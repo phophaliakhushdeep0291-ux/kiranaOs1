@@ -828,7 +828,7 @@ export function ProductFormPanel({
               <select
                 data-testid="product-drug-schedule"
                 value={form.watch("drugSchedule") ?? ""}
-                onChange={(event) => form.setValue("drugSchedule", event.target.value || null, { shouldDirty: true })}
+                onChange={(event) => form.setValue("drugSchedule", (event.target.value || null) as ProductFormData["drugSchedule"], { shouldDirty: true })}
                 aria-label="Drug schedule"
                 className="mt-2 h-9 w-full rounded-md border border-[#e6ecf4] bg-white px-2 text-[12px] font-semibold text-[#13274d]"
               >

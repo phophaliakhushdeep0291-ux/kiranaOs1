@@ -34,6 +34,7 @@ import { gstStateCode } from "@/lib/gstin";
 import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
+import { billingSlotsFor } from "@/features/core/billing/billing-slots";
 import { SPLIT_PAYMENT, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 import { getRetailPaymentReadiness, verifyRetailPayment } from "../retail-payment";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
@@ -1110,6 +1111,13 @@ export default function Billing() {
    * rewrites the key. Matching on the OLD key first is therefore required —
    * after the change the line no longer answers to the key that was clicked.
    */
+  // Values contributed by the active trade's billing slots, keyed by slot id.
+  // A pharmacy puts the authorising prescription here; every other shop keeps an
+  // empty object and renders nothing.
+  const [billingSlotValues, setBillingSlotValues] = useState<Record<string, unknown>>({});
+  const slotProducts = cart.filter((item) => !item.isCustom).map((item) => item.product as unknown as Record<string, unknown>);
+  const activeBillingSlots = billingSlotsFor({ productIds: slotProducts.map((p) => String(p.id)), products: slotProducts });
+
   function updateLineBatch(lineKey: string, batch?: SellableBatch) {
     setCart((previous) => previous.map((item) => (
       cartItemKey(item) === lineKey ? { ...item, batch } : item
@@ -1427,6 +1435,7 @@ export default function Billing() {
         waivedAmount: 0,
         allowAdvancePayment: allowAdvancePayment === true,
         advanceAmount,
+        prescriptionId: (billingSlotValues.prescriptionId as { id?: string } | undefined)?.id,
         items: cart.map((item) => ({
           productId: item.isCustom ? undefined : item.product.id,
           inventoryLotId: item.batch?.id,
@@ -1752,6 +1761,18 @@ export default function Billing() {
         </div>
         <div className="flex min-h-0 flex-1 overflow-y-auto p-2 pb-[var(--app-mobile-checkout-panel-clearance)] overscroll-contain lg:overflow-visible lg:p-0">
       <BillingSummary
+        tradeSlots={activeBillingSlots.length > 0 ? (
+          <div data-testid="billing-trade-slots">
+            {activeBillingSlots.map(({ id, Component }) => (
+              <Component
+                key={id}
+                productIds={slotProducts.map((product) => String(product.id))}
+                value={billingSlotValues[id]}
+                onChange={(value) => setBillingSlotValues((previous) => ({ ...previous, [id]: value }))}
+              />
+            ))}
+          </div>
+        ) : null}
         summaryWidth={summaryWidth}
         onStartSummaryResize={startSummaryResize}
         isOnline={isOnline}

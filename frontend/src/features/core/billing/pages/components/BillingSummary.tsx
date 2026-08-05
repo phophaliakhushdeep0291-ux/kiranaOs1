@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type Dispatch, type ReactNode, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -119,6 +119,9 @@ interface BillingSummaryProps {
   onUpdateLineDiscount: (lineKey: string, amount: number) => void;
   onUpdateLineNote: (lineKey: string, note: string) => void;
   onUpdateLineBatch: (lineKey: string, batch?: SellableBatch) => void;
+  /** Controls contributed by the active trade — a pharmacy's prescription
+   *  attach, for one. Null for every shop that registered no slot. */
+  tradeSlots?: ReactNode;
   onReadScale: (lineKey: string, billingUnit: string) => void;
   scaleReadingLineKey: string | null;
   onRemoveItem: (productId: string) => void;
@@ -246,6 +249,7 @@ export function BillingSummary({
   onUpdateLineDiscount,
   onUpdateLineNote,
   onUpdateLineBatch,
+  tradeSlots,
   onReadScale,
   scaleReadingLineKey,
   onRemoveItem,
@@ -732,6 +736,11 @@ export function BillingSummary({
             {newBillingReason}
           </div>
         )}
+
+        {/* What the active trade needs before this bill can be confirmed — a
+            pharmacy's prescription attach sits here, directly above the action
+            it unblocks, so the counter is not hunting for it after a refusal. */}
+        {tradeSlots}
 
         {/* Save Bill button — 54px blue gradient */}
         <Button

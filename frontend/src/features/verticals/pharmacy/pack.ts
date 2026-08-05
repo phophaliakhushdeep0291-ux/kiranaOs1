@@ -1,5 +1,8 @@
 import { Stethoscope } from "lucide-react";
 import type { VerticalPack } from "../types";
+// Side-effect import: contributes the prescription control to shared billing,
+// so core never imports pharmacy. Server twin: shared/sale-guards.js.
+import "./prescriptions/billing-slot";
 
 /**
  * Pharmacy & medical.

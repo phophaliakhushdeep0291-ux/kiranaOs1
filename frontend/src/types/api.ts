@@ -457,6 +457,9 @@ export interface BillInputItem {
 }
 
 export interface BillInput {
+  /** The register entry authorising this sale. Required only when the bill holds
+   *  a Schedule H, H1 or X medicine; every other sale ignores it. */
+  prescriptionId?: string;
   /**
    * Stable client identity for this bill so server-side creates are idempotent.
    * Vital on the ONLINE path (coupons/loyalty/gift cards): a retry after a lost
@@ -1064,4 +1067,198 @@ export interface PrescriptionSummary {
   refillable: number;
   stale: number;
   staleAfterDays: number;
+}
+
+/* ── Electronics: serialised units ────────────────────────────────────────── */
+
+export type ProductUnitStatus = "in_stock" | "sold" | "returned" | "rma" | "lost" | "scrapped";
+export type ProductUnitCondition = "new" | "open_box" | "refurbished";
+
+export interface ProductUnit {
+  id: string;
+  productId: string;
+  productName: string;
+  imei?: string | null;
+  imei2?: string | null;
+  serialNumber?: string | null;
+  status: ProductUnitStatus;
+  condition: ProductUnitCondition;
+  purchaseBillId?: string | null;
+  supplierId?: string | null;
+  costPrice: number;
+  receivedAt: string;
+  receivedAtKey?: string | null;
+  billId?: string | null;
+  billNumber?: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone: string;
+  soldAt?: string | null;
+  soldAtKey?: string | null;
+  sellingPrice: number;
+  warrantyMonths: number;
+  warrantyUntil?: string | null;
+  warrantyUntilKey?: string | null;
+  /** Days until cover ends; negative once it has lapsed, null when never sold. */
+  warrantyDaysLeft?: number | null;
+  isUnderWarranty: boolean;
+  isWarrantyExpiringSoon: boolean;
+  /** Still physically on the shop's shelf or bench. */
+  isHeld: boolean;
+  canSell: boolean;
+  notes?: string | null;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProductUnitIdentityInput {
+  imei?: string | null;
+  imei2?: string | null;
+  serialNumber?: string | null;
+  condition?: ProductUnitCondition;
+  costPrice?: number;
+  notes?: string | null;
+}
+
+export interface ReceiveProductUnitsInput {
+  productId: string;
+  purchaseBillId?: string | null;
+  supplierId?: string | null;
+  costPrice?: number;
+  warrantyMonths?: number;
+  units: ProductUnitIdentityInput[];
+}
+
+export interface SellProductUnitInput {
+  billId?: string | null;
+  billNumber?: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  sellingPrice?: number;
+  warrantyMonths?: number | null;
+  /** YYYY-MM-DD. Defaults to today; backdating catches up a missed entry. */
+  soldOn?: string | null;
+  notes?: string | null;
+}
+
+export interface ProductUnitSummary {
+  today: string;
+  inStock: number;
+  openBox: number;
+  soldToday: number;
+  soldThisMonth: number;
+  atService: number;
+  warrantyExpiringSoon: number;
+  warrantySoonDays: number;
+}
+
+/* ── Auto parts: vehicle fitment ──────────────────────────────────────────── */
+
+export type PartCrossReferenceKind = "oem" | "alternative" | "supersedes" | "superseded_by";
+
+export interface PartFitment {
+  id: string;
+  productId: string;
+  productName: string;
+  make: string;
+  model: string;
+  /** Null means the part fits every variant of the model. */
+  variant?: string | null;
+  /** Null bounds are open: "since forever" and "still current". */
+  yearFrom?: number | null;
+  yearTo?: number | null;
+  /** "2015–2020", "2015 onwards", "up to 2012", "all years". */
+  yearLabel: string;
+  /** "Maruti Suzuki Swift · Diesel 1.3 DDiS" */
+  vehicleLabel: string;
+  notes?: string | null;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PartFitmentInput {
+  productId: string;
+  make: string;
+  model: string;
+  variant?: string | null;
+  yearFrom?: number | null;
+  yearTo?: number | null;
+  notes?: string | null;
+}
+
+export interface BulkPartFitmentInput {
+  productId: string;
+  fitments: Array<Omit<PartFitmentInput, "productId">>;
+}
+
+/** A part that fits the vehicle being asked about, with what the shop holds of it. */
+export interface FittingPart {
+  productId: string;
+  productName: string;
+  /** False when the fitment outlived the product it was recorded against. */
+  inCatalogue: boolean;
+  sku?: string | null;
+  brand?: string | null;
+  stockQty: number;
+  unit: string;
+  price: number;
+  fitments: PartFitment[];
+}
+
+export interface PartCrossReference {
+  id: string;
+  productId: string;
+  productName: string;
+  /** Set only when the alternative is something this shop stocks. */
+  alternateProductId?: string | null;
+  partNumber: string;
+  brand?: string | null;
+  kind: PartCrossReferenceKind;
+  /** Whether the shop can actually hand the alternative over. */
+  isStocked: boolean;
+  notes?: string | null;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PartCrossReferenceInput {
+  productId: string;
+  alternateProductId?: string | null;
+  partNumber: string;
+  brand?: string | null;
+  kind?: PartCrossReferenceKind;
+  notes?: string | null;
+}
+
+export interface VehicleOptions {
+  makes: string[];
+  models: string[];
+  variants: string[];
+}
+
+export interface PartNumberLookup {
+  partNumber: string;
+  products: Array<{
+    productId: string;
+    productName: string;
+    sku?: string | null;
+    brand?: string | null;
+    stockQty: number;
+    price: number;
+  }>;
+  references: PartCrossReference[];
+}
+
+export interface FitmentSummary {
+  fitments: number;
+  references: number;
+  mappedParts: number;
+  catalogueSize: number;
+  /** Parts still invisible to a "does this fit?" search. */
+  unmappedParts: number;
+  makes: number;
 }

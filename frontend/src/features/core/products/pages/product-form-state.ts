@@ -52,6 +52,10 @@ export const productFormSchema = z.object({
   stockQuantity: z.coerce.number().min(0).default(0),
   lowStockAlert: z.coerce.number().min(0).default(0),
   batchTrackingEnabled: z.boolean().default(false),
+  // h | h1 | x | otc, or null for anything that is not a scheduled drug — which
+  // is every product until a pharmacy classifies it. Setting h/h1/x is what
+  // makes billing demand a prescription for this medicine.
+  drugSchedule: z.enum(["h", "h1", "x", "otc"]).nullable().default(null),
   reorderLevel: z.coerce.number().min(0).default(0),
   description: z.string().trim().max(500).optional(),
   imageUrl: z.string().optional(),
@@ -169,6 +173,7 @@ export function productToForm(product?: Product): ProductFormData {
       ? round2(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
       : fromBaseQty(product?.lowStockThreshold, unit),
     batchTrackingEnabled: product?.batchTrackingEnabled ?? false,
+    drugSchedule: product?.drugSchedule ?? null,
     reorderLevel: product?.reorderLevel ?? 0,
     description: product?.description ?? "",
     imageUrl: product?.imageUrl ?? "",
