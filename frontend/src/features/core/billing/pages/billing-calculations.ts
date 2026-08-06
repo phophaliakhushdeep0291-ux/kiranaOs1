@@ -15,6 +15,27 @@ export function roundQuantity(value: number): number {
   return Math.round((n + Number.EPSILON) * 1000) / 1000 || 0;
 }
 
+/**
+ * Quantity a cart line should take for the raw text currently in its qty box, or
+ * null to keep the quantity it already has.
+ *
+ * Null covers every keystroke that is not yet a usable number — an emptied box,
+ * a lone "0" or "0." on the way to "0.5", a stray "-" or "abc". Those must not
+ * reach updateQty, which drops any line whose quantity hits 0: pushing the 0
+ * from a cleared box deleted the row out from under whoever was retyping it, so
+ * the quantity could not be edited by typing at all. Removing a line stays
+ * explicit — the − button at 1, or the × button.
+ */
+export function parseQtyDraft(draft: string): number | null {
+  if (draft.trim() === "") return null;
+  const parsed = Number(draft);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  // Round BEFORE the zero check, not after: 0.0004 is positive but stores as 0,
+  // and returning that would delete the line just as the old code did.
+  const rounded = roundQuantity(parsed);
+  return rounded > 0 ? rounded : null;
+}
+
 /** Cash the shop must hand back when the customer tenders more than the bill. */
 export function computeChangeDue(cashTendered: number, grandTotal: number): number {
   const change = roundMoney((Number(cashTendered) || 0) - (Number(grandTotal) || 0));

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BadgePercent, Loader2, Pencil, Scale, ShoppingCart, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { cartItemGross, cartItemLineDiscount, cartItemNet, productMinSellingPrice, roundMoney } from "../billing-calculations";
+import { cartItemGross, cartItemLineDiscount, cartItemNet, parseQtyDraft, productMinSellingPrice, roundMoney } from "../billing-calculations";
 import { cartItemKey, type CartItem } from "../billing-types";
 import { BatchPicker } from "./BatchPicker";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
@@ -90,6 +90,9 @@ function CartRow({
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [discountDraft, setDiscountDraft] = useState<string>("");
   const discountInputRef = useRef<HTMLInputElement | null>(null);
+  // null = not being typed in, so the box tracks item.quantity and still reflects
+  // the +/- buttons and scale readings. A string means the user is mid-edit.
+  const [qtyDraft, setQtyDraft] = useState<string | null>(null);
   const lineGross = cartItemGross(item);
   const lineDiscount = cartItemLineDiscount(item);
   const lineTotal = cartItemNet(item);
@@ -117,6 +120,22 @@ function CartRow({
     if (next.trim() !== "" && Number.isFinite(parsed) && parsed >= 0) {
       onUpdateRate(lineKey, parsed);
     }
+  }
+
+  function onQtyDraftChange(next: string) {
+    // Keep the raw text so an emptied box and a half-typed "0." stay typable, and
+    // push only a usable quantity live. See parseQtyDraft for why a cleared box
+    // must never reach onUpdateQty.
+    setQtyDraft(next);
+    const parsed = parseQtyDraft(next);
+    if (parsed !== null) onUpdateQty(lineKey, parsed);
+  }
+
+  function commitQty() {
+    // Leaving the box empty or invalid restores the quantity the line already has.
+    const parsed = qtyDraft === null ? null : parseQtyDraft(qtyDraft);
+    if (parsed !== null && parsed !== item.quantity) onUpdateQty(lineKey, parsed);
+    setQtyDraft(null);
   }
 
   function commitRate() {
@@ -326,8 +345,13 @@ function CartRow({
           type="number"
           inputMode="decimal"
           aria-label={t("billing.cart.quantityFor", { name: item.product.name })}
-          value={item.quantity}
-          onChange={(e) => onUpdateQty(lineKey, Number(e.target.value) || 0)}
+          value={qtyDraft ?? String(item.quantity)}
+          onChange={(e) => onQtyDraftChange(e.target.value)}
+          onBlur={commitQty}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+            if (e.key === "Escape") { setQtyDraft(null); e.currentTarget.blur(); }
+          }}
           className="border-x border-[#e6ecf4] bg-white text-center text-[12px] font-extrabold text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         <button
