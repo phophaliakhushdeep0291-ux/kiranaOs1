@@ -1,71 +1,96 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { parseQtyDraft } from "@/features/core/billing/pages/billing-calculations";
+import { MIN_QUANTITY, parseQuantityDraft } from "@/components/ui/input";
 
-// Regression: clearing the qty box deleted the cart line. The box pushed
-// `Number("") || 0` straight into updateQty, which filters out any line whose
-// quantity reaches 0 — so the row vanished the moment it was emptied and the
-// quantity could not be retyped at all.
+// Regression: clearing the qty box deleted the cart line. Every numeric box
+// parsed its own value inline as `Number(e.target.value) || 0`, so emptying one
+// committed a 0 — and updateQty filters out any line whose quantity reaches 0.
+// The row vanished on the keystroke that cleared it, so the quantity could not
+// be retyped at all.
 
 const billingCart = readFileSync("src/features/core/billing/pages/components/BillingCart.tsx", "utf8");
 const billingPage = readFileSync("src/features/core/billing/pages/BillingPage.tsx", "utf8");
 
-describe("parseQtyDraft", () => {
-  it("returns null for a cleared box so the line keeps its quantity", () => {
-    expect(parseQtyDraft("")).toBeNull();
-    expect(parseQtyDraft("   ")).toBeNull();
+const QTY_BOXES = [
+  "src/features/core/billing/pages/components/BillingCart.tsx",
+  "src/features/core/bills/components/EditBillDialog.tsx",
+  "src/features/core/returns/components/ReturnDialog.tsx",
+  "src/features/verticals/furniture-home/orders/components/OrderPanel.tsx",
+  "src/features/verticals/pharmacy/prescriptions/components/PrescriptionPanel.tsx",
+  "src/features/verticals/stationery-books/book-lists/components/BookListPanel.tsx",
+];
+
+describe("parseQuantityDraft", () => {
+  it("returns null for a cleared box so the row keeps its quantity", () => {
+    expect(parseQuantityDraft("")).toBeNull();
+    expect(parseQuantityDraft("   ")).toBeNull();
   });
 
-  it("returns null for keystrokes on the way to a decimal, without deleting the line", () => {
-    expect(parseQtyDraft("0")).toBeNull();
-    expect(parseQtyDraft("0.")).toBeNull();
-    expect(parseQtyDraft(".")).toBeNull();
-    expect(parseQtyDraft("-")).toBeNull();
+  it("returns null for keystrokes on the way to a decimal", () => {
+    expect(parseQuantityDraft("0")).toBeNull();
+    expect(parseQuantityDraft("0.")).toBeNull();
+    expect(parseQuantityDraft(".")).toBeNull();
+    expect(parseQuantityDraft("-")).toBeNull();
   });
 
-  it("returns null for junk and for non-positive numbers", () => {
-    expect(parseQtyDraft("abc")).toBeNull();
-    expect(parseQtyDraft("-3")).toBeNull();
-    expect(parseQtyDraft("NaN")).toBeNull();
-    expect(parseQtyDraft("Infinity")).toBeNull();
+  it("returns null for junk and non-positive numbers", () => {
+    expect(parseQuantityDraft("abc")).toBeNull();
+    expect(parseQuantityDraft("-3")).toBeNull();
+    expect(parseQuantityDraft("NaN")).toBeNull();
+    expect(parseQuantityDraft("Infinity")).toBeNull();
   });
 
   it("accepts whole quantities", () => {
-    expect(parseQtyDraft("1")).toBe(1);
-    expect(parseQtyDraft("12")).toBe(12);
-    expect(parseQtyDraft(" 7 ")).toBe(7);
+    expect(parseQuantityDraft("1")).toBe(1);
+    expect(parseQuantityDraft("12")).toBe(12);
+    expect(parseQuantityDraft(" 7 ")).toBe(7);
   });
 
   it("accepts the loose-item decimals a weighing counter needs", () => {
-    expect(parseQtyDraft("0.5")).toBe(0.5);
-    expect(parseQtyDraft("1.25")).toBe(1.25);
-    expect(parseQtyDraft("0.005")).toBe(0.005);
+    expect(parseQuantityDraft("0.5")).toBe(0.5);
+    expect(parseQuantityDraft("1.25")).toBe(1.25);
+    expect(parseQuantityDraft("0.005")).toBe(0.005);
+    expect(parseQuantityDraft("0.001")).toBe(MIN_QUANTITY);
   });
 
-  it("rounds to the millesimal precision quantities are stored at", () => {
-    expect(parseQtyDraft("1.23456")).toBe(1.235);
+  it("rounds to the precision quantities are stored at", () => {
+    expect(parseQuantityDraft("1.23456")).toBe(1.235);
   });
 
-  it("returns null when a positive value rounds away to zero", () => {
-    // 0.0004 is > 0 but stores as 0, and committing 0 removes the line — the very
-    // bug this helper exists to prevent.
-    expect(parseQtyDraft("0.0004")).toBeNull();
-    expect(parseQtyDraft("1e-9")).toBeNull();
+  it("returns null when a positive value rounds away below the minimum", () => {
+    // 0.0004 clears a raw `> 0` check but stores as 0, and committing 0 removes
+    // the line — the very bug this parser exists to prevent.
+    expect(parseQuantityDraft("0.0004")).toBeNull();
+    expect(parseQuantityDraft("1e-9")).toBeNull();
+  });
+
+  it("accepts a typed zero where zero is a real answer", () => {
+    // Returns and exchanges pass min 0: zero means this line is not being
+    // returned, which must stay reachable by typing.
+    expect(parseQuantityDraft("0", 0)).toBe(0);
+    expect(parseQuantityDraft("0.0004", 0)).toBe(0);
+    // A cleared box still commits nothing, whatever the minimum.
+    expect(parseQuantityDraft("", 0)).toBeNull();
+    expect(parseQuantityDraft("-1", 0)).toBeNull();
   });
 });
 
-describe("qty box wiring", () => {
-  it("drives the qty box from a draft and commits on blur", () => {
-    expect(billingCart).toContain("value={qtyDraft ?? String(item.quantity)}");
-    expect(billingCart).toContain("onChange={(e) => onQtyDraftChange(e.target.value)}");
-    expect(billingCart).toContain("onBlur={commitQty}");
+describe("qty boxes across the app", () => {
+  it("no qty box parses its own value inline any more", () => {
+    for (const path of QTY_BOXES) {
+      const source = readFileSync(path, "utf8");
+      expect(source, `${path} still parses a qty inline`).not.toMatch(/qty:\s*Number\((e|event)\.target\.value\)\s*\|\|\s*0/);
+      expect(source, `${path} still parses a quantity inline`).not.toMatch(/quantity:\s*Number\((e|event)\.target\.value\)\s*\|\|\s*0/);
+    }
   });
 
-  it("never pushes a raw parsed value from the qty box again", () => {
-    expect(billingCart).not.toContain("onUpdateQty(lineKey, Number(e.target.value) || 0)");
+  it("every qty box goes through the shared draft hook", () => {
+    for (const path of QTY_BOXES) {
+      expect(readFileSync(path, "utf8"), `${path} does not use useQuantityDraft`).toContain("useQuantityDraft");
+    }
   });
 
-  it("keeps the stepper buttons able to remove a line at zero", () => {
+  it("keeps the stepper buttons able to remove a billing line at zero", () => {
     expect(billingCart).toContain("onUpdateQty(lineKey, item.quantity - 1)");
     expect(billingPage).toContain(".filter((item) => item.quantity > 0)");
   });

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BookOpen, GripVertical, Loader2, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, useQuantityDraft } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
@@ -251,15 +251,7 @@ export function BookListPanel({ open, editing, saving, options, onClose, onSubmi
                     onChange={(e) => patchLine(index, { name: e.target.value, productId: null })}
                     aria-label={`Line ${index + 1}`}
                   />
-                  <Input
-                    className="h-9 w-[64px]"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={line.qty}
-                    onChange={(e) => patchLine(index, { qty: Number(e.target.value) || 0 })}
-                    aria-label={`Quantity for line ${index + 1}`}
-                  />
+                  <LineQuantity qty={line.qty} onChange={(qty) => patchLine(index, { qty })} label={`Quantity for line ${index + 1}`} />
                   <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-[#52627e]">
                     <input
                       type="checkbox"
@@ -335,4 +327,11 @@ function Fld({ label, hint, children }: { label: string; hint?: string; children
       {hint && <p className="mt-1 text-[11px] text-[#9aa6bb]">{hint}</p>}
     </div>
   );
+}
+
+// Per-row draft: a hook cannot run inside the lines.map callback. Zero is not
+// offered — submit already refuses a line without a quantity above zero.
+function LineQuantity({ qty, onChange, label }: { qty: number; onChange: (next: number) => void; label: string }) {
+  const props = useQuantityDraft(qty, onChange);
+  return <Input className="h-9 w-[64px]" type="number" inputMode="decimal" step="1" aria-label={label} {...props} />;
 }

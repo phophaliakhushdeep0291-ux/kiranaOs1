@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, useQuantityDraft } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useToast } from "@/hooks/use-toast";
@@ -263,14 +263,9 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
                       placeholder="Item name"
                       className="h-9"
                     />
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      value={line.quantity}
-                      onChange={(event) => updateLine(line.key, { quantity: Number(event.target.value) || 0 })}
-                      className="h-9 text-right"
-                      aria-label="Quantity"
+                    <BillLineQuantity
+                      quantity={line.quantity}
+                      onChange={(quantity) => updateLine(line.key, { quantity })}
                     />
                     <Input
                       type="number"
@@ -354,4 +349,13 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
       />
     </>
   );
+}
+
+// One row's quantity box. A hook cannot be called inside the lines.map callback,
+// so each row gets its own component to own its draft. Zero is not offered: a
+// bill line at zero drops out of the total while still sitting on screen, which
+// reads as the bill quietly under-counting. Removing a line is the Trash button.
+function BillLineQuantity({ quantity, onChange }: { quantity: number; onChange: (next: number) => void }) {
+  const props = useQuantityDraft(quantity, onChange);
+  return <Input type="number" inputMode="decimal" className="h-9 text-right" aria-label="Quantity" {...props} />;
 }
