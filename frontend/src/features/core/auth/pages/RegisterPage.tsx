@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
-import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, ShieldCheck, Store } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+import { BrandMark } from "@/components/shared/BrandMark";
 import { BUSINESS_TYPE_DEFS, saveBusinessType, type BusinessType } from "@/features/core/settings/business-types";
 import { applyAccent } from "@/features/core/settings/theme";
 import { cn } from "@/lib/utils";
@@ -128,7 +129,7 @@ export default function Register() {
           <section className="hidden bg-sidebar p-8 text-sidebar-foreground lg:flex lg:flex-col lg:justify-between">
             <div>
               <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-md ring-1 ring-white/10">
-                <Store size={24} />
+                <BrandMark size={26} />
               </div>
               <h1 className="mt-6 font-display text-3xl font-black text-white">Set up your shop counter</h1>
               <p className="mt-3 max-w-md text-sm leading-6 text-sidebar-foreground/75">
@@ -152,7 +153,7 @@ export default function Register() {
           <div className="w-full p-6 sm:p-8">
             <div className="mb-6">
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground lg:hidden">
-                <Store size={28} />
+                <BrandMark size={30} title="Artha" />
               </div>
               <div className="hidden items-center gap-2 text-sm font-bold text-primary lg:flex">
                 <ShieldCheck size={15} />Step 1 of 2 — Shop details

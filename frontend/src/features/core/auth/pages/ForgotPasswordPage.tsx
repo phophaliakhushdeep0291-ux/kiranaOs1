@@ -3,7 +3,8 @@ import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { MailCheck, Store } from "lucide-react";
+import { MailCheck } from "lucide-react";
+import { BrandMark } from "@/components/shared/BrandMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +40,7 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-md rounded-2xl border bg-card p-6 shadow-xl">
         <div className="mb-6">
           <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            {sent ? <MailCheck size={24} /> : <Store size={24} />}
+            {sent ? <MailCheck size={24} /> : <BrandMark size={26} title="Artha" />}
           </div>
           <h1 className="text-2xl font-black text-foreground">Recover password</h1>
           <p className="mt-1 text-sm text-muted-foreground">
