@@ -17,6 +17,9 @@ import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
 import { completeDeviceReplacement, type ActiveDeviceDto } from "@/features/core/devices/api";
 import { ChevronLeft, ChevronRight, Laptop, Loader2, LockKeyhole, Store } from "lucide-react";
+// Imported from the module, not the @/components/shared barrel: the barrel
+// re-exports ~25 components, and pulling it into an auth chunk cost ~12 kB.
+import { BrandMark } from "@/components/shared/BrandMark";
 
 const schema = z.object({
   identifier: z.string().min(3, "Enter your mobile number or email"),
@@ -240,7 +243,7 @@ export default function Login() {
           <div className="pointer-events-none absolute -bottom-36 -left-28 h-96 w-96 rounded-full border border-white/10 bg-[var(--brand)]/25" />
           <div>
             <div className="relative inline-flex h-12 w-12 items-center justify-center rounded-[14px] bg-[var(--brand)] text-white shadow-[0_14px_30px_rgba(0,74,255,0.35)] ring-1 ring-white/20">
-              <Store size={24} aria-hidden="true" />
+              <BrandMark size={26} />
             </div>
             <p className="relative mt-8 text-[11px] font-black uppercase tracking-[0.2em] text-[#78a8ff]">Retail operating system</p>
             <h1 className="relative mt-3 font-display text-4xl font-black tracking-tight text-white">Ar<span className="text-[#4c8dff]">tha</span></h1>
@@ -261,7 +264,7 @@ export default function Login() {
         <div className="w-full p-6 sm:p-9">
         <div className="mb-8 text-center lg:text-left">
           <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-lg bg-primary text-primary-foreground lg:hidden">
-            <Store className="text-primary-foreground" size={28} />
+            <BrandMark className="text-primary-foreground" size={30} title="Artha" />
           </div>
           <div className="hidden items-center gap-2 text-sm font-bold text-primary lg:flex">
             <LockKeyhole size={16} aria-hidden="true" />

@@ -37,3 +37,4 @@ export { ChartCard, type ChartCardProps } from "./ChartCard";
 export { ErrorState, type ErrorStateProps, type ErrorStateVariant } from "./ErrorState";
 export { LoadingSkeleton, type LoadingSkeletonProps } from "./LoadingSkeleton";
 export { RightDrawer, type RightDrawerProps, type RightDrawerSize } from "./RightDrawer";
+export { BrandMark, type BrandMarkProps } from "./BrandMark";
