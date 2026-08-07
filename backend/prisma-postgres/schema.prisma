@@ -527,6 +527,16 @@ model Product {
 
   @@unique([shopId, idempotencyKey])
   @@unique([shopId, sourceDeviceId, clientProductId])
+  // One barcode, one product. Capture-on-first-scan binds codes from the counter,
+  // where a mistake is silent: a code pointing at two products bills whichever one
+  // the query happened to return. NULL is not a value in a unique index, so the
+  // hundreds of products that legitimately have no barcode do not collide.
+  //
+  // A soft-deleted product KEEPS its barcode reserved, because it can be restored
+  // from the recycle bin — releasing the code would let a restore resurrect a real
+  // duplicate. products.service.js turns the resulting constraint error into a
+  // message that names the owning product and says it is in the recycle bin.
+  @@unique([shopId, barcode])
   @@index([shopId, deletedAt])
   @@index([shopId, updatedAt, id])
   // The menu card, in the order it is printed: "this shop's dishes, by course".

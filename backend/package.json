@@ -68,6 +68,7 @@
     "proof:restore": "node scripts/disaster-recovery-proof.js",
     "proof:dr": "node scripts/disaster-recovery-proof.js",
     "migration:safety": "node scripts/migration-safety-check.js",
+    "check:barcode-uniqueness": "node scripts/check-barcode-uniqueness.js",
     "release:gate": "node scripts/release-gate.js",
     "release:manifest": "node scripts/release-manifest.js",
     "release:certify:local": "node scripts/release-certification.js --mode=local",

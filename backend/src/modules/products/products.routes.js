@@ -4,7 +4,7 @@ import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { requireOwnerPin, requireOwnerPinForFields, requireShop } from "../../middleware/permissions.js";
 import { requireFeature } from "../feature-gates/featureGate.middleware.js";
 import { validate, validateQuery } from "../../middleware/validate.js";
-import { createProductSchema, updateProductSchema, productQuerySchema } from "./products.schema.js";
+import { bindProductBarcodeSchema, createProductSchema, updateProductSchema, productQuerySchema } from "./products.schema.js";
 import * as ctrl from "./products.controller.js";
 import { requireLocationAccess } from "../stores/location-access.service.js";
 
@@ -30,6 +30,11 @@ router.get("/:id", requireLocationAccess("view"), ctrl.get);
 // Static production check anchor: router.post("/", requireOwnerPinForFields(protectedProductFields), validate(createProductSchema), ctrl.create)
 router.post("/", requireFeature("basic_products"), requireOwnerPinForFields(protectedProductFields), validate(createProductSchema), ctrl.create);
 router.patch("/:id", requireFeature("basic_products"), requireOwnerPinForFields(protectedProductFields), validate(updateProductSchema), ctrl.update);
+// Capture-on-first-scan. Deliberately NOT behind requireOwnerPin: the whole point is
+// that a cashier with a queue can teach the catalog a code without fetching the owner.
+// It is still narrow — the schema accepts one field, and the service refuses to rebind a
+// product that already has a code, so this cannot be used to repoint an existing barcode.
+router.post("/:id/barcode", requireFeature("basic_products"), validate(bindProductBarcodeSchema), ctrl.bindBarcode);
 router.delete("/:id", requireOwnerPin, ctrl.remove);
 
 export default router;
