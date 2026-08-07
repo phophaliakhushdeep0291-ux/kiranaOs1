@@ -13,6 +13,7 @@ import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { useOfflineStatus } from "@/features/core/sync";
+import { useListProducts } from "@/features/core/products/queries";
 import {
   cancelRental, createRental, deleteRental, getRentalSummary,
   listRentals, markRentalPickedUp, markRentalReturned, updateRental,
@@ -68,6 +69,24 @@ export default function RentalsPage() {
 
   const bookingsQ = useQuery({ queryKey: ["rentals"], queryFn: () => listRentals() });
   const summaryQ = useQuery({ queryKey: ["rentals", "summary"], queryFn: getRentalSummary });
+
+  /**
+   * Pictures are read live off the catalogue rather than copied onto the
+   * booking line.
+   *
+   * The line copies the garment's *name* on purpose, so an old booking keeps
+   * saying what went out even after the product is renamed. An image is
+   * different: `imageUrl` is often a data URL of a photo the shop took, and
+   * duplicating that onto every line of every booking would put megabytes into
+   * a table that is read on a counter tablet. A picture is also the one field
+   * where the current one is what you want — if the shop replaces a blurry
+   * photo, every booking should show the better one.
+   */
+  const productsQ = useListProducts({ limit: 500 });
+  const imageFor = useMemo(
+    () => new Map((productsQ.data ?? []).filter((p) => p.imageUrl).map((p) => [p.id, p.imageUrl as string])),
+    [productsQ.data],
+  );
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["rentals"] });
@@ -247,10 +266,13 @@ export default function RentalsPage() {
                           <span className="mt-1 inline-block rounded-[5px] bg-[#f1f5fa] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#52627e]">{booking.bookingNumber}</span>
                         </td>
                         <td className="px-5 py-3 align-top">
-                          <ul className="space-y-0.5">
+                          <ul className="space-y-1.5">
                             {booking.items.map((item, idx) => (
-                              <li key={item.id ?? idx} className="text-[12px] text-[#344668]">
-                                <span className="font-semibold">{item.qty}</span> × {item.name}
+                              <li key={item.id ?? idx} className="flex items-center gap-2 text-[12px] text-[#344668]">
+                                <GarmentThumb src={item.productId ? imageFor.get(item.productId) : null} alt={item.name} />
+                                <span className="min-w-0">
+                                  <span className="font-semibold">{item.qty}</span> × {item.name}
+                                </span>
                               </li>
                             ))}
                           </ul>
@@ -393,6 +415,24 @@ function ReturnDialog({ booking, saving, onClose, onConfirm }: {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * The garment, so the counter hands over the right outfit.
+ *
+ * A rental is a specific physical piece leaving the shop for a run of days, and
+ * "1 × Lehenga" on a list of forty bookings does not tell anyone which one. The
+ * shirt outline stands in for a product with no photo yet, so the column keeps
+ * its rhythm instead of collapsing on the rows that have none.
+ */
+function GarmentThumb({ src, alt }: { src?: string | null; alt: string }) {
+  return (
+    <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand)]">
+      {src
+        ? <img src={src} alt={alt} loading="lazy" className="h-full w-full object-cover" />
+        : <Shirt size={15} aria-hidden />}
+    </span>
   );
 }
 
