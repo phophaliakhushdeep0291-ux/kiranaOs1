@@ -73,7 +73,19 @@ describe("loadCustomerCatalog", () => {
     await loadCustomerCatalog("shop1", { fetcher, storage }, "loc2");
     expect(storage.read("shop1")).toBeNull();
     expect(storage.read("shop1:location:loc2")?.location.id).toBe("loc2");
-    expect(fetcher).toHaveBeenCalledWith("shop1", "loc2");
+    // The trailing argument is the restaurant table code a guest scanned, which
+    // a branch catalogue read has none of.
+    expect(fetcher).toHaveBeenCalledWith("shop1", "loc2", undefined);
+  });
+
+  it("passes the scanned table through to the catalogue fetch", () => {
+    const storage = memoryStorage();
+    const fetcher = vi.fn().mockResolvedValue(makeCatalog());
+    return loadCustomerCatalog("shop1", { fetcher, storage }, undefined, "t5").then(() => {
+      // Without this the server cannot tell which table the guest is at, and the
+      // menu opens with nothing selected — which is the entire point of the QR.
+      expect(fetcher).toHaveBeenCalledWith("shop1", undefined, "t5");
+    });
   });
 });
 

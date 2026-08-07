@@ -169,18 +169,35 @@ assert.ok(
 );
 // Both doors: the catalogue a customer browses, and the order they submit from a
 // phone that may still be showing a catalogue cached before the outfit went out.
+//
+// The two doors now share one loader, which is stronger than checking the filter
+// twice: they cannot drift apart. So what is pinned is that the loader consults
+// the registry, and that BOTH entry points go through the loader — a hold that
+// only the catalogue respected would let a booked-out sherwani be ordered from a
+// stale phone.
+assert.ok(
+  /async function loadStorefrontCandidates[\s\S]*?unavailableProductIds\(/.test(publicService),
+  "the shared storefront loader must consult the availability registry",
+);
 assert.equal(
-  (publicService.match(/unavailableProductIds\(/g) || []).length,
-  2,
-  "both the catalog read and the order submission must check rental holds",
+  (publicService.match(/loadStorefrontCandidates\(/g) || []).length,
+  3,
+  "the loader is defined once and used by both the catalog read and the order submission",
 );
 assert.ok(
   /bookedOut\.has\(p\.id\)/.test(publicService),
-  "the catalog must drop fully-booked products",
+  "the loader must drop fully-booked products",
+);
+// The order path can only see what the loader returned, so a booked-out product
+// is simply absent and its line is skipped. That is what makes the two doors
+// agree by construction rather than by both remembering to ask.
+assert.ok(
+  /const byId = new Map\(candidates\.map/.test(publicService),
+  "order submission must resolve lines against the filtered candidates, not a raw product list",
 );
 assert.ok(
-  /bookedOut\.has\(productId\)/.test(publicService),
-  "an order for a fully-booked product must not be accepted",
+  /const product = byId\.get\(productId\);[\s\S]{0,80}if \(!product/.test(publicService),
+  "an order line whose product is not among the available candidates must be dropped",
 );
 
 /* ── Routing order ─────────────────────────────────────────────────────────── */

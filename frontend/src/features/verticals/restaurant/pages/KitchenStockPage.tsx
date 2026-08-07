@@ -12,9 +12,10 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
-import { useListProducts } from "@/features/core/products/queries";
 import type { DishRecipeComponent, KitchenStock, MenuBoard, MenuDish, Product } from "@/types/api";
-import { deleteRecipe, getKitchenStock, getMenuBoard, getRecipe, saveRecipe } from "../service/restaurant-api";
+import {
+  deleteRecipe, getKitchenStock, getMenuBoard, getRecipe, readCatalogueProducts, saveRecipe,
+} from "../service/restaurant-api";
 
 /**
  * What is left in the kitchen, and what it means for tonight's menu.
@@ -49,14 +50,18 @@ export default function KitchenStockPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingDish, setEditingDish] = useState<MenuDish | null>(null);
-
-  const products = useListProducts();
+  const [products, setProducts] = useState<Product[]>([]);
 
   const refresh = useCallback(async () => {
     try {
-      const [nextStock, nextBoard] = await Promise.all([getKitchenStock(), getMenuBoard()]);
+      const [nextStock, nextBoard, catalogue] = await Promise.all([
+        getKitchenStock(),
+        getMenuBoard(),
+        readCatalogueProducts(),
+      ]);
       setStock(nextStock);
       setBoard(nextBoard);
+      setProducts(catalogue);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load kitchen stock.");
@@ -228,7 +233,7 @@ export default function KitchenStockPage() {
       {editingDish ? (
         <RecipeEditor
           dish={editingDish}
-          products={products.data ?? []}
+          products={products}
           onClose={() => setEditingDish(null)}
           onSaved={async (message) => {
             setEditingDish(null);

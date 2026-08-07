@@ -149,33 +149,47 @@ export default defineConfig({
         // the service worker can no longer precache it for offline use (the
         // "Critical offline entry is missing" guard below fires), and the entry
         // static-imports them all — startup measured 2043.4 kB.
-        experimentalMinChunkSize: 70_000,
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "wouter"],
-          "vendor-data": ["dexie", "@tanstack/react-query"],
-          "vendor-ui": ["lucide-react"],
-          "vendor-validation": ["zod"],
-          "vendor-date": ["date-fns"],
+        experimentalMinChunkSize: 40000,
+        // FUNCTION form, deliberately. The object form assigns a named module
+        // AND everything it imports, so naming a trade's page dragged the shared
+        // UI kit into that trade's chunk and every core page then imported it —
+        // the opposite of isolation, and it cost PurchaseBillsPage its manifest
+        // record, failing the offline precache stamp below. The function form
+        // assigns one module at a time, which is what a per-vertical split needs.
+        manualChunks(id) {
+          const file = id.replace(/\\/g, "/");
+
+          if (file.includes("/node_modules/")) {
+            // Package names plus the transitive deps the object form used to pull
+            // in implicitly. Keep these lists in step with package.json — a missed
+            // dep silently lands in whichever route chunk reaches it first.
+            if (/\/node_modules\/(react|react-dom|scheduler|wouter|regexparam|use-sync-external-store)\//.test(file)) return "vendor-react";
+            if (/\/node_modules\/(dexie|@tanstack\/react-query|@tanstack\/query-core)\//.test(file)) return "vendor-data";
+            if (/\/node_modules\/lucide-react\//.test(file)) return "vendor-ui";
+            if (/\/node_modules\/zod\//.test(file)) return "vendor-validation";
+            if (/\/node_modules\/date-fns\//.test(file)) return "vendor-date";
+            return undefined;
+          }
+
           // The Hindi tables are dynamically imported, but left to its own
           // heuristics Rollup folded them into whichever route chunk happened to
           // pull them in first — so an English shop opening that page downloaded
           // ~45 kB of Devanagari it never renders, and a Hindi shop had to fetch
           // an unrelated route to get its own language. Pinning them to a named
           // chunk keeps the language payload independent of routing.
-          "i18n-hindi": ["./src/features/core/settings/translations/hindi"],
-          // Do NOT add a per-vertical entry here in the object form. Naming a
-          // trade's page assigns that module AND everything it imports, so the
-          // shared UI kit lands in the trade's chunk and every core page then has
-          // to import it — the opposite of isolation. It also costs
-          // PurchaseBillsPage its own manifest record, which fails the offline
-          // precache stamp below and breaks the build outright.
-          //
-          // Splitting verticals properly needs the function form (which assigns
-          // one module at a time) AND a different answer for
-          // experimentalMinChunkSize, since that is what merges a trade's screens
-          // into shared chunks in the first place. Measured attempts are recorded
-          // in scripts/check-bundle-size.mjs; it is a real piece of work, not a
-          // one-line entry.
+          if (file.includes("/src/features/core/settings/translations/hindi")) return "i18n-hindi";
+
+          // One chunk per trade, so a kirana shop never downloads the restaurant
+          // kitchen display. pack.ts is excluded on purpose: registry.ts imports
+          // every pack eagerly to build the business-type map, so pinning it here
+          // would make each trade chunk a static import of the shell and undo the
+          // whole split. Business type is switchable at runtime (Settings → Store
+          // Profile), so every trade must stay in the build — this decides when a
+          // shop downloads a trade, not whether it is shipped.
+          const vertical = /\/src\/features\/verticals\/([^/]+)\//.exec(file);
+          if (vertical && !/\/pack\.ts$/.test(file)) return `vertical-${vertical[1]}`;
+
+          return undefined;
         },
       },
     },
