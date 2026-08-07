@@ -4,10 +4,12 @@ import { CheckCheck, ChefHat, Clock, Flame, LayoutGrid, Loader2, Utensils } from
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES, type ChipTone } from "@/lib/chip-tones";
+import { useToast } from "@/hooks/use-toast";
 import {
-  KOT_STATUS_FLOW, loadKotTickets, nextKotStatus, saveKotTickets, ticketAgeMinutes,
+  KOT_STATUS_FLOW, nextKotStatus, ticketAgeMinutes,
   type KotStatus, type KotTicket,
 } from "../service/table-store";
+import { listKitchenTickets, setKitchenTicketStatus } from "../service/restaurant-api";
 import { GuestOrdersStrip } from "./components/GuestOrdersStrip";
 
 /** How long a ticket may sit before the board calls it out. */
@@ -21,19 +23,23 @@ const COLUMNS: Array<{ status: KotStatus; label: string; tone: ChipTone; action:
 
 export default function KitchenPage() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [tickets, setTickets] = useState<KotTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [, setTick] = useState(0);
 
   const refresh = useCallback(async () => {
-    setTickets(await loadKotTickets());
+    // Served tickets are asked for because this screen shows a short "done"
+    // rail of its own; the filtering below is what splits them.
+    setTickets(await listKitchenTickets({ includeServed: true }).catch(() => [] as KotTicket[]));
     setLoading(false);
   }, []);
 
   useEffect(() => {
     void refresh();
-    // A kitchen screen is left open, so it re-reads on its own: new tickets are
-    // fired from the tables screen, which may be another tab on this device.
+    // A kitchen screen is left open, so it re-reads on its own — and now that
+    // tickets are a shop record, what it is polling for is the till ACROSS THE
+    // ROOM firing them, not another tab on this device.
     const poll = window.setInterval(() => { void refresh(); }, 5_000);
     const age = window.setInterval(() => setTick((n) => n + 1), 30_000);
     const onFocus = () => void refresh();
@@ -54,22 +60,39 @@ export default function KitchenPage() {
     [tickets],
   );
 
-  async function advance(ticket: KotTicket) {
-    const next = nextKotStatus(ticket.status);
-    if (!next) return;
-    const current = await loadKotTickets();
-    const updated = current.map((row) => (row.id === ticket.id ? { ...row, status: next } : row));
-    await saveKotTickets(updated);
-    setTickets(updated);
+  /**
+   * Moved optimistically, then confirmed.
+   *
+   * A cook taps this with wet hands mid-service and looks away; waiting on a
+   * round trip before the card moves would read as a dead screen. If the write
+   * fails, the refresh below puts the ticket back where the server says it is
+   * rather than leaving the screen quietly lying about the pass.
+   */
+  async function applyStatus(ids: string[], next: KotStatus) {
+    if (ids.length === 0) return;
+    const before = tickets;
+    setTickets(tickets.map((row) => (ids.includes(row.id) ? { ...row, status: next } : row)));
+    try {
+      await Promise.all(ids.map((id) => setKitchenTicketStatus(id, next)));
+      await refresh();
+    } catch {
+      setTickets(before);
+      toast({
+        title: "Could not update the pass",
+        description: "The kitchen board is shared with the counter, so it needs a connection. Check the network and try again.",
+        variant: "destructive",
+      });
+    }
   }
 
-  async function bumpAll(status: KotStatus) {
+  function advance(ticket: KotTicket) {
+    const next = nextKotStatus(ticket.status);
+    if (next) void applyStatus([ticket.id], next);
+  }
+
+  function bumpAll(status: KotStatus) {
     const next = nextKotStatus(status);
-    if (!next) return;
-    const current = await loadKotTickets();
-    const updated = current.map((row) => (row.status === status ? { ...row, status: next } : row));
-    await saveKotTickets(updated);
-    setTickets(updated);
+    if (next) void applyStatus(tickets.filter((row) => row.status === status).map((row) => row.id), next);
   }
 
   if (loading) {
