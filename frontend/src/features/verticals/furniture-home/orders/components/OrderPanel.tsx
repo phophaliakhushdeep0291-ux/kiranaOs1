@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, NotebookPen, Plus, Search, Sofa, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input, useQuantityDraft } from "@/components/ui/input";
+import { Input, useMoneyDraft, useQuantityDraft } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
@@ -264,7 +264,7 @@ export function OrderPanel({ open, editing, saving, width, onResizeStart, onClos
                   <div className="flex flex-wrap items-center gap-2">
                     <LineQuantity qty={line.qty} onChange={(qty) => patchLine(index, { qty })} label={`Quantity for item ${index + 1}`} />
                     <span className="text-[12px] text-[#8492ac]">×</span>
-                    <Input className="h-9 w-[110px]" type="number" min="0" step="0.01" value={line.rate} onChange={(e) => patchLine(index, { rate: Number(e.target.value) || 0 })} aria-label={`Rate for item ${index + 1}`} />
+                    <LineRate rate={line.rate} onChange={(rate) => patchLine(index, { rate })} label={`Rate for item ${index + 1}`} />
                     <span className="ml-auto text-[12.5px] font-bold text-[var(--brand-ink)]">{inr(line.qty * line.rate)}</span>
                   </div>
                   {line.productId && (
@@ -377,4 +377,9 @@ function Fld({ label, hint, children }: { label: string; hint?: string; children
 function LineQuantity({ qty, onChange, label }: { qty: number; onChange: (next: number) => void; label: string }) {
   const props = useQuantityDraft(qty, onChange);
   return <Input className="h-9 w-[70px]" type="number" inputMode="decimal" step="0.5" aria-label={label} {...props} />;
+}
+
+function LineRate({ rate, onChange, label }: { rate: number; onChange: (next: number) => void; label: string }) {
+  const props = useMoneyDraft(rate, onChange);
+  return <Input className="h-9 w-[110px]" type="number" inputMode="decimal" step="0.01" aria-label={label} {...props} />;
 }

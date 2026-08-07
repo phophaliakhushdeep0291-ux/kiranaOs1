@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarRange, Check, Loader2, Minus, Plus, Search, Shirt, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, useMoneyDraft } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
@@ -127,6 +127,11 @@ export function RentalBookingPanel({ open, editing, saving, width, onResizeStart
 
   const catalogue = availabilityQ.data?.items ?? [];
   const chosen = useMemo(() => new Map(items.filter((i) => i.productId).map((i) => [i.productId as string, i])), [items]);
+  /** productId → photo, so a chosen line can show the garment without storing a copy of it. */
+  const imageFor = useMemo(
+    () => new Map(catalogue.filter((row) => row.imageUrl).map((row) => [row.productId, row.imageUrl as string])),
+    [catalogue],
+  );
 
   const visible = useMemo(() => {
     const term = itemSearch.trim().toLowerCase();
@@ -270,6 +275,14 @@ export function RentalBookingPanel({ open, editing, saving, width, onResizeStart
               <div className="space-y-2 rounded-[12px] border border-[#e7edf7] p-3">
                 {items.map((item) => (
                   <div key={item.productId ?? item.name} className="flex flex-wrap items-center gap-2">
+                    {/* Resolved from the catalogue at render, not carried on the
+                        draft: an existing booking being edited never had one to
+                        carry, and this way both paths show the same picture. */}
+                    <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand)]">
+                      {imageFor.get(item.productId ?? "")
+                        ? <img src={imageFor.get(item.productId ?? "")!} alt={item.name} loading="lazy" className="h-full w-full object-cover" />
+                        : <Shirt size={15} aria-hidden />}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[12.5px] font-bold text-[var(--brand-ink)]">{item.name}</p>
                       <p className="text-[11px] text-[#8492ac]">{inr(item.ratePerDay)}/day × {days} day{days === 1 ? "" : "s"}</p>
@@ -287,14 +300,10 @@ export function RentalBookingPanel({ open, editing, saving, width, onResizeStart
                         <Plus size={13} />
                       </button>
                     </div>
-                    <Input
-                      className="h-8 w-[92px]"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={item.ratePerDay}
-                      onChange={(e) => setRate(item.productId, Number(e.target.value) || 0)}
-                      aria-label={`Per-day rent for ${item.name}`}
+                    <LineRate
+                      rate={item.ratePerDay}
+                      onChange={(rate) => setRate(item.productId, rate)}
+                      label={`Per-day rent for ${item.name}`}
                     />
                     <button type="button" className="grid h-8 w-8 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" onClick={() => setQty(item.productId, 0)} aria-label={`Remove ${item.name}`}><X size={14} /></button>
                   </div>
@@ -412,4 +421,11 @@ function Fld({ label, hint, children }: { label: string; hint?: string; children
       {hint && <p className="mt-1 text-[11px] text-[#9aa6bb]">{hint}</p>}
     </div>
   );
+}
+
+// A hook cannot run inside the items.map callback, so each row owns its draft.
+// Zero is allowed: a rent of zero is a real, if unusual, answer.
+function LineRate({ rate, onChange, label }: { rate: number; onChange: (next: number) => void; label: string }) {
+  const props = useMoneyDraft(rate, onChange);
+  return <Input className="h-8 w-[92px]" type="number" inputMode="decimal" step="0.01" aria-label={label} {...props} />;
 }

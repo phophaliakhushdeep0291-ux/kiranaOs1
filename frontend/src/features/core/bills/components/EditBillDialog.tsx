@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input, useQuantityDraft } from "@/components/ui/input";
+import { Input, useMoneyDraft, useQuantityDraft } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useToast } from "@/hooks/use-toast";
@@ -115,6 +115,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
     [lines],
   );
   const total = computeBillInputTotal(inputItems, discount, gstMode);
+  const discountProps = useMoneyDraft(discount, setDiscount);
 
   const matches = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -267,14 +268,9 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
                       quantity={line.quantity}
                       onChange={(quantity) => updateLine(line.key, { quantity })}
                     />
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      value={line.ratePerRateUnit}
-                      onChange={(event) => updateLine(line.key, { ratePerRateUnit: Number(event.target.value) || 0 })}
-                      className="h-9 text-right"
-                      aria-label="Rate"
+                    <BillLineRate
+                      rate={line.ratePerRateUnit}
+                      onChange={(ratePerRateUnit) => updateLine(line.key, { ratePerRateUnit })}
                     />
                     <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-red-600" onClick={() => removeLine(line.key)} aria-label="Remove item">
                       <Trash2 size={15} />
@@ -312,8 +308,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
                   type="number"
                   inputMode="decimal"
                   min={0}
-                  value={discount}
-                  onChange={(event) => setDiscount(Number(event.target.value) || 0)}
+                  {...discountProps}
                   className="h-9 w-24 text-right"
                   aria-label="Discount"
                 />
@@ -358,4 +353,10 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
 function BillLineQuantity({ quantity, onChange }: { quantity: number; onChange: (next: number) => void }) {
   const props = useQuantityDraft(quantity, onChange);
   return <Input type="number" inputMode="decimal" className="h-9 text-right" aria-label="Quantity" {...props} />;
+}
+
+// A hook cannot run inside the lines.map callback, so each row owns its draft.
+function BillLineRate({ rate, onChange }: { rate: number; onChange: (next: number) => void }) {
+  const props = useMoneyDraft(rate, onChange);
+  return <Input type="number" inputMode="decimal" className="h-9 text-right" aria-label="Rate" {...props} />;
 }

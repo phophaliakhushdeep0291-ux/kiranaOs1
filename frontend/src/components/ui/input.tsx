@@ -19,13 +19,17 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
 )
 Input.displayName = "Input"
 
-/** Quantities store at millesimal precision (0.005 kg = 5 g). */
-function roundQuantity(value: number): number {
+/** Quantities store at millesimal precision (0.005 kg = 5 g); money at paise. */
+const QUANTITY_DECIMALS = 3
+const MONEY_DECIMALS = 2
+
+function roundTo(value: number, decimals: number): number {
+  const factor = 10 ** decimals
   const n = Number(value) || 0
-  return Math.round((n + Number.EPSILON) * 1000) / 1000 || 0
+  return Math.round((n + Number.EPSILON) * factor) / factor || 0
 }
 
-/** The smallest quantity that survives that rounding. */
+/** The smallest quantity that survives quantity rounding. */
 export const MIN_QUANTITY = 0.001
 
 /**
@@ -33,14 +37,19 @@ export const MIN_QUANTITY = 0.001
  * value alone — an emptied box, a lone "-" or ".", a "0." on the way to "0.5",
  * anything below `min`, and anything that rounds away below it.
  */
-export function parseQuantityDraft(draft: string, min = MIN_QUANTITY): number | null {
+export function parseNumericDraft(draft: string, min = 0, decimals = QUANTITY_DECIMALS): number | null {
   if (draft.trim() === "") return null
   const parsed = Number(draft)
   if (!Number.isFinite(parsed)) return null
   // Round BEFORE the bounds check: 0.0004 clears a min of 0.001 on the raw value
   // but stores as 0, and committing that 0 is the deletion this guards against.
-  const rounded = roundQuantity(parsed)
+  const rounded = roundTo(parsed, decimals)
   return rounded >= min ? rounded : null
+}
+
+/** Quantity flavour: millesimal precision, and MIN_QUANTITY as the default floor. */
+export function parseQuantityDraft(draft: string, min = MIN_QUANTITY): number | null {
+  return parseNumericDraft(draft, min, QUANTITY_DECIMALS)
 }
 
 // Makes a numeric box one you can actually clear and retype.
@@ -63,40 +72,50 @@ export function parseQuantityDraft(draft: string, min = MIN_QUANTITY): number | 
 // experimentalMinChunkSize those get merged into the entry — measured at +67 kB
 // of startup JS across the six screens below. This module is already imported by
 // ~80 files, so it costs nothing to sit here.
-export interface QuantityDraftOptions {
+export interface NumericDraftOptions {
   /**
-   * Smallest committable value. MIN_QUANTITY (the default) where a zero would
-   * make the row meaningless, such as a cart or order line. Pass 0 where zero is
-   * a real answer, such as a return line nobody is returning.
+   * Smallest committable value. MIN_QUANTITY where a zero would make the row
+   * meaningless, such as a cart or order line. 0 where zero is a real answer —
+   * a return line nobody is returning, a rate that really is free.
    */
   min?: number
   max?: number
+  decimals?: number
+  /**
+   * Commit null when the box is emptied, instead of leaving the value alone.
+   * For a field where "nothing typed" must be distinguishable from a typed 0 —
+   * bulk edit, where a blank box previously armed "set to 0" across the whole
+   * selection. Callers using this take `number | null` in onCommit.
+   */
+  emptyCommitsNull?: boolean
 }
 
-export function useQuantityDraft(
-  value: number,
-  onCommit: (next: number) => void,
-  { min = MIN_QUANTITY, max }: QuantityDraftOptions = {},
+export function useNumericDraft(
+  value: number | null,
+  onCommit: (next: number | null) => void,
+  { min = 0, max, decimals = QUANTITY_DECIMALS, emptyCommitsNull = false }: NumericDraftOptions = {},
 ) {
   // null = not being typed in, so the box tracks `value` and keeps reflecting
   // steppers, scale readings and every other outside edit. A string means mid-edit.
   const [draft, setDraft] = React.useState<string | null>(null)
 
   const clamp = (next: number) => (max !== undefined ? Math.min(next, max) : next)
+  const commit = onCommit
 
   return {
-    value: draft ?? String(value),
+    value: draft ?? (value === null ? "" : String(value)),
     onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
       const next = event.target.value
       setDraft(next)
-      const parsed = parseQuantityDraft(next, min)
-      if (parsed !== null) onCommit(clamp(parsed))
+      const parsed = parseNumericDraft(next, min, decimals)
+      if (parsed !== null) commit(clamp(parsed))
+      else if (emptyCommitsNull && next.trim() === "" && value !== null) commit(null)
     },
     onBlur: () => {
       // Leaving the box empty or invalid restores the value the row already has,
       // rather than committing a zero. Removing a row stays a separate action.
-      const parsed = draft === null ? null : parseQuantityDraft(draft, min)
-      if (parsed !== null && clamp(parsed) !== value) onCommit(clamp(parsed))
+      const parsed = draft === null ? null : parseNumericDraft(draft, min, decimals)
+      if (parsed !== null && clamp(parsed) !== value) commit(clamp(parsed))
       setDraft(null)
     },
     onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -104,6 +123,35 @@ export function useQuantityDraft(
       if (event.key === "Escape") { setDraft(null); event.currentTarget.blur() }
     },
   }
+}
+
+/** Quantity box: millesimal precision, MIN_QUANTITY floor unless told otherwise. */
+export function useQuantityDraft(
+  value: number,
+  onCommit: (next: number) => void,
+  { min = MIN_QUANTITY, max }: { min?: number; max?: number } = {},
+) {
+  return useNumericDraft(
+    value,
+    (next) => { if (next !== null) onCommit(next) },
+    { min, max, decimals: QUANTITY_DECIMALS },
+  )
+}
+
+/**
+ * Money box: paise precision, and 0 is allowed by default — a rate or discount
+ * of zero is a real answer, unlike a cart line of zero.
+ */
+export function useMoneyDraft(
+  value: number,
+  onCommit: (next: number) => void,
+  { min = 0, max }: { min?: number; max?: number } = {},
+) {
+  return useNumericDraft(
+    value,
+    (next) => { if (next !== null) onCommit(next) },
+    { min, max, decimals: MONEY_DECIMALS },
+  )
 }
 
 export { Input }

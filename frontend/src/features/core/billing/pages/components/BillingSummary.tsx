@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type Dispatch, type ReactNode, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, useMoneyDraft, useNumericDraft } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BillInputBillType, type Customer } from "@/lib/api/client";
@@ -272,6 +272,15 @@ export function BillingSummary({
   const [couponCode, setCouponCode] = useState("");
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Clear-and-retype drafts. Both boxes previously committed 0 on the keystroke
+  // that emptied them, so the old figure had to be selected over.
+  const discountProps = useMoneyDraft(safeDiscount, (next) => setDiscount(clampAmount(next, 0, subtotal)), { max: subtotal });
+  const loyaltyProps = useNumericDraft(
+    loyaltyPoints,
+    (next) => setLoyaltyPoints(Math.min(loyaltyMaxPoints, Math.max(0, Math.floor(next ?? 0)))),
+    { decimals: 0, max: loyaltyMaxPoints },
+  );
 
   async function handleApplyCoupon() {
     if (!couponCode.trim() || subtotal <= 0) return;
@@ -590,10 +599,9 @@ export function BillingSummary({
                     min={0}
                     max={subtotal}
                     autoFocus
-                    value={safeDiscount === 0 ? "" : safeDiscount}
-                    onChange={(e) => setDiscount(clampAmount(Number(e.target.value) || 0, 0, subtotal))}
-                    onBlur={() => setEditingDiscount(false)}
-                    onKeyDown={(e) => e.key === "Enter" && setEditingDiscount(false)}
+                    {...discountProps}
+                    onBlur={() => { discountProps.onBlur(); setEditingDiscount(false); }}
+                    onKeyDown={(e) => { discountProps.onKeyDown(e); if (e.key === "Enter") setEditingDiscount(false); }}
                     className="w-16 rounded-[7px] border border-[#dbe8ff] bg-white px-2 py-1 text-right text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
                     placeholder={t("billing.summary.discountPlaceholder")}
                   />
@@ -673,7 +681,7 @@ export function BillingSummary({
                       : loyaltyBalance < loyaltyMinimumPoints ? <p className="text-[11px] font-semibold text-slate-600">{t("billing.summary.loyaltyBelowMinimum", { tier: loyaltyTier ? t("billing.summary.loyaltyTierPrefix", { tier: loyaltyTier }) : "", points: loyaltyBalance.toLocaleString("en-IN"), minimum: loyaltyMinimumPoints.toLocaleString("en-IN") })}</p>
                         : <>
                             <div className="flex items-center gap-2">
-                              <Input type="number" min={loyaltyMinimumPoints} max={loyaltyMaxPoints} value={loyaltyPoints || ""} onChange={(event) => setLoyaltyPoints(Math.min(loyaltyMaxPoints, Math.max(0, Math.floor(Number(event.target.value) || 0))))} placeholder={t("billing.summary.loyaltyMinPlaceholder", { minimum: loyaltyMinimumPoints })} className="h-9 bg-white text-xs" />
+                              <Input type="number" min={loyaltyMinimumPoints} max={loyaltyMaxPoints} {...loyaltyProps} placeholder={t("billing.summary.loyaltyMinPlaceholder", { minimum: loyaltyMinimumPoints })} className="h-9 bg-white text-xs" />
                               <Button type="button" variant="outline" className="h-9 shrink-0 border-violet-200 text-[11px] font-black text-violet-700" disabled={loyaltyMaxPoints < loyaltyMinimumPoints} onClick={() => setLoyaltyPoints(loyaltyMaxPoints)}>{t("billing.summary.loyaltyUseMax")}</Button>
                               {loyaltyPoints > 0 ? <Button type="button" variant="ghost" className="h-9 px-2 text-[11px] font-bold text-slate-500" onClick={() => setLoyaltyPoints(0)}>{t("billing.summary.loyaltyClear")}</Button> : null}
                             </div>

@@ -80,6 +80,32 @@ describe("patch assembly", () => {
     expect(intentHasEffect(NONE)).toBe(false);
     expect(intentHasEffect({ ...NONE, priceMode: "increase_pct", priceValue: 0 })).toBe(false);
     expect(intentHasEffect({ ...NONE, priceMode: "increase_pct", priceValue: 5 })).toBe(true);
+    // A typed 0 still means "empty the shelf" — that stays a real instruction.
     expect(intentHasEffect({ ...NONE, stockMode: "set", stockValue: 0 })).toBe(true);
+  });
+
+  // An emptied box used to be indistinguishable from a typed 0, so clearing it
+  // armed "set to 0" and Apply wrote a zero price or zero stock to every selected
+  // product — with the box rendering blank, so nothing warned you.
+  it("treats an empty box as no instruction, whatever the mode", () => {
+    expect(intentHasEffect({ ...NONE, priceMode: "set", priceValue: null })).toBe(false);
+    expect(intentHasEffect({ ...NONE, stockMode: "set", stockValue: null })).toBe(false);
+    expect(intentHasEffect({ ...NONE, priceMode: "increase_flat", priceValue: null })).toBe(false);
+    expect(intentHasEffect({ ...NONE, stockMode: "decrease", stockValue: null })).toBe(false);
+  });
+
+  it("leaves price and stock untouched when the box is empty", () => {
+    const product = { defaultPricePerRateUnit: 250, stockBaseQty: 40 } as never;
+    expect(nextSellingPrice(product, { ...NONE, priceMode: "set", priceValue: null })).toBe(250);
+    expect(nextStock(product, { ...NONE, stockMode: "set", stockValue: null })).toBe(40);
+
+    const patch = computeBulkPatch(product, { priceMode: "set", priceValue: null, stockMode: "set", stockValue: null });
+    expect(patch.noop).toBe(true);
+    expect(patch.patch).toEqual({});
+  });
+
+  it("still writes a deliberate zero", () => {
+    const product = { defaultPricePerRateUnit: 250, stockBaseQty: 40 } as never;
+    expect(nextStock(product, { ...NONE, stockMode: "set", stockValue: 0 })).toBe(0);
   });
 });

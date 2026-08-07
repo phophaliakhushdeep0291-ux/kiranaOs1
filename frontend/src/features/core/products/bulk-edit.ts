@@ -12,10 +12,16 @@ export type BulkStockMode = "none" | "set" | "increase" | "decrease";
 
 export interface BulkEditIntent {
   priceMode: BulkPriceMode;
-  /** Percent (for _pct modes) or rupees (for _flat / set). */
-  priceValue: number;
+  /**
+   * Percent (for _pct modes) or rupees (for _flat / set). null means nothing has
+   * been typed yet, which is NOT the same as a typed 0 — "set stock to 0" is a
+   * real instruction (mark the shelf empty), while an empty box must do nothing.
+   * They were the same value before, so clearing the box armed "set to 0" and
+   * Apply wrote a zero price or zero stock to every selected product.
+   */
+  priceValue: number | null;
   stockMode: BulkStockMode;
-  stockValue: number;
+  stockValue: number | null;
 }
 
 function round2(value: number): number {
@@ -41,6 +47,7 @@ function minPrice(product: Product & Record<string, unknown>): number {
 /** New selling price for one product under the intent (before the min-price floor). */
 export function nextSellingPrice(product: Product & Record<string, unknown>, intent: BulkEditIntent): number {
   const base = currentSellingPrice(product);
+  if (intent.priceValue === null) return base;
   const value = Math.max(0, Number(intent.priceValue) || 0);
   switch (intent.priceMode) {
     case "increase_pct": return round2(base * (1 + value / 100));
@@ -55,6 +62,7 @@ export function nextSellingPrice(product: Product & Record<string, unknown>, int
 /** New base-unit stock for one product under the intent. */
 export function nextStock(product: Product & Record<string, unknown>, intent: BulkEditIntent): number {
   const base = currentStock(product);
+  if (intent.stockValue === null) return base;
   const value = Number(intent.stockValue) || 0;
   switch (intent.stockMode) {
     case "set": return round3(Math.max(0, value));
@@ -109,7 +117,12 @@ export function computeBulkPatch(product: Product & Record<string, unknown>, int
 
 /** Does the intent actually ask for any change? (Guards the Apply button.) */
 export function intentHasEffect(intent: BulkEditIntent): boolean {
-  const priceActive = intent.priceMode !== "none" && (intent.priceMode === "set" || Number(intent.priceValue) > 0);
-  const stockActive = intent.stockMode !== "none" && (intent.stockMode === "set" || Number(intent.stockValue) > 0);
+  // An empty box (null) never counts, whatever the mode — that is what stopped a
+  // cleared field from arming "set to 0" across the whole selection. A typed 0
+  // still counts for "set", because emptying the shelf is a real instruction.
+  const priceActive = intent.priceMode !== "none" && intent.priceValue !== null
+    && (intent.priceMode === "set" || Number(intent.priceValue) > 0);
+  const stockActive = intent.stockMode !== "none" && intent.stockValue !== null
+    && (intent.stockMode === "set" || Number(intent.stockValue) > 0);
   return priceActive || stockActive;
 }

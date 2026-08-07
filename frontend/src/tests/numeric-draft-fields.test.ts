@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { MIN_QUANTITY, parseQuantityDraft } from "@/components/ui/input";
+import { MIN_QUANTITY, parseNumericDraft, parseQuantityDraft } from "@/components/ui/input";
 
 // Regression: clearing the qty box deleted the cart line. Every numeric box
 // parsed its own value inline as `Number(e.target.value) || 0`, so emptying one
@@ -75,6 +75,33 @@ describe("parseQuantityDraft", () => {
   });
 });
 
+const MONEY_BOXES = [
+  "src/features/core/bills/components/EditBillDialog.tsx",
+  "src/features/core/billing/pages/components/BillingSummary.tsx",
+  "src/features/core/products/pages/components/BulkEditDialog.tsx",
+  "src/features/verticals/furniture-home/orders/components/OrderPanel.tsx",
+  "src/features/verticals/clothing/rentals/components/RentalBookingPanel.tsx",
+];
+
+describe("parseNumericDraft at money precision", () => {
+  it("keeps paise and drops the third decimal", () => {
+    expect(parseNumericDraft("12.34", 0, 2)).toBe(12.34);
+    expect(parseNumericDraft("12.345", 0, 2)).toBe(12.35);
+    expect(parseNumericDraft("0.004", 0, 2)).toBe(0);
+  });
+
+  it("allows a rate or discount of exactly zero", () => {
+    // Unlike a cart line, a money field of 0 is a real answer.
+    expect(parseNumericDraft("0", 0, 2)).toBe(0);
+  });
+
+  it("still commits nothing for an emptied box", () => {
+    expect(parseNumericDraft("", 0, 2)).toBeNull();
+    expect(parseNumericDraft("  ", 0, 2)).toBeNull();
+    expect(parseNumericDraft("-5", 0, 2)).toBeNull();
+  });
+});
+
 describe("qty boxes across the app", () => {
   it("no qty box parses its own value inline any more", () => {
     for (const path of QTY_BOXES) {
@@ -87,6 +114,21 @@ describe("qty boxes across the app", () => {
   it("every qty box goes through the shared draft hook", () => {
     for (const path of QTY_BOXES) {
       expect(readFileSync(path, "utf8"), `${path} does not use useQuantityDraft`).toContain("useQuantityDraft");
+    }
+  });
+
+  it("no money box parses its own value inline any more", () => {
+    for (const path of MONEY_BOXES) {
+      const source = readFileSync(path, "utf8");
+      expect(source, `${path} still parses a rate inline`).not.toMatch(/rate\w*:\s*Number\((e|event)\.target\.value\)\s*\|\|\s*0/i);
+      expect(source, `${path} still parses a price inline`).not.toMatch(/price\w*:\s*Number\((e|event)\.target\.value\)\s*\|\|\s*0/i);
+      expect(source, `${path} still parses a stock value inline`).not.toMatch(/stockValue:\s*Number\((e|event)\.target\.value\)\s*\|\|\s*0/);
+    }
+  });
+
+  it("every money box goes through a shared draft hook", () => {
+    for (const path of MONEY_BOXES) {
+      expect(readFileSync(path, "utf8"), `${path} uses no draft hook`).toMatch(/useMoneyDraft|useNumericDraft/);
     }
   });
 

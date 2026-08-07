@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, useNumericDraft } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { patchProductLocalFirst } from "@/features/core/products/local-actions";
@@ -18,7 +18,7 @@ interface BulkEditDialogProps {
   onDone: () => void;
 }
 
-const EMPTY: BulkEditIntent = { priceMode: "none", priceValue: 0, stockMode: "none", stockValue: 0 };
+const EMPTY: BulkEditIntent = { priceMode: "none", priceValue: null, stockMode: "none", stockValue: null };
 
 export function BulkEditDialog({ open, onOpenChange, products, requiresOwnerPin, onDone }: BulkEditDialogProps) {
   const { t } = useAppLanguage();
@@ -34,6 +34,20 @@ export function BulkEditDialog({ open, onOpenChange, products, requiresOwnerPin,
       floored: patches.filter((p) => p.flooredToMinimum).length,
     };
   }, [products, intent]);
+
+  // Null-aware drafts: an emptied box must read as "nothing typed", not as a
+  // typed 0. Before this, clearing the box armed "set to 0" and Apply wrote a
+  // zero price or zero stock to every selected product.
+  const priceProps = useNumericDraft(
+    intent.priceValue,
+    (next) => setIntent((s) => ({ ...s, priceValue: next })),
+    { emptyCommitsNull: true, decimals: 2 },
+  );
+  const stockProps = useNumericDraft(
+    intent.stockValue,
+    (next) => setIntent((s) => ({ ...s, stockValue: next })),
+    { emptyCommitsNull: true, decimals: 3 },
+  );
 
   const hasEffect = intentHasEffect(intent);
 
@@ -106,9 +120,8 @@ export function BulkEditDialog({ open, onOpenChange, products, requiresOwnerPin,
                 inputMode="decimal"
                 className="w-28"
                 disabled={intent.priceMode === "none"}
-                value={intent.priceValue === 0 ? "" : intent.priceValue}
                 placeholder={intent.priceMode.includes("pct") ? "%" : "₹"}
-                onChange={(e) => setIntent((s) => ({ ...s, priceValue: Number(e.target.value) || 0 }))}
+                {...priceProps}
               />
             </div>
           </div>
@@ -131,9 +144,8 @@ export function BulkEditDialog({ open, onOpenChange, products, requiresOwnerPin,
                 inputMode="decimal"
                 className="w-28"
                 disabled={intent.stockMode === "none"}
-                value={intent.stockValue === 0 ? "" : intent.stockValue}
                 placeholder="qty"
-                onChange={(e) => setIntent((s) => ({ ...s, stockValue: Number(e.target.value) || 0 }))}
+                {...stockProps}
               />
             </div>
           </div>
