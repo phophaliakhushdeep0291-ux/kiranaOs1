@@ -17,6 +17,7 @@
                     "app:check":  "node scripts/check-production-app.mjs",
                     "i18n:check":  "node scripts/check-translation-placeholders.mjs",
                     "icons":  "node scripts/generate-icons.mjs",
+                    "catalog:generate":  "node scripts/generate-starter-catalog.mjs",
                     "security:check":  "npm run bundle:check && npm run app:check",
                     "prod:check":  "npm run typecheck && npm run i18n:check && npm run test && npm run build && npm run security:check",
                     "qa:purchase-receive":  "node scripts/capture-purchase-receive-ui.mjs",

@@ -107,6 +107,7 @@ model Shop {
   furnitureOrders             FurnitureOrder[]
   testerUnits                 TesterUnit[]
   restaurantTables            RestaurantTable[]
+  kitchenTickets              KitchenTicket[]
   dishRecipeComponents        DishRecipeComponent[]
   auditRules                  AuditRule[]
   auditRuns                   AuditRun[]
@@ -808,6 +809,7 @@ model StoreLocation {
   stockCountSessions   StockCountSession[]
   inventoryLots        InventoryLot[]
   restaurantTables     RestaurantTable[]
+  kitchenTickets       KitchenTicket[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])
@@ -3426,4 +3428,56 @@ model DishRecipeComponent {
   @@unique([shopId, dishProductId, ingredientProductId])
   @@index([shopId, dishProductId])
   @@index([shopId, ingredientProductId])
+}
+
+// A kitchen ticket (KOT) — what the pass is actually working off.
+//
+// This lives on the server rather than on the till because the kitchen display
+// is a DIFFERENT DEVICE from the counter that fires it. Held device-locally, a
+// ticket never reached the screen it was written for.
+//
+// tableId and billId are deliberately NOT foreign keys. A table's order is the
+// parked HeldBill on the till taking it, whose id is local to that device; the
+// server only groups by it. That also lets a ticket outlive the sitting it came
+// from, which is what a kitchen record is for.
+model KitchenTicket {
+  id         String  @id @default(cuid())
+  shopId     String
+  locationId String?
+
+  // Per-shop, server-assigned. The till cannot number these: two devices firing
+  // at the same moment would both read the same highest number and pick it.
+  ticketNo Int
+
+  tableId   String
+  tableName String
+  // The sitting this belongs to, so a re-seated table starts owing the kitchen
+  // everything on the new order rather than inheriting the last party's tally.
+  billId String
+
+  // new | preparing | ready | served
+  status String @default("new")
+  // KotLine[]: { key, name, qty, unit, note }. A fired snapshot — never queried
+  // line by line, so it is one column rather than a child table.
+  linesJson String    @default("[]")
+  firedAt   DateTime  @default(now())
+  servedAt  DateTime?
+
+  // Durable create idempotency: a retried fire must not put the dish on twice.
+  // Nullable, and NULLs are DISTINCT in a unique index, so tickets without a
+  // key never collide with each other.
+  idempotencyKey String?
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@unique([shopId, idempotencyKey])
+  @@unique([shopId, ticketNo])
+  @@index([shopId, deletedAt, firedAt])
+  @@index([shopId, status, firedAt])
+  @@index([shopId, billId])
 }

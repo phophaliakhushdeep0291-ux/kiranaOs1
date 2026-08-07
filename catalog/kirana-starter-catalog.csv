@@ -1,0 +1,561 @@
+﻿Name,Category,Unit,SKU/Barcode,MRP,Cost Price,Selling Price,GST %,Opening Stock,Low Stock Alert,Reorder Level,HSN,Brand,Aliases,Description,Pack Size,Pack Unit,Loose Item,Active
+Aashirvaad Shudh Chakki Atta 5kg,Atta & Flour,packet,,340,319.6,340,0,0,5,10,1101,Aashirvaad,"atta, आटा, gehu atta, wheat flour",,5,kg,no,yes
+Aashirvaad Shudh Chakki Atta 10kg,Atta & Flour,packet,,660,620.4,660,0,0,5,10,1101,Aashirvaad,"atta, आटा, wheat flour",,10,kg,no,yes
+Aashirvaad Multigrain Atta 5kg,Atta & Flour,packet,,395,371.3,395,0,0,5,10,1101,Aashirvaad,"multigrain atta, मल्टीग्रेन आटा",,5,kg,no,yes
+Fortune Chakki Fresh Atta 5kg,Atta & Flour,packet,,320,300.8,320,0,0,5,10,1101,Fortune,"atta, आटा, fortune atta",,5,kg,no,yes
+Fortune Chakki Fresh Atta 10kg,Atta & Flour,packet,,625,587.5,625,0,0,5,10,1101,Fortune,"atta, आटा",,10,kg,no,yes
+Pillsbury Chakki Fresh Atta 5kg,Atta & Flour,packet,,330,310.2,330,0,0,5,10,1101,Pillsbury,"atta, आटा",,5,kg,no,yes
+Nature Fresh Sampoorna Atta 5kg,Atta & Flour,packet,,315,296.1,315,0,0,5,10,1101,Nature Fresh,"atta, आटा",,5,kg,no,yes
+Rajdhani Chakki Atta 5kg,Atta & Flour,packet,,300,282,300,0,0,5,10,1101,Rajdhani,"atta, आटा",,5,kg,no,yes
+Shakti Bhog Atta 5kg,Atta & Flour,packet,,305,286.7,305,0,0,5,10,1101,Shakti Bhog,"atta, आटा",,5,kg,no,yes
+Rajdhani Besan 500g,Atta & Flour,packet,,70,65.8,70,0,0,5,10,1106,Rajdhani,"besan, बेसन, gram flour, chana atta",,500,gram,no,yes
+Rajdhani Besan 1kg,Atta & Flour,packet,,135,126.9,135,0,0,5,10,1106,Rajdhani,"besan, बेसन, gram flour",,1,kg,no,yes
+Fortune Besan 1kg,Atta & Flour,packet,,130,122.2,130,0,0,5,10,1106,Fortune,"besan, बेसन",,1,kg,no,yes
+Rajdhani Maida 500g,Atta & Flour,packet,,38,35.72,38,0,0,5,10,1101,Rajdhani,"maida, मैदा, refined flour",,500,gram,no,yes
+Rajdhani Maida 1kg,Atta & Flour,packet,,72,67.68,72,0,0,5,10,1101,Rajdhani,"maida, मैदा",,1,kg,no,yes
+Rajdhani Sooji Rava 500g,Atta & Flour,packet,,40,37.6,40,0,0,5,10,1103,Rajdhani,"sooji, सूजी, rava, semolina",,500,gram,no,yes
+Rajdhani Sooji Rava 1kg,Atta & Flour,packet,,76,71.44,76,0,0,5,10,1103,Rajdhani,"sooji, सूजी, rava",,1,kg,no,yes
+Aashirvaad Multigrain Atta 1kg,Atta & Flour,packet,,85,79.9,85,0,0,5,10,1101,Aashirvaad,"atta, आटा",,1,kg,no,yes
+Bajra Atta 500g,Atta & Flour,packet,,55,51.7,55,0,0,5,10,1101,Local,"bajra atta, बाजरा आटा, pearl millet flour",,500,gram,no,yes
+Makki Atta 500g,Atta & Flour,packet,,48,45.12,48,0,0,5,10,1101,Local,"makki atta, मक्की आटा, maize flour",,500,gram,no,yes
+Jau Atta 500g,Atta & Flour,packet,,52,48.88,52,0,0,5,10,1101,Local,"jau atta, जौ आटा, barley flour",,500,gram,no,yes
+Ragi Atta 500g,Atta & Flour,packet,,70,65.8,70,0,0,5,10,1101,Local,"ragi atta, रागी आटा, nachni",,500,gram,no,yes
+Sattu 500g,Atta & Flour,packet,,80,75.2,80,0,0,5,10,1101,Local,"sattu, सत्तू",,500,gram,no,yes
+Idli Rava 1kg,Atta & Flour,packet,,90,84.6,90,0,0,5,10,1103,Local,"idli rava, इडली रवा",,1,kg,no,yes
+MTR Dosa Mix 500g,Atta & Flour,packet,,95,89.3,95,0,0,5,10,1101,MTR,"dosa mix, डोसा मिक्स",,500,gram,no,yes
+Gits Idli Mix 200g,Atta & Flour,packet,,70,65.8,70,0,0,5,10,1101,Gits,"idli mix, इडली मिक्स",,200,gram,no,yes
+India Gate Basmati Rice Classic 5kg,Rice,packet,,720,669.6,720,0,0,5,10,0403,India Gate,"chawal, चावल, basmati, rice",,5,kg,no,yes
+India Gate Basmati Rice Classic 1kg,Rice,packet,,150,139.5,150,0,0,5,10,0403,India Gate,"chawal, चावल, basmati",,1,kg,no,yes
+Daawat Rozana Basmati Rice 5kg,Rice,packet,,480,446.4,480,0,0,5,10,1006,Daawat,"chawal, चावल, basmati",,5,kg,no,yes
+Daawat Devaaya Basmati Rice 1kg,Rice,packet,,165,153.45,165,0,0,5,10,1006,Daawat,"chawal, चावल, basmati",,1,kg,no,yes
+Kohinoor Basmati Rice 1kg,Rice,packet,,175,162.75,175,0,0,5,10,1006,Kohinoor,"chawal, चावल, basmati",,1,kg,no,yes
+Fortune Everyday Basmati Rice 5kg,Rice,packet,,450,418.5,450,0,0,5,10,1006,Fortune,"chawal, चावल",,5,kg,no,yes
+Sona Masoori Rice 5kg,Rice,packet,,340,316.2,340,0,0,5,10,1006,Local,"sona masoori, सोना मसूरी, chawal",,5,kg,no,yes
+Kolam Rice 5kg,Rice,packet,,320,297.6,320,0,0,5,10,1006,Local,"kolam chawal, कोलम चावल",,5,kg,no,yes
+Broken Rice 5kg,Rice,packet,,220,204.6,220,0,0,5,10,1006,Local,"tukda chawal, टुकड़ा चावल",,5,kg,no,yes
+Poha Thick 500g,Rice,packet,,42,39.06,42,0,0,5,10,1904,Local,"poha, पोहा, chiwda, flattened rice",,500,gram,no,yes
+Poha Thin 500g,Rice,packet,,42,39.06,42,0,0,5,10,1904,Local,"patla poha, पतला पोहा",,500,gram,no,yes
+Murmura Puffed Rice 200g,Rice,packet,,30,27.9,30,0,0,5,10,1006,Local,"murmura, मुरमुरा, lai, puffed rice",,200,gram,no,yes
+Sabudana 500g,Rice,packet,,90,83.7,90,0,0,5,10,1006,Local,"sabudana, साबूदाना, sago",,500,gram,no,yes
+Tata Sampann Toor Dal 1kg,Dal & Pulses,packet,,180,165.6,180,0,0,5,10,0713,Tata Sampann,"toor dal, तूर दाल, arhar dal, अरहर",,1,kg,no,yes
+Tata Sampann Chana Dal 1kg,Dal & Pulses,packet,,95,87.4,95,0,0,5,10,0713,Tata Sampann,"chana dal, चना दाल",,1,kg,no,yes
+Tata Sampann Moong Dal 1kg,Dal & Pulses,packet,,145,133.4,145,0,0,5,10,0713,Tata Sampann,"moong dal, मूंग दाल",,1,kg,no,yes
+Tata Sampann Urad Dal 1kg,Dal & Pulses,packet,,155,142.6,155,0,0,5,10,0713,Tata Sampann,"urad dal, उड़द दाल",,1,kg,no,yes
+Tata Sampann Masoor Dal 1kg,Dal & Pulses,packet,,120,110.4,120,0,0,5,10,0713,Tata Sampann,"masoor dal, मसूर दाल",,1,kg,no,yes
+Fortune Toor Dal 1kg,Dal & Pulses,packet,,170,156.4,170,0,0,5,10,0713,Fortune,"toor dal, तूर दाल, arhar",,1,kg,no,yes
+Fortune Moong Dal 1kg,Dal & Pulses,packet,,140,128.8,140,0,0,5,10,0713,Fortune,"moong dal, मूंग दाल",,1,kg,no,yes
+Fortune Chana Dal 1kg,Dal & Pulses,packet,,90,82.8,90,0,0,5,10,0713,Fortune,"chana dal, चना दाल",,1,kg,no,yes
+Rajma Chitra 500g,Dal & Pulses,packet,,95,87.4,95,0,0,5,10,0713,Local,"rajma, राजमा, kidney beans",,500,gram,no,yes
+Rajma Kashmiri 500g,Dal & Pulses,packet,,120,110.4,120,0,0,5,10,0713,Local,"rajma, राजमा",,500,gram,no,yes
+Kabuli Chana 500g,Dal & Pulses,packet,,85,78.2,85,0,0,5,10,0713,Local,"kabuli chana, काबुली चना, chhole, chickpea",,500,gram,no,yes
+Kala Chana 500g,Dal & Pulses,packet,,60,55.2,60,0,0,5,10,0713,Local,"kala chana, काला चना",,500,gram,no,yes
+Safed Matar 500g,Dal & Pulses,packet,,55,50.6,55,0,0,5,10,0713,Local,"safed matar, सफेद मटर, white peas",,500,gram,no,yes
+Lobia 500g,Dal & Pulses,packet,,70,64.4,70,0,0,5,10,0713,Local,"lobia, लोबिया, black eyed pea",,500,gram,no,yes
+Moth Dal 500g,Dal & Pulses,packet,,75,69,75,0,0,5,10,0713,Local,"moth, मोठ",,500,gram,no,yes
+Moong Sabut 500g,Dal & Pulses,packet,,80,73.6,80,0,0,5,10,0713,Local,"sabut moong, साबुत मूंग, green gram",,500,gram,no,yes
+Urad Sabut 500g,Dal & Pulses,packet,,85,78.2,85,0,0,5,10,0713,Local,"sabut urad, साबुत उड़द",,500,gram,no,yes
+Soya Chunks 200g,Dal & Pulses,packet,,65,59.8,65,0,0,5,10,0713,Nutrela,"soya chunks, सोया चंक्स, nutrela, badi",,200,gram,no,yes
+Tata Salt 1kg,Sugar & Salt,packet,,28,26.32,28,5,0,5,10,2501,Tata,"namak, नमक, salt, tata namak",,1,kg,no,yes
+Tata Salt Lite 1kg,Sugar & Salt,packet,,42,39.48,42,5,0,5,10,2501,Tata,"namak, नमक, low sodium salt",,1,kg,no,yes
+Aashirvaad Salt 1kg,Sugar & Salt,packet,,28,26.32,28,5,0,5,10,2501,Aashirvaad,"namak, नमक",,1,kg,no,yes
+Sugar 1kg,Sugar & Salt,packet,,48,45.12,48,5,0,5,10,1701,Local,"cheeni, चीनी, shakkar, शक्कर, sugar",,1,kg,no,yes
+Sugar 5kg,Sugar & Salt,packet,,235,220.9,235,5,0,5,10,1701,Local,"cheeni, चीनी, shakkar",,5,kg,no,yes
+Madhur Sugar 1kg,Sugar & Salt,packet,,52,48.88,52,5,0,5,10,1701,Madhur,"cheeni, चीनी, sugar",,1,kg,no,yes
+Bura Sugar 500g,Sugar & Salt,packet,,55,51.7,55,5,0,5,10,1701,Local,"bura, बूरा, boora",,500,gram,no,yes
+Gud Jaggery 1kg,Sugar & Salt,packet,,70,65.8,70,5,0,5,10,1701,Local,"gud, गुड़, jaggery, gur",,1,kg,no,yes
+Mishri 250g,Sugar & Salt,packet,,45,42.3,45,5,0,5,10,1701,Local,"mishri, मिश्री, rock sugar",,250,gram,no,yes
+Sendha Namak 500g,Sugar & Salt,packet,,45,42.3,45,5,0,5,10,1701,Local,"sendha namak, सेंधा नमक, rock salt, vrat namak",,500,gram,no,yes
+Kala Namak 200g,Sugar & Salt,packet,,35,32.9,35,5,0,5,10,1701,Local,"kala namak, काला नमक, black salt",,200,gram,no,yes
+Sugar Free Gold 100 Tablets,Sugar & Salt,pack,,180,169.2,180,5,0,5,10,1701,Sugar Free,"sugar free, शुगर फ्री, sweetener",,100,piece,no,yes
+Fortune Sunflower Oil 1L Pouch,Edible Oil,packet,,145,136.3,145,5,0,5,10,1512,Fortune,"tel, तेल, sunflower oil, refined",,1,litre,no,yes
+Fortune Sunflower Oil 5L Jar,Edible Oil,packet,,720,676.8,720,5,0,5,10,1512,Fortune,"tel, तेल, sunflower oil",,5,litre,no,yes
+Fortune Soyabean Oil 1L Pouch,Edible Oil,packet,,135,126.9,135,5,0,5,10,1507,Fortune,"soyabean tel, सोयाबीन तेल",,1,litre,no,yes
+Fortune Kachi Ghani Mustard Oil 1L,Edible Oil,packet,,175,164.5,175,5,0,5,10,1514,Fortune,"sarson tel, सरसों तेल, mustard oil",,1,litre,no,yes
+Fortune Kachi Ghani Mustard Oil 5L,Edible Oil,packet,,860,808.4,860,5,0,5,10,1514,Fortune,"sarson tel, सरसों तेल",,5,litre,no,yes
+Saffola Gold Oil 1L,Edible Oil,packet,,195,183.3,195,5,0,5,10,1512,Saffola,"saffola, सैफोला, refined oil",,1,litre,no,yes
+Saffola Gold Oil 5L,Edible Oil,packet,,960,902.4,960,5,0,5,10,1512,Saffola,"saffola, सैफोला",,5,litre,no,yes
+Dhara Mustard Oil 1L,Edible Oil,packet,,170,159.8,170,5,0,5,10,1514,Dhara,"sarson tel, सरसों तेल, dhara",,1,litre,no,yes
+Dhara Refined Sunflower Oil 1L,Edible Oil,packet,,150,141,150,5,0,5,10,1512,Dhara,"tel, तेल, sunflower",,1,litre,no,yes
+Sundrop Groundnut Oil 1L,Edible Oil,packet,,235,220.9,235,5,0,5,10,1508,Sundrop,"mungfali tel, मूंगफली तेल, groundnut oil",,1,litre,no,yes
+Patanjali Mustard Oil 1L,Edible Oil,packet,,165,155.1,165,5,0,5,10,1514,Patanjali,"sarson tel, सरसों तेल",,1,litre,no,yes
+Gemini Refined Sunflower Oil 1L,Edible Oil,packet,,148,139.12,148,5,0,5,10,1512,Gemini,"tel, तेल",,1,litre,no,yes
+Rice Bran Oil 1L,Edible Oil,packet,,160,150.4,160,5,0,5,10,1512,Fortune,"rice bran tel, राइस ब्रान तेल",,1,litre,no,yes
+Coconut Oil 500ml Parachute,Edible Oil,packet,,180,169.2,180,5,0,5,10,1512,Parachute,"nariyal tel, नारियल तेल, coconut oil",,500,ml,no,yes
+Til Oil 500ml,Edible Oil,packet,,190,178.6,190,5,0,5,10,1512,Local,"til tel, तिल तेल, sesame oil",,500,ml,no,yes
+Amul Ghee 1L Tin,Ghee & Butter,packet,,680,625.6,680,5,0,3,6,0405,Amul,"ghee, घी, amul ghee",,1,litre,no,yes
+Amul Ghee 500ml,Ghee & Butter,packet,,350,322,350,5,0,3,6,0405,Amul,"ghee, घी",,500,ml,no,yes
+Amul Ghee 200ml,Ghee & Butter,packet,,145,133.4,145,5,0,3,6,0405,Amul,"ghee, घी",,200,ml,no,yes
+Patanjali Cow Ghee 1L,Ghee & Butter,packet,,680,625.6,680,5,0,3,6,0405,Patanjali,"ghee, घी, gaay ka ghee",,1,litre,no,yes
+Patanjali Cow Ghee 500ml,Ghee & Butter,packet,,350,322,350,5,0,3,6,0405,Patanjali,"ghee, घी",,500,ml,no,yes
+Mother Dairy Ghee 1L,Ghee & Butter,packet,,670,616.4,670,5,0,3,6,0405,Mother Dairy,"ghee, घी",,1,litre,no,yes
+Saras Ghee 1L,Ghee & Butter,packet,,650,598,650,5,0,3,6,0405,Saras,"ghee, घी, saras",,1,litre,no,yes
+Nova Vanaspati 1L,Ghee & Butter,packet,,165,151.8,165,5,0,3,6,0405,Nova,"vanaspati, वनस्पति, dalda",,1,litre,no,yes
+Dalda Vanaspati 1L,Ghee & Butter,packet,,175,161,175,5,0,3,6,0405,Dalda,"dalda, डालडा, vanaspati",,1,litre,no,yes
+Amul Butter 100g,Ghee & Butter,packet,,62,57.04,62,5,0,3,6,0405,Amul,"makhan, मक्खन, butter, amul butter",,100,gram,no,yes
+Amul Butter 500g,Ghee & Butter,packet,,285,262.2,285,5,0,3,6,0405,Amul,"makhan, मक्खन, butter",,500,gram,no,yes
+Amul Cheese Slices 200g,Ghee & Butter,packet,,145,133.4,145,5,0,3,6,0406,Amul,"cheese, चीज़, cheese slice",,200,gram,no,yes
+Amul Cheese Cube 200g,Ghee & Butter,packet,,140,128.8,140,5,0,3,6,0406,Amul,"cheese, चीज़",,200,gram,no,yes
+Britannia Butter 100g,Ghee & Butter,packet,,58,53.36,58,5,0,3,6,0405,Britannia,"makhan, मक्खन, butter",,100,gram,no,yes
+Amul Taaza Toned Milk 500ml,Dairy,packet,,29,26.68,29,5,0,5,10,0401,Amul,"doodh, दूध, milk, amul taaza",,500,ml,no,yes
+Amul Gold Milk 500ml,Dairy,packet,,35,32.2,35,5,0,5,10,0401,Amul,"doodh, दूध, milk",,500,ml,no,yes
+Amul Masti Dahi 400g,Dairy,packet,,50,46,50,5,0,5,10,0403,Amul,"dahi, दही, curd, yogurt",,400,gram,no,yes
+Amul Masti Dahi 1kg,Dairy,packet,,95,87.4,95,5,0,5,10,0403,Amul,"dahi, दही, curd",,1,kg,no,yes
+Amul Malai Paneer 200g,Dairy,packet,,95,87.4,95,5,0,5,10,0406,Amul,"paneer, पनीर, cottage cheese",,200,gram,no,yes
+Mother Dairy Paneer 200g,Dairy,packet,,92,84.64,92,5,0,5,10,0406,Mother Dairy,"paneer, पनीर",,200,gram,no,yes
+Amul Masti Buttermilk 500ml,Dairy,packet,,20,18.4,20,5,0,5,10,0403,Amul,"chaas, छाछ, buttermilk, mattha",,500,ml,no,yes
+Amul Lassi 200ml,Dairy,packet,,25,23,25,5,0,5,10,0403,Amul,"lassi, लस्सी",,200,ml,no,yes
+Amul Kool Badam 200ml,Dairy,packet,,30,27.6,30,5,0,5,10,0401,Amul,"badam milk, बादाम दूध, flavoured milk",,200,ml,no,yes
+Amul Fresh Cream 250ml,Dairy,packet,,85,78.2,85,5,0,5,10,0401,Amul,"cream, क्रीम, malai",,250,ml,no,yes
+Amul Mithai Mate 400g,Dairy,packet,,145,133.4,145,5,0,5,10,0401,Amul,"condensed milk, कंडेंस्ड मिल्क, milkmaid",,400,gram,no,yes
+Nestle Milkmaid 400g,Dairy,packet,,165,151.8,165,5,0,5,10,0401,Nestle,"milkmaid, मिल्कमेड, condensed milk",,400,gram,no,yes
+Amulya Milk Powder 500g,Dairy,packet,,275,253,275,5,0,5,10,0402,Amul,"milk powder, मिल्क पाउडर, doodh powder",,500,gram,no,yes
+Nestle Everyday Dairy Whitener 400g,Dairy,packet,,250,230,250,5,0,5,10,0401,Nestle,"milk powder, मिल्क पाउडर, everyday",,400,gram,no,yes
+Saras Milk 500ml,Dairy,packet,,28,25.76,28,5,0,5,10,0401,Saras,"doodh, दूध, milk, saras",,500,ml,no,yes
+Tata Tea Premium 250g,Tea & Coffee,packet,,145,131.95,145,5,0,4,8,0902,Tata Tea,"chai, चाय, chai patti, tea",,250,gram,no,yes
+Tata Tea Premium 500g,Tea & Coffee,packet,,285,259.35,285,5,0,4,8,0902,Tata Tea,"chai, चाय, chai patti",,500,gram,no,yes
+Tata Tea Premium 1kg,Tea & Coffee,packet,,560,509.6,560,5,0,4,8,0902,Tata Tea,"chai, चाय, chai patti",,1,kg,no,yes
+Tata Tea Gold 250g,Tea & Coffee,packet,,185,168.35,185,5,0,4,8,0902,Tata Tea,"chai, चाय, gold tea",,250,gram,no,yes
+Red Label Tea 250g,Tea & Coffee,packet,,140,127.4,140,5,0,4,8,0902,Brooke Bond,"chai, चाय, red label",,250,gram,no,yes
+Red Label Tea 500g,Tea & Coffee,packet,,275,250.25,275,5,0,4,8,0902,Brooke Bond,"chai, चाय, red label",,500,gram,no,yes
+Taj Mahal Tea 250g,Tea & Coffee,packet,,195,177.45,195,5,0,4,8,0902,Brooke Bond,"chai, चाय, taj mahal",,250,gram,no,yes
+Society Tea 250g,Tea & Coffee,packet,,135,122.85,135,5,0,4,8,0902,Society,"chai, चाय, society tea",,250,gram,no,yes
+Wagh Bakri Tea 250g,Tea & Coffee,packet,,150,136.5,150,5,0,4,8,0902,Wagh Bakri,"chai, चाय, wagh bakri",,250,gram,no,yes
+Lipton Green Tea 25 Bags,Tea & Coffee,pack,,180,163.8,180,5,0,4,8,0902,Lipton,"green tea, ग्रीन टी",,25,piece,no,yes
+Tetley Green Tea 25 Bags,Tea & Coffee,pack,,190,172.9,190,5,0,4,8,0902,Tetley,"green tea, ग्रीन टी",,25,piece,no,yes
+Nescafe Classic Coffee 50g,Tea & Coffee,packet,,190,172.9,190,5,0,4,8,0403,Nescafe,"coffee, कॉफ़ी, nescafe",,50,gram,no,yes
+Nescafe Classic Coffee 100g,Tea & Coffee,packet,,360,327.6,360,5,0,4,8,0403,Nescafe,"coffee, कॉफ़ी",,100,gram,no,yes
+Bru Instant Coffee 50g,Tea & Coffee,packet,,165,150.15,165,5,0,4,8,0901,Bru,"coffee, कॉफ़ी, bru",,50,gram,no,yes
+Bru Gold Coffee 50g,Tea & Coffee,packet,,235,213.85,235,5,0,4,8,0901,Bru,"coffee, कॉफ़ी",,50,gram,no,yes
+Sunrise Coffee 50g,Tea & Coffee,packet,,155,141.05,155,5,0,4,8,0901,Sunrise,"coffee, कॉफ़ी",,50,gram,no,yes
+Tea Masala 50g,Tea & Coffee,packet,,45,40.95,45,5,0,4,8,0902,Local,"chai masala, चाय मसाला",,50,gram,no,yes
+Parle-G Original 250g,Biscuits,packet,,30,26.4,30,5,0,6,12,1905,Parle,"parle g, पारले जी, biscuit, biskut",,250,gram,no,yes
+Parle-G Original 100g,Biscuits,packet,,10,8.8,10,5,0,6,12,1905,Parle,"parle g, पारले जी, biscuit",,100,gram,no,yes
+Parle-G Gold 200g,Biscuits,packet,,50,44,50,5,0,6,12,1905,Parle,"parle gold, पारले गोल्ड",,200,gram,no,yes
+Britannia Good Day Cashew 200g,Biscuits,packet,,50,44,50,5,0,6,12,1905,Britannia,"good day, गुड डे, biscuit",,200,gram,no,yes
+Britannia Good Day Butter 200g,Biscuits,packet,,50,44,50,5,0,6,12,1905,Britannia,"good day, गुड डे",,200,gram,no,yes
+Britannia Marie Gold 250g,Biscuits,packet,,40,35.2,40,5,0,6,12,1905,Britannia,"marie, मैरी, marie gold",,250,gram,no,yes
+Britannia Bourbon 150g,Biscuits,packet,,45,39.6,45,5,0,6,12,1905,Britannia,"bourbon, बोरबॉन, cream biscuit",,150,gram,no,yes
+Britannia 50-50 Maska Chaska 150g,Biscuits,packet,,35,30.8,35,5,0,6,12,1905,Britannia,"50 50, फिफ्टी फिफ्टी",,150,gram,no,yes
+Britannia NutriChoice Digestive 250g,Biscuits,packet,,110,96.8,110,5,0,6,12,1905,Britannia,"digestive, डाइजेस्टिव",,250,gram,no,yes
+Britannia Milk Bikis 250g,Biscuits,packet,,45,39.6,45,5,0,6,12,1905,Britannia,"milk bikis, मिल्क बिकिस",,250,gram,no,yes
+Parle Monaco 200g,Biscuits,packet,,40,35.2,40,5,0,6,12,1905,Parle,"monaco, मोनैको, salty biscuit",,200,gram,no,yes
+Parle Krackjack 200g,Biscuits,packet,,40,35.2,40,5,0,6,12,1905,Parle,"krackjack, क्रैकजैक",,200,gram,no,yes
+Parle Hide & Seek 200g,Biscuits,packet,,60,52.8,60,5,0,6,12,1905,Parle,"hide and seek, हाइड एंड सीक",,200,gram,no,yes
+Sunfeast Dark Fantasy 100g,Biscuits,packet,,50,44,50,5,0,6,12,1905,Sunfeast,"dark fantasy, डार्क फैंटेसी",,100,gram,no,yes
+Sunfeast Marie Light 250g,Biscuits,packet,,40,35.2,40,5,0,6,12,1905,Sunfeast,"marie, मैरी",,250,gram,no,yes
+Oreo Biscuit 120g,Biscuits,packet,,35,30.8,35,5,0,6,12,1905,Cadbury,"oreo, ओरियो",,120,gram,no,yes
+Unibic Choco Chip Cookies 150g,Biscuits,packet,,70,61.6,70,5,0,6,12,1905,Unibic,"cookies, कुकीज़",,150,gram,no,yes
+Parle Hide & Seek Fills 75g,Biscuits,packet,,30,26.4,30,5,0,6,12,1905,Parle,"hide and seek, हाइड एंड सीक",,75,gram,no,yes
+Priyagold Butter Bite 200g,Biscuits,packet,,45,39.6,45,5,0,6,12,1905,Priyagold,"butter bite, बटर बाइट",,200,gram,no,yes
+Britannia Tiger Krunch 100g,Biscuits,packet,,20,17.6,20,5,0,6,12,1905,Britannia,"tiger, टाइगर biscuit",,100,gram,no,yes
+Britannia Bread 400g,Bakery,packet,,50,45,50,5,0,4,8,1905,Britannia,"bread, ब्रेड, double roti, पाव",,400,gram,no,yes
+Britannia Brown Bread 400g,Bakery,packet,,55,49.5,55,5,0,4,8,1905,Britannia,"brown bread, ब्राउन ब्रेड",,400,gram,no,yes
+Modern Bread 400g,Bakery,packet,,50,45,50,5,0,4,8,1905,Modern,"bread, ब्रेड",,400,gram,no,yes
+Britannia Pav 6 Piece,Bakery,pack,,35,31.5,35,5,0,4,8,1905,Britannia,"pav, पाव, ladi pav",,6,piece,no,yes
+Britannia Toast Rusk 200g,Bakery,packet,,45,40.5,45,5,0,4,8,1905,Britannia,"rusk, रस्क, toast, टोस्ट",,200,gram,no,yes
+Parle Rusk 300g,Bakery,packet,,60,54,60,5,0,4,8,1905,Parle,"rusk, रस्क, toast",,300,gram,no,yes
+Britannia Cake Slice 60g,Bakery,packet,,20,18,20,5,0,4,8,1905,Britannia,"cake, केक",,60,gram,no,yes
+Britannia Fruit Cake 250g,Bakery,packet,,90,81,90,5,0,4,8,1905,Britannia,"cake, केक, fruit cake",,250,gram,no,yes
+Bakery Khari 200g,Bakery,packet,,50,45,50,5,0,4,8,1905,Local,"khari, खारी, puff biscuit",,200,gram,no,yes
+Bakery Nankhatai 200g,Bakery,packet,,55,49.5,55,5,0,4,8,1905,Local,"nankhatai, नानखटाई",,200,gram,no,yes
+Haldiram Bhujia 200g,Namkeen & Snacks,packet,,55,47.3,55,5,0,6,12,2106,Haldiram,"bhujia, भुजिया, namkeen, नमकीन",,200,gram,no,yes
+Haldiram Bhujia 400g,Namkeen & Snacks,packet,,105,90.3,105,5,0,6,12,2106,Haldiram,"bhujia, भुजिया, namkeen",,400,gram,no,yes
+Haldiram Aloo Bhujia 200g,Namkeen & Snacks,packet,,55,47.3,55,5,0,6,12,2106,Haldiram,"aloo bhujia, आलू भुजिया",,200,gram,no,yes
+Haldiram Navratan Mix 200g,Namkeen & Snacks,packet,,60,51.6,60,5,0,6,12,2106,Haldiram,"navratan, नवरतन, mixture",,200,gram,no,yes
+Haldiram Moong Dal 200g,Namkeen & Snacks,packet,,60,51.6,60,5,0,6,12,2106,Haldiram,"moong dal namkeen, मूंग दाल",,200,gram,no,yes
+Haldiram Khatta Meetha 200g,Namkeen & Snacks,packet,,58,49.88,58,5,0,6,12,2106,Haldiram,"khatta meetha, खट्टा मीठा",,200,gram,no,yes
+Bikaji Bhujia 200g,Namkeen & Snacks,packet,,52,44.72,52,5,0,6,12,2106,Bikaji,"bhujia, भुजिया, bikaji",,200,gram,no,yes
+Bikaji Soan Papdi 250g,Namkeen & Snacks,packet,,95,81.7,95,5,0,6,12,2106,Bikaji,"soan papdi, सोन पापड़ी",,250,gram,no,yes
+Bikano Navratan Mix 200g,Namkeen & Snacks,packet,,55,47.3,55,5,0,6,12,2106,Bikano,"mixture, मिक्सचर",,200,gram,no,yes
+Lays Classic Salted 52g,Namkeen & Snacks,packet,,20,17.2,20,5,0,6,12,2501,Lays,"lays, लेज़, chips, चिप्स",,52,gram,no,yes
+Lays Magic Masala 52g,Namkeen & Snacks,packet,,20,17.2,20,5,0,6,12,2106,Lays,"lays, लेज़, chips",,52,gram,no,yes
+Lays American Style Cream & Onion 52g,Namkeen & Snacks,packet,,20,17.2,20,5,0,6,12,2106,Lays,"lays, लेज़, chips",,52,gram,no,yes
+Kurkure Masala Munch 90g,Namkeen & Snacks,packet,,20,17.2,20,5,0,6,12,2106,Kurkure,"kurkure, कुरकुरे",,90,gram,no,yes
+Bingo Mad Angles 66g,Namkeen & Snacks,packet,,20,17.2,20,5,0,6,12,2106,Bingo,"bingo, बिंगो, mad angles",,66,gram,no,yes
+Uncle Chipps Spicy Treat 52g,Namkeen & Snacks,packet,,20,17.2,20,5,0,6,12,2106,Uncle Chipps,"chips, चिप्स",,52,gram,no,yes
+Balaji Wafers 45g,Namkeen & Snacks,packet,,10,8.6,10,5,0,6,12,2106,Balaji,"wafers, वेफर्स, chips",,45,gram,no,yes
+Haldiram Aloo Lachha 200g,Namkeen & Snacks,packet,,60,51.6,60,5,0,6,12,2106,Haldiram,"aloo lachha, आलू लच्छा",,200,gram,no,yes
+Peanuts Salted 100g,Namkeen & Snacks,packet,,30,25.8,30,5,0,6,12,2501,Local,"mungfali, मूंगफली, peanuts",,100,gram,no,yes
+Roasted Chana 200g,Namkeen & Snacks,packet,,45,38.7,45,5,0,6,12,0713,Local,"bhuna chana, भुना चना",,200,gram,no,yes
+Papad Lijjat 200g,Namkeen & Snacks,packet,,70,60.2,70,5,0,6,12,2106,Lijjat,"papad, पापड़, lijjat",,200,gram,no,yes
+Fryums Plain 200g,Namkeen & Snacks,packet,,45,38.7,45,5,0,6,12,2106,Local,"fryums, फ्रायम्स, papad",,200,gram,no,yes
+Cadbury Dairy Milk 55g,Chocolates & Candy,packet,,50,43.5,50,5,0,6,12,1806,Cadbury,"dairy milk, डेरी मिल्क, chocolate, चॉकलेट",,55,gram,no,yes
+Cadbury Dairy Milk 13.2g,Chocolates & Candy,packet,,10,8.7,10,5,0,6,12,1806,Cadbury,"dairy milk, डेरी मिल्क, chocolate",,13,gram,no,yes
+Cadbury Dairy Milk Silk 60g,Chocolates & Candy,packet,,90,78.3,90,5,0,6,12,1806,Cadbury,"silk, सिल्क, chocolate",,60,gram,no,yes
+Cadbury 5 Star 25g,Chocolates & Candy,packet,,20,17.4,20,5,0,6,12,1806,Cadbury,"5 star, फाइव स्टार",,25,gram,no,yes
+Cadbury Perk 13g,Chocolates & Candy,packet,,10,8.7,10,5,0,6,12,1806,Cadbury,"perk, पर्क",,13,gram,no,yes
+Cadbury Gems 17g,Chocolates & Candy,packet,,10,8.7,10,5,0,6,12,1806,Cadbury,"gems, जेम्स",,17,gram,no,yes
+Nestle KitKat 27g,Chocolates & Candy,packet,,25,21.75,25,5,0,6,12,1806,Nestle,"kitkat, किटकैट",,27,gram,no,yes
+Nestle Munch 10g,Chocolates & Candy,packet,,10,8.7,10,5,0,6,12,1806,Nestle,"munch, मंच",,10,gram,no,yes
+Nestle Milkybar 12g,Chocolates & Candy,packet,,20,17.4,20,5,0,6,12,1806,Nestle,"milkybar, मिल्कीबार",,12,gram,no,yes
+Amul Dark Chocolate 150g,Chocolates & Candy,packet,,120,104.4,120,5,0,6,12,1806,Amul,"dark chocolate, डार्क चॉकलेट",,150,gram,no,yes
+Alpenliebe Candy Jar 100 Pcs,Chocolates & Candy,pack,,100,87,100,5,0,6,12,1704,Alpenliebe,"alpenliebe, अल्पेनलिबे, candy, टॉफी",,100,piece,no,yes
+Mango Bite Candy 100 Pcs,Chocolates & Candy,pack,,100,87,100,5,0,6,12,1704,Parle,"mango bite, मैंगो बाइट, toffee",,100,piece,no,yes
+Melody Toffee 100 Pcs,Chocolates & Candy,pack,,100,87,100,5,0,6,12,1704,Parle,"melody, मेलोडी, toffee",,100,piece,no,yes
+Poppins Candy Roll,Chocolates & Candy,piece,,10,8.7,10,5,0,6,12,1704,Parle,"poppins, पॉपिन्स",,1,piece,no,yes
+Center Fresh Chewing Gum 28g,Chocolates & Candy,packet,,30,26.1,30,5,0,6,12,1704,Perfetti,"center fresh, chewing gum, च्यूइंग गम",,28,gram,no,yes
+Center Fruit Chewing Gum 28g,Chocolates & Candy,packet,,30,26.1,30,5,0,6,12,1704,Perfetti,"center fruit, chewing gum, च्यूइंग गम",,28,gram,no,yes
+Pulse Candy 100 Pcs,Chocolates & Candy,pack,,100,87,100,5,0,6,12,1704,Pass Pass,"pulse, पल्स candy",,100,piece,no,yes
+Eclairs Candy 100 Pcs,Chocolates & Candy,pack,,100,87,100,5,0,6,12,1704,Cadbury,"eclairs, एक्लेयर्स",,100,piece,no,yes
+Hajmola Tablets 120 Pcs,Chocolates & Candy,pack,,75,65.25,75,5,0,6,12,1806,Dabur,"hajmola, हाजमोला, digestive",,120,piece,no,yes
+Everest Haldi Powder 100g,Spices & Masala,packet,,40,35.6,40,5,0,4,8,0910,Everest,"haldi, हल्दी, turmeric powder",,100,gram,no,yes
+Everest Haldi Powder 200g,Spices & Masala,packet,,78,69.42,78,5,0,4,8,0910,Everest,"haldi, हल्दी, turmeric",,200,gram,no,yes
+Everest Lal Mirch Powder 100g,Spices & Masala,packet,,55,48.95,55,5,0,4,8,0910,Everest,"lal mirch, लाल मिर्च, chilli powder",,100,gram,no,yes
+Everest Dhaniya Powder 100g,Spices & Masala,packet,,42,37.38,42,5,0,4,8,0910,Everest,"dhaniya, धनिया, coriander powder",,100,gram,no,yes
+Everest Garam Masala 100g,Spices & Masala,packet,,90,80.1,90,5,0,4,8,0910,Everest,"garam masala, गरम मसाला",,100,gram,no,yes
+Everest Kitchen King Masala 100g,Spices & Masala,packet,,95,84.55,95,5,0,4,8,0910,Everest,"kitchen king, किचन किंग",,100,gram,no,yes
+Everest Sabji Masala 100g,Spices & Masala,packet,,85,75.65,85,5,0,4,8,0910,Everest,"sabji masala, सब्जी मसाला",,100,gram,no,yes
+MDH Deggi Mirch 100g,Spices & Masala,packet,,95,84.55,95,5,0,4,8,0910,MDH,"deggi mirch, देगी मिर्च",,100,gram,no,yes
+MDH Chana Masala 100g,Spices & Masala,packet,,85,75.65,85,5,0,4,8,0713,MDH,"chana masala, चना मसाला",,100,gram,no,yes
+MDH Chicken Masala 100g,Spices & Masala,packet,,90,80.1,90,5,0,4,8,0910,MDH,"chicken masala, चिकन मसाला",,100,gram,no,yes
+MDH Kasuri Methi 25g,Spices & Masala,packet,,45,40.05,45,5,0,4,8,0910,MDH,"kasuri methi, कसूरी मेथी",,25,gram,no,yes
+Catch Black Pepper Powder 50g,Spices & Masala,packet,,90,80.1,90,5,0,4,8,0910,Catch,"kali mirch, काली मिर्च, black pepper",,50,gram,no,yes
+Catch Sprinklers Chat Masala 100g,Spices & Masala,packet,,75,66.75,75,5,0,4,8,0910,Catch,"chat masala, चाट मसाला",,100,gram,no,yes
+Tata Sampann Haldi 200g,Spices & Masala,packet,,85,75.65,85,5,0,4,8,0910,Tata Sampann,"haldi, हल्दी",,200,gram,no,yes
+Tata Sampann Chilli Powder 200g,Spices & Masala,packet,,120,106.8,120,5,0,4,8,0910,Tata Sampann,"lal mirch, लाल मिर्च",,200,gram,no,yes
+Jeera Whole 100g,Spices & Masala,packet,,55,48.95,55,5,0,4,8,0910,Local,"jeera, जीरा, cumin",,100,gram,no,yes
+Rai Sarson 100g,Spices & Masala,packet,,25,22.25,25,5,0,4,8,0910,Local,"rai, राई, mustard seed",,100,gram,no,yes
+Methi Dana 100g,Spices & Masala,packet,,25,22.25,25,5,0,4,8,0910,Local,"methi dana, मेथी दाना, fenugreek",,100,gram,no,yes
+Ajwain 100g,Spices & Masala,packet,,50,44.5,50,5,0,4,8,0910,Local,"ajwain, अजवाइन, carom",,100,gram,no,yes
+Saunf 100g,Spices & Masala,packet,,55,48.95,55,5,0,4,8,0910,Local,"saunf, सौंफ, fennel",,100,gram,no,yes
+Elaichi Green 10g,Spices & Masala,packet,,90,80.1,90,5,0,4,8,0910,Local,"elaichi, इलायची, cardamom",,10,gram,no,yes
+Laung Clove 25g,Spices & Masala,packet,,70,62.3,70,5,0,4,8,0910,Local,"laung, लौंग, clove",,25,gram,no,yes
+Dalchini 50g,Spices & Masala,packet,,45,40.05,45,5,0,4,8,0910,Local,"dalchini, दालचीनी, cinnamon",,50,gram,no,yes
+Tej Patta 25g,Spices & Masala,packet,,20,17.8,20,5,0,4,8,0910,Local,"tej patta, तेज पत्ता, bay leaf",,25,gram,no,yes
+Hing Powder 25g,Spices & Masala,packet,,90,80.1,90,5,0,4,8,0910,Everest,"hing, हींग, asafoetida",,25,gram,no,yes
+Amchur Powder 100g,Spices & Masala,packet,,60,53.4,60,5,0,4,8,0910,Local,"amchur, अमचूर, dry mango powder",,100,gram,no,yes
+Kali Mirch Whole 50g,Spices & Masala,packet,,95,84.55,95,5,0,4,8,0910,Local,"kali mirch, काली मिर्च, pepper",,50,gram,no,yes
+Sambhar Masala 100g,Spices & Masala,packet,,70,62.3,70,5,0,4,8,0910,MTR,"sambhar masala, सांभर मसाला",,100,gram,no,yes
+Pav Bhaji Masala 100g,Spices & Masala,packet,,90,80.1,90,5,0,4,8,0910,Everest,"pav bhaji masala, पाव भाजी मसाला",,100,gram,no,yes
+Biryani Masala 50g,Spices & Masala,packet,,75,66.75,75,5,0,4,8,0910,Shan,"biryani masala, बिरयानी मसाला",,50,gram,no,yes
+Kissan Tomato Ketchup 500g,Sauces & Spreads,packet,,115,102.35,115,5,0,3,6,2103,Kissan,"ketchup, केचप, tomato sauce, sos",,500,gram,no,yes
+Kissan Tomato Ketchup 1kg,Sauces & Spreads,packet,,205,182.45,205,5,0,3,6,2103,Kissan,"ketchup, केचप, tomato sauce",,1,kg,no,yes
+Maggi Tomato Ketchup 500g,Sauces & Spreads,packet,,120,106.8,120,5,0,3,6,2103,Maggi,"ketchup, केचप, sauce",,500,gram,no,yes
+Maggi Hot & Sweet Sauce 500g,Sauces & Spreads,packet,,135,120.15,135,5,0,3,6,2103,Maggi,"hot and sweet, सॉस",,500,gram,no,yes
+Ching's Schezwan Chutney 250g,Sauces & Spreads,packet,,110,97.9,110,5,0,3,6,2103,Ching's,"schezwan, शेजवान chutney",,250,gram,no,yes
+Kissan Mixed Fruit Jam 500g,Sauces & Spreads,packet,,180,160.2,180,5,0,3,6,2007,Kissan,"jam, जैम, mixed fruit",,500,gram,no,yes
+Kissan Mixed Fruit Jam 200g,Sauces & Spreads,packet,,90,80.1,90,5,0,3,6,2007,Kissan,"jam, जैम",,200,gram,no,yes
+Dabur Honey 250g,Sauces & Spreads,packet,,180,160.2,180,5,0,3,6,0409,Dabur,"honey, शहद, shahad",,250,gram,no,yes
+Dabur Honey 500g,Sauces & Spreads,packet,,320,284.8,320,5,0,3,6,0409,Dabur,"honey, शहद",,500,gram,no,yes
+Patanjali Honey 250g,Sauces & Spreads,packet,,145,129.05,145,5,0,3,6,0409,Patanjali,"honey, शहद",,250,gram,no,yes
+Mother's Recipe Mango Pickle 500g,Sauces & Spreads,packet,,145,129.05,145,5,0,3,6,2001,Mother's Recipe,"achar, अचार, pickle, aam ka achar",,500,gram,no,yes
+Priya Mixed Pickle 500g,Sauces & Spreads,packet,,135,120.15,135,5,0,3,6,2001,Priya,"achar, अचार, pickle",,500,gram,no,yes
+Nutella Hazelnut Spread 290g,Sauces & Spreads,packet,,395,351.55,395,5,0,3,6,2103,Nutella,"nutella, नुटेला, chocolate spread",,290,gram,no,yes
+Sundrop Peanut Butter 200g,Sauces & Spreads,packet,,150,133.5,150,5,0,3,6,2103,Sundrop,"peanut butter, पीनट बटर",,200,gram,no,yes
+Veeba Mayonnaise 250g,Sauces & Spreads,packet,,110,97.9,110,5,0,3,6,2103,Veeba,"mayonnaise, मेयोनीज़",,250,gram,no,yes
+Soya Sauce 200ml,Sauces & Spreads,packet,,65,57.85,65,5,0,3,6,2103,Ching's,"soya sauce, सोया सॉस",,200,ml,no,yes
+Vinegar 500ml,Sauces & Spreads,packet,,45,40.05,45,5,0,3,6,2103,Local,"sirka, सिरका, vinegar",,500,ml,no,yes
+Maggi 2-Minute Noodles 70g,Instant Food,packet,,14,12.46,14,5,0,6,12,1902,Maggi,"maggi, मैगी, noodles, नूडल्स",,70,gram,no,yes
+Maggi 2-Minute Noodles 4 Pack 280g,Instant Food,packet,,56,49.84,56,5,0,6,12,1902,Maggi,"maggi, मैगी, noodles",,280,gram,no,yes
+Maggi 2-Minute Noodles 12 Pack,Instant Food,packet,,168,149.52,168,5,0,6,12,1902,Maggi,"maggi, मैगी, noodles",,840,gram,no,yes
+Maggi Masala Oats 500g,Instant Food,packet,,180,160.2,180,5,0,6,12,1104,Maggi,"oats, ओट्स, masala oats",,500,gram,no,yes
+Yippee Magic Masala Noodles 70g,Instant Food,packet,,14,12.46,14,5,0,6,12,1902,Yippee,"yippee, यिप्पी, noodles",,70,gram,no,yes
+Top Ramen Noodles 70g,Instant Food,packet,,14,12.46,14,5,0,6,12,1902,Top Ramen,"top ramen, noodles, नूडल्स",,70,gram,no,yes
+Knorr Classic Tomato Soup 53g,Instant Food,packet,,65,57.85,65,5,0,6,12,0403,Knorr,"soup, सूप, knorr",,53,gram,no,yes
+Knorr Sweet Corn Soup 44g,Instant Food,packet,,65,57.85,65,5,0,6,12,1902,Knorr,"soup, सूप",,44,gram,no,yes
+Ching's Hakka Noodles 140g,Instant Food,packet,,50,44.5,50,5,0,6,12,1902,Ching's,"hakka noodles, हक्का नूडल्स",,140,gram,no,yes
+Ching's Manchow Soup 55g,Instant Food,packet,,60,53.4,60,5,0,6,12,1902,Ching's,"soup, सूप",,55,gram,no,yes
+MTR Ready to Eat Poha 80g,Instant Food,packet,,60,53.4,60,5,0,6,12,1904,MTR,"poha, पोहा, ready to eat",,80,gram,no,yes
+MTR Upma Mix 200g,Instant Food,packet,,75,66.75,75,5,0,6,12,1902,MTR,"upma, उपमा",,200,gram,no,yes
+Bambino Vermicelli 400g,Instant Food,packet,,60,53.4,60,5,0,6,12,1902,Bambino,"seviyan, सेवइयां, vermicelli",,400,gram,no,yes
+Pasta Penne 500g,Instant Food,packet,,90,80.1,90,5,0,6,12,9608,Bambino,"pasta, पास्ता",,500,gram,no,yes
+Weikfield Pasta 500g,Instant Food,packet,,125,111.25,125,5,0,6,12,1902,Weikfield,"pasta, पास्ता",,500,gram,no,yes
+Kelloggs Corn Flakes 475g,Breakfast Cereal,packet,,245,218.05,245,5,0,3,6,1904,Kelloggs,"corn flakes, कॉर्न फ्लेक्स",,475,gram,no,yes
+Kelloggs Chocos 375g,Breakfast Cereal,packet,,250,222.5,250,5,0,3,6,1904,Kelloggs,"chocos, चोकोस",,375,gram,no,yes
+Kelloggs Muesli 500g,Breakfast Cereal,packet,,370,329.3,370,5,0,3,6,1904,Kelloggs,"muesli, म्यूसली",,500,gram,no,yes
+Quaker Oats 1kg,Breakfast Cereal,packet,,240,213.6,240,5,0,3,6,1104,Quaker,"oats, ओट्स, quaker",,1,kg,no,yes
+Quaker Oats 400g,Breakfast Cereal,packet,,105,93.45,105,5,0,3,6,1104,Quaker,"oats, ओट्स",,400,gram,no,yes
+Saffola Masala Oats 500g,Breakfast Cereal,packet,,185,164.65,185,5,0,3,6,1104,Saffola,"oats, ओट्स, masala oats",,500,gram,no,yes
+Bagrry's Muesli 500g,Breakfast Cereal,packet,,360,320.4,360,5,0,3,6,1904,Bagrry's,"muesli, म्यूसली",,500,gram,no,yes
+Horlicks 500g Refill,Breakfast Cereal,packet,,285,253.65,285,5,0,3,6,1904,Horlicks,"horlicks, हॉर्लिक्स, health drink",,500,gram,no,yes
+Bournvita 500g,Breakfast Cereal,packet,,255,226.95,255,5,0,3,6,1904,Cadbury,"bournvita, बॉर्नविटा",,500,gram,no,yes
+Complan 500g,Breakfast Cereal,packet,,320,284.8,320,5,0,3,6,1904,Complan,"complan, कॉम्प्लान",,500,gram,no,yes
+Boost 500g,Breakfast Cereal,packet,,275,244.75,275,5,0,3,6,1904,Boost,"boost, बूस्ट",,500,gram,no,yes
+Protinex 400g,Breakfast Cereal,packet,,590,525.1,590,5,0,3,6,1904,Protinex,"protinex, प्रोटीनेक्स",,400,gram,no,yes
+Bisleri Water 1L,Beverages,bottle,,20,18,20,5,0,6,12,2201,Bisleri,"paani, पानी, water, bisleri",,1,litre,no,yes
+Bisleri Water 2L,Beverages,bottle,,30,27,30,5,0,6,12,2201,Bisleri,"paani, पानी, water",,2,litre,no,yes
+Bisleri Water 500ml,Beverages,bottle,,10,9,10,5,0,6,12,2201,Bisleri,"paani, पानी, water",,500,ml,no,yes
+Kinley Water 1L,Beverages,bottle,,20,18,20,5,0,6,12,2201,Kinley,"paani, पानी, water",,1,litre,no,yes
+Real Mixed Fruit Juice 1L,Beverages,bottle,,125,112.5,125,5,0,6,12,2009,Real,"juice, जूस, real",,1,litre,no,yes
+Real Orange Juice 1L,Beverages,bottle,,125,112.5,125,5,0,6,12,2009,Real,"juice, जूस, orange",,1,litre,no,yes
+Tropicana Orange Juice 1L,Beverages,bottle,,130,117,130,5,0,6,12,2009,Tropicana,"juice, जूस, tropicana",,1,litre,no,yes
+Frooti Mango Drink 250ml,Beverages,bottle,,20,18,20,5,0,6,12,2202,Frooti,"frooti, फ्रूटी, mango drink",,250,ml,no,yes
+Maaza Mango Drink 600ml,Beverages,bottle,,45,40.5,45,5,0,6,12,2202,Maaza,"maaza, माज़ा, mango drink",,600,ml,no,yes
+Slice Mango Drink 600ml,Beverages,bottle,,45,40.5,45,5,0,6,12,2202,Slice,"slice, स्लाइस, mango drink",,600,ml,no,yes
+Appy Fizz 250ml,Beverages,bottle,,25,22.5,25,5,0,6,12,2202,Appy,"appy fizz, एप्पी फ़िज़",,250,ml,no,yes
+Rasna Powder 500g,Beverages,packet,,120,108,120,5,0,6,12,2202,Rasna,"rasna, रसना, sharbat",,500,gram,no,yes
+Roohafza 750ml,Beverages,bottle,,185,166.5,185,5,0,6,12,2202,Hamdard,"rooh afza, रूह अफ़ज़ा, sharbat",,750,ml,no,yes
+Glucon-D Orange 400g,Beverages,packet,,145,130.5,145,5,0,6,12,2202,Glucon-D,"glucon d, ग्लूकोन डी, glucose",,400,gram,no,yes
+Electral Powder 21g,Beverages,packet,,25,22.5,25,5,0,6,12,2202,Electral,"electral, इलेक्ट्रल, ors",,21,gram,no,yes
+Coca-Cola 750ml,Soft Drinks,bottle,,45,40.5,45,40,0,6,12,2202,Coca-Cola,"coke, कोक, cold drink, ठंडा",,750,ml,no,yes
+Coca-Cola 250ml,Soft Drinks,bottle,,20,18,20,40,0,6,12,2202,Coca-Cola,"coke, कोक, cold drink",,250,ml,no,yes
+Coca-Cola 2L,Soft Drinks,bottle,,99,89.1,99,40,0,6,12,2202,Coca-Cola,"coke, कोक, cold drink",,2,litre,no,yes
+Thums Up 750ml,Soft Drinks,bottle,,45,40.5,45,40,0,6,12,2202,Thums Up,"thums up, थम्स अप, cold drink",,750,ml,no,yes
+Thums Up 250ml,Soft Drinks,bottle,,20,18,20,40,0,6,12,2202,Thums Up,"thums up, थम्स अप",,250,ml,no,yes
+Sprite 750ml,Soft Drinks,bottle,,45,40.5,45,40,0,6,12,2202,Sprite,"sprite, स्प्राइट, cold drink",,750,ml,no,yes
+Limca 750ml,Soft Drinks,bottle,,45,40.5,45,40,0,6,12,2202,Limca,"limca, लिम्का",,750,ml,no,yes
+Fanta 750ml,Soft Drinks,bottle,,45,40.5,45,40,0,6,12,2202,Fanta,"fanta, फैंटा",,750,ml,no,yes
+Pepsi 750ml,Soft Drinks,bottle,,45,40.5,45,40,0,6,12,2202,Pepsi,"pepsi, पेप्सी, cold drink",,750,ml,no,yes
+Mountain Dew 750ml,Soft Drinks,bottle,,45,40.5,45,40,0,6,12,2202,Mountain Dew,"mountain dew, माउंटेन ड्यू",,750,ml,no,yes
+7Up 750ml,Soft Drinks,bottle,,45,40.5,45,40,0,6,12,2202,7Up,"seven up, सेवन अप",,750,ml,no,yes
+Sting Energy Drink 250ml,Soft Drinks,bottle,,20,18,20,40,0,6,12,2202,Sting,"sting, स्टिंग, energy drink",,250,ml,no,yes
+Red Bull 250ml,Soft Drinks,bottle,,125,112.5,125,40,0,6,12,2202,Red Bull,"red bull, रेड बुल, energy drink",,250,ml,no,yes
+Soda Water 750ml,Soft Drinks,bottle,,25,22.5,25,40,0,6,12,2201,Local,"soda, सोडा",,750,ml,no,yes
+Almonds Badam 250g,Dry Fruits,packet,,280,246.4,280,5,0,3,6,0802,Local,"badam, बादाम, almonds",,250,gram,no,yes
+Almonds Badam 500g,Dry Fruits,packet,,550,484,550,5,0,3,6,0802,Local,"badam, बादाम, almonds",,500,gram,no,yes
+Cashew Kaju 250g,Dry Fruits,packet,,300,264,300,5,0,3,6,0802,Local,"kaju, काजू, cashew",,250,gram,no,yes
+Raisins Kishmish 250g,Dry Fruits,packet,,120,105.6,120,5,0,3,6,0802,Local,"kishmish, किशमिश, raisins",,250,gram,no,yes
+Walnut Akhrot 250g,Dry Fruits,packet,,320,281.6,320,5,0,3,6,0802,Local,"akhrot, अखरोट, walnut",,250,gram,no,yes
+Pista 100g,Dry Fruits,packet,,180,158.4,180,5,0,3,6,0802,Local,"pista, पिस्ता, pistachio",,100,gram,no,yes
+Anjeer 200g,Dry Fruits,packet,,290,255.2,290,5,0,3,6,0802,Local,"anjeer, अंजीर, fig",,200,gram,no,yes
+Khajur Dates 500g,Dry Fruits,packet,,180,158.4,180,5,0,3,6,0802,Local,"khajur, खजूर, dates",,500,gram,no,yes
+Makhana 100g,Dry Fruits,packet,,110,96.8,110,5,0,3,6,0802,Local,"makhana, मखाना, fox nut",,100,gram,no,yes
+Chironji 50g,Dry Fruits,packet,,180,158.4,180,5,0,3,6,0802,Local,"chironji, चिरौंजी",,50,gram,no,yes
+Coconut Dry Gola 1 Piece,Dry Fruits,piece,,60,52.8,60,5,0,3,6,0802,Local,"gola, गोला, dry coconut, khopra",,1,piece,no,yes
+Lifebuoy Soap 125g,Bath & Soap,packet,,38,33.44,38,5,0,6,12,3401,Lifebuoy,"sabun, साबुन, lifebuoy, soap",,125,gram,no,yes
+Lux Soap 100g,Bath & Soap,packet,,42,36.96,42,5,0,6,12,3401,Lux,"sabun, साबुन, lux, soap",,100,gram,no,yes
+Santoor Soap 125g,Bath & Soap,packet,,45,39.6,45,5,0,6,12,3401,Santoor,"sabun, साबुन, santoor",,125,gram,no,yes
+Dove Soap 100g,Bath & Soap,packet,,75,66,75,5,0,6,12,3401,Dove,"sabun, साबुन, dove",,100,gram,no,yes
+Cinthol Soap 100g,Bath & Soap,packet,,45,39.6,45,5,0,6,12,3401,Cinthol,"sabun, साबुन, cinthol",,100,gram,no,yes
+Medimix Soap 125g,Bath & Soap,packet,,50,44,50,5,0,6,12,3401,Medimix,"sabun, साबुन, medimix",,125,gram,no,yes
+Dettol Original Soap 125g,Bath & Soap,packet,,55,48.4,55,5,0,6,12,3401,Dettol,"sabun, साबुन, dettol",,125,gram,no,yes
+Pears Soap 125g,Bath & Soap,packet,,90,79.2,90,5,0,6,12,3401,Pears,"sabun, साबुन, pears",,125,gram,no,yes
+Godrej No.1 Soap 100g,Bath & Soap,packet,,32,28.16,32,5,0,6,12,3401,Godrej,"sabun, साबुन, godrej no 1",,100,gram,no,yes
+Vivel Soap 100g,Bath & Soap,packet,,40,35.2,40,5,0,6,12,3401,Vivel,"sabun, साबुन, vivel",,100,gram,no,yes
+Dettol Handwash 200ml,Bath & Soap,packet,,99,87.12,99,5,0,6,12,3401,Dettol,"handwash, हैंडवॉश",,200,ml,no,yes
+Lifebuoy Handwash Refill 750ml,Bath & Soap,packet,,175,154,175,5,0,6,12,3401,Lifebuoy,"handwash, हैंडवॉश refill",,750,ml,no,yes
+Dettol Antiseptic Liquid 250ml,Bath & Soap,packet,,145,127.6,145,5,0,6,12,3401,Dettol,"dettol, डेटॉल, antiseptic",,250,ml,no,yes
+Savlon Antiseptic 100ml,Bath & Soap,packet,,75,66,75,5,0,6,12,3401,Savlon,"savlon, सेवलॉन, antiseptic",,100,ml,no,yes
+Bath Loofah 1 Piece,Bath & Soap,piece,,50,44,50,5,0,6,12,3401,Local,"loofah, लूफा, bath sponge",,1,piece,no,yes
+Clinic Plus Shampoo 175ml,Hair Care,packet,,115,100.05,115,5,0,4,8,3305,Clinic Plus,"shampoo, शैम्पू, clinic plus",,175,ml,no,yes
+Clinic Plus Shampoo Sachet 5ml,Hair Care,packet,,2,1.74,2,5,0,4,8,3305,Clinic Plus,"shampoo sachet, शैम्पू पाउच",,5,ml,no,yes
+Head & Shoulders Shampoo 180ml,Hair Care,packet,,185,160.95,185,5,0,4,8,3305,Head & Shoulders,"shampoo, शैम्पू, anti dandruff",,180,ml,no,yes
+Sunsilk Shampoo 180ml,Hair Care,packet,,145,126.15,145,5,0,4,8,3305,Sunsilk,"shampoo, शैम्पू, sunsilk",,180,ml,no,yes
+Dove Shampoo 180ml,Hair Care,packet,,210,182.7,210,5,0,4,8,3305,Dove,"shampoo, शैम्पू, dove",,180,ml,no,yes
+Pantene Shampoo 180ml,Hair Care,packet,,190,165.3,190,5,0,4,8,3305,Pantene,"shampoo, शैम्पू, pantene",,180,ml,no,yes
+Parachute Coconut Hair Oil 250ml,Hair Care,packet,,130,113.1,130,5,0,4,8,3305,Parachute,"nariyal tel, नारियल तेल, hair oil",,250,ml,no,yes
+Dabur Amla Hair Oil 200ml,Hair Care,packet,,115,100.05,115,5,0,4,8,3305,Dabur,"amla tel, आंवला तेल, hair oil",,200,ml,no,yes
+Bajaj Almond Drops Hair Oil 200ml,Hair Care,packet,,165,143.55,165,5,0,4,8,3305,Bajaj,"badam tel, बादाम तेल, hair oil",,200,ml,no,yes
+Navratna Cool Oil 200ml,Hair Care,packet,,145,126.15,145,5,0,4,8,3305,Navratna,"navratna, नवरत्न, thanda tel",,200,ml,no,yes
+Keo Karpin Hair Oil 200ml,Hair Care,packet,,130,113.1,130,5,0,4,8,3305,Keo Karpin,"hair oil, बाल का तेल",,200,ml,no,yes
+Godrej Expert Hair Colour 20g,Hair Care,packet,,35,30.45,35,5,0,4,8,3305,Godrej,"hair colour, हेयर कलर, mehndi",,20,gram,no,yes
+Vasmol Hair Dye 50ml,Hair Care,packet,,85,73.95,85,5,0,4,8,3305,Vasmol,"hair dye, हेयर डाई, kala",,50,ml,no,yes
+Indulekha Bringha Oil 100ml,Hair Care,packet,,450,391.5,450,5,0,4,8,3305,Indulekha,"hair oil, बाल का तेल",,100,ml,no,yes
+Hair Comb Plastic,Hair Care,piece,,30,26.1,30,5,0,4,8,3305,Local,"kanghi, कंघी, comb",,1,piece,no,yes
+Hair Rubber Band Pack,Hair Care,piece,,20,17.4,20,5,0,4,8,3305,Local,"rubber band, रबर बैंड",,1,piece,no,yes
+Colgate Strong Teeth 200g,Oral Care,packet,,115,101.2,115,5,0,4,8,3306,Colgate,"toothpaste, टूथपेस्ट, manjan, colgate",,200,gram,no,yes
+Colgate Strong Teeth 100g,Oral Care,packet,,60,52.8,60,5,0,4,8,3306,Colgate,"toothpaste, टूथपेस्ट, colgate",,100,gram,no,yes
+Colgate MaxFresh 150g,Oral Care,packet,,95,83.6,95,5,0,4,8,3306,Colgate,"toothpaste, टूथपेस्ट",,150,gram,no,yes
+Close Up Toothpaste 150g,Oral Care,packet,,95,83.6,95,5,0,4,8,3306,Close Up,"toothpaste, टूथपेस्ट, close up",,150,gram,no,yes
+Pepsodent Toothpaste 150g,Oral Care,packet,,90,79.2,90,5,0,4,8,3306,Pepsodent,"toothpaste, टूथपेस्ट",,150,gram,no,yes
+Dabur Red Toothpaste 200g,Oral Care,packet,,115,101.2,115,5,0,4,8,3306,Dabur,"toothpaste, टूथपेस्ट, dabur red",,200,gram,no,yes
+Patanjali Dant Kanti 200g,Oral Care,packet,,95,83.6,95,5,0,4,8,3306,Patanjali,"dant kanti, दंत कांति, toothpaste",,200,gram,no,yes
+Sensodyne Toothpaste 75g,Oral Care,packet,,145,127.6,145,5,0,4,8,3306,Sensodyne,"sensodyne, सेंसोडाइन",,75,gram,no,yes
+Colgate Toothbrush Medium,Oral Care,piece,,35,30.8,35,5,0,4,8,9603,Colgate,"toothbrush, टूथब्रश, brush",,1,piece,no,yes
+Oral-B Toothbrush,Oral Care,piece,,45,39.6,45,5,0,4,8,9603,Oral-B,"toothbrush, टूथब्रश",,1,piece,no,yes
+Colgate Tooth Powder 100g,Oral Care,packet,,65,57.2,65,5,0,4,8,3306,Colgate,"manjan, मंजन, tooth powder",,100,gram,no,yes
+Dabur Lal Dant Manjan 100g,Oral Care,packet,,70,61.6,70,5,0,4,8,3306,Dabur,"lal manjan, लाल मंजन",,100,gram,no,yes
+Listerine Mouthwash 250ml,Oral Care,packet,,165,145.2,165,5,0,4,8,3306,Listerine,"mouthwash, माउथवॉश",,250,ml,no,yes
+Nivea Soft Cream 100ml,Skin Care,packet,,210,182.7,210,5,0,3,6,3304,Nivea,"cream, क्रीम, nivea",,100,ml,no,yes
+Ponds Dreamflower Talc 200g,Skin Care,packet,,145,126.15,145,5,0,3,6,3304,Ponds,"powder, पाउडर, talc",,200,gram,no,yes
+Ponds Cold Cream 100ml,Skin Care,packet,,180,156.6,180,5,0,3,6,3304,Ponds,"cold cream, कोल्ड क्रीम",,100,ml,no,yes
+Boroline Cream 20g,Skin Care,packet,,50,43.5,50,5,0,3,6,3304,Boroline,"boroline, बोरोलीन, cream",,20,gram,no,yes
+Vaseline Petroleum Jelly 85ml,Skin Care,packet,,125,108.75,125,5,0,3,6,3304,Vaseline,"vaseline, वैसलीन",,85,ml,no,yes
+Vaseline Body Lotion 200ml,Skin Care,packet,,210,182.7,210,5,0,3,6,3304,Vaseline,"body lotion, बॉडी लोशन",,200,ml,no,yes
+Nivea Body Lotion 200ml,Skin Care,packet,,230,200.1,230,5,0,3,6,3304,Nivea,"body lotion, बॉडी लोशन",,200,ml,no,yes
+Fair & Lovely Cream 50g,Skin Care,packet,,115,100.05,115,5,0,3,6,3304,Glow & Lovely,"cream, क्रीम, fairness",,50,gram,no,yes
+Himalaya Neem Face Wash 100ml,Skin Care,packet,,165,143.55,165,5,0,3,6,3304,Himalaya,"face wash, फेस वॉश",,100,ml,no,yes
+Clean & Clear Face Wash 100ml,Skin Care,packet,,165,143.55,165,5,0,3,6,3304,Clean & Clear,"face wash, फेस वॉश",,100,ml,no,yes
+Lacto Calamine Lotion 60ml,Skin Care,packet,,165,143.55,165,5,0,3,6,3304,Lacto Calamine,"lacto calamine, लोशन",,60,ml,no,yes
+Himalaya Baby Powder 200g,Skin Care,packet,,165,143.55,165,5,0,3,6,3304,Himalaya,"baby powder, बेबी पाउडर",,200,gram,no,yes
+Moov Pain Relief Cream 30g,Skin Care,packet,,130,113.1,130,5,0,3,6,3304,Moov,"moov, मूव, pain cream",,30,gram,no,yes
+Volini Gel 30g,Skin Care,packet,,135,117.45,135,5,0,3,6,3304,Volini,"volini, वोलिनी, pain gel",,30,gram,no,yes
+Vicks VapoRub 50ml,Skin Care,packet,,165,143.55,165,5,0,3,6,3304,Vicks,"vicks, विक्स, balm",,50,ml,no,yes
+Zandu Balm 25ml,Skin Care,packet,,95,82.65,95,5,0,3,6,3304,Zandu,"zandu balm, जंडू बाम",,25,ml,no,yes
+Amrutanjan Balm 8ml,Skin Care,packet,,40,34.8,40,5,0,3,6,3304,Amrutanjan,"balm, बाम",,8,ml,no,yes
+Gillette Guard Razor,Grooming,piece,,35,30.45,35,5,0,3,6,8212,Gillette,"razor, रेजर, shaving",,1,piece,no,yes
+Gillette Guard Cartridge 4 Pack,Grooming,pack,,90,78.3,90,5,0,3,6,3307,Gillette,"blade, ब्लेड, cartridge",,4,piece,no,yes
+Topaz Blade 10 Pack,Grooming,pack,,40,34.8,40,5,0,3,6,8212,Topaz,"blade, ब्लेड, ustra",,10,piece,no,yes
+Gillette Shaving Foam 200g,Grooming,packet,,325,282.75,325,5,0,3,6,3307,Gillette,"shaving foam, शेविंग फोम",,200,gram,no,yes
+Old Spice Shaving Cream 70g,Grooming,packet,,120,104.4,120,5,0,3,6,3307,Old Spice,"shaving cream, शेविंग क्रीम",,70,gram,no,yes
+Park Avenue Shaving Cream 84g,Grooming,packet,,110,95.7,110,5,0,3,6,3307,Park Avenue,"shaving cream, शेविंग क्रीम",,84,gram,no,yes
+Nivea Men Face Wash 100ml,Grooming,packet,,180,156.6,180,5,0,3,6,3307,Nivea Men,"face wash, फेस वॉश",,100,ml,no,yes
+Fogg Deodorant 150ml,Grooming,packet,,250,217.5,250,5,0,3,6,3307,Fogg,"deo, डियो, deodorant, spray",,150,ml,no,yes
+Wild Stone Deodorant 150ml,Grooming,packet,,230,200.1,230,5,0,3,6,3307,Wild Stone,"deo, डियो, deodorant",,150,ml,no,yes
+Nail Cutter,Grooming,piece,,40,34.8,40,5,0,3,6,3307,Local,"nail cutter, नेल कटर",,1,piece,no,yes
+Surf Excel Easy Wash 1kg,Detergent & Laundry,packet,,145,129.05,145,5,0,5,10,3402,Surf Excel,"surf, सर्फ, detergent, washing powder",,1,kg,no,yes
+Surf Excel Easy Wash 500g,Detergent & Laundry,packet,,75,66.75,75,5,0,5,10,3402,Surf Excel,"surf, सर्फ, detergent",,500,gram,no,yes
+Surf Excel Matic Front Load 1kg,Detergent & Laundry,packet,,235,209.15,235,5,0,5,10,3402,Surf Excel,"matic, मैटिक, detergent",,1,kg,no,yes
+Rin Detergent Bar 250g,Detergent & Laundry,packet,,22,19.58,22,5,0,5,10,3402,Rin,"rin, रिन, sabun, washing bar",,250,gram,no,yes
+Wheel Detergent Powder 1kg,Detergent & Laundry,packet,,65,57.85,65,5,0,5,10,3402,Wheel,"wheel, व्हील, detergent",,1,kg,no,yes
+Wheel Detergent Bar 250g,Detergent & Laundry,packet,,20,17.8,20,5,0,5,10,3402,Wheel,"wheel, व्हील, washing bar",,250,gram,no,yes
+Nirma Washing Powder 1kg,Detergent & Laundry,packet,,70,62.3,70,5,0,5,10,3402,Nirma,"nirma, निरमा, detergent",,1,kg,no,yes
+Tide Detergent Powder 1kg,Detergent & Laundry,packet,,130,115.7,130,5,0,5,10,3402,Tide,"tide, टाइड, detergent",,1,kg,no,yes
+Ariel Detergent Powder 1kg,Detergent & Laundry,packet,,180,160.2,180,5,0,5,10,3402,Ariel,"ariel, एरियल, detergent",,1,kg,no,yes
+Ghadi Detergent Powder 1kg,Detergent & Laundry,packet,,70,62.3,70,5,0,5,10,3402,Ghadi,"ghadi, घड़ी, detergent",,1,kg,no,yes
+Comfort Fabric Conditioner 220ml,Detergent & Laundry,packet,,100,89,100,5,0,5,10,3402,Comfort,"comfort, कम्फर्ट, fabric softener",,220,ml,no,yes
+Ujala Supreme 75ml,Detergent & Laundry,packet,,30,26.7,30,5,0,5,10,3402,Ujala,"ujala, उजाला, neel",,75,ml,no,yes
+Robin Blue Powder 100g,Detergent & Laundry,packet,,25,22.25,25,5,0,5,10,3402,Robin,"neel, नील, robin blue",,100,gram,no,yes
+Vanish Stain Remover 200g,Detergent & Laundry,packet,,165,146.85,165,5,0,5,10,3402,Vanish,"vanish, वैनिश, stain remover",,200,gram,no,yes
+Vim Dishwash Bar 200g,Cleaning,packet,,22,19.36,22,5,0,4,8,3402,Vim,"vim, विम, bartan sabun, dishwash",,200,gram,no,yes
+Vim Dishwash Liquid 500ml,Cleaning,packet,,130,114.4,130,5,0,4,8,3402,Vim,"vim liquid, विम, dishwash",,500,ml,no,yes
+Exo Dishwash Bar 200g,Cleaning,packet,,20,17.6,20,5,0,4,8,3402,Exo,"exo, एक्सो, bartan bar",,200,gram,no,yes
+Pril Dishwash Liquid 425ml,Cleaning,packet,,120,105.6,120,5,0,4,8,3402,Pril,"pril, प्रिल, dishwash",,425,ml,no,yes
+Harpic Toilet Cleaner 500ml,Cleaning,packet,,110,96.8,110,5,0,4,8,3402,Harpic,"harpic, हार्पिक, toilet cleaner",,500,ml,no,yes
+Harpic Toilet Cleaner 1L,Cleaning,packet,,200,176,200,5,0,4,8,3402,Harpic,"harpic, हार्पिक",,1,litre,no,yes
+Lizol Floor Cleaner 500ml,Cleaning,packet,,125,110,125,5,0,4,8,3402,Lizol,"lizol, लाइजॉल, floor cleaner, phenyl",,500,ml,no,yes
+Lizol Floor Cleaner 975ml,Cleaning,packet,,225,198,225,5,0,4,8,3402,Lizol,"lizol, लाइजॉल, floor cleaner",,975,ml,no,yes
+Phenyl White 1L,Cleaning,packet,,70,61.6,70,5,0,4,8,3402,Local,"phenyl, फिनाइल",,1,litre,no,yes
+Colin Glass Cleaner 500ml,Cleaning,packet,,115,101.2,115,5,0,4,8,3402,Colin,"colin, कोलिन, glass cleaner",,500,ml,no,yes
+Scotch Brite Scrub Pad,Cleaning,piece,,35,30.8,35,5,0,4,8,3402,Scotch Brite,"scrubber, स्क्रबर, jhaava",,1,piece,no,yes
+Steel Scrubber,Cleaning,piece,,20,17.6,20,5,0,4,8,3402,Local,"steel scrubber, स्टील स्क्रबर, jhaava",,1,piece,no,yes
+Broom Soft Phool Jhadu,Cleaning,piece,,120,105.6,120,5,0,4,8,9603,Local,"jhadu, झाड़ू, broom",,1,piece,no,yes
+Broom Hard Nariyal,Cleaning,piece,,90,79.2,90,5,0,4,8,9603,Local,"jhadu, झाड़ू, broom",,1,piece,no,yes
+Floor Wiper,Cleaning,piece,,180,158.4,180,5,0,4,8,3402,Local,"wiper, वाइपर, pocha",,1,piece,no,yes
+Bathroom Brush,Cleaning,piece,,90,79.2,90,5,0,4,8,9603,Local,"brush, ब्रश, toilet brush",,1,piece,no,yes
+All Out Refill 45ml,Pest & Repellent,packet,,85,73.95,85,18,0,3,6,3808,All Out,"all out, ऑल आउट, mosquito",,45,ml,no,yes
+Good Knight Refill 45ml,Pest & Repellent,packet,,85,73.95,85,18,0,3,6,3808,Good Knight,"good knight, गुड नाइट, machhar",,45,ml,no,yes
+Good Knight Machine + Refill,Pest & Repellent,piece,,140,121.8,140,18,0,3,6,3808,Good Knight,"good knight machine, मशीन",,1,piece,no,yes
+Mortein Insect Killer Spray 425ml,Pest & Repellent,packet,,290,252.3,290,18,0,3,6,3808,Mortein,"mortein, मॉर्टिन, spray, keeda",,425,ml,no,yes
+Hit Cockroach Spray 320ml,Pest & Repellent,packet,,270,234.9,270,18,0,3,6,3808,Hit,"hit, हिट, cockroach spray",,320,ml,no,yes
+Odomos Mosquito Cream 50g,Pest & Repellent,packet,,95,82.65,95,18,0,3,6,3808,Odomos,"odomos, ओडोमॉस",,50,gram,no,yes
+Mosquito Coil 10 Pack,Pest & Repellent,pack,,45,39.15,45,18,0,3,6,3808,Local,"coil, कॉइल, machhar coil",,10,piece,no,yes
+Rat Kill Cake 25g,Pest & Repellent,packet,,40,34.8,40,18,0,3,6,3808,Local,"chuha mar, चूहा मार, rat kill",,25,gram,no,yes
+Naphthalene Balls 100g,Pest & Repellent,packet,,50,43.5,50,18,0,3,6,3808,Local,"naphthalene, नेफ्थलीन balls",,100,gram,no,yes
+Matchbox 10 Pack,Household,pack,,10,8.6,10,5,0,5,10,3605,Local,"machis, माचिस, matchbox",,10,piece,no,yes
+Candle 6 Piece,Household,pack,,30,25.8,30,5,0,5,10,3406,Local,"mombatti, मोमबत्ती, candle",,6,piece,no,yes
+Garbage Bags Medium 30 Pcs,Household,pack,,90,77.4,90,5,0,5,10,3406,Local,"garbage bag, कचरा बैग, dustbin bag",,30,piece,no,yes
+Aluminium Foil 9m,Household,piece,,90,77.4,90,5,0,5,10,3406,Local,"foil, फॉयल, silver paper",,1,piece,no,yes
+Cling Film 30m,Household,piece,,120,103.2,120,5,0,5,10,3406,Local,"cling film, क्लिंग फिल्म",,1,piece,no,yes
+Paper Napkin 100 Pcs,Household,pack,,60,51.6,60,5,0,5,10,3406,Local,"tissue, टिश्यू, napkin",,100,piece,no,yes
+Toilet Paper Roll 4 Pack,Household,pack,,150,129,150,5,0,5,10,3406,Local,"toilet paper, टॉयलेट पेपर",,4,piece,no,yes
+Plastic Bags 1kg,Household,packet,,120,103.2,120,5,0,5,10,3406,Local,"polythene, पॉलिथीन, plastic bag, thaili",,1,kg,no,yes
+Carry Bag Cloth,Household,piece,,25,21.5,25,5,0,5,10,3406,Local,"cloth bag, कपड़े का थैला",,1,piece,no,yes
+Rope Nylon 10m,Household,piece,,70,60.2,70,5,0,5,10,3406,Local,"rassi, रस्सी, rope",,1,piece,no,yes
+Clothes Clip 12 Pcs,Household,pack,,40,34.4,40,5,0,5,10,3406,Local,"chimta, चिमटा, clothes clip",,12,piece,no,yes
+Bucket 15L Plastic,Household,piece,,180,154.8,180,5,0,5,10,3406,Local,"balti, बाल्टी, bucket",,1,piece,no,yes
+Mug Plastic,Household,piece,,45,38.7,45,5,0,5,10,3406,Local,"mug, मग",,1,piece,no,yes
+Dustbin Small,Household,piece,,120,103.2,120,5,0,5,10,3406,Local,"dustbin, कूड़ेदान",,1,piece,no,yes
+Lighter Gas,Household,piece,,20,17.2,20,5,0,5,10,3406,Local,"lighter, लाइटर",,1,piece,no,yes
+Insect Net Cover,Household,piece,,90,77.4,90,5,0,5,10,3406,Local,"jaali, जाली, food cover",,1,piece,no,yes
+Agarbatti Cycle Pure 100g,Pooja Items,packet,,50,42.5,50,5,0,4,8,3307,Cycle,"agarbatti, अगरबत्ती, incense",,100,gram,no,yes
+Agarbatti Mangaldeep 100g,Pooja Items,packet,,45,38.25,45,5,0,4,8,3307,Mangaldeep,"agarbatti, अगरबत्ती",,100,gram,no,yes
+Dhoop Batti 20 Sticks,Pooja Items,pack,,40,34,40,5,0,4,8,3307,Cycle,"dhoop, धूप, dhoopbatti",,20,piece,no,yes
+Camphor Kapoor 50g,Pooja Items,packet,,90,76.5,90,5,0,4,8,3307,Local,"kapoor, कपूर, camphor",,50,gram,no,yes
+Diya Cotton Wick 100 Pcs,Pooja Items,pack,,30,25.5,30,5,0,4,8,3307,Local,"batti, बत्ती, wick, ruee",,100,piece,no,yes
+Til Oil Pooja 200ml,Pooja Items,packet,,90,76.5,90,5,0,4,8,3307,Local,"til tel, तिल तेल, pooja oil",,200,ml,no,yes
+Roli Chandan 50g,Pooja Items,packet,,25,21.25,25,5,0,4,8,3307,Local,"roli, रोली, kumkum, tilak",,50,gram,no,yes
+Kalava Mauli Thread,Pooja Items,piece,,15,12.75,15,5,0,4,8,3307,Local,"kalava, कलावा, mauli",,1,piece,no,yes
+Havan Samagri 200g,Pooja Items,packet,,90,76.5,90,5,0,4,8,3307,Local,"havan samagri, हवन सामग्री",,200,gram,no,yes
+Gangajal 250ml,Pooja Items,packet,,50,42.5,50,5,0,4,8,3307,Local,"gangajal, गंगाजल",,250,ml,no,yes
+Matchbox Pooja Large,Pooja Items,piece,,15,12.75,15,5,0,4,8,3605,Local,"machis, माचिस",,1,piece,no,yes
+Nariyal Coconut 1 Piece,Pooja Items,piece,,45,38.25,45,5,0,4,8,3307,Local,"nariyal, नारियल, coconut",,1,piece,no,yes
+Pampers Baby Dry Pants M 9 Pcs,Baby Care,pack,,199,179.1,199,5,0,3,6,9619,Pampers,"diaper, डायपर, pampers",,9,piece,no,yes
+Pampers Baby Dry Pants L 8 Pcs,Baby Care,pack,,199,179.1,199,5,0,3,6,9619,Pampers,"diaper, डायपर",,8,piece,no,yes
+Huggies Wonder Pants M 9 Pcs,Baby Care,pack,,189,170.1,189,5,0,3,6,9619,Huggies,"diaper, डायपर, huggies",,9,piece,no,yes
+Johnson Baby Powder 200g,Baby Care,packet,,210,189,210,5,0,3,6,9619,Johnson,"baby powder, बेबी पाउडर",,200,gram,no,yes
+Johnson Baby Soap 75g,Baby Care,packet,,70,63,70,5,0,3,6,9619,Johnson,"baby soap, बेबी साबुन",,75,gram,no,yes
+Johnson Baby Oil 100ml,Baby Care,packet,,145,130.5,145,5,0,3,6,9619,Johnson,"baby oil, बेबी तेल",,100,ml,no,yes
+Johnson Baby Shampoo 100ml,Baby Care,packet,,130,117,130,5,0,3,6,9619,Johnson,"baby shampoo, बेबी शैम्पू",,100,ml,no,yes
+Himalaya Baby Lotion 200ml,Baby Care,packet,,215,193.5,215,5,0,3,6,9619,Himalaya,"baby lotion, बेबी लोशन",,200,ml,no,yes
+Cerelac Wheat 300g,Baby Care,packet,,290,261,290,5,0,3,6,9619,Nestle,"cerelac, सेरेलैक, baby food",,300,gram,no,yes
+Lactogen 1 400g,Baby Care,packet,,470,423,470,5,0,3,6,9619,Nestle,"lactogen, लैक्टोजेन, baby milk",,400,gram,no,yes
+Baby Wipes 72 Pcs,Baby Care,pack,,180,162,180,5,0,3,6,9619,Himalaya,"wipes, वाइप्स, baby wipes",,72,piece,no,yes
+Feeding Bottle 250ml,Baby Care,packet,,250,225,250,5,0,3,6,9619,Local,"feeding bottle, फीडिंग बोतल",,250,ml,no,yes
+Whisper Ultra Clean XL 15 Pads,Feminine Hygiene,pack,,199,177.11,199,0,0,4,8,9619,Whisper,"pad, पैड, sanitary napkin, whisper",,15,piece,no,yes
+Whisper Choice Regular 20 Pads,Feminine Hygiene,pack,,165,146.85,165,0,0,4,8,9619,Whisper,"pad, पैड, sanitary napkin",,20,piece,no,yes
+Stayfree Secure XL 20 Pads,Feminine Hygiene,pack,,175,155.75,175,0,0,4,8,9619,Stayfree,"pad, पैड, stayfree",,20,piece,no,yes
+Sofy Bodyfit 15 Pads,Feminine Hygiene,pack,,160,142.4,160,0,0,4,8,9619,Sofy,"pad, पैड, sofy",,15,piece,no,yes
+Nine Sanitary Pads 10 Pcs,Feminine Hygiene,pack,,70,62.3,70,0,0,4,8,9619,Nine,"pad, पैड, sanitary",,10,piece,no,yes
+Classmate Notebook 172 Pages,Stationery,pack,,55,46.2,55,0,0,5,10,4820,Classmate,"copy, कॉपी, notebook, register",,172,piece,no,yes
+Classmate Long Notebook 300 Pages,Stationery,pack,,110,92.4,110,0,0,5,10,4820,Classmate,"register, रजिस्टर, notebook",,300,piece,no,yes
+Rough Notebook 100 Pages,Stationery,pack,,30,25.2,30,0,0,5,10,4820,Local,"copy, कॉपी, rough copy",,100,piece,no,yes
+Reynolds Ball Pen Blue,Stationery,piece,,10,8.4,10,0,0,5,10,9608,Reynolds,"pen, पेन, kalam",,1,piece,no,yes
+Cello Butterflow Pen Blue,Stationery,piece,,10,8.4,10,0,0,5,10,9608,Cello,"pen, पेन",,1,piece,no,yes
+Nataraj Pencil 10 Pack,Stationery,pack,,50,42,50,0,0,5,10,9608,Nataraj,"pencil, पेंसिल",,10,piece,no,yes
+Apsara Pencil 10 Pack,Stationery,pack,,60,50.4,60,0,0,5,10,9608,Apsara,"pencil, पेंसिल",,10,piece,no,yes
+Eraser Nataraj,Stationery,piece,,5,4.2,5,0,0,5,10,4820,Nataraj,"rubber, रबर, eraser",,1,piece,no,yes
+Sharpener,Stationery,piece,,5,4.2,5,0,0,5,10,9608,Local,"sharpener, शार्पनर, cutter",,1,piece,no,yes
+Geometry Box,Stationery,piece,,150,126,150,0,0,5,10,4820,Camlin,"geometry box, ज्यामिति बॉक्स",,1,piece,no,yes
+Fevicol 50g,Stationery,packet,,40,33.6,40,0,0,5,10,4820,Fevicol,"fevicol, फेविकोल, glue, gond",,50,gram,no,yes
+Fevistick 8g,Stationery,packet,,35,29.4,35,0,0,5,10,4820,Fevistick,"fevistick, glue stick, गोंद",,8,gram,no,yes
+Scale 30cm,Stationery,piece,,20,16.8,20,0,0,5,10,4820,Local,"scale, स्केल, ruler",,1,piece,no,yes
+Stapler Small,Stationery,piece,,90,75.6,90,0,0,5,10,4820,Kangaro,"stapler, स्टेपलर",,1,piece,no,yes
+Cello Tape 1 inch,Stationery,piece,,40,33.6,40,0,0,5,10,4820,Local,"tape, टेप, cello tape",,1,piece,no,yes
+A4 Paper 100 Sheets,Stationery,pack,,90,75.6,90,0,0,5,10,4820,Local,"a4 paper, ए4 पेपर",,100,piece,no,yes
+Envelope White 10 Pcs,Stationery,pack,,30,25.2,30,0,0,5,10,4820,Local,"lifafa, लिफाफा, envelope",,10,piece,no,yes
+Marker Permanent Black,Stationery,piece,,30,25.2,30,0,0,5,10,4820,Camlin,"marker, मार्कर",,1,piece,no,yes
+Highlighter,Stationery,piece,,30,25.2,30,0,0,5,10,4820,Camlin,"highlighter, हाइलाइटर",,1,piece,no,yes
+Crayons 12 Shades,Stationery,pack,,60,50.4,60,0,0,5,10,4820,Camlin,"crayons, क्रेयॉन",,12,piece,no,yes
+Eveready AA Battery 2 Pack,Electrical,pack,,30,25.5,30,18,0,3,6,8506,Eveready,"cell, सेल, battery, pencil cell",,2,piece,no,yes
+Eveready AAA Battery 2 Pack,Electrical,pack,,32,27.2,32,18,0,3,6,8506,Eveready,"cell, सेल, battery",,2,piece,no,yes
+Duracell AA Battery 2 Pack,Electrical,pack,,90,76.5,90,18,0,3,6,8506,Duracell,"cell, सेल, battery",,2,piece,no,yes
+Eveready 9V Battery,Electrical,piece,,70,59.5,70,18,0,3,6,8506,Eveready,"battery, बैटरी, 9 volt",,1,piece,no,yes
+Philips LED Bulb 9W,Electrical,piece,,130,110.5,130,18,0,3,6,8539,Philips,"bulb, बल्ब, led",,1,piece,no,yes
+Syska LED Bulb 9W,Electrical,piece,,110,93.5,110,18,0,3,6,8539,Syska,"bulb, बल्ब, led",,1,piece,no,yes
+Philips LED Bulb 12W,Electrical,piece,,180,153,180,18,0,3,6,8539,Philips,"bulb, बल्ब, led",,1,piece,no,yes
+Eveready Torch LED,Electrical,piece,,250,212.5,250,18,0,3,6,8506,Eveready,"torch, टॉर्च, batti",,1,piece,no,yes
+Extension Board 4 Socket,Electrical,piece,,280,238,280,18,0,3,6,8506,Local,"extension, एक्सटेंशन board",,1,piece,no,yes
+Insulation Tape,Electrical,piece,,20,17,20,18,0,3,6,8506,Local,"tape, टेप, insulation",,1,piece,no,yes
+Vimal Pan Masala 10 Sachet,Tobacco & Pan,pack,,50,45.5,50,40,0,5,10,2402,Vimal,"pan masala, पान मसाला",,10,piece,no,yes
+Rajnigandha Pan Masala 10 Sachet,Tobacco & Pan,pack,,100,91,100,40,0,5,10,2402,Rajnigandha,"rajnigandha, रजनीगंधा, pan masala",,10,piece,no,yes
+Pass Pass Mouth Freshener 25g,Tobacco & Pan,packet,,30,27.3,30,40,0,5,10,1704,Pass Pass,"mukhwas, मुखवास, mouth freshener",,25,gram,no,yes
+Chandan Mouth Freshener 25g,Tobacco & Pan,packet,,25,22.75,25,40,0,5,10,1704,Local,"mukhwas, मुखवास, saunf",,25,gram,no,yes
+Eggs 6 Piece Tray,Eggs & Fresh,pack,,50,44,50,0,0,6,12,0407,Local,"anda, अंडा, eggs",,6,piece,no,yes
+Eggs 12 Piece Tray,Eggs & Fresh,pack,,95,83.6,95,0,0,6,12,0407,Local,"anda, अंडा, eggs",,12,piece,no,yes
+Eggs 30 Piece Tray,Eggs & Fresh,pack,,230,202.4,230,0,0,6,12,0407,Local,"anda, अंडा, eggs, crate",,30,piece,no,yes
+Onion 1kg,Eggs & Fresh,packet,,40,35.2,40,0,0,6,12,0407,Local,"pyaz, प्याज, onion",,1,kg,no,yes
+Potato 1kg,Eggs & Fresh,packet,,30,26.4,30,0,0,6,12,0407,Local,"aloo, आलू, potato",,1,kg,no,yes
+Tomato 1kg,Eggs & Fresh,packet,,40,35.2,40,0,0,6,12,0407,Local,"tamatar, टमाटर, tomato",,1,kg,no,yes
+Ginger 250g,Eggs & Fresh,packet,,30,26.4,30,0,0,6,12,0407,Local,"adrak, अदरक, ginger",,250,gram,no,yes
+Garlic 250g,Eggs & Fresh,packet,,50,44,50,0,0,6,12,0407,Local,"lehsun, लहसुन, garlic",,250,gram,no,yes
+Green Chilli 250g,Eggs & Fresh,packet,,20,17.6,20,0,0,6,12,0407,Local,"hari mirch, हरी मिर्च, chilli",,250,gram,no,yes
+Lemon 250g,Eggs & Fresh,packet,,30,26.4,30,0,0,6,12,0407,Local,"nimbu, नींबू, lemon",,250,gram,no,yes
+Loose Wheat Gehu (per kg),Loose Grains,kg,,32,28.48,32,0,0,5,15,1006,,"gehu, गेहूं, wheat, khula",,1,kg,yes,yes
+Loose Atta (per kg),Loose Grains,kg,,40,35.6,40,0,0,5,15,1006,,"atta, आटा, khula atta",,1,kg,yes,yes
+Loose Rice Sona Masoori (per kg),Loose Grains,kg,,58,51.62,58,0,0,5,15,1006,,"chawal, चावल, khula chawal",,1,kg,yes,yes
+Loose Rice Basmati (per kg),Loose Grains,kg,,110,97.9,110,0,0,5,15,1006,,"basmati, बासमती, chawal",,1,kg,yes,yes
+Loose Bajra (per kg),Loose Grains,kg,,38,33.82,38,0,0,5,15,1006,,"bajra, बाजरा",,1,kg,yes,yes
+Loose Makka (per kg),Loose Grains,kg,,35,31.15,35,0,0,5,15,1006,,"makka, मक्का, maize",,1,kg,yes,yes
+Loose Jau (per kg),Loose Grains,kg,,42,37.38,42,0,0,5,15,1006,,"jau, जौ, barley",,1,kg,yes,yes
+Loose Poha (per kg),Loose Grains,kg,,70,62.3,70,0,0,5,15,1904,,"poha, पोहा",,1,kg,yes,yes
+Loose Sooji (per kg),Loose Grains,kg,,60,53.4,60,0,0,5,15,1103,,"sooji, सूजी, rava",,1,kg,yes,yes
+Loose Maida (per kg),Loose Grains,kg,,50,44.5,50,0,0,5,15,1006,,"maida, मैदा",,1,kg,yes,yes
+Loose Besan (per kg),Loose Grains,kg,,110,97.9,110,0,0,5,15,1106,,"besan, बेसन",,1,kg,yes,yes
+Loose Sabudana (per kg),Loose Grains,kg,,150,133.5,150,0,0,5,15,1006,,"sabudana, साबूदाना",,1,kg,yes,yes
+Loose Toor Dal (per kg),Loose Dal,kg,,155,137.95,155,0,0,5,15,0713,,"toor dal, तूर दाल, arhar, khuli dal",,1,kg,yes,yes
+Loose Chana Dal (per kg),Loose Dal,kg,,80,71.2,80,0,0,5,15,0713,,"chana dal, चना दाल",,1,kg,yes,yes
+Loose Moong Dal (per kg),Loose Dal,kg,,125,111.25,125,0,0,5,15,0713,,"moong dal, मूंग दाल",,1,kg,yes,yes
+Loose Urad Dal (per kg),Loose Dal,kg,,135,120.15,135,0,0,5,15,0713,,"urad dal, उड़द दाल",,1,kg,yes,yes
+Loose Masoor Dal (per kg),Loose Dal,kg,,105,93.45,105,0,0,5,15,0713,,"masoor dal, मसूर दाल",,1,kg,yes,yes
+Loose Rajma (per kg),Loose Dal,kg,,165,146.85,165,0,0,5,15,0713,,"rajma, राजमा",,1,kg,yes,yes
+Loose Kabuli Chana (per kg),Loose Dal,kg,,145,129.05,145,0,0,5,15,0713,,"kabuli chana, काबुली चना, chhole",,1,kg,yes,yes
+Loose Kala Chana (per kg),Loose Dal,kg,,105,93.45,105,0,0,5,15,0713,,"kala chana, काला चना",,1,kg,yes,yes
+Loose Safed Matar (per kg),Loose Dal,kg,,95,84.55,95,0,0,5,15,0713,,"safed matar, सफेद मटर",,1,kg,yes,yes
+Loose Moth (per kg),Loose Dal,kg,,130,115.7,130,0,0,5,15,0713,,"moth, मोठ",,1,kg,yes,yes
+Loose Lobia (per kg),Loose Dal,kg,,125,111.25,125,0,0,5,15,0713,,"lobia, लोबिया",,1,kg,yes,yes
+Loose Soyabean (per kg),Loose Dal,kg,,90,80.1,90,0,0,5,15,0713,,"soyabean, सोयाबीन",,1,kg,yes,yes
+Loose Haldi Powder (per kg),Loose Spices,kg,,280,229.6,280,5,0,2,5,0910,,"haldi, हल्दी, turmeric",,1,kg,yes,yes
+Loose Mirch Powder (per kg),Loose Spices,kg,,420,344.4,420,5,0,2,5,0910,,"lal mirch, लाल मिर्च",,1,kg,yes,yes
+Loose Dhaniya Powder (per kg),Loose Spices,kg,,320,262.4,320,5,0,2,5,0910,,"dhaniya, धनिया",,1,kg,yes,yes
+Loose Jeera (per kg),Loose Spices,kg,,520,426.4,520,5,0,2,5,0910,,"jeera, जीरा, cumin",,1,kg,yes,yes
+Loose Rai (per kg),Loose Spices,kg,,180,147.6,180,5,0,2,5,0910,,"rai, राई, sarson",,1,kg,yes,yes
+Loose Methi Dana (per kg),Loose Spices,kg,,160,131.2,160,5,0,2,5,0910,,"methi, मेथी",,1,kg,yes,yes
+Loose Saunf (per kg),Loose Spices,kg,,420,344.4,420,5,0,2,5,0910,,"saunf, सौंफ",,1,kg,yes,yes
+Loose Ajwain (per kg),Loose Spices,kg,,380,311.6,380,5,0,2,5,0910,,"ajwain, अजवाइन",,1,kg,yes,yes
+Loose Kali Mirch (per kg),Loose Spices,kg,,1400,1148,1400,5,0,2,5,0910,,"kali mirch, काली मिर्च",,1,kg,yes,yes
+Loose Elaichi (per kg),Loose Spices,kg,,3800,3116,3800,5,0,2,5,0910,,"elaichi, इलायची",,1,kg,yes,yes
+Loose Laung (per kg),Loose Spices,kg,,1600,1312,1600,5,0,2,5,0910,,"laung, लौंग",,1,kg,yes,yes
+Loose Imli (per kg),Loose Spices,kg,,180,147.6,180,5,0,2,5,0910,,"imli, इमली, tamarind",,1,kg,yes,yes
+Loose Badam (per kg),Loose Dry Fruits,kg,,950,807.5,950,5,0,1,3,0802,,"badam, बादाम, almond",,1,kg,yes,yes
+Loose Kaju (per kg),Loose Dry Fruits,kg,,1050,892.5,1050,5,0,1,3,0802,,"kaju, काजू, cashew",,1,kg,yes,yes
+Loose Kishmish (per kg),Loose Dry Fruits,kg,,380,323,380,5,0,1,3,0802,,"kishmish, किशमिश, raisin",,1,kg,yes,yes
+Loose Akhrot (per kg),Loose Dry Fruits,kg,,1150,977.5,1150,5,0,1,3,0802,,"akhrot, अखरोट, walnut",,1,kg,yes,yes
+Loose Khajur (per kg),Loose Dry Fruits,kg,,280,238,280,5,0,1,3,0802,,"khajur, खजूर, dates",,1,kg,yes,yes
+Loose Makhana (per kg),Loose Dry Fruits,kg,,950,807.5,950,5,0,1,3,0802,,"makhana, मखाना",,1,kg,yes,yes
+Loose Mungfali (per kg),Loose Dry Fruits,kg,,140,119,140,5,0,1,3,0802,,"mungfali, मूंगफली, peanut",,1,kg,yes,yes
+Loose Sarson Tel (per kg),Loose Oil & Ghee,kg,,160,144,160,5,0,3,8,1512,,"sarson tel, सरसों तेल, khula tel",,1,kg,yes,yes
+Loose Refined Tel (per kg),Loose Oil & Ghee,kg,,140,126,140,5,0,3,8,1512,,"refined tel, रिफाइंड तेल",,1,kg,yes,yes
+Loose Desi Ghee (per kg),Loose Oil & Ghee,kg,,620,558,620,5,0,3,8,1512,,"desi ghee, देसी घी",,1,kg,yes,yes
+Loose Gud (per kg),Loose Oil & Ghee,kg,,65,58.5,65,5,0,3,8,1512,,"gud, गुड़, jaggery",,1,kg,yes,yes
+Loose Cheeni (per kg),Loose Oil & Ghee,kg,,46,41.4,46,5,0,3,8,1512,,"cheeni, चीनी, shakkar, sugar",,1,kg,yes,yes

@@ -1,0 +1,836 @@
+#!/usr/bin/env python3
+"""
+KiranaOS starter catalog generator.
+
+Emits a CSV in the exact column order that KiranaOS's existing product importer
+expects (PRODUCT_IMPORT_COLUMNS in frontend/src/features/core/products/import/
+product-import-csv.ts), so it can be loaded through Products -> Import today
+with no code change.
+
+Design notes (read before trusting the numbers):
+  * BARCODES ARE DELIBERATELY BLANK. Real EAN-13 codes for specific SKUs cannot
+    be invented; a wrong barcode silently adds the wrong item to a bill. The
+    correct design is capture-on-first-scan: the shop scans a packet once and
+    the code binds to the row.
+  * MRP/prices are TYPICAL STARTING VALUES so the shop is not staring at zeros.
+    They vary by state, pack and month and must be corrected on setup.
+  * GST rates follow the GST 2.0 structure (0 / 5 / 18 / 40) effective
+    22 Sep 2025. Verify against the shop's accountant before filing.
+  * The durable, high-value part of this file is names, Hindi + Hinglish
+    aliases, category, pack size, unit and HSN. Those do not go stale.
+"""
+
+import csv
+import os
+
+# category -> (gst, hsn, unit, margin, low_stock, reorder)
+# margin = shopkeeper's typical gross margin, used to derive cost from MRP.
+CAT = {
+    "Atta & Flour":      (0,  "1101", "piece", 0.06, 5, 10),
+    "Rice":              (0,  "1006", "piece", 0.07, 5, 10),
+    "Dal & Pulses":      (0,  "0713", "piece", 0.08, 5, 10),
+    "Sugar & Salt":      (5,  "1701", "piece", 0.06, 5, 10),
+    "Edible Oil":        (5,  "1512", "piece", 0.06, 5, 10),
+    "Ghee & Butter":     (5,  "0405", "piece", 0.08, 3, 6),
+    "Dairy":             (5,  "0401", "piece", 0.08, 5, 10),
+    "Tea & Coffee":      (5,  "0902", "piece", 0.09, 4, 8),
+    "Biscuits":          (5,  "1905", "piece", 0.12, 6, 12),
+    "Bakery":            (5,  "1905", "piece", 0.10, 4, 8),
+    "Namkeen & Snacks":  (5,  "2106", "piece", 0.14, 6, 12),
+    "Chocolates & Candy":(5,  "1806", "piece", 0.13, 6, 12),
+    "Spices & Masala":   (5,  "0910", "piece", 0.11, 4, 8),
+    "Sauces & Spreads":  (5,  "2103", "piece", 0.11, 3, 6),
+    "Instant Food":      (5,  "1902", "piece", 0.11, 6, 12),
+    "Breakfast Cereal":  (5,  "1904", "piece", 0.11, 3, 6),
+    "Beverages":         (5,  "2202", "piece", 0.10, 6, 12),
+    "Soft Drinks":       (40, "2202", "piece", 0.10, 6, 12),
+    "Dry Fruits":        (5,  "0802", "piece", 0.12, 3, 6),
+    "Bath & Soap":       (5,  "3401", "piece", 0.12, 6, 12),
+    "Hair Care":         (5,  "3305", "piece", 0.13, 4, 8),
+    "Oral Care":         (5,  "3306", "piece", 0.12, 4, 8),
+    "Skin Care":         (5,  "3304", "piece", 0.13, 3, 6),
+    "Grooming":          (5,  "3307", "piece", 0.13, 3, 6),
+    "Detergent & Laundry":(5, "3402", "piece", 0.11, 5, 10),
+    "Cleaning":          (5,  "3402", "piece", 0.12, 4, 8),
+    "Pest & Repellent":  (18, "3808", "piece", 0.13, 3, 6),
+    "Household":         (5,  "3406", "piece", 0.14, 5, 10),
+    "Pooja Items":       (5,  "3307", "piece", 0.15, 4, 8),
+    "Baby Care":         (5,  "9619", "piece", 0.10, 3, 6),
+    "Feminine Hygiene":  (0,  "9619", "piece", 0.11, 4, 8),
+    "Stationery":        (0,  "4820", "piece", 0.16, 5, 10),
+    "Electrical":        (18, "8506", "piece", 0.15, 3, 6),
+    "Tobacco & Pan":     (40, "2402", "piece", 0.09, 5, 10),
+    "Loose Grains":      (0,  "1006", "kg",    0.11, 5, 15),
+    "Loose Dal":         (0,  "0713", "kg",    0.11, 5, 15),
+    "Loose Spices":      (5,  "0910", "kg",    0.18, 2, 5),
+    "Loose Dry Fruits":  (5,  "0802", "kg",    0.15, 1, 3),
+    "Loose Oil & Ghee":  (5,  "1512", "kg",    0.10, 3, 8),
+    "Eggs & Fresh":      (0,  "0407", "piece", 0.12, 6, 12),
+}
+
+# Per-item overrides where the category default is wrong.
+HSN_OVERRIDE = {
+    "1514": ["Mustard Oil"], "1508": ["Groundnut Oil"], "1507": ["Soyabean Oil"],
+    "1511": ["Palm Oil"], "1512": ["Sunflower Oil", "Rice Bran Oil"],
+    "2501": ["Salt"], "0406": ["Paneer", "Cheese"], "0403": ["Curd", "Dahi", "Lassi", "Buttermilk"],
+    "0402": ["Milk Powder", "Condensed Milk"], "0901": ["Coffee"],
+    "2201": ["Water"], "2009": ["Juice"], "1704": ["Candy", "Toffee", "Chewing Gum", "Mouth Freshener"],
+    "0409": ["Honey"], "2001": ["Pickle", "Achar"], "2007": ["Jam"],
+    "1104": ["Oats"], "9603": ["Toothbrush", "Broom", "Brush"], "8212": ["Razor", "Blade"],
+    "3605": ["Matchbox"], "9608": ["Pen"], "9609": ["Pencil"], "8539": ["Bulb", "Tube"],
+    "1106": ["Besan"], "1103": ["Sooji", "Rava"], "1904": ["Poha"], "0713": ["Rajma", "Chana"],
+}
+
+
+def hsn_for(name, default):
+    for hsn, keys in HSN_OVERRIDE.items():
+        for k in keys:
+            if k.lower() in name.lower():
+                return hsn
+    return default
+
+
+# (name, brand, mrp, pack_value, pack_unit, aliases)
+ITEMS = {
+"Atta & Flour": [
+ ("Aashirvaad Shudh Chakki Atta 5kg","Aashirvaad",340,5,"kg","atta, आटा, gehu atta, wheat flour"),
+ ("Aashirvaad Shudh Chakki Atta 10kg","Aashirvaad",660,10,"kg","atta, आटा, wheat flour"),
+ ("Aashirvaad Multigrain Atta 5kg","Aashirvaad",395,5,"kg","multigrain atta, मल्टीग्रेन आटा"),
+ ("Fortune Chakki Fresh Atta 5kg","Fortune",320,5,"kg","atta, आटा, fortune atta"),
+ ("Fortune Chakki Fresh Atta 10kg","Fortune",625,10,"kg","atta, आटा"),
+ ("Pillsbury Chakki Fresh Atta 5kg","Pillsbury",330,5,"kg","atta, आटा"),
+ ("Nature Fresh Sampoorna Atta 5kg","Nature Fresh",315,5,"kg","atta, आटा"),
+ ("Rajdhani Chakki Atta 5kg","Rajdhani",300,5,"kg","atta, आटा"),
+ ("Shakti Bhog Atta 5kg","Shakti Bhog",305,5,"kg","atta, आटा"),
+ ("Rajdhani Besan 500g","Rajdhani",70,500,"g","besan, बेसन, gram flour, chana atta"),
+ ("Rajdhani Besan 1kg","Rajdhani",135,1,"kg","besan, बेसन, gram flour"),
+ ("Fortune Besan 1kg","Fortune",130,1,"kg","besan, बेसन"),
+ ("Rajdhani Maida 500g","Rajdhani",38,500,"g","maida, मैदा, refined flour"),
+ ("Rajdhani Maida 1kg","Rajdhani",72,1,"kg","maida, मैदा"),
+ ("Rajdhani Sooji Rava 500g","Rajdhani",40,500,"g","sooji, सूजी, rava, semolina"),
+ ("Rajdhani Sooji Rava 1kg","Rajdhani",76,1,"kg","sooji, सूजी, rava"),
+ ("Aashirvaad Multigrain Atta 1kg","Aashirvaad",85,1,"kg","atta, आटा"),
+ ("Bajra Atta 500g","Local",55,500,"g","bajra atta, बाजरा आटा, pearl millet flour"),
+ ("Makki Atta 500g","Local",48,500,"g","makki atta, मक्की आटा, maize flour"),
+ ("Jau Atta 500g","Local",52,500,"g","jau atta, जौ आटा, barley flour"),
+ ("Ragi Atta 500g","Local",70,500,"g","ragi atta, रागी आटा, nachni"),
+ ("Sattu 500g","Local",80,500,"g","sattu, सत्तू"),
+ ("Idli Rava 1kg","Local",90,1,"kg","idli rava, इडली रवा"),
+ ("MTR Dosa Mix 500g","MTR",95,500,"g","dosa mix, डोसा मिक्स"),
+ ("Gits Idli Mix 200g","Gits",70,200,"g","idli mix, इडली मिक्स"),
+],
+"Rice": [
+ ("India Gate Basmati Rice Classic 5kg","India Gate",720,5,"kg","chawal, चावल, basmati, rice"),
+ ("India Gate Basmati Rice Classic 1kg","India Gate",150,1,"kg","chawal, चावल, basmati"),
+ ("Daawat Rozana Basmati Rice 5kg","Daawat",480,5,"kg","chawal, चावल, basmati"),
+ ("Daawat Devaaya Basmati Rice 1kg","Daawat",165,1,"kg","chawal, चावल, basmati"),
+ ("Kohinoor Basmati Rice 1kg","Kohinoor",175,1,"kg","chawal, चावल, basmati"),
+ ("Fortune Everyday Basmati Rice 5kg","Fortune",450,5,"kg","chawal, चावल"),
+ ("Sona Masoori Rice 5kg","Local",340,5,"kg","sona masoori, सोना मसूरी, chawal"),
+ ("Kolam Rice 5kg","Local",320,5,"kg","kolam chawal, कोलम चावल"),
+ ("Broken Rice 5kg","Local",220,5,"kg","tukda chawal, टुकड़ा चावल"),
+ ("Poha Thick 500g","Local",42,500,"g","poha, पोहा, chiwda, flattened rice"),
+ ("Poha Thin 500g","Local",42,500,"g","patla poha, पतला पोहा"),
+ ("Murmura Puffed Rice 200g","Local",30,200,"g","murmura, मुरमुरा, lai, puffed rice"),
+ ("Sabudana 500g","Local",90,500,"g","sabudana, साबूदाना, sago"),
+],
+"Dal & Pulses": [
+ ("Tata Sampann Toor Dal 1kg","Tata Sampann",180,1,"kg","toor dal, तूर दाल, arhar dal, अरहर"),
+ ("Tata Sampann Chana Dal 1kg","Tata Sampann",95,1,"kg","chana dal, चना दाल"),
+ ("Tata Sampann Moong Dal 1kg","Tata Sampann",145,1,"kg","moong dal, मूंग दाल"),
+ ("Tata Sampann Urad Dal 1kg","Tata Sampann",155,1,"kg","urad dal, उड़द दाल"),
+ ("Tata Sampann Masoor Dal 1kg","Tata Sampann",120,1,"kg","masoor dal, मसूर दाल"),
+ ("Fortune Toor Dal 1kg","Fortune",170,1,"kg","toor dal, तूर दाल, arhar"),
+ ("Fortune Moong Dal 1kg","Fortune",140,1,"kg","moong dal, मूंग दाल"),
+ ("Fortune Chana Dal 1kg","Fortune",90,1,"kg","chana dal, चना दाल"),
+ ("Rajma Chitra 500g","Local",95,500,"g","rajma, राजमा, kidney beans"),
+ ("Rajma Kashmiri 500g","Local",120,500,"g","rajma, राजमा"),
+ ("Kabuli Chana 500g","Local",85,500,"g","kabuli chana, काबुली चना, chhole, chickpea"),
+ ("Kala Chana 500g","Local",60,500,"g","kala chana, काला चना"),
+ ("Safed Matar 500g","Local",55,500,"g","safed matar, सफेद मटर, white peas"),
+ ("Lobia 500g","Local",70,500,"g","lobia, लोबिया, black eyed pea"),
+ ("Moth Dal 500g","Local",75,500,"g","moth, मोठ"),
+ ("Moong Sabut 500g","Local",80,500,"g","sabut moong, साबुत मूंग, green gram"),
+ ("Urad Sabut 500g","Local",85,500,"g","sabut urad, साबुत उड़द"),
+ ("Soya Chunks 200g","Nutrela",65,200,"g","soya chunks, सोया चंक्स, nutrela, badi"),
+],
+"Sugar & Salt": [
+ ("Tata Salt 1kg","Tata",28,1,"kg","namak, नमक, salt, tata namak"),
+ ("Tata Salt Lite 1kg","Tata",42,1,"kg","namak, नमक, low sodium salt"),
+ ("Aashirvaad Salt 1kg","Aashirvaad",28,1,"kg","namak, नमक"),
+ ("Sugar 1kg","Local",48,1,"kg","cheeni, चीनी, shakkar, शक्कर, sugar"),
+ ("Sugar 5kg","Local",235,5,"kg","cheeni, चीनी, shakkar"),
+ ("Madhur Sugar 1kg","Madhur",52,1,"kg","cheeni, चीनी, sugar"),
+ ("Bura Sugar 500g","Local",55,500,"g","bura, बूरा, boora"),
+ ("Gud Jaggery 1kg","Local",70,1,"kg","gud, गुड़, jaggery, gur"),
+ ("Mishri 250g","Local",45,250,"g","mishri, मिश्री, rock sugar"),
+ ("Sendha Namak 500g","Local",45,500,"g","sendha namak, सेंधा नमक, rock salt, vrat namak"),
+ ("Kala Namak 200g","Local",35,200,"g","kala namak, काला नमक, black salt"),
+ ("Sugar Free Gold 100 Tablets","Sugar Free",180,100,"piece","sugar free, शुगर फ्री, sweetener"),
+],
+"Edible Oil": [
+ ("Fortune Sunflower Oil 1L Pouch","Fortune",145,1,"l","tel, तेल, sunflower oil, refined"),
+ ("Fortune Sunflower Oil 5L Jar","Fortune",720,5,"l","tel, तेल, sunflower oil"),
+ ("Fortune Soyabean Oil 1L Pouch","Fortune",135,1,"l","soyabean tel, सोयाबीन तेल"),
+ ("Fortune Kachi Ghani Mustard Oil 1L","Fortune",175,1,"l","sarson tel, सरसों तेल, mustard oil"),
+ ("Fortune Kachi Ghani Mustard Oil 5L","Fortune",860,5,"l","sarson tel, सरसों तेल"),
+ ("Saffola Gold Oil 1L","Saffola",195,1,"l","saffola, सैफोला, refined oil"),
+ ("Saffola Gold Oil 5L","Saffola",960,5,"l","saffola, सैफोला"),
+ ("Dhara Mustard Oil 1L","Dhara",170,1,"l","sarson tel, सरसों तेल, dhara"),
+ ("Dhara Refined Sunflower Oil 1L","Dhara",150,1,"l","tel, तेल, sunflower"),
+ ("Sundrop Groundnut Oil 1L","Sundrop",235,1,"l","mungfali tel, मूंगफली तेल, groundnut oil"),
+ ("Patanjali Mustard Oil 1L","Patanjali",165,1,"l","sarson tel, सरसों तेल"),
+ ("Gemini Refined Sunflower Oil 1L","Gemini",148,1,"l","tel, तेल"),
+ ("Rice Bran Oil 1L","Fortune",160,1,"l","rice bran tel, राइस ब्रान तेल"),
+ ("Coconut Oil 500ml Parachute","Parachute",180,500,"ml","nariyal tel, नारियल तेल, coconut oil"),
+ ("Til Oil 500ml","Local",190,500,"ml","til tel, तिल तेल, sesame oil"),
+],
+"Ghee & Butter": [
+ ("Amul Ghee 1L Tin","Amul",680,1,"l","ghee, घी, amul ghee"),
+ ("Amul Ghee 500ml","Amul",350,500,"ml","ghee, घी"),
+ ("Amul Ghee 200ml","Amul",145,200,"ml","ghee, घी"),
+ ("Patanjali Cow Ghee 1L","Patanjali",680,1,"l","ghee, घी, gaay ka ghee"),
+ ("Patanjali Cow Ghee 500ml","Patanjali",350,500,"ml","ghee, घी"),
+ ("Mother Dairy Ghee 1L","Mother Dairy",670,1,"l","ghee, घी"),
+ ("Saras Ghee 1L","Saras",650,1,"l","ghee, घी, saras"),
+ ("Nova Vanaspati 1L","Nova",165,1,"l","vanaspati, वनस्पति, dalda"),
+ ("Dalda Vanaspati 1L","Dalda",175,1,"l","dalda, डालडा, vanaspati"),
+ ("Amul Butter 100g","Amul",62,100,"g","makhan, मक्खन, butter, amul butter"),
+ ("Amul Butter 500g","Amul",285,500,"g","makhan, मक्खन, butter"),
+ ("Amul Cheese Slices 200g","Amul",145,200,"g","cheese, चीज़, cheese slice"),
+ ("Amul Cheese Cube 200g","Amul",140,200,"g","cheese, चीज़"),
+ ("Britannia Butter 100g","Britannia",58,100,"g","makhan, मक्खन, butter"),
+],
+"Dairy": [
+ ("Amul Taaza Toned Milk 500ml","Amul",29,500,"ml","doodh, दूध, milk, amul taaza"),
+ ("Amul Gold Milk 500ml","Amul",35,500,"ml","doodh, दूध, milk"),
+ ("Amul Masti Dahi 400g","Amul",50,400,"g","dahi, दही, curd, yogurt"),
+ ("Amul Masti Dahi 1kg","Amul",95,1,"kg","dahi, दही, curd"),
+ ("Amul Malai Paneer 200g","Amul",95,200,"g","paneer, पनीर, cottage cheese"),
+ ("Mother Dairy Paneer 200g","Mother Dairy",92,200,"g","paneer, पनीर"),
+ ("Amul Masti Buttermilk 500ml","Amul",20,500,"ml","chaas, छाछ, buttermilk, mattha"),
+ ("Amul Lassi 200ml","Amul",25,200,"ml","lassi, लस्सी"),
+ ("Amul Kool Badam 200ml","Amul",30,200,"ml","badam milk, बादाम दूध, flavoured milk"),
+ ("Amul Fresh Cream 250ml","Amul",85,250,"ml","cream, क्रीम, malai"),
+ ("Amul Mithai Mate 400g","Amul",145,400,"g","condensed milk, कंडेंस्ड मिल्क, milkmaid"),
+ ("Nestle Milkmaid 400g","Nestle",165,400,"g","milkmaid, मिल्कमेड, condensed milk"),
+ ("Amulya Milk Powder 500g","Amul",275,500,"g","milk powder, मिल्क पाउडर, doodh powder"),
+ ("Nestle Everyday Dairy Whitener 400g","Nestle",250,400,"g","milk powder, मिल्क पाउडर, everyday"),
+ ("Saras Milk 500ml","Saras",28,500,"ml","doodh, दूध, milk, saras"),
+],
+"Tea & Coffee": [
+ ("Tata Tea Premium 250g","Tata Tea",145,250,"g","chai, चाय, chai patti, tea"),
+ ("Tata Tea Premium 500g","Tata Tea",285,500,"g","chai, चाय, chai patti"),
+ ("Tata Tea Premium 1kg","Tata Tea",560,1,"kg","chai, चाय, chai patti"),
+ ("Tata Tea Gold 250g","Tata Tea",185,250,"g","chai, चाय, gold tea"),
+ ("Red Label Tea 250g","Brooke Bond",140,250,"g","chai, चाय, red label"),
+ ("Red Label Tea 500g","Brooke Bond",275,500,"g","chai, चाय, red label"),
+ ("Taj Mahal Tea 250g","Brooke Bond",195,250,"g","chai, चाय, taj mahal"),
+ ("Society Tea 250g","Society",135,250,"g","chai, चाय, society tea"),
+ ("Wagh Bakri Tea 250g","Wagh Bakri",150,250,"g","chai, चाय, wagh bakri"),
+ ("Lipton Green Tea 25 Bags","Lipton",180,25,"piece","green tea, ग्रीन टी"),
+ ("Tetley Green Tea 25 Bags","Tetley",190,25,"piece","green tea, ग्रीन टी"),
+ ("Nescafe Classic Coffee 50g","Nescafe",190,50,"g","coffee, कॉफ़ी, nescafe"),
+ ("Nescafe Classic Coffee 100g","Nescafe",360,100,"g","coffee, कॉफ़ी"),
+ ("Bru Instant Coffee 50g","Bru",165,50,"g","coffee, कॉफ़ी, bru"),
+ ("Bru Gold Coffee 50g","Bru",235,50,"g","coffee, कॉफ़ी"),
+ ("Sunrise Coffee 50g","Sunrise",155,50,"g","coffee, कॉफ़ी"),
+ ("Tea Masala 50g","Local",45,50,"g","chai masala, चाय मसाला"),
+],
+"Biscuits": [
+ ("Parle-G Original 250g","Parle",30,250,"g","parle g, पारले जी, biscuit, biskut"),
+ ("Parle-G Original 100g","Parle",10,100,"g","parle g, पारले जी, biscuit"),
+ ("Parle-G Gold 200g","Parle",50,200,"g","parle gold, पारले गोल्ड"),
+ ("Britannia Good Day Cashew 200g","Britannia",50,200,"g","good day, गुड डे, biscuit"),
+ ("Britannia Good Day Butter 200g","Britannia",50,200,"g","good day, गुड डे"),
+ ("Britannia Marie Gold 250g","Britannia",40,250,"g","marie, मैरी, marie gold"),
+ ("Britannia Bourbon 150g","Britannia",45,150,"g","bourbon, बोरबॉन, cream biscuit"),
+ ("Britannia 50-50 Maska Chaska 150g","Britannia",35,150,"g","50 50, फिफ्टी फिफ्टी"),
+ ("Britannia NutriChoice Digestive 250g","Britannia",110,250,"g","digestive, डाइजेस्टिव"),
+ ("Britannia Milk Bikis 250g","Britannia",45,250,"g","milk bikis, मिल्क बिकिस"),
+ ("Parle Monaco 200g","Parle",40,200,"g","monaco, मोनैको, salty biscuit"),
+ ("Parle Krackjack 200g","Parle",40,200,"g","krackjack, क्रैकजैक"),
+ ("Parle Hide & Seek 200g","Parle",60,200,"g","hide and seek, हाइड एंड सीक"),
+ ("Sunfeast Dark Fantasy 100g","Sunfeast",50,100,"g","dark fantasy, डार्क फैंटेसी"),
+ ("Sunfeast Marie Light 250g","Sunfeast",40,250,"g","marie, मैरी"),
+ ("Oreo Biscuit 120g","Cadbury",35,120,"g","oreo, ओरियो"),
+ ("Unibic Choco Chip Cookies 150g","Unibic",70,150,"g","cookies, कुकीज़"),
+ ("Parle Hide & Seek Fills 75g","Parle",30,75,"g","hide and seek, हाइड एंड सीक"),
+ ("Priyagold Butter Bite 200g","Priyagold",45,200,"g","butter bite, बटर बाइट"),
+ ("Britannia Tiger Krunch 100g","Britannia",20,100,"g","tiger, टाइगर biscuit"),
+],
+"Bakery": [
+ ("Britannia Bread 400g","Britannia",50,400,"g","bread, ब्रेड, double roti, पाव"),
+ ("Britannia Brown Bread 400g","Britannia",55,400,"g","brown bread, ब्राउन ब्रेड"),
+ ("Modern Bread 400g","Modern",50,400,"g","bread, ब्रेड"),
+ ("Britannia Pav 6 Piece","Britannia",35,6,"piece","pav, पाव, ladi pav"),
+ ("Britannia Toast Rusk 200g","Britannia",45,200,"g","rusk, रस्क, toast, टोस्ट"),
+ ("Parle Rusk 300g","Parle",60,300,"g","rusk, रस्क, toast"),
+ ("Britannia Cake Slice 60g","Britannia",20,60,"g","cake, केक"),
+ ("Britannia Fruit Cake 250g","Britannia",90,250,"g","cake, केक, fruit cake"),
+ ("Bakery Khari 200g","Local",50,200,"g","khari, खारी, puff biscuit"),
+ ("Bakery Nankhatai 200g","Local",55,200,"g","nankhatai, नानखटाई"),
+],
+"Namkeen & Snacks": [
+ ("Haldiram Bhujia 200g","Haldiram",55,200,"g","bhujia, भुजिया, namkeen, नमकीन"),
+ ("Haldiram Bhujia 400g","Haldiram",105,400,"g","bhujia, भुजिया, namkeen"),
+ ("Haldiram Aloo Bhujia 200g","Haldiram",55,200,"g","aloo bhujia, आलू भुजिया"),
+ ("Haldiram Navratan Mix 200g","Haldiram",60,200,"g","navratan, नवरतन, mixture"),
+ ("Haldiram Moong Dal 200g","Haldiram",60,200,"g","moong dal namkeen, मूंग दाल"),
+ ("Haldiram Khatta Meetha 200g","Haldiram",58,200,"g","khatta meetha, खट्टा मीठा"),
+ ("Bikaji Bhujia 200g","Bikaji",52,200,"g","bhujia, भुजिया, bikaji"),
+ ("Bikaji Soan Papdi 250g","Bikaji",95,250,"g","soan papdi, सोन पापड़ी"),
+ ("Bikano Navratan Mix 200g","Bikano",55,200,"g","mixture, मिक्सचर"),
+ ("Lays Classic Salted 52g","Lays",20,52,"g","lays, लेज़, chips, चिप्स"),
+ ("Lays Magic Masala 52g","Lays",20,52,"g","lays, लेज़, chips"),
+ ("Lays American Style Cream & Onion 52g","Lays",20,52,"g","lays, लेज़, chips"),
+ ("Kurkure Masala Munch 90g","Kurkure",20,90,"g","kurkure, कुरकुरे"),
+ ("Bingo Mad Angles 66g","Bingo",20,66,"g","bingo, बिंगो, mad angles"),
+ ("Uncle Chipps Spicy Treat 52g","Uncle Chipps",20,52,"g","chips, चिप्स"),
+ ("Balaji Wafers 45g","Balaji",10,45,"g","wafers, वेफर्स, chips"),
+ ("Haldiram Aloo Lachha 200g","Haldiram",60,200,"g","aloo lachha, आलू लच्छा"),
+ ("Peanuts Salted 100g","Local",30,100,"g","mungfali, मूंगफली, peanuts"),
+ ("Roasted Chana 200g","Local",45,200,"g","bhuna chana, भुना चना"),
+ ("Papad Lijjat 200g","Lijjat",70,200,"g","papad, पापड़, lijjat"),
+ ("Fryums Plain 200g","Local",45,200,"g","fryums, फ्रायम्स, papad"),
+],
+"Chocolates & Candy": [
+ ("Cadbury Dairy Milk 55g","Cadbury",50,55,"g","dairy milk, डेरी मिल्क, chocolate, चॉकलेट"),
+ ("Cadbury Dairy Milk 13.2g","Cadbury",10,13,"g","dairy milk, डेरी मिल्क, chocolate"),
+ ("Cadbury Dairy Milk Silk 60g","Cadbury",90,60,"g","silk, सिल्क, chocolate"),
+ ("Cadbury 5 Star 25g","Cadbury",20,25,"g","5 star, फाइव स्टार"),
+ ("Cadbury Perk 13g","Cadbury",10,13,"g","perk, पर्क"),
+ ("Cadbury Gems 17g","Cadbury",10,17,"g","gems, जेम्स"),
+ ("Nestle KitKat 27g","Nestle",25,27,"g","kitkat, किटकैट"),
+ ("Nestle Munch 10g","Nestle",10,10,"g","munch, मंच"),
+ ("Nestle Milkybar 12g","Nestle",20,12,"g","milkybar, मिल्कीबार"),
+ ("Amul Dark Chocolate 150g","Amul",120,150,"g","dark chocolate, डार्क चॉकलेट"),
+ ("Alpenliebe Candy Jar 100 Pcs","Alpenliebe",100,100,"piece","alpenliebe, अल्पेनलिबे, candy, टॉफी"),
+ ("Mango Bite Candy 100 Pcs","Parle",100,100,"piece","mango bite, मैंगो बाइट, toffee"),
+ ("Melody Toffee 100 Pcs","Parle",100,100,"piece","melody, मेलोडी, toffee"),
+ ("Poppins Candy Roll","Parle",10,1,"piece","poppins, पॉपिन्स"),
+ ("Center Fresh Chewing Gum 28g","Perfetti",30,28,"g","center fresh, chewing gum, च्यूइंग गम"),
+ ("Center Fruit Chewing Gum 28g","Perfetti",30,28,"g","center fruit, chewing gum, च्यूइंग गम"),
+ ("Pulse Candy 100 Pcs","Pass Pass",100,100,"piece","pulse, पल्स candy"),
+ ("Eclairs Candy 100 Pcs","Cadbury",100,100,"piece","eclairs, एक्लेयर्स"),
+ ("Hajmola Tablets 120 Pcs","Dabur",75,120,"piece","hajmola, हाजमोला, digestive"),
+],
+"Spices & Masala": [
+ ("Everest Haldi Powder 100g","Everest",40,100,"g","haldi, हल्दी, turmeric powder"),
+ ("Everest Haldi Powder 200g","Everest",78,200,"g","haldi, हल्दी, turmeric"),
+ ("Everest Lal Mirch Powder 100g","Everest",55,100,"g","lal mirch, लाल मिर्च, chilli powder"),
+ ("Everest Dhaniya Powder 100g","Everest",42,100,"g","dhaniya, धनिया, coriander powder"),
+ ("Everest Garam Masala 100g","Everest",90,100,"g","garam masala, गरम मसाला"),
+ ("Everest Kitchen King Masala 100g","Everest",95,100,"g","kitchen king, किचन किंग"),
+ ("Everest Sabji Masala 100g","Everest",85,100,"g","sabji masala, सब्जी मसाला"),
+ ("MDH Deggi Mirch 100g","MDH",95,100,"g","deggi mirch, देगी मिर्च"),
+ ("MDH Chana Masala 100g","MDH",85,100,"g","chana masala, चना मसाला"),
+ ("MDH Chicken Masala 100g","MDH",90,100,"g","chicken masala, चिकन मसाला"),
+ ("MDH Kasuri Methi 25g","MDH",45,25,"g","kasuri methi, कसूरी मेथी"),
+ ("Catch Black Pepper Powder 50g","Catch",90,50,"g","kali mirch, काली मिर्च, black pepper"),
+ ("Catch Sprinklers Chat Masala 100g","Catch",75,100,"g","chat masala, चाट मसाला"),
+ ("Tata Sampann Haldi 200g","Tata Sampann",85,200,"g","haldi, हल्दी"),
+ ("Tata Sampann Chilli Powder 200g","Tata Sampann",120,200,"g","lal mirch, लाल मिर्च"),
+ ("Jeera Whole 100g","Local",55,100,"g","jeera, जीरा, cumin"),
+ ("Rai Sarson 100g","Local",25,100,"g","rai, राई, mustard seed"),
+ ("Methi Dana 100g","Local",25,100,"g","methi dana, मेथी दाना, fenugreek"),
+ ("Ajwain 100g","Local",50,100,"g","ajwain, अजवाइन, carom"),
+ ("Saunf 100g","Local",55,100,"g","saunf, सौंफ, fennel"),
+ ("Elaichi Green 10g","Local",90,10,"g","elaichi, इलायची, cardamom"),
+ ("Laung Clove 25g","Local",70,25,"g","laung, लौंग, clove"),
+ ("Dalchini 50g","Local",45,50,"g","dalchini, दालचीनी, cinnamon"),
+ ("Tej Patta 25g","Local",20,25,"g","tej patta, तेज पत्ता, bay leaf"),
+ ("Hing Powder 25g","Everest",90,25,"g","hing, हींग, asafoetida"),
+ ("Amchur Powder 100g","Local",60,100,"g","amchur, अमचूर, dry mango powder"),
+ ("Kali Mirch Whole 50g","Local",95,50,"g","kali mirch, काली मिर्च, pepper"),
+ ("Sambhar Masala 100g","MTR",70,100,"g","sambhar masala, सांभर मसाला"),
+ ("Pav Bhaji Masala 100g","Everest",90,100,"g","pav bhaji masala, पाव भाजी मसाला"),
+ ("Biryani Masala 50g","Shan",75,50,"g","biryani masala, बिरयानी मसाला"),
+],
+"Sauces & Spreads": [
+ ("Kissan Tomato Ketchup 500g","Kissan",115,500,"g","ketchup, केचप, tomato sauce, sos"),
+ ("Kissan Tomato Ketchup 1kg","Kissan",205,1,"kg","ketchup, केचप, tomato sauce"),
+ ("Maggi Tomato Ketchup 500g","Maggi",120,500,"g","ketchup, केचप, sauce"),
+ ("Maggi Hot & Sweet Sauce 500g","Maggi",135,500,"g","hot and sweet, सॉस"),
+ ("Ching's Schezwan Chutney 250g","Ching's",110,250,"g","schezwan, शेजवान chutney"),
+ ("Kissan Mixed Fruit Jam 500g","Kissan",180,500,"g","jam, जैम, mixed fruit"),
+ ("Kissan Mixed Fruit Jam 200g","Kissan",90,200,"g","jam, जैम"),
+ ("Dabur Honey 250g","Dabur",180,250,"g","honey, शहद, shahad"),
+ ("Dabur Honey 500g","Dabur",320,500,"g","honey, शहद"),
+ ("Patanjali Honey 250g","Patanjali",145,250,"g","honey, शहद"),
+ ("Mother's Recipe Mango Pickle 500g","Mother's Recipe",145,500,"g","achar, अचार, pickle, aam ka achar"),
+ ("Priya Mixed Pickle 500g","Priya",135,500,"g","achar, अचार, pickle"),
+ ("Nutella Hazelnut Spread 290g","Nutella",395,290,"g","nutella, नुटेला, chocolate spread"),
+ ("Sundrop Peanut Butter 200g","Sundrop",150,200,"g","peanut butter, पीनट बटर"),
+ ("Veeba Mayonnaise 250g","Veeba",110,250,"g","mayonnaise, मेयोनीज़"),
+ ("Soya Sauce 200ml","Ching's",65,200,"ml","soya sauce, सोया सॉस"),
+ ("Vinegar 500ml","Local",45,500,"ml","sirka, सिरका, vinegar"),
+],
+"Instant Food": [
+ ("Maggi 2-Minute Noodles 70g","Maggi",14,70,"g","maggi, मैगी, noodles, नूडल्स"),
+ ("Maggi 2-Minute Noodles 4 Pack 280g","Maggi",56,280,"g","maggi, मैगी, noodles"),
+ ("Maggi 2-Minute Noodles 12 Pack","Maggi",168,840,"g","maggi, मैगी, noodles"),
+ ("Maggi Masala Oats 500g","Maggi",180,500,"g","oats, ओट्स, masala oats"),
+ ("Yippee Magic Masala Noodles 70g","Yippee",14,70,"g","yippee, यिप्पी, noodles"),
+ ("Top Ramen Noodles 70g","Top Ramen",14,70,"g","top ramen, noodles, नूडल्स"),
+ ("Knorr Classic Tomato Soup 53g","Knorr",65,53,"g","soup, सूप, knorr"),
+ ("Knorr Sweet Corn Soup 44g","Knorr",65,44,"g","soup, सूप"),
+ ("Ching's Hakka Noodles 140g","Ching's",50,140,"g","hakka noodles, हक्का नूडल्स"),
+ ("Ching's Manchow Soup 55g","Ching's",60,55,"g","soup, सूप"),
+ ("MTR Ready to Eat Poha 80g","MTR",60,80,"g","poha, पोहा, ready to eat"),
+ ("MTR Upma Mix 200g","MTR",75,200,"g","upma, उपमा"),
+ ("Bambino Vermicelli 400g","Bambino",60,400,"g","seviyan, सेवइयां, vermicelli"),
+ ("Pasta Penne 500g","Bambino",90,500,"g","pasta, पास्ता"),
+ ("Weikfield Pasta 500g","Weikfield",125,500,"g","pasta, पास्ता"),
+],
+"Breakfast Cereal": [
+ ("Kelloggs Corn Flakes 475g","Kelloggs",245,475,"g","corn flakes, कॉर्न फ्लेक्स"),
+ ("Kelloggs Chocos 375g","Kelloggs",250,375,"g","chocos, चोकोस"),
+ ("Kelloggs Muesli 500g","Kelloggs",370,500,"g","muesli, म्यूसली"),
+ ("Quaker Oats 1kg","Quaker",240,1,"kg","oats, ओट्स, quaker"),
+ ("Quaker Oats 400g","Quaker",105,400,"g","oats, ओट्स"),
+ ("Saffola Masala Oats 500g","Saffola",185,500,"g","oats, ओट्स, masala oats"),
+ ("Bagrry's Muesli 500g","Bagrry's",360,500,"g","muesli, म्यूसली"),
+ ("Horlicks 500g Refill","Horlicks",285,500,"g","horlicks, हॉर्लिक्स, health drink"),
+ ("Bournvita 500g","Cadbury",255,500,"g","bournvita, बॉर्नविटा"),
+ ("Complan 500g","Complan",320,500,"g","complan, कॉम्प्लान"),
+ ("Boost 500g","Boost",275,500,"g","boost, बूस्ट"),
+ ("Protinex 400g","Protinex",590,400,"g","protinex, प्रोटीनेक्स"),
+],
+"Beverages": [
+ ("Bisleri Water 1L","Bisleri",20,1,"l","paani, पानी, water, bisleri"),
+ ("Bisleri Water 2L","Bisleri",30,2,"l","paani, पानी, water"),
+ ("Bisleri Water 500ml","Bisleri",10,500,"ml","paani, पानी, water"),
+ ("Kinley Water 1L","Kinley",20,1,"l","paani, पानी, water"),
+ ("Real Mixed Fruit Juice 1L","Real",125,1,"l","juice, जूस, real"),
+ ("Real Orange Juice 1L","Real",125,1,"l","juice, जूस, orange"),
+ ("Tropicana Orange Juice 1L","Tropicana",130,1,"l","juice, जूस, tropicana"),
+ ("Frooti Mango Drink 250ml","Frooti",20,250,"ml","frooti, फ्रूटी, mango drink"),
+ ("Maaza Mango Drink 600ml","Maaza",45,600,"ml","maaza, माज़ा, mango drink"),
+ ("Slice Mango Drink 600ml","Slice",45,600,"ml","slice, स्लाइस, mango drink"),
+ ("Appy Fizz 250ml","Appy",25,250,"ml","appy fizz, एप्पी फ़िज़"),
+ ("Rasna Powder 500g","Rasna",120,500,"g","rasna, रसना, sharbat"),
+ ("Roohafza 750ml","Hamdard",185,750,"ml","rooh afza, रूह अफ़ज़ा, sharbat"),
+ ("Glucon-D Orange 400g","Glucon-D",145,400,"g","glucon d, ग्लूकोन डी, glucose"),
+ ("Electral Powder 21g","Electral",25,21,"g","electral, इलेक्ट्रल, ors"),
+],
+"Soft Drinks": [
+ ("Coca-Cola 750ml","Coca-Cola",45,750,"ml","coke, कोक, cold drink, ठंडा"),
+ ("Coca-Cola 250ml","Coca-Cola",20,250,"ml","coke, कोक, cold drink"),
+ ("Coca-Cola 2L","Coca-Cola",99,2,"l","coke, कोक, cold drink"),
+ ("Thums Up 750ml","Thums Up",45,750,"ml","thums up, थम्स अप, cold drink"),
+ ("Thums Up 250ml","Thums Up",20,250,"ml","thums up, थम्स अप"),
+ ("Sprite 750ml","Sprite",45,750,"ml","sprite, स्प्राइट, cold drink"),
+ ("Limca 750ml","Limca",45,750,"ml","limca, लिम्का"),
+ ("Fanta 750ml","Fanta",45,750,"ml","fanta, फैंटा"),
+ ("Pepsi 750ml","Pepsi",45,750,"ml","pepsi, पेप्सी, cold drink"),
+ ("Mountain Dew 750ml","Mountain Dew",45,750,"ml","mountain dew, माउंटेन ड्यू"),
+ ("7Up 750ml","7Up",45,750,"ml","seven up, सेवन अप"),
+ ("Sting Energy Drink 250ml","Sting",20,250,"ml","sting, स्टिंग, energy drink"),
+ ("Red Bull 250ml","Red Bull",125,250,"ml","red bull, रेड बुल, energy drink"),
+ ("Soda Water 750ml","Local",25,750,"ml","soda, सोडा"),
+],
+"Dry Fruits": [
+ ("Almonds Badam 250g","Local",280,250,"g","badam, बादाम, almonds"),
+ ("Almonds Badam 500g","Local",550,500,"g","badam, बादाम, almonds"),
+ ("Cashew Kaju 250g","Local",300,250,"g","kaju, काजू, cashew"),
+ ("Raisins Kishmish 250g","Local",120,250,"g","kishmish, किशमिश, raisins"),
+ ("Walnut Akhrot 250g","Local",320,250,"g","akhrot, अखरोट, walnut"),
+ ("Pista 100g","Local",180,100,"g","pista, पिस्ता, pistachio"),
+ ("Anjeer 200g","Local",290,200,"g","anjeer, अंजीर, fig"),
+ ("Khajur Dates 500g","Local",180,500,"g","khajur, खजूर, dates"),
+ ("Makhana 100g","Local",110,100,"g","makhana, मखाना, fox nut"),
+ ("Chironji 50g","Local",180,50,"g","chironji, चिरौंजी"),
+ ("Coconut Dry Gola 1 Piece","Local",60,1,"piece","gola, गोला, dry coconut, khopra"),
+],
+"Bath & Soap": [
+ ("Lifebuoy Soap 125g","Lifebuoy",38,125,"g","sabun, साबुन, lifebuoy, soap"),
+ ("Lux Soap 100g","Lux",42,100,"g","sabun, साबुन, lux, soap"),
+ ("Santoor Soap 125g","Santoor",45,125,"g","sabun, साबुन, santoor"),
+ ("Dove Soap 100g","Dove",75,100,"g","sabun, साबुन, dove"),
+ ("Cinthol Soap 100g","Cinthol",45,100,"g","sabun, साबुन, cinthol"),
+ ("Medimix Soap 125g","Medimix",50,125,"g","sabun, साबुन, medimix"),
+ ("Dettol Original Soap 125g","Dettol",55,125,"g","sabun, साबुन, dettol"),
+ ("Pears Soap 125g","Pears",90,125,"g","sabun, साबुन, pears"),
+ ("Godrej No.1 Soap 100g","Godrej",32,100,"g","sabun, साबुन, godrej no 1"),
+ ("Vivel Soap 100g","Vivel",40,100,"g","sabun, साबुन, vivel"),
+ ("Dettol Handwash 200ml","Dettol",99,200,"ml","handwash, हैंडवॉश"),
+ ("Lifebuoy Handwash Refill 750ml","Lifebuoy",175,750,"ml","handwash, हैंडवॉश refill"),
+ ("Dettol Antiseptic Liquid 250ml","Dettol",145,250,"ml","dettol, डेटॉल, antiseptic"),
+ ("Savlon Antiseptic 100ml","Savlon",75,100,"ml","savlon, सेवलॉन, antiseptic"),
+ ("Bath Loofah 1 Piece","Local",50,1,"piece","loofah, लूफा, bath sponge"),
+],
+"Hair Care": [
+ ("Clinic Plus Shampoo 175ml","Clinic Plus",115,175,"ml","shampoo, शैम्पू, clinic plus"),
+ ("Clinic Plus Shampoo Sachet 5ml","Clinic Plus",2,5,"ml","shampoo sachet, शैम्पू पाउच"),
+ ("Head & Shoulders Shampoo 180ml","Head & Shoulders",185,180,"ml","shampoo, शैम्पू, anti dandruff"),
+ ("Sunsilk Shampoo 180ml","Sunsilk",145,180,"ml","shampoo, शैम्पू, sunsilk"),
+ ("Dove Shampoo 180ml","Dove",210,180,"ml","shampoo, शैम्पू, dove"),
+ ("Pantene Shampoo 180ml","Pantene",190,180,"ml","shampoo, शैम्पू, pantene"),
+ ("Parachute Coconut Hair Oil 250ml","Parachute",130,250,"ml","nariyal tel, नारियल तेल, hair oil"),
+ ("Dabur Amla Hair Oil 200ml","Dabur",115,200,"ml","amla tel, आंवला तेल, hair oil"),
+ ("Bajaj Almond Drops Hair Oil 200ml","Bajaj",165,200,"ml","badam tel, बादाम तेल, hair oil"),
+ ("Navratna Cool Oil 200ml","Navratna",145,200,"ml","navratna, नवरत्न, thanda tel"),
+ ("Keo Karpin Hair Oil 200ml","Keo Karpin",130,200,"ml","hair oil, बाल का तेल"),
+ ("Godrej Expert Hair Colour 20g","Godrej",35,20,"g","hair colour, हेयर कलर, mehndi"),
+ ("Vasmol Hair Dye 50ml","Vasmol",85,50,"ml","hair dye, हेयर डाई, kala"),
+ ("Indulekha Bringha Oil 100ml","Indulekha",450,100,"ml","hair oil, बाल का तेल"),
+ ("Hair Comb Plastic","Local",30,1,"piece","kanghi, कंघी, comb"),
+ ("Hair Rubber Band Pack","Local",20,1,"piece","rubber band, रबर बैंड"),
+],
+"Oral Care": [
+ ("Colgate Strong Teeth 200g","Colgate",115,200,"g","toothpaste, टूथपेस्ट, manjan, colgate"),
+ ("Colgate Strong Teeth 100g","Colgate",60,100,"g","toothpaste, टूथपेस्ट, colgate"),
+ ("Colgate MaxFresh 150g","Colgate",95,150,"g","toothpaste, टूथपेस्ट"),
+ ("Close Up Toothpaste 150g","Close Up",95,150,"g","toothpaste, टूथपेस्ट, close up"),
+ ("Pepsodent Toothpaste 150g","Pepsodent",90,150,"g","toothpaste, टूथपेस्ट"),
+ ("Dabur Red Toothpaste 200g","Dabur",115,200,"g","toothpaste, टूथपेस्ट, dabur red"),
+ ("Patanjali Dant Kanti 200g","Patanjali",95,200,"g","dant kanti, दंत कांति, toothpaste"),
+ ("Sensodyne Toothpaste 75g","Sensodyne",145,75,"g","sensodyne, सेंसोडाइन"),
+ ("Colgate Toothbrush Medium","Colgate",35,1,"piece","toothbrush, टूथब्रश, brush"),
+ ("Oral-B Toothbrush","Oral-B",45,1,"piece","toothbrush, टूथब्रश"),
+ ("Colgate Tooth Powder 100g","Colgate",65,100,"g","manjan, मंजन, tooth powder"),
+ ("Dabur Lal Dant Manjan 100g","Dabur",70,100,"g","lal manjan, लाल मंजन"),
+ ("Listerine Mouthwash 250ml","Listerine",165,250,"ml","mouthwash, माउथवॉश"),
+],
+"Skin Care": [
+ ("Nivea Soft Cream 100ml","Nivea",210,100,"ml","cream, क्रीम, nivea"),
+ ("Ponds Dreamflower Talc 200g","Ponds",145,200,"g","powder, पाउडर, talc"),
+ ("Ponds Cold Cream 100ml","Ponds",180,100,"ml","cold cream, कोल्ड क्रीम"),
+ ("Boroline Cream 20g","Boroline",50,20,"g","boroline, बोरोलीन, cream"),
+ ("Vaseline Petroleum Jelly 85ml","Vaseline",125,85,"ml","vaseline, वैसलीन"),
+ ("Vaseline Body Lotion 200ml","Vaseline",210,200,"ml","body lotion, बॉडी लोशन"),
+ ("Nivea Body Lotion 200ml","Nivea",230,200,"ml","body lotion, बॉडी लोशन"),
+ ("Fair & Lovely Cream 50g","Glow & Lovely",115,50,"g","cream, क्रीम, fairness"),
+ ("Himalaya Neem Face Wash 100ml","Himalaya",165,100,"ml","face wash, फेस वॉश"),
+ ("Clean & Clear Face Wash 100ml","Clean & Clear",165,100,"ml","face wash, फेस वॉश"),
+ ("Lacto Calamine Lotion 60ml","Lacto Calamine",165,60,"ml","lacto calamine, लोशन"),
+ ("Himalaya Baby Powder 200g","Himalaya",165,200,"g","baby powder, बेबी पाउडर"),
+ ("Moov Pain Relief Cream 30g","Moov",130,30,"g","moov, मूव, pain cream"),
+ ("Volini Gel 30g","Volini",135,30,"g","volini, वोलिनी, pain gel"),
+ ("Vicks VapoRub 50ml","Vicks",165,50,"ml","vicks, विक्स, balm"),
+ ("Zandu Balm 25ml","Zandu",95,25,"ml","zandu balm, जंडू बाम"),
+ ("Amrutanjan Balm 8ml","Amrutanjan",40,8,"ml","balm, बाम"),
+],
+"Grooming": [
+ ("Gillette Guard Razor","Gillette",35,1,"piece","razor, रेजर, shaving"),
+ ("Gillette Guard Cartridge 4 Pack","Gillette",90,4,"piece","blade, ब्लेड, cartridge"),
+ ("Topaz Blade 10 Pack","Topaz",40,10,"piece","blade, ब्लेड, ustra"),
+ ("Gillette Shaving Foam 200g","Gillette",325,200,"g","shaving foam, शेविंग फोम"),
+ ("Old Spice Shaving Cream 70g","Old Spice",120,70,"g","shaving cream, शेविंग क्रीम"),
+ ("Park Avenue Shaving Cream 84g","Park Avenue",110,84,"g","shaving cream, शेविंग क्रीम"),
+ ("Nivea Men Face Wash 100ml","Nivea Men",180,100,"ml","face wash, फेस वॉश"),
+ ("Fogg Deodorant 150ml","Fogg",250,150,"ml","deo, डियो, deodorant, spray"),
+ ("Wild Stone Deodorant 150ml","Wild Stone",230,150,"ml","deo, डियो, deodorant"),
+ ("Nail Cutter","Local",40,1,"piece","nail cutter, नेल कटर"),
+],
+"Detergent & Laundry": [
+ ("Surf Excel Easy Wash 1kg","Surf Excel",145,1,"kg","surf, सर्फ, detergent, washing powder"),
+ ("Surf Excel Easy Wash 500g","Surf Excel",75,500,"g","surf, सर्फ, detergent"),
+ ("Surf Excel Matic Front Load 1kg","Surf Excel",235,1,"kg","matic, मैटिक, detergent"),
+ ("Rin Detergent Bar 250g","Rin",22,250,"g","rin, रिन, sabun, washing bar"),
+ ("Wheel Detergent Powder 1kg","Wheel",65,1,"kg","wheel, व्हील, detergent"),
+ ("Wheel Detergent Bar 250g","Wheel",20,250,"g","wheel, व्हील, washing bar"),
+ ("Nirma Washing Powder 1kg","Nirma",70,1,"kg","nirma, निरमा, detergent"),
+ ("Tide Detergent Powder 1kg","Tide",130,1,"kg","tide, टाइड, detergent"),
+ ("Ariel Detergent Powder 1kg","Ariel",180,1,"kg","ariel, एरियल, detergent"),
+ ("Ghadi Detergent Powder 1kg","Ghadi",70,1,"kg","ghadi, घड़ी, detergent"),
+ ("Comfort Fabric Conditioner 220ml","Comfort",100,220,"ml","comfort, कम्फर्ट, fabric softener"),
+ ("Ujala Supreme 75ml","Ujala",30,75,"ml","ujala, उजाला, neel"),
+ ("Robin Blue Powder 100g","Robin",25,100,"g","neel, नील, robin blue"),
+ ("Vanish Stain Remover 200g","Vanish",165,200,"g","vanish, वैनिश, stain remover"),
+],
+"Cleaning": [
+ ("Vim Dishwash Bar 200g","Vim",22,200,"g","vim, विम, bartan sabun, dishwash"),
+ ("Vim Dishwash Liquid 500ml","Vim",130,500,"ml","vim liquid, विम, dishwash"),
+ ("Exo Dishwash Bar 200g","Exo",20,200,"g","exo, एक्सो, bartan bar"),
+ ("Pril Dishwash Liquid 425ml","Pril",120,425,"ml","pril, प्रिल, dishwash"),
+ ("Harpic Toilet Cleaner 500ml","Harpic",110,500,"ml","harpic, हार्पिक, toilet cleaner"),
+ ("Harpic Toilet Cleaner 1L","Harpic",200,1,"l","harpic, हार्पिक"),
+ ("Lizol Floor Cleaner 500ml","Lizol",125,500,"ml","lizol, लाइजॉल, floor cleaner, phenyl"),
+ ("Lizol Floor Cleaner 975ml","Lizol",225,975,"ml","lizol, लाइजॉल, floor cleaner"),
+ ("Phenyl White 1L","Local",70,1,"l","phenyl, फिनाइल"),
+ ("Colin Glass Cleaner 500ml","Colin",115,500,"ml","colin, कोलिन, glass cleaner"),
+ ("Scotch Brite Scrub Pad","Scotch Brite",35,1,"piece","scrubber, स्क्रबर, jhaava"),
+ ("Steel Scrubber","Local",20,1,"piece","steel scrubber, स्टील स्क्रबर, jhaava"),
+ ("Broom Soft Phool Jhadu","Local",120,1,"piece","jhadu, झाड़ू, broom"),
+ ("Broom Hard Nariyal","Local",90,1,"piece","jhadu, झाड़ू, broom"),
+ ("Floor Wiper","Local",180,1,"piece","wiper, वाइपर, pocha"),
+ ("Bathroom Brush","Local",90,1,"piece","brush, ब्रश, toilet brush"),
+],
+"Pest & Repellent": [
+ ("All Out Refill 45ml","All Out",85,45,"ml","all out, ऑल आउट, mosquito"),
+ ("Good Knight Refill 45ml","Good Knight",85,45,"ml","good knight, गुड नाइट, machhar"),
+ ("Good Knight Machine + Refill","Good Knight",140,1,"piece","good knight machine, मशीन"),
+ ("Mortein Insect Killer Spray 425ml","Mortein",290,425,"ml","mortein, मॉर्टिन, spray, keeda"),
+ ("Hit Cockroach Spray 320ml","Hit",270,320,"ml","hit, हिट, cockroach spray"),
+ ("Odomos Mosquito Cream 50g","Odomos",95,50,"g","odomos, ओडोमॉस"),
+ ("Mosquito Coil 10 Pack","Local",45,10,"piece","coil, कॉइल, machhar coil"),
+ ("Rat Kill Cake 25g","Local",40,25,"g","chuha mar, चूहा मार, rat kill"),
+ ("Naphthalene Balls 100g","Local",50,100,"g","naphthalene, नेफ्थलीन balls"),
+],
+"Household": [
+ ("Matchbox 10 Pack","Local",10,10,"piece","machis, माचिस, matchbox"),
+ ("Candle 6 Piece","Local",30,6,"piece","mombatti, मोमबत्ती, candle"),
+ ("Garbage Bags Medium 30 Pcs","Local",90,30,"piece","garbage bag, कचरा बैग, dustbin bag"),
+ ("Aluminium Foil 9m","Local",90,1,"piece","foil, फॉयल, silver paper"),
+ ("Cling Film 30m","Local",120,1,"piece","cling film, क्लिंग फिल्म"),
+ ("Paper Napkin 100 Pcs","Local",60,100,"piece","tissue, टिश्यू, napkin"),
+ ("Toilet Paper Roll 4 Pack","Local",150,4,"piece","toilet paper, टॉयलेट पेपर"),
+ ("Plastic Bags 1kg","Local",120,1,"kg","polythene, पॉलिथीन, plastic bag, thaili"),
+ ("Carry Bag Cloth","Local",25,1,"piece","cloth bag, कपड़े का थैला"),
+ ("Rope Nylon 10m","Local",70,1,"piece","rassi, रस्सी, rope"),
+ ("Clothes Clip 12 Pcs","Local",40,12,"piece","chimta, चिमटा, clothes clip"),
+ ("Bucket 15L Plastic","Local",180,1,"piece","balti, बाल्टी, bucket"),
+ ("Mug Plastic","Local",45,1,"piece","mug, मग"),
+ ("Dustbin Small","Local",120,1,"piece","dustbin, कूड़ेदान"),
+ ("Lighter Gas","Local",20,1,"piece","lighter, लाइटर"),
+ ("Insect Net Cover","Local",90,1,"piece","jaali, जाली, food cover"),
+],
+"Pooja Items": [
+ ("Agarbatti Cycle Pure 100g","Cycle",50,100,"g","agarbatti, अगरबत्ती, incense"),
+ ("Agarbatti Mangaldeep 100g","Mangaldeep",45,100,"g","agarbatti, अगरबत्ती"),
+ ("Dhoop Batti 20 Sticks","Cycle",40,20,"piece","dhoop, धूप, dhoopbatti"),
+ ("Camphor Kapoor 50g","Local",90,50,"g","kapoor, कपूर, camphor"),
+ ("Diya Cotton Wick 100 Pcs","Local",30,100,"piece","batti, बत्ती, wick, ruee"),
+ ("Til Oil Pooja 200ml","Local",90,200,"ml","til tel, तिल तेल, pooja oil"),
+ ("Roli Chandan 50g","Local",25,50,"g","roli, रोली, kumkum, tilak"),
+ ("Kalava Mauli Thread","Local",15,1,"piece","kalava, कलावा, mauli"),
+ ("Havan Samagri 200g","Local",90,200,"g","havan samagri, हवन सामग्री"),
+ ("Gangajal 250ml","Local",50,250,"ml","gangajal, गंगाजल"),
+ ("Matchbox Pooja Large","Local",15,1,"piece","machis, माचिस"),
+ ("Nariyal Coconut 1 Piece","Local",45,1,"piece","nariyal, नारियल, coconut"),
+],
+"Baby Care": [
+ ("Pampers Baby Dry Pants M 9 Pcs","Pampers",199,9,"piece","diaper, डायपर, pampers"),
+ ("Pampers Baby Dry Pants L 8 Pcs","Pampers",199,8,"piece","diaper, डायपर"),
+ ("Huggies Wonder Pants M 9 Pcs","Huggies",189,9,"piece","diaper, डायपर, huggies"),
+ ("Johnson Baby Powder 200g","Johnson",210,200,"g","baby powder, बेबी पाउडर"),
+ ("Johnson Baby Soap 75g","Johnson",70,75,"g","baby soap, बेबी साबुन"),
+ ("Johnson Baby Oil 100ml","Johnson",145,100,"ml","baby oil, बेबी तेल"),
+ ("Johnson Baby Shampoo 100ml","Johnson",130,100,"ml","baby shampoo, बेबी शैम्पू"),
+ ("Himalaya Baby Lotion 200ml","Himalaya",215,200,"ml","baby lotion, बेबी लोशन"),
+ ("Cerelac Wheat 300g","Nestle",290,300,"g","cerelac, सेरेलैक, baby food"),
+ ("Lactogen 1 400g","Nestle",470,400,"g","lactogen, लैक्टोजेन, baby milk"),
+ ("Baby Wipes 72 Pcs","Himalaya",180,72,"piece","wipes, वाइप्स, baby wipes"),
+ ("Feeding Bottle 250ml","Local",250,250,"ml","feeding bottle, फीडिंग बोतल"),
+],
+"Feminine Hygiene": [
+ ("Whisper Ultra Clean XL 15 Pads","Whisper",199,15,"piece","pad, पैड, sanitary napkin, whisper"),
+ ("Whisper Choice Regular 20 Pads","Whisper",165,20,"piece","pad, पैड, sanitary napkin"),
+ ("Stayfree Secure XL 20 Pads","Stayfree",175,20,"piece","pad, पैड, stayfree"),
+ ("Sofy Bodyfit 15 Pads","Sofy",160,15,"piece","pad, पैड, sofy"),
+ ("Nine Sanitary Pads 10 Pcs","Nine",70,10,"piece","pad, पैड, sanitary"),
+],
+"Stationery": [
+ ("Classmate Notebook 172 Pages","Classmate",55,172,"piece","copy, कॉपी, notebook, register"),
+ ("Classmate Long Notebook 300 Pages","Classmate",110,300,"piece","register, रजिस्टर, notebook"),
+ ("Rough Notebook 100 Pages","Local",30,100,"piece","copy, कॉपी, rough copy"),
+ ("Reynolds Ball Pen Blue","Reynolds",10,1,"piece","pen, पेन, kalam"),
+ ("Cello Butterflow Pen Blue","Cello",10,1,"piece","pen, पेन"),
+ ("Nataraj Pencil 10 Pack","Nataraj",50,10,"piece","pencil, पेंसिल"),
+ ("Apsara Pencil 10 Pack","Apsara",60,10,"piece","pencil, पेंसिल"),
+ ("Eraser Nataraj","Nataraj",5,1,"piece","rubber, रबर, eraser"),
+ ("Sharpener","Local",5,1,"piece","sharpener, शार्पनर, cutter"),
+ ("Geometry Box","Camlin",150,1,"piece","geometry box, ज्यामिति बॉक्स"),
+ ("Fevicol 50g","Fevicol",40,50,"g","fevicol, फेविकोल, glue, gond"),
+ ("Fevistick 8g","Fevistick",35,8,"g","fevistick, glue stick, गोंद"),
+ ("Scale 30cm","Local",20,1,"piece","scale, स्केल, ruler"),
+ ("Stapler Small","Kangaro",90,1,"piece","stapler, स्टेपलर"),
+ ("Cello Tape 1 inch","Local",40,1,"piece","tape, टेप, cello tape"),
+ ("A4 Paper 100 Sheets","Local",90,100,"piece","a4 paper, ए4 पेपर"),
+ ("Envelope White 10 Pcs","Local",30,10,"piece","lifafa, लिफाफा, envelope"),
+ ("Marker Permanent Black","Camlin",30,1,"piece","marker, मार्कर"),
+ ("Highlighter","Camlin",30,1,"piece","highlighter, हाइलाइटर"),
+ ("Crayons 12 Shades","Camlin",60,12,"piece","crayons, क्रेयॉन"),
+],
+"Electrical": [
+ ("Eveready AA Battery 2 Pack","Eveready",30,2,"piece","cell, सेल, battery, pencil cell"),
+ ("Eveready AAA Battery 2 Pack","Eveready",32,2,"piece","cell, सेल, battery"),
+ ("Duracell AA Battery 2 Pack","Duracell",90,2,"piece","cell, सेल, battery"),
+ ("Eveready 9V Battery","Eveready",70,1,"piece","battery, बैटरी, 9 volt"),
+ ("Philips LED Bulb 9W","Philips",130,1,"piece","bulb, बल्ब, led"),
+ ("Syska LED Bulb 9W","Syska",110,1,"piece","bulb, बल्ब, led"),
+ ("Philips LED Bulb 12W","Philips",180,1,"piece","bulb, बल्ब, led"),
+ ("Eveready Torch LED","Eveready",250,1,"piece","torch, टॉर्च, batti"),
+ ("Extension Board 4 Socket","Local",280,1,"piece","extension, एक्सटेंशन board"),
+ ("Insulation Tape","Local",20,1,"piece","tape, टेप, insulation"),
+],
+"Tobacco & Pan": [
+ ("Vimal Pan Masala 10 Sachet","Vimal",50,10,"piece","pan masala, पान मसाला"),
+ ("Rajnigandha Pan Masala 10 Sachet","Rajnigandha",100,10,"piece","rajnigandha, रजनीगंधा, pan masala"),
+ ("Pass Pass Mouth Freshener 25g","Pass Pass",30,25,"g","mukhwas, मुखवास, mouth freshener"),
+ ("Chandan Mouth Freshener 25g","Local",25,25,"g","mukhwas, मुखवास, saunf"),
+],
+"Eggs & Fresh": [
+ ("Eggs 6 Piece Tray","Local",50,6,"piece","anda, अंडा, eggs"),
+ ("Eggs 12 Piece Tray","Local",95,12,"piece","anda, अंडा, eggs"),
+ ("Eggs 30 Piece Tray","Local",230,30,"piece","anda, अंडा, eggs, crate"),
+ ("Onion 1kg","Local",40,1,"kg","pyaz, प्याज, onion"),
+ ("Potato 1kg","Local",30,1,"kg","aloo, आलू, potato"),
+ ("Tomato 1kg","Local",40,1,"kg","tamatar, टमाटर, tomato"),
+ ("Ginger 250g","Local",30,250,"g","adrak, अदरक, ginger"),
+ ("Garlic 250g","Local",50,250,"g","lehsun, लहसुन, garlic"),
+ ("Green Chilli 250g","Local",20,250,"g","hari mirch, हरी मिर्च, chilli"),
+ ("Lemon 250g","Local",30,250,"g","nimbu, नींबू, lemon"),
+],
+# --- LOOSE / WEIGHED ITEMS (isLooseItem = yes, priced per kg) ---
+"Loose Grains": [
+ ("Loose Wheat Gehu (per kg)","",32,1,"kg","gehu, गेहूं, wheat, khula"),
+ ("Loose Atta (per kg)","",40,1,"kg","atta, आटा, khula atta"),
+ ("Loose Rice Sona Masoori (per kg)","",58,1,"kg","chawal, चावल, khula chawal"),
+ ("Loose Rice Basmati (per kg)","",110,1,"kg","basmati, बासमती, chawal"),
+ ("Loose Bajra (per kg)","",38,1,"kg","bajra, बाजरा"),
+ ("Loose Makka (per kg)","",35,1,"kg","makka, मक्का, maize"),
+ ("Loose Jau (per kg)","",42,1,"kg","jau, जौ, barley"),
+ ("Loose Poha (per kg)","",70,1,"kg","poha, पोहा"),
+ ("Loose Sooji (per kg)","",60,1,"kg","sooji, सूजी, rava"),
+ ("Loose Maida (per kg)","",50,1,"kg","maida, मैदा"),
+ ("Loose Besan (per kg)","",110,1,"kg","besan, बेसन"),
+ ("Loose Sabudana (per kg)","",150,1,"kg","sabudana, साबूदाना"),
+],
+"Loose Dal": [
+ ("Loose Toor Dal (per kg)","",155,1,"kg","toor dal, तूर दाल, arhar, khuli dal"),
+ ("Loose Chana Dal (per kg)","",80,1,"kg","chana dal, चना दाल"),
+ ("Loose Moong Dal (per kg)","",125,1,"kg","moong dal, मूंग दाल"),
+ ("Loose Urad Dal (per kg)","",135,1,"kg","urad dal, उड़द दाल"),
+ ("Loose Masoor Dal (per kg)","",105,1,"kg","masoor dal, मसूर दाल"),
+ ("Loose Rajma (per kg)","",165,1,"kg","rajma, राजमा"),
+ ("Loose Kabuli Chana (per kg)","",145,1,"kg","kabuli chana, काबुली चना, chhole"),
+ ("Loose Kala Chana (per kg)","",105,1,"kg","kala chana, काला चना"),
+ ("Loose Safed Matar (per kg)","",95,1,"kg","safed matar, सफेद मटर"),
+ ("Loose Moth (per kg)","",130,1,"kg","moth, मोठ"),
+ ("Loose Lobia (per kg)","",125,1,"kg","lobia, लोबिया"),
+ ("Loose Soyabean (per kg)","",90,1,"kg","soyabean, सोयाबीन"),
+],
+"Loose Spices": [
+ ("Loose Haldi Powder (per kg)","",280,1,"kg","haldi, हल्दी, turmeric"),
+ ("Loose Mirch Powder (per kg)","",420,1,"kg","lal mirch, लाल मिर्च"),
+ ("Loose Dhaniya Powder (per kg)","",320,1,"kg","dhaniya, धनिया"),
+ ("Loose Jeera (per kg)","",520,1,"kg","jeera, जीरा, cumin"),
+ ("Loose Rai (per kg)","",180,1,"kg","rai, राई, sarson"),
+ ("Loose Methi Dana (per kg)","",160,1,"kg","methi, मेथी"),
+ ("Loose Saunf (per kg)","",420,1,"kg","saunf, सौंफ"),
+ ("Loose Ajwain (per kg)","",380,1,"kg","ajwain, अजवाइन"),
+ ("Loose Kali Mirch (per kg)","",1400,1,"kg","kali mirch, काली मिर्च"),
+ ("Loose Elaichi (per kg)","",3800,1,"kg","elaichi, इलायची"),
+ ("Loose Laung (per kg)","",1600,1,"kg","laung, लौंग"),
+ ("Loose Imli (per kg)","",180,1,"kg","imli, इमली, tamarind"),
+],
+"Loose Dry Fruits": [
+ ("Loose Badam (per kg)","",950,1,"kg","badam, बादाम, almond"),
+ ("Loose Kaju (per kg)","",1050,1,"kg","kaju, काजू, cashew"),
+ ("Loose Kishmish (per kg)","",380,1,"kg","kishmish, किशमिश, raisin"),
+ ("Loose Akhrot (per kg)","",1150,1,"kg","akhrot, अखरोट, walnut"),
+ ("Loose Khajur (per kg)","",280,1,"kg","khajur, खजूर, dates"),
+ ("Loose Makhana (per kg)","",950,1,"kg","makhana, मखाना"),
+ ("Loose Mungfali (per kg)","",140,1,"kg","mungfali, मूंगफली, peanut"),
+],
+"Loose Oil & Ghee": [
+ ("Loose Sarson Tel (per kg)","",160,1,"kg","sarson tel, सरसों तेल, khula tel"),
+ ("Loose Refined Tel (per kg)","",140,1,"kg","refined tel, रिफाइंड तेल"),
+ ("Loose Desi Ghee (per kg)","",620,1,"kg","desi ghee, देसी घी"),
+ ("Loose Gud (per kg)","",65,1,"kg","gud, गुड़, jaggery"),
+ ("Loose Cheeni (per kg)","",46,1,"kg","cheeni, चीनी, shakkar, sugar"),
+],
+}
+
+HEADERS = ["Name","Category","Unit","SKU/Barcode","MRP","Cost Price","Selling Price","GST %",
+           "Opening Stock","Low Stock Alert","Reorder Level","HSN","Brand","Aliases",
+           "Description","Pack Size","Pack Unit","Loose Item","Active"]
+
+LOOSE_CATS = {"Loose Grains","Loose Dal","Loose Spices","Loose Dry Fruits","Loose Oil & Ghee"}
+
+# KiranaOS only understands the unit vocabulary in
+# frontend/src/features/core/products/pages/product-pricing.ts (UNITS /
+# UNIT_TO_BASE_UNIT). Anything outside it silently falls back to itself and
+# breaks the base-unit conversion, so normalise here.
+# "g" converts correctly in UNIT_FACTOR_TO_BASE but is NOT in the UNITS array the
+# product form offers, so a "g" row imports and then cannot be re-picked in the
+# unit dropdown. "gram" is the canonical spelling.
+PACK_UNIT_FIX = {"l": "litre", "liter": "litre", "lt": "litre", "m": "piece",
+                 "pcs": "piece", "g": "gram", "gm": "gram"}
+WEIGHT_VOL_UNITS = {"gram", "kg", "ml", "litre"}
+BOTTLE_CATS = {"Beverages", "Soft Drinks"}
+
+
+def selling_unit_for(cat, pack_unit, pack_value):
+    """Pick the unit the shopkeeper actually sells in.
+
+    weight/volume pack  -> "packet" (or "bottle" for drinks)  e.g. Atta packet 5 kg
+    multi-count pack    -> "pack"                             e.g. Whisper pack 15 piece
+    single item         -> "piece"                            e.g. one pen
+    Note: "packet"/"pack" trip productFormSchema's superRefine, which demands a
+    pack size — every row below carries one, so this is safe.
+    """
+    if pack_unit in WEIGHT_VOL_UNITS:
+        return "bottle" if cat in BOTTLE_CATS and pack_unit in {"ml", "litre"} else "packet"
+    return "pack" if pack_value > 1 else "piece"
+
+
+def build_rows():
+    rows, seen = [], set()
+    for cat, items in ITEMS.items():
+        gst, hsn_default, loose_unit, margin, low, reorder = CAT[cat]
+        loose = "yes" if cat in LOOSE_CATS else "no"
+        for name, brand, mrp, pv, pu, aliases in items:
+            pu = PACK_UNIT_FIX.get(pu.lower(), pu.lower())
+            if pu not in WEIGHT_VOL_UNITS and pu != "piece":
+                raise SystemExit(f"unsupported pack unit {pu!r} on {name}")
+            unit = loose_unit if loose == "yes" else selling_unit_for(cat, pu, pv)
+            key = name.lower()
+            if key in seen:
+                raise SystemExit(f"duplicate product name: {name}")
+            seen.add(key)
+            selling = float(mrp)
+            cost = round(selling * (1 - margin), 2)
+            rows.append({
+                "Name": name,
+                "Category": cat,
+                "Unit": unit,
+                "SKU/Barcode": "",            # deliberately blank — see module docstring
+                "MRP": f"{selling:g}",
+                "Cost Price": f"{cost:g}",
+                "Selling Price": f"{selling:g}",
+                "GST %": str(gst),
+                "Opening Stock": "0",
+                "Low Stock Alert": str(low),
+                "Reorder Level": str(reorder),
+                "HSN": hsn_for(name, hsn_default),
+                "Brand": brand,
+                "Aliases": aliases,
+                "Description": "",
+                "Pack Size": f"{pv:g}",
+                "Pack Unit": pu,
+                "Loose Item": loose,
+                "Active": "yes",
+            })
+    return rows
+
+
+def main():
+    out_dir = os.environ.get("OUT_DIR", ".")
+    rows = build_rows()
+    path = os.path.join(out_dir, "kirana-starter-catalog.csv")
+    with open(path, "w", newline="", encoding="utf-8-sig") as fh:
+        w = csv.DictWriter(fh, fieldnames=HEADERS)
+        w.writeheader()
+        w.writerows(rows)
+
+    by_cat = {}
+    for r in rows:
+        by_cat[r["Category"]] = by_cat.get(r["Category"], 0) + 1
+    print(f"wrote {len(rows)} products -> {path}")
+    print(f"categories: {len(by_cat)}")
+    for c in sorted(by_cat, key=lambda k: -by_cat[k]):
+        print(f"  {by_cat[c]:>4}  {c}")
+    loose_n = sum(1 for r in rows if r["Loose Item"] == "yes")
+    print(f"loose (per-kg) items: {loose_n}")
+    gst_mix = {}
+    for r in rows:
+        gst_mix[r["GST %"]] = gst_mix.get(r["GST %"], 0) + 1
+    print("gst mix:", dict(sorted(gst_mix.items(), key=lambda kv: int(kv[0]))))
+
+
+if __name__ == "__main__":
+    main()
