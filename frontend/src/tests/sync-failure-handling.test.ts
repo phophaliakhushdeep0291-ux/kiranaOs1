@@ -206,6 +206,7 @@ const syncPushMock = vi.hoisted(() => vi.fn());
 const syncPullMock = vi.hoisted(() => vi.fn());
 const requestSyncRetryMock = vi.hoisted(() => vi.fn());
 const emitLocalDataChangedMock = vi.hoisted(() => vi.fn());
+const listSyncConflictsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/offline/context", () => ({
   getOfflineScope: () => dbState.scope,
@@ -311,6 +312,7 @@ vi.mock("@/features/core/sync/api", () => ({
   acknowledgeSyncSequence: vi.fn(async () => ({ acknowledgement: { accepted: true } })),
   getSyncStatus: vi.fn(async () => ({ allowed: true })),
   requestSyncRetry: requestSyncRetryMock,
+  listSyncConflicts: listSyncConflictsMock,
 }));
 
 vi.mock("@/features/core/subscription/access", () => ({
@@ -381,6 +383,7 @@ describe("sync failure handling", () => {
     dbState.reset();
     syncPullMock.mockResolvedValue({ changes: [], cursor: "cursor-empty" });
     requestSyncRetryMock.mockResolvedValue({ queued: true });
+    listSyncConflictsMock.mockResolvedValue({ conflicts: [], summary: { open: 0, resolved: 0, dismissed: 0 }, pagination: { hasMore: false, nextCursor: null, limit: 100 } });
   });
 
   it("failed bill sync keeps bill and marks operation FAILED", async () => {
@@ -567,5 +570,77 @@ describe("sync failure handling", () => {
     ]);
     expect(snapshot.pendingOperations).toHaveLength(0);
     expect(snapshot.localBusinessRowsCount).toBeGreaterThan(0);
+  });
+  it("collapses legacy client-reported and push-created rows into one authoritative review item", async () => {
+    const sourceEventId = "op_customer_device_b";
+    const localConflictId = `conflict_customer_customer_shared_${sourceEventId}`;
+    dbState.putInto("sync_conflicts", {
+      id: localConflictId,
+      entity_type: "customer",
+      entity_id: "customer_shared",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "conflict",
+      resolution: "unresolved",
+      server_conflict_id: "server_client_reported",
+      server_version: sourceEventId,
+      local_snapshot: { customer: { name: "Device B name" } },
+      server_snapshot: { conflict: { id: "server_push_conflict" } },
+      created_at: "2026-08-01T09:52:14.000Z",
+      updated_at: "2026-08-01T09:52:14.000Z",
+    });
+    listSyncConflictsMock.mockResolvedValueOnce({
+      conflicts: [
+        {
+          id: "server_client_reported",
+          client_conflict_id: localConflictId,
+          source_event_id: null,
+          device_id: dbState.scope.device_id,
+          entity_type: "customer",
+          entity_id: "customer_shared",
+          reason_code: "CLIENT_SYNC_CONFLICT",
+          message: "duplicate client report",
+          status: "open",
+          local_snapshot: { customer: { name: "Device B name" } },
+          server_snapshot: { conflict: { id: "server_push_conflict" } },
+          server_version: sourceEventId,
+          version: 1,
+          detected_at: "2026-08-01T09:52:15.000Z",
+          created_at: "2026-08-01T09:52:15.000Z",
+          updated_at: "2026-08-01T09:52:15.000Z",
+        },
+        {
+          id: "server_push_conflict",
+          client_conflict_id: null,
+          source_event_id: sourceEventId,
+          device_id: dbState.scope.device_id,
+          entity_type: "customer",
+          entity_id: "customer_shared",
+          reason_code: "SYNC_CUSTOMER_VERSION_CONFLICT",
+          message: "Customer changed on another device",
+          status: "open",
+          local_snapshot: { customer: { name: "Device B name" } },
+          server_snapshot: { id: "customer_shared", name: "Device A name", updatedAt: "2026-08-01T09:50:34.538Z" },
+          server_version: "44",
+          version: 1,
+          detected_at: "2026-08-01T09:52:14.000Z",
+          created_at: "2026-08-01T09:52:14.000Z",
+          updated_at: "2026-08-01T09:52:14.000Z",
+        },
+      ],
+      summary: { open: 2, resolved: 0, dismissed: 0 },
+      pagination: { hasMore: false, nextCursor: null, limit: 100 },
+    });
+
+    const snapshot = await readSyncSnapshot();
+
+    expect(snapshot.conflicts).toHaveLength(1);
+    expect(snapshot.conflicts[0]).toEqual(expect.objectContaining({
+      server_conflict_id: "server_push_conflict",
+      source_event_id: sourceEventId,
+      local_snapshot: { customer: { name: "Device B name" } },
+      server_snapshot: { id: "customer_shared", name: "Device A name", updatedAt: "2026-08-01T09:50:34.538Z" },
+    }));
   });
 });

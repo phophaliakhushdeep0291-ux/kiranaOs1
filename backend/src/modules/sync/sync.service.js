@@ -329,6 +329,7 @@ export async function reportSyncConflict(shopId, input, actor = {}) {
       }
       return publicSyncConflict(linked);
     }
+  }
   const create = {
     shopId,
     clientConflictId: input.client_conflict_id,
@@ -472,6 +473,42 @@ export async function resolveSyncConflict(shopId, input, actor = {}) {
       expiresAt: syncConflictExpiry(),
     },
   });
+  const sourceIdentity = existing.sourceEventId
+    ?? (existing.clientConflictId && existing.serverVersion ? String(existing.serverVersion) : null);
+  let linkedConflictIds = [];
+  if (sourceIdentity) {
+    const linkedConflicts = await db.syncConflict.findMany({
+      where: {
+        shopId,
+        id: { not: existing.id },
+        status: "open",
+        entityType: existing.entityType,
+        entityId: existing.entityId,
+        OR: [
+          { sourceEventId: sourceIdentity },
+          { sourceEventId: null, serverVersion: sourceIdentity },
+        ],
+      },
+      select: { id: true },
+    });
+    linkedConflictIds = linkedConflicts.map((conflict) => conflict.id);
+    if (linkedConflictIds.length > 0) {
+      await db.syncConflict.updateMany({
+        where: { shopId, id: { in: linkedConflictIds }, status: "open" },
+        data: {
+          status: targetStatus,
+          resolution,
+          mergedPayloadJson: snapshotJson(selectedPayload),
+          resolutionNote: input.note ?? null,
+          resolvedByUserId: actor.userId ?? null,
+          resolvedByDeviceId: actor.deviceId ?? null,
+          resolvedAt,
+          expiresAt: syncConflictExpiry(),
+          version: { increment: 1 },
+        },
+      });
+    }
+  }
   await createAuditLog({
     shopId,
     userId: actor.userId ?? null,
@@ -485,6 +522,7 @@ export async function resolveSyncConflict(shopId, input, actor = {}) {
       entityType: existing.entityType,
       entityId: existing.entityId,
       reasonCode: existing.reasonCode,
+      linkedConflictIds,
     },
   });
   return publicSyncConflict(updated);

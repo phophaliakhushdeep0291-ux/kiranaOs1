@@ -123,6 +123,38 @@ if (ctx.skip) {
       assert.ok(conflict, "the competing device update is retained for owner review");
       assert.match(conflict.localSnapshotJson, /Device B name/);
       assert.match(conflict.serverSnapshotJson, /Device A name/);
+      const serverSnapshot = JSON.parse(conflict.serverSnapshotJson);
+      assert.equal(serverSnapshot.name, "Device A name");
+      assert.equal(typeof serverSnapshot.updatedAt, "string", "server timestamps remain reviewable instead of serializing to {}");
+      assert.ok(!Number.isNaN(Date.parse(serverSnapshot.updatedAt)));
+
+      const reported = assertSuccess(await ctx.post("/api/sync/conflicts/report", {
+        client_conflict_id: "client-customer-device-b-update",
+        entity_type: "customer",
+        entity_id: customer.id,
+        reason_code: "CLIENT_SYNC_CONFLICT",
+        message: "Client received the durable server conflict",
+        local_snapshot: { name: "Device B name" },
+        server_snapshot: serverSnapshot,
+        server_version: "customer-device-b-update",
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(reported.conflict.id, conflict.id, "client reporting links to the push conflict instead of duplicating it");
+      assert.equal(await ctx.db.syncConflict.count({
+        where: { shopId: tenant.shop.id, entityType: "customer", entityId: customer.id, status: "open" },
+      }), 1);
+
+      const resolved = assertSuccess(await ctx.post("/api/sync/resolve-conflict", {
+        conflict_id: conflict.id,
+        resolution: "use_server",
+        expected_version: conflict.version,
+        note: "Two-device integration recovery",
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(resolved.conflict.status, "resolved");
+      assert.equal(resolved.conflict.resolution, "use_server");
+      assert.equal((await ctx.db.customer.findUnique({ where: { id: customer.id } })).name, "Device A name");
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "SYNC_CONFLICT_RESOLVED", entityId: conflict.id },
+      }), 1);
     });
 
     test("bill creation posts append-only FinancialLedger entries exactly once across retries", async () => {

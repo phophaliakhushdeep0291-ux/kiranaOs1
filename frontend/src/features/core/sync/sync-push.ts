@@ -400,6 +400,7 @@ async function handlePushResults(
         readString(resultEnvelope.conflict_id) ??
         readString(serverConflict?.id);
       const rawServerRecordVersion = Number(serverConflict?.version);
+      const rawServerVersion = serverConflict?.server_version ?? result.server_version;
       await storeConflict({
         entityType,
         entityId: localId ?? item.event.entity_id,
@@ -409,7 +410,7 @@ async function handlePushResults(
         errorMessage: result.error_message ?? result.error ?? "Sync conflict",
         serverConflictId,
         serverRecordVersion: Number.isInteger(rawServerRecordVersion) ? rawServerRecordVersion : undefined,
-        serverVersion: serverConflict?.server_version ?? result.server_version ?? null,
+        serverVersion: typeof rawServerVersion === "string" || typeof rawServerVersion === "number" ? rawServerVersion : null,
       });
       conflicts += 1;
       continue;
