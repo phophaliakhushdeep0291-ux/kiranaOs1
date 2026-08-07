@@ -13,12 +13,12 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { offlineDB } from "@/lib/offline/db";
-import { HELD_BILLS_KEY } from "@/features/core/billing/pages/open-bills";
-import type { HeldBill } from "@/features/core/billing/pages/billing-types";
+import { BILLING_DRAFT_KEY, HELD_BILLS_KEY } from "@/features/core/billing/pages/open-bills";
+import type { BillingDraft, HeldBill } from "@/features/core/billing/pages/billing-types";
 import {
   buildKotTicket, buildOccupancy, loadFloorPlan, loadKotTickets, loadTableBills,
   newTableId, reconcileTableBills, saveFloorPlan, saveKotTickets, saveTableBills,
-  type KotTicket, type RestaurantTable, type TableOccupancy,
+  withLiveDraft, type KotTicket, type RestaurantTable, type TableOccupancy,
 } from "../service/table-store";
 import { openTableInBilling, releaseTable } from "../service/open-table";
 
@@ -55,14 +55,16 @@ export default function TablesPage() {
   const [, setTick] = useState(0);
 
   const refresh = useCallback(async () => {
-    const [plan, heldRaw, mapRaw, kot] = await Promise.all([
+    const [plan, heldRaw, draft, mapRaw, kot] = await Promise.all([
       loadFloorPlan(),
       offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null),
+      offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY).catch(() => null),
       loadTableBills(),
       loadKotTickets(),
     ]);
-    const held = Array.isArray(heldRaw) ? heldRaw : [];
-    const map = reconcileTableBills(mapRaw, held);
+    // The table open at the till lives in the draft, not the parked set.
+    const held = withLiveDraft(Array.isArray(heldRaw) ? heldRaw : [], draft);
+    const map = reconcileTableBills(mapRaw, held, draft?.activeBillId);
     // A settled table drops out of the map here; persist so it stays freed.
     if (Object.keys(map).length !== Object.keys(mapRaw).length) void saveTableBills(map);
     setTables(plan);
@@ -112,9 +114,9 @@ export default function TablesPage() {
   }
 
   async function sendToKitchen(row: TableOccupancy) {
-    if (row.pendingKotLines.length === 0) return;
+    if (row.pendingKotLines.length === 0 || !row.bill) return;
     const current = await loadKotTickets();
-    const ticket = buildKotTicket(row.table, row.pendingKotLines, current);
+    const ticket = buildKotTicket(row.table, row.bill.id, row.pendingKotLines, current);
     const next = [ticket, ...current];
     await saveKotTickets(next);
     setTickets(next);

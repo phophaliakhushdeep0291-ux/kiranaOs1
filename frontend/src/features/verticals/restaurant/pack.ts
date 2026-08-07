@@ -38,7 +38,10 @@ export const restaurantPack: VerticalPack = {
       href: "/kitchen",
       label: "Kitchen",
       Icon: ChefHat,
-      insertAfter: "/tables",
+      // Anchored to the core entry, not to "/tables": the sidebar only splices
+      // after items in the shared list, so anchoring to a sibling vertical entry
+      // would drop this one to the tail. Pack order keeps Tables ahead of it.
+      insertAfter: "/billing",
       mobile: { group: "Sell", helper: "Work off the kitchen tickets" },
     },
   ],

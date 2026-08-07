@@ -22,6 +22,7 @@ const ResetPassword = lazy(() => import("@/features/core/auth/pages/ResetPasswor
 const VerifyEmail = lazy(() => import("@/features/core/auth/pages/VerifyEmailPage"));
 const DeviceRemoved = lazy(() => import("@/features/core/devices/pages/DeviceRemovedPage"));
 const CustomerOrder = lazy(() => import("@/features/core/customer-order/CustomerOrderPage"));
+const DineInMenu = lazy(() => import("@/features/core/customer-order/DineInMenuPage"));
 const ImportOrder = lazy(() => import("@/features/core/customer-order/ImportOrderPage"));
 const Dashboard = lazy(() => import("@/features/core/dashboard/pages/DashboardPage"));
 const Billing = lazy(() => import("@/features/core/billing/pages/BillingPage"));
@@ -240,7 +241,11 @@ export function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
   const verticalPack = useActiveVerticalPack();
-  const isCustomerOrderPath = /^\/order\/[^/]+/.test(location);
+  // Both public customer surfaces: the shop's order page and a restaurant
+  // table's menu. Neither may be gated on auth or redirected once signed in — a
+  // guest scanning a sticker has no account, and an owner previewing their own
+  // menu must not be bounced to the dashboard.
+  const isCustomerOrderPath = /^\/order\/[^/]+/.test(location) || /^\/t\/[^/]+/.test(location);
 
   // §13 screen tracking. The public storefront tracks its own online-session
   // events, so it is excluded here to keep a shopper's browsing out of the POS
@@ -298,6 +303,21 @@ export function AppRoutes() {
       <Route path="/order/:shopCode">
         <ErrorBoundary>
           <LazyPage component={CustomerOrder} />
+        </ErrorBoundary>
+      </Route>
+      {/* What the QR taped to a restaurant table opens. Public for the same reasons
+          as /order, and a short path on purpose: it is printed on a sticker, and
+          fewer characters means larger QR modules — the difference between a scan
+          that works at arm's length in dim restaurant light and one a guest hunts for. */}
+      <Route path="/t/:shopCode/:tableCode">
+        <ErrorBoundary>
+          <LazyPage component={DineInMenu} />
+        </ErrorBoundary>
+      </Route>
+      {/* The menu without a table: someone who followed the shop's plain link. */}
+      <Route path="/t/:shopCode">
+        <ErrorBoundary>
+          <LazyPage component={DineInMenu} />
         </ErrorBoundary>
       </Route>
       <Route path="/">

@@ -3,6 +3,8 @@ import { AppError } from "../../middleware/error.js";
 import { listProducts } from "../products/products.service.js";
 import { priceCatalogProducts } from "../pricing/pricing.service.js";
 import { unavailableProductIds } from "../../shared/catalog-availability.js";
+import { resolveStorefrontOrderContext, shapeStorefrontCatalog } from "../../shared/storefront-modes.js";
+import { parseShopSettings } from "../shops/businessProfiles.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { toBaseQty } from "../../utils/units.js";
 
@@ -39,7 +41,27 @@ export function toCustomerSafeProduct(p) {
   };
 }
 
-export async function getPublicCatalog(shopId, requestedLocationId = null) {
+/**
+ * Everything a shop is willing to show a stranger, before any one trade decides
+ * how to present it.
+ *
+ * Split out because both reads need it and they must agree: the rule that
+ * decides what a guest may SEE has to be the same one that decides what they may
+ * ORDER, or a menu will happily accept a dish the till then refuses.
+ */
+async function loadStorefrontCandidates(shopId, locationId, quantitiesByProductId) {
+  const products = await listProducts(shopId, { locationId });
+  const priced = await priceCatalogProducts(shopId, products, locationId, quantitiesByProductId);
+  // An outfit promised to someone for today is not on the rack, so customers must
+  // not see it at all — same as a sold-out product. It reappears by itself the day
+  // the booking window ends or the moment it is marked returned.
+  const bookedOut = await unavailableProductIds(shopId, priced);
+  return priced
+    .filter((p) => p.status !== "inactive" && p.isActive !== false)
+    .filter((p) => !bookedOut.has(p.id));
+}
+
+export async function getPublicCatalog(shopId, requestedLocationId = null, { tableCode = null } = {}) {
   const shop = await db.shop.findUnique({ where: { id: shopId } });
   // One 404 for both "no such shop" and "ordering disabled" so we never leak which shop ids
   // exist or whether a real shop has the feature turned off.
@@ -48,29 +70,47 @@ export async function getPublicCatalog(shopId, requestedLocationId = null) {
   }
 
   const location = await resolveOperationalLocation(shopId, requestedLocationId);
-  const [products, locations] = await Promise.all([
-    listProducts(shopId, { locationId: location.id }),
+  const [candidates, locations] = await Promise.all([
+    loadStorefrontCandidates(shopId, location.id),
     db.storeLocation.findMany({
       where: { shopId, active: true },
       orderBy: [{ isPrimary: "desc" }, { name: "asc" }],
       select: { id: true, code: true, name: true, address: true, city: true, phone: true, isPrimary: true },
     }),
   ]);
-  const priced = await priceCatalogProducts(shopId, products, location.id);
-  // An outfit promised to someone for today is not on the rack, so customers must
-  // not see it at all — same as a sold-out product. It reappears by itself the day
-  // the booking window ends or the moment it is marked returned.
-  const bookedOut = await unavailableProductIds(shopId, priced);
-  const safe = priced
-    .filter((p) => p.status !== "inactive" && p.isActive !== false && Number(p.stockBaseQty ?? 0) > 0)
-    .filter((p) => !bookedOut.has(p.id))
-    .map(toCustomerSafeProduct);
+
+  // A trade may serve a different public page from the same shop record — a
+  // restaurant shows a menu, not a delivery catalogue. Asked through the shared
+  // registry so this file never names a trade; null means "nobody claimed it",
+  // which is the ordinary shelf storefront below.
+  const settings = parseShopSettings(shop.settingsJson);
+  const storefront = await shapeStorefrontCatalog({
+    shopId, shop, settings, locationId: location.id, products: candidates, request: { tableCode },
+  });
+
+  const safe = storefront?.products
+    // Only the default shelf storefront hides zero-stock items. A trade that
+    // claimed the storefront has already applied its own rule, which for a
+    // kitchen is the 86 list and its recipes — not a plate count nobody keeps.
+    ?? candidates.filter((p) => Number(p.stockBaseQty ?? 0) > 0).map(toCustomerSafeProduct);
 
   return {
     shop: { id: shop.id, name: shop.name, city: shop.city ?? null },
     location: locations.find((row) => row.id === location.id),
     locations,
     products: safe,
+    ...(storefront
+      ? {
+        storefront: {
+          mode: storefront.mode,
+          table: storefront.table ?? null,
+          tableRequested: storefront.tableRequested === true,
+          guestOrdersEnabled: storefront.guestOrdersEnabled !== false,
+          branding: storefront.branding ?? null,
+          menu: storefront.menu ?? null,
+        },
+      }
+      : {}),
   };
 }
 
@@ -103,7 +143,7 @@ export async function getPublicOrderStatus(shopId, orderId) {
   }
   const order = await db.customerOrder.findFirst({
     where: { id: String(orderId ?? ""), shopId },
-    select: { id: true, status: true, paymentStatus: true, fulfillmentStatus: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
+    select: { id: true, status: true, paymentStatus: true, fulfillmentStatus: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, tableName: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
   });
   if (!order) throw new AppError("We couldn't find that order.", 404);
   return {
@@ -114,6 +154,7 @@ export async function getPublicOrderStatus(shopId, orderId) {
     stage: ORDER_STAGE[order.status] ?? order.status,
     fulfillmentType: order.fulfillmentType,
     promisedSlot: order.promisedSlot,
+    tableName: order.tableName ?? null,
     location: order.location,
     itemCount: order.itemCount,
     estimatedTotal: order.estimatedTotal,
@@ -138,6 +179,9 @@ function shapeOrderSubmitResponse(order, shopName, duplicate = false) {
     shopName,
     locationId: order.locationId ?? null,
     fulfillmentType: order.fulfillmentType ?? "delivery",
+    // Echoed back so the confirmation reads "on its way to T5" rather than a
+    // delivery promise the guest is not waiting for.
+    tableName: order.tableName ?? null,
     status: order.status ?? "new",
     duplicate,
   };
@@ -158,23 +202,44 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   if (idempotencyKey) {
     const existing = await db.customerOrder.findFirst({
       where: { shopId, idempotencyKey },
-      select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, createdAt: true },
+      select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, tableId: true, tableName: true, createdAt: true },
     });
     if (existing) return shapeOrderSubmitResponse(existing, shop.name, true);
+  }
+
+  // A trade may record something of its own on an order placed from its
+  // storefront — a restaurant records which table it came from. Asked through
+  // the shared registry so this file never names a trade.
+  const settings = parseShopSettings(shop.settingsJson);
+  const storefrontOrder = await resolveStorefrontOrderContext({ shopId, shop, settings, body });
+  if (storefrontOrder?.blocked) {
+    throw new AppError(storefrontOrder.reason ?? "This shop is not taking orders from this page.", 403);
   }
 
   const customerName = String(body.customerName ?? "").trim();
   const customerMobile = String(body.customerMobile ?? "").trim();
   const customerAddress = String(body.customerAddress ?? "").trim();
   const note = String(body.note ?? "").trim();
-  const fulfillmentType = body.fulfillmentType === "pickup" ? "pickup" : "delivery";
+  const fulfillmentType = storefrontOrder?.fulfillmentType
+    ?? (body.fulfillmentType === "pickup" ? "pickup" : "delivery");
   const promisedSlot = String(body.promisedSlot ?? "").trim().slice(0, 120) || null;
   const location = await resolveOperationalLocation(shopId, body.locationId || null);
-  if (customerName.length < 2) throw new AppError("Please enter your name.", 400);
-  if (!/^[6-9]\d{9}$/.test(customerMobile.replace(/[\s-]/g, ""))) {
-    throw new AppError("Please enter a valid 10-digit mobile number.", 400);
+
+  // A guest sitting at a table has already identified themselves by being in the
+  // room, and the table is where the food goes. Demanding a name and a mobile
+  // number before they can order a dosa is how a QR menu gets abandoned at the
+  // second field — so for a seated order both are optional, and the table's name
+  // stands in for one the guest did not give.
+  const seatedAtTable = Boolean(storefrontOrder?.tableId);
+  const orderedName = customerName || (seatedAtTable ? String(storefrontOrder.tableName ?? "Table") : "");
+  if (!seatedAtTable && customerName.length < 2) throw new AppError("Please enter your name.", 400);
+  if (customerMobile || !seatedAtTable) {
+    if (!/^[6-9]\d{9}$/.test(customerMobile.replace(/[\s-]/g, ""))) {
+      throw new AppError("Please enter a valid 10-digit mobile number.", 400);
+    }
   }
-  if (fulfillmentType === "delivery" && customerAddress.length < 5) {
+  const addressRequired = storefrontOrder?.requiresAddress !== false && fulfillmentType === "delivery";
+  if (addressRequired && customerAddress.length < 5) {
     throw new AppError("Please enter a delivery address.", 400);
   }
 
@@ -190,20 +255,34 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
     if (productId && qty > 0) normalizedItems.set(productId, round2((normalizedItems.get(productId) ?? 0) + qty));
   }
   const quantitiesByProductId = Object.fromEntries(normalizedItems);
-  const products = await priceCatalogProducts(shopId, await listProducts(shopId, { locationId: location.id }), location.id, quantitiesByProductId);
-  const byId = new Map(products.map((p) => [p.id, p]));
   // A customer's phone may still be showing a catalogue cached before the outfit
   // was booked out, so the order path re-checks rather than trusting what they saw.
-  const bookedOut = await unavailableProductIds(shopId, products);
+  const candidates = await loadStorefrontCandidates(shopId, location.id, quantitiesByProductId);
+  const byId = new Map(candidates.map((p) => [p.id, p]));
+  // Re-asked here, not carried over from the catalogue read: what the guest may
+  // order has to be decided by the same rule that decided what they could see,
+  // or a menu will cheerfully accept a dish the till then refuses.
+  const storefront = await shapeStorefrontCatalog({
+    shopId, shop, settings, locationId: location.id, products: candidates,
+    request: { tableCode: body.tableCode ?? null },
+  });
+  const orderableIds = storefront ? new Set(storefront.products.map((p) => p.id)) : null;
+
   const lines = [];
   for (const [productId, qty] of normalizedItems) {
     const product = byId.get(productId);
     if (!product || qty <= 0) continue;
-    if (product.status === "inactive" || product.isActive === false || Number(product.stockBaseQty ?? 0) <= 0) continue;
-    if (bookedOut.has(productId)) continue;
-    const requestedBaseQty = toBaseQty(qty, product.rateUnit || product.baseUnit, product.baseUnit);
-    if (requestedBaseQty > Number(product.stockBaseQty ?? 0) + 0.000001) {
-      throw new AppError(`${product.name} has only ${product.stockBaseQty} ${product.baseUnit} available at this store.`, 409, "ORDER_QUANTITY_UNAVAILABLE");
+    if (orderableIds) {
+      // The trade that owns this storefront already decided. For a kitchen that
+      // is the 86 list and the recipe's ingredients — asking about the dish's
+      // own stock here would refuse every dish a restaurant does not count.
+      if (!orderableIds.has(productId)) continue;
+    } else {
+      if (Number(product.stockBaseQty ?? 0) <= 0) continue;
+      const requestedBaseQty = toBaseQty(qty, product.rateUnit || product.baseUnit, product.baseUnit);
+      if (requestedBaseQty > Number(product.stockBaseQty ?? 0) + 0.000001) {
+        throw new AppError(`${product.name} has only ${product.stockBaseQty} ${product.baseUnit} available at this store.`, 409, "ORDER_QUANTITY_UNAVAILABLE");
+      }
     }
     const safe = toCustomerSafeProduct(product);
     lines.push({ productId: safe.id, name: safe.name, unit: safe.unit, price: safe.price, qty });
@@ -218,11 +297,17 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
       data: {
         shopId,
         locationId: location.id,
-        customerName: customerName.slice(0, 120),
+        customerName: orderedName.slice(0, 120),
         customerMobile: customerMobile.replace(/[\s-]/g, "").slice(0, 15),
         customerAddress: customerAddress ? customerAddress.slice(0, 400) : null,
         note: note ? note.slice(0, 400) : null,
         fulfillmentType,
+        // Both the id and the name: the id is how the floor screen finds the
+        // table, the name is what the kitchen ticket prints and must survive the
+        // table being renamed or taken off the floor plan mid-service.
+        tableId: storefrontOrder?.tableId ?? null,
+        tableName: storefrontOrder?.tableName ?? null,
+        guestCount: storefrontOrder?.guestCount ?? null,
         promisedSlot,
         sourceChannel: "customer_portal",
         paymentStatus: "unpaid",
@@ -233,7 +318,7 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
         status: "new",
         idempotencyKey,
       },
-      select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, createdAt: true },
+      select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, tableId: true, tableName: true, createdAt: true },
     });
 
     return shapeOrderSubmitResponse(order, shop.name);
@@ -241,7 +326,7 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
     if (idempotencyKey && error?.code === "P2002") {
       const existing = await db.customerOrder.findFirst({
         where: { shopId, idempotencyKey },
-        select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, createdAt: true },
+        select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, tableId: true, tableName: true, createdAt: true },
       });
       if (existing) return shapeOrderSubmitResponse(existing, shop.name, true);
     }

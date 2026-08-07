@@ -349,7 +349,12 @@ export const inventoryRules = [
         // later in the day is not a late stock adjustment, and flagging them
         // would raise a finding for every afternoon sale. The day's staleness is
         // reported once on the closing itself.
-        if (row.action === "sale") continue;
+        //
+        // "recipe_use" is the same event seen from the kitchen's side — the
+        // ingredients a dish consumed, written in the same transaction as the
+        // sale that consumed them. Judged separately it would raise a finding
+        // per ingredient of every dish served after the lock.
+        if (row.action === "sale" || row.action === "recipe_use") continue;
         const recordedAt = new Date(row.createdAt).getTime();
         for (const lock of locks) {
           const lockDayStart = startOfDay(lock.date).getTime();

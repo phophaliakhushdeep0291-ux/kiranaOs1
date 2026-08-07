@@ -70,10 +70,32 @@ export function describeOrderUrlReach(url: string): OrderUrlReach {
 }
 
 /**
- * Prefer an explicitly configured public address so the printed QR stays correct
+ * The address a customer-facing link hangs off.
+ *
+ * Prefer an explicitly configured public address so a printed QR stays correct
  * no matter which machine or port the till happens to run on. Fall back to the
  * current origin, which is right for the normal deployed case.
+ *
+ * Separated from the link itself because there is now more than one customer
+ * link — the shop's order page, and the QR on each restaurant table — and two
+ * copies of "where do we publish from?" would eventually disagree. The one that
+ * was wrong would be the one already glued to a table.
  */
+export function resolveCustomerOrderBase({
+  configuredBaseUrl,
+  currentOrigin,
+  basePath = "",
+}: {
+  configuredBaseUrl?: string | null;
+  currentOrigin: string;
+  basePath?: string;
+}): string {
+  const configured = (configuredBaseUrl ?? "").trim().replace(/\/+$/, "");
+  if (configured) return configured;
+  const origin = currentOrigin.replace(/\/+$/, "");
+  return `${origin}${basePath.replace(/\/+$/, "")}`;
+}
+
 export function resolveCustomerOrderUrl({
   shopId,
   configuredBaseUrl,
@@ -86,9 +108,5 @@ export function resolveCustomerOrderUrl({
   basePath?: string;
 }): string {
   if (!shopId) return "";
-  const configured = (configuredBaseUrl ?? "").trim().replace(/\/+$/, "");
-  if (configured) return `${configured}/order/${shopId}`;
-  const origin = currentOrigin.replace(/\/+$/, "");
-  const base = basePath.replace(/\/+$/, "");
-  return `${origin}${base}/order/${shopId}`;
+  return `${resolveCustomerOrderBase({ configuredBaseUrl, currentOrigin, basePath })}/order/${shopId}`;
 }

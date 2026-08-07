@@ -1,5 +1,5 @@
 import { offlineDB } from "@/lib/offline/db";
-import { cartItemKey, type CartItem, type HeldBill } from "@/features/core/billing/pages/billing-types";
+import { cartItemKey, type BillingDraft, type CartItem, type HeldBill } from "@/features/core/billing/pages/billing-types";
 
 /**
  * Table service and kitchen tickets for a restaurant.
@@ -13,10 +13,8 @@ import { cartItemKey, type CartItem, type HeldBill } from "@/features/core/billi
  * The consequence worth knowing: settling a table's bill removes it from the
  * held set, and the table frees itself. Nothing here has to observe the sale.
  *
- * Everything persists in this device's offline store. A floor plan is shared
- * across the shop's devices through shop settings (see `floor-plan-sync.ts`);
- * live tickets are this device's, and the kitchen screen says so rather than
- * implying a counter across the room is feeding it.
+ * Everything persists in this device's offline store; the kitchen screen says
+ * so rather than implying a counter across the room is feeding it.
  */
 
 export const FLOOR_PLAN_KEY = "kirana-os:restaurant:floor-plan:v1";
@@ -32,6 +30,14 @@ export interface RestaurantTable {
   /** Free-text area: "Ground floor", "Terrace", "AC hall". */
   section: string;
   seats: number;
+  /**
+   * What the table's QR sticker carries. Absent on a plan that has never been
+   * published — a floor this device invented and the server has not seen, whose
+   * tables therefore have nothing to print yet.
+   */
+  code?: string;
+  /** Whether guests may order from this table's QR at all. */
+  selfOrderEnabled?: boolean;
 }
 
 export type KotStatus = "new" | "preparing" | "ready" | "served";
@@ -50,6 +56,15 @@ export interface KotTicket {
   ticketNo: number;
   tableId: string;
   tableName: string;
+  /**
+   * The order this ticket belongs to, not just the table.
+   *
+   * A table is reused all evening, so "already fired" has to be counted against
+   * one sitting. Keyed on the table alone, a fresh party ordering two naan at T3
+   * would be treated as already sent because the previous party's ticket had
+   * two — and the kitchen would never hear about it.
+   */
+  billId: string;
   createdAt: string;
   status: KotStatus;
   lines: KotLine[];
@@ -124,22 +139,50 @@ export function pruneKotTickets(tickets: KotTicket[], now = Date.now()): KotTick
 }
 
 /**
- * Drop table -> bill links whose held bill is gone.
+ * Drop table -> bill links that no longer describe a live order.
  *
- * That is the ordinary path, not an error: the cart was settled, cancelled or
- * pruned, and the table is free again. Self-healing here means no other screen
- * has to remember to release a table.
+ * That is the ordinary path, not an error, and self-healing here means no other
+ * screen has to remember to release a table. Two cases end a sitting:
+ *
+ * - the held bill is gone (settled, cancelled or pruned);
+ * - the held bill is still listed but empty. Settling a table leaves the till
+ *   holding an emptied cart under the same id, so "still in the list" is not
+ *   the same as "still eating" — without this the table would read Seated,
+ *   ₹0 for the rest of the day and never free itself.
+ *
+ * The one empty cart that *is* a live order is the table being rung up right
+ * now: a waiter who has seated a party and not yet keyed the first dish.
  */
 export function reconcileTableBills(
   map: Record<string, string>,
   heldBills: HeldBill[],
+  activeBillId?: string,
 ): Record<string, string> {
-  const live = new Set(heldBills.map((bill) => bill.id));
+  const live = new Map(heldBills.map((bill) => [bill.id, bill]));
   const next: Record<string, string> = {};
   for (const [tableId, billId] of Object.entries(map)) {
-    if (live.has(billId)) next[tableId] = billId;
+    const bill = live.get(billId);
+    if (!bill) continue;
+    if ((bill.cart?.length ?? 0) === 0 && billId !== activeBillId) continue;
+    next[tableId] = billId;
   }
   return next;
+}
+
+/**
+ * Fold the cart currently open in the billing workspace back over the parked
+ * set.
+ *
+ * A held bill is only rewritten when the counter parks or switches, so the one
+ * table being rung up right now is stale in that list — it would read "0 items,
+ * ₹0" while a waiter is adding to it. The draft is the live copy of exactly one
+ * table, matched by `activeBillId`, so overlaying it is what makes the floor
+ * show the order as it is being taken.
+ */
+export function withLiveDraft(heldBills: HeldBill[], draft: BillingDraft | null | undefined): HeldBill[] {
+  const activeId = draft?.activeBillId;
+  if (!activeId) return heldBills;
+  return heldBills.map((bill) => (bill.id === activeId ? { ...bill, ...draft, id: bill.id } : bill));
 }
 
 export interface TableOccupancy {
@@ -207,8 +250,9 @@ export function buildOccupancy(
   const billById = new Map(heldBills.map((bill) => [bill.id, bill]));
   return tables.map((table) => {
     const bill = billById.get(map[table.id] ?? "") ?? null;
-    const tableTickets = tickets
-      .filter((ticket) => ticket.tableId === table.id)
+    // Scoped to this sitting's bill, so a re-seated table starts owing the
+    // kitchen everything on the new order.
+    const tableTickets = (bill ? tickets.filter((ticket) => ticket.billId === bill.id) : [])
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return {
       table,
@@ -229,6 +273,7 @@ export function nextTicketNo(tickets: KotTicket[]): number {
 
 export function buildKotTicket(
   table: RestaurantTable,
+  billId: string,
   lines: KotLine[],
   tickets: KotTicket[],
   now = new Date(),
@@ -238,6 +283,7 @@ export function buildKotTicket(
     ticketNo: nextTicketNo(tickets),
     tableId: table.id,
     tableName: table.name,
+    billId,
     createdAt: now.toISOString(),
     status: "new",
     lines,
