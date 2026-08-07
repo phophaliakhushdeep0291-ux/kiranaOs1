@@ -18,6 +18,7 @@ const QTY_BOXES = [
   "src/features/verticals/furniture-home/orders/components/OrderPanel.tsx",
   "src/features/verticals/pharmacy/prescriptions/components/PrescriptionPanel.tsx",
   "src/features/verticals/stationery-books/book-lists/components/BookListPanel.tsx",
+  "src/features/core/products/pages/components/VariantGridEditor.tsx",
 ];
 
 describe("parseQuantityDraft", () => {
@@ -81,6 +82,7 @@ const MONEY_BOXES = [
   "src/features/core/products/pages/components/BulkEditDialog.tsx",
   "src/features/verticals/furniture-home/orders/components/OrderPanel.tsx",
   "src/features/verticals/clothing/rentals/components/RentalBookingPanel.tsx",
+  "src/features/core/products/pages/components/VariantGridEditor.tsx",
 ];
 
 describe("parseNumericDraft at money precision", () => {
