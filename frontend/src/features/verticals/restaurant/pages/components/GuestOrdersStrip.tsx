@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { listCustomerOrders, updateCustomerOrder, type CustomerOrder } from "@/features/core/orders/api";
+import { useListProducts } from "@/features/core/products/queries";
 import { loadFloorPlan, type RestaurantTable } from "../../service/table-store";
 import { acceptGuestOrderToTable, loadAcceptedOrderIds, pendingGuestOrders } from "../../service/guest-orders";
 
