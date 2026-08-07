@@ -191,9 +191,9 @@ export default function MerchantSetupPage() {
     starterCatalogAbort.current = controller;
     setStarterCatalogRun({ created: 0, total: 0 });
     try {
-      // Dynamic: the 560 rows are fetched when the shop asks for them, never at startup.
-      const { runStarterCatalogImport } = await import("@/features/core/products/starter-catalog/starter-catalog-import");
-      const result = await runStarterCatalogImport({
+      // Dynamic: the catalog rows are fetched when the shop asks for them, never at startup.
+      const { loadKiranaStarterCatalog } = await import("@/features/core/products/starter-catalog/load-starter-catalog");
+      const result = await loadKiranaStarterCatalog({
         signal: controller.signal,
         onProgress: ({ created, total }) => setStarterCatalogRun({ created, total }),
       });

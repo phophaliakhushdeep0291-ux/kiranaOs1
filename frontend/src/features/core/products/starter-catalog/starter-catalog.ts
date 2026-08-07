@@ -30,14 +30,9 @@ export interface StarterCatalogItem {
   readonly isActive: boolean;
 }
 
-/**
- * How many products the built-in catalog holds.
- *
- * Stated here rather than read off the generated array so a screen can put the number in
- * a button label without pulling 200 kB of product rows into its chunk to count them.
- * starter-catalog.test.ts fails if it drifts from the generated data.
- */
-export const STARTER_CATALOG_ITEM_COUNT = 560;
+// The item count a screen needs for a button label lives in
+// kirana-catalog-summary.generated.ts, which the generator rewrites from the CSV. Stating
+// it by hand here as well would be a second copy that only a test remembers to update.
 
 /** Runtime half of `readonly`: the generated module is frozen, not merely typed. */
 export function freezeStarterCatalog(items: StarterCatalogItem[]): readonly StarterCatalogItem[] {
@@ -97,7 +92,15 @@ const CELL: Partial<Record<ProductImportField, (item: StarterCatalogItem) => str
  * ProductInputs directly would be a second set of rules to keep correct.
  */
 export function starterCatalogToCsv(items: readonly StarterCatalogItem[]): string {
+  const writers = PRODUCT_IMPORT_COLUMNS.map((column) => {
+    const write = CELL[column.field];
+    // The coverage check the type system cannot do here. A column added to the importer
+    // without a decision about what the starter catalog puts in it stops the catalog from
+    // rendering at all, rather than shipping every row with that column silently blank.
+    if (!write) throw new Error(`The starter catalog has no value for the "${column.header}" import column.`);
+    return write;
+  });
   const header = PRODUCT_IMPORT_COLUMNS.map((column) => csvEscape(column.header)).join(",");
-  const rows = items.map((item) => PRODUCT_IMPORT_COLUMNS.map((column) => csvEscape(CELL[column.field](item))).join(","));
+  const rows = items.map((item) => writers.map((write) => csvEscape(write(item))).join(","));
   return `${header}\n${rows.join("\n")}\n`;
 }

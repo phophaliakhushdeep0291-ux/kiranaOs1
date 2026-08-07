@@ -6,10 +6,12 @@ import {
   KIRANA_STARTER_CATALOG,
   KIRANA_STARTER_CATALOG_CHECKSUM,
 } from "@/features/core/products/starter-catalog/kirana-catalog.generated";
+import { starterCatalogToCsv } from "@/features/core/products/starter-catalog/starter-catalog";
 import {
-  STARTER_CATALOG_ITEM_COUNT,
-  starterCatalogToCsv,
-} from "@/features/core/products/starter-catalog/starter-catalog";
+  KIRANA_STARTER_CATALOG_COUNT,
+  KIRANA_STARTER_CATALOG_LOOSE_COUNT,
+  KIRANA_STARTER_CATALOG_SUMMARY_CHECKSUM,
+} from "@/features/core/products/starter-catalog/kirana-catalog-summary.generated";
 import { PRODUCT_IMPORT_COLUMNS, parseProductsCsv } from "@/features/core/products/import/product-import-csv";
 import { UNITS } from "@/features/core/products/pages/product-pricing";
 
@@ -41,7 +43,14 @@ describe("starter catalog generated module", () => {
   });
 
   it("keeps the advertised item count truthful", () => {
-    expect(KIRANA_STARTER_CATALOG).toHaveLength(STARTER_CATALOG_ITEM_COUNT);
+    // The setup screen labels its button from the summary module so it does not have to
+    // download 560 rows to count them. If the two drift, the button lies about the offer.
+    expect(KIRANA_STARTER_CATALOG).toHaveLength(KIRANA_STARTER_CATALOG_COUNT);
+    expect(KIRANA_STARTER_CATALOG.filter((item) => item.isLooseItem)).toHaveLength(KIRANA_STARTER_CATALOG_LOOSE_COUNT);
+  });
+
+  it("regenerates both modules together, so the summary cannot be stale on its own", () => {
+    expect(KIRANA_STARTER_CATALOG_SUMMARY_CHECKSUM).toBe(KIRANA_STARTER_CATALOG_CHECKSUM);
   });
 
   it("ships 560 products, 48 of them loose", () => {

@@ -166,6 +166,42 @@ describe("loading the built-in kirana catalog", () => {
     expect(createProductOps()).toHaveLength(560);
   });
 
+  it("syncs to 560 server products, not 1120, however the outbox is replayed", async () => {
+    /*
+     * Models what the server does with these operations, because the counts that matter to
+     * a shopkeeper are the ones in the cloud. applyCreateProduct derives a clientProductId
+     * (payload.clientProductId ?? payload.localProductId ?? event.entity_id) and
+     * createProduct upserts on it, so a create is idempotent per client product id.
+     *
+     * The outbox-length assertions above cannot see this: they would still pass if every
+     * row carried the same id, or none. This applies the rule.
+     */
+    const serverProducts = (rows: Row[]) => {
+      const byClientProductId = new Map<string, Row>();
+      for (const row of rows) {
+        const payload = row.payload as Row;
+        const clientProductId = String(payload.clientProductId ?? payload.localProductId ?? row.entity_id ?? "");
+        if (!clientProductId) throw new Error("A CREATE_PRODUCT carried no durable client id, so the server could not dedupe it.");
+        if (!byClientProductId.has(clientProductId)) byClientProductId.set(clientProductId, payload.product as Row);
+      }
+      return byClientProductId;
+    };
+
+    // Loaded with no connection: every product sits in the outbox, nothing has synced.
+    await importStarterCatalogItems(KIRANA_STARTER_CATALOG);
+    expect(serverProducts(createProductOps()).size).toBe(560);
+
+    // The push goes out twice — a retry after a lost acknowledgement replays rows the
+    // server already applied. This is the case that would double the catalog.
+    const replayed = [...createProductOps(), ...createProductOps()];
+    expect(serverProducts(replayed).size).toBe(560);
+
+    // And the shopkeeper taps the button again before anything has synced.
+    await importStarterCatalogItems(KIRANA_STARTER_CATALOG);
+    expect(serverProducts(createProductOps()).size).toBe(560);
+    expect(serverProducts([...createProductOps(), ...replayed]).size).toBe(560);
+  });
+
   it("leaves a shop's own products alone", async () => {
     dbState.committed.products = [
       { id: "product_local", name: "Ramesh special mixture", unit: "packet", sellingPrice: 40, isLooseItem: false },
