@@ -112,6 +112,7 @@ export default function ProductsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [starterHint, setStarterHint] = useState(false);
   const [pendingValues, setPendingValues] = useState<ProductFormData | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -338,7 +339,14 @@ export default function ProductsPage() {
     const params = new URLSearchParams(query || browserQuery);
     if (params.get("add") === "1") openAdd();
     if (params.get("import") === "1") setImportOpen(true);
-    if (params.get("add") !== "1" && params.get("import") !== "1") return;
+    // A filter hint, so a screen that just added a few hundred products can land the shop
+    // on the group it wants reviewed rather than on an undifferentiated list.
+    const categoryHint = params.get("category")?.trim();
+    if (categoryHint) setCategory(categoryHint);
+    if (params.get("starter") === "1") setStarterHint(true);
+    const handled = params.get("add") === "1" || params.get("import") === "1"
+      || Boolean(categoryHint) || params.get("starter") === "1";
+    if (!handled) return;
     setLocation("/products");
   }, [location, openAdd, setLocation]);
 
@@ -427,6 +435,26 @@ export default function ProductsPage() {
         <StatCard icon={<XCircle size={18} />} iconClass="bg-rose-50 text-rose-600" label={t("products.stats.outOfStock")} value={stats.outOfStock.toLocaleString("en-IN")} sub={t("products.stats.outOfStockHint")} />
         <StatCard icon={<Layers size={18} />} iconClass="bg-violet-50 text-violet-600" label={t("products.stats.categories")} value={stats.categories.toLocaleString("en-IN")} sub={t("products.stats.categoriesHint")} />
       </div>
+
+      {/* The starter catalog stocks a shop with items it may not carry. Say where to prune
+          them, once, rather than leaving a shopkeeper to scroll several hundred rows. */}
+      {starterHint && (
+        <div className="mt-3.5 flex items-start gap-3 rounded-[14px] border border-[#d9e7fb] bg-[#f4f9ff] p-3" data-testid="starter-catalog-hint">
+          <Layers size={16} className="mt-0.5 shrink-0 text-[var(--brand)]" aria-hidden="true" />
+          <p className="min-w-0 flex-1 text-[12px] leading-5 text-[#344668]">
+            <span className="font-bold">Starter items added.</span>{" "}
+            Use the category filter to take one group at a time and delete anything you don't sell.
+            Prices are starting values — correct them as you go.
+          </p>
+          <button
+            className="shrink-0 text-[11px] font-bold text-[#536383] hover:underline"
+            data-testid="starter-catalog-hint-dismiss"
+            onClick={() => setStarterHint(false)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* ── Toolbar ── */}
       <div className="mt-3.5 flex flex-col gap-3 rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] lg:flex-row lg:items-center">

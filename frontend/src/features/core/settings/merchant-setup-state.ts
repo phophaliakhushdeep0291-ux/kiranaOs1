@@ -1,3 +1,7 @@
+// Counts only — the catalog itself is loaded with a dynamic import when the shop taps
+// the action. Importing the data module here would put 560 rows in the settings chunk.
+import { KIRANA_STARTER_CATALOG_COUNT } from "@/features/core/products/starter-catalog/kirana-catalog-summary.generated";
+
 export const MERCHANT_SETUP_KEY = "onboarding:merchant-setup:v1";
 
 export type MerchantSetupStepId =
@@ -24,6 +28,20 @@ export interface MerchantSetupFacts {
   customerCount: number;
   supplierCount: number;
   billCount: number;
+  /** Which trade this shop is. Only `kirana` is offered the built-in kirana catalog. */
+  businessTypeKey?: string;
+}
+
+/**
+ * A one-tap alternative to the step's normal "go and do it yourself" link.
+ *
+ * The step still links to the products screen; this is the shortcut for the one case
+ * where the app already knows what the shop is about to type in by hand.
+ */
+export interface MerchantSetupQuickAction {
+  id: "load-starter-catalog";
+  label: string;
+  hint: string;
 }
 
 export interface MerchantSetupStep {
@@ -38,6 +56,7 @@ export interface MerchantSetupStep {
   detail: string;
   confirmable?: boolean;
   skippable?: boolean;
+  quickAction?: MerchantSetupQuickAction;
 }
 
 export interface MerchantSetupProgress {
@@ -72,6 +91,23 @@ export function normaliseMerchantSetupState(value: unknown): MerchantSetupState 
 
 function countLabel(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+/**
+ * Offered to a kirana shop that has no products yet, and to nobody else.
+ *
+ * A chemist or a garage would have to delete all 560 rows, so the offer would cost them
+ * time rather than save it. A shop that already has products has already made its own
+ * decisions about names and prices, and the catalog's starting prices are not better
+ * information than the ones the shop typed in.
+ */
+function starterCatalogQuickAction(facts: MerchantSetupFacts): MerchantSetupQuickAction | undefined {
+  if (facts.businessTypeKey !== "kirana" || facts.productCount !== 0) return undefined;
+  return {
+    id: "load-starter-catalog",
+    label: `Load ${KIRANA_STARTER_CATALOG_COUNT} common kirana items`,
+    hint: "You can delete what you don't sell.",
+  };
 }
 
 export function buildMerchantSetupProgress(
@@ -139,6 +175,7 @@ export function buildMerchantSetupProgress(
       complete: facts.productCount > 0,
       skipped: false,
       detail: facts.productCount > 0 ? countLabel(facts.productCount, "product") : "No products added yet",
+      quickAction: starterCatalogQuickAction(facts),
     },
     {
       id: "customers",

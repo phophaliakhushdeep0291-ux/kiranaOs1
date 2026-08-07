@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
   BadgeCheck,
@@ -16,6 +16,7 @@ import {
 import { offlineDB } from "@/lib/offline/db";
 import type { Shop } from "@/types/api";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { SettingsShell } from "../SettingsShell";
 import { Badge, Card, CardHead } from "../ui";
@@ -52,6 +53,11 @@ const EMPTY_FACTS: MerchantSetupFacts = {
   billCount: 0,
 };
 
+interface StarterCatalogRun {
+  created: number;
+  total: number;
+}
+
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -62,6 +68,16 @@ function isStoreProfileReady(shop?: Shop | null, prefs?: Record<string, unknown>
   const phone = text(shop?.phone) || text(profile.phone) || text(profile.mobile) || text(profile.mobileNumber);
   const address = text(shop?.address) || text(shop?.city) || text(profile.address) || text(profile.city);
   return Boolean(name && phone && address);
+}
+
+/**
+ * The saved profile wins over the device's cached type: the device store defaults to
+ * "kirana" when nothing has been chosen yet, and offering a kirana catalog on the strength
+ * of a default is how a chemist ends up deleting 560 grocery items.
+ */
+function businessTypeKeyOf(prefs?: Record<string, unknown>): string | undefined {
+  const profile = (prefs?.storeProfile && typeof prefs.storeProfile === "object" ? prefs.storeProfile : {}) as Record<string, unknown>;
+  return text(profile.businessTypeKey) || undefined;
 }
 
 async function loadFacts(shop?: Shop | null, prefs?: Record<string, unknown>): Promise<MerchantSetupFacts> {
@@ -77,6 +93,7 @@ async function loadFacts(shop?: Shop | null, prefs?: Record<string, unknown>): P
     customerCount: customers.length,
     supplierCount: suppliers.length,
     billCount: bills.length,
+    businessTypeKey: businessTypeKeyOf(prefs),
   };
 }
 
@@ -92,6 +109,9 @@ export default function MerchantSetupPage() {
   const [facts, setFacts] = useState<MerchantSetupFacts>(EMPTY_FACTS);
   const [state, setState] = useState<MerchantSetupState>(() => normaliseMerchantSetupState(null));
   const [loading, setLoading] = useState(true);
+  const [starterCatalogRun, setStarterCatalogRun] = useState<StarterCatalogRun | null>(null);
+  const starterCatalogAbort = useRef<AbortController | null>(null);
+  const { toast } = useToast();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -161,6 +181,50 @@ export default function MerchantSetupPage() {
 
   const continueStep = progress.nextStep;
 
+  const cancelStarterCatalog = useCallback(() => {
+    starterCatalogAbort.current?.abort();
+  }, []);
+
+  const runStarterCatalog = useCallback(async () => {
+    if (starterCatalogRun) return;
+    const controller = new AbortController();
+    starterCatalogAbort.current = controller;
+    setStarterCatalogRun({ created: 0, total: 0 });
+    try {
+      // Dynamic: the 560 rows are fetched when the shop asks for them, never at startup.
+      const { runStarterCatalogImport } = await import("@/features/core/products/starter-catalog/starter-catalog-import");
+      const result = await runStarterCatalogImport({
+        signal: controller.signal,
+        onProgress: ({ created, total }) => setStarterCatalogRun({ created, total }),
+      });
+      await refresh();
+      if (result.cancelled) {
+        toast({
+          title: `Stopped after ${result.created} items`,
+          description: "The items already added are kept. Run it again to add the rest — it will not duplicate them.",
+        });
+        return;
+      }
+      toast({
+        title: result.created > 0 ? `Added ${result.created} items` : "Nothing to add",
+        description: result.created > 0
+          ? "Review them by category and delete anything you don't sell."
+          : "This shop already has every item in the starter catalog.",
+      });
+      // Land him where the deleting happens, filtered, rather than on a list of 560.
+      navigate("/products?starter=1");
+    } catch (error) {
+      toast({
+        title: "Could not load the starter catalog",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      starterCatalogAbort.current = null;
+      setStarterCatalogRun(null);
+    }
+  }, [navigate, refresh, starterCatalogRun, toast]);
+
   return (
     <SettingsShell>
       <Card className="border-[var(--brand-border)] bg-white">
@@ -226,6 +290,46 @@ export default function MerchantSetupPage() {
                       </div>
                       <p className="mt-1 text-[12px] leading-5 text-[#64748b]">{step.description}</p>
                       <p className="mt-1 text-[12px] font-bold text-[#344668]">{step.detail}</p>
+                      {step.quickAction && (
+                        <div className="mt-3 rounded-[10px] border border-[#d9e7fb] bg-[#f4f9ff] p-3" data-testid="starter-catalog-action">
+                          {starterCatalogRun ? (
+                            <>
+                              <p className="text-[12px] font-bold text-[var(--brand-ink)]" data-testid="starter-catalog-progress">
+                                {starterCatalogRun.total > 0
+                                  ? `Adding ${starterCatalogRun.created} of ${starterCatalogRun.total}...`
+                                  : "Preparing the catalog..."}
+                              </p>
+                              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e2ecf9]">
+                                <div
+                                  className="h-full rounded-full bg-[var(--brand)] transition-all duration-200"
+                                  style={{ width: `${starterCatalogRun.total > 0 ? Math.round((starterCatalogRun.created / starterCatalogRun.total) * 100) : 0}%` }}
+                                />
+                              </div>
+                              <Button
+                                variant="outline"
+                                className="mt-3 rounded-[8px]"
+                                data-testid="starter-catalog-cancel"
+                                onClick={cancelStarterCatalog}
+                              >
+                                Stop
+                              </Button>
+                              <p className="mt-2 text-[11px] text-[#64748b]">Items already added are kept.</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[12px] font-bold text-[var(--brand-ink)]">{step.quickAction.label}</p>
+                              <p className="mt-0.5 text-[11px] text-[#64748b]">{step.quickAction.hint}</p>
+                              <Button
+                                className="mt-2 rounded-[8px] bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]"
+                                data-testid="starter-catalog-start"
+                                onClick={() => void runStarterCatalog()}
+                              >
+                                <PackagePlus size={14} className="mr-1" /> {step.quickAction.label}
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex min-w-0 flex-wrap gap-2 md:justify-end">

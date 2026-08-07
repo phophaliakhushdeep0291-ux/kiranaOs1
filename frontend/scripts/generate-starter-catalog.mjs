@@ -88,8 +88,7 @@ function parseCsv(text) {
  * renames or reorders a column, generation fails loudly rather than writing a module
  * whose fields are quietly one place to the left.
  */
-function readImportColumns() {
-  const source = readFileSync(importContractPath, "utf8");
+function readImportColumns(source) {
   const block = source.match(/export const PRODUCT_IMPORT_COLUMNS: ImportColumn\[] = \[([\s\S]*?)\n\];/);
   if (!block) throw new Error(`Could not find PRODUCT_IMPORT_COLUMNS in ${importContractPath}`);
   const columns = [...block[1].matchAll(/\{\s*header:\s*"((?:[^"\\]|\\.)*)",\s*field:\s*"([A-Za-z]+)"/g)]

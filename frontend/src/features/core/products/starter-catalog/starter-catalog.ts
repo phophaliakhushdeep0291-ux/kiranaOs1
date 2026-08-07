@@ -30,6 +30,15 @@ export interface StarterCatalogItem {
   readonly isActive: boolean;
 }
 
+/**
+ * How many products the built-in catalog holds.
+ *
+ * Stated here rather than read off the generated array so a screen can put the number in
+ * a button label without pulling 200 kB of product rows into its chunk to count them.
+ * starter-catalog.test.ts fails if it drifts from the generated data.
+ */
+export const STARTER_CATALOG_ITEM_COUNT = 560;
+
 /** Runtime half of `readonly`: the generated module is frozen, not merely typed. */
 export function freezeStarterCatalog(items: StarterCatalogItem[]): readonly StarterCatalogItem[] {
   for (const item of items) {
@@ -46,11 +55,17 @@ function csvEscape(value: string): string {
 }
 
 /**
- * Exhaustive over the import contract on purpose. Adding a column to
- * PRODUCT_IMPORT_COLUMNS without deciding what the starter catalog puts in it is a
- * typecheck error here rather than a silently blank column at the shop counter.
+ * One writer per import column.
+ *
+ * This cannot be a `Record<ProductImportField, ...>`: that field type is
+ * `keyof ProductFormData | "skuBarcode"`, the whole product form, not the nineteen
+ * columns the CSV actually has — so the exhaustive version demanded writers for
+ * `imageUrl`, `variantAxes` and ten other fields no column carries. Coverage is instead
+ * checked against PRODUCT_IMPORT_COLUMNS itself, below, which is the real contract:
+ * add a column without deciding what the starter catalog puts in it and the build that
+ * regenerates the catalog throws, naming the column.
  */
-const CELL: Record<ProductImportField, (item: StarterCatalogItem) => string> = {
+const CELL: Partial<Record<ProductImportField, (item: StarterCatalogItem) => string>> = {
   name: (item) => item.name,
   category: (item) => item.category,
   unit: (item) => item.unit,

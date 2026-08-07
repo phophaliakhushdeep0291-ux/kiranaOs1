@@ -44,6 +44,7 @@ import testerRoutes from "./verticals/beauty-cosmetics/testers/testers.routes.js
 import restaurantTableRoutes from "./verticals/restaurant/tables/tables.routes.js";
 import restaurantMenuRoutes from "./verticals/restaurant/menu/menu.routes.js";
 import dishRecipeRoutes from "./verticals/restaurant/recipes/recipes.routes.js";
+import kitchenTicketRoutes from "./verticals/restaurant/kot/kot.routes.js";
 import integrationRoutes from "./modules/integrations/integrations.routes.js";
 import { taxRoutes as complianceRoutes } from "./core/taxes/index.js";
 import loyaltyRoutes from "./modules/loyalty/loyalty.routes.js";
@@ -262,6 +263,7 @@ app.use("/api/testers", testerRoutes);
 app.use("/api/restaurant/tables", restaurantTableRoutes);
 app.use("/api/restaurant/menu", restaurantMenuRoutes);
 app.use("/api/restaurant/recipes", dishRecipeRoutes);
+app.use("/api/restaurant/kot", kitchenTicketRoutes);
 app.use("/api/integrations", integrationRoutes);
 app.use("/api/stores", storeRoutes);
 app.use("/api/compliance", complianceRoutes);
