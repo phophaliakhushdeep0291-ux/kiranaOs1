@@ -5,6 +5,8 @@ import {
   BUSINESS_TYPES,
   CAPABILITIES,
   bootstrapForShop,
+  businessTypeFromSettings,
+  requestedBusinessTypeFromSettings,
   settingsForBusinessType,
 } from "../src/modules/shops/businessProfiles.js";
 
@@ -47,6 +49,33 @@ test("configured capabilities are bounded by the known catalog and preset", () =
   assert.ok(CAPABILITIES.includes("BATCH_TRACKING"));
   assert.equal(bootstrap.capabilities.includes("BATCH_TRACKING"), false);
   assert.equal(bootstrap.capabilities.includes("NOT_A_REAL_CAPABILITY"), false);
+});
+
+test("a settings payload asking for a new trade is read as that trade", () => {
+  // What the owner's Store Profile screen actually sends: the whole stored blob
+  // with storeProfile.businessTypeKey changed. businessProfile is server-owned
+  // and still carries the old value, so reading that first made the change
+  // cancel itself — the shop was rewritten exactly as it was, with a 200.
+  const stored = settingsForBusinessType("kirana");
+  const requested = {
+    ...stored,
+    storeProfile: { ...stored.storeProfile, businessTypeKey: "restaurant" },
+  };
+
+  assert.equal(businessTypeFromSettings(stored), "kirana");
+  assert.equal(requestedBusinessTypeFromSettings(requested), "restaurant");
+
+  const saved = settingsForBusinessType(requestedBusinessTypeFromSettings(requested), requested);
+  assert.equal(saved.businessProfile.businessType, "restaurant");
+  assert.equal(saved.storeProfile.businessTypeKey, "restaurant");
+  assert.ok(bootstrapForShop({ id: "s", name: "Cafe", settingsJson: JSON.stringify(saved) }, "owner")
+    .navigation.includes("tables"));
+});
+
+test("a payload that never names a trade leaves the stored one alone", () => {
+  const stored = settingsForBusinessType("pharmacy");
+  const unrelatedEdit = { ...stored, storeProfile: { ...stored.storeProfile, businessTypeKey: undefined } };
+  assert.equal(requestedBusinessTypeFromSettings(unrelatedEdit), "pharmacy");
 });
 
 test("custom shops preserve known owner-selected capabilities", () => {

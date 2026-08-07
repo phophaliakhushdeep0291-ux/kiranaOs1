@@ -35,7 +35,8 @@ const PATH_NAVIGATION_KEYS: Array<[RegExp, string[]]> = [
   [/^\/dashboard(?:\/|$)/, ["dashboard"]],
   [/^\/billing(?:\/|$)/, ["billing", "pos"]],
   [/^\/products(?:\/|$)|^\/categories(?:\/|$)/, ["products", "menu", "medicines"]],
-  [/^\/inventory\/batches(?:\/|$)/, ["batches", "expiry", "inventory"]],
+  // `/inventory/batches` is deliberately absent: it is gated on the CAPABILITY
+  // instead, by `isPathAllowedByCapabilities` below. See the note there.
   [/^\/inventory(?:\/|$)/, ["inventory"]],
   [/^\/udhar(?:\/|$)/, ["udhar", "customers"]],
   [/^\/customers(?:\/|$)/, ["customers"]],
@@ -78,4 +79,28 @@ export function isPathInBusinessProfile(path: string, navigation?: string[]) {
 
 export function profileHasCapability(capabilities: string[] | undefined, capability: string) {
   return capabilities?.includes(capability) ?? false;
+}
+
+/**
+ * Screens that belong to a capability rather than to a navigation key.
+ *
+ * Batch & Expiry used to be unlocked by the plain "inventory" key, which every
+ * trade carries — so a garment shop, a shoe shop and a spare-parts counter all
+ * found dated-stock tooling in the sidebar. The obvious fix was to demand the
+ * "batches"/"expiry" nav keys instead, but only pharmacy and cosmetics list
+ * those; a kirana store holds BATCH_TRACKING and sells dated food, and would
+ * have lost the screen until its server profile caught up.
+ *
+ * Asking the capability is both the more truthful question and the one that
+ * needs no deploy ordering: it is answered correctly by servers old and new.
+ */
+const PATH_CAPABILITIES: Array<[RegExp, string[]]> = [
+  [/^\/inventory\/batches(?:\/|$)/, ["BATCH_TRACKING", "EXPIRY_TRACKING"]],
+];
+
+export function isPathAllowedByCapabilities(path: string, capabilities?: string[]) {
+  // Bootstrap can be unavailable offline; the gate must not lock the app then.
+  if (!capabilities) return true;
+  const rule = PATH_CAPABILITIES.find(([pattern]) => pattern.test(path));
+  return !rule || rule[1].some((capability) => capabilities.includes(capability));
 }

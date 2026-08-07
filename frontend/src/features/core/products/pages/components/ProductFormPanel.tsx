@@ -17,6 +17,7 @@ import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAlia
 import { fetchGroqAliasSuggestions } from "../product-aliases";
 import { baseUnitFor, isScaleUnit, round2, sellingUnitCode, sellingUnitConversion, sellingUnitName, UNITS } from "../product-pricing";
 import { useShopCapability } from "@/features/core/settings/capabilities";
+import { VariantGridEditor } from "./VariantGridEditor";
 import type { ProductFormData } from "../product-form-state";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { generateInternalEan13 } from "@/lib/barcode/ean13";
@@ -146,7 +147,15 @@ export function ProductFormPanel({
     : sellingUnitName(selectedUnit, packSizeValue, packSizeUnit);
   const sellingUnits = form.watch("sellingUnits") ?? [];
   const packagingMode = form.watch("packagingMode") ?? "pooled";
-  const alternateSellingUnits = sellingUnits.filter((row) => !row.isDefault);
+  const variantAxes = form.watch("variantAxes") ?? [];
+  // A garment sold by size has no separate pack rows: its selling units ARE the
+  // size × colour cells, so the two editors must never both be writing them.
+  const hasVariantGrid = variantAxes.length > 0;
+  // Shown to any trade that sells the same thing in more than one size or
+  // shade — clothing, footwear, cosmetics, furniture — and to a product that
+  // already has a grid, so switching business type cannot strand one.
+  const showVariantGrid = hasCapability("PRODUCT_VARIANTS") || hasVariantGrid;
+  const alternateSellingUnits = sellingUnits.filter((row) => !row.isDefault && !row.variantValue1 && !row.variantValue2);
   const err = form.formState.errors;
   const productMrp = Number(form.watch("mrp") || 0);
 
@@ -588,7 +597,28 @@ export function ProductFormPanel({
               <span className={`font-black ${margin < 0 ? "text-rose-600" : "text-emerald-600"}`}>{margin}%</span>
             </div>
 
-            {!isLoose ? (
+            {showVariantGrid && !isLoose && (
+              <VariantGridEditor
+                axes={variantAxes}
+                sellingUnits={sellingUnits}
+                // What is actually saved against this product, which the live
+                // form value stops being the moment anything is typed.
+                baselineUnits={editing?.sellingUnits ?? []}
+                fallbackPrice={Number(form.watch("sellingPrice") || 0)}
+                unitType={selectedUnit}
+                onChange={({ axes, sellingUnits: nextUnits }) => {
+                  form.setValue("variantAxes", axes, { shouldDirty: true });
+                  form.setValue("sellingUnits", nextUnits, { shouldDirty: true });
+                  // A grid counts every row on its own — pooled sizes would all
+                  // read one shared number and report availability that is untrue.
+                  if (axes.length > 0) form.setValue("packagingMode", "per_pack", { shouldDirty: true });
+                }}
+              />
+            )}
+
+            {/* Pack sizes and a variant grid both write sellingUnits, so only one
+                may be on screen. A shirt is sold by size, not by the 500 g pack. */}
+            {!isLoose && !hasVariantGrid ? (
               <div className="rounded-[12px] border border-[#e3eaf3] bg-[#fbfcfe] p-3" data-testid="alternate-pack-sizes">
                 <div className="flex items-center justify-between gap-3">
                   <div>

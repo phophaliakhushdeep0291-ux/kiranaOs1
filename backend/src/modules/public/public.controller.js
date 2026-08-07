@@ -5,7 +5,12 @@ import { recordOnlineActivity } from "../activity/online-activity.service.js";
 
 export async function catalog(req, res, next) {
   try {
-    const data = await svc.getPublicCatalog(req.params.shopId, req.query.locationId);
+    // `table` is what a QR sticker on a restaurant table carries. Unknown codes
+    // are not an error here: the menu still opens, and the page says the table
+    // was not recognised rather than refusing to show anything.
+    const data = await svc.getPublicCatalog(req.params.shopId, req.query.locationId, {
+      tableCode: req.query.table ? String(req.query.table) : null,
+    });
     res.json({ success: true, data });
   } catch (err) {
     next(err);

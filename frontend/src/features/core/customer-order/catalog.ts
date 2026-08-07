@@ -18,11 +18,64 @@ export interface CustomerCatalogProduct {
   imageUrl: string | null;
 }
 
+/**
+ * A dish as a guest reads it, rather than as a shelf lists it.
+ *
+ * Sent only by shops whose trade serves a menu. The shared page never asks for
+ * it — the server decides which storefront a shop has and says so, which is what
+ * keeps the customer page free of any one trade's code.
+ */
+export interface CustomerMenuItem {
+  id: string;
+  name: string;
+  course: string;
+  description: string | null;
+  price: number;
+  unit: string;
+  imageUrl: string | null;
+  foodType: "veg" | "nonveg" | "egg" | "vegan" | "jain" | null;
+  spiceLevel: number | null;
+  prepMinutes: number | null;
+  tags: string[];
+  hasRecipe: boolean;
+  /** Deliberately coarse: "order it now or pick something else", not a count. */
+  lastFew: boolean;
+}
+
+export interface CustomerMenuSection {
+  course: string;
+  items: CustomerMenuItem[];
+}
+
+/** How one restaurant's page is told apart from the next one's. */
+export interface StorefrontBranding {
+  displayName: string;
+  tagline: string | null;
+  themeKey: string;
+  accent: string;
+  surface: string;
+  ink: string;
+  logoUrl: string | null;
+  footerNote: string | null;
+}
+
+export interface CustomerStorefront {
+  mode: "dine_in" | string;
+  table: { id: string; code: string; name: string; section: string; seats: number } | null;
+  /** True when a code was scanned — so "not recognised" reads differently from "no table". */
+  tableRequested: boolean;
+  guestOrdersEnabled: boolean;
+  branding: StorefrontBranding | null;
+  menu: CustomerMenuSection[] | null;
+}
+
 export interface CustomerCatalog {
   shop: { id: string; name: string; city: string | null };
   location: CustomerStoreLocation;
   locations: CustomerStoreLocation[];
   products: CustomerCatalogProduct[];
+  /** Present only when the shop's trade serves something other than a delivery catalogue. */
+  storefront?: CustomerStorefront;
   cachedAt: string;
 }
 
@@ -87,8 +140,17 @@ export function readCachedCatalog(shopCode: string, locationId?: string): Custom
 }
 
 /** Fetch the live customer-safe catalog from the public endpoint. */
-export async function fetchCustomerCatalog(shopCode: string, locationId?: string): Promise<CustomerCatalog> {
-  const query = locationId ? `?locationId=${encodeURIComponent(locationId)}` : "";
+export async function fetchCustomerCatalog(
+  shopCode: string,
+  locationId?: string,
+  tableCode?: string,
+): Promise<CustomerCatalog> {
+  const params = new URLSearchParams();
+  if (locationId) params.set("locationId", locationId);
+  // The code off the sticker on the guest's table. An unknown one is not an
+  // error: the menu still opens and the page says the table was not recognised.
+  if (tableCode) params.set("table", tableCode);
+  const query = params.toString() ? `?${params}` : "";
   const url = `${getApiBaseUrl()}/public/shops/${encodeURIComponent(shopCode)}/catalog${query}`;
   let res: Response;
   try {
@@ -113,6 +175,13 @@ export interface CustomerOrderDetails {
   locationId: string;
   fulfillmentType: "delivery" | "pickup";
   promisedSlot?: string;
+  /**
+   * The table the guest is sitting at. The server re-resolves it — a code in a
+   * request body is a claim, and the order is only seated if the shop's own
+   * floor plan agrees.
+   */
+  tableCode?: string;
+  guestCount?: number;
 }
 
 export interface SubmitOrderResult {
@@ -121,7 +190,9 @@ export interface SubmitOrderResult {
   estimatedTotal: number;
   shopName: string;
   locationId: string | null;
-  fulfillmentType: "delivery" | "pickup";
+  fulfillmentType: "delivery" | "pickup" | "dine_in";
+  /** Echoed back so a confirmation reads "on its way to T5", not a delivery promise. */
+  tableName?: string | null;
   status: "new";
   duplicate?: boolean;
 }
@@ -164,8 +235,9 @@ export interface CustomerOrderStatus {
   orderId: string;
   status: "new" | "accepted" | "ready" | "fulfilled" | "rejected" | "cancelled";
   stage: OrderStage;
-  fulfillmentType: "delivery" | "pickup";
+  fulfillmentType: "delivery" | "pickup" | "dine_in";
   promisedSlot: string | null;
+  tableName?: string | null;
   location: Pick<CustomerStoreLocation, "id" | "name" | "address" | "city" | "phone"> | null;
   itemCount: number;
   estimatedTotal: number;
@@ -248,12 +320,13 @@ export async function loadCustomerCatalog(
   shopCode: string,
   deps: { fetcher?: typeof fetchCustomerCatalog; storage?: CatalogStorage } = {},
   locationId?: string,
+  tableCode?: string,
 ): Promise<LoadCatalogResult> {
   const fetcher = deps.fetcher ?? fetchCustomerCatalog;
   const storage = deps.storage ?? localStorageCatalogStore;
 
   try {
-    const catalog = await fetcher(shopCode, locationId);
+    const catalog = await fetcher(shopCode, locationId, tableCode);
     storage.write(scopedCatalogKey(shopCode, locationId), catalog);
     return { catalog, source: "network" };
   } catch (err) {

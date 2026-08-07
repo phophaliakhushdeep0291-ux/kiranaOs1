@@ -20,7 +20,11 @@ import { isVerticalPathActive } from "@/features/verticals/registry";
  */
 const KIRANA_NAVIGATION = [
   // Trade entries — backend/src/verticals/kirana/navigation.js
-  "billing", "products", "inventory", "udhar", "daily-closing",
+  // "batches"/"expiry" are here because a kirana shop sells dated stock and the
+  // pack carries BATCH_TRACKING/EXPIRY_TRACKING. They used to be missing, and
+  // the client covered for it by letting plain "inventory" open Batch & Expiry —
+  // which handed that screen to garment and spare-parts shops too.
+  "billing", "products", "inventory", "batches", "expiry", "udhar", "daily-closing",
   // Shared spine — composed on by defineBusinessProfile
   "dashboard", "customers", "purchases", "suppliers", "sales", "returns",
   "reports", "cash-payments", "expenses", "staff", "settings",

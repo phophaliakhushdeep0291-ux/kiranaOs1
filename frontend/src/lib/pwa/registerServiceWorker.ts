@@ -71,7 +71,14 @@ export async function unregisterStaleLocalServiceWorkers(): Promise<void> {
  * offline PWA, because that is the surface that actually needs it.
  */
 export function isPublicCustomerRoute(pathname: string): boolean {
-  return /^\/order(\/|$)/.test(pathname);
+  // "/t/<shop>/<table>" is the QR taped to a restaurant table. Same stranger,
+  // same one-off phone, same shop wifi — and a guest who cannot load the menu
+  // while sitting in the restaurant is a worse failure than one who cannot
+  // order for delivery, because a waiter is now standing there waiting.
+  //
+  // The pattern is anchored on "/t/" rather than "/t": the till's own "/tables"
+  // is a real app route and must keep its worker.
+  return /^\/order(\/|$)/.test(pathname) || /^\/t\//.test(pathname);
 }
 
 const PUBLIC_ROUTE_SW_RELEASE_KEY = "kirana:public-route-sw-released";

@@ -224,6 +224,9 @@ function rowToFormData(values: Record<string, string>): ProductFormData {
     // Bulk import has no column for per-pack counts, and inventing one pack layout
     // for every imported row would be worse than the shared pool it already assumes.
     packagingMode: "pooled",
+    // A spreadsheet row is one plain product. A size × colour grid is entered on
+    // the product screen, where the shop can see the combinations it is creating.
+    variantAxes: [],
     category: (values.category ?? "").trim() || "general",
     brand: (values.brand ?? "").trim() || undefined,
     unit: ((values.unit ?? "").trim() || "piece").toLowerCase(),

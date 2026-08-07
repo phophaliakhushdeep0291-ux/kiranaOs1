@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BadgePercent, Loader2, Pencil, Scale, ShoppingCart, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useQuantityDraft } from "@/components/ui/input";
 import { cartItemGross, cartItemLineDiscount, cartItemNet, productMinSellingPrice, roundMoney } from "../billing-calculations";
 import { cartItemKey, type CartItem } from "../billing-types";
 import { BatchPicker } from "./BatchPicker";
@@ -101,6 +102,7 @@ function CartRow({
   const emoji = getProductEmoji(item.product.name, item.product.category);
   const sellingUnits = (item.product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
   const lineKey = cartItemKey(item);
+  const qtyProps = useQuantityDraft(item.quantity, (next) => onUpdateQty(lineKey, next));
   const scaleUnit = item.sellingUnit?.unitType ?? item.product.rateUnit ?? item.product.unit ?? item.unit;
   const canReadScale = item.product.isLooseItem === true && isScaleBillingUnit(scaleUnit);
 
@@ -326,8 +328,7 @@ function CartRow({
           type="number"
           inputMode="decimal"
           aria-label={t("billing.cart.quantityFor", { name: item.product.name })}
-          value={item.quantity}
-          onChange={(e) => onUpdateQty(lineKey, Number(e.target.value) || 0)}
+          {...qtyProps}
           className="border-x border-[#e6ecf4] bg-white text-center text-[12px] font-extrabold text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         <button

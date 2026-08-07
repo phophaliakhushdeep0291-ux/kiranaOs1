@@ -61,7 +61,9 @@ export type VerticalPageId =
   | "pharmacy/prescriptions"
   | "stationery/book-lists"
   | "restaurant/tables"
-  | "restaurant/kitchen";
+  | "restaurant/kitchen"
+  | "restaurant/menu"
+  | "restaurant/kitchen-stock";
 
 export interface VerticalRoute {
   /** Wouter pattern, e.g. "/rentals" or "/tables/:id". */

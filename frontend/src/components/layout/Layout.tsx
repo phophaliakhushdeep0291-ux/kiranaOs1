@@ -44,7 +44,7 @@ import { SubscriptionStatusBanner } from "@/features/core/subscription/component
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { useBusinessType } from "@/features/core/settings/business-types";
 import { useBusinessTypeServerSync } from "@/features/core/settings/business-type-sync";
-import { isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
+import { isPathAllowedByCapabilities, isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { useModuleVisibility } from "@/features/core/settings/modules";
 import { useModuleVisibilityServerSync } from "@/features/core/settings/module-visibility-sync";
 import { useActiveVerticalPack } from "@/features/verticals/registry";
@@ -354,7 +354,13 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   const nav = useMemo(() => {
     const items: NavItem[] = [];
     const profileNavigation = businessProfile.data?.navigation;
-    const pathEnabled = (href: string) => isHrefEnabled(href) && isPathInBusinessProfile(href, profileNavigation);
+    const profileCapabilities = businessProfile.data?.capabilities;
+    const pathEnabled = (href: string) =>
+      isHrefEnabled(href)
+      && isPathInBusinessProfile(href, profileNavigation)
+      // Dated-stock tooling belongs to shops that hold the capability, not to
+      // every shop that happens to carry the "inventory" nav key.
+      && isPathAllowedByCapabilities(href, profileCapabilities);
     const pending = new Set(verticalPack.nav.filter((entry) => pathEnabled(entry.href)));
     const spliceAfter = (href: string) => {
       for (const entry of pending) {
@@ -372,7 +378,10 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
       }
       const children = item.children.filter((child) => isHrefEnabled(child.href));
       if (children.length === 0) continue;
-      const profileChildren = children.filter((child) => isPathInBusinessProfile(child.href, profileNavigation));
+      // `pathEnabled`, not the profile check alone: a child like Batch & Expiry
+      // is gated on a capability, and filtering only by nav key would let it
+      // back into the group after being kept out of the top level.
+      const profileChildren = children.filter((child) => pathEnabled(child.href));
       if (profileChildren.length === 0) continue;
       items.push({
         ...item,

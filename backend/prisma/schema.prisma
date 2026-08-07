@@ -111,6 +111,8 @@ model Shop {
   bookLists                     BookList[]
   furnitureOrders               FurnitureOrder[]
   testerUnits                   TesterUnit[]
+  restaurantTables              RestaurantTable[]
+  dishRecipeComponents          DishRecipeComponent[]
   auditRules                    AuditRule[]
   auditRuns                     AuditRun[]
   auditEvaluations              AuditEvaluation[]
@@ -304,8 +306,15 @@ model CustomerOrder {
   itemCount         Int       @default(0)
   estimatedTotal    Float     @default(0)
   note              String?
-  fulfillmentType   String    @default("delivery") // delivery | pickup
+  fulfillmentType   String    @default("delivery") // delivery | pickup | dine_in
   promisedSlot      String?
+  // Where the guest is sitting, when the order came off a table's QR code. Both
+  // the id and the name are kept: the id is how the floor screen finds the table,
+  // the name is what the kitchen ticket prints and must survive the table being
+  // renamed or removed from the floor plan.
+  tableId           String?
+  tableName         String?
+  guestCount        Int?
   sourceChannel     String    @default("customer_portal") // pos | customer_portal | api | marketplace
   externalOrderId   String?
   paymentStatus     String    @default("unpaid") // unpaid | partially_paid | paid | refunded
@@ -330,6 +339,8 @@ model CustomerOrder {
   @@index([shopId, sourceChannel, createdAt])
   @@index([shopId, fulfillmentStatus, createdAt])
   @@index([shopId, paymentStatus, createdAt])
+  // "What has this table ordered tonight?" — the floor screen's only question.
+  @@index([shopId, tableId, status, createdAt])
 }
 
 // ─────────────────────────────────────────────
@@ -500,6 +511,22 @@ model Product {
   // catalogue nobody has classified behaves exactly as it does today. Marking a
   // product IS the act of opting it into the prescription requirement.
   drugSchedule                 String?
+  // ── Menu card (restaurants) ────────────────────────────────────────────────
+  // A dish is an ordinary Product — it is priced, billed, taxed and stocked
+  // through exactly the same path as a packet of biscuits. What a menu adds is
+  // how the dish is *presented and cooked*, which no retail column carries.
+  //
+  // Every one of these is nullable or defaulted, so a kirana catalogue is
+  // untouched and a restaurant fills them in one dish at a time.
+  menuCourse                   String? // "Starters" / "Main course" / "Breads" — free text: no cuisine is assumed
+  foodType                     String? // veg | nonveg | egg | vegan | jain — the mark Indian menus are legally expected to carry
+  spiceLevel                   Int? // 0 none … 3 very hot
+  prepMinutes                  Int? // what the kitchen promises, shown to the guest before they order
+  menuTags                     String? // csv: bestseller,chef-special,new,jain-available
+  // Today's "86" list. Distinct from stock and from isActive: the dish exists,
+  // is priced and returns tomorrow — the kitchen has simply run out of it now.
+  menuAvailable                Boolean   @default(true)
+  menuSortOrder                Int       @default(0)
   clientProductId              String? // stable client-generated id, for offline-create idempotency
   idempotencyKey               String? // durable create idempotency key (survives retries/pull echoes)
   sourceDeviceId               String? // device that created the product offline
@@ -523,6 +550,9 @@ model Product {
   @@unique([shopId, idempotencyKey])
   @@unique([shopId, sourceDeviceId, clientProductId])
   @@index([shopId, deletedAt])
+  // The menu card, in the order it is printed: "give me this shop's dishes,
+  // grouped by course". Asked on every guest scan, so it is indexed.
+  @@index([shopId, menuCourse, menuSortOrder])
   // Sync pull keyset pagination: WHERE shopId=X AND updatedAt>=since ORDER BY updatedAt ASC, id ASC
   @@index([shopId, updatedAt, id])
 }
@@ -807,6 +837,7 @@ model StoreLocation {
   loyaltyTransactions  LoyaltyTransaction[]
   stockCountSessions   StockCountSession[]
   inventoryLots        InventoryLot[]
+  restaurantTables     RestaurantTable[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])
@@ -3508,4 +3539,102 @@ model TesterUnit {
   // "What is on the counter, and what needs replacing?"
   @@index([shopId, status, openedOn])
   @@index([shopId, productId, status])
+}
+
+// ─────────────────────────────────────────────
+// RESTAURANT — the floor and the recipe book
+// ─────────────────────────────────────────────
+
+// A table on the restaurant floor.
+//
+// The floor plan used to live only in the till's own IndexedDB, which was fine
+// while the only reader was the till. A QR code stuck to table 5 is read by a
+// stranger's phone, and that phone talks to the server — which knew nothing
+// about table 5. So the floor plan is a shop record now: the server can answer
+// "is this a real table here, and what is it called" without trusting anything
+// printed on the sticker.
+//
+// `code` is what the QR carries. It is short and human-checkable (t5,
+// terrace-2) because a waiter has to be able to read it off a curling sticker,
+// and it is deliberately not a secret: it names a piece of furniture in a public
+// room. The protection that matters is that a guest can only ever add to their
+// own table's order — never see a bill, a total, or another table.
+model RestaurantTable {
+  id         String @id @default(cuid())
+  shopId     String
+  // Which branch's floor this table is on. Null means the shop's primary
+  // location, which is every single-outlet restaurant.
+  locationId String?
+
+  code    String // printed on the QR sticker: "t5", "terrace-2"
+  name    String // what the staff call it: "T5", "Terrace 2"
+  section String @default("Dining") // "Ground floor", "Terrace", "AC hall"
+  seats   Int    @default(4)
+
+  // Ordering from this table's QR, independently of the shop-wide switch: a
+  // restaurant can open the terrace to self-ordering and keep the private room
+  // on waiter service.
+  selfOrderEnabled Boolean @default(true)
+  active           Boolean @default(true)
+  sortOrder        Int     @default(0)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  // One sticker, one table. The guard that stops a mistyped code silently
+  // pointing two tables at the same order.
+  @@unique([shopId, code])
+  @@index([shopId, deletedAt])
+  @@index([shopId, section, sortOrder])
+  @@index([shopId, locationId, active])
+}
+
+// One ingredient of one dish — the line that turns "we sold 4 butter chickens"
+// into "we are down 600 g of butter".
+//
+// Without this a restaurant's stock figures are fiction: the POS decrements the
+// dish, and the dish is not a thing anybody buys or stores. The kitchen buys
+// chicken, cream and butter, and those are what run out mid-service.
+//
+// Neither product id is a foreign key, consistent with the other trade
+// registers: a recipe must survive its dish being renamed, and an ingredient
+// being replaced by an equivalent one, without cascading a delete through the
+// kitchen's costing history.
+//
+// Rows are deleted outright rather than soft-deleted. A recipe line is
+// configuration, not history — and a soft-deleted row would sit inside the
+// unique index below, silently refusing to let the cook add the ingredient back.
+model DishRecipeComponent {
+  id     String @id @default(cuid())
+  shopId String
+
+  dishProductId       String
+  ingredientProductId String
+  ingredientName      String // copied so a costing report reads without a join
+
+  // Ingredient consumed per ONE portion of the dish, in the ingredient's own
+  // base unit (g, ml, piece) — the same unit stock is kept in, so depletion is a
+  // subtraction with no conversion to get wrong.
+  qtyBase Float @default(0)
+  // Trim, spillage and the bit left in the pan, as a percentage on top of qtyBase.
+  wastagePct Float @default(0)
+  // An ingredient the dish can be served without (a garnish). Excluded from
+  // "can the kitchen still make this?", so a shop that has run out of coriander
+  // is not told it cannot serve dal.
+  optional Boolean @default(false)
+  note     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, dishProductId, ingredientProductId])
+  @@index([shopId, dishProductId])
+  // "What else uses paneer?" — asked whenever an ingredient runs low.
+  @@index([shopId, ingredientProductId])
 }

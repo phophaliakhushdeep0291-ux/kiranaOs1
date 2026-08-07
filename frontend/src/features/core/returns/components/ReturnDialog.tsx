@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, useQuantityDraft } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -317,13 +317,10 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setLineQty(i, getQty(i) - 1, max)}>−</Button>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      className="h-8 w-16 text-center"
-                      value={getQty(i) === 0 ? "" : getQty(i)}
-                      placeholder="0"
-                      onChange={(e) => setLineQty(i, Number(e.target.value) || 0, max)}
+                    <ReturnLineQuantity
+                      quantity={getQty(i)}
+                      max={max}
+                      onChange={(quantity) => setLineQty(i, quantity, max)}
                     />
                     <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setLineQty(i, getQty(i) + 1, max)}>+</Button>
                   </div>
@@ -379,13 +376,10 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setExchangeQty(line.productId, line.quantity - 1)}>−</Button>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        className="h-8 w-14 text-center"
-                        value={line.quantity === 0 ? "" : line.quantity}
-                        placeholder="0"
-                        onChange={(event) => setExchangeQty(line.productId, Number(event.target.value) || 0)}
+                      <ReturnLineQuantity
+                        quantity={line.quantity}
+                        widthClass="w-14"
+                        onChange={(quantity) => setExchangeQty(line.productId, quantity)}
                       />
                       <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setExchangeQty(line.productId, line.quantity + 1)}>+</Button>
                       <button type="button" title={`Remove ${line.name}`} onClick={() => setExchangeLines((current) => current.filter((item) => item.productId !== line.productId))} className="ml-1 text-rose-600 hover:text-rose-700"><Trash2 size={14} /></button>
@@ -484,5 +478,36 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
       </DialogContent>
     </Dialog>
     </>
+  );
+}
+
+// One line's quantity box. A hook cannot be called inside the map callbacks
+// above, so each row owns its draft here. min is 0 on purpose: unlike a cart or
+// order line, zero is a real answer — it means this line is not being returned
+// or exchanged — so the box must be able to hold a typed 0.
+//
+// The old box derived its text from state and rendered 0 as blank, which erased
+// the "0" of "0.5" as it was typed and made loose quantities unreachable. The
+// draft keeps the raw text instead.
+function ReturnLineQuantity({
+  quantity,
+  onChange,
+  max,
+  widthClass = "w-16",
+}: {
+  quantity: number;
+  onChange: (next: number) => void;
+  max?: number;
+  widthClass?: string;
+}) {
+  const props = useQuantityDraft(quantity, onChange, { min: 0, max });
+  return (
+    <Input
+      type="number"
+      inputMode="decimal"
+      className={cn("h-8 text-center", widthClass)}
+      placeholder="0"
+      {...props}
+    />
   );
 }

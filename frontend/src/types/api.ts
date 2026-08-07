@@ -66,6 +66,13 @@ export interface ProductSellingUnit {
   onHandQty?: number | null;
   lowStockThreshold?: number | null;
   reorderLevel?: number | null;
+  /**
+   * Where this row sits on the parent's variant axes: `variantValue1` is its
+   * value on `axes[0]`, `variantValue2` on `axes[1]`. Both null on an ordinary
+   * packaging row — a 70 g packet has no position on a size chart.
+   */
+  variantValue1?: string | null;
+  variantValue2?: string | null;
   isDefault: boolean;
   isActive: boolean;
   createdAt?: string;
@@ -74,6 +81,18 @@ export interface ProductSellingUnit {
 
 /** How a product's stock is counted across its pack sizes. */
 export type PackagingMode = "pooled" | "per_pack";
+
+/**
+ * One axis of a product's variant grid: "Size" with S, M, L.
+ *
+ * AXIS ORDER IS LOAD-BEARING — a selling unit's `variantValue1` is its value on
+ * `axes[0]`. Reordering this array remaps every existing row, so once variants
+ * exist treat it as append-only.
+ */
+export interface ProductVariantAxis {
+  name: string;
+  values: string[];
+}
 
 export interface Product {
   id: string;
@@ -109,6 +128,8 @@ export interface Product {
   quantitySlabPricing?: QuantitySlabPrice[];
   customerSpecificPricing?: CustomerSpecificPrice[] | Record<string, number>;
   sellingUnits?: ProductSellingUnit[];
+  /** The variant grid, in axis order. Empty for an ordinary product. */
+  variantAxes?: ProductVariantAxis[];
   gstRate?: number;
   hsn?: string | null;
   brand?: string | null;
@@ -165,6 +186,8 @@ export interface ProductInput {
   quantitySlabPricing?: QuantitySlabPrice[];
   customerSpecificPricing?: CustomerSpecificPrice[] | Record<string, number>;
   sellingUnits?: ProductSellingUnit[];
+  /** The variant grid, in axis order. Declaring one forces per-pack stock. */
+  variantAxes?: ProductVariantAxis[];
   gstRate?: number;
   hsn?: string;
   brand?: string;
@@ -1615,4 +1638,141 @@ export interface TesterSummary {
   openedThisMonth: number;
   costThisMonth: number;
   dueSoonDays: number;
+}
+
+/* ── Restaurant: the floor, the menu card and the recipe book ─────────────── */
+
+export interface RestaurantTable {
+  id: string;
+  /** What the QR sticker carries: short and human-checkable ("t5"). */
+  code: string;
+  name: string;
+  section: string;
+  seats: number;
+  /** Per table, so the terrace can self-order while the private room does not. */
+  selfOrderEnabled: boolean;
+  active: boolean;
+  sortOrder: number;
+  locationId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RestaurantTableInput {
+  name: string;
+  code?: string;
+  section?: string;
+  seats?: number;
+  selfOrderEnabled?: boolean;
+  sortOrder?: number;
+}
+
+export type FoodType = "veg" | "nonveg" | "egg" | "vegan" | "jain";
+
+export interface MenuDish {
+  id: string;
+  name: string;
+  category: string | null;
+  price: number;
+  mrp: number | null;
+  unit: string;
+  imageUrl: string | null;
+  description: string | null;
+  gstRate: number;
+  menuCourse: string | null;
+  foodType: FoodType | null;
+  spiceLevel: number | null;
+  prepMinutes: number | null;
+  tags: string[];
+  /** Tonight's "86" switch: on the menu, priced, but the kitchen has run out. */
+  menuAvailable: boolean;
+  menuSortOrder: number;
+  /** A dish cooked to order has no stock of its own — the ingredients are the stock. */
+  hasRecipe: boolean;
+  portionsLeft: number | null;
+  stockBaseQty: number;
+}
+
+export interface MenuCourseSection {
+  course: string;
+  dishes: MenuDish[];
+}
+
+export interface MenuBoard {
+  courses: MenuCourseSection[];
+  dishCount: number;
+  suggestedCourses: string[];
+}
+
+export interface MenuDishPatch {
+  menuCourse?: string | null;
+  foodType?: FoodType | null;
+  spiceLevel?: number | null;
+  prepMinutes?: number | null;
+  tags?: string[] | null;
+  menuAvailable?: boolean;
+  menuSortOrder?: number;
+}
+
+export interface DishRecipeComponent {
+  id?: string;
+  dishProductId?: string;
+  ingredientProductId: string;
+  ingredientName?: string;
+  /** Per ONE portion, in the ingredient's own base unit (g, ml, piece). */
+  qtyBase: number;
+  wastagePct: number;
+  /** A garnish the dish can be served without — excluded from "can we make it?". */
+  optional: boolean;
+  note?: string | null;
+  ingredientMissing?: boolean;
+  baseUnit?: string | null;
+  stockBaseQty?: number;
+  perPortion?: number;
+}
+
+export interface DishRecipe {
+  dish: { id: string; name: string; unit: string; price: number };
+  components: DishRecipeComponent[];
+  /** Null means nothing constrains the dish — never confuse it with zero. */
+  portionsPossible: number | null;
+  ingredientCost: number;
+}
+
+export type KitchenStockStatus = "out" | "low" | "ok";
+
+export interface KitchenIngredient {
+  productId: string;
+  name: string;
+  missing: boolean;
+  baseUnit: string | null;
+  stockBaseQty: number;
+  threshold: number;
+  status: KitchenStockStatus;
+  usedInDishes: number;
+  dishIds: string[];
+}
+
+export interface KitchenDish {
+  dishProductId: string;
+  name: string;
+  missing: boolean;
+  menuCourse: string | null;
+  menuAvailable: boolean;
+  componentCount: number;
+  portionsPossible: number | null;
+  blockedBy: string[];
+  status: KitchenStockStatus | "unknown";
+}
+
+export interface KitchenStock {
+  ingredients: KitchenIngredient[];
+  dishes: KitchenDish[];
+  summary: {
+    ingredientsOut: number;
+    ingredientsLow: number;
+    dishesOut: number;
+    dishesLow: number;
+    dishesWithRecipes: number;
+  };
 }

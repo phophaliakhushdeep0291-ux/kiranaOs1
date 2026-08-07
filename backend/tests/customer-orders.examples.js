@@ -83,8 +83,19 @@ assert.ok(
   publicService.includes("isCustomerOrderingEnabled(shop.settingsJson)"),
   "order submission must respect the shop customer-ordering opt-in",
 );
+// The catalogue read and the order write share one loader, so the rule that
+// decides what a guest may SEE is the rule that decides what they may ORDER.
+// Asserted on that loader rather than on an inlined listProducts call, which is
+// what this used to name — a shape, not the invariant.
 assert.ok(
-  publicService.includes("listProducts(shopId, { locationId: location.id })") && publicService.includes("new Map(products.map"),
+  publicService.includes("async function loadStorefrontCandidates")
+    && publicService.includes("priceCatalogProducts(shopId, products, locationId, quantitiesByProductId)"),
+  "the storefront loader must re-price every line from the shop's own catalog",
+);
+assert.ok(
+  publicService.includes("const candidates = await loadStorefrontCandidates(shopId, location.id, quantitiesByProductId)")
+    && publicService.includes("new Map(candidates.map")
+    && publicService.includes("const safe = toCustomerSafeProduct(product)"),
   "order submission must re-price from the shop catalog instead of trusting client prices",
 );
 assert.ok(

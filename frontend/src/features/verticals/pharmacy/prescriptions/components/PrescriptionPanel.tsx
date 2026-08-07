@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardPlus, Loader2, Pill, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, useQuantityDraft } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
@@ -367,7 +367,7 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <Input className="h-9" placeholder="500 mg" value={item.strength} onChange={(e) => patchItem(index, { strength: e.target.value })} aria-label={`Strength for medicine ${index + 1}`} />
-                    <Input className="h-9" type="number" min="0" step="0.5" value={item.qty} onChange={(e) => patchItem(index, { qty: Number(e.target.value) || 0 })} aria-label={`Quantity for medicine ${index + 1}`} />
+                    <ItemQuantity qty={item.qty} onChange={(qty) => patchItem(index, { qty })} label={`Quantity for medicine ${index + 1}`} />
                     <Input className="h-9" placeholder="strip" value={item.unit} onChange={(e) => patchItem(index, { unit: e.target.value })} aria-label={`Unit for medicine ${index + 1}`} />
                     <Input className="h-9" placeholder="Batch no." value={item.batchNumber} onChange={(e) => patchItem(index, { batchNumber: e.target.value })} aria-label={`Batch number for medicine ${index + 1}`} />
                   </div>
@@ -449,4 +449,11 @@ function Fld({ label, hint, children }: { label: string; hint?: string; children
       {hint && <p className="mt-1 text-[11px] text-[#9aa6bb]">{hint}</p>}
     </div>
   );
+}
+
+// Per-row draft: a hook cannot run inside the items.map callback. Zero is not
+// offered — submit already refuses a medicine without a quantity above zero.
+function ItemQuantity({ qty, onChange, label }: { qty: number; onChange: (next: number) => void; label: string }) {
+  const props = useQuantityDraft(qty, onChange);
+  return <Input className="h-9" type="number" inputMode="decimal" step="0.5" aria-label={label} {...props} />;
 }
