@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
-  ChefHat, Clock, IndianRupee, LayoutGrid, Loader2, Pencil, Plus, Receipt,
+  ChefHat, Clock, IndianRupee, LayoutGrid, Loader2, Pencil, Plus, QrCode, Receipt,
   Trash2, Users, Utensils, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,10 @@ import {
   withLiveDraft, type KotTicket, type RestaurantTable, type TableOccupancy,
 } from "../service/table-store";
 import { openTableInBilling, releaseTable } from "../service/open-table";
+import { listTables, publishFloorPlan } from "../service/restaurant-api";
+import { mergeServerCodes, unpublishedTables } from "../service/table-qr";
+import { TableQrDialog } from "./components/TableQrDialog";
+import { useAuth } from "@/features/core/auth/useAuth";
 
 function inr(n: number) {
   return `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -38,9 +42,44 @@ function sinceLabel(iso: string | null): string {
 
 const BLANK_TABLE = { name: "", section: "Dining", seats: "4" };
 
+/**
+ * Publish this device's floor to the server, and bring back what each table's
+ * QR sticker says.
+ *
+ * The till keeps owning table ids — they key the table -> open-order map, and
+ * rewriting them would drop every seating currently on the floor. The server
+ * owns only the thing the till cannot: a code a stranger's phone can resolve.
+ *
+ * A floor with tables the server has never seen is published once. That is
+ * matched on the derived code, so running it again does not duplicate the room.
+ * Failure here is not an error the waiter should see: the floor screen works
+ * offline and only the QR codes are missing until the connection returns.
+ */
+async function syncFloorCodes(plan: RestaurantTable[]): Promise<RestaurantTable[]> {
+  let published = await listTables().catch(() => null);
+  if (!published) return plan;
+
+  let merged = mergeServerCodes(plan, published);
+  if (unpublishedTables(merged).length > 0) {
+    published = await publishFloorPlan(
+      plan.map((table, index) => ({
+        name: table.name,
+        section: table.section,
+        seats: table.seats,
+        sortOrder: index,
+      })),
+    ).catch(() => null);
+    if (published) merged = mergeServerCodes(plan, published);
+  }
+  return merged;
+}
+
 export default function TablesPage() {
   const { toast } = useToast();
+  const { shop } = useAuth();
   const [, navigate] = useLocation();
+  const [qrFor, setQrFor] = useState<RestaurantTable | null>(null);
+  const [qrSheetOpen, setQrSheetOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
@@ -72,6 +111,15 @@ export default function TablesPage() {
     setTableBills(map);
     setTickets(kot);
     setLoading(false);
+
+    // The floor paints first and the QR codes arrive a moment later. A waiter
+    // opening this screen mid-service is looking for a free table, not a
+    // sticker, and must never wait on the network to see one.
+    const withCodes = await syncFloorCodes(plan);
+    if (withCodes.some((table, index) => table.code !== plan[index]?.code)) {
+      setTables(withCodes);
+      void saveFloorPlan(withCodes);
+    }
   }, []);
 
   useEffect(() => {
@@ -189,7 +237,15 @@ export default function TablesPage() {
               this device, so a second tablet keeps its own. */}
           <p className="mt-0.5 text-[12px] text-[#8494ad]">This device's floor — tables and kitchen tickets are not shared with other devices yet.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            className="h-10 gap-2 rounded-[10px] font-bold"
+            data-testid="print-table-qr"
+            onClick={() => setQrSheetOpen(true)}
+          >
+            <QrCode size={15} /> Table QR codes
+          </Button>
           <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/kitchen")}>
             <ChefHat size={15} /> Kitchen
           </Button>
@@ -223,6 +279,7 @@ export default function TablesPage() {
                 onSeat={() => void seat(row)}
                 onKot={() => void sendToKitchen(row)}
                 onEdit={() => openForm(row.table)}
+                onQr={() => setQrFor(row.table)}
                 onRelease={() => setReleasing(row)}
                 onRemove={() => setRemoving(row.table)}
               />
@@ -279,6 +336,15 @@ export default function TablesPage() {
         onConfirm={() => void confirmRemove()}
         onCancel={() => setRemoving(null)}
       />
+
+      <TableQrDialog
+        open={Boolean(qrFor) || qrSheetOpen}
+        table={qrFor}
+        tables={tables}
+        shopId={shop?.id ?? ""}
+        shopName={shop?.name ?? ""}
+        onClose={() => { setQrFor(null); setQrSheetOpen(false); }}
+      />
     </div>
   );
 }
@@ -295,12 +361,13 @@ function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; va
 }
 
 function TableCard({
-  row, onSeat, onKot, onEdit, onRelease, onRemove,
+  row, onSeat, onKot, onEdit, onQr, onRelease, onRemove,
 }: {
   row: TableOccupancy;
   onSeat: () => void;
   onKot: () => void;
   onEdit: () => void;
+  onQr: () => void;
   onRelease: () => void;
   onRemove: () => void;
 }) {
@@ -356,6 +423,22 @@ function TableCard({
         {occupied && pending > 0 ? (
           <Button size="sm" variant="outline" className="h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={onKot}>
             <ChefHat size={13} /> Fire {pending}
+          </Button>
+        ) : null}
+        {/* Shown whether or not the table is seated: a curling sticker gets
+            reprinted mid-service, and a guest asking for the QR is not a reason
+            to clear their order first. Hidden only until the floor has been
+            published — an unpublished table has no code to encode. */}
+        {row.table.code ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 rounded-[8px] p-0 text-[#64748b]"
+            title={`QR for ${row.table.name}`}
+            data-testid={`table-qr-${row.table.id}`}
+            onClick={onQr}
+          >
+            <QrCode size={13} />
           </Button>
         ) : null}
         {occupied ? (

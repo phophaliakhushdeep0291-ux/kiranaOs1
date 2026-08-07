@@ -1,4 +1,4 @@
-import { ChefHat, LayoutGrid } from "lucide-react";
+import { ChefHat, LayoutGrid, Soup, Utensils } from "lucide-react";
 import type { VerticalPack } from "../types";
 
 /**
@@ -14,17 +14,27 @@ import type { VerticalPack } from "../types";
  * same pricing, tax, tender and sync path as every other bill. See
  * `service/table-store.ts`.
  *
+ * Two more screens exist because a kitchen is not a shelf:
+ *
+ * - **Menu** owns what a menu adds and a catalogue has no word for — course,
+ *   veg mark, spice, kitchen time, and the "86" switch that says "run out
+ *   tonight" rather than "we don't sell this".
+ * - **Kitchen stock** owns the recipes. Without them a restaurant's inventory is
+ *   fiction: the POS decrements the dish, and nobody buys or stores a dish.
+ *
  * Still to come here: modifiers as first-class options rather than line notes,
- * recipe-level stock depletion, and splitting one table's bill across guests.
+ * and splitting one table's bill across guests.
  */
 export const restaurantPack: VerticalPack = {
   id: "restaurant",
   label: "Restaurant & Café",
   businessTypes: ["restaurant"],
-  paths: ["/tables", "/kitchen"],
+  paths: ["/tables", "/kitchen", "/menu", "/kitchen-stock"],
   routes: [
     { path: "/tables", page: "restaurant/tables" },
     { path: "/kitchen", page: "restaurant/kitchen" },
+    { path: "/menu", page: "restaurant/menu" },
+    { path: "/kitchen-stock", page: "restaurant/kitchen-stock" },
   ],
   nav: [
     {
@@ -43,6 +53,22 @@ export const restaurantPack: VerticalPack = {
       // would drop this one to the tail. Pack order keeps Tables ahead of it.
       insertAfter: "/billing",
       mobile: { group: "Sell", helper: "Work off the kitchen tickets" },
+    },
+    {
+      href: "/menu",
+      label: "Menu",
+      Icon: Utensils,
+      // Anchored to the catalogue rather than to a sibling vertical entry: the
+      // menu IS this trade's catalogue view, and it reads next to Products.
+      insertAfter: "/products",
+      mobile: { group: "Catalogue", helper: "Courses, veg marks and tonight's 86 list" },
+    },
+    {
+      href: "/kitchen-stock",
+      label: "Kitchen stock",
+      Icon: Soup,
+      insertAfter: "/products",
+      mobile: { group: "Catalogue", helper: "Recipes, what's left and what can't be served" },
     },
   ],
   capabilities: [

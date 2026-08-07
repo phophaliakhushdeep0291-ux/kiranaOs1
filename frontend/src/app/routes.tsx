@@ -107,6 +107,8 @@ const VERTICAL_PAGES: Record<VerticalPageId, ComponentType> = {
   "stationery/book-lists": lazy(() => import("@/features/verticals/stationery-books/book-lists/pages/BookListsPage")),
   "restaurant/tables": lazy(() => import("@/features/verticals/restaurant/pages/TablesPage")),
   "restaurant/kitchen": lazy(() => import("@/features/verticals/restaurant/pages/KitchenPage")),
+  "restaurant/menu": lazy(() => import("@/features/verticals/restaurant/pages/MenuPage")),
+  "restaurant/kitchen-stock": lazy(() => import("@/features/verticals/restaurant/pages/KitchenStockPage")),
 };
 
 const ROUTE_LOADING_LABELS: Record<string, string> = {

@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { encodeQrSvg } from "@/lib/qr/qr-encoder";
-import type { RestaurantTable } from "@/types/api";
-import { describeTableQr, tablesForPrinting } from "../../service/table-qr";
+import { describeTableQr, tablesForPrinting, type PrintableTable } from "../../service/table-qr";
 
 /**
  * The sticker that goes on the table.
@@ -25,17 +24,17 @@ export interface TableQrDialogProps {
   shopId: string;
   shopName: string;
   /** Null for the "print every table" sheet. */
-  table: RestaurantTable | null;
-  tables: RestaurantTable[];
+  table: PrintableTable | null;
+  tables: PrintableTable[];
   configuredBaseUrl?: string | null;
 }
 
-function qrTargets(tables: RestaurantTable[], shopId: string, configuredBaseUrl?: string | null) {
+function qrTargets(tables: PrintableTable[], shopId: string, configuredBaseUrl?: string | null) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   return tables.map((table) => ({
     table,
-    ...describeTableQr({ shopId, tableCode: table.code, configuredBaseUrl, currentOrigin: origin, basePath }),
+    ...describeTableQr({ shopId, tableCode: table.code ?? "", configuredBaseUrl, currentOrigin: origin, basePath }),
   }));
 }
 
@@ -54,7 +53,7 @@ function printSheet(
         <p class="table">${escapeHtml(table.name)}</p>
         <div class="qr">${encodeQrSvg(url, { border: 2 })}</div>
         <p class="lead">Scan to see the menu &amp; order</p>
-        <p class="code">${escapeHtml(table.section)} &middot; ${escapeHtml(table.code)}</p>
+        <p class="code">${escapeHtml(table.section ?? "")} &middot; ${escapeHtml(table.code ?? "")}</p>
       </figure>`)
     .join("");
 

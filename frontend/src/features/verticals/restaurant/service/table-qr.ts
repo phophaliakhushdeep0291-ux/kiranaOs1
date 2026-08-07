@@ -1,5 +1,4 @@
 import { describeOrderUrlReach, resolveCustomerOrderBase, type OrderUrlReach } from "@/features/core/customer-order/order-url";
-import type { RestaurantTable } from "@/types/api";
 
 /**
  * Where the QR sticker on a table points.
@@ -67,15 +66,76 @@ export function describeTableQr(args: {
 }
 
 /**
+ * The code the server will derive from a table's name.
+ *
+ * A deliberate second copy of the server's `slugifyTableCode`, and the two must
+ * agree: this is how the till matches the floor it holds against the floor the
+ * server published, without inventing codes of its own. A client that guessed
+ * differently would republish the whole floor on every load, quietly retiring
+ * and recreating tables whose stickers are already on the wall.
+ *
+ * `src/tests/restaurant-table-qr.test.ts` pins the pairs that matter.
+ */
+export function tableCodeForName(name: string): string {
+  const slug = String(name ?? "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
+  return slug || "table";
+}
+
+/**
+ * Fold the codes the server published back onto the floor this device holds.
+ *
+ * The till keeps its own table ids on purpose: they key the table -> open-order
+ * map, and rewriting them would drop every seating currently on the floor. What
+ * comes back from the server is the one thing the till cannot know — what the
+ * sticker on each table says.
+ */
+export function mergeServerCodes<T extends { name: string }>(
+  plan: T[],
+  published: Array<{ code: string; name: string; selfOrderEnabled: boolean }>,
+): Array<T & { code?: string; selfOrderEnabled?: boolean }> {
+  const byCode = new Map(published.map((table) => [table.code, table]));
+  return plan.map((table) => {
+    const match = byCode.get(tableCodeForName(table.name));
+    if (!match) return table;
+    return { ...table, code: match.code, selfOrderEnabled: match.selfOrderEnabled };
+  });
+}
+
+/** Tables this device holds that the server has never seen — nothing to print for them yet. */
+export function unpublishedTables<T extends { name: string; code?: string }>(plan: T[]): T[] {
+  return plan.filter((table) => !table.code);
+}
+
+/**
  * Tables in the order they should be printed: by section, then by the shop's own
  * ordering. A printed sheet that runs T1, T10, T2 is a sheet somebody has to
  * sort by hand while the glue dries.
  */
-export function tablesForPrinting(tables: RestaurantTable[]): RestaurantTable[] {
+export function tablesForPrinting<T extends PrintableTable>(tables: T[]): T[] {
   return [...tables]
-    .filter((table) => table.active)
+    // A table with no code has no sticker to print: the server has never seen
+    // it, so a QR made here would resolve to nothing on the guest's phone.
+    .filter((table) => Boolean(table.code) && table.active !== false)
     .sort((a, b) =>
-      a.section.localeCompare(b.section)
-      || a.sortOrder - b.sortOrder
+      (a.section ?? "").localeCompare(b.section ?? "")
+      || (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
       || a.name.localeCompare(b.name, undefined, { numeric: true }));
+}
+
+/**
+ * Structural rather than the API type, because both floors print the same:
+ * the one the server holds, and the one the till is showing on screen.
+ */
+export interface PrintableTable {
+  id: string;
+  name: string;
+  code?: string;
+  section?: string;
+  sortOrder?: number;
+  active?: boolean;
 }
