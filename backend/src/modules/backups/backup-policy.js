@@ -38,6 +38,22 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // A booking is business history — who took which garment, for which days, and
   // what money is still owed on it. It restores with the rest of the ledger.
   "RentalBooking",
+  // ── Trade registers ────────────────────────────────────────────────────────
+  // Every one of these is the shop's own record of its trade, not this
+  // install's: what was dispensed, which serial went to whom, which part fits
+  // which car, what a school asked for, what a showroom promised to deliver,
+  // and which tester is open on the counter. A restore that dropped them would
+  // hand a pharmacy back its bills with no prescription register behind them.
+  //
+  // They are listed because the test derives the model set from the schema
+  // rather than from a hand-kept list — so a trade shipping a new table cannot
+  // quietly leave it out of backup and discover it missing at restore time.
+  "Prescription", "ProductUnit", "PartFitment", "PartCrossReference",
+  "FootwearSizeProfile", "BookList", "FurnitureOrder", "TesterUnit",
+  // The restaurant floor and its recipe book. The floor is what every printed
+  // table QR resolves against — losing it turns every sticker in the room into
+  // a dead link — and a recipe is what makes the kitchen's stock figures true.
+  "RestaurantTable", "DishRecipeComponent",
 ]);
 
 export const RESTORABLE_CHILD_MODELS = Object.freeze({

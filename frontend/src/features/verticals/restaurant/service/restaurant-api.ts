@@ -1,5 +1,7 @@
 import { ApiClientError, apiRequest } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
+import { listProducts as listProductsFromServer } from "@/features/core/products/api";
+import type { Product } from "@/types/api";
 import type {
   DishRecipe,
   DishRecipeComponent,
@@ -134,4 +136,26 @@ export function deleteRecipe(dishProductId: string) {
 export function getKitchenStock() {
   return readThrough(KITCHEN_STOCK_CACHE_KEY, () =>
     apiRequest<KitchenStock>("/restaurant/recipes/kitchen-stock", { background: true }));
+}
+
+// ── The catalogue, read cheaply ──────────────────────────────────────────────
+
+/**
+ * The shop's products, for the two restaurant screens that need whole product
+ * records: picking an ingredient, and turning a guest's order into cart lines.
+ *
+ * Deliberately NOT `useListProducts`. That hook is the counter's read-write
+ * catalogue and statically pulls the product mutation path — create, update,
+ * delete, and the sync outbox behind them — into whatever chunk imports it. Both
+ * of these screens only ever READ, and paying ~35 kB of write machinery on a
+ * kitchen screen is a cost the shop downloads and never uses.
+ *
+ * Local first, then the server, because the offline copy is the one the counter
+ * has been maintaining all day and is what a cart line has to be built from.
+ */
+export async function readCatalogueProducts(): Promise<Product[]> {
+  const local = await offlineDB.getAll<Product>("products").catch(() => [] as Product[]);
+  const live = local.filter((product) => product.deletedAt == null);
+  if (live.length > 0) return live;
+  return listProductsFromServer({ limit: 500 }).catch(() => [] as Product[]);
 }
