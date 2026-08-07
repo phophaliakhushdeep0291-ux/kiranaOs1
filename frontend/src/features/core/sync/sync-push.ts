@@ -383,14 +383,33 @@ async function handlePushResults(
         "CONFLICT",
         result.error_message ?? result.error ?? "Sync conflict",
       );
+      const resultEnvelope = isRecord(result.result) ? result.result : {};
+      const serverConflict =
+        isRecord(result.conflict)
+          ? result.conflict
+          : isRecord(resultEnvelope.conflict)
+            ? resultEnvelope.conflict
+            : null;
+      const serverSnapshot = serverConflict && "server_snapshot" in serverConflict
+        ? serverConflict.server_snapshot
+        : serverConflict && isRecord(serverConflict.server_record)
+          ? serverConflict.server_record
+          : result.entity ?? resultEnvelope.entity ?? resultEnvelope.server_record ?? result.result ?? null;
+      const serverConflictId =
+        readString(result.conflict_id) ??
+        readString(resultEnvelope.conflict_id) ??
+        readString(serverConflict?.id);
+      const rawServerRecordVersion = Number(serverConflict?.version);
       await storeConflict({
         entityType,
         entityId: localId ?? item.event.entity_id,
         sourceId: item.event.op_id,
         localSnapshot: item.event.payload,
-        serverSnapshot:
-          result.conflict ?? result.result ?? result.entity ?? null,
+        serverSnapshot,
         errorMessage: result.error_message ?? result.error ?? "Sync conflict",
+        serverConflictId,
+        serverRecordVersion: Number.isInteger(rawServerRecordVersion) ? rawServerRecordVersion : undefined,
+        serverVersion: serverConflict?.server_version ?? result.server_version ?? null,
       });
       conflicts += 1;
       continue;

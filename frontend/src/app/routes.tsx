@@ -276,6 +276,13 @@ export function AppRoutes() {
     return () => window.clearTimeout(handle);
   }, [isAuthenticated, location]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.ready.then((registration) => {
+      registration.active?.postMessage({ type: "CACHE_VERTICAL", verticalId: verticalPack.id });
+    });
+  }, [isAuthenticated, verticalPack.id]);
+
   if (isLoading && !isCustomerOrderPath) return <LoadingScreen />;
 
   return (

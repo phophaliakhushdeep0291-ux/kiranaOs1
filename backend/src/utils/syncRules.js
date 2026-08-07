@@ -85,6 +85,13 @@ export function removeSensitiveSyncFields(value) {
     return value.map(removeSensitiveSyncFields);
   }
 
+  // Conflict and result snapshots must remain useful for owner review. Treat
+  // Dates as values before walking generic objects (Date has no enumerable
+  // fields and otherwise becomes `{}` in the persisted JSON snapshot).
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+
   // Prisma money shadows are BigInt. Conflict/result snapshots are JSON, so
   // preserve their exact decimal value as a string instead of throwing or
   // coercing a potentially unsafe integer to Number.

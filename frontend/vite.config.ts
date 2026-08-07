@@ -52,21 +52,44 @@ function stampServiceWorkerBuild() {
       ];
       const coreAssets = new Set<string>();
       const visited = new Set<string>();
-      const includeRecord = (key: string) => {
-        if (visited.has(key)) return;
-        visited.add(key);
+      const includeRecord = (key: string, assets = coreAssets, seen = visited) => {
+        if (seen.has(key)) return;
+        seen.add(key);
         const record = manifest[key];
         if (!record) throw new Error(`Critical offline entry is missing from Vite manifest: ${key}`);
-        if (record.file) coreAssets.add(`/${record.file}`);
-        for (const file of [...(record.css ?? []), ...(record.assets ?? [])]) coreAssets.add(`/${file}`);
-        for (const imported of record.imports ?? []) includeRecord(imported);
+        if (record.file) assets.add(`/${record.file}`);
+        for (const file of [...(record.css ?? []), ...(record.assets ?? [])]) assets.add(`/${file}`);
+        for (const imported of record.imports ?? []) includeRecord(imported, assets, seen);
       };
-      criticalEntries.forEach(includeRecord);
+      criticalEntries.forEach((key) => includeRecord(key));
+      const verticalPrefixes: Record<string, string[]> = {
+        clothing: ["src/features/verticals/clothing/"],
+        footwear: ["src/features/verticals/footwear/"],
+        "auto-parts": ["src/features/verticals/auto-parts/"],
+        electronics: ["src/features/verticals/electronics/"],
+        pharmacy: ["src/features/verticals/pharmacy/"],
+        "stationery-books": ["src/features/verticals/stationery-books/"],
+        "furniture-home": ["src/features/verticals/furniture-home/"],
+        "beauty-cosmetics": ["src/features/verticals/beauty-cosmetics/"],
+        restaurant: ["src/features/verticals/restaurant/"],
+      };
+      const verticalAssets = Object.fromEntries(Object.entries(verticalPrefixes).map(([id, prefixes]) => {
+        const entries = Object.keys(manifest).filter((key) => prefixes.some((prefix) => key.startsWith(prefix)) && key.endsWith("Page.tsx"));
+        const assets = new Set<string>();
+        const seen = new Set<string>();
+        entries.forEach((key) => includeRecord(key, assets, seen));
+        for (const key of entries) {
+          const file = manifest[key]?.file;
+          if (file && coreAssets.has(`/${file}`)) throw new Error(`Vertical page leaked into the core offline cache: ${key}`);
+        }
+        return [id, [...assets].sort()];
+      }));
       fs.writeFileSync(
         swPath,
         source
           .replaceAll("__KIRANA_BUILD_ID__", buildId)
-          .replace("__KIRANA_CORE_ASSETS__", JSON.stringify([...coreAssets].sort())),
+          .replace("__KIRANA_CORE_ASSETS__", JSON.stringify([...coreAssets].sort()))
+          .replace("__KIRANA_VERTICAL_ASSETS__", JSON.stringify(verticalAssets)),
       );
     },
   };

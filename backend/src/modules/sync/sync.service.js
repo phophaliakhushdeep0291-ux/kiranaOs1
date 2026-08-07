@@ -293,6 +293,42 @@ async function applyMutableConflictChoice(shopId, conflict, resolution, mergedPa
 }
 
 export async function reportSyncConflict(shopId, input, actor = {}) {
+  // A push conflict is already durable on the server under sourceEventId. Older
+  // clients still report the same item after receiving the push response; link
+  // that client id to the authoritative row instead of creating a second owner
+  // review card for one failed operation.
+  const linkedSourceEventId = typeof input.server_version === "string"
+    ? input.server_version.trim()
+    : "";
+  if (linkedSourceEventId) {
+    const sourceConflict = await db.syncConflict.findFirst({
+      where: {
+        shopId,
+        sourceEventId: linkedSourceEventId,
+        entityType: input.entity_type,
+        entityId: input.entity_id,
+      },
+    });
+    if (sourceConflict) {
+      let linked = sourceConflict;
+      if (!sourceConflict.clientConflictId) {
+        const occupiedClientId = await db.syncConflict.findFirst({
+          where: { shopId, clientConflictId: input.client_conflict_id },
+          select: { id: true },
+        });
+        if (!occupiedClientId) {
+          try {
+            linked = await db.syncConflict.update({
+              where: { id: sourceConflict.id },
+              data: { clientConflictId: input.client_conflict_id },
+            });
+          } catch {
+            linked = await db.syncConflict.findUnique({ where: { id: sourceConflict.id } }) ?? sourceConflict;
+          }
+        }
+      }
+      return publicSyncConflict(linked);
+    }
   const create = {
     shopId,
     clientConflictId: input.client_conflict_id,

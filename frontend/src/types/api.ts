@@ -734,6 +734,7 @@ export interface SyncPushEventResult extends Record<string, unknown> {
   server_id?: string;
   serverId?: string;
   server_version?: string | number;
+  conflict_id?: string;
   result?: Record<string, unknown>;
   entity?: Record<string, unknown>;
   conflict?: Record<string, unknown>;
