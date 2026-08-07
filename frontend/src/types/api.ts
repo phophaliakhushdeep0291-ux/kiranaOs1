@@ -66,6 +66,13 @@ export interface ProductSellingUnit {
   onHandQty?: number | null;
   lowStockThreshold?: number | null;
   reorderLevel?: number | null;
+  /**
+   * Where this row sits on the parent's variant axes: `variantValue1` is its
+   * value on `axes[0]`, `variantValue2` on `axes[1]`. Both null on an ordinary
+   * packaging row — a 70 g packet has no position on a size chart.
+   */
+  variantValue1?: string | null;
+  variantValue2?: string | null;
   isDefault: boolean;
   isActive: boolean;
   createdAt?: string;
@@ -74,6 +81,18 @@ export interface ProductSellingUnit {
 
 /** How a product's stock is counted across its pack sizes. */
 export type PackagingMode = "pooled" | "per_pack";
+
+/**
+ * One axis of a product's variant grid: "Size" with S, M, L.
+ *
+ * AXIS ORDER IS LOAD-BEARING — a selling unit's `variantValue1` is its value on
+ * `axes[0]`. Reordering this array remaps every existing row, so once variants
+ * exist treat it as append-only.
+ */
+export interface ProductVariantAxis {
+  name: string;
+  values: string[];
+}
 
 export interface Product {
   id: string;
@@ -109,6 +128,8 @@ export interface Product {
   quantitySlabPricing?: QuantitySlabPrice[];
   customerSpecificPricing?: CustomerSpecificPrice[] | Record<string, number>;
   sellingUnits?: ProductSellingUnit[];
+  /** The variant grid, in axis order. Empty for an ordinary product. */
+  variantAxes?: ProductVariantAxis[];
   gstRate?: number;
   hsn?: string | null;
   brand?: string | null;
@@ -165,6 +186,8 @@ export interface ProductInput {
   quantitySlabPricing?: QuantitySlabPrice[];
   customerSpecificPricing?: CustomerSpecificPrice[] | Record<string, number>;
   sellingUnits?: ProductSellingUnit[];
+  /** The variant grid, in axis order. Declaring one forces per-pack stock. */
+  variantAxes?: ProductVariantAxis[];
   gstRate?: number;
   hsn?: string;
   brand?: string;

@@ -21,8 +21,18 @@ const sellingUnitFormSchema = z.object({
   // products leave them null and keep using the single shared stock number.
   onHandQty: z.number().nullable().optional(),
   lowStockThreshold: z.number().nullable().optional(),
+  // Where this row sits on the product's variant axes. Carried through the form
+  // explicitly: anything not named here is dropped on save, which would strip
+  // every size and colour off a garment the moment it was edited.
+  variantValue1: z.string().nullable().optional(),
+  variantValue2: z.string().nullable().optional(),
   isDefault: z.boolean(),
   isActive: z.boolean(),
+});
+
+const variantAxisFormSchema = z.object({
+  name: z.string(),
+  values: z.array(z.string()),
 });
 
 export const productFormSchema = z.object({
@@ -33,6 +43,9 @@ export const productFormSchema = z.object({
   packSizeValue: z.coerce.number().positive("Pack size must be greater than zero").default(1),
   packSizeUnit: z.string().trim().min(1).default("piece"),
   sellingUnits: z.array(sellingUnitFormSchema).default([]),
+  // The size × colour grid. Empty for every ordinary product, which is what
+  // keeps a kirana shop's form exactly as it was.
+  variantAxes: z.array(variantAxisFormSchema).max(2).default([]),
   // "pooled": every pack draws on one shared stock number — loose rice, where 1 kg
   // and a 5 kg bag come out of the same sack. "per_pack": each pack is counted and
   // reordered on its own, so the shopkeeper can see WHICH size has run low.
@@ -153,6 +166,7 @@ export function productToForm(product?: Product): ProductFormData {
     packSizeValue: defaultUnit?.packSizeValue ?? 1,
     packSizeUnit: defaultUnit?.packSizeUnit ?? product?.baseUnit ?? (product?.isLooseItem ? unit : "piece"),
     sellingUnits: product?.sellingUnits ?? [],
+    variantAxes: product?.variantAxes ?? [],
     packagingMode: product?.packagingMode === "per_pack" ? "per_pack" : "pooled",
     barcode: product?.barcode ?? product?.sku ?? "",
     hsn: product?.hsn ?? "",
@@ -227,13 +241,40 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     isDefault: true,
     isActive: true,
   };
-  const sellingUnits = [
-    defaultSellingUnit,
-    ...values.sellingUnits.filter((row) => {
-      const isPersistedDefault = Boolean(previousDefault?.id && row.id === previousDefault.id);
-      return !row.isDefault && !isPersistedDefault && row.unitCode !== defaultSellingUnit.unitCode;
-    }),
-  ];
+  /**
+   * A variant grid replaces the packaging rows rather than joining them.
+   *
+   * For an ordinary product the form synthesises one default pack out of the
+   * main unit/size/price fields and appends any extra packs. A garment has no
+   * such row: its selling units ARE the size × colour cells, one of which
+   * carries `isDefault`. Prepending the synthesised pack here would put a
+   * sizeless row on the shelf alongside the grid, and billing would happily
+   * sell it.
+   */
+  const variantRows = values.sellingUnits.filter((row) => row.variantValue1 || row.variantValue2);
+  // Defaulted rather than assumed: `formToInput` is exported and called with
+  // hand-built form data from the CSV importer and the voice draft path, and a
+  // caller predating the grid must not crash on a field it never knew about.
+  const variantAxes = values.variantAxes ?? [];
+  const hasGrid = variantAxes.length > 0 && variantRows.length > 0;
+
+  const sellingUnits = hasGrid
+    ? variantRows
+    : [
+        defaultSellingUnit,
+        ...values.sellingUnits.filter((row) => {
+          const isPersistedDefault = Boolean(previousDefault?.id && row.id === previousDefault.id);
+          return !row.isDefault && !isPersistedDefault && row.unitCode !== defaultSellingUnit.unitCode;
+        }),
+      ];
+
+  // Each cell holds its own pieces, so the product's own figure is their sum.
+  // The server does not recompute it, and everything that asks "how many of this
+  // shirt are there?" without opening the grid reads this number.
+  const gridQty = round2(variantRows.reduce((sum, row) => sum + (Number(row.onHandQty) || 0), 0));
+  const stockQuantity = hasGrid ? gridQty : values.stockQuantity;
+  // A cell is one piece, never a pack, so the grid's total is already in base units.
+  const stockBaseQty = hasGrid ? gridQty : round2(values.stockQuantity * conversionToBase);
 
   return {
     name: values.name.trim(),
@@ -247,8 +288,8 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     sku: values.barcode?.trim() || undefined,
     hsn: values.hsn?.trim() || undefined,
     aliases: splitProductAliases(values.aliasesText),
-    stockBaseQty: round2(values.stockQuantity * conversionToBase),
-    stockQuantity: values.stockQuantity,
+    stockBaseQty,
+    stockQuantity,
     stockUnit: values.unit,
     stockTrackingEnabled: true,
     trackStock: true,
@@ -268,7 +309,10 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     quantitySlabPricing: [],
     customerSpecificPricing: [],
     sellingUnits,
-    packagingMode: values.packagingMode,
+    variantAxes,
+    // A grid always counts per row — that is what makes "which size is out?"
+    // answerable, and the server forces it anyway.
+    packagingMode: hasGrid ? "per_pack" : values.packagingMode,
     mrp: round2(values.mrp),
     gstRate: Number(values.gstRate || 0),
     reorderLevel: Number(values.reorderLevel || 0),
