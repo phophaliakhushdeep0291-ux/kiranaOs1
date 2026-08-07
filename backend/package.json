@@ -99,7 +99,7 @@
     "test:book-lists": "node tests/book-lists.examples.js",
     "test:furniture-orders": "node tests/furniture-orders.examples.js",
     "test:testers": "node tests/cosmetics-testers.examples.js",
-    "test:restaurant": "node tests/restaurant-tables-menu.examples.js"
+    "test:restaurant": "node tests/restaurant-tables-menu.examples.js && node tests/kitchen-tickets.examples.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
