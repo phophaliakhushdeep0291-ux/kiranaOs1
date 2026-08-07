@@ -55,11 +55,14 @@ export default function DeviceRemovedPage() {
           </div>
         </div>
 
+        {/* h-11, not the 40px default: this screen is only ever reached on the
+            phone whose device slot was removed, and exporting the unsynced data
+            is the one chance to save it. */}
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <Button variant="outline" onClick={() => void exportPendingData()} disabled={exporting || pendingCount === 0}>
+          <Button variant="outline" className="h-11" onClick={() => void exportPendingData()} disabled={exporting || pendingCount === 0}>
             <Download className="mr-2 h-4 w-4" />{exporting ? "Preparing..." : "Export unsynced data"}
           </Button>
-          <Button onClick={() => setLocation("/login")}>
+          <Button className="h-11" onClick={() => setLocation("/login")}>
             <LogIn className="mr-2 h-4 w-4" />Sign in with owner approval
           </Button>
         </div>
