@@ -32,7 +32,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useModuleVisibility } from "@/features/core/settings/modules";
 import { useActiveVerticalPack } from "@/features/verticals/registry";
-import { isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
+import { isPathAllowedByCapabilities, isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import {
   Drawer,
   DrawerClose,

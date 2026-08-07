@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BUSINESS_TYPE_DEFS, saveBusinessType, type BusinessType } from "@/features/core/settings/business-types";
-import { SHARED_NAVIGATION, isPathInBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
+import { SHARED_NAVIGATION, isPathAllowedByCapabilities, isPathInBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { isModuleAvailable, isPathEnabled, setModulePathGate } from "@/features/core/settings/modules";
 import {
   VERTICAL_PACKS,
@@ -213,5 +213,31 @@ describe("server navigation gate", () => {
   it("treats an absent navigation list as offline-permissive", () => {
     // Bootstrap can be unavailable offline; the gate must not lock the app then.
     expect(isPathInBusinessProfile("/products", undefined)).toBe(true);
+  });
+
+  it("keeps Batch & Expiry away from trades that sell nothing dated", () => {
+    // The leak was that the nav rule also accepted plain "inventory", which
+    // every trade carries — so a garment shop, a shoe shop and a spare-parts
+    // counter all found dated-stock tooling in the sidebar.
+    //
+    // It is gated on the capability rather than on a nav key, because only
+    // pharmacy and cosmetics list "batches"/"expiry" while a kirana store holds
+    // BATCH_TRACKING and genuinely sells dated food. The capability is both the
+    // truthful question and the one a server of any age answers correctly.
+    expect(isPathAllowedByCapabilities("/inventory/batches", ["BASIC_INVENTORY", "PRODUCT_VARIANTS"])).toBe(false);
+    expect(isPathAllowedByCapabilities("/inventory/batches", ["BASIC_INVENTORY", "BATCH_TRACKING"])).toBe(true);
+    expect(isPathAllowedByCapabilities("/inventory/batches", ["EXPIRY_TRACKING"])).toBe(true);
+
+    // Plain /inventory is every shop's and must stay reachable.
+    expect(isPathAllowedByCapabilities("/inventory", ["BASIC_INVENTORY"])).toBe(true);
+
+    // Bootstrap can be unavailable offline; the gate must not lock the app then.
+    expect(isPathAllowedByCapabilities("/inventory/batches", undefined)).toBe(true);
+  });
+
+  it("no longer blocks the batches path on a navigation key", () => {
+    // Gating moved to the capability, so the nav gate must stay out of the way —
+    // otherwise a kirana profile without the "batches" key loses the screen.
+    expect(isPathInBusinessProfile("/inventory/batches", [...SHARED_NAVIGATION, "inventory"])).toBe(true);
   });
 });
