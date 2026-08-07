@@ -191,7 +191,7 @@ export async function createDeviceBoundLoginSession({ user, reqMeta, sessionData
       },
     });
     return { device, session };
-    });
+    }, { maxWait: 5_000, timeout: 15_000 });
 
   if (result.blocked) {
     throw new AppError("This device has been blocked by the shop owner.", 403, "DEVICE_BLOCKED");

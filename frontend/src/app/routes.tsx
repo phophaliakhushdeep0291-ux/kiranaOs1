@@ -278,9 +278,14 @@ export function AppRoutes() {
 
   useEffect(() => {
     if (!isAuthenticated || !("serviceWorker" in navigator)) return;
-    void navigator.serviceWorker.ready.then((registration) => {
-      registration.active?.postMessage({ type: "CACHE_VERTICAL", verticalId: verticalPack.id });
-    });
+    const cacheActiveVertical = () => {
+      void navigator.serviceWorker.ready
+        .then((registration) => registration.active?.postMessage({ type: "CACHE_VERTICAL", verticalId: verticalPack.id }))
+        .catch(() => undefined);
+    };
+    cacheActiveVertical();
+    window.addEventListener("online", cacheActiveVertical);
+    return () => window.removeEventListener("online", cacheActiveVertical);
   }, [isAuthenticated, verticalPack.id]);
 
   if (isLoading && !isCustomerOrderPath) return <LoadingScreen />;
