@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-08T09:21:51.000Z",
+  "generatedAt": "2026-08-08T09:27:37.439Z",
   "frontendUrl": "http://127.0.0.1:5173",
   "apiUrl": "http://127.0.0.1:3000/api",
   "results": [
@@ -17,31 +17,14 @@
       "bodyWidth": 375,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
+          "type": "button",
           "label": "Order QR",
           "width": 95,
           "height": 32
         }
       ],
-      "undersizedCount": 4,
+      "undersizedCount": 1,
       "visibleControlCount": 15,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -63,31 +46,14 @@
       "bodyWidth": 390,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
+          "type": "button",
           "label": "Order QR",
           "width": 95,
           "height": 32
         }
       ],
-      "undersizedCount": 4,
+      "undersizedCount": 1,
       "visibleControlCount": 15,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -109,31 +75,14 @@
       "bodyWidth": 430,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
+          "type": "button",
           "label": "Order QR",
           "width": 95,
           "height": 32
         }
       ],
-      "undersizedCount": 4,
+      "undersizedCount": 1,
       "visibleControlCount": 15,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -155,49 +104,35 @@
       "bodyWidth": 768,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
+          "type": "button",
           "label": "Order QR",
           "width": 95,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "बारकोड स्कैन करें",
           "width": 36,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "बोलकर बिल खोलें",
           "width": 36,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "सभी",
           "width": 65,
           "height": 36
         }
       ],
-      "undersizedCount": 7,
+      "undersizedCount": 4,
       "visibleControlCount": 15,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -219,98 +154,29 @@
       "bodyWidth": 375,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
+          "type": "",
           "label": "Close",
           "width": 32,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "पैक किया माल",
           "width": 163,
           "height": 40
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "खुला माल",
           "width": 163,
           "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "e.g. Tata Salt 1 kg",
-          "width": 343,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "",
-          "width": 343,
-          "height": 40
-        },
-        {
-          "tag": "SELECT",
-          "label": "grocerydairybeveragessnackshouseholdpersonal carestationeryother",
-          "width": 1,
-          "height": 1
-        },
-        {
-          "tag": "INPUT",
-          "label": "e.g. Tata",
-          "width": 343,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "Scan packet barcode",
-          "width": 247,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Generate",
-          "width": 88,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "piece",
-          "width": 343,
-          "height": 40
-        },
-        {
-          "tag": "SELECT",
-          "label": "piecekggramlitremlpacketboxdozensetpairbundlerollsheetmeteryardpackpou",
-          "width": 1,
-          "height": 1
-        },
-        {
-          "tag": "INPUT",
-          "label": "एक और माल जोड़ने के लिए यह खुला रखें",
-          "width": 16,
-          "height": 16
         }
       ],
-      "undersizedCount": 15,
-      "visibleControlCount": 28,
+      "undersizedCount": 3,
+      "visibleControlCount": 25,
       "desktopSidebarVisible": false,
       "genericFailure": false,
       "stuckLoading": false,
@@ -331,134 +197,71 @@
       "bodyWidth": 390,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
+          "type": "",
           "label": "Close",
           "width": 32,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "पैक किया माल",
           "width": 170,
           "height": 40
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "खुला माल",
           "width": 170,
           "height": 40
         },
         {
-          "tag": "INPUT",
-          "label": "e.g. Tata Salt 1 kg",
-          "width": 358,
-          "height": 40
-        },
-        {
           "tag": "BUTTON",
-          "label": "",
-          "width": 358,
-          "height": 40
-        },
-        {
-          "tag": "SELECT",
-          "label": "grocerydairybeveragessnackshouseholdpersonal carestationeryother",
-          "width": 1,
-          "height": 1
-        },
-        {
-          "tag": "INPUT",
-          "label": "e.g. Tata",
-          "width": 358,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "Scan packet barcode",
-          "width": 262,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Generate",
-          "width": 88,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "piece",
-          "width": 358,
-          "height": 40
-        },
-        {
-          "tag": "SELECT",
-          "label": "piecekggramlitremlpacketboxdozensetpairbundlerollsheetmeteryardpackpou",
-          "width": 1,
-          "height": 1
-        },
-        {
-          "tag": "BUTTON",
+          "type": "button",
           "label": "piece",
           "width": 51,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "packet",
           "width": 57,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "pouch",
           "width": 55,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "bottle",
           "width": 53,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "box",
           "width": 42,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "carton",
           "width": 58,
           "height": 32
-        },
-        {
-          "tag": "INPUT",
-          "label": "एक और माल जोड़ने के लिए यह खुला रखें",
-          "width": 16,
-          "height": 16
         }
       ],
-      "undersizedCount": 21,
-      "visibleControlCount": 34,
+      "undersizedCount": 9,
+      "visibleControlCount": 31,
       "desktopSidebarVisible": false,
       "genericFailure": false,
       "stuckLoading": false,
@@ -479,152 +282,71 @@
       "bodyWidth": 430,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
+          "type": "",
           "label": "Close",
           "width": 32,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "पैक किया माल",
           "width": 190,
           "height": 40
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "खुला माल",
           "width": 190,
           "height": 40
         },
         {
-          "tag": "INPUT",
-          "label": "e.g. Tata Salt 1 kg",
-          "width": 398,
-          "height": 40
-        },
-        {
           "tag": "BUTTON",
-          "label": "",
-          "width": 398,
-          "height": 40
-        },
-        {
-          "tag": "SELECT",
-          "label": "grocerydairybeveragessnackshouseholdpersonal carestationeryother",
-          "width": 1,
-          "height": 1
-        },
-        {
-          "tag": "INPUT",
-          "label": "e.g. Tata",
-          "width": 398,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "Scan packet barcode",
-          "width": 302,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Generate",
-          "width": 88,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "piece",
-          "width": 398,
-          "height": 40
-        },
-        {
-          "tag": "SELECT",
-          "label": "piecekggramlitremlpacketboxdozensetpairbundlerollsheetmeteryardpackpou",
-          "width": 1,
-          "height": 1
-        },
-        {
-          "tag": "BUTTON",
+          "type": "button",
           "label": "piece",
           "width": 51,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "packet",
           "width": 57,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "pouch",
           "width": 55,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "bottle",
           "width": 53,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "box",
           "width": 42,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "carton",
           "width": 58,
           "height": 32
-        },
-        {
-          "tag": "INPUT",
-          "label": "जैसे 500",
-          "width": 189,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "piece",
-          "width": 171,
-          "height": 40
-        },
-        {
-          "tag": "SELECT",
-          "label": "piecegramkgmllitre",
-          "width": 1,
-          "height": 1
-        },
-        {
-          "tag": "INPUT",
-          "label": "एक और माल जोड़ने के लिए यह खुला रखें",
-          "width": 16,
-          "height": 16
         }
       ],
-      "undersizedCount": 24,
-      "visibleControlCount": 37,
+      "undersizedCount": 9,
+      "visibleControlCount": 33,
       "desktopSidebarVisible": false,
       "genericFailure": false,
       "stuckLoading": false,
@@ -645,170 +367,71 @@
       "bodyWidth": 768,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
+          "type": "",
           "label": "Close",
           "width": 32,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "पैक किया माल",
           "width": 181,
           "height": 40
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "खुला माल",
           "width": 181,
           "height": 40
         },
         {
-          "tag": "INPUT",
-          "label": "e.g. Tata Salt 1 kg",
-          "width": 380,
-          "height": 40
-        },
-        {
           "tag": "BUTTON",
-          "label": "",
-          "width": 184,
-          "height": 40
-        },
-        {
-          "tag": "SELECT",
-          "label": "grocerydairybeveragessnackshouseholdpersonal carestationeryother",
-          "width": 1,
-          "height": 1
-        },
-        {
-          "tag": "INPUT",
-          "label": "e.g. Tata",
-          "width": 184,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "Scan packet barcode",
-          "width": 88,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Generate",
-          "width": 88,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "piece",
-          "width": 184,
-          "height": 40
-        },
-        {
-          "tag": "SELECT",
-          "label": "piecekggramlitremlpacketboxdozensetpairbundlerollsheetmeteryardpackpou",
-          "width": 1,
-          "height": 1
-        },
-        {
-          "tag": "BUTTON",
+          "type": "button",
           "label": "piece",
           "width": 51,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "packet",
           "width": 57,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "pouch",
           "width": 55,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "bottle",
           "width": 53,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "box",
           "width": 42,
           "height": 32
         },
         {
           "tag": "BUTTON",
+          "type": "button",
           "label": "carton",
           "width": 58,
           "height": 32
-        },
-        {
-          "tag": "INPUT",
-          "label": "जैसे 500",
-          "width": 180,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "piece",
-          "width": 162,
-          "height": 40
-        },
-        {
-          "tag": "SELECT",
-          "label": "piecegramkgmllitre",
-          "width": 1,
-          "height": 1
-        },
-        {
-          "tag": "INPUT",
-          "label": "जैसे 25010010",
-          "width": 380,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "namak, salt, साल्ट",
-          "width": 380,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "AI Suggest",
-          "width": 99,
-          "height": 27
-        },
-        {
-          "tag": "INPUT",
-          "label": "एक और माल जोड़ने के लिए यह खुला रखें",
-          "width": 16,
-          "height": 16
         }
       ],
-      "undersizedCount": 27,
-      "visibleControlCount": 40,
+      "undersizedCount": 9,
+      "visibleControlCount": 35,
       "desktopSidebarVisible": false,
       "genericFailure": false,
       "stuckLoading": false,
@@ -827,27 +450,8 @@
       ],
       "documentWidth": 375,
       "bodyWidth": 375,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        }
-      ],
-      "undersizedCount": 3,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 13,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -869,55 +473,35 @@
       "bodyWidth": 390,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "INPUT",
-          "label": "नाम या मोबाइल से खोजें",
-          "width": 334,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
+          "type": "",
           "label": "सभी ग्राहक",
           "width": 79,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "बकाया वाले",
           "width": 79,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Overdue",
           "width": 79,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Cleared",
           "width": 79,
           "height": 36
         }
       ],
-      "undersizedCount": 8,
+      "undersizedCount": 4,
       "visibleControlCount": 18,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -939,55 +523,35 @@
       "bodyWidth": 430,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "INPUT",
-          "label": "नाम या मोबाइल से खोजें",
-          "width": 368,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
+          "type": "",
           "label": "सभी ग्राहक",
           "width": 88,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "बकाया वाले",
           "width": 88,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Overdue",
           "width": 88,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Cleared",
           "width": 88,
           "height": 36
         }
       ],
-      "undersizedCount": 8,
+      "undersizedCount": 4,
       "visibleControlCount": 18,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1009,55 +573,35 @@
       "bodyWidth": 768,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "INPUT",
-          "label": "नाम या मोबाइल से खोजें",
-          "width": 706,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
+          "type": "",
           "label": "सभी ग्राहक",
           "width": 172,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "बकाया वाले",
           "width": 172,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Overdue",
           "width": 172,
           "height": 36
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Cleared",
           "width": 172,
           "height": 36
         }
       ],
-      "undersizedCount": 8,
+      "undersizedCount": 4,
       "visibleControlCount": 18,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1077,27 +621,8 @@
       ],
       "documentWidth": 375,
       "bodyWidth": 375,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        }
-      ],
-      "undersizedCount": 3,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 12,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1117,27 +642,8 @@
       ],
       "documentWidth": 390,
       "bodyWidth": 390,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        }
-      ],
-      "undersizedCount": 3,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 15,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1157,39 +663,8 @@
       ],
       "documentWidth": 430,
       "bodyWidth": 430,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "INPUT",
-          "label": "Search by product, SKU, barcode...",
-          "width": 264,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Filters",
-          "width": 92,
-          "height": 40
-        }
-      ],
-      "undersizedCount": 5,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 17,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1209,69 +684,8 @@
       ],
       "documentWidth": 768,
       "bodyWidth": 768,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "INPUT",
-          "label": "Search by product, SKU, barcode...",
-          "width": 492,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Filters",
-          "width": 92,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Export",
-          "width": 102,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "All Categories",
-          "width": 347,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "All Brands",
-          "width": 347,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "All Units",
-          "width": 347,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "All Stock Status",
-          "width": 347,
-          "height": 36
-        }
-      ],
-      "undersizedCount": 10,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 22,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1293,73 +707,21 @@
       "bodyWidth": 375,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "INPUT",
+          "type": "file",
           "label": "",
           "width": 1,
           "height": 1
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Close",
           "width": 32,
           "height": 32
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Select supplier",
-          "width": 342,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "+91 98290 12345",
-          "width": 342,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "",
-          "width": 342,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "Auto if left blank",
-          "width": 342,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "UPI",
-          "width": 342,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Full Credit (Unpaid)",
-          "width": 342,
-          "height": 40
         }
       ],
-      "undersizedCount": 11,
+      "undersizedCount": 2,
       "visibleControlCount": 20,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1381,121 +743,35 @@
       "bodyWidth": 390,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Supplier return",
-          "width": 135,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "New order",
-          "width": 108,
-          "height": 36
-        },
-        {
           "tag": "INPUT",
+          "type": "file",
           "label": "",
           "width": 1,
           "height": 1
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Close",
           "width": 32,
           "height": 32
         },
         {
           "tag": "BUTTON",
-          "label": "Select supplier",
-          "width": 357,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "+91 98290 12345",
-          "width": 357,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "",
-          "width": 357,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "Auto if left blank",
-          "width": 357,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "UPI",
-          "width": 357,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Full Credit (Unpaid)",
-          "width": 357,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Select product",
-          "width": 164,
-          "height": 36
-        },
-        {
-          "tag": "INPUT",
-          "label": "0",
-          "width": 56,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "₹0",
-          "width": 76,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
+          "type": "",
           "label": "Remove line",
           "width": 24,
           "height": 28
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Add Product",
           "width": 90,
           "height": 18
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Scan Barcode",
-          "width": 152,
-          "height": 40
         }
       ],
-      "undersizedCount": 19,
+      "undersizedCount": 4,
       "visibleControlCount": 28,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1517,122 +793,36 @@
       "bodyWidth": 430,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Supplier return",
-          "width": 135,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "New order",
-          "width": 108,
-          "height": 36
-        },
-        {
           "tag": "INPUT",
+          "type": "file",
           "label": "",
           "width": 1,
           "height": 1
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Close",
           "width": 32,
           "height": 32
         },
         {
           "tag": "BUTTON",
-          "label": "Select supplier",
-          "width": 397,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "+91 98290 12345",
-          "width": 397,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "",
-          "width": 397,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "Auto if left blank",
-          "width": 397,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "UPI",
-          "width": 397,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Full Credit (Unpaid)",
-          "width": 397,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Select product",
-          "width": 164,
-          "height": 36
-        },
-        {
-          "tag": "INPUT",
-          "label": "0",
-          "width": 56,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "₹0",
-          "width": 76,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
+          "type": "",
           "label": "Remove line",
           "width": 24,
           "height": 28
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Add Product",
           "width": 90,
           "height": 18
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Scan Barcode",
-          "width": 152,
-          "height": 40
         }
       ],
-      "undersizedCount": 19,
-      "visibleControlCount": 29,
+      "undersizedCount": 4,
+      "visibleControlCount": 28,
       "desktopSidebarVisible": false,
       "genericFailure": false,
       "stuckLoading": false,
@@ -1653,151 +843,35 @@
       "bodyWidth": 768,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Supplier return",
-          "width": 135,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "New order",
-          "width": 108,
-          "height": 36
-        },
-        {
           "tag": "INPUT",
-          "label": "Search by bill no., supplier or product…",
-          "width": 256,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Filters",
-          "width": 93,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Columns",
-          "width": 108,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Export",
-          "width": 95,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Add Purchase",
-          "width": 138,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
+          "type": "file",
           "label": "",
           "width": 1,
           "height": 1
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Close",
           "width": 32,
           "height": 32
         },
         {
           "tag": "BUTTON",
-          "label": "Select supplier",
-          "width": 399,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "+91 98290 12345",
-          "width": 399,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "",
-          "width": 194,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "Auto if left blank",
-          "width": 194,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "UPI",
-          "width": 194,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Full Credit (Unpaid)",
-          "width": 194,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Select product",
-          "width": 164,
-          "height": 36
-        },
-        {
-          "tag": "INPUT",
-          "label": "0",
-          "width": 56,
-          "height": 40
-        },
-        {
-          "tag": "INPUT",
-          "label": "₹0",
-          "width": 76,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
+          "type": "",
           "label": "Remove line",
           "width": 28,
           "height": 28
         },
         {
           "tag": "BUTTON",
+          "type": "",
           "label": "Add Product",
           "width": 90,
           "height": 18
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Scan Barcode",
-          "width": 152,
-          "height": 40
         }
       ],
-      "undersizedCount": 24,
+      "undersizedCount": 4,
       "visibleControlCount": 34,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1819,7 +893,7 @@
       "bodyWidth": 375,
       "undersized": [],
       "undersizedCount": 0,
-      "visibleControlCount": 0,
+      "visibleControlCount": 14,
       "desktopSidebarVisible": false,
       "genericFailure": false,
       "stuckLoading": false,
@@ -1838,27 +912,8 @@
       ],
       "documentWidth": 390,
       "bodyWidth": 390,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        }
-      ],
-      "undersizedCount": 3,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 14,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1878,27 +933,8 @@
       ],
       "documentWidth": 430,
       "bodyWidth": 430,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        }
-      ],
-      "undersizedCount": 3,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 15,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1920,55 +956,14 @@
       "bodyWidth": 768,
       "undersized": [
         {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
           "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "02 Aug 2026 - 08 Aug 2026⌄",
-          "width": 229,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Filters",
-          "width": 102,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Export",
-          "width": 105,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Refresh reports",
-          "width": 36,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
+          "type": "button",
           "label": "This Week",
           "width": 92,
           "height": 28
         }
       ],
-      "undersizedCount": 8,
+      "undersizedCount": 1,
       "visibleControlCount": 15,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -1988,27 +983,8 @@
       ],
       "documentWidth": 375,
       "bodyWidth": 375,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        }
-      ],
-      "undersizedCount": 3,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 14,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -2028,27 +1004,8 @@
       ],
       "documentWidth": 390,
       "bodyWidth": 390,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        }
-      ],
-      "undersizedCount": 3,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 17,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -2068,27 +1025,8 @@
       ],
       "documentWidth": 430,
       "bodyWidth": 430,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        }
-      ],
-      "undersizedCount": 3,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 18,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -2108,27 +1046,8 @@
       ],
       "documentWidth": 768,
       "bodyWidth": 768,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        }
-      ],
-      "undersizedCount": 3,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 19,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -2148,39 +1067,8 @@
       ],
       "documentWidth": 375,
       "bodyWidth": 375,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Retry blocked",
-          "width": 349,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Force sync",
-          "width": 349,
-          "height": 40
-        }
-      ],
-      "undersizedCount": 5,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 12,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -2200,39 +1088,8 @@
       ],
       "documentWidth": 390,
       "bodyWidth": 390,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Retry blocked",
-          "width": 364,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Force sync",
-          "width": 364,
-          "height": 40
-        }
-      ],
-      "undersizedCount": 5,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 12,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -2252,39 +1109,8 @@
       ],
       "documentWidth": 430,
       "bodyWidth": 430,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Retry blocked",
-          "width": 159,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Force sync",
-          "width": 140,
-          "height": 40
-        }
-      ],
-      "undersizedCount": 5,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 12,
       "desktopSidebarVisible": false,
       "genericFailure": false,
@@ -2304,39 +1130,8 @@
       ],
       "documentWidth": 768,
       "bodyWidth": 768,
-      "undersized": [
-        {
-          "tag": "A",
-          "label": "Artha home",
-          "width": 42,
-          "height": 42
-        },
-        {
-          "tag": "A",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Manage subscription",
-          "width": 148,
-          "height": 36
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Retry blocked",
-          "width": 159,
-          "height": 40
-        },
-        {
-          "tag": "BUTTON",
-          "label": "Force sync",
-          "width": 140,
-          "height": 40
-        }
-      ],
-      "undersizedCount": 5,
+      "undersized": [],
+      "undersizedCount": 0,
       "visibleControlCount": 12,
       "desktopSidebarVisible": false,
       "genericFailure": false,

@@ -97,7 +97,7 @@ internal sealed class SetupWindow : Form
         saveButton.Click += async (_, _) => await SaveAndPairAsync();
         testButton.Click += async (_, _) => await TestPrintAsync();
         refreshButton.Click += (_, _) => LoadPrinters();
-        Shown += (_, _) => { LoadConfig(); LoadPrinters(); };
+        Shown += async (_, _) => { LoadConfig(); LoadPrinters(); await RefreshVersionNoticeAsync(); };
     }
 
     private void LoadConfig()
@@ -148,6 +148,7 @@ internal sealed class SetupWindow : Form
             File.Move(temporary, ConfigPath, true);
             RestartService();
             await WaitForBridgeAsync();
+            await RefreshVersionNoticeAsync();
             pairingCode.Text = code;
             status.Text = "Ready. This code expires in 10 minutes and works once.";
             testButton.Enabled = true;
@@ -200,6 +201,31 @@ internal sealed class SetupWindow : Form
             await Task.Delay(250);
         }
         throw new InvalidOperationException();
+    }
+
+    private async Task RefreshVersionNoticeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(config.Token)) return;
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+            using var request = new HttpRequestMessage(HttpMethod.Get, "http://127.0.0.1:17873/v1/health");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.Token);
+            using var response = await client.SendAsync(request);
+            if (!response.IsSuccessStatusCode) return;
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var root = document.RootElement;
+            var installed = root.TryGetProperty("version", out var current) ? current.GetString() : Application.ProductVersion;
+            version.Text = $"Hardware Bridge v{installed}";
+            if (root.TryGetProperty("update", out var update)
+                && update.TryGetProperty("available", out var available) && available.GetBoolean()
+                && update.TryGetProperty("latestVersion", out var latest))
+            {
+                version.Text += $"  ·  Update {latest.GetString()} available";
+                version.ForeColor = Color.DarkOrange;
+            }
+        }
+        catch { /* version remains visible even when the update service is offline */ }
     }
 
     private static string LoadToken()

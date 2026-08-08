@@ -7,6 +7,7 @@ import { defaultConfigPath, loadBridgeConfig, saveBridgeConfig } from "./config.
 import { consumePairingCode } from "./pairing.mjs";
 import { plainHardwareError } from "./plain-errors.mjs";
 import { UpdateChecker } from "./update-check.mjs";
+import { PrintJobExecutor } from "./print-executor.mjs";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.KIRANA_BRIDGE_PORT || 17873);
@@ -18,7 +19,6 @@ const TRANSPORT = String(bridgeConfig.printer?.transport || "").toLowerCase();
 const ALLOWED_ORIGINS = new Set(bridgeConfig.allowedOrigins);
 const MAX_BODY_BYTES = 1024 * 1024;
 const printJournal = new PrintJobJournal();
-const inFlightPrintJobs = new Map();
 const updateChecker = new UpdateChecker({ currentVersion: VERSION, manifestUrl: bridgeConfig.updateManifestUrl });
 let pairingExchange = Promise.resolve();
 
@@ -62,6 +62,18 @@ async function sendRaw(buffer) {
   if (TRANSPORT === "windows") return sendWindowsRaw(buffer, { printerName: bridgeConfig.printer.name });
   throw Object.assign(new Error("Printer transport is not configured"), { status: 503 });
 }
+
+const printExecutor = new PrintJobExecutor({
+  journal: printJournal,
+  sendRaw,
+  buildBuffer: ({ html, paperSize, autoCut, cashDrawer }, completedCopies) => buildEscPosJob({
+    html,
+    paperSize,
+    autoCut,
+    // A sale opens the drawer once, not once per customer/shop copy.
+    cashDrawer: cashDrawer && completedCopies === 0,
+  }),
+});
 
 async function exchangePairingCode(code) {
   const operation = pairingExchange.then(async () => {
@@ -134,36 +146,8 @@ const server = http.createServer(async (req, res) => {
       const paperSize = ["58mm", "76mm", "80mm"].includes(body.paperSize) ? body.paperSize : "80mm";
       const autoCut = body.autoCut !== false;
       const cashDrawer = body.cashDrawer === true;
-      const active = inFlightPrintJobs.get(jobId);
-      if (active) {
-        if (active.copies !== copies) return json(res, 409, { message: "Print job id is already active with a different copy count" }, origin);
-        await active.promise;
-        return json(res, 200, { ok: true, jobId, duplicate: true, completedCopies: copies }, origin);
-      }
-      const promise = (async () => {
-        const existing = await printJournal.begin(jobId, copies);
-        if (existing.completedCopies >= copies) return { completedCopies: copies, duplicate: true, resumed: false };
-        let completedCopies = existing.completedCopies;
-        while (completedCopies < copies) {
-          await sendRaw(buildEscPosJob({
-            html: body.html,
-            paperSize,
-            autoCut,
-            // A sale opens the drawer once, not once per customer/shop copy.
-            cashDrawer: cashDrawer && completedCopies === 0,
-          }));
-          const progress = await printJournal.recordCopy(jobId);
-          completedCopies = progress.completedCopies;
-        }
-        return { completedCopies, duplicate: false, resumed: existing.completedCopies > 0 };
-      })();
-      inFlightPrintJobs.set(jobId, { copies, promise });
-      try {
-        const outcome = await promise;
-        return json(res, 200, { ok: true, jobId, ...outcome }, origin);
-      } finally {
-        inFlightPrintJobs.delete(jobId);
-      }
+      const outcome = await printExecutor.run({ jobId, copies, html: body.html, paperSize, autoCut, cashDrawer });
+      return json(res, 200, { ok: true, jobId, ...outcome }, origin);
     }
     if (req.method === "POST" && url.pathname === "/v1/cash-drawer/open") {
       await readJson(req);

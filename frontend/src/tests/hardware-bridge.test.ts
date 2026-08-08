@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { isScaleBillingUnit, normalizeHardwareBridgeUrl, scaleReadingToBillingQuantity } from "@/features/core/hardware/local-hardware-bridge";
 
 describe("local hardware bridge security boundary", () => {
@@ -12,6 +14,14 @@ describe("local hardware bridge security boundary", () => {
   it("rejects embedded credentials and query-string routing", () => {
     expect(() => normalizeHardwareBridgeUrl("http://user:pass@127.0.0.1:17873")).toThrow(/credentials/i);
     expect(() => normalizeHardwareBridgeUrl("http://127.0.0.1:17873?target=remote")).toThrow(/query/i);
+  });
+
+  it("offers a six-character pairing code instead of exposing a long token field", () => {
+    const source = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/settings/pages/PrinterSettingsPage.tsx"), "utf8");
+    expect(source).toContain("6-character pairing code");
+    expect(source).toContain("pairHardwareBridge");
+    expect(source).not.toContain("Per-device pairing token");
+    expect(source).not.toContain("setHardwareBridgeToken(bridgeToken)");
   });
 
   it("converts stable gram and kilogram readings to millesimal billing quantities", () => {
