@@ -92,7 +92,7 @@
     "test:event-bus": "node tests/event-bus.examples.js",
     "test:activity": "node tests/activity-personalization.examples.js",
     "test:rentals": "node tests/rental-availability.examples.js",
-    "test:verticals": "node tests/business-vertical-architecture.examples.js",
+    "test:verticals": "node tests/business-vertical-architecture.examples.js && node tests/shop-type-plan-entitlements.examples.js",
     "test:batch-mrp": "node tests/batch-mrp.examples.js",
     "test:near-expiry": "node tests/near-expiry-alerts.examples.js",
     "test:schedule-h": "node tests/schedule-h-enforcement.examples.js && node tests/sale-guards.examples.js && node tests/prescription-register.examples.js",
