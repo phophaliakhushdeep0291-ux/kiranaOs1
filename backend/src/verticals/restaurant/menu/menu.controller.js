@@ -1,5 +1,6 @@
 import * as svc from "./menu.service.js";
 import * as addons from "./addons.service.js";
+import * as combos from "./combos.service.js";
 import { createAuditLog } from "../../../modules/audit/audit.service.js";
 
 export async function board(req, res, next) {
@@ -101,6 +102,26 @@ export async function setDishAddonGroups(req, res, next) {
       shopId: req.shopId, userId: req.user?.id, action: "menu_dish_addons_updated",
       entityType: "product", entityId: req.params.productId,
       after: { groups: data.map((group) => group.name) }, req,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+// ── Combos ──────────────────────────────────────────────────────────────────
+
+export async function comboComponents(req, res, next) {
+  try { res.json({ success: true, data: await combos.listComboComponents(req.shopId, req.params.productId) }); }
+  catch (err) { next(err); }
+}
+
+/** Replaces the combo's dish list wholesale — the editor always sends all of it. */
+export async function setComboComponents(req, res, next) {
+  try {
+    const data = await combos.setComboComponents(req.shopId, req.params.productId, req.body.components ?? []);
+    await createAuditLog({
+      shopId: req.shopId, userId: req.user?.id, action: "menu_combo_updated",
+      entityType: "product", entityId: req.params.productId,
+      after: { components: data.map((row) => ({ name: row.name, quantity: row.quantity })) }, req,
     });
     res.json({ success: true, data });
   } catch (err) { next(err); }

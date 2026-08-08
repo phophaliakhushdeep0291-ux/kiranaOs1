@@ -1707,6 +1707,16 @@ export interface MenuDish {
    */
   variations: MenuDishVariation[];
   addonGroups: MenuAddonGroup[];
+  /**
+   * The dishes a thali or meal deal is made of. Empty for an ordinary dish.
+   *
+   * Having components IS what makes a product a combo — `isCombo` is derived from
+   * this list rather than stored, so no flag can disagree with it.
+   */
+  comboComponents: MenuComboComponent[];
+  isCombo: boolean;
+  /** What the parts cost separately and what the guest saves. Null unless a combo. */
+  comboValue: ComboValue | null;
 }
 
 export interface MenuAddonOption {
