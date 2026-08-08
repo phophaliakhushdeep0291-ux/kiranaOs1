@@ -1,5 +1,7 @@
 import { dexieDB, offlineDB } from "@/lib/offline/db";
 import { getLicenseEvaluation, listCachedDevices } from "@/features/core/devices/license";
+import { getStoredBusinessType, type BusinessType } from "@/features/core/settings/business-type-store";
+import { buildId } from "@/features/core/settings/app-info";
 
 export type OfflineReadinessState = "ready" | "degraded" | "not_ready";
 
@@ -42,6 +44,12 @@ async function readStorageHealth() {
 }
 
 async function isAppShellCached(): Promise<boolean> {
+const OFFLINE_VERTICAL_BY_BUSINESS_TYPE: Partial<Record<BusinessType, string>> = {
+  clothing: "clothing", footwear: "footwear", auto_parts: "auto-parts",
+  electronics: "electronics", pharmacy: "pharmacy", stationery: "stationery-books",
+  furniture: "furniture-home", cosmetics: "beauty-cosmetics", restaurant: "restaurant",
+};
+
   if (typeof window === "undefined" || !("caches" in window)) return false;
   try {
     const keys = await window.caches.keys();
@@ -54,7 +62,9 @@ async function isAppShellCached(): Promise<boolean> {
         .every((path) => paths.has(path));
       const hasScript = [...paths].some((path) => path.endsWith(".js"));
       const hasStyles = [...paths].some((path) => path.endsWith(".css"));
-      if (hasRequiredShell && hasScript && hasStyles) return true;
+      const verticalId = OFFLINE_VERTICAL_BY_BUSINESS_TYPE[getStoredBusinessType()];
+      const hasActiveVertical = !verticalId || paths.has(`/__offline/vertical/${verticalId}/${buildId()}`);
+      if (hasRequiredShell && hasScript && hasStyles && hasActiveVertical) return true;
     }
   } catch {
     // Cache Storage can be unavailable in private or restricted browser modes.
@@ -103,7 +113,7 @@ export async function readOfflineReadiness(): Promise<OfflineReadinessSnapshot> 
   const deviceTrusted = currentDeviceStatus === "active";
   const warnings: string[] = [];
   if (!databaseAvailable) warnings.push("Local database is unavailable; do not continue offline billing.");
-  if (!appShellCached) warnings.push("The complete app shell has not been verified for an offline restart.");
+  if (!appShellCached) warnings.push("The app shell or this shop type's screens are not yet cached for an offline restart.");
   if (storage.persistentStorageSupported && !storage.persistentStorageGranted) warnings.push("Browser storage is not protected from automatic cleanup.");
   if ((storage.storageUsageRatio ?? 0) >= 0.85) warnings.push("Browser storage is more than 85% full.");
   if (productCount === 0) warnings.push("No products are cached on this device yet.");

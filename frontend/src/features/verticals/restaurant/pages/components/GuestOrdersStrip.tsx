@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { listCustomerOrders, updateCustomerOrder, type CustomerOrder } from "@/features/core/orders/api";
+import { useListProducts } from "@/features/core/products/queries";
 import { loadFloorPlan, type RestaurantTable } from "../../service/table-store";
 import { acceptGuestOrderToTable, loadAcceptedOrderIds, pendingGuestOrders } from "../../service/guest-orders";
 
@@ -26,6 +27,13 @@ const POLL_MS = 20_000;
 
 export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
   const { toast } = useToast();
+  // The counter's own catalogue hook, deliberately. Swapping it for a lighter
+  // read here was measured and made things WORSE: it broke the import edge that
+  // keeps the public dine-in menu grouped with this trade's lazy chunks, and
+  // Rollup folded that page into the startup shell instead — putting 45 kB of
+  // restaurant guest menu into every kirana shop's first load. Chunking is a
+  // whole-graph optimisation; do not change what this imports without
+  // re-running `npm run bundle:check` and reading where the entry landed.
   const products = useListProducts();
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
@@ -37,9 +45,9 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
       loadAcceptedOrderIds(),
       loadFloorPlan(),
     ]);
+    setTables(plan);
     if (!response) return;
     setOrders(pendingGuestOrders(response.orders, accepted));
-    setTables(plan);
   }, []);
 
   useEffect(() => {

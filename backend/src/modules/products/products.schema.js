@@ -92,6 +92,17 @@ export const createProductSchema = z.object({
 
 export const updateProductSchema = createProductSchema.partial();
 
+/**
+ * Capture-on-first-scan sends only the code it just read.
+ *
+ * A separate schema from updateProductSchema on purpose: this endpoint is reachable by a
+ * cashier mid-queue, and it must be able to set exactly one field. Letting it accept a
+ * partial product would turn a scan into an arbitrary product edit.
+ */
+export const bindProductBarcodeSchema = z.object({
+  barcode: z.string().trim().min(1, "A barcode is required").max(64),
+});
+
 export const productQuerySchema = z.object({
   category: z.string().optional(),
   search: z.string().optional(),

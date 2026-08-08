@@ -57,7 +57,9 @@ describe("product form fits the trade", () => {
       auto_parts: "-/-",
       electronics: "-/-",
       furniture: "-/-",
-      restaurant: "-/-",
+      // A kitchen buys dated goods even though it sells undated dishes. The
+      // dish leaving the pass has no use-by; the cream it was made from does.
+      restaurant: "-/batch",
       other: "-/-",
     });
   });
@@ -70,9 +72,13 @@ describe("product form fits the trade", () => {
   });
 
   it("offers batch and expiry only where stock is dated", () => {
-    const dated = (["kirana", "pharmacy", "cosmetics"] as const)
+    // Restaurant sits with the dated trades, not the undated ones: the question
+    // is what the shop STORES, not what it hands over. A kitchen holds dairy,
+    // meat and produce — the shortest shelf life of any trade on this list —
+    // so it tracks supplier lots and use-by dates like a chemist does.
+    const dated = (["kirana", "pharmacy", "cosmetics", "restaurant"] as const)
       .every((type) => packForBusinessType(type).capabilities.includes("BATCH_TRACKING"));
-    const undated = (["clothing", "footwear", "auto_parts", "electronics", "furniture", "restaurant"] as const)
+    const undated = (["clothing", "footwear", "auto_parts", "electronics", "furniture"] as const)
       .some((type) => packForBusinessType(type).capabilities.includes("BATCH_TRACKING"));
 
     expect(dated).toBe(true);

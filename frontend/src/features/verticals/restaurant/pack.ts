@@ -72,7 +72,12 @@ export const restaurantPack: VerticalPack = {
     },
   ],
   capabilities: [
-    "BASIC_INVENTORY", "TABLE_MANAGEMENT", "KOT", "KITCHEN_DISPLAY",
+    // Mirrors backend/src/verticals/restaurant/capabilities.js. The two lists
+    // are read by DIFFERENT gates and must agree: this one drives
+    // `useShopCapability` (which fields the product form offers), while the
+    // server's drives the sidebar's `isPathAllowedByCapabilities`.
+    "BASIC_INVENTORY", "BATCH_TRACKING", "EXPIRY_TRACKING",
+    "TABLE_MANAGEMENT", "KOT", "KITCHEN_DISPLAY",
     "MENU_MODIFIERS", "RECIPE_INVENTORY", "SPLIT_BILLING", "TAKEAWAY",
     "DELIVERY_ORDERS",
   ],

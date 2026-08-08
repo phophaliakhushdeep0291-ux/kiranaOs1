@@ -5,6 +5,7 @@ import {
   normaliseMerchantSetupState,
   type MerchantSetupFacts,
 } from "@/features/core/settings/merchant-setup-state";
+import { KIRANA_STARTER_CATALOG_COUNT } from "@/features/core/products/starter-catalog/kirana-catalog-summary.generated";
 
 const EMPTY_FACTS: MerchantSetupFacts = {
   storeProfileReady: false,
@@ -83,5 +84,35 @@ describe("merchant setup readiness", () => {
     expect(progress.completedCount).toBe(progress.totalCount);
     expect(progress.percent).toBe(100);
     expect(progress.nextStep).toBeUndefined();
+  });
+});
+
+describe("built-in starter catalog offer", () => {
+  const quickActionFor = (facts: Partial<MerchantSetupFacts>) =>
+    buildMerchantSetupProgress({ ...EMPTY_FACTS, ...facts }, createMerchantSetupState())
+      .steps.find((step) => step.id === "products")?.quickAction;
+
+  it("offers the catalog to a kirana shop with no products", () => {
+    const action = quickActionFor({ businessTypeKey: "kirana" });
+    expect(action?.id).toBe("load-starter-catalog");
+    // The number comes from the generated summary, so the label cannot promise 560 items
+    // while the CSV ships a different count.
+    expect(action?.label).toBe(`Load ${KIRANA_STARTER_CATALOG_COUNT} common kirana items`);
+  });
+
+  it("does not offer a grocery catalog to another trade", () => {
+    // A chemist would have to delete all of it, so the offer would cost time, not save it.
+    expect(quickActionFor({ businessTypeKey: "pharmacy" })).toBeUndefined();
+    expect(quickActionFor({ businessTypeKey: "clothing" })).toBeUndefined();
+  });
+
+  it("does not offer it before the shop has chosen a trade", () => {
+    // The device store defaults to "kirana" when nothing is saved; an absent key must not
+    // be read as a decision to sell groceries.
+    expect(quickActionFor({})).toBeUndefined();
+  });
+
+  it("withdraws the offer once the shop has products of its own", () => {
+    expect(quickActionFor({ businessTypeKey: "kirana", productCount: 1 })).toBeUndefined();
   });
 });

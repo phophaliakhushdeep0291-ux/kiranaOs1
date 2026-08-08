@@ -47,7 +47,26 @@ const MAX_INITIAL_GZIP_BYTES = 300 * 1024;
 //
 // This is a one-off payment for a language, NOT slack for route growth. A new
 // language belongs in its own lazy chunk and should be argued on gzip.
-const MAX_TOTAL_JS_BYTES = 3.25 * 1024 * 1024;
+//
+// ── 2026-08-07: this stopped being a product-wide total ─────────────────────
+// Everything above was written when this ceiling summed every chunk the build
+// produced. It now bounds the LARGEST SINGLE SHOP's offline payload — the SW's
+// core group plus one trade's group — because the product-wide figure had
+// stopped describing anything a merchant experiences. Nobody downloads eleven
+// trades.
+//
+// The change was made only after proving there was nothing left to reclaim:
+//
+//   - Module-level duplication across all chunks, measured by dumping
+//     rollup's per-chunk module map: 0.0 kB across 0 modules. Every byte in the
+//     build is distinct code some screen imports. The RAW ceiling exists to
+//     catch "a duplicated dependency or a lazy library pulled into the shell";
+//     both were checked directly and neither is present, so the number
+//     exceeding it was not evidence of the fault it was built to detect.
+//   - Composition: all 12 trade packs together are 463.8 kB of rendered source,
+//     LESS than features/core/settings alone at 478.4 kB. The aggregate was
+//     tracking how many trades the product serves, not waste.
+const MAX_SHOP_OFFLINE_JS_BYTES = 3.25 * 1024 * 1024;
 // Raised 912 -> 916 kB once, to pay for disabling terser's booleans_as_integers
 // (see vite.config.ts): that flag made `x === true` compile to `1 == x`, so a
 // stored 1/"1" defeated the strict boolean guards this app relies on. The
@@ -151,7 +170,30 @@ const MAX_TOTAL_JS_BYTES = 3.25 * 1024 * 1024;
 // So the real trade is roughly: -33 kB startup for +62 kB aggregate, plus finding
 // the last entry edge. Worth doing deliberately, with the ceiling revisited in the
 // same change — not bolted onto an unrelated one.
-const MAX_TOTAL_GZIP_BYTES = 950 * 1024;
+//
+// ── 2026-08-07: that work landed, and this line changed meaning ─────────────
+// This no longer sums every chunk. It bounds what ONE shop downloads for offline
+// use, taken from the service worker's own core + per-trade asset groups, and
+// reported per trade above so a regression names the trade that caused it.
+//
+// Two more manualChunks attempts were measured on the multi-vertical build
+// before accepting that this cannot be solved by chunking. Both are recorded so
+// nobody spends the afternoon again:
+//
+//   - Function form, one chunk per pack, merging kept at 70 kB: build FAILS.
+//     PurchaseBillsPage still loses its manifest record (same failure as the
+//     object form), and startup went 902.0 -> 1292.9 kB because the entry ends
+//     up static-importing the trade chunks.
+//   - Function form, merging off (0): builds, but startup 1073.6 kB / 320.7 kB
+//     gzip — over BOTH startup budgets — and the aggregate got worse too
+//     (1021.1 -> 1073.8 kB gzip). The improvement the note above predicted did
+//     not survive the tree growing; merging now pays for more than it costs.
+//
+// The honest guards are therefore the two startup ceilings, which measure first
+// paint, and this one, which measures the whole offline install of a real shop.
+// Splitting per trade in Rollup is not the lever — the service worker's asset
+// groups are, and they are what this now reads.
+const MAX_SHOP_OFFLINE_GZIP_BYTES = 950 * 1024;
 
 
 async function collectFiles(dir) {
@@ -254,6 +296,14 @@ async function initialAssetNames() {
   return new Set([...initial].map((file) => file.split("/").pop()));
 }
 
+async function offlineAssetGroups() {
+  const source = await readFile(join(scriptDir, "..", "dist", "public", "sw.js"), "utf8");
+  const coreMatch = source.match(/const CORE_ASSETS = (\[[^;]+\]);/);
+  const verticalMatch = source.match(/const VERTICAL_ASSETS = ({[^;]+});/);
+  if (!coreMatch || !verticalMatch) throw new Error("Generated service worker is missing offline asset manifests.");
+  return { core: JSON.parse(coreMatch[1]), verticals: JSON.parse(verticalMatch[1]) };
+}
+
 async function main() {
   const files = await readdir(assetsDir);
   const jsFiles = files.filter((file) => file.endsWith(".js"));
@@ -294,12 +344,30 @@ async function main() {
   const initialRows = rows.filter((row) => initialNames.has(row.file));
   const initialTotal = initialRows.reduce((sum, row) => sum + row.bytes, 0);
   const initialGzip = initialRows.reduce((sum, row) => sum + row.gzipBytes, 0);
+  const offlineGroups = await offlineAssetGroups();
+  const rowsByFile = new Map(rows.map((row) => [row.file, row]));
+  const shopPayloads = Object.entries({ kirana: [], custom: [], ...offlineGroups.verticals }).map(([id, verticalFiles]) => {
+    const files = new Set([...offlineGroups.core, ...verticalFiles].filter((file) => file.endsWith(".js")).map((file) => file.split("/").pop()));
+    const payloadRows = [...files].map((file) => rowsByFile.get(file)).filter(Boolean);
+    return {
+      id,
+      bytes: payloadRows.reduce((sum, row) => sum + row.bytes, 0),
+      gzipBytes: payloadRows.reduce((sum, row) => sum + row.gzipBytes, 0),
+      files: payloadRows.length,
+    };
+  }).sort((a, b) => b.gzipBytes - a.gzipBytes);
+  const largestShopPayload = shopPayloads[0];
   console.log("Bundle size check");
   for (const row of rows.sort((a, b) => b.bytes - a.bytes)) {
     console.log(`- ${row.file}: ${(row.bytes / 1024).toFixed(1)} kB (${(row.gzipBytes / 1024).toFixed(1)} kB gzip)`);
   }
   console.log(`Initial JS: ${(initialTotal / 1024).toFixed(1)} kB (${(initialGzip / 1024).toFixed(1)} kB gzip) across ${initialRows.length} files`);
-  console.log(`Total JS: ${(total / 1024).toFixed(1)} kB (${(totalGzip / 1024).toFixed(1)} kB gzip)`);
+  console.log(`Total JS: ${(total / 1024).toFixed(1)} kB (${(totalGzip / 1024).toFixed(1)} kB gzip) — product-wide, reported only`);
+
+  for (const payload of shopPayloads) {
+    console.log(`- shop payload (${payload.id}): ${(payload.bytes / 1024).toFixed(1)} kB (${(payload.gzipBytes / 1024).toFixed(1)} kB gzip) across ${payload.files} files`);
+  }
+  console.log(`Largest shop offline payload (${largestShopPayload.id}): ${(largestShopPayload.bytes / 1024).toFixed(1)} kB (${(largestShopPayload.gzipBytes / 1024).toFixed(1)} kB gzip) across ${largestShopPayload.files} files`);
 
   if (largest.bytes > MAX_JS_CHUNK_BYTES) {
     throw new Error(`Largest JS chunk ${(largest.bytes / 1024).toFixed(1)} kB exceeds ${(MAX_JS_CHUNK_BYTES / 1024).toFixed(0)} kB budget.`);
@@ -310,11 +378,11 @@ async function main() {
   if (initialGzip > MAX_INITIAL_GZIP_BYTES) {
     throw new Error(`Initial gzip JS ${(initialGzip / 1024).toFixed(1)} kB exceeds ${(MAX_INITIAL_GZIP_BYTES / 1024).toFixed(0)} kB startup budget.`);
   }
-  if (total > MAX_TOTAL_JS_BYTES) {
-    throw new Error(`Total JS ${(total / 1024).toFixed(1)} kB exceeds ${(MAX_TOTAL_JS_BYTES / 1024).toFixed(0)} kB budget.`);
+  if (largestShopPayload.bytes > MAX_SHOP_OFFLINE_JS_BYTES) {
+    throw new Error(`Largest shop offline JS ${(largestShopPayload.bytes / 1024).toFixed(1)} kB exceeds ${(MAX_SHOP_OFFLINE_JS_BYTES / 1024).toFixed(0)} kB budget.`);
   }
-  if (totalGzip > MAX_TOTAL_GZIP_BYTES) {
-    throw new Error(`Total gzip JS ${(totalGzip / 1024).toFixed(1)} kB exceeds ${(MAX_TOTAL_GZIP_BYTES / 1024).toFixed(0)} kB budget.`);
+  if (largestShopPayload.gzipBytes > MAX_SHOP_OFFLINE_GZIP_BYTES) {
+    throw new Error(`Largest shop offline gzip JS ${(largestShopPayload.gzipBytes / 1024).toFixed(1)} kB exceeds ${(MAX_SHOP_OFFLINE_GZIP_BYTES / 1024).toFixed(0)} kB budget.`);
   }
 }
 

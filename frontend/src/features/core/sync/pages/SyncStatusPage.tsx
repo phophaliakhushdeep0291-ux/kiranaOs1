@@ -170,11 +170,48 @@ function mergeServerConflictRows(
   serverRows: SyncConflictRecord[],
 ): ConflictRow[] {
   const scope = getOfflineScope();
+  const sourceEventIds = new Set(
+    serverRows
+      .map((row) => row.source_event_id)
+      .filter((value): value is string => typeof value === "string" && value.length > 0),
+  );
+  const serverIdentity = (row: SyncConflictRecord) => {
+    const explicitSource = typeof row.source_event_id === "string" && row.source_event_id.length > 0
+      ? row.source_event_id
+      : null;
+    const linkedSource = explicitSource
+      ?? (typeof row.server_version === "string" && sourceEventIds.has(row.server_version)
+        ? row.server_version
+        : null);
+    if (linkedSource) return `source:${linkedSource}`;
+    if (row.client_conflict_id) return `client:${row.client_conflict_id}`;
+    return `server:${row.id}`;
+  };
+  const canonicalServerRows = new Map<string, SyncConflictRecord>();
+  for (const row of serverRows) {
+    const identity = serverIdentity(row);
+    const current = canonicalServerRows.get(identity);
+    const rowIsAuthoritative = typeof row.source_event_id === "string" && row.source_event_id.length > 0;
+    const currentIsAuthoritative = typeof current?.source_event_id === "string" && current.source_event_id.length > 0;
+    if (!current || (rowIsAuthoritative && !currentIsAuthoritative)) {
+      canonicalServerRows.set(identity, row);
+    }
+  }
+
   const byIdentity = new Map<string, ConflictRow>();
-  for (const row of localRows) byIdentity.set(String(row.id), row);
-  for (const server of serverRows) {
+  for (const row of localRows) {
+    const explicitSource = readStringFromRecord(row, ["source_event_id"]);
+    const linkedSource = explicitSource
+      ?? (typeof row.server_version === "string" && sourceEventIds.has(row.server_version)
+        ? row.server_version
+        : null);
+    const identity = linkedSource ? `source:${linkedSource}` : `client:${String(row.id)}`;
+    byIdentity.set(identity, row);
+  }
+
+  for (const [identity, server] of canonicalServerRows) {
     const clientId = server.client_conflict_id ?? undefined;
-    const local = clientId ? byIdentity.get(clientId) : undefined;
+    const local = byIdentity.get(identity) ?? (clientId ? byIdentity.get(`client:${clientId}`) : undefined);
     const id = local?.id ?? clientId ?? server.id;
     const merged: ConflictRow = {
       ...(local ?? {}),
@@ -194,11 +231,12 @@ function mergeServerConflictRows(
       local_snapshot: local?.local_snapshot ?? server.local_snapshot ?? null,
       server_snapshot: server.server_snapshot ?? local?.server_snapshot ?? null,
       error_message: server.message,
+      source_event_id: server.source_event_id ?? readStringFromRecord(local, ["source_event_id"]),
       server_conflict_id: server.id,
       server_record_version: server.version,
       server_version: server.server_version,
     };
-    byIdentity.set(String(id), merged);
+    byIdentity.set(identity, merged);
   }
   return [...byIdentity.values()].sort((a, b) =>
     String(b.updated_at ?? b.created_at ?? "").localeCompare(String(a.updated_at ?? a.created_at ?? "")),

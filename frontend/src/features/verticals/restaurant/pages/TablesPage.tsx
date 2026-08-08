@@ -16,12 +16,12 @@ import { offlineDB } from "@/lib/offline/db";
 import { BILLING_DRAFT_KEY, HELD_BILLS_KEY } from "@/features/core/billing/pages/open-bills";
 import type { BillingDraft, HeldBill } from "@/features/core/billing/pages/billing-types";
 import {
-  buildKotTicket, buildOccupancy, loadFloorPlan, loadKotTickets, loadTableBills,
-  newTableId, reconcileTableBills, saveFloorPlan, saveKotTickets, saveTableBills,
+  buildKotTicket, buildOccupancy, loadFloorPlan, loadTableBills,
+  newTableId, reconcileTableBills, saveFloorPlan, saveTableBills,
   withLiveDraft, type KotTicket, type RestaurantTable, type TableOccupancy,
 } from "../service/table-store";
 import { openTableInBilling, releaseTable } from "../service/open-table";
-import { listTables, publishFloorPlan } from "../service/restaurant-api";
+import { fireKitchenTicket, listKitchenTickets, listTables, publishFloorPlan } from "../service/restaurant-api";
 import { mergeServerCodes, unpublishedTables } from "../service/table-qr";
 import { TableQrDialog } from "./components/TableQrDialog";
 import { useAuth } from "@/features/core/auth/useAuth";
@@ -99,7 +99,9 @@ export default function TablesPage() {
       offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null),
       offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY).catch(() => null),
       loadTableBills(),
-      loadKotTickets(),
+      // Every till's tickets, not this one's: the "already fired" tally below
+      // is only right if it can see what the other counter has already sent.
+      listKitchenTickets({ includeServed: true }).catch(() => [] as KotTicket[]),
     ]);
     // The table open at the till lives in the draft, not the parked set.
     const held = withLiveDraft(Array.isArray(heldRaw) ? heldRaw : [], draft);
@@ -163,15 +165,36 @@ export default function TablesPage() {
 
   async function sendToKitchen(row: TableOccupancy) {
     if (row.pendingKotLines.length === 0 || !row.bill) return;
-    const current = await loadKotTickets();
-    const ticket = buildKotTicket(row.table, row.bill.id, row.pendingKotLines, current);
-    const next = [ticket, ...current];
-    await saveKotTickets(next);
-    setTickets(next);
-    toast({
-      title: `KOT #${ticket.ticketNo} sent`,
-      description: `${ticket.lines.length} item${ticket.lines.length === 1 ? "" : "s"} from ${row.table.name} are with the kitchen.`,
-    });
+    const lines = row.pendingKotLines;
+    try {
+      // The ticket number comes back from the server: two tills firing at the
+      // same moment would otherwise both pick the same one, and the kitchen
+      // would get two different tickets called #14.
+      //
+      // The idempotency key is this device's own ticket id, so a send retried
+      // after a dropped reply lands once rather than putting the dish on twice.
+      const ticket = await fireKitchenTicket({
+        tableId: row.table.id,
+        tableName: row.table.name,
+        billId: row.bill.id,
+        lines,
+        idempotencyKey: buildKotTicket(row.table, row.bill.id, lines, tickets).id,
+      });
+      setTickets([ticket, ...tickets]);
+      toast({
+        title: `KOT #${ticket.ticketNo} sent`,
+        description: `${ticket.lines.length} item${ticket.lines.length === 1 ? "" : "s"} from ${row.table.name} are with the kitchen.`,
+      });
+    } catch {
+      // Deliberately not saved locally as a consolation. A ticket the kitchen
+      // screen cannot see is not a sent ticket, and a success toast over one
+      // would be exactly the bug this whole change removes.
+      toast({
+        title: "The kitchen did not get that",
+        description: "The board is shared with the kitchen screen, so sending needs a connection. Check the network — nothing has been taken off the table.",
+        variant: "destructive",
+      });
+    }
   }
 
   function openForm(table: RestaurantTable | null) {

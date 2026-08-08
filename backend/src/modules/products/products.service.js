@@ -1,5 +1,6 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
+import { createAuditLog } from "../audit/audit.service.js";
 import { requireFeatureAccess } from "../feature-gates/featureGate.service.js";
 import {
   getProductPermanentDeleteBlockReason,
@@ -447,6 +448,126 @@ async function assertNoActiveProductNameConflict(shopId, name, excludeId = null)
     err.code = "PRODUCT_NAME_DUPLICATE";
     throw err;
   }
+}
+
+/**
+ * Refuse a barcode that any product in this shop already answers to.
+ *
+ * Wider than the database constraint on purpose. `Product_shopId_barcode_key` covers
+ * Product.barcode only, but a scan resolves against three columns — resolveScanMatch()
+ * on the till matches Product.barcode OR Product.sku, and per-pack codes live on
+ * ProductSellingUnit.barcode. Binding a code that already sits in one of the other two
+ * would pass the constraint and still make the next scan of it ambiguous, which is the
+ * exact failure this feature exists to prevent.
+ */
+async function assertBarcodeAvailable(shopId, code, excludeProductId = null) {
+  const exclude = excludeProductId ? { NOT: { id: excludeProductId } } : {};
+  // Soft-deleted products are included: they hold their code until they are purged,
+  // because restoring one from the recycle bin would otherwise create a real duplicate.
+  const owner = await db.product.findFirst({
+    where: { shopId, ...exclude, OR: [{ barcode: code }, { sku: code }] },
+    select: { id: true, name: true, deletedAt: true },
+  });
+  if (owner) {
+    const where = owner.deletedAt ? " (in the recycle bin)" : "";
+    const err = new AppError(`Barcode ${code} already belongs to "${owner.name}"${where}`, 409);
+    err.code = "PRODUCT_BARCODE_DUPLICATE";
+    err.details = { productId: owner.id, productName: owner.name, inRecycleBin: Boolean(owner.deletedAt) };
+    throw err;
+  }
+
+  const unitOwner = await db.productSellingUnit.findFirst({
+    where: { shopId, barcode: code, ...(excludeProductId ? { NOT: { productId: excludeProductId } } : {}) },
+    select: { productId: true, unitCode: true, product: { select: { name: true } } },
+  });
+  if (unitOwner) {
+    const err = new AppError(
+      `Barcode ${code} already belongs to the ${unitOwner.unitCode} pack of "${unitOwner.product?.name ?? "another product"}"`,
+      409,
+    );
+    err.code = "PRODUCT_BARCODE_DUPLICATE";
+    err.details = { productId: unitOwner.productId, productName: unitOwner.product?.name ?? null, unitCode: unitOwner.unitCode };
+    throw err;
+  }
+}
+
+/**
+ * Bind a scanned code to a product that does not have one yet — capture-on-first-scan.
+ *
+ * Three rules, all of them correctness rather than polish:
+ *
+ *  - It never REBINDS. A product that already answers to a code keeps it; changing a
+ *    barcode is an explicit action from the product screen, not something a cashier can
+ *    do by scanning the wrong packet during a queue.
+ *  - Re-binding the SAME code is a success, not an error. An offline bind replays
+ *    through the outbox whenever a push is retried, and a retry that 409s would strand
+ *    the operation in the queue forever.
+ *  - Uniqueness is checked against every column a scan can match, then enforced again by
+ *    the database, so two devices binding the same code concurrently cannot both win.
+ */
+export async function bindProductBarcode(shopId, productId, barcode, { identity = null, req = null, userId = null } = {}) {
+  const code = compactText(barcode);
+  if (!code) {
+    const err = new AppError("A barcode is required", 400);
+    err.code = "PRODUCT_BARCODE_REQUIRED";
+    throw err;
+  }
+
+  const product = await db.product.findFirst({ where: { id: productId, shopId, deletedAt: null } });
+  if (!product) throw new AppError("Product not found", 404);
+
+  const current = compactText(product.barcode);
+  // Idempotent replay: the same device (or another) already landed this exact bind.
+  if (current === code) return deserializeProduct(product);
+  if (current) {
+    const err = new AppError(
+      `"${product.name}" already has barcode ${current}. Change it from the product screen.`,
+      409,
+    );
+    err.code = "PRODUCT_BARCODE_ALREADY_SET";
+    err.details = { productId: product.id, productName: product.name, currentBarcode: current };
+    throw err;
+  }
+
+  await assertBarcodeAvailable(shopId, code, productId);
+
+  let updated;
+  try {
+    updated = await db.product.update({
+      where: { id: product.id },
+      // sku mirrors barcode the same way the create path does, so a scan resolves
+      // whichever column the till happens to match on.
+      data: { barcode: code, ...(compactText(product.sku) ? {} : { sku: code }) },
+    });
+  } catch (error) {
+    // The unique index is the real arbiter. Two devices that both passed the read
+    // above race here, and exactly one loses — deterministically, at the database.
+    if (error?.code === "P2002") {
+      const err = new AppError(`Barcode ${code} was just bound to another product`, 409);
+      err.code = "PRODUCT_BARCODE_DUPLICATE";
+      throw err;
+    }
+    throw error;
+  }
+
+  await createAuditLog({
+    shopId,
+    userId,
+    req,
+    action: "product_barcode_bound",
+    entityType: "product",
+    entityId: product.id,
+    before: { barcode: product.barcode, sku: product.sku },
+    after: { barcode: updated.barcode, sku: updated.sku },
+    metadata: {
+      productName: product.name,
+      barcode: code,
+      source: identity?.sourceDeviceId ? "sync" : "online",
+      clientProductId: identity?.clientProductId ?? null,
+    },
+  });
+
+  return deserializeProduct(updated);
 }
 
 async function getDeletedProduct(shopId, id) {

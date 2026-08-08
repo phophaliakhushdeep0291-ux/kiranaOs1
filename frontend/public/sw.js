@@ -2,6 +2,7 @@
 const BUILD_ID = "__KIRANA_BUILD_ID__";
 const CACHE_VERSION = `kiranaos-shell-v7-${BUILD_ID}`;
 const CORE_ASSETS = __KIRANA_CORE_ASSETS__;
+const VERTICAL_ASSETS = __KIRANA_VERTICAL_ASSETS__;
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -51,6 +52,15 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.data && event.data.type === "CACHE_VERTICAL") {
+    const assets = VERTICAL_ASSETS[event.data.verticalId];
+    if (Array.isArray(assets)) event.waitUntil(
+      caches.open(CACHE_VERSION).then(async (cache) => {
+        await cache.addAll(assets);
+        await cache.put(`/__offline/vertical/${event.data.verticalId}/${BUILD_ID}`, new Response("ready"));
+      }),
+    );
+  }
 });
 
 // Sensitive routes (API, auth, sync, cross-origin, non-GET) must never touch Cache Storage.

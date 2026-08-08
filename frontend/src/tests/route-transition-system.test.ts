@@ -12,7 +12,11 @@ describe("product-wide route transition system", () => {
   it("wraps every lazy route in one keyed ready transition", () => {
     expect(routes).toContain('className="app-route-frame min-w-0"');
     expect(routes).toContain("<RouteTransition routeKey={routeKey}>");
-    expect(routeTransition).toContain('className="app-route-ready min-w-0"');
+    // The entry flourish is now opt-in per render (see the stranded-page guard
+    // in layout-shell-behavior), so the class list is composed rather than
+    // literal. What matters here is unchanged: one wrapper, carrying both the
+    // hook every route is found by and its min-width reset.
+    expect(routeTransition).toMatch(/className=\{`app-route-ready min-w-0\$\{[^}]*\}`\}/);
   });
 
   it("resets the application scroll position precisely on page changes", () => {

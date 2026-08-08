@@ -293,6 +293,43 @@ async function applyMutableConflictChoice(shopId, conflict, resolution, mergedPa
 }
 
 export async function reportSyncConflict(shopId, input, actor = {}) {
+  // A push conflict is already durable on the server under sourceEventId. Older
+  // clients still report the same item after receiving the push response; link
+  // that client id to the authoritative row instead of creating a second owner
+  // review card for one failed operation.
+  const linkedSourceEventId = typeof input.server_version === "string"
+    ? input.server_version.trim()
+    : "";
+  if (linkedSourceEventId) {
+    const sourceConflict = await db.syncConflict.findFirst({
+      where: {
+        shopId,
+        sourceEventId: linkedSourceEventId,
+        entityType: input.entity_type,
+        entityId: input.entity_id,
+      },
+    });
+    if (sourceConflict) {
+      let linked = sourceConflict;
+      if (!sourceConflict.clientConflictId) {
+        const occupiedClientId = await db.syncConflict.findFirst({
+          where: { shopId, clientConflictId: input.client_conflict_id },
+          select: { id: true },
+        });
+        if (!occupiedClientId) {
+          try {
+            linked = await db.syncConflict.update({
+              where: { id: sourceConflict.id },
+              data: { clientConflictId: input.client_conflict_id },
+            });
+          } catch {
+            linked = await db.syncConflict.findUnique({ where: { id: sourceConflict.id } }) ?? sourceConflict;
+          }
+        }
+      }
+      return publicSyncConflict(linked);
+    }
+  }
   const create = {
     shopId,
     clientConflictId: input.client_conflict_id,
@@ -436,6 +473,42 @@ export async function resolveSyncConflict(shopId, input, actor = {}) {
       expiresAt: syncConflictExpiry(),
     },
   });
+  const sourceIdentity = existing.sourceEventId
+    ?? (existing.clientConflictId && existing.serverVersion ? String(existing.serverVersion) : null);
+  let linkedConflictIds = [];
+  if (sourceIdentity) {
+    const linkedConflicts = await db.syncConflict.findMany({
+      where: {
+        shopId,
+        id: { not: existing.id },
+        status: "open",
+        entityType: existing.entityType,
+        entityId: existing.entityId,
+        OR: [
+          { sourceEventId: sourceIdentity },
+          { sourceEventId: null, serverVersion: sourceIdentity },
+        ],
+      },
+      select: { id: true },
+    });
+    linkedConflictIds = linkedConflicts.map((conflict) => conflict.id);
+    if (linkedConflictIds.length > 0) {
+      await db.syncConflict.updateMany({
+        where: { shopId, id: { in: linkedConflictIds }, status: "open" },
+        data: {
+          status: targetStatus,
+          resolution,
+          mergedPayloadJson: snapshotJson(selectedPayload),
+          resolutionNote: input.note ?? null,
+          resolvedByUserId: actor.userId ?? null,
+          resolvedByDeviceId: actor.deviceId ?? null,
+          resolvedAt,
+          expiresAt: syncConflictExpiry(),
+          version: { increment: 1 },
+        },
+      });
+    }
+  }
   await createAuditLog({
     shopId,
     userId: actor.userId ?? null,
@@ -449,6 +522,7 @@ export async function resolveSyncConflict(shopId, input, actor = {}) {
       entityType: existing.entityType,
       entityId: existing.entityId,
       reasonCode: existing.reasonCode,
+      linkedConflictIds,
     },
   });
   return publicSyncConflict(updated);

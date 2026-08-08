@@ -62,6 +62,18 @@ export async function update(req, res, next) {
   } catch (err) { next(err); }
 }
 
+export async function bindBarcode(req, res, next) {
+  try {
+    // The service writes its own audit row, because the bind also arrives over sync
+    // where there is no request to hang one off.
+    const product = await svc.bindProductBarcode(req.shopId, req.params.id, req.body.barcode, {
+      req,
+      userId: req.user?.userId ?? null,
+    });
+    res.json({ success: true, data: product });
+  } catch (err) { next(err); }
+}
+
 export async function remove(req, res, next) {
   try {
     const product = await svc.softDeleteProduct(req.shopId, req.params.id);

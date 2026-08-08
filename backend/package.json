@@ -68,6 +68,7 @@
     "proof:restore": "node scripts/disaster-recovery-proof.js",
     "proof:dr": "node scripts/disaster-recovery-proof.js",
     "migration:safety": "node scripts/migration-safety-check.js",
+    "check:barcode-uniqueness": "node scripts/check-barcode-uniqueness.js",
     "release:gate": "node scripts/release-gate.js",
     "release:manifest": "node scripts/release-manifest.js",
     "release:certify:local": "node scripts/release-certification.js --mode=local",
@@ -99,7 +100,7 @@
     "test:book-lists": "node tests/book-lists.examples.js",
     "test:furniture-orders": "node tests/furniture-orders.examples.js",
     "test:testers": "node tests/cosmetics-testers.examples.js",
-    "test:restaurant": "node tests/restaurant-tables-menu.examples.js"
+    "test:restaurant": "node tests/restaurant-tables-menu.examples.js && node tests/kitchen-tickets.examples.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",

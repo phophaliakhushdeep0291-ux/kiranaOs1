@@ -53,7 +53,12 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // The restaurant floor and its recipe book. The floor is what every printed
   // table QR resolves against — losing it turns every sticker in the room into
   // a dead link — and a recipe is what makes the kitchen's stock figures true.
-  "RestaurantTable", "DishRecipeComponent",
+  //
+  // A kitchen ticket is business history too, not install state: it is the
+  // record of what was actually cooked, which is the answer when a guest
+  // disputes a line on the bill. It is short-lived on the rail, but a restore
+  // that dropped it would leave the sale with nothing behind it.
+  "RestaurantTable", "DishRecipeComponent", "KitchenTicket",
 ]);
 
 export const RESTORABLE_CHILD_MODELS = Object.freeze({

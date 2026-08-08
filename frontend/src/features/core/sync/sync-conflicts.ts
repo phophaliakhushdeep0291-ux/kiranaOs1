@@ -21,6 +21,9 @@ export async function storeConflict(input: {
   localSnapshot?: unknown;
   serverSnapshot?: unknown;
   errorMessage?: string;
+  serverConflictId?: string;
+  serverRecordVersion?: number;
+  serverVersion?: string | number | null;
 }): Promise<void> {
   const scope = getOfflineScope();
   const now = nowIso();
@@ -44,8 +47,14 @@ export async function storeConflict(input: {
     local_snapshot: localSnapshot ?? null,
     server_snapshot: serverSnapshot ?? null,
     error_message: input.errorMessage ?? "Sync conflict",
+    source_event_id: input.sourceId,
+    server_conflict_id: input.serverConflictId,
+    server_record_version: input.serverRecordVersion,
+    server_version: input.serverVersion ?? input.sourceId,
   });
 
+
+  if (input.serverConflictId) return;
   // Local persistence is authoritative while offline. Reporting is deliberately
   // best-effort and backgrounded; when connectivity exists it makes the same
   // review item visible to every owner/admin device without blocking reconciliation.

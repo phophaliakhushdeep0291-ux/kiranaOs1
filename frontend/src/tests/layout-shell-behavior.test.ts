@@ -1,9 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+
+/** Every .tsx under a directory, with its text, for whole-tree invariants. */
+function sourceFiles(dir: string): Array<{ path: string; text: string }> {
+  const found: Array<{ path: string; text: string }> = [];
+  const walk = (current: string) => {
+    for (const entry of readdirSync(current)) {
+      const full = join(current, entry);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (entry.endsWith(".tsx")) found.push({ path: full.replace(/\\/g, "/"), text: readFileSync(full, "utf8") });
+    }
+  };
+  walk(dir);
+  return found;
+}
 
 const layout = readFileSync("src/components/layout/Layout.tsx", "utf8");
 const mobileChrome = readFileSync("src/components/layout/MobileAppChrome.tsx", "utf8");
 const styles = readFileSync("src/index.css", "utf8");
+const routeTransition = readFileSync("src/components/shared/RouteTransition.tsx", "utf8");
 
 /** Every `href:` inside one navigation literal, found by balancing its brackets. */
 function navHrefs(source: string, declaration: string) {
@@ -17,6 +33,64 @@ function navHrefs(source: string, declaration: string) {
   }
   return [...source.slice(open, end).matchAll(/href:\s*"([^"]+)"/g)].map((match) => match[1]);
 }
+
+describe("route entry animation cannot strand the page", () => {
+  // This has now broken the layout twice from opposite ends. `both`/`forwards`
+  // left an identity transform behind, so page-level `position: fixed` chrome
+  // anchored to the scrolling page box; `backwards` pinned the opening frame —
+  // `opacity: 0` plus a 6px drop — so a document that was laid out but not yet
+  // painting rendered invisible, 6px low, and 6px taller than the viewport.
+  // Both failures share one cause: a decorative animation owning the resting
+  // state of the page. These assertions keep the resting state authoritative.
+
+  it("keeps the flourish off the element unless the page can actually paint", () => {
+    // A hidden document's animation clock never advances — the exact condition
+    // that used to strand the page — and the check has to be synchronous, or
+    // the settled page paints once and then flashes back to transparent.
+    expect(routeTransition).toContain('document.visibilityState === "visible"');
+    expect(routeTransition).toContain("app-route-animate");
+    // The animation must hang off the opt-in class, never the base class, or
+    // the resting state stops being the correct one.
+    expect(styles).toContain(".app-route-ready.app-route-animate {");
+    expect(styles).not.toMatch(/\.app-route-ready\s*\{[^}]*animation:/);
+  });
+
+  it("never fills a transform keyframe in either direction", () => {
+    for (const animation of ["app-route-enter", "app-data-enter"]) {
+      const declaration = new RegExp(`animation:\\s*${animation}[^;]*;`, "g");
+      const uses = styles.match(declaration) ?? [];
+      expect(uses.length, `${animation} is not declared`).toBeGreaterThan(0);
+      for (const use of uses) {
+        // `forwards`/`both` re-creates the containing-block bug; `backwards`
+        // re-creates the stranded-opening-frame bug. No fill mode is correct.
+        expect(use, `${animation} must not set a fill mode`).not.toMatch(/forwards|backwards|both/);
+      }
+    }
+  });
+
+  it("still resolves both entry keyframes back to a clean resting state", () => {
+    // Reduced motion is the other path to the resting state and must clear the
+    // transform outright rather than leaving an identity matrix behind.
+    expect(styles).toContain("animation: none !important;");
+    expect(styles).toContain("transform: none !important;");
+  });
+});
+
+describe("mobile panels stay inside the viewport the user can see", () => {
+  it("sizes every slide-over to the dynamic viewport, not the large one", () => {
+    // These panels are `position: fixed`, so `h-full` resolves against the
+    // large viewport — the address-bar-hidden one — while their sticky action
+    // row sits on the panel's bottom edge. On a phone with the address bar
+    // showing, that puts Cancel/Save below the fold.
+    const panels = sourceFiles("src/features").filter((file) => file.text.includes("app-slide-panel"));
+    expect(panels.length).toBeGreaterThan(5);
+    const largeViewport = panels
+      .filter((file) => /app-slide-panel[^"'`]*\bh-full\b/.test(file.text))
+      .map((file) => file.path);
+    expect(largeViewport).toEqual([]);
+    expect(styles).not.toMatch(/\.purchase-panel\s*\{[^}]*\bh-full\b/);
+  });
+});
 
 describe("desktop app shell behavior", () => {
   it("keeps the sidebar fixed while the page content scrolls", () => {

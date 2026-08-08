@@ -1131,7 +1131,7 @@ describe("sync backend contract", () => {
     });
   });
 
-  it("backend conflict response stores conflict and marks outbox CONFLICT", async () => {
+  it("backend conflict response reuses the durable server conflict without reporting a duplicate", async () => {
     const event = seedProductOutbox();
     mockedSyncPush.mockResolvedValueOnce({
       results: [
@@ -1140,8 +1140,23 @@ describe("sync backend contract", () => {
           status: "CONFLICT",
           entity_type: "product",
           local_id: "product_local_1",
-          conflict: { server_record: { id: "product_local_1", name: "Server Sugar" } },
           error_message: "version conflict",
+          result: {
+            code: "SYNC_PRODUCT_VERSION_CONFLICT",
+            retryable: false,
+            conflict_id: "server_conflict_1",
+            conflict: {
+              id: "server_conflict_1",
+              source_event_id: event.op_id,
+              entity_type: "product",
+              entity_id: "product_local_1",
+              message: "version conflict",
+              status: "open",
+              version: 3,
+              server_version: "44",
+              server_snapshot: { id: "product_local_1", name: "Server Sugar" },
+            },
+          },
         },
       ],
     });
@@ -1156,9 +1171,15 @@ describe("sync backend contract", () => {
       expect.objectContaining({
         entity_type: "product",
         entity_id: "product_local_1",
+        source_event_id: event.op_id,
+        server_conflict_id: "server_conflict_1",
+        server_record_version: 3,
+        server_version: "44",
+        server_snapshot: { id: "product_local_1", name: "Server Sugar" },
         error_message: "version conflict",
       }),
     ]);
+    expect(reportSyncConflictMock).not.toHaveBeenCalled();
   });
 
   it("retry failed operation works and reuses the same idempotency_key", async () => {

@@ -12,6 +12,10 @@ import type {
   RestaurantTable,
   RestaurantTableInput,
 } from "@/types/api";
+// Same pack, so this is not a boundary crossing: the ticket shape is already
+// defined beside the pure helpers that build and read it, and duplicating it
+// here would give the two halves of one feature two types to drift apart.
+import type { KotLine, KotStatus, KotTicket } from "./table-store";
 
 /**
  * The restaurant's server-side records: the floor, the menu card, the recipes.
@@ -158,4 +162,54 @@ export async function readCatalogueProducts(): Promise<Product[]> {
   const live = local.filter((product) => product.deletedAt == null);
   if (live.length > 0) return live;
   return listProductsFromServer({ limit: 500 }).catch(() => [] as Product[]);
+}
+
+// ── Kitchen tickets ──────────────────────────────────────────────────────────
+//
+// The clearest case in this file for why these records are the server's. A
+// kitchen ticket is written by the till and read by a screen across the room —
+// a different device, always. While tickets lived in the firing device's own
+// IndexedDB the two never met, and the kitchen rail sat empty all service.
+//
+// Firing therefore needs a connection, and that is the honest behaviour rather
+// than a limitation: a ticket saved locally because the Wi-Fi was down is a
+// ticket the kitchen will never cook, and telling the waiter it was sent would
+// be the same bug wearing a success toast.
+//
+// Reads still fall back to cache, so a screen that briefly loses the network
+// keeps showing the rail it last saw instead of blanking mid-service.
+
+const KOT_CACHE_KEY = "restaurant:kot:server-cache:v1";
+
+export function listKitchenTickets(options: { includeServed?: boolean; billId?: string } = {}) {
+  const params = new URLSearchParams();
+  if (options.includeServed) params.set("includeServed", "true");
+  if (options.billId) params.set("billId", options.billId);
+  const qs = params.toString() ? `?${params}` : "";
+  // Only the unfiltered rail is cached: a per-bill answer is a question about
+  // one sitting, and serving a stale one would let the till re-fire an order.
+  const load = () => apiRequest<KotTicket[]>(`/restaurant/kot${qs}`, { background: true });
+  return options.billId ? load() : readThrough(KOT_CACHE_KEY, load);
+}
+
+export function fireKitchenTicket(input: {
+  tableId: string;
+  tableName: string;
+  billId: string;
+  lines: KotLine[];
+  /** The till's own ticket id, so a retry after a dropped reply lands once. */
+  idempotencyKey?: string;
+}) {
+  return apiRequest<KotTicket>("/restaurant/kot", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function setKitchenTicketStatus(id: string, status: KotStatus) {
+  return apiRequest<KotTicket>(`/restaurant/kot/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function voidKitchenTicket(id: string) {
+  return apiRequest<{ id: string; deleted: boolean }>(`/restaurant/kot/${id}`, { method: "DELETE" });
 }
