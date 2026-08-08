@@ -225,7 +225,7 @@ async function auditOfflineRoute(client, qaId, route) {
   // navigator.onLine is only a network-interface hint and can remain true while
   // every request is blocked. Prove the cut with an uncached cross-origin fetch.
   const networkBlocked = await client.evaluate(`fetch(${JSON.stringify(API_HEALTH_URL)}+"?offlineProbe="+Date.now(),{cache:"no-store"}).then(()=>false).catch(()=>true)`);
-  const metrics = await client.evaluate(`(()=>{const text=document.body.innerText,main=document.getElementById("main-content");return{path:location.pathname,online:navigator.onLine,controlled:Boolean(navigator.serviceWorker?.controller),windowScrollTop:Math.round(window.scrollY),mainScrollTop:Math.round(main?.scrollTop||0),documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,genericFailure:/something went wrong|unexpected error|page failed to load|application failed to start/i.test(text),localDbProblem:text.includes("Local database problem detected"),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[],hasSeedProduct:text.includes("Offline Matrix Rice"),hasSeedCustomer:text.includes("Offline Matrix Customer")}})()`);
+  const metrics = await client.evaluate(`(()=>{const text=document.body.innerText,main=document.getElementById("main-content");return{path:location.pathname,online:navigator.onLine,controlled:Boolean(navigator.serviceWorker?.controller),windowScrollTop:Math.round(window.scrollY),mainScrollTop:Math.round(main?.scrollTop||0),documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,genericFailure:/something went wrong|unexpected error|page failed to load|application failed to start/i.test(text),localDbProblem:text.includes("Local database problem detected"),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[],hasSeedProduct:text.includes("Offline Matrix Rice"),hasSeedCustomer:text.includes("Offline Matrix Customer"),hasLocalBackupTool:text.includes("Encrypted local emergency backup")&&text.includes("Export local backup")&&text.includes("Works offline")}})()`);
   const screenshot = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
   const filename = `${qaId.toLowerCase()}-${VIEWPORT.width}x${VIEWPORT.height}.png`;
   await mkdir(OUTPUT_DIR, { recursive: true });
@@ -241,7 +241,10 @@ async function auditOfflineRoute(client, qaId, route) {
   assert(metrics.runtimeErrors.length === 0, `${qaId} runtime errors offline: ${metrics.runtimeErrors.join(" | ")}`);
   if (route === "/products") assert(metrics.hasSeedProduct, `${qaId} did not restore cached product data`);
   if (route === "/customers") assert(metrics.hasSeedCustomer, `${qaId} did not restore cached customer data`);
-  if (route === "/recovery-mode") assert(!metrics.localDbProblem, `${qaId} falsely reported a local database problem`);
+  if (route === "/recovery-mode") {
+    assert(!metrics.localDbProblem, `${qaId} falsely reported a local database problem`);
+    assert(metrics.hasLocalBackupTool, `${qaId} did not expose the encrypted local backup tool offline`);
+  }
   return { qaId, route, networkBlocked, readyMs, ...metrics, screenshot: filename };
 }
 

@@ -10,6 +10,9 @@ describe("recovery access contract", () => {
     expect(page).not.toContain("<UpgradePrompt");
     expect(page).toContain("Restore last unsaved bill");
     expect(page).toContain("Recover pending sync operations");
+    expect(page).toContain("Encrypted local emergency backup");
+    expect(page).toContain("Export local backup");
+    expect(page).toContain("Works offline");
     expect(page).toContain("Local DB health check");
   });
 
