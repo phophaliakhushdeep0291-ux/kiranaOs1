@@ -13,10 +13,14 @@ test("Windows installer registers an automatic hidden service and launches setup
   assert.match(installer, /\/inheritance:r/);
   assert.match(installer, /S-1-5-18/);
   assert.match(installer, /S-1-5-32-544/);
+  assert.match(installer, /PrepareToInstall/);
+  assert.match(installer, /Parameters: "refresh"[^\r\n]+ShouldRefreshService/);
+  assert.match(installer, /Parameters: "start"[^\r\n]+ShouldRefreshService/);
   assert.match(service, /<startmode>Automatic<\/startmode>/);
   assert.match(service, /127\.0\.0\.1|server\.mjs/);
   assert.match(setup, /PrinterSettings\.InstalledPrinters/);
   assert.match(setup, /Test print/);
+  assert.match(setup, /config\.Token = RandomToken\(\)/);
   assert.doesNotMatch(setup, /Console\.(Write|Read)/);
 });
 

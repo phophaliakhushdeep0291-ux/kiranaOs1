@@ -47,9 +47,40 @@ Name: "desktopicon"; Description: "Create a Hardware Bridge Setup shortcut"; Fla
 
 [Run]
 Filename: "{sys}\icacls.exe"; Parameters: """{commonappdata}\KiranaOS\HardwareBridge"" /inheritance:r /grant:r ""*S-1-5-18:(OI)(CI)F"" ""*S-1-5-32-544:(OI)(CI)F"""; Flags: runhidden waituntilterminated
-Filename: "{app}\KiranaOSHardwareBridge.exe"; Parameters: "install"; Flags: runhidden waituntilterminated
+Filename: "{app}\KiranaOSHardwareBridge.exe"; Parameters: "install"; Flags: runhidden waituntilterminated; Check: ShouldInstallService
+Filename: "{app}\KiranaOSHardwareBridge.exe"; Parameters: "refresh"; Flags: runhidden waituntilterminated; Check: ShouldRefreshService
+Filename: "{app}\KiranaOSHardwareBridge.exe"; Parameters: "start"; Flags: runhidden waituntilterminated; Check: ShouldRefreshService
 Filename: "{app}\KiranaOS.HardwareBridge.Setup.exe"; Description: "Choose printer and pair KiranaOS"; Flags: postinstall waituntilterminated skipifsilent
 
 [UninstallRun]
 Filename: "{app}\KiranaOSHardwareBridge.exe"; Parameters: "stop"; Flags: runhidden waituntilterminated skipifdoesntexist
 Filename: "{app}\KiranaOSHardwareBridge.exe"; Parameters: "uninstall"; Flags: runhidden waituntilterminated skipifdoesntexist
+
+[Code]
+var
+  ServiceExistedBeforeInstall: Boolean;
+
+function ShouldInstallService: Boolean;
+begin
+  Result := not ServiceExistedBeforeInstall;
+end;
+
+function ShouldRefreshService: Boolean;
+begin
+  Result := ServiceExistedBeforeInstall;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  WrapperPath: String;
+begin
+  Result := '';
+  ServiceExistedBeforeInstall := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\KiranaOSHardwareBridge');
+  WrapperPath := ExpandConstant('{app}\KiranaOSHardwareBridge.exe');
+  if ServiceExistedBeforeInstall and FileExists(WrapperPath) then
+  begin
+    if (not Exec(WrapperPath, 'stop', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+      Result := 'The existing KiranaOS Hardware Bridge service could not be stopped. Close Setup and try again.';
+  end;
+end;

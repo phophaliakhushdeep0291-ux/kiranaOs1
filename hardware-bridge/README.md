@@ -14,6 +14,8 @@ The retail installation path is the signed `KiranaOS-Hardware-Bridge-<version>-x
 
 Choose the receipt printer, select **Save printer and create pairing code**, then type the six-character code in KiranaOS → Settings → Printer. Codes expire after ten minutes, stop after five wrong attempts, and are single-use. KiranaOS exchanges the code locally for the long token and never syncs that token to the cloud. The setup window includes a real **Test print** action and reports only an actionable result—never a stack trace or adapter code.
 
+Creating another pairing code rotates the private device token, immediately invalidating every previously paired browser. Installer upgrades stop the existing service before replacing files, refresh the registered service definition, and restart it after the secured files are in place.
+
 The setup window and Printer Settings show the installed version. The service checks the configured HTTPS update manifest every six hours; Printer Settings displays an update notice and download version when a newer release exists.
 
 Supported adapters:
