@@ -10,6 +10,7 @@ const API_HEALTH_URL = `${API_URL.replace(/\/api$/, "")}/health`;
 const CHROME_PATH = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const DEBUG_PORT = Number(process.env.QA_OFFLINE_DEBUG_PORT || 9484);
 const OUTPUT_DIR = path.resolve(process.env.QA_OFFLINE_OUTPUT_DIR || "qa-artifacts/offline-core-restart");
+const BUILD_DIR = path.resolve(process.env.QA_OFFLINE_BUILD_DIR || path.join(OUTPUT_DIR, "dist"));
 const PROFILE_DIR = path.resolve(process.env.QA_OFFLINE_PROFILE_DIR || path.join(tmpdir(), "artha-offline-core-restart-profile"));
 const BUILD_ID = process.env.QA_OFFLINE_BUILD_ID || "offline-core-restart-qa";
 const VIEWPORT = { width: 390, height: 844 };
@@ -69,6 +70,15 @@ async function waitForUrl(url, timeout = 30_000) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
+async function waitForUrlDown(url, timeout = 15_000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    try { await fetch(url); } catch { return; }
+    await sleep(150);
+  }
+  throw new Error(`Timed out waiting for ${url} to close`);
+}
+
 async function waitForPage(client, expression, timeout = 45_000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -92,7 +102,7 @@ async function runBuild() {
     "node_modules/vite/bin/vite.js", "build", "--configLoader", "runner", "--config", "vite.config.ts",
   ], {
     cwd: path.resolve("."),
-    env: { ...process.env, VITE_API_BASE_URL: API_URL, KIRANA_BUILD_ID: BUILD_ID },
+    env: { ...process.env, VITE_API_BASE_URL: API_URL, KIRANA_BUILD_ID: BUILD_ID, KIRANA_OUT_DIR: BUILD_DIR },
     windowsHide: true,
     stdio: "inherit",
   });
@@ -107,18 +117,31 @@ async function startPreview() {
   const preview = spawn(process.execPath, [
     "node_modules/vite/bin/vite.js", "preview", "--config", "vite.config.ts",
     "--host", "127.0.0.1", "--port", String(new URL(FRONTEND_URL).port || 4173), "--strictPort",
-  ], { cwd: path.resolve("."), windowsHide: true, stdio: "ignore" });
+  ], {
+    cwd: path.resolve("."),
+    env: { ...process.env, KIRANA_OUT_DIR: BUILD_DIR },
+    windowsHide: true,
+    stdio: "ignore",
+  });
   await waitForUrl(FRONTEND_URL);
   return preview;
 }
 
-async function launchChrome(initialUrl) {
+async function launchChrome(initialUrl, debugPort) {
+  let stderr = "";
   const chrome = spawn(CHROME_PATH, [
     "--headless=new", "--disable-gpu", "--disable-extensions", "--no-first-run", "--no-default-browser-check",
-    `--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${PROFILE_DIR}`, initialUrl,
-  ], { windowsHide: true, stdio: "ignore" });
-  await waitForUrl(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
-  const targets = await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json`)).json();
+    "--remote-debugging-address=127.0.0.1", `--remote-debugging-port=${debugPort}`, `--user-data-dir=${PROFILE_DIR}`, initialUrl,
+  ], { windowsHide: true, stdio: ["ignore", "ignore", "pipe"] });
+  chrome.stderr?.on("data", (chunk) => { stderr = `${stderr}${String(chunk)}`.slice(-8_000); });
+  try {
+    await waitForUrl(`http://127.0.0.1:${debugPort}/json/version`, 60_000);
+  } catch (error) {
+    if (chrome.exitCode === null) chrome.kill();
+    await waitForExit(chrome, 5_000);
+    throw new Error(`Chrome QA launch failed on port ${debugPort} (exit ${chrome.exitCode ?? "running"}). ${error.message}${stderr ? `\n${stderr}` : ""}`);
+  }
+  const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
   const target = targets.find((item) => item.type === "page");
   assert(target, "Chrome did not create a page target");
   const client = new CdpClient(target.webSocketDebuggerUrl);
@@ -129,16 +152,22 @@ async function launchChrome(initialUrl) {
   await client.send("Page.addScriptToEvaluateOnNewDocument", {
     source: `window.__arthaQaErrors=[];window.addEventListener("error",event=>window.__arthaQaErrors.push(String(event.error?.stack||event.message||event.error)));window.addEventListener("unhandledrejection",event=>window.__arthaQaErrors.push(String(event.reason?.stack||event.reason)));`,
   });
-  return { chrome, client };
+  return { chrome, client, debugPort };
 }
 
-async function closeChrome(client, chrome) {
+async function closeChrome(client, chrome, debugPort) {
   if (client) {
     await client.send("Browser.close").catch(() => {});
     client.close();
   }
-  await waitForExit(chrome);
-  if (chrome.exitCode === null) chrome.kill();
+  await waitForExit(chrome, 15_000);
+  if (chrome.exitCode === null) {
+    chrome.kill();
+    await waitForExit(chrome, 5_000);
+  }
+  await waitForUrlDown(`http://127.0.0.1:${debugPort}/json/version`, 15_000);
+  // Chrome can release its process before the persistent profile's file locks.
+  await sleep(1_500);
 }
 
 async function prepareAppOrigin(client) {
@@ -257,12 +286,12 @@ async function main() {
   let onlineBrowser;
   let offlineBrowser;
   try {
-    onlineBrowser = await launchChrome("about:blank");
+    onlineBrowser = await launchChrome("about:blank", DEBUG_PORT);
     const cacheState = await primeOfflineInstall(onlineBrowser.client);
-    await closeChrome(onlineBrowser.client, onlineBrowser.chrome);
+    await closeChrome(onlineBrowser.client, onlineBrowser.chrome, onlineBrowser.debugPort);
     onlineBrowser = null;
 
-    offlineBrowser = await launchChrome("about:blank");
+    offlineBrowser = await launchChrome("about:blank", DEBUG_PORT + 1);
     await offlineBrowser.client.send("Emulation.setDeviceMetricsOverride", { ...VIEWPORT, deviceScaleFactor: 1, mobile: true });
     await setOffline(offlineBrowser.client);
     const results = [];
@@ -271,8 +300,8 @@ async function main() {
     await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), buildId: BUILD_ID, frontendUrl: FRONTEND_URL, cacheState, coldRestart: true, networkDisabled: true, results }, null, 2));
     console.log(`Offline cold-restart matrix passed ${results.length}/${results.length} routes. Artifacts: ${OUTPUT_DIR}`);
   } finally {
-    if (onlineBrowser) await closeChrome(onlineBrowser.client, onlineBrowser.chrome);
-    if (offlineBrowser) await closeChrome(offlineBrowser.client, offlineBrowser.chrome);
+    if (onlineBrowser) await closeChrome(onlineBrowser.client, onlineBrowser.chrome, onlineBrowser.debugPort);
+    if (offlineBrowser) await closeChrome(offlineBrowser.client, offlineBrowser.chrome, offlineBrowser.debugPort);
     if (preview.exitCode === null) preview.kill();
     await waitForExit(preview);
   }

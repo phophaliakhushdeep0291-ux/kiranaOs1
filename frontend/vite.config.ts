@@ -7,6 +7,9 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 const dormantVerticalsEnabled = process.env.ENABLE_DORMANT_VERTICALS === "true";
+const buildOutDir = process.env.KIRANA_OUT_DIR
+  ? path.resolve(projectRoot, process.env.KIRANA_OUT_DIR)
+  : path.resolve(projectRoot, "dist/public");
 
 const rawPort = process.env.PORT ?? "5173";
 const port = Number(rawPort);
@@ -28,10 +31,10 @@ function stampServiceWorkerBuild() {
   return {
     name: "kiranaos-service-worker-build-stamp",
     closeBundle() {
-      const swPath = path.resolve(projectRoot, "dist/public/sw.js");
+      const swPath = path.resolve(buildOutDir, "sw.js");
       if (!fs.existsSync(swPath)) return;
       const source = fs.readFileSync(swPath, "utf8");
-      const publicRoot = path.resolve(projectRoot, "dist/public");
+      const publicRoot = buildOutDir;
       const manifestPath = path.join(publicRoot, ".vite", "manifest.json");
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<string, {
         file?: string;
@@ -149,7 +152,7 @@ export default defineConfig({
       mangle: { toplevel: true },
       format: { comments: false, semicolons: false },
     },
-    outDir: path.resolve(projectRoot, "dist/public"),
+    outDir: buildOutDir,
     emptyOutDir: true,
     chunkSizeWarningLimit: 900,
     rollupOptions: {

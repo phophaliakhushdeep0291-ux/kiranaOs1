@@ -136,7 +136,9 @@ internal sealed class SetupWindow : Form
         saveButton.Enabled = false;
         try
         {
-            config.Token = string.IsNullOrWhiteSpace(config.Token) ? RandomToken() : config.Token;
+            // Creating a new pairing code is also the explicit credential-rotation
+            // action. Any previously paired browser must use the new one-time code.
+            config.Token = RandomToken();
             config.Printer = new PrinterConfig { Transport = "windows", Name = printerName };
             var code = RandomCode();
             var salt = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
