@@ -9,6 +9,10 @@ test("Windows installer registers an automatic hidden service and launches setup
   assert.match(installer, /PrivilegesRequired=admin/);
   assert.match(installer, /SignTool=release-sign/);
   assert.match(installer, /KiranaOS\.HardwareBridge\.Setup\.exe/);
+  assert.match(installer, /icacls\.exe/);
+  assert.match(installer, /\/inheritance:r/);
+  assert.match(installer, /S-1-5-18/);
+  assert.match(installer, /S-1-5-32-544/);
   assert.match(service, /<startmode>Automatic<\/startmode>/);
   assert.match(service, /127\.0\.0\.1|server\.mjs/);
   assert.match(setup, /PrinterSettings\.InstalledPrinters/);
@@ -19,5 +23,9 @@ test("Windows installer registers an automatic hidden service and launches setup
 test("release build refuses to create an unsigned retail installer", async () => {
   const build = await readFile(new URL("../windows/build-installer.ps1", import.meta.url), "utf8");
   assert.match(build, /Unsigned retail installers are intentionally not produced/);
+  assert.match(build, /Get-FileHash -Algorithm SHA256/);
+  assert.match(build, /WinSW v2\.12\.0 SHA-256 verification failed/);
+  assert.match(build, /must match hardware-bridge package version/);
+  assert.match(build, /must match the bridge health version/);
   assert.match(build, /signtool verify \/pa \/all/);
 });

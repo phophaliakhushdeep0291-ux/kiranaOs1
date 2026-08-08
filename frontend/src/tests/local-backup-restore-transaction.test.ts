@@ -11,6 +11,7 @@ type Row = Record<string, unknown>;
 
 function makeTable(name: string, keyPath: string, initialRows: Row[]) {
   let rows = structuredClone(initialRows);
+  let failNextBulkPut = false;
   return {
     name,
     schema: { primKey: { keyPath } },
@@ -19,6 +20,10 @@ function makeTable(name: string, keyPath: string, initialRows: Row[]) {
       rows = rows.filter((row) => !keys.includes(row[keyPath] as string | number));
     }),
     bulkPut: vi.fn(async (incoming: Row[]) => {
+      if (failNextBulkPut) {
+        failNextBulkPut = false;
+        throw new Error(`simulated ${name} write failure`);
+      }
       for (const row of incoming) {
         const key = row[keyPath];
         rows = rows.filter((candidate) => candidate[keyPath] !== key);
@@ -27,6 +32,9 @@ function makeTable(name: string, keyPath: string, initialRows: Row[]) {
     }),
     replaceRows(nextRows: Row[]) {
       rows = structuredClone(nextRows);
+    },
+    failBulkPutOnce() {
+      failNextBulkPut = true;
     },
     rows() {
       return structuredClone(rows);
@@ -54,9 +62,15 @@ vi.mock("@/lib/offline/db", () => ({
     verno: 6,
     tables: [tables.products, tables.syncOutbox, tables.deviceLicense, tables.futureGlobal],
     open: vi.fn(async () => undefined),
-    transaction: vi.fn(async (_mode: string, _tables: unknown[], callback: () => Promise<void>) => {
+    transaction: vi.fn(async (_mode: string, transactionTables: Array<ReturnType<typeof makeTable>>, callback: () => Promise<void>) => {
       state.transactionCalls += 1;
-      await callback();
+      const snapshots = transactionTables.map((table) => [table, table.rows()] as const);
+      try {
+        await callback();
+      } catch (error) {
+        for (const [table, rows] of snapshots) table.replaceRows(rows);
+        throw error;
+      }
     }),
   },
   isScopedTableName: vi.fn((name: string) => ["products", "sync_outbox", "device_license_cache"].includes(name)),
@@ -181,5 +195,48 @@ describe("local backup export and atomic restore", () => {
     ]));
     expect(tables.deviceLicense.rows()).toEqual([expect.objectContaining({ id: "license_secret" })]);
     expect(tables.futureGlobal.rows()).toEqual([{ id: "global_setting", value: "must-not-touch" }]);
+  });
+
+  it("rolls back every table when a later restore write fails", async () => {
+    tables.syncOutbox.replaceRows([{
+      clientEventId: "event_current",
+      tenant_id: "shop_A",
+      store_id: "shop_A",
+      device_id: "device_current",
+      status: "PENDING",
+      sync_status: "pending_sync",
+    }]);
+    const originalProducts = tables.products.rows();
+    const originalOutbox = tables.syncOutbox.rows();
+    const payload: LocalBackupPayload = {
+      format: LOCAL_BACKUP_FORMAT,
+      schemaVersion: 1,
+      databaseVersion: 6,
+      createdAt: "2026-08-08T12:00:00.000Z",
+      scope: { tenant_id: "shop_A", store_id: "shop_A" },
+      device: { device_id: "device_original", metadataOnly: true },
+      tables: {
+        products: [row("replacement_product")],
+        sync_outbox: [{
+          clientEventId: "replacement_event",
+          tenant_id: "shop_A",
+          store_id: "shop_A",
+          device_id: "device_original",
+          status: "PENDING",
+          sync_status: "pending_sync",
+        }],
+      },
+    };
+    const file = new Blob([await encryptLocalBackupPayload(payload, passphrase)]);
+    tables.syncOutbox.failBulkPutOnce();
+
+    await expect(restoreEncryptedLocalBackup(file, passphrase, {
+      confirmation: LOCAL_BACKUP_CONFIRMATION,
+      replaceExisting: true,
+    })).rejects.toThrow(/simulated sync_outbox write failure/i);
+
+    expect(state.transactionCalls).toBe(1);
+    expect(tables.products.rows()).toEqual(originalProducts);
+    expect(tables.syncOutbox.rows()).toEqual(originalOutbox);
   });
 });

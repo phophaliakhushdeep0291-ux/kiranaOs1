@@ -291,6 +291,17 @@ export async function restoreEncryptedLocalBackup(
   const knownTables = new Map(dexieDB.tables.map((table) => [table.name, table]));
   const unknownTables = Object.keys(payload.tables).filter((name) => !knownTables.has(name));
   if (unknownTables.length > 0) throw new Error(`Backup contains unsupported tables: ${unknownTables.join(", ")}.`);
+  const unsafeTables = Object.keys(payload.tables).filter(
+    (name) => NON_TRANSFERABLE_TABLES.has(name) || !isScopedTableName(name),
+  );
+  if (unsafeTables.length > 0) throw new Error(`Backup contains device-local or unscoped tables that cannot be restored: ${unsafeTables.join(", ")}.`);
+  const transferableTables = dexieDB.tables.filter(
+    (table) => isScopedTableName(table.name) && !NON_TRANSFERABLE_TABLES.has(table.name),
+  );
+  const missingTables = transferableTables
+    .filter((table) => !Object.prototype.hasOwnProperty.call(payload.tables, table.name))
+    .map((table) => table.name);
+  if (missingTables.length > 0) throw new Error(`Backup is incomplete and is missing tables: ${missingTables.join(", ")}.`);
   const existingRows = await countExistingLocalRows();
   if (existingRows > 0 && !options.replaceExisting) {
     throw new Error("This device already has local data. Enable replacement only after reviewing the backup preview.");
@@ -298,14 +309,24 @@ export async function restoreEncryptedLocalBackup(
 
   let restoredRowCount = 0;
   let restoredTableCount = 0;
-  const transferableTables = dexieDB.tables.filter(
-    (table) => isScopedTableName(table.name) && !NON_TRANSFERABLE_TABLES.has(table.name),
-  );
   await dexieDB.transaction("rw", transferableTables, async () => {
+    const currentRowsByTable = new Map<string, Record<string, unknown>[]>();
+    let transactionScopeRowCount = 0;
+    for (const table of transferableTables) {
+      const currentRows = await table.toArray() as Record<string, unknown>[];
+      currentRowsByTable.set(table.name, currentRows);
+      transactionScopeRowCount += currentRows.filter(
+        (row) => row.tenant_id === currentScope.tenant_id && row.store_id === currentScope.store_id,
+      ).length;
+    }
+    if (transactionScopeRowCount > 0 && !options.replaceExisting) {
+      throw new Error("This device already has local data. Enable replacement only after reviewing the backup preview.");
+    }
+
     for (const table of transferableTables) {
       const keyPath = table.schema.primKey.keyPath;
       if (typeof keyPath !== "string") throw new Error(`Cannot safely restore table ${table.name}: unsupported primary key.`);
-      const currentRows = await table.toArray() as Record<string, unknown>[];
+      const currentRows = currentRowsByTable.get(table.name) ?? [];
       const currentKeys = currentRows
         .filter((row) => row.tenant_id === currentScope.tenant_id && row.store_id === currentScope.store_id)
         .map((row) => row[keyPath])

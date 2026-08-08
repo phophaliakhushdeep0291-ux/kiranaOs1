@@ -7,7 +7,7 @@ import { defaultConfigPath, loadBridgeConfig, saveBridgeConfig } from "./config.
 import { consumePairingCode } from "./pairing.mjs";
 import { plainHardwareError } from "./plain-errors.mjs";
 import { UpdateChecker } from "./update-check.mjs";
-import { PrintJobExecutor } from "./print-executor.mjs";
+import { fingerprintPrintPayload, PrintJobExecutor } from "./print-executor.mjs";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.KIRANA_BRIDGE_PORT || 17873);
@@ -146,7 +146,8 @@ const server = http.createServer(async (req, res) => {
       const paperSize = ["58mm", "76mm", "80mm"].includes(body.paperSize) ? body.paperSize : "80mm";
       const autoCut = body.autoCut !== false;
       const cashDrawer = body.cashDrawer === true;
-      const outcome = await printExecutor.run({ jobId, copies, html: body.html, paperSize, autoCut, cashDrawer });
+      const payloadFingerprint = fingerprintPrintPayload({ html: body.html, paperSize, autoCut, cashDrawer });
+      const outcome = await printExecutor.run({ jobId, copies, html: body.html, paperSize, autoCut, cashDrawer, payloadFingerprint });
       return json(res, 200, { ok: true, jobId, ...outcome }, origin);
     }
     if (req.method === "POST" && url.pathname === "/v1/cash-drawer/open") {

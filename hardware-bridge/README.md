@@ -35,7 +35,7 @@ npm.cmd start
 
 This source-debug path is not part of shop installation. A shopkeeper never needs PowerShell or a terminal.
 
-Print job ids and per-copy progress are persisted at `~/.kiranaos/hardware-bridge-print-jobs.json` by default; override with `KIRANA_BRIDGE_JOB_JOURNAL`. Concurrent retries share one in-flight job, restarts resume only unfinished copies, and reusing a job id with a different copy count is rejected. As with every raw printer protocol, a machine crash in the tiny interval after the printer accepts bytes but before the journal fsync can still require an operator to inspect the last receipt.
+Print job ids, a SHA-256 fingerprint of the exact receipt payload, and per-copy progress are persisted at `~/.kiranaos/hardware-bridge-print-jobs.json` by default; override with `KIRANA_BRIDGE_JOB_JOURNAL`. Concurrent retries share one in-flight job, restarts resume only unfinished copies, and reusing a job id with different content, printer controls, or copy count is rejected. Pre-fingerprint legacy journal rows fail closed and require operator inspection plus a new job id. As with every raw printer protocol, a machine crash in the tiny interval after the printer accepts bytes but before the journal fsync can still require an operator to inspect the last receipt.
 
 ## Physical printer certification — exactly two resale models
 
@@ -57,4 +57,4 @@ Software artifacts are retained by `tests/failure-recovery.test.mjs`, `tests/job
 
 ## Signed release build
 
-Run `windows/build-installer.ps1` from a Windows release worker with .NET 8, Inno Setup, SignTool, the `KIRANA_CODE_SIGN_PFX` / `KIRANA_CODE_SIGN_PASSWORD` secrets, and an explicit comma-separated `KIRANA_FRONTEND_ORIGINS`. The build rejects non-HTTPS origins except loopback development origins, signs the service wrapper, setup application, uninstaller, and installer, then fails unless Authenticode verification passes. `.github/workflows/hardware-bridge-installer.yml` publishes the signed installer artifact; it deliberately cannot publish an unsigned retail build.
+Run `windows/build-installer.ps1` from a Windows release worker with .NET 8, Inno Setup, SignTool, the `KIRANA_CODE_SIGN_PFX` / `KIRANA_CODE_SIGN_PASSWORD` secrets, and an explicit comma-separated `KIRANA_FRONTEND_ORIGINS`. The build rejects non-HTTPS origins except loopback development origins, requires the installer/package/health versions to agree, and verifies the pinned WinSW v2.12.0 SHA-256 before signing it. The installer removes inherited access from the ProgramData credential/journal directory and grants access only to SYSTEM and local administrators. The build signs the service wrapper, setup application, uninstaller, and installer, then fails unless Authenticode verification passes. `.github/workflows/hardware-bridge-installer.yml` publishes the signed installer artifact; it deliberately cannot publish an unsigned retail build.
