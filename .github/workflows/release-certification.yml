@@ -11,8 +11,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: kiranaos-release-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Pull requests coalesce: pushing again supersedes that PR's in-flight run.
+  #
+  # Pushes to main must not. Merges here land minutes apart while this job runs
+  # for tens of minutes, so a shared group cancelled the run certifying the
+  # previous commit — main went red with nothing actually broken. Keying pushes
+  # by SHA also stops a third merge from displacing the second while it is still
+  # queued, since a group holds only one pending run.
+  group: kiranaos-release-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   certify:
