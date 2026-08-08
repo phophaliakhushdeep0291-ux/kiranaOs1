@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../../middleware/auth.js";
 import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";
 import { requireShop } from "../../../middleware/permissions.js";
+import { requireFeature } from "../../../modules/feature-gates/featureGate.middleware.js";
 import { requireCapability } from "../../../modules/shops/businessProfile.middleware.js";
 import { validate } from "../../../middleware/validate.js";
 import {
@@ -17,7 +18,7 @@ const router = Router();
 // Gated on the capability rather than the business type: a hardware shop runs
 // the same pack without fitment, and a shop that does not answer "does this
 // fit?" is turned away by the server, not only by a hidden sidebar entry.
-router.use(requireAuth, requireShop, requireDeviceActivated(), requireCapability("VEHICLE_FITMENT"));
+router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("vehicle_fitment"), requireCapability("VEHICLE_FITMENT"));
 
 // Static paths first — none of these may be swallowed by "/:id".
 router.get("/search", ctrl.findForVehicle);

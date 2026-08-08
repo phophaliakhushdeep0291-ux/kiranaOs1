@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../../middleware/auth.js";
 import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";
 import { requireShop } from "../../../middleware/permissions.js";
+import { requireFeature } from "../../../modules/feature-gates/featureGate.middleware.js";
 import { requireCapability } from "../../../modules/shops/businessProfile.middleware.js";
 import { validate } from "../../../middleware/validate.js";
 import { createTableSchema, replaceFloorPlanSchema, updateTableSchema } from "./tables.schema.js";
@@ -15,7 +16,7 @@ const router = Router();
 // Gated on the capability rather than the trade: any shop that seats guests at
 // numbered tables holds TABLE_MANAGEMENT, and one that does not is turned away
 // by the server, not only by a hidden sidebar entry.
-router.use(requireAuth, requireShop, requireDeviceActivated(), requireCapability("TABLE_MANAGEMENT"));
+router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("restaurant_tables"), requireCapability("TABLE_MANAGEMENT"));
 
 router.get("/", ctrl.list);
 router.get("/:id", ctrl.detail);

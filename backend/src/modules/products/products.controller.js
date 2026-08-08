@@ -1,6 +1,7 @@
 import * as svc from "./products.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
+import { lookupProductKnowledge } from "./product-knowledge.service.js";
 
 export async function list(req, res, next) {
   try {
@@ -14,6 +15,17 @@ export async function get(req, res, next) {
     const product = await svc.getProduct(req.shopId, req.params.id, { locationId: requestLocationId(req) });
     res.json({ success: true, data: product });
   } catch (err) { next(err); }
+}
+
+export async function lookupKnowledge(req, res, next) {
+  try {
+    const result = await lookupProductKnowledge(req.params.barcode);
+    res.json({ success: true, data: result });
+  } catch {
+    // Product knowledge is an enrichment path. An upstream outage must fall back to
+    // the existing manual capture sheet, never break billing or expose vendor errors.
+    res.json({ success: true, data: { found: false, barcode: String(req.params.barcode || ""), reason: "lookup_unavailable" } });
+  }
 }
 
 const SENSITIVE_PRODUCT_FIELDS = [

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../../middleware/auth.js";
 import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";
 import { requireShop } from "../../../middleware/permissions.js";
+import { requireFeature } from "../../../modules/feature-gates/featureGate.middleware.js";
 import { requireCapability } from "../../../modules/shops/businessProfile.middleware.js";
 import { validate } from "../../../middleware/validate.js";
 import {
@@ -17,7 +18,7 @@ const router = Router();
 // Gated on the capability rather than the trade: any showroom that sells before
 // the goods leave the floor holds SALES_ORDERS, and a shop that does not is
 // turned away by the server, not only by a hidden sidebar entry.
-router.use(requireAuth, requireShop, requireDeviceActivated(), requireCapability("SALES_ORDERS"));
+router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("furniture_order_book"), requireCapability("SALES_ORDERS"));
 
 // Static paths first — none of these may be swallowed by "/:id".
 router.get("/summary", ctrl.summary);

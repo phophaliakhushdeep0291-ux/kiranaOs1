@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../../middleware/auth.js";
 import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";
 import { requireShop } from "../../../middleware/permissions.js";
+import { requireFeature } from "../../../modules/feature-gates/featureGate.middleware.js";
 import { requireCapability } from "../../../modules/shops/businessProfile.middleware.js";
 import { validate } from "../../../middleware/validate.js";
 import { saveRecipeSchema } from "./recipes.schema.js";
@@ -12,7 +13,7 @@ import * as ctrl from "./recipes.controller.js";
 import "./recipes.guard.js";
 
 const router = Router();
-router.use(requireAuth, requireShop, requireDeviceActivated(), requireCapability("RECIPE_INVENTORY"));
+router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("restaurant_recipe_inventory"), requireCapability("RECIPE_INVENTORY"));
 
 // Static path first — it must not be read as a dish id.
 router.get("/kitchen-stock", ctrl.kitchenStock);
