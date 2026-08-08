@@ -1773,6 +1773,32 @@ export interface MenuDishVariation {
   isDefault: boolean;
 }
 
+/** One dish inside a combo, with how many of it the combo includes. */
+export interface MenuComboComponent {
+  componentProductId: string;
+  name: string;
+  /** 2 roti in a thali. Fractional is legal — half a portion of raita. */
+  quantity: number;
+  sortOrder: number;
+  note: string | null;
+}
+
+/**
+ * A combo's price against its parts.
+ *
+ * Both numbers, not just the saving: "₹30 off" means nothing on a menu without
+ * the ₹180 it came off, and a combo priced ABOVE its parts is a mistake the owner
+ * should see rather than a negative number to hide.
+ */
+export interface ComboValue {
+  /** What the components cost bought à la carte. */
+  separately: number;
+  price: number;
+  /** Never negative — a combo dearer than its parts saves nothing. */
+  saving: number;
+  dearerThanParts: boolean;
+}
+
 export interface MenuCourseSection {
   course: string;
   dishes: MenuDish[];
