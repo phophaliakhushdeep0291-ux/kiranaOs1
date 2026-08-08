@@ -117,7 +117,7 @@ export function getStoredRefreshToken() {
 }
 
 export function isBrowserOnline() {
-  return typeof navigator === "undefined" ? true : navigator.onLine;
+  return typeof navigator === "undefined" || typeof navigator.onLine !== "boolean" ? true : navigator.onLine;
 }
 
 /**

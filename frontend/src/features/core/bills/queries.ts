@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
+import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { RECENT_CACHE_DAYS, pruneRecentRows, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { offlineDB } from "@/lib/offline/db";
 import { getQueryOptions, type QueryHookOptions } from "@/lib/api/query-options";

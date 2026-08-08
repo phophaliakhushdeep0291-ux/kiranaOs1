@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
+import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";

@@ -7,7 +7,9 @@ const addonManager = readFileSync(new URL("../features/verticals/restaurant/page
 
 describe("premium restaurant phone controls", () => {
   it("keeps guest menu controls at least 44px in their tapping dimension", () => {
-    expect(guestMenu).toContain('className="flex min-h-11 shrink-0 items-center');
+    expect(guestMenu).toContain('className="h-11 w-full bg-transparent');
+    expect(guestMenu).toContain('[scrollbar-width:none] [&::-webkit-scrollbar]:hidden');
+    expect(guestMenu).toContain('className="flex min-h-11 min-w-11 shrink-0 items-center');
     expect(guestMenu).toContain('className="min-h-11 rounded-xl border-[1.5px]');
     expect(guestMenu).toContain('className="grid h-11 w-11 shrink-0 place-items-center rounded-full border"');
     expect(guestMenu).toContain('className="grid h-11 w-11 place-items-center rounded-lg"');

@@ -101,30 +101,35 @@ function publicSyncConflict(row) {
   };
 }
 
-function conflictEntityFromEvent(event) {
+export function conflictEntityFromEvent(event) {
   const type = String(event?.type ?? "UNKNOWN");
   const payload = getEventPayload(event);
   const nested = payload.product ?? payload.customer ?? payload.bill ?? payload.supplier ?? {};
-  const entityType = type.includes("PRODUCT")
-    ? "product"
-    : type.includes("CUSTOMER") || type.includes("UDHAR")
-      ? "customer"
-      : type.includes("BILL")
-        ? "bill"
-        : type.includes("SUPPLIER")
-          ? "supplier"
-          : type.includes("STOCK") || type.includes("DAMAGE")
-            ? "stock_ledger"
-            : "sync_event";
+  // Order matters: UDHAR_PAYMENT contains neither CUSTOMER nor BILL, while
+  // RECORD_SUPPLIER_PAYMENT contains SUPPLIER. Financial and stock events must
+  // never be mislabelled as a mutable contact conflict because that would make
+  // the UI offer destructive "keep local/cloud" resolution for ledger history.
+  let entityType = "sync_event";
+  if (type.includes("UDHAR") || type.includes("LEDGER_ADJUSTMENT")) entityType = "udhar";
+  else if (type.includes("PAYMENT")) entityType = "payment";
+  else if (type.includes("PURCHASE")) entityType = "purchase";
+  else if (type.includes("BILL")) entityType = "bill";
+  else if (type.includes("STOCK") || type.includes("DAMAGE")) entityType = "stock_ledger";
+  else if (type.includes("PRODUCT")) entityType = "product";
+  else if (type.includes("CUSTOMER")) entityType = "customer";
+  else if (type.includes("SUPPLIER")) entityType = "supplier";
+  const identityByEntity = {
+    product: [payload.productId, payload.localProductId],
+    customer: [payload.customerId, payload.localCustomerId],
+    supplier: [payload.supplierId, payload.localSupplierId],
+    bill: [payload.billId, payload.localBillId],
+    udhar: [payload.ledgerEntryId, payload.paymentId, payload.customerId, payload.localCustomerId],
+    payment: [payload.paymentId, payload.ledgerEntryId, payload.supplierId, payload.customerId],
+    purchase: [payload.purchaseHistoryId, payload.localPurchaseHistoryId, payload.productId, payload.localProductId],
+    stock_ledger: [payload.inventoryMovementId, payload.productId, payload.localProductId],
+  };
   const entityId = [
-    payload.productId,
-    payload.localProductId,
-    payload.customerId,
-    payload.localCustomerId,
-    payload.billId,
-    payload.localBillId,
-    payload.supplierId,
-    payload.localSupplierId,
+    ...(identityByEntity[entityType] ?? []),
     nested.id,
     nested.localId,
     nested.local_id,
@@ -3421,7 +3426,7 @@ async function entityExists(shopId, entityType, id) {
   return false;
 }
 
-function looksLikeClientLocalId(id) {
+export function looksLikeClientLocalId(id) {
   const normalized = String(id).toLowerCase();
   return normalized.startsWith("local")
     || normalized.startsWith("tmp")
@@ -3438,8 +3443,7 @@ function looksLikeClientLocalId(id) {
     || normalized.startsWith("device_")
     || normalized.startsWith("audit_")
     || normalized.includes("indexeddb")
-    || normalized.includes("pending")
-    || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized);
+    || normalized.includes("pending");
 }
 
 function collectCreateBillIdentityValues(...sources) {

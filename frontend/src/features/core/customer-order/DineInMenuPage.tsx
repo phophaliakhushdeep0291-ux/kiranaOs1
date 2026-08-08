@@ -344,12 +344,12 @@ export default function DineInMenuPage() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search the menu"
-            className="w-full bg-transparent text-[13px] outline-none placeholder:text-[color:var(--menu-muted)]"
+            className="h-11 w-full bg-transparent text-[13px] outline-none placeholder:text-[color:var(--menu-muted)]"
           />
           {search ? <button type="button" onClick={() => setSearch("")} aria-label="Clear" className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl"><X size={14} style={{ color: "var(--menu-muted)" }} /></button> : null}
         </div>
 
-        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Chip active={vegOnly} onClick={() => setVegOnly((on) => !on)} accentWhenActive="#15803d">
             <Leaf size={12} /> Veg only
           </Chip>
@@ -529,7 +529,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-bold transition"
+      className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-bold transition"
       style={active
         ? { background: accentWhenActive ?? "var(--menu-accent)", borderColor: "transparent", color: "#fff" }
         : { background: "var(--menu-card)", borderColor: "var(--menu-line)", color: "var(--menu-muted)" }}
