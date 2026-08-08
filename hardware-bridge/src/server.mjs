@@ -3,16 +3,24 @@ import crypto from "node:crypto";
 import { buildDrawerPulse, buildEscPosJob } from "./escpos.mjs";
 import { readScaleCommand, sendNetworkRaw, sendWindowsRaw } from "./adapters.mjs";
 import { PrintJobJournal } from "./job-journal.mjs";
+import { defaultConfigPath, loadBridgeConfig, saveBridgeConfig } from "./config.mjs";
+import { consumePairingCode } from "./pairing.mjs";
+import { plainHardwareError } from "./plain-errors.mjs";
+import { UpdateChecker } from "./update-check.mjs";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.KIRANA_BRIDGE_PORT || 17873);
-const TOKEN = String(process.env.KIRANA_BRIDGE_TOKEN || "");
-const TRANSPORT = String(process.env.KIRANA_BRIDGE_PRINTER_TRANSPORT || "").toLowerCase();
-const ALLOWED_ORIGINS = new Set(String(process.env.KIRANA_BRIDGE_ALLOWED_ORIGINS || "http://127.0.0.1:5173,http://localhost:5173")
-  .split(",").map((value) => value.trim()).filter(Boolean));
+const VERSION = "1.1.0";
+const CONFIG_PATH = defaultConfigPath();
+let bridgeConfig = await loadBridgeConfig(CONFIG_PATH);
+const TOKEN = String(bridgeConfig.token || "");
+const TRANSPORT = String(bridgeConfig.printer?.transport || "").toLowerCase();
+const ALLOWED_ORIGINS = new Set(bridgeConfig.allowedOrigins);
 const MAX_BODY_BYTES = 1024 * 1024;
 const printJournal = new PrintJobJournal();
 const inFlightPrintJobs = new Map();
+const updateChecker = new UpdateChecker({ currentVersion: VERSION, manifestUrl: bridgeConfig.updateManifestUrl });
+let pairingExchange = Promise.resolve();
 
 if (TOKEN.length < 32) {
   console.error("KIRANA_BRIDGE_TOKEN must be a random value of at least 32 characters.");
@@ -50,9 +58,24 @@ async function readJson(req) {
 }
 
 async function sendRaw(buffer) {
-  if (TRANSPORT === "network") return sendNetworkRaw(buffer, { host: process.env.KIRANA_BRIDGE_PRINTER_HOST, port: process.env.KIRANA_BRIDGE_PRINTER_PORT || 9100 });
-  if (TRANSPORT === "windows") return sendWindowsRaw(buffer, { printerName: process.env.KIRANA_BRIDGE_PRINTER_NAME });
+  if (TRANSPORT === "network") return sendNetworkRaw(buffer, { host: bridgeConfig.printer.host, port: bridgeConfig.printer.port || 9100 });
+  if (TRANSPORT === "windows") return sendWindowsRaw(buffer, { printerName: bridgeConfig.printer.name });
   throw Object.assign(new Error("Printer transport is not configured"), { status: 503 });
+}
+
+async function exchangePairingCode(code) {
+  const operation = pairingExchange.then(async () => {
+    bridgeConfig = await loadBridgeConfig(CONFIG_PATH);
+    try { consumePairingCode(bridgeConfig.pairing, code); }
+    catch (error) {
+      if (error?.persistPairing) await saveBridgeConfig(CONFIG_PATH, bridgeConfig);
+      throw error;
+    }
+    await saveBridgeConfig(CONFIG_PATH, bridgeConfig);
+    return bridgeConfig.token;
+  });
+  pairingExchange = operation.catch(() => undefined);
+  return operation;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -65,15 +88,25 @@ const server = http.createServer(async (req, res) => {
     res.setHeader("access-control-max-age", "600");
     res.writeHead(204); return res.end();
   }
+  const url = new URL(req.url || "/", `http://${HOST}:${PORT}`);
+  if (req.method === "POST" && url.pathname === "/v1/pair") {
+    try {
+      const body = await readJson(req);
+      const token = await exchangePairingCode(body.code);
+      return json(res, 200, { ok: true, token }, origin);
+    } catch (error) {
+      return json(res, Number(error?.status) || 500, { message: String(error?.message || "Pairing failed").slice(0, 180) }, origin);
+    }
+  }
   if (!authorized(req)) return json(res, 401, { message: "Valid bridge pairing token required" }, origin);
 
   try {
-    const url = new URL(req.url || "/", `http://${HOST}:${PORT}`);
     if (req.method === "GET" && url.pathname === "/v1/health") {
       return json(res, 200, {
         ok: true,
-        version: "1.0.0",
+        version: VERSION,
         deviceName: process.env.KIRANA_BRIDGE_DEVICE_NAME || "KiranaOS Counter Bridge",
+        update: updateChecker.snapshot(),
         capabilities: {
           print: ["network", "windows"].includes(TRANSPORT),
           cutter: ["network", "windows"].includes(TRANSPORT),
@@ -81,6 +114,16 @@ const server = http.createServer(async (req, res) => {
           scale: Boolean(process.env.KIRANA_BRIDGE_SCALE_EXECUTABLE),
         },
       }, origin);
+    }
+    if (req.method === "POST" && url.pathname === "/v1/test-print") {
+      await readJson(req);
+      await sendRaw(buildEscPosJob({
+        html: "<h1>KiranaOS</h1><p>Printer setup successful</p><p>Test receipt - no sale recorded</p>",
+        paperSize: "80mm",
+        autoCut: true,
+        cashDrawer: false,
+      }));
+      return json(res, 200, { ok: true, message: "Test receipt printed successfully." }, origin);
     }
     if (req.method === "POST" && url.pathname === "/v1/print") {
       const body = await readJson(req);
@@ -137,10 +180,12 @@ const server = http.createServer(async (req, res) => {
     }
     return json(res, 404, { message: "Hardware bridge endpoint not found" }, origin);
   } catch (error) {
-    return json(res, Number(error?.status) || 500, { message: String(error?.message || "Hardware operation failed").slice(0, 300) }, origin);
+    return json(res, Number(error?.status) || 500, { message: plainHardwareError(error) }, origin);
   }
 });
 
 server.requestTimeout = 15_000;
 server.headersTimeout = 10_000;
 server.listen(PORT, HOST, () => console.log(`KiranaOS hardware bridge listening on http://${HOST}:${PORT}`));
+void updateChecker.check();
+setInterval(() => void updateChecker.check(), 6 * 60 * 60 * 1000).unref();

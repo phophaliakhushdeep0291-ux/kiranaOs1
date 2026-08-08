@@ -82,8 +82,8 @@ export const PLAN_CONFIGS = {
   starter: {
     code: "starter",
     name: "Starter",
-    priceMonthlyPaise: 4900,
-    priceYearlyPaise: 39900,
+    priceMonthlyPaise: 24900,
+    priceYearlyPaise: 249900,
     maxDevices: 2,
     maxStores: 1,
     maxStaff: 0,

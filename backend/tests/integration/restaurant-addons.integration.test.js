@@ -84,6 +84,63 @@ if (ctx.skip) {
   }
 
   describe("restaurant bill configuration", () => {
+    test("keeps an explicit portion price authoritative when a dish also has an MRP", async () => {
+      const fixture = await restaurantFixture();
+      await ctx.db.product.update({ where: { id: fixture.dish.id }, data: { mrp: 420 } });
+      await ctx.db.menuAddonOption.update({ where: { id: fixture.option.id }, data: { priceDelta: 85 } });
+      const large = await ctx.db.productSellingUnit.create({
+        data: {
+          shopId: fixture.tenant.shop.id,
+          productId: fixture.dish.id,
+          name: "Large",
+          unitType: "portion",
+          unitCode: "portion-large",
+          conversionToBase: 1.4,
+          defaultPrice: 590,
+          isDefault: false,
+        },
+      });
+
+      const response = await ctx.post("/api/bills/confirm", {
+        locationId: fixture.location.id,
+        billType: "normal_sale",
+        gstMode: "inclusive",
+        customerName: "Walk-in",
+        items: [{
+          productId: fixture.dish.id,
+          name: fixture.dish.name,
+          quantity: 1,
+          enteredUnit: "Large",
+          sellingUnitId: large.id,
+          sellingUnitCode: large.unitCode,
+          baseRatePerRateUnit: 590,
+          ratePerRateUnit: 675,
+          gstRate: 0,
+          lineDiscount: 0,
+          addons: [{ optionId: fixture.option.id, quantity: 1 }],
+        }],
+        discount: 0,
+        actualAmount: 675,
+        buyerPaidAmount: 675,
+        waivedAmount: 0,
+        payments: [{ mode: "cash", amount: 675 }],
+      }, { token: fixture.auth.accessToken });
+
+      const bill = assertSuccess(response, 201);
+      assert.equal(bill.grandTotal, 675);
+      assert.equal(bill.items[0].ratePerRateUnit, 675);
+      assert.deepEqual(
+        bill.items[0].addons.map(({ name, price, quantity }) => ({ name, price, quantity })),
+        [{ name: "Extra cheese", price: 85, quantity: 1 }],
+      );
+
+      const branchStock = await ctx.db.locationStock.findMany({ where: { locationId: fixture.location.id } });
+      const branchQty = new Map(branchStock.map((row) => [row.productId, row.stockBaseQty]));
+      assert.equal(branchQty.get(fixture.dish.id), 3.6, "one Large consumes 1.4 dish units");
+      assert.equal(branchQty.get(fixture.recipeIngredient.id), 2.44, "recipe follows the Large portion factor");
+      assert.equal(branchQty.get(fixture.addonIngredient.id), 1.9, "one selected add-on consumes stock once");
+    });
+
     test("server reprices add-ons and consumes portion-aware stock at the selected store", async () => {
       const fixture = await restaurantFixture();
       const response = await ctx.post("/api/bills/confirm", {

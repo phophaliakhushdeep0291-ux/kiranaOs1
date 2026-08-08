@@ -1745,9 +1745,9 @@ html[data-density="compact"] {
 
   .mobile-brand-mark {
     display: grid;
-    width: 42px;
-    height: 42px;
-    flex: 0 0 42px;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
     place-items: center;
     border-radius: 14px;
     color: #ffffff;

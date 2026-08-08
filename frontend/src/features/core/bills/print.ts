@@ -5,6 +5,7 @@ import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
 import { computeGstBreakdown, type GstMode } from "@/lib/gst";
 import { gstStateCode } from "@/lib/gstin";
 import { roundMoney } from "@/lib/money";
+import { billItemAddonSummary } from "@/features/core/bills/bill-item-options";
 
 export interface PrintableBillRow {
   name: string;
@@ -120,13 +121,7 @@ export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [],
       gstRate: readNumber(item.gstRate ?? item.gst_rate, 0),
       hsn: typeof item.hsn === "string" ? item.hsn : null,
       note: [
-        Array.isArray(item.addons)
-          ? item.addons.map((raw) => {
-            const addon = asRecord(raw);
-            const qty = readNumber(addon.quantity, 1);
-            return `${qty > 1 ? `${qty}× ` : ""}${String(addon.name ?? "Option")}`;
-          }).join(", ")
-          : "",
+        billItemAddonSummary(item),
         typeof item.note === "string" ? item.note : "",
       ].filter(Boolean).join(" · ") || null,
     };

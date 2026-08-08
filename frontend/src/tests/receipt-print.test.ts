@@ -114,4 +114,34 @@ describe("receipt printing", () => {
     expect(html).toContain("Rs 500");
     expect(html).not.toContain("Rs 1,000");
   });
+
+  it("keeps finalized restaurant options on duplicate receipts", () => {
+    const bill = {
+      id: "bill_restaurant",
+      billNo: "KOS-2026-000002",
+      billType: "normal_sale",
+      status: "paid",
+      customerName: "Walk-in",
+      subtotal: 675,
+      discount: 0,
+      grandTotal: 675,
+      paidAmount: 675,
+      creditAmount: 0,
+      createdAt: "2026-08-08T11:00:00.000Z",
+    } as Bill;
+
+    const snapshot = buildPrintableBillSnapshot(bill, [{
+      name: "Truffle Paneer Flatbread",
+      quantity: 1,
+      enteredUnit: "Large",
+      ratePerRateUnit: 675,
+      lineTotal: 675,
+      addons: [{ groupName: "Finish your plate", name: "Smoked mozzarella", price: 85, quantity: 1 }],
+    }]);
+    const html = buildBillPrintHtml(snapshot);
+
+    expect(snapshot.rows[0].unit).toBe("Large");
+    expect(snapshot.rows[0].note).toBe("Smoked mozzarella");
+    expect(html).toContain("Smoked mozzarella");
+  });
 });

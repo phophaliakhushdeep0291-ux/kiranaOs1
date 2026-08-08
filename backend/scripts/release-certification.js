@@ -252,23 +252,27 @@ runStep({
   id: "backend-source-db",
   label: "Prepare isolated database for source-level tests",
   command: process.execPath,
-  args: [
-    "node_modules/prisma/build/index.js",
-    "db",
-    "push",
-    "--schema",
-    "prisma/schema.prisma",
-    "--force-reset",
-    "--accept-data-loss",
-    "--skip-generate",
-  ],
-  env: { NODE_ENV: "test", DATABASE_URL: sqliteTestUrl },
+  args: ["scripts/setup-test-db.js"],
+  env: {
+    NODE_ENV: "test",
+    DATABASE_URL: sqliteTestUrl,
+    TEST_DATABASE_URL: sqliteTestUrl,
+    PRISMA_CLIENT_VARIANT: "integration",
+    FORCE_DB_TESTS: "true",
+  },
 });
 runStep({
   id: "backend-tests",
   label: "Backend source and calculation tests",
   args: ["test"],
-  env: { NODE_ENV: "test", DATABASE_URL: sqliteTestUrl, LOG_LEVEL: "silent" },
+  env: {
+    NODE_ENV: "test",
+    DATABASE_URL: sqliteTestUrl,
+    TEST_DATABASE_URL: sqliteTestUrl,
+    PRISMA_CLIENT_VARIANT: "integration",
+    FORCE_DB_TESTS: "true",
+    LOG_LEVEL: "silent",
+  },
 });
 runStep({
   id: "backend-integration-sqlite",

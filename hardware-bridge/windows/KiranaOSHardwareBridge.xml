@@ -1,0 +1,18 @@
+<service>
+  <id>KiranaOSHardwareBridge</id>
+  <name>KiranaOS Hardware Bridge</name>
+  <description>Secure local printer, cash drawer, and weighing scale bridge for KiranaOS.</description>
+  <executable>%BASE%\runtime\node.exe</executable>
+  <arguments>"%BASE%\app\src\server.mjs"</arguments>
+  <workingdirectory>%BASE%\app</workingdirectory>
+  <env name="KIRANA_BRIDGE_CONFIG" value="%ProgramData%\KiranaOS\HardwareBridge\config.json" />
+  <env name="KIRANA_BRIDGE_JOB_JOURNAL" value="%ProgramData%\KiranaOS\HardwareBridge\print-jobs.json" />
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <stoptimeout>15sec</stoptimeout>
+  <onfailure action="restart" delay="5 sec" />
+  <onfailure action="restart" delay="15 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <logpath>%ProgramData%\KiranaOS\HardwareBridge\logs</logpath>
+  <log mode="roll-by-size"><sizeThreshold>10240</sizeThreshold><keepFiles>3</keepFiles></log>
+</service>

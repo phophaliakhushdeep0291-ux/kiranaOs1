@@ -17,6 +17,12 @@ const kiloPack = { conversionToBase: 1000 };                    // 1 kg
 // ── the default pack keeps the product MRP exactly ──────────────────
 assert.equal(sellingUnitMaxPrice(defaultPack, product, defaultPack), 55);
 
+// A restaurant portion's conversion is recipe consumption, not pack size. A
+// Large menu price must not be clamped to product MRP x portion factor.
+const largePortion = { unitType: "portion", conversionToBase: 1.4, defaultPrice: 590 };
+assert.equal(sellingUnitMaxPrice(largePortion, { mrp: 420 }, defaultPack), 0);
+assert.equal(sellingUnitMaxPrice({ ...largePortion, maximumPrice: 625 }, { mrp: 420 }, defaultPack), 625);
+
 // ── a bigger pack is measured against ITS OWN size ──────────────────
 // 10x the goods, so 10x the ceiling. Rs 450 for the bag is now sellable; the old
 // behaviour compared it against Rs 55 and refused the bill.

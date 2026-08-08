@@ -21,7 +21,7 @@ if (ctx.skip) {
     test("plans endpoint returns the three public plans and hides Legacy Standard", async () => {
       const plans = assertSuccess(await ctx.get("/api/plans"));
       assert.deepEqual(plans.map((p) => p.code), ["starter", "growth", "pro"]);
-      assert.deepEqual(plans.map((p) => p.priceMonthlyPaise), [4900, 59900, 99900]);
+      assert.deepEqual(plans.map((p) => p.priceMonthlyPaise), [24900, 59900, 99900]);
     });
 
     test("current subscription returns fallback/trial for shop without subscription", async () => {
