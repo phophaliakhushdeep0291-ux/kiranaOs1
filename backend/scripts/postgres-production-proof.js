@@ -27,14 +27,28 @@ const env = {
   LOG_LEVEL: process.env.LOG_LEVEL || "silent",
 };
 
+// `prisma validate`, contract:check and prod:check read files only — no
+// database — so under the release-certification harness, which has already run
+// all three earlier in the same job, a second run cannot reach a different
+// verdict. On a billed two-core runner that repetition is pure cost, so the
+// harness sets this flag to skip it. Run standalone, the flag is unset and the
+// proof still performs every check itself.
+const staticChecksAlreadyRan = process.env.RELEASE_CERT_STATIC_ALREADY_RAN === "true";
+
 const commands = [
   ["npm", ["run", "prisma:generate:postgres"], "Generate Prisma client from PostgreSQL schema"],
-  ["node", ["node_modules/prisma/build/index.js", "validate", "--schema", "prisma-postgres/schema.prisma"], "Validate PostgreSQL Prisma schema"],
+  ...(staticChecksAlreadyRan
+    ? []
+    : [["node", ["node_modules/prisma/build/index.js", "validate", "--schema", "prisma-postgres/schema.prisma"], "Validate PostgreSQL Prisma schema"]]),
   ["npm", ["run", "setup:test-db"], "Reset isolated PostgreSQL test database"],
   ["npm", ["run", "test:integration"], "Run DB-backed integration and concurrency tests"],
   ["npm", ["run", "money:paise:reconcile"], "Reconcile rupee Float columns with paise shadow columns"],
-  ["npm", ["run", "contract:check"], "Check API contract"],
-  ["npm", ["run", "prod:check"], "Run production static checks"],
+  ...(staticChecksAlreadyRan
+    ? []
+    : [
+        ["npm", ["run", "contract:check"], "Check API contract"],
+        ["npm", ["run", "prod:check"], "Run production static checks"],
+      ]),
 ];
 
 console.log(`PostgreSQL proof database: ${maskDatabaseUrl(postgresUrl)}`);
