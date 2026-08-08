@@ -53,7 +53,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/auth/pages/VerifyEmailPage.tsx", // 1
   "features/core/billing/pages/BillingPage.tsx", // 8
   "features/core/billing/pages/components/BatchPicker.tsx", // 2
-  "features/core/billing/pages/components/BillingPaymentPanel.tsx", // 2
   "features/core/billing/pages/components/BillingSearch.tsx", // 6
   "features/core/bills/components/EditBillDialog.tsx", // 13
   "features/core/bills/pages/BillDetailPage.tsx", // 53

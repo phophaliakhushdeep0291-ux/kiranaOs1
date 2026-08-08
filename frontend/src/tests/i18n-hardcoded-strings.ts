@@ -32,6 +32,9 @@ function isUserVisibleText(value: string): boolean {
   // An identifier immediately followed by "(" never occurs in a label; real UI text
   // that uses brackets puts a space first, as in "Amount (₹)".
   if (/\w\(/.test(text)) return false;
+  // JSX ternary glue: `</div> : cond ? <div>` reads as ">text<" to this regex.
+  // No user-visible label begins with ":" or ")".
+  if (/^[:)]/.test(text)) return false;
   return true;
 }
 
