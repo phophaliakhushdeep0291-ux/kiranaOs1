@@ -134,6 +134,9 @@ model Shop {
   bankStatementTransactions     BankStatementTransaction[]
   bankReconciliationAllocations BankReconciliationAllocation[]
   bankReconciliationEvents      BankReconciliationEvent[]
+  channelSettlementImports      ChannelSettlementImport[]
+  channelSettlementRows         ChannelSettlementRow[]
+  channelSettlementEvents       ChannelSettlementEvent[]
   maintenanceLock               ShopMaintenanceLock?
 }
 
@@ -860,6 +863,8 @@ model StoreLocation {
   inventoryLots        InventoryLot[]
   restaurantTables     RestaurantTable[]
   kitchenTickets       KitchenTicket[]
+  channelSettlementImports ChannelSettlementImport[]
+  channelSettlementRows    ChannelSettlementRow[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])
@@ -3836,4 +3841,106 @@ model BillItemAddon {
 
   @@index([billItemId])
   @@index([optionId])
+}
+
+// Provider-neutral order and payout reconciliation. Importers map their own
+// CSV headers onto these canonical fields; no proprietary format is guessed.
+model ChannelSettlementImport {
+  id                 String   @id @default(cuid())
+  shopId             String
+  locationId         String?
+  provider           String
+  fileName           String
+  fileHash           String
+  mappingJson        String
+  periodFrom         DateTime?
+  periodTo           DateTime?
+  rowCount           Int      @default(0)
+  grossPaise         BigInt   @default(0)
+  calculatedNetPaise BigInt   @default(0)
+  paidNetPaise       BigInt   @default(0)
+  variancePaise      BigInt   @default(0)
+  status             String   @default("processed")
+  importedByUserId   String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  rows     ChannelSettlementRow[]
+
+  @@unique([shopId, provider, fileHash])
+  @@index([shopId, createdAt])
+  @@index([shopId, locationId, createdAt])
+  @@index([shopId, provider, createdAt])
+}
+
+model ChannelSettlementRow {
+  id                         String   @id @default(cuid())
+  importId                   String
+  shopId                     String
+  locationId                 String?
+  provider                   String
+  rowNumber                  Int
+  rowFingerprint             String
+  externalOrderId            String
+  orderDate                  DateTime
+  channelStatus              String?
+  currency                   String   @default("INR")
+  grossPaise                 BigInt
+  merchantDiscountPaise      BigInt   @default(0)
+  platformCommissionPaise    BigInt   @default(0)
+  paymentFeePaise            BigInt   @default(0)
+  taxOnFeesPaise             BigInt   @default(0)
+  tcsPaise                   BigInt   @default(0)
+  tdsPaise                   BigInt   @default(0)
+  adjustmentPaise            BigInt   @default(0)
+  refundPaise                BigInt   @default(0)
+  providerExpectedNetPaise   BigInt?
+  calculatedExpectedNetPaise BigInt
+  paidNetPaise               BigInt
+  variancePaise              BigInt
+  mismatchTypesJson          String   @default("[]")
+  matchStatus                String   @default("open")
+  candidateCustomerOrderId   String?
+  candidateBillId            String?
+  matchedCustomerOrderId     String?
+  matchedBillId              String?
+  bankStatementTransactionId String?
+  resolutionStatus           String   @default("open")
+  resolutionNote             String?
+  resolvedByUserId           String?
+  resolvedAt                 DateTime?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  import   ChannelSettlementImport  @relation(fields: [importId], references: [id], onDelete: Cascade)
+  shop     Shop                     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation?           @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  events   ChannelSettlementEvent[]
+
+  @@unique([importId, rowNumber])
+  @@index([shopId, externalOrderId])
+  @@index([shopId, locationId, orderDate])
+  @@index([shopId, resolutionStatus, orderDate])
+  @@index([shopId, provider, orderDate])
+  @@index([importId, matchStatus])
+}
+
+model ChannelSettlementEvent {
+  id           String   @id @default(cuid())
+  shopId       String
+  rowId        String
+  action       String
+  previousJson String
+  nextJson     String
+  reason       String?
+  actorUserId  String?
+  createdAt    DateTime @default(now())
+
+  shop Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  row  ChannelSettlementRow @relation(fields: [rowId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, rowId, createdAt])
+  @@index([shopId, action, createdAt])
 }

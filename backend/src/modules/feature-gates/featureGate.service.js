@@ -1,6 +1,10 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
-import { deserializeFeatures, planAtLeast } from "../subscription/planConfig.js";
+import {
+  deserializeFeatures,
+  hasLegacyShopTypeFeatureAccess,
+  planAtLeast,
+} from "../subscription/planConfig.js";
 import { getEffectivePlan, getSubscriptionStatus, isSubscriptionActive } from "../subscription/subscription.service.js";
 import { FEATURE_REGISTRY, OLD_DATA_VIEW_FEATURE } from "./featureRegistry.js";
 
@@ -9,7 +13,7 @@ export async function hasFeature(shopId, featureName) {
   const effective = await getEffectivePlan(shopId);
   const subscription = effective.subscription;
   if (!isSubscriptionActive(subscription)) return false;
-  return effective.features.includes(featureName);
+  return effective.features.includes(featureName) || hasLegacyShopTypeFeatureAccess(effective.features, featureName);
 }
 
 export function isOldDataViewFeature(featureName) {
@@ -25,7 +29,7 @@ export async function requireFeatureAccess(shopId, featureName) {
     err.meta = { status: effective.subscription.status, planCode: effective.planCode };
     throw err;
   }
-  if (!effective.features.includes(featureName)) {
+  if (!effective.features.includes(featureName) && !hasLegacyShopTypeFeatureAccess(effective.features, featureName)) {
     const err = new AppError("Feature not available on current plan", 403);
     err.code = "FEATURE_NOT_INCLUDED";
     err.meta = { featureName, planCode: effective.planCode, requiredPlan: FEATURE_REGISTRY[featureName]?.minimumPlan };

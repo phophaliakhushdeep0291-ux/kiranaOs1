@@ -21,6 +21,8 @@ const protectedProductFields = [
 
 router.get("/", requireLocationAccess("view"), validateQuery(productQuerySchema), ctrl.list);
 router.get("/recycle-bin", validateQuery(productQuerySchema), ctrl.listDeleted);
+// Shared, read-only product identity lookup. Stock, price and tax remain shop-owned.
+router.get("/knowledge/:barcode", requireLocationAccess("view"), ctrl.lookupKnowledge);
 router.delete("/recycle-bin/empty", requireOwnerPin, ctrl.emptyRecycleBin);
 router.post("/:id/restore", requireOwnerPin, ctrl.restore);
 router.delete("/:id/permanent", requireOwnerPin, ctrl.permanentRemove);

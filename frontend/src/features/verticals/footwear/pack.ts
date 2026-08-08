@@ -25,7 +25,7 @@ export const footwearPack: VerticalPack = {
   businessTypes: ["footwear"],
   paths: ["/size-runs"],
   routes: [
-    { path: "/size-runs", page: "footwear/size-runs" },
+    { path: "/size-runs", page: "footwear/size-runs", featureName: "footwear_size_runs" },
   ],
   nav: [
     {

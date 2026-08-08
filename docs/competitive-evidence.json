@@ -1,0 +1,446 @@
+{
+  "schemaVersion": 1,
+  "title": "KiranaOS competitive capability evidence",
+  "generatedAt": "2026-08-08",
+  "scoreScale": 10,
+  "statusFactors": {
+    "verified": 1,
+    "partial": 0.5,
+    "external_blocked": 0.25,
+    "absent": 0
+  },
+  "officialDomains": [
+    "www.zoho.com",
+    "www.petpooja.com",
+    "www.gofrugal.com",
+    "resources.ondc.org",
+    "pos.toasttab.com",
+    "www.lightspeedhq.com"
+  ],
+  "domains": [
+    { "id": "billing_inventory", "label": "Billing and inventory", "weight": 20 },
+    { "id": "gst_compliance", "label": "GST and compliance automation", "weight": 15 },
+    { "id": "multi_store", "label": "Multi-store operations", "weight": 15 },
+    { "id": "hardware_payments", "label": "Hardware and payment integrations", "weight": 15 },
+    { "id": "omnichannel_loyalty", "label": "Omnichannel and loyalty", "weight": 15 },
+    { "id": "production_maturity", "label": "Production maturity", "weight": 15 },
+    { "id": "ux_accessibility", "label": "UI, UX and accessibility", "weight": 5 }
+  ],
+  "claims": [
+    {
+      "id": "billing_offline_sync",
+      "domain": "billing_inventory",
+      "weight": 30,
+      "status": "verified",
+      "proofKind": "code_controlled",
+      "summary": "Offline billing, idempotent synchronization and conflict-safe recovery are implemented and integration-tested.",
+      "competitorEvidence": [
+        { "product": "Zoho POS", "url": "https://www.zoho.com/en-us/pos/features/", "claim": "Billing and offline store operation are core POS capabilities." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/bills/bills.service.js", "backend/src/modules/sync/sync.service.js", "frontend/src/features/core/sync/sync-engine.ts"],
+        "testCommands": ["cd backend && npm run test:integration", "cd frontend && npm test"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "inventory_depth",
+      "domain": "billing_inventory",
+      "weight": 35,
+      "status": "verified",
+      "proofKind": "code_controlled",
+      "summary": "Stock, lots, batches, expiry, variants, per-pack quantities and stock counts are code-controlled and tested.",
+      "competitorEvidence": [
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "Real-time inventory, replenishment and warehouse visibility are benchmark capabilities." },
+        { "product": "Lightspeed Retail", "url": "https://www.lightspeedhq.com/pos/retail/inventory-management-software/", "claim": "Advanced retail inventory management is a leading-product benchmark." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/inventory/inventory.service.js", "backend/src/modules/inventory-lots/inventoryLots.service.js", "backend/src/modules/inventory/stockCounts.service.js"],
+        "testCommands": ["cd backend && npm test", "cd backend && npm run test:integration"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "procurement_reconciliation",
+      "domain": "billing_inventory",
+      "weight": 20,
+      "status": "verified",
+      "proofKind": "code_controlled",
+      "summary": "Purchase orders, receiving and PO-versus-receipt reconciliation are implemented and tested.",
+      "competitorEvidence": [
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "Source-to-pay and PO/GIN/GRN reconciliation are leading procurement benchmarks." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/purchase-orders/purchaseOrders.service.js", "backend/src/modules/purchase-orders/procurementReconciliation.js"],
+        "testCommands": ["cd backend && npm test"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "restaurant_operations",
+      "domain": "billing_inventory",
+      "weight": 15,
+      "status": "partial",
+      "proofKind": "code_controlled",
+      "summary": "Tables, KOT, recipes, QR ordering and menu add-ons exist; reservations, kiosk and staff scheduling are not complete.",
+      "competitorEvidence": [
+        { "product": "Petpooja", "url": "https://www.petpooja.com/poss", "claim": "Restaurant POS breadth includes KOT, tables, ordering, recipes and operational add-ons." },
+        { "product": "Toast", "url": "https://pos.toasttab.com/restaurant-pos", "claim": "Restaurant platform breadth includes KDS, online ordering, scheduling and integrations." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/verticals/restaurant", "frontend/src/features/verticals/restaurant"],
+        "testCommands": ["cd backend && npm run test:restaurant", "cd backend && npm run test:integration", "cd frontend && npm test"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "gst_working_papers",
+      "domain": "gst_compliance",
+      "weight": 45,
+      "status": "verified",
+      "proofKind": "code_controlled",
+      "summary": "GST invoice register, HSN summaries, credit notes and GSTR working papers are implemented with explicit filing warnings.",
+      "competitorEvidence": [
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "GST statutory reports and accounting exports are established retail ERP benchmarks." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/compliance/compliance.service.js", "backend/src/modules/compliance/compliance.routes.js"],
+        "testCommands": ["cd backend && npm run test:compliance", "cd backend && npm run test:integration"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "gst_registration_scoping",
+      "domain": "gst_compliance",
+      "weight": 25,
+      "status": "partial",
+      "proofKind": "code_controlled",
+      "summary": "Location-aware registration scope and blocking warnings exist, but automated multi-GSTIN filing orchestration is incomplete.",
+      "competitorEvidence": [
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/multi-store-pos/", "claim": "Centralized multi-store statutory control is a chain-retail benchmark." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/compliance/compliance.service.js", "backend/src/modules/stores/location-context.service.js"],
+        "testCommands": ["cd backend && npm run test:compliance"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "gst_legal_submission",
+      "domain": "gst_compliance",
+      "weight": 30,
+      "status": "external_blocked",
+      "proofKind": "external_runtime",
+      "summary": "A guarded GSP adapter exists, but legal IRN/GSTN submission is not certified without provider credentials and production contract evidence.",
+      "competitorEvidence": [
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "Statutory GST filing automation is a benchmark capability." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/compliance/gsp-http.provider.js"],
+        "testCommands": ["cd backend && npm run test:compliance"],
+        "externalProofRequirements": ["Credentialed GSP sandbox contract test", "Legal production enablement approval", "IRN cancellation and retry evidence"],
+        "runtimeProof": { "status": "missing", "artifact": null }
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "location_rbac",
+      "domain": "multi_store",
+      "weight": 35,
+      "status": "verified",
+      "proofKind": "code_controlled",
+      "summary": "Tenant-safe locations, location access and role restrictions are implemented and integration-tested.",
+      "competitorEvidence": [
+        { "product": "Zoho POS", "url": "https://www.zoho.com/en-us/pos/features/", "claim": "Multi-outlet management and controlled user access are standard benchmarks." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/stores/stores.service.js", "backend/src/modules/stores/location-access.service.js"],
+        "testCommands": ["cd backend && npm run test:integration", "cd frontend && npm test"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "branch_stock_operations",
+      "domain": "multi_store",
+      "weight": 40,
+      "status": "verified",
+      "proofKind": "code_controlled",
+      "summary": "Location stock, branch purchasing, transfers, closing and reports are implemented with tenant isolation.",
+      "competitorEvidence": [
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/multi-store-pos/", "claim": "Centralized inventory and branch operations are multi-store benchmarks." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/stores/stores.service.js", "frontend/src/features/core/inventory/pages/StockTransfersPage.tsx"],
+        "testCommands": ["cd backend && npm run test:integration", "cd frontend && npm test"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "warehouse_repackaging",
+      "domain": "multi_store",
+      "weight": 25,
+      "status": "absent",
+      "proofKind": "code_controlled",
+      "summary": "Central warehouse binning, bulk repackaging and automatic branch replenishment are not implemented as complete workflows.",
+      "competitorEvidence": [
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "Central warehousing, repackaging and outlet replenishment are leading multi-store capabilities." }
+      ],
+      "kiranaEvidence": { "sourcePaths": [], "testCommands": [] },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "local_print_bridge",
+      "domain": "hardware_payments",
+      "weight": 30,
+      "status": "partial",
+      "proofKind": "runtime_required",
+      "summary": "A paired local print bridge and direct-print contract exist, but the supported-device matrix lacks certified physical-device runs.",
+      "competitorEvidence": [
+        { "product": "Zoho POS", "url": "https://www.zoho.com/en-us/pos/features/store-hardware.html", "claim": "Receipt printers and store peripherals are expected POS hardware integrations." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["hardware-bridge/src/server.mjs", "frontend/src/features/core/hardware/local-hardware-bridge.ts"],
+        "testCommands": ["cd frontend && npm test"],
+        "externalProofRequirements": ["Physical printer compatibility matrix", "Reconnect and paper-out recovery run"],
+        "runtimeProof": { "status": "missing", "artifact": null }
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "razorpay_adapter",
+      "domain": "hardware_payments",
+      "weight": 30,
+      "status": "partial",
+      "proofKind": "external_runtime",
+      "summary": "Razorpay signatures, webhook idempotency and payment state transitions are tested with fixtures, not credentialed provider traffic.",
+      "competitorEvidence": [
+        { "product": "Zoho POS", "url": "https://www.zoho.com/pos/integrations.html", "claim": "Razorpay and integrated payment providers are a current POS benchmark." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/payment-provider/razorpay.provider.js", "backend/src/modules/payment-provider/retailPayment.service.js"],
+        "testCommands": ["cd backend && npm run razorpay:fixtures", "cd backend && npm run test:integration"],
+        "externalProofRequirements": ["Credentialed provider sandbox payment", "Webhook delivery and retry trace", "Refund settlement trace"],
+        "runtimeProof": { "status": "missing", "artifact": null }
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "integrated_terminals_dynamic_qr",
+      "domain": "hardware_payments",
+      "weight": 25,
+      "status": "absent",
+      "proofKind": "external_runtime",
+      "summary": "Integrated card terminals and provider-confirmed dynamic UPI QR are not production integrations.",
+      "competitorEvidence": [
+        { "product": "Zoho POS", "url": "https://www.zoho.com/pos/integrations.html", "claim": "Pine Labs, Paytm, PhonePe and terminal-linked payments are benchmark integrations." }
+      ],
+      "kiranaEvidence": { "sourcePaths": [], "testCommands": [] },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "store_peripherals",
+      "domain": "hardware_payments",
+      "weight": 15,
+      "status": "absent",
+      "proofKind": "runtime_required",
+      "summary": "Certified weighing scale, pole display and cash-drawer drivers are not present.",
+      "competitorEvidence": [
+        { "product": "Zoho POS", "url": "https://www.zoho.com/en-us/pos/features/store-hardware.html", "claim": "Scales, displays and cash drawers are benchmark store peripherals." }
+      ],
+      "kiranaEvidence": { "sourcePaths": [], "testCommands": [] },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "public_ordering",
+      "domain": "omnichannel_loyalty",
+      "weight": 25,
+      "status": "verified",
+      "proofKind": "code_controlled",
+      "summary": "Public catalog, QR ordering, customer orders and restaurant guest ordering are implemented and tested.",
+      "competitorEvidence": [
+        { "product": "Toast", "url": "https://pos.toasttab.com/products/online-ordering", "claim": "Direct online ordering tied to POS operations is an omnichannel benchmark." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/orders/orders.service.js", "frontend/src/features/core/customer-order/CustomerOrderPage.tsx"],
+        "testCommands": ["cd backend && npm test", "cd frontend && npm test"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "loyalty_ledger",
+      "domain": "omnichannel_loyalty",
+      "weight": 25,
+      "status": "verified",
+      "proofKind": "code_controlled",
+      "summary": "Loyalty earn, redeem, reversal and audit ledger behavior are implemented and tested.",
+      "competitorEvidence": [
+        { "product": "Toast", "url": "https://pos.toasttab.com/products/loyalty/", "claim": "Integrated loyalty and repeat-customer rewards are a leading POS benchmark." },
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "CRM, offers and loyalty are integrated retail benchmarks." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/loyalty/loyalty.service.js", "frontend/src/features/core/loyalty/pages/LoyaltyPage.tsx"],
+        "testCommands": ["cd backend && npm run test:loyalty", "cd backend && npm run test:integration"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "whatsapp_operations",
+      "domain": "omnichannel_loyalty",
+      "weight": 20,
+      "status": "partial",
+      "proofKind": "external_runtime",
+      "summary": "Bill delivery and reminder workflows exist, while production WhatsApp delivery still depends on provider credentials and templates.",
+      "competitorEvidence": [
+        { "product": "Zoho POS", "url": "https://www.zoho.com/pos/integrations.html", "claim": "WhatsApp order, invoice and payment messaging is a benchmark integration." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/reminders", "frontend/src/features/core/bills/whatsapp-delivery.ts"],
+        "testCommands": ["cd backend && npm test", "cd frontend && npm test"],
+        "externalProofRequirements": ["Credentialed WhatsApp template delivery", "Delivery-status callback trace"],
+        "runtimeProof": { "status": "missing", "artifact": null }
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "channel_order_settlement",
+      "domain": "omnichannel_loyalty",
+      "weight": 30,
+      "status": "absent",
+      "proofKind": "code_controlled",
+      "summary": "Marketplace order ingestion and order-level payout reconciliation are not yet implemented.",
+      "competitorEvidence": [
+        { "product": "Petpooja", "url": "https://www.petpooja.com/poss/online-order-reconciliation", "claim": "Order ID matching, status/amount variance, missing-order detection and outlet rollups are benchmark capabilities." },
+        { "product": "ONDC", "url": "https://resources.ondc.org/reconsiliationandsettlementframework", "claim": "Standardized end-to-end reconciliation and settlement is the network benchmark." }
+      ],
+      "kiranaEvidence": { "sourcePaths": [], "testCommands": [] },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "local_release_certification",
+      "domain": "production_maturity",
+      "weight": 35,
+      "status": "partial",
+      "proofKind": "runtime_required",
+      "summary": "The local release gate proves schemas, migrations, backend, integration, frontend, contracts, payments and local storage in one report.",
+      "competitorEvidence": [
+        { "product": "Zoho POS", "url": "https://www.zoho.com/en-us/pos/features/", "claim": "Reliable cloud and offline operation establish the production benchmark." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/scripts/release-certification.js"],
+        "testCommands": ["cd backend && npm run release:certify:local"],
+        "externalProofRequirements": ["Regenerate a durable local certification attestation after the current change set"],
+        "runtimeProof": { "status": "missing", "artifact": null }
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "postgres_redis_proof",
+      "domain": "production_maturity",
+      "weight": 30,
+      "status": "external_blocked",
+      "proofKind": "external_runtime",
+      "summary": "PostgreSQL, production concurrency and Redis worker proof require external services and are not certified by the local run.",
+      "competitorEvidence": [
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/cloud-pos/", "claim": "Cloud POS availability and centralized operation are production benchmarks." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/scripts/postgres-production-proof.js", "backend/scripts/verify-worker-runtime.js"],
+        "testCommands": ["cd backend && npm run proof:postgres", "cd backend && npm run worker:verify"],
+        "externalProofRequirements": ["Isolated PostgreSQL test database", "Redis worker runtime", "Concurrency and reconciliation report"],
+        "runtimeProof": { "status": "missing", "artifact": null }
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "live_cloud_proof",
+      "domain": "production_maturity",
+      "weight": 20,
+      "status": "external_blocked",
+      "proofKind": "external_runtime",
+      "summary": "Live API and cloud object-storage contract proof are not configured in the local certification environment.",
+      "competitorEvidence": [
+        { "product": "Zoho POS", "url": "https://www.zoho.com/en-us/pos/features/", "claim": "Cloud operation and cross-location access are leading-product expectations." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/scripts/e2e-contract-smoke.js", "backend/scripts/verify-object-storage.js"],
+        "testCommands": ["cd backend && npm run contract:smoke", "cd backend && npm run storage:verify"],
+        "externalProofRequirements": ["Deployed live API", "Production object-storage bucket and credentials"],
+        "runtimeProof": { "status": "missing", "artifact": null }
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "dr_container_release_proof",
+      "domain": "production_maturity",
+      "weight": 15,
+      "status": "external_blocked",
+      "proofKind": "external_runtime",
+      "summary": "Docker image, isolated PostgreSQL restore drill and approved rollback metadata remain unproved externally.",
+      "competitorEvidence": [
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "Business continuity, cloud/local backup and recovery are production benchmarks." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/scripts/disaster-recovery-proof.js", "backend/Dockerfile", "backend/scripts/release-gate.js"],
+        "testCommands": ["cd backend && npm run proof:dr", "cd backend && npm run docker:build"],
+        "externalProofRequirements": ["Docker engine", "Isolated restore target", "Release approval and rollback image metadata"],
+        "runtimeProof": { "status": "missing", "artifact": null }
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "automated_ui_quality",
+      "domain": "ux_accessibility",
+      "weight": 50,
+      "status": "verified",
+      "proofKind": "code_controlled",
+      "summary": "Responsive contracts, navigation, subscription stability and core interaction behavior are covered by automated frontend tests and a production build.",
+      "competitorEvidence": [
+        { "product": "Lightspeed Retail", "url": "https://www.lightspeedhq.com/pos/retail/features/", "claim": "Fast, usable retail workflows across operational surfaces are a product benchmark." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["frontend/src/tests/mobile-core-matrix-harness.test.ts", "frontend/src/tests/subscription-ui-stability.test.ts"],
+        "testCommands": ["cd frontend && npm run typecheck", "cd frontend && npm test", "cd frontend && npm run build"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "live_ui_matrix",
+      "domain": "ux_accessibility",
+      "weight": 30,
+      "status": "partial",
+      "proofKind": "runtime_required",
+      "summary": "A 32-capture mobile matrix harness exists, but a current complete screenshot report has not been attached to this evidence set.",
+      "competitorEvidence": [
+        { "product": "Lightspeed Retail", "url": "https://www.lightspeedhq.com/pos/retail/features/", "claim": "Polished cross-device workflows are part of the leading retail UX benchmark." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["frontend/scripts/capture-mobile-core-matrix-v1.mjs", "frontend/src/tests/mobile-core-matrix-harness.test.ts"],
+        "testCommands": ["cd frontend && npm test"],
+        "externalProofRequirements": ["Current 32-viewport screenshot report", "Zero undersized controls, overflow, redirects and runtime errors"],
+        "runtimeProof": { "status": "missing", "artifact": null }
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "formal_accessibility_audit",
+      "domain": "ux_accessibility",
+      "weight": 20,
+      "status": "absent",
+      "proofKind": "runtime_required",
+      "summary": "A current WCAG-oriented keyboard, screen-reader and automated accessibility audit artifact is absent.",
+      "competitorEvidence": [
+        { "product": "Lightspeed Retail", "url": "https://www.lightspeedhq.com/pos/retail/features/", "claim": "Usable employee and customer workflows form the comparison baseline." }
+      ],
+      "kiranaEvidence": { "sourcePaths": [], "testCommands": [] },
+      "lastVerifiedAt": "2026-08-08"
+    }
+  ],
+  "caps": [
+    { "domain": "gst_compliance", "maxScore": 8, "requiresVerifiedClaims": ["gst_legal_submission"], "reason": "No legal-submission parity claim without credentialed GSP proof." },
+    { "domain": "multi_store", "maxScore": 8.5, "requiresVerifiedClaims": ["warehouse_repackaging"], "reason": "Full multi-store parity requires warehouse and replenishment workflows." },
+    { "domain": "hardware_payments", "maxScore": 6, "requiresVerifiedClaims": ["local_print_bridge", "razorpay_adapter", "integrated_terminals_dynamic_qr", "store_peripherals"], "reason": "Adapter code is not equivalent to certified physical/provider integration." },
+    { "domain": "omnichannel_loyalty", "maxScore": 7, "requiresVerifiedClaims": ["channel_order_settlement"], "reason": "Omnichannel parity requires native channel order and payout reconciliation." },
+    { "domain": "production_maturity", "maxScore": 6.5, "requiresVerifiedClaims": ["postgres_redis_proof", "live_cloud_proof", "dr_container_release_proof"], "reason": "Local tests cannot prove deployed production maturity." },
+    { "domain": "ux_accessibility", "maxScore": 7.5, "requiresVerifiedClaims": ["live_ui_matrix", "formal_accessibility_audit"], "reason": "Automated component tests cannot certify end-to-end UX or accessibility alone." }
+  ]
+}

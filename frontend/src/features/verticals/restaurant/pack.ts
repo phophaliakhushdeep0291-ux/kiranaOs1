@@ -32,10 +32,10 @@ export const restaurantPack: VerticalPack = {
   businessTypes: ["restaurant"],
   paths: ["/tables", "/kitchen", "/menu", "/kitchen-stock"],
   routes: [
-    { path: "/tables", page: "restaurant/tables" },
-    { path: "/kitchen", page: "restaurant/kitchen" },
-    { path: "/menu", page: "restaurant/menu" },
-    { path: "/kitchen-stock", page: "restaurant/kitchen-stock" },
+    { path: "/tables", page: "restaurant/tables", featureName: "restaurant_tables" },
+    { path: "/kitchen", page: "restaurant/kitchen", featureName: "restaurant_kot" },
+    { path: "/menu", page: "restaurant/menu", featureName: "restaurant_menu" },
+    { path: "/kitchen-stock", page: "restaurant/kitchen-stock", featureName: "restaurant_recipe_inventory" },
   ],
   nav: [
     {

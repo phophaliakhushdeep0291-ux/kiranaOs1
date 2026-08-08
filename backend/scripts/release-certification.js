@@ -177,6 +177,12 @@ function writeReports(metadata) {
   fs.writeFileSync(path.join(artifactDir, "release-certification-latest.json"), json, "utf8");
   fs.writeFileSync(path.join(artifactDir, "release-certification-latest.md"), markdown, "utf8");
 
+  if (mode === "local" && status === "local-passed") {
+    const durableEvidenceDir = path.join(repoRoot, "docs", "evidence");
+    fs.mkdirSync(durableEvidenceDir, { recursive: true });
+    fs.writeFileSync(path.join(durableEvidenceDir, "local-release-certification-latest.json"), json, "utf8");
+  }
+
   console.log(`Release report: ${jsonPath}`);
   console.log(`Human report:  ${mdPath}`);
   return { report, exitCode: failed.length || blocked.length ? 1 : 0 };

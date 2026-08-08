@@ -25,7 +25,7 @@ export const stationeryPack: VerticalPack = {
   businessTypes: ["stationery"],
   paths: ["/book-lists"],
   routes: [
-    { path: "/book-lists", page: "stationery/book-lists" },
+    { path: "/book-lists", page: "stationery/book-lists", featureName: "academic_book_lists" },
   ],
   nav: [
     {

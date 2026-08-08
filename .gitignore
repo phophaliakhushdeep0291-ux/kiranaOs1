@@ -16,13 +16,36 @@ coverage/
 dev.db
 
 *.log
+*.orig
+*.rej
+*.tmp
 
 # Local archives / handoff bundles should not be committed.
 *.zip
 
 .vscode/
 .idea/
+.claude/
 .DS_Store
+
+# One-off local probes and deployment-trigger marker files are never product
+# source. Keep their reusable scripts under scripts/ instead.
+__qa_*
+patch-test.txt
+*-redeploy.txt
+
+# Generated browser/test evidence belongs in CI artifacts, not Git history.
+qa-artifacts/
+test-results/
+playwright-report/
+
+# Accidental mounted workspace paths and runtime shop data.
+/backend/prisma/mnt/
+/backend/storage/exports/
+/backend/storage/backups/
+
+# Windows installer staging is reproducible from the signed release workflow.
+/hardware-bridge/windows/stage/
 
 # Generated UI verification screenshots (runtime assets live under frontend/public).
 /frontend/*.png
@@ -31,11 +54,13 @@ dev.db
 # is not part of the app build, and leaving it untracked put a few thousand
 # files in every `git status`.
 /hotel-demo/
+/hotel-pitch/
 
 # Release-certification output. These are run artifacts pinned to one commit —
 # `ci27/` and `ci29/` were committed by accident and are two failed runs from
 # 2026-07-13 that nothing reads.
 release-certification-*.json
 release-certification-*.md
+/ci[0-9]*/
 # Unrelated prototypes retained outside the product build/test/lint/CI surface.
 archive/

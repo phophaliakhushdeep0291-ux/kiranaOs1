@@ -3,9 +3,9 @@ import { AppError } from "../../middleware/error.js";
 import * as service from "./subscription.service.js";
 import { createSubscriptionCheckout, validateSubscriptionCoupon, verifySubscriptionPayment } from "../payment-provider/paymentProvider.service.js";
 
-export async function plans(_req, res, next) {
+export async function plans(req, res, next) {
   try {
-    res.json({ success: true, data: await service.listPlans() });
+    res.json({ success: true, data: await service.listPlans(req.query.businessType) });
   } catch (err) { next(err); }
 }
 
@@ -82,7 +82,7 @@ export async function checkout(req, res, next) {
 
 export async function validateCoupon(req, res, next) {
   try {
-    const data = await validateSubscriptionCoupon(req.body);
+    const data = await validateSubscriptionCoupon({ ...req.body, shopId: req.shopId });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

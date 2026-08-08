@@ -62,7 +62,7 @@ export function BillingOrderQrButton() {
           type="button"
           data-testid="button-order-qr"
           onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--brand-border)] bg-[#eaf2ff] px-2.5 py-1.5 text-[12px] font-bold text-[var(--brand)]"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--brand-border)] bg-[#eaf2ff] px-3 py-2 text-[12px] font-bold text-[var(--brand)]"
         >
           <QrCode size={14} /> Order QR
         </button>
@@ -73,7 +73,7 @@ export function BillingOrderQrButton() {
           <div className="w-[min(92vw,360px)] rounded-3xl bg-white p-6 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <p className="font-display text-base font-black text-[var(--brand-ink)]">Order here</p>
-              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[#64748b] hover:bg-[#f1f5fb]">
+              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="grid h-11 w-11 place-items-center rounded-lg text-[#64748b] hover:bg-[#f1f5fb]">
                 <X size={18} />
               </button>
             </div>

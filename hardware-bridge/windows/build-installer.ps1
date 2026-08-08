@@ -12,6 +12,7 @@ $winswUrl = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.
 if (-not $env:KIRANA_CODE_SIGN_PFX -or -not $env:KIRANA_CODE_SIGN_PASSWORD) {
   throw "Release signing requires KIRANA_CODE_SIGN_PFX and KIRANA_CODE_SIGN_PASSWORD. Unsigned retail installers are intentionally not produced."
 }
+if (-not $env:KIRANA_FRONTEND_ORIGINS) { throw "KIRANA_FRONTEND_ORIGINS must explicitly list the HTTPS KiranaOS frontend origins." }
 $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source
 $signtool = (Get-Command signtool.exe -ErrorAction Stop).Source
 $dotnet = (Get-Command dotnet.exe -ErrorAction Stop).Source
@@ -24,6 +25,15 @@ if (Test-Path -LiteralPath $stage) {
   Remove-Item -LiteralPath $resolvedStage -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage "runtime"), (Join-Path $stage "app"), (Join-Path $stage "setup"), $dist | Out-Null
+$allowedOrigins = @($env:KIRANA_FRONTEND_ORIGINS.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+foreach ($origin in $allowedOrigins) {
+  $uri = [Uri]$origin
+  $loopback = $uri.Host -in @("127.0.0.1", "localhost", "::1")
+  if (($uri.Scheme -ne "https") -and -not ($uri.Scheme -eq "http" -and $loopback)) { throw "Every frontend origin must be HTTPS or a loopback development origin: $origin" }
+  if ($uri.AbsolutePath -ne "/" -or $uri.Query -or $uri.Fragment -or $uri.UserInfo) { throw "Frontend origins cannot contain paths, credentials, queries, or fragments: $origin" }
+}
+$defaults = @{ version = 1; token = ""; allowedOrigins = $allowedOrigins; printer = @{ transport = "windows"; name = ""; host = ""; port = 9100 }; pairing = $null; updateManifestUrl = "https://updates.kiranaos.in/hardware-bridge/stable.json" } | ConvertTo-Json -Depth 4
+[IO.File]::WriteAllText((Join-Path $stage "bridge-defaults.json"), $defaults, [Text.UTF8Encoding]::new($false))
 Copy-Item -LiteralPath $node -Destination (Join-Path $stage "runtime\node.exe")
 Copy-Item -LiteralPath (Join-Path $bridgeRoot "src") -Destination (Join-Path $stage "app\src") -Recurse
 Copy-Item -LiteralPath (Join-Path $bridgeRoot "scripts") -Destination (Join-Path $stage "app\scripts") -Recurse

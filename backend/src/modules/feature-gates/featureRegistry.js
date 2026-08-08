@@ -47,7 +47,21 @@ export const FEATURE_REGISTRY = {
   staff_performance_report: { minimumPlan: "pro", description: "Staff performance report" },
   advanced_analytics: { minimumPlan: "pro", description: "Advanced analytics" },
   api_webhook_later: { minimumPlan: "pro", description: "API/webhook later" },
+  channel_settlement: { minimumPlan: "pro", description: "Channel order and payout reconciliation" },
   premium_support: { minimumPlan: "pro", description: "Premium support" },
+  product_variants: { minimumPlan: "starter", description: "Size, colour and product variants" },
+  clothing_rentals: { minimumPlan: "growth", description: "Clothing rental bookings" },
+  footwear_size_runs: { minimumPlan: "starter", description: "Footwear size-run stock" },
+  vehicle_fitment: { minimumPlan: "starter", description: "Vehicle fitment and alternative parts" },
+  serial_imei_tracking: { minimumPlan: "starter", description: "Serial number and IMEI tracking" },
+  prescription_tracking: { minimumPlan: "starter", description: "Prescription register" },
+  academic_book_lists: { minimumPlan: "starter", description: "School and academic book lists" },
+  furniture_order_book: { minimumPlan: "starter", description: "Furniture quotations and order book" },
+  tester_stock: { minimumPlan: "starter", description: "Cosmetics tester stock" },
+  restaurant_tables: { minimumPlan: "starter", description: "Restaurant table management" },
+  restaurant_kot: { minimumPlan: "starter", description: "Kitchen order tickets and display" },
+  restaurant_menu: { minimumPlan: "starter", description: "Restaurant menu management" },
+  restaurant_recipe_inventory: { minimumPlan: "growth", description: "Recipe and ingredient inventory" },
 };
 
 export const OLD_DATA_VIEW_FEATURE = "view_old_data";

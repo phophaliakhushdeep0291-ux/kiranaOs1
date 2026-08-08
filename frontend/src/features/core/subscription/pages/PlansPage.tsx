@@ -2,7 +2,8 @@ import { CheckCircle2, Crown, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PLAN_DEFINITIONS, PUBLIC_PLAN_ORDER, type BillingCycle, type PlanCode } from "@/features/core/subscription/plans";
+import { getPlanForBusinessType, PUBLIC_PLAN_ORDER, type BillingCycle, type PlanCode } from "@/features/core/subscription/plans";
+import { BUSINESS_TYPE_DEFS, useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { PlanBadge, UpgradeModal } from "@/features/core/subscription/components";
 import { useState } from "react";
@@ -14,12 +15,13 @@ export default function PlansPage() {
   const [targetPlan, setTargetPlan] = useState<PlanCode | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("yearly");
   const [, navigate] = useLocation();
+  const businessType = useBusinessTypeKey();
 
   return (
     <PageShell className="space-y-5">
       <PageHeader
         title="Plans"
-        description="Choose a shop launch bundle: in-person setup, supported hardware configuration, training, support and software."
+        description={`${BUSINESS_TYPE_DEFS[businessType].label} pricing: in-person setup, supported hardware configuration, training, support and software.`}
         actions={snapshot ? <PlanBadge planCode={snapshot.planCode} status={snapshot.status} /> : null}
       />
 
@@ -41,7 +43,7 @@ export default function PlansPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         {PUBLIC_PLAN_ORDER.map((code) => {
-          const plan = PLAN_DEFINITIONS[code];
+          const plan = getPlanForBusinessType(code, businessType);
           const isCurrent = snapshot?.planCode === code;
           return (
             <Card key={plan.code} className={plan.highlight ? "border-primary shadow-sm" : ""}>

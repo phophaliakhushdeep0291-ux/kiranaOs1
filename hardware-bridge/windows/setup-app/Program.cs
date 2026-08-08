@@ -30,7 +30,7 @@ internal sealed class BridgeConfig
     [JsonPropertyName("version")] public int Version { get; set; } = 1;
     [JsonPropertyName("token")] public string Token { get; set; } = "";
     [JsonPropertyName("allowedOrigins")] public string[] AllowedOrigins { get; set; } =
-        ["https://app.kiranaos.in", "http://localhost:5173", "http://127.0.0.1:5173"];
+        ["http://localhost:5173", "http://127.0.0.1:5173"];
     [JsonPropertyName("printer")] public PrinterConfig Printer { get; set; } = new();
     [JsonPropertyName("pairing")] public PairingState? Pairing { get; set; }
     [JsonPropertyName("updateManifestUrl")] public string UpdateManifestUrl { get; set; } =
@@ -105,6 +105,11 @@ internal sealed class SetupWindow : Form
         try
         {
             if (File.Exists(ConfigPath)) config = JsonSerializer.Deserialize<BridgeConfig>(File.ReadAllText(ConfigPath)) ?? new();
+            else
+            {
+                var defaultsPath = Path.Combine(AppContext.BaseDirectory, "bridge-defaults.json");
+                if (File.Exists(defaultsPath)) config = JsonSerializer.Deserialize<BridgeConfig>(File.ReadAllText(defaultsPath)) ?? new();
+            }
         }
         catch { status.Text = "Previous setup could not be read. Choose the printer again."; }
     }

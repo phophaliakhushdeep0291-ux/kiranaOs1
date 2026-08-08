@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../../middleware/auth.js";
 import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";
 import { requireShop } from "../../../middleware/permissions.js";
+import { requireFeature } from "../../../modules/feature-gates/featureGate.middleware.js";
 import { requireCapability } from "../../../modules/shops/businessProfile.middleware.js";
 import { validate } from "../../../middleware/validate.js";
 import { fireTicketSchema, updateTicketStatusSchema } from "./kot.schema.js";
@@ -11,7 +12,7 @@ const router = Router();
 // Gated on the capability rather than the trade, matching tables: any shop that
 // sends orders to a kitchen holds KOT, and one that does not is turned away by
 // the server rather than only by a hidden sidebar entry.
-router.use(requireAuth, requireShop, requireDeviceActivated(), requireCapability("KOT"));
+router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("restaurant_kot"), requireCapability("KOT"));
 
 router.get("/", ctrl.list);
 router.get("/:id", ctrl.detail);

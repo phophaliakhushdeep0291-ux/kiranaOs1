@@ -2,12 +2,13 @@ import { Router } from "express";
 import { requireAuth } from "../../../middleware/auth.js";
 import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";
 import { requireShop } from "../../../middleware/permissions.js";
+import { requireFeature } from "../../../modules/feature-gates/featureGate.middleware.js";
 import { validate } from "../../../middleware/validate.js";
 import { cancelRentalSchema, createRentalSchema, returnRentalSchema, updateRentalSchema } from "./rentals.schema.js";
 import * as ctrl from "./rentals.controller.js";
 
 const router = Router();
-router.use(requireAuth, requireShop, requireDeviceActivated());
+router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("clothing_rentals"));
 
 // Static paths first — "/availability" must not be swallowed by "/:id".
 router.get("/availability", ctrl.availability);

@@ -75,8 +75,84 @@ const proOnlyFeatures = [
   "staff_performance_report",
   "advanced_analytics",
   "api_webhook_later",
+  "channel_settlement",
   "premium_support",
 ];
+
+// Version marker stored with new shop-type-aware subscription snapshots. A
+// subscription without it predates vertical plan gates and is grandfathered so
+// adding the gates cannot take an existing workflow away from a live shop.
+export const SHOP_TYPE_ENTITLEMENTS_V1 = "shop_type_entitlements_v1";
+
+export const SHOP_TYPE_FEATURES = Object.freeze([
+  "product_variants",
+  "clothing_rentals",
+  "footwear_size_runs",
+  "vehicle_fitment",
+  "serial_imei_tracking",
+  "prescription_tracking",
+  "academic_book_lists",
+  "furniture_order_book",
+  "tester_stock",
+  "restaurant_tables",
+  "restaurant_kot",
+  "restaurant_menu",
+  "restaurant_recipe_inventory",
+]);
+
+export function hasLegacyShopTypeFeatureAccess(features, featureName) {
+  return SHOP_TYPE_FEATURES.includes(featureName) && !features.includes(SHOP_TYPE_ENTITLEMENTS_V1);
+}
+
+// Essentials are included in Starter for the trade that needs them at the
+// counter. Growth adds workflows that improve control or expand the operation;
+// Business inherits both and continues to carry multi-counter/multi-store scale.
+export const BUSINESS_TYPE_PLAN_FEATURES = Object.freeze({
+  kirana: {
+    starter: ["batch_expiry"],
+    growth: ["advanced_inventory"],
+  },
+  clothing: {
+    starter: ["product_variants"],
+    growth: ["clothing_rentals", "loyalty_program"],
+  },
+  footwear: {
+    starter: ["product_variants", "footwear_size_runs"],
+    growth: ["loyalty_program"],
+  },
+  auto_parts: {
+    starter: ["vehicle_fitment"],
+    growth: ["advanced_inventory"],
+  },
+  electronics: {
+    starter: ["serial_imei_tracking"],
+    growth: ["advanced_inventory"],
+  },
+  pharmacy: {
+    starter: ["batch_expiry", "prescription_tracking"],
+    growth: ["advanced_inventory"],
+  },
+  stationery: {
+    starter: ["academic_book_lists"],
+    growth: [],
+  },
+  furniture: {
+    starter: ["product_variants", "furniture_order_book"],
+    growth: ["advanced_inventory"],
+  },
+  cosmetics: {
+    starter: ["product_variants", "batch_expiry", "tester_stock"],
+    growth: ["loyalty_program"],
+  },
+  restaurant: {
+    starter: ["batch_expiry", "restaurant_tables", "restaurant_kot", "restaurant_menu"],
+    growth: ["restaurant_recipe_inventory", "advanced_inventory"],
+  },
+  other: {
+    starter: [],
+    growth: [],
+  },
+});
 
 export const PLAN_CONFIGS = {
   starter: {
@@ -145,8 +221,17 @@ export function normalizeBusinessType(businessType) {
 export function getPlanConfigForBusinessType(planCode = "starter", businessType = "kirana") {
   const base = getPlanConfig(planCode);
   if (planCode === "standard") return base;
-  const [priceMonthlyPaise, priceYearlyPaise] = BUSINESS_TYPE_PLAN_PRICING[normalizeBusinessType(businessType)][planCode] ?? [];
-  return { ...base, priceMonthlyPaise: priceMonthlyPaise ?? base.priceMonthlyPaise, priceYearlyPaise: priceYearlyPaise ?? base.priceYearlyPaise };
+  const normalizedType = normalizeBusinessType(businessType);
+  const [priceMonthlyPaise, priceYearlyPaise] = BUSINESS_TYPE_PLAN_PRICING[normalizedType][planCode] ?? [];
+  const vertical = BUSINESS_TYPE_PLAN_FEATURES[normalizedType];
+  const starterEntitlements = vertical.starter;
+  const growthEntitlements = planAtLeast(planCode, "growth") ? vertical.growth : [];
+  return {
+    ...base,
+    priceMonthlyPaise: priceMonthlyPaise ?? base.priceMonthlyPaise,
+    priceYearlyPaise: priceYearlyPaise ?? base.priceYearlyPaise,
+    features: [...new Set([...base.features, SHOP_TYPE_ENTITLEMENTS_V1, ...starterEntitlements, ...growthEntitlements])],
+  };
 }
 
 export const FIRST_YEAR_ONBOARDING_SKU = Object.freeze({

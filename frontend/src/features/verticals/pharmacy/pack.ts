@@ -27,7 +27,7 @@ export const pharmacyPack: VerticalPack = {
   businessTypes: ["pharmacy"],
   paths: ["/prescriptions"],
   routes: [
-    { path: "/prescriptions", page: "pharmacy/prescriptions" },
+    { path: "/prescriptions", page: "pharmacy/prescriptions", featureName: "prescription_tracking" },
   ],
   nav: [
     {

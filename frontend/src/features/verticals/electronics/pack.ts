@@ -24,7 +24,7 @@ export const electronicsPack: VerticalPack = {
   businessTypes: ["electronics"],
   paths: ["/serial-units"],
   routes: [
-    { path: "/serial-units", page: "electronics/units" },
+    { path: "/serial-units", page: "electronics/units", featureName: "serial_imei_tracking" },
   ],
   nav: [
     {

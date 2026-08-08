@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../../middleware/auth.js";
 import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";
 import { requireShop } from "../../../middleware/permissions.js";
+import { requireFeature } from "../../../modules/feature-gates/featureGate.middleware.js";
 import { requireCapability } from "../../../modules/shops/businessProfile.middleware.js";
 import { validate } from "../../../middleware/validate.js";
 import { copyBookListSchema, createBookListSchema, updateBookListSchema } from "./book-lists.schema.js";
@@ -11,7 +12,7 @@ const router = Router();
 // Gated on the capability, not the trade: a general store next to a school sells
 // book sets too, and a shop that does not is turned away by the server rather
 // than only by a hidden sidebar entry.
-router.use(requireAuth, requireShop, requireDeviceActivated(), requireCapability("ACADEMIC_BOOK_LISTS"));
+router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("academic_book_lists"), requireCapability("ACADEMIC_BOOK_LISTS"));
 
 // Static paths first — none of these may be swallowed by "/:id".
 router.get("/options", ctrl.options);

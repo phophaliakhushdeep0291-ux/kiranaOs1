@@ -28,4 +28,16 @@ describe("mobile core QA matrix harness", () => {
     expect(source).toMatch(/control\s*=>\s*control\.width\s*<\s*44\s*\|\|\s*control\.height\s*<\s*44/);
     expect(source).toContain("undersized.length === 0");
   });
+
+  it("reuses a valid QA browser session instead of exhausting auth registration limits", () => {
+    expect(source).toContain("PROFILE_DIR");
+    expect(source).toContain('manifest.webmanifest');
+    expect(source).toContain('apiUrl+\"/auth/me\"');
+    expect(source).toContain('apiUrl+\"/auth/refresh\"');
+    expect(source).toContain('return \"reused\"');
+    expect(source).toContain('return \"refreshed\"');
+    expect(source).toContain('return \"logged-in\"');
+    expect(source).toContain('localStorage.setItem(mobileKey,qaMobile)');
+    expect(source).toContain('client.send(\"Browser.close\")');
+  });
 });

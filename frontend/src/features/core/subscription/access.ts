@@ -9,6 +9,8 @@ import { emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import {
   FEATURE_LABELS,
   getPlan,
+  getPlanForBusinessType,
+  getPlanForEntitlementSnapshot,
   getRequiredPlanForFeature,
   type FeatureName,
   type PlanCode,
@@ -16,6 +18,7 @@ import {
   type SubscriptionState,
 } from "@/features/core/subscription/plans";
 import { getLicenseEvaluation } from "@/features/core/devices/license";
+import { getStoredBusinessType, subscribeToBusinessType } from "@/features/core/settings/business-type-store";
 
 const DEFAULT_TRIAL_KEY = "kirana-os:subscription-default-trial:v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -169,6 +172,21 @@ function isSubscriptionActionOnly(payload: Record<string, unknown> | null) {
   );
 }
 
+function entitlementFeaturesFromPayload(payload: Record<string, unknown> | null): string[] | null {
+  if (!payload) return null;
+  const plan = isRecord(payload.plan) ? payload.plan : null;
+  const candidates = [
+    payload.entitledFeatures,
+    payload.entitled_features,
+    payload.features,
+    plan?.features,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate.filter((item): item is string => typeof item === "string");
+  }
+  return null;
+}
+
 export async function writeSubscriptionSnapshot(
   payload: Record<string, unknown>,
 ): Promise<void> {
@@ -207,7 +225,7 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
   const now = Date.now();
   const license = await getLicenseEvaluation().catch(() => null);
   if (license?.token && license.state !== "missing") {
-    const plan = getPlan(license.plan);
+    const plan = getPlanForEntitlementSnapshot(license.plan, getStoredBusinessType(), license.token.features);
     const graceActive = license.state === "grace";
     const isExpired =
       license.state === "expired" || license.state === "invalid";
@@ -241,7 +259,7 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
     const graceEnd = new Date(trial.offlineGraceEndsAt).getTime();
     const status: SubscriptionState = now <= trialEnd ? "trial" : "expired";
     const graceActive = now > trialEnd && now <= graceEnd;
-    const plan = getPlan("starter");
+    const plan = getPlanForBusinessType("starter", getStoredBusinessType());
     return {
       plan,
       planCode: plan.code,
@@ -269,10 +287,15 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
     };
   }
 
-  const plan = getPlan(
+  const planCode = getPlan(
     String(
       payload.planCode ?? payload.plan_code ?? latest?.plan_code ?? "starter",
     ),
+  ).code;
+  const plan = getPlanForEntitlementSnapshot(
+    planCode,
+    getStoredBusinessType(),
+    entitlementFeaturesFromPayload(payload),
   );
   const rawStatus = String(payload.status ?? "active").toLowerCase();
   const status: SubscriptionState =
@@ -385,7 +408,7 @@ export function decideFeature(
   snapshot: SubscriptionSnapshot,
   featureName: FeatureName,
 ): Omit<FeatureDecision, "loading" | "refresh"> {
-  const requiredPlan = getRequiredPlanForFeature(featureName);
+  const requiredPlan = getRequiredPlanForFeature(featureName, getStoredBusinessType());
   const label = FEATURE_LABELS[featureName] ?? featureName;
 
   if (featureName === "view_old_data") {
@@ -487,9 +510,11 @@ export function useSubscriptionSnapshot() {
   useEffect(() => {
     void refresh();
     const handler = () => void refresh();
+    const unsubscribeBusinessType = subscribeToBusinessType(handler);
     window.addEventListener("kirana:local-data-changed", handler);
     window.addEventListener("kirana:sync-queue-updated", handler);
     return () => {
+      unsubscribeBusinessType();
       window.removeEventListener("kirana:local-data-changed", handler);
       window.removeEventListener("kirana:sync-queue-updated", handler);
     };
@@ -502,7 +527,7 @@ export function useFeature(featureName: FeatureName): FeatureDecision {
   const { snapshot, loading, refresh } = useSubscriptionSnapshot();
   return useMemo(() => {
     const safeSnapshot = snapshot ?? {
-      plan: getPlan("starter"),
+      plan: getPlanForBusinessType("starter", getStoredBusinessType()),
       planCode: "starter" as PlanCode,
       status: "trial" as SubscriptionState,
       isTrial: true,

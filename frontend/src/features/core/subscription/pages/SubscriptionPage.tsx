@@ -3,7 +3,8 @@ import { AlertTriangle, CheckCircle2, CloudOff, CreditCard, Database, RefreshCcw
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PLAN_DEFINITIONS, PUBLIC_PLAN_ORDER, type PlanCode } from "@/features/core/subscription/plans";
+import { getPlanForBusinessType, PUBLIC_PLAN_ORDER, type PlanCode } from "@/features/core/subscription/plans";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { CancelSubscriptionDialog, PlanBadge, UpgradeModal } from "@/features/core/subscription/components";
 import { subscriptionRefreshLocalFirst } from "@/features/core/subscription/local-actions";
@@ -19,6 +20,7 @@ function formatDate(value: string | null) {
 }
 
 export default function SubscriptionPage() {
+  const businessType = useBusinessTypeKey();
   const { snapshot, loading, refresh } = useSubscriptionSnapshot();
   const { toast } = useToast();
   const [targetPlan, setTargetPlan] = useState<PlanCode | null>(null);
@@ -115,7 +117,7 @@ export default function SubscriptionPage() {
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
           {PUBLIC_PLAN_ORDER.map((code, index) => {
-            const plan = PLAN_DEFINITIONS[code];
+            const plan = getPlanForBusinessType(code, businessType);
             const isCurrent = snapshot.planCode === plan.code;
             const isHigher = index > currentIndex;
             // Clicking the plan you already have shouldn't try to sell it back to you:

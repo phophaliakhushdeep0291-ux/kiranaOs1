@@ -42,6 +42,7 @@ jobs:
         env:
           KIRANA_CODE_SIGN_PFX: ${{ runner.temp }}\kiranaos-signing.pfx
           KIRANA_CODE_SIGN_PASSWORD: ${{ secrets.KIRANA_CODE_SIGN_PASSWORD }}
+          KIRANA_FRONTEND_ORIGINS: ${{ vars.KIRANA_FRONTEND_ORIGINS }}
         run: .\windows\build-installer.ps1 -Version "${{ inputs.version }}"
       - name: Upload signed installer
         uses: actions/upload-artifact@v4

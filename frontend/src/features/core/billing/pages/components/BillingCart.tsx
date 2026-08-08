@@ -164,15 +164,15 @@ function CartRow({
   return (
     <div
       data-testid={`cart-item-${item.product.id}`}
-      className="grid grid-cols-[34px_1fr_84px_60px_22px] items-center gap-[9px] border-b border-[#edf1f6] px-2.5 py-3 last:border-b-0"
+      className="grid grid-cols-[34px_minmax(0,1fr)_44px] items-start gap-x-2 gap-y-3 border-b border-[#edf1f6] px-2.5 py-3 last:border-b-0 sm:grid-cols-[34px_minmax(0,1fr)_134px_60px_44px] sm:items-center sm:gap-[9px]"
     >
       {/* Thumbnail */}
-      <div className={`grid h-[34px] w-[34px] shrink-0 place-items-center overflow-hidden rounded-[7px] text-lg ${color}`}>
+      <div className={`col-start-1 row-start-1 grid h-[34px] w-[34px] shrink-0 place-items-center overflow-hidden rounded-[7px] text-lg sm:col-auto sm:row-auto ${color}`}>
         {item.product.imageUrl ? <img src={item.product.imageUrl} alt="" className="h-full w-full object-contain" /> : emoji}
       </div>
 
       {/* Name + editable rate */}
-      <div className="min-w-0">
+      <div className="col-start-2 row-start-1 min-w-0 sm:col-auto sm:row-auto">
         <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#13274d]">
           {item.product.name}
         </p>
@@ -190,7 +190,7 @@ function CartRow({
             aria-label={t("billing.cart.sellingUnitFor", { name: item.product.name })}
             value={item.sellingUnit?.unitCode ?? sellingUnits.find((unit) => unit.isDefault)?.unitCode ?? sellingUnits[0]?.unitCode}
             onChange={(event) => onUpdateUnit(lineKey, event.target.value)}
-            className="mt-1 h-6 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#31527e] outline-none focus:border-[var(--brand)]"
+            className="mt-1 h-11 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#31527e] outline-none focus:border-[var(--brand)]"
           >
             {sellingUnits.map((unit) => <option key={unit.unitCode} value={unit.unitCode}>{t("billing.cart.unitOption", { name: unit.name, price: Number(unit.defaultPrice).toLocaleString("en-IN") })}</option>)}
           </select>
@@ -204,7 +204,7 @@ function CartRow({
             type="button"
             onClick={() => onReadScale(lineKey, scaleUnit)}
             disabled={scaleReading}
-            className="mt-1 inline-flex h-6 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 text-[10px] font-extrabold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
+            className="mt-1 inline-flex h-11 min-w-11 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 text-[10px] font-extrabold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
             aria-label={t("billing.cart.readScaleFor", { name: item.product.name })}
           >
             {scaleReading ? <Loader2 size={11} className="animate-spin" /> : <Scale size={11} />}
@@ -214,7 +214,7 @@ function CartRow({
         {editingRate ? (
           <div
             className={cn(
-              "mt-1 inline-flex h-[26px] items-center gap-0.5 rounded-[7px] border bg-white px-1.5 shadow-sm ring-2 ring-offset-0",
+              "mt-1 inline-flex h-11 items-center gap-0.5 rounded-[7px] border bg-white px-1.5 shadow-sm ring-2 ring-offset-0",
               isBelowMin ? "border-red-300 ring-red-100" : "border-[var(--brand)] ring-[var(--brand)]/15",
             )}
           >
@@ -240,7 +240,7 @@ function CartRow({
             data-testid={`rate-edit-${item.product.id}`}
             onClick={startEditRate}
             className={cn(
-              "group mt-[5px] inline-flex items-center gap-1 rounded-[6px] px-1 py-[1px] text-[11px] font-bold leading-none -ml-1 transition-colors hover:bg-[#eef4ff]",
+              "group mt-[5px] inline-flex min-h-11 items-center gap-1 rounded-[6px] px-1 py-[1px] text-[11px] font-bold leading-none -ml-1 transition-colors hover:bg-[#eef4ff]",
               isBelowMin ? "text-red-600" : "text-[#2d4268]",
             )}
             title={t("billing.cart.editRateHint")}
@@ -254,7 +254,7 @@ function CartRow({
           </button>
         )}
         {editingDiscount ? (
-          <div className="mt-1 inline-flex h-[26px] items-center gap-0.5 rounded-[7px] border border-[var(--brand)] bg-white px-1.5 shadow-sm ring-2 ring-[var(--brand)]/15">
+          <div className="mt-1 inline-flex h-11 items-center gap-0.5 rounded-[7px] border border-[var(--brand)] bg-white px-1.5 shadow-sm ring-2 ring-[var(--brand)]/15">
             <span className="text-[11px] font-bold text-[#8290a8]">−₹</span>
             <input
               ref={discountInputRef}
@@ -277,7 +277,7 @@ function CartRow({
           <button
             data-testid={`line-discount-edit-${item.product.id}`}
             onClick={startEditDiscount}
-            className="mt-1 inline-flex items-center gap-1 rounded-[6px] bg-[#e9f9f0] px-1.5 py-[2px] text-[10px] font-extrabold leading-none text-[#1a8a4e] transition-colors hover:bg-[#d8f3e5]"
+            className="mt-1 inline-flex min-h-11 items-center gap-1 rounded-[6px] bg-[#e9f9f0] px-1.5 py-[2px] text-[10px] font-extrabold leading-none text-[#1a8a4e] transition-colors hover:bg-[#d8f3e5]"
             title={t("billing.cart.editLineDiscountHint")}
           >
             <BadgePercent size={10} aria-hidden="true" />
@@ -287,7 +287,7 @@ function CartRow({
           <button
             data-testid={`line-discount-add-${item.product.id}`}
             onClick={startEditDiscount}
-            className="group mt-1 inline-flex items-center gap-1 rounded-[6px] px-1 py-[1px] text-[10px] font-bold leading-none -ml-1 text-[#9aa7bd] transition-colors hover:bg-[#eef4ff] hover:text-[var(--brand)]"
+            className="group mt-1 inline-flex min-h-11 items-center gap-1 rounded-[6px] px-1 py-[1px] text-[10px] font-bold leading-none -ml-1 text-[#9aa7bd] transition-colors hover:bg-[#eef4ff] hover:text-[var(--brand)]"
             title={t("billing.cart.addLineDiscountHint")}
           >
             <BadgePercent size={10} aria-hidden="true" />
@@ -301,7 +301,7 @@ function CartRow({
           onChange={(event) => onUpdateLineNote(lineKey, event.target.value)}
           placeholder={t("billing.cart.notePlaceholder")}
           aria-label={t("billing.cart.noteFor", { name: item.product.name })}
-          className="mt-1 h-6 w-full max-w-[220px] rounded-md border border-transparent bg-transparent px-1.5 text-[10px] font-semibold text-[#9a6b00] placeholder:text-[#9aa7bd] hover:bg-[#fff8e6] focus:border-[var(--brand)] focus:bg-white focus:outline-none"
+          className="mt-1 h-11 w-full max-w-[220px] rounded-md border border-transparent bg-transparent px-1.5 text-[10px] font-semibold text-[#9a6b00] placeholder:text-[#9aa7bd] hover:bg-[#fff8e6] focus:border-[var(--brand)] focus:bg-white focus:outline-none"
         />
         {/* Batch-tracked goods only. A custom line has no product to draw batches from. */}
         {item.product.batchTrackingEnabled && !item.isCustom ? (
@@ -326,11 +326,11 @@ function CartRow({
       </div>
 
       {/* Qty stepper — 84px, 3 columns */}
-      <div className="grid h-[30px] w-[84px] grid-cols-3 overflow-hidden rounded-[8px] border border-[#dfe8f5]">
+      <div className="col-start-2 row-start-2 grid h-[46px] w-[134px] grid-cols-3 justify-self-start overflow-hidden rounded-[8px] border border-[#dfe8f5] sm:col-auto sm:row-auto">
         <button
           data-testid={`button-dec-${item.product.id}`}
           onClick={() => onUpdateQty(lineKey, item.quantity - 1)}
-          className="bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
+          className="min-h-11 min-w-11 bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
           aria-label={t("billing.cart.decrease", { name: item.product.name })}
         >
           −
@@ -341,12 +341,12 @@ function CartRow({
           inputMode="decimal"
           aria-label={t("billing.cart.quantityFor", { name: item.product.name })}
           {...qtyProps}
-          className="border-x border-[#e6ecf4] bg-white text-center text-[12px] font-extrabold text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="min-h-11 min-w-11 border-x border-[#e6ecf4] bg-white text-center text-[12px] font-extrabold text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         <button
           data-testid={`button-inc-${item.product.id}`}
           onClick={() => onUpdateQty(lineKey, item.quantity + 1)}
-          className="bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
+          className="min-h-11 min-w-11 bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
           aria-label={t("billing.cart.increase", { name: item.product.name })}
         >
           +
@@ -354,7 +354,7 @@ function CartRow({
       </div>
 
       {/* Line total (net of its own discount, with the gross struck through) */}
-      <span className="text-right text-[12px] font-black text-[#13274d] tabular-nums">
+      <span className="col-start-3 row-start-2 self-center text-right text-[12px] font-black text-[#13274d] tabular-nums sm:col-auto sm:row-auto">
         {lineDiscount > 0 ? (
           <span className="mr-1 text-[10px] font-semibold text-[#9aa7bd] line-through">₹{lineGross.toLocaleString("en-IN")}</span>
         ) : null}
@@ -365,7 +365,7 @@ function CartRow({
       <button
         data-testid={`button-remove-${item.product.id}`}
         onClick={() => onRemoveItem(lineKey)}
-        className="grid h-[22px] w-[22px] place-items-center rounded text-[#536383] transition-colors hover:bg-red-50 hover:text-red-600"
+        className="col-start-3 row-start-1 grid h-11 w-11 place-items-center rounded text-[#536383] transition-colors hover:bg-red-50 hover:text-red-600 sm:col-auto sm:row-auto"
         aria-label={t("billing.cart.remove", { name: item.product.name })}
       >
         <X size={15} />
