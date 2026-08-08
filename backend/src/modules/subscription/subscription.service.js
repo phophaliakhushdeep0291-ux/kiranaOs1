@@ -296,6 +296,7 @@ export async function reconcileSubscriptionAfterRefund({
 export async function changePlan(shopId, planCode) {
   if (!validatePlanCode(planCode)) throw new AppError("Invalid plan code", 400);
   await ensurePlansSeeded();
+  const nextPlan = await getPlanByCode(planCode);
   const now = new Date();
   const current = await db.subscription.findUnique({ where: { shopId } });
   if (!current) {
@@ -315,7 +316,14 @@ export async function changePlan(shopId, planCode) {
   }
   return db.subscription.update({
     where: { shopId },
-    data: { planCode, updatedAt: now },
+    data: {
+      planCode,
+      lockedPriceMonthlyPaise: nextPlan.priceMonthlyPaise,
+      lockedPriceYearlyPaise: nextPlan.priceYearlyPaise,
+      entitledFeaturesJson: nextPlan.featuresJson,
+      intendedPaidPlanCode: planCode,
+      updatedAt: now,
+    },
   });
 }
 

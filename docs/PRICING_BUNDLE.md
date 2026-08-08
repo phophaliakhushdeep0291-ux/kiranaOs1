@@ -13,3 +13,5 @@ Every subscription snapshots its price and feature entitlement when activated. C
 ## Market check (8 August 2026)
 
 Official competitor pages showed myBillBook Silver for Android at ₹399/year (one device, one business, one user). Vyapar advertised a lifetime-free mobile tier; its paid Silver offers varied by device/term, with official pages showing ₹283–₹333.25/month billed on multi-year/annual terms and ₹3,999/year on the main pricing page. These are reference points, not components of the KiranaOS bundle.
+
+Sources checked: [myBillBook Silver](https://freetrial.mybillbook.in/silver-plan-for-android.html) and [Vyapar pricing](https://vyaparapp.in/pricing).
