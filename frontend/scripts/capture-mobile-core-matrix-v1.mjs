@@ -1,13 +1,15 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 const FRONTEND_URL = process.env.QA_FRONTEND_URL || "http://127.0.0.1:5173";
+const FRONTEND_ORIGIN = new URL(FRONTEND_URL).origin;
 const API_URL = process.env.QA_API_URL || "http://127.0.0.1:3000/api";
 const CHROME_PATH = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const DEBUG_PORT = Number(process.env.QA_DEBUG_PORT || 9482);
 const OUTPUT_DIR = path.resolve(process.env.QA_OUTPUT_DIR || "qa-artifacts/mobile-core-matrix");
+const PROFILE_DIR = path.resolve(process.env.QA_PROFILE_DIR || path.join(tmpdir(), "artha-mobile-core-matrix-profile"));
 const VIEWPORTS = [[375, 667], [390, 844], [430, 932], [768, 1024]];
 const ROUTES = [
   ["MQA-BILL-01", "/billing"], ["MQA-PROD-01", "/products"],
@@ -65,17 +67,60 @@ async function navigate(client, route) {
   await sleep(900);
 }
 
-async function registerSession(client) {
+async function prepareAppOrigin(client) {
+  // Use a same-origin static document so the application cannot clear an old
+  // session while the harness is still deciding whether to verify or refresh it.
+  await client.send("Page.navigate", { url: `${FRONTEND_URL}/manifest.webmanifest` });
+  await waitForPage(
+    client,
+    `document.readyState === "complete" && location.origin === ${JSON.stringify(FRONTEND_ORIGIN)}`,
+  );
+  await waitForPage(client, `document.body && document.body.innerText.trim().length > 20`);
+}
+
+async function ensureSession(client) {
   const runId = `${Date.now()}${Math.floor(Math.random() * 1000)}`, mobile = `8${runId.slice(-9)}`;
-  await client.evaluate(`(async()=>{const apiUrl=${JSON.stringify(API_URL)},deviceId=localStorage.getItem("kiranaos_device_id")||localStorage.getItem("kirana-os:device-id:v1");if(!deviceId)throw new Error("Browser device identity was not initialized");const response=await fetch(apiUrl+"/auth/register",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({shopName:"Mobile Matrix QA",ownerName:"QA Owner",city:"Jaipur",address:"Automated QA",mobile:${JSON.stringify(mobile)},password:"Test@12345",ownerPin:"2468"})});const json=await response.json();if(!response.ok)throw new Error("Registration failed: "+JSON.stringify(json));const auth=json.data??json;localStorage.setItem("kiranaApiBaseUrl",apiUrl);localStorage.setItem("kiranaos.auth.session.v1",JSON.stringify({accessToken:auth.accessToken??auth.token,refreshToken:auth.refreshToken,user:auth.user,shop:auth.shop}));sessionStorage.setItem("kiranaos.security.sessionStarted.v1",String(Date.now()));return true})()`);
+  const outcome = await client.evaluate(`(async()=>{
+    const apiUrl=${JSON.stringify(API_URL)},sessionKey="kiranaos.auth.session.v1",mobileKey="kiranaos.qa.mobile",password="Test@12345";
+    let deviceId=localStorage.getItem("kiranaos_device_id")||localStorage.getItem("kirana-os:device-id:v1");
+    if(!deviceId){deviceId="mobile_matrix_"+crypto.randomUUID();localStorage.setItem("kiranaos_device_id",deviceId);localStorage.setItem("kirana-os:device-id:v1",deviceId)}
+    let stored={};try{stored=JSON.parse(localStorage.getItem(sessionKey)||"{}")||{}}catch{}
+    const save=(auth)=>{const session={accessToken:auth.accessToken??auth.token,refreshToken:auth.refreshToken,user:auth.user,shop:auth.shop};localStorage.setItem("kiranaApiBaseUrl",apiUrl);localStorage.setItem(sessionKey,JSON.stringify(session));sessionStorage.setItem("kiranaos.security.sessionStarted.v1",String(Date.now()));return session};
+    const verify=async(session)=>{if(!session?.accessToken)return false;const response=await fetch(apiUrl+"/auth/me",{headers:{authorization:"Bearer "+session.accessToken,"x-device-id":deviceId}});return response.ok};
+    if(await verify(stored)){sessionStorage.setItem("kiranaos.security.sessionStarted.v1",String(Date.now()));return "reused"}
+    if(stored.refreshToken){const response=await fetch(apiUrl+"/auth/refresh",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({refreshToken:stored.refreshToken})});if(response.ok){const json=await response.json(),session=save(json.data??json);if(await verify(session))return "refreshed"}}
+    const knownMobile=localStorage.getItem(mobileKey)||stored.user?.mobile||stored.user?.phone||"";
+    if(knownMobile){const response=await fetch(apiUrl+"/auth/login",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({mobile:knownMobile,password})});const json=await response.json();if(!response.ok)throw new Error("QA login failed: "+JSON.stringify(json));save(json.data??json);localStorage.setItem(mobileKey,knownMobile);return "logged-in"}
+    const qaMobile=${JSON.stringify(mobile)},response=await fetch(apiUrl+"/auth/register",{method:"POST",headers:{"content-type":"application/json","x-device-id":deviceId},body:JSON.stringify({shopName:"Mobile Matrix QA",ownerName:"QA Owner",city:"Jaipur",address:"Automated QA",mobile:qaMobile,password,ownerPin:"2468"})}),json=await response.json();
+    if(!response.ok)throw new Error("Registration failed: "+JSON.stringify(json));save(json.data??json);localStorage.setItem(mobileKey,qaMobile);return "registered"
+  })()`);
+  console.log(`QA auth session: ${outcome}`);
+  return outcome;
+}
+
+async function closeChrome(client, chrome) {
+  if (client) {
+    await client.send("Browser.close").catch(() => {});
+    client.close();
+  }
+  if (chrome.exitCode === null) {
+    await Promise.race([
+      new Promise((resolve) => chrome.once("exit", resolve)),
+      sleep(5_000),
+    ]);
+  }
+  if (chrome.exitCode === null) chrome.kill();
 }
 
 async function auditPage(client, qaId, route, width, height) {
   await client.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: true });
   await navigate(client, route);
-  const metrics = await client.evaluate(`(()=>{const visible=node=>{const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&rect.width>0&&rect.height>0&&rect.bottom>0&&rect.top<innerHeight};const controls=[...document.querySelectorAll("button,input,select,textarea,[role=button],[role=combobox],a[href]")].filter(visible).map(node=>{const rect=node.getBoundingClientRect();return{tag:node.tagName,type:node.getAttribute("type")||"",label:(node.getAttribute("aria-label")||node.textContent||node.getAttribute("placeholder")||"").trim().replace(/\\s+/g," ").slice(0,70),width:Math.round(rect.width),height:Math.round(rect.height)}}).filter(control=>!(["checkbox","radio","hidden"].includes(control.type))&&!(control.tag==="SELECT"&&control.width<=2&&control.height<=2));const undersized=controls.filter(control=>control.width<44||control.height<44),text=document.body.innerText;return{path:location.pathname,viewport:[innerWidth,innerHeight],documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,undersized:undersized.slice(0,30),undersizedCount:undersized.length,visibleControlCount:controls.length,desktopSidebarVisible:[...document.querySelectorAll(".app-desktop-sidebar")].some(visible),genericFailure:/something went wrong|unexpected error|page failed to load/i.test(text),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[]}})()`);
+  const metrics = await client.evaluate(`(()=>{const visible=node=>{const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&rect.width>0&&rect.height>0&&rect.bottom>0&&rect.top<innerHeight};const controls=[...document.querySelectorAll("button,input,select,textarea,[role=button],[role=combobox],a[href]")].filter(visible).map(node=>{const rect=node.getBoundingClientRect();return{tag:node.tagName,type:node.getAttribute("type")||"",label:(node.getAttribute("aria-label")||node.textContent||node.getAttribute("placeholder")||"").trim().replace(/\\s+/g," ").slice(0,70),width:Math.round(rect.width),height:Math.round(rect.height)}}).filter(control=>!(["checkbox","radio","hidden"].includes(control.type))&&!(control.width<=2&&control.height<=2));const undersized=controls.filter(control=>control.width<44||control.height<44),text=document.body.innerText;return{path:location.pathname,viewport:[innerWidth,innerHeight],documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,undersized:undersized.slice(0,30),undersizedCount:undersized.length,visibleControlCount:controls.length,desktopSidebarVisible:[...document.querySelectorAll(".app-desktop-sidebar")].some(visible),genericFailure:/something went wrong|unexpected error|page failed to load/i.test(text),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[]}})()`);
   const image = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
   const filename = `${qaId.toLowerCase()}-${width}x${height}.png`;
+  // Developers may run build/cleanup tasks alongside this long matrix; recreate
+  // the ignored artifact directory before each durable write.
+  await mkdir(OUTPUT_DIR, { recursive: true });
   await writeFile(path.join(OUTPUT_DIR, filename), Buffer.from(image.data, "base64"));
   assert(metrics.path === route, `${qaId} redirected from ${route} to ${metrics.path}`);
   assert(metrics.documentWidth <= width + 1 && metrics.bodyWidth <= width + 1, `${qaId} ${width}px horizontal overflow: ${JSON.stringify(metrics)}`);
@@ -88,9 +133,9 @@ async function auditPage(client, qaId, route, width, height) {
 
 async function main() {
   await mkdir(OUTPUT_DIR, { recursive: true });
+  await mkdir(PROFILE_DIR, { recursive: true });
   await waitFor(`${API_URL.replace(/\/api$/, "")}/health/ready`); await waitFor(FRONTEND_URL);
-  const profile = await mkdtemp(path.join(tmpdir(), "artha-mobile-matrix-"));
-  const chrome = spawn(CHROME_PATH, ["--headless=new", "--disable-gpu", "--disable-extensions", "--no-first-run", "--no-default-browser-check", `--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${profile}`, `${FRONTEND_URL}/register`], { windowsHide: true, stdio: "ignore" });
+  const chrome = spawn(CHROME_PATH, ["--headless=new", "--disable-gpu", "--disable-extensions", "--no-first-run", "--no-default-browser-check", `--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${PROFILE_DIR}`, `${FRONTEND_URL}/manifest.webmanifest`], { windowsHide: true, stdio: "ignore" });
   let client;
   try {
     await waitFor(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
@@ -98,14 +143,16 @@ async function main() {
     assert(target, "Chrome did not create the application page");
     client = new CdpClient(target.webSocketDebuggerUrl); await client.connect(); await client.send("Page.enable"); await client.send("Runtime.enable");
     await client.send("Page.addScriptToEvaluateOnNewDocument", { source: `window.__arthaQaErrors=[];window.addEventListener("error",event=>window.__arthaQaErrors.push(String(event.error?.stack||event.message||event.error)));window.addEventListener("unhandledrejection",event=>window.__arthaQaErrors.push(String(event.reason?.stack||event.reason)));` });
-    await navigate(client, "/register"); await registerSession(client);
+    await prepareAppOrigin(client);
+    await ensureSession(client);
     const results = [];
     for (const [qaId, route] of ROUTES) for (const [width, height] of VIEWPORTS) results.push(await auditPage(client, qaId, route, width, height));
+    await mkdir(OUTPUT_DIR, { recursive: true });
     await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), frontendUrl: FRONTEND_URL, apiUrl: API_URL, results }, null, 2));
     const undersized = results.filter((result) => result.undersizedCount > 0);
     assert(undersized.length === 0, `${undersized.length}/${results.length} captures contain controls below 44x44; inspect ${path.join(OUTPUT_DIR, "report.json")}`);
     console.log(`Mobile core matrix passed ${results.length}/${results.length} captures. Artifacts: ${OUTPUT_DIR}`);
-  } finally { client?.close(); chrome.kill(); }
+  } finally { await closeChrome(client, chrome); }
 }
 
 main().catch((error) => { console.error(error.stack ?? error); process.exitCode = 1; });

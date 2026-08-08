@@ -86,6 +86,25 @@ function itemTotal(row: AnyRow) {
   return readNumber(row.line_total, quantity * rate);
 }
 
+function BillItemDescription({ item }: { item: AnyRow }) {
+  const addons = billItemAddons(item);
+  const variation = String(item.sellingUnitLabel ?? item.selling_unit_label ?? "").trim();
+  const note = String(item.note ?? "").trim();
+
+  return <div className="min-w-0">
+    <div className="break-words font-semibold text-foreground">{String(item.name ?? item.productName ?? "Item")}</div>
+    {variation ? <div className="mt-1 text-xs font-semibold text-muted-foreground">Portion: {variation}</div> : null}
+    {addons.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Selected add-ons">
+      {addons.map((addon, addonIndex) => <span className="inline-flex max-w-full flex-wrap items-center gap-x-1 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold leading-4 text-amber-950" key={`${addon.optionId ?? addon.name}-${addonIndex}`}>
+        {addon.groupName ? <span className="text-amber-700">{addon.groupName}:</span> : null}
+        <span>{addon.quantity > 1 ? `${addon.quantity}× ` : ""}{addon.name}</span>
+        {addon.price > 0 ? <span className="text-amber-800">+{money(addon.price * addon.quantity)}</span> : null}
+      </span>)}
+    </div> : null}
+    {note ? <div className="mt-1.5 break-words text-xs text-muted-foreground">{note}</div> : null}
+  </div>;
+}
+
 function paymentStatus(bill: BillRecord, payments: AnyRow[]) {
   if (bill.status === "cancelled") return "Cancelled";
   if (bill.billType === "estimate") return "Rough/Estimate";
@@ -315,7 +334,7 @@ export default function BillDetailPage() {
     <div className="space-y-4 p-4 pb-28 md:space-y-5 md:p-6 md:pb-8">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-2">
-          <Link href="/bills"><Button variant="outline" size="sm"><ArrowLeft size={15} className="mr-1" />Back</Button></Link>
+          <Link href="/bills" className="inline-flex"><Button variant="outline" size="sm"><ArrowLeft size={15} className="mr-1" />Back</Button></Link>
           <div>
             <h1 className="text-2xl font-bold">{billNo(bill)}</h1>
             <p className="text-sm text-muted-foreground">Duplicate copy, audit trail, ledger impact, and sync status.</p>
@@ -387,32 +406,28 @@ export default function BillDetailPage() {
 
       <Card>
         <CardHeader><CardTitle>Items</CardTitle></CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/60 text-muted-foreground"><tr><th className="px-4 py-3 text-left">Item</th><th className="px-4 py-3 text-right">Qty</th><th className="px-4 py-3 text-right">Rate</th><th className="px-4 py-3 text-right">Total</th></tr></thead>
-            <tbody>{visibleItems.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No item rows found.</td></tr> : visibleItems.map((item, index) => {
-              const addons = billItemAddons(item);
-              const variation = String(item.sellingUnitLabel ?? item.selling_unit_label ?? "").trim();
-              const note = String(item.note ?? "").trim();
-              return <tr className="border-t align-top" key={String(item.id ?? index)}>
-                <td className="px-4 py-3">
-                  <div className="font-medium">{String(item.name ?? item.productName ?? "Item")}</div>
-                  {variation ? <div className="mt-1 text-xs font-semibold text-muted-foreground">Portion: {variation}</div> : null}
-                  {addons.length > 0 ? <div className="mt-2 flex max-w-[28rem] flex-wrap gap-1.5" aria-label="Selected add-ons">
-                    {addons.map((addon, addonIndex) => <span className="inline-flex min-h-7 items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-950" key={`${addon.optionId ?? addon.name}-${addonIndex}`}>
-                      {addon.groupName ? <span className="mr-1 text-amber-700">{addon.groupName}:</span> : null}
-                      {addon.quantity > 1 ? `${addon.quantity}× ` : ""}{addon.name}
-                      {addon.price > 0 ? <span className="ml-1 text-amber-800">+{money(addon.price * addon.quantity)}</span> : null}
-                    </span>)}
-                  </div> : null}
-                  {note ? <div className="mt-1.5 text-xs text-muted-foreground">{note}</div> : null}
-                </td>
+        <CardContent className="p-0">
+          <div className="divide-y sm:hidden">
+            {visibleItems.length === 0 ? <div className="px-4 py-8 text-center text-sm text-muted-foreground">No item rows found.</div> : visibleItems.map((item, index) => <article className="space-y-3 p-4" key={String(item.id ?? index)}>
+              <BillItemDescription item={item} />
+              <dl className="grid grid-cols-3 gap-2 rounded-xl bg-muted/50 p-3 text-sm">
+                <div className="min-w-0"><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Qty</dt><dd className="mt-0.5 break-words font-bold">{readNumber(item.quantity, 0)} {String(item.enteredUnit ?? item.entered_unit ?? "")}</dd></div>
+                <div className="min-w-0 text-right"><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Rate</dt><dd className="mt-0.5 font-bold">{money(readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0))}</dd></div>
+                <div className="min-w-0 text-right"><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</dt><dd className="mt-0.5 font-black">{money(itemTotal(item))}</dd></div>
+              </dl>
+            </article>)}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/60 text-muted-foreground"><tr><th className="px-4 py-3 text-left">Item</th><th className="px-4 py-3 text-right">Qty</th><th className="px-4 py-3 text-right">Rate</th><th className="px-4 py-3 text-right">Total</th></tr></thead>
+              <tbody>{visibleItems.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No item rows found.</td></tr> : visibleItems.map((item, index) => <tr className="border-t align-top" key={String(item.id ?? index)}>
+                <td className="px-4 py-3"><BillItemDescription item={item} /></td>
                 <td className="px-4 py-3 text-right">{readNumber(item.quantity, 0)} {String(item.enteredUnit ?? item.entered_unit ?? "")}</td>
                 <td className="px-4 py-3 text-right">{money(readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0))}</td>
                 <td className="px-4 py-3 text-right font-semibold">{money(itemTotal(item))}</td>
-              </tr>;
-            })}</tbody>
-          </table>
+              </tr>)}</tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
 

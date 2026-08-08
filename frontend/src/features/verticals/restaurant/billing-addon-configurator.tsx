@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Check, Minus, Plus, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { registerProductConfigurator, type ProductConfiguratorProps } from "@/features/core/billing/product-configurators";
 import { getStoredBusinessType } from "@/features/core/settings/business-type-store";
 import { useAppLanguage } from "@/features/core/settings/i18n";
@@ -49,7 +49,10 @@ function AddonConfigurator({ product, data, onConfirm, onCancel }: ProductConfig
   return (
     <Dialog open onOpenChange={(next) => { if (!next) onCancel(); }}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><Settings2 size={18} /> {t("restaurant.addons.configure", { product: product.name })}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Settings2 size={18} /> {t("restaurant.addons.configure", { product: product.name })}</DialogTitle>
+          <DialogDescription className="sr-only">{t("restaurant.addons.configureHelp", { product: product.name })}</DialogDescription>
+        </DialogHeader>
         <div className="space-y-4">
           {validation.map(({ group, count, valid: groupValid }) => (
             <section key={group.id} className={cn("rounded-2xl border p-3.5", attempted && !groupValid && "border-rose-300 bg-rose-50/50")}>

@@ -2,6 +2,7 @@ import type { restaurantEn } from "./restaurant";
 
 export const restaurantHi: { [K in keyof typeof restaurantEn]: string } = {
   "restaurant.addons.configure": "{product} को तैयार करें",
+  "restaurant.addons.configureHelp": "{product} को बिल में जोड़ने से पहले उसके भाग और ऐड-ऑन चुनें।",
   "restaurant.addons.chooseAtLeast": "कम से कम {count} चुनें",
   "restaurant.addons.optional": "वैकल्पिक",
   "restaurant.addons.upTo": " · अधिकतम {count}",

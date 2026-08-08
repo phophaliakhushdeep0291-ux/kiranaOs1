@@ -36,6 +36,7 @@ Source: "{#StageDir}\runtime\node.exe"; DestDir: "{app}\runtime"; Flags: ignorev
 Source: "{#StageDir}\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#StageDir}\setup\KiranaOS.HardwareBridge.Setup.exe"; DestDir: "{app}"; Flags: ignoreversion signonce
 Source: "{#StageDir}\setup\*"; DestDir: "{app}"; Excludes: "KiranaOS.HardwareBridge.Setup.exe"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#StageDir}\bridge-defaults.json"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Hardware Bridge Setup"; Filename: "{app}\KiranaOS.HardwareBridge.Setup.exe"

@@ -115,7 +115,7 @@ describe("subscription and plan gating", () => {
 
   it("publishes three annual-first plans while retaining Legacy Standard internally", () => {
     expect(PUBLIC_PLAN_ORDER).toEqual(["starter", "growth", "pro"]);
-    expect(PLAN_DEFINITIONS.starter).toMatchObject({ price: 49, annualPrice: 399, maxDevices: 2 });
+    expect(PLAN_DEFINITIONS.starter).toMatchObject({ price: 249, annualPrice: 2499, maxDevices: 2 });
     expect(PLAN_DEFINITIONS.growth).toMatchObject({ price: 599, annualPrice: 4999, maxDevices: 5, maxStaff: 5 });
     expect(PLAN_DEFINITIONS.pro).toMatchObject({ name: "Business", price: 999, annualPrice: 8999, maxDevices: 10, maxStaff: 20 });
     expect(PLAN_DEFINITIONS.standard.legacy).toBe(true);

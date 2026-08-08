@@ -317,6 +317,10 @@ export async function changePlan(shopId, planCode) {
         currentPeriodEnd: trialEnd,
         trialEndsAt: trialEnd,
         graceEndsAt: addDays(trialEnd, DEFAULT_GRACE_DAYS),
+        lockedPriceMonthlyPaise: nextPlan.priceMonthlyPaise,
+        lockedPriceYearlyPaise: nextPlan.priceYearlyPaise,
+        entitledFeaturesJson: nextPlan.featuresJson,
+        intendedPaidPlanCode: planCode,
       },
     });
   }
@@ -520,8 +524,13 @@ function subscriptionPlanSnapshot(plan, subscription) {
 
 function planForBusinessType(plan, businessType) {
   if (!plan || plan.code === "standard") return plan;
-  const pricing = getPlanConfigForBusinessType(plan.code, businessType);
-  return { ...plan, priceMonthlyPaise: pricing.priceMonthlyPaise, priceYearlyPaise: pricing.priceYearlyPaise };
+  const configured = getPlanConfigForBusinessType(plan.code, businessType);
+  return {
+    ...plan,
+    priceMonthlyPaise: configured.priceMonthlyPaise,
+    priceYearlyPaise: configured.priceYearlyPaise,
+    featuresJson: JSON.stringify(configured.features),
+  };
 }
 
 async function getShopBusinessType(shopId, client = db) {

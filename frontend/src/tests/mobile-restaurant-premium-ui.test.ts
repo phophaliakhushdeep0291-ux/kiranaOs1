@@ -20,6 +20,7 @@ describe("premium restaurant phone controls", () => {
     expect(billingConfigurator).toContain('className="h-11 w-11" aria-label={`Decrease ${option.name}`}');
     expect(billingConfigurator).toContain('className="h-11 w-11" aria-label={`Increase ${option.name}`}');
     expect(billingConfigurator).toContain('<DialogFooter className="gap-2 max-sm:!flex-col sm:justify-between">');
+    expect(billingConfigurator).toContain('t("restaurant.addons.configureHelp", { product: product.name })');
     expect(billingConfigurator).not.toContain('className="h-7 w-7"');
     expect(addonManager).toContain('className="mt-1 h-11 w-full rounded-md');
     expect(addonManager).toContain('className="h-11 w-11" aria-label={t("restaurant.addons.removeChoice"');

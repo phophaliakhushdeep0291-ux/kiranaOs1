@@ -75,6 +75,9 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
+      - name: Reject tracked generated and runtime artifacts
+        run: node scripts/check-repository-hygiene.mjs
+
       - name: Install backend dependencies
         working-directory: backend
         run: npm ci
@@ -95,4 +98,3 @@ jobs:
           path: backend/release-artifacts
           if-no-files-found: error
           retention-days: 30
-

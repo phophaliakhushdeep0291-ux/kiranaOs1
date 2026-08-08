@@ -474,7 +474,7 @@ export function BillingSearch({
                   title={t("billing.search.scanBarcode")}
                   aria-label={t("billing.search.scanBarcode")}
                   onClick={openBarcodeScanner}
-                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] sm:h-9 sm:w-9"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] lg:h-9 lg:w-9"
                 >
                   <ScanLine size={16} aria-hidden="true" />
                 </button>
@@ -483,7 +483,7 @@ export function BillingSearch({
                   title={t("billing.search.voiceBilling")}
                   aria-label={t("billing.search.openVoiceBilling")}
                   onClick={onToggleVoice}
-                  className={`grid h-11 w-11 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] sm:h-9 sm:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
+                  className={`grid h-11 w-11 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] lg:h-9 lg:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
                 >
                   <Mic size={16} aria-hidden="true" />
                 </button>
@@ -589,7 +589,7 @@ export function BillingSearch({
               />
             ))}
             {hasMoreCategories && (
-              <button onClick={() => setShowAllCategories((value) => !value)} className="h-11 shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] sm:h-9">
+              <button onClick={() => setShowAllCategories((value) => !value)} className="h-11 shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] lg:h-9">
                 {showAllCategories ? t("billing.search.categoriesLess") : t("billing.search.categoriesMore")} ▾
               </button>
             )}
@@ -970,7 +970,7 @@ function CategoryChip({ label, active, onClick }: { label: string; active: boole
   return (
     <button
       onClick={onClick}
-      className={`h-11 shrink-0 rounded-[8px] border px-5 text-[12px] font-semibold capitalize transition-all sm:h-9 ${
+      className={`h-11 shrink-0 rounded-[8px] border px-5 text-[12px] font-semibold capitalize transition-all lg:h-9 ${
         active
           ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_8px_16px_rgba(0,87,255,0.2)]"
           : "border-[#e6ecf4] bg-white text-[#3a4a6b] hover:bg-[#f7f9fd]"

@@ -57,4 +57,4 @@ Software artifacts are retained by `tests/failure-recovery.test.mjs`, `tests/job
 
 ## Signed release build
 
-Run `windows/build-installer.ps1` from a Windows release worker with .NET 8, Inno Setup, SignTool, and the `KIRANA_CODE_SIGN_PFX` / `KIRANA_CODE_SIGN_PASSWORD` secrets. The build signs the service wrapper, setup application, uninstaller, and installer, then fails unless Authenticode verification passes. `.github/workflows/hardware-bridge-installer.yml` publishes the signed installer artifact; it deliberately cannot publish an unsigned retail build.
+Run `windows/build-installer.ps1` from a Windows release worker with .NET 8, Inno Setup, SignTool, the `KIRANA_CODE_SIGN_PFX` / `KIRANA_CODE_SIGN_PASSWORD` secrets, and an explicit comma-separated `KIRANA_FRONTEND_ORIGINS`. The build rejects non-HTTPS origins except loopback development origins, signs the service wrapper, setup application, uninstaller, and installer, then fails unless Authenticode verification passes. `.github/workflows/hardware-bridge-installer.yml` publishes the signed installer artifact; it deliberately cannot publish an unsigned retail build.

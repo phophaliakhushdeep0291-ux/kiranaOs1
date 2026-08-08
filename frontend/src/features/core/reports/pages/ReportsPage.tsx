@@ -496,7 +496,7 @@ export default function ReportsPage() {
             <PopoverTrigger asChild><Button variant="outline" className="h-11 w-full rounded-xl border-[#dfe7f2] px-4 text-[12px] font-bold sm:h-9 sm:w-auto sm:rounded-[7px] sm:font-semibold"><Filter size={14} className="mr-2" />Filters</Button></PopoverTrigger>
             <PopoverContent align="end" className="w-48 rounded-[8px] p-2">
               {(["today", "week", "month"] as const).map((item) => (
-                <button key={item} className={cn("min-h-11 w-full rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc] sm:min-h-0 sm:rounded-[6px]", period === item && "bg-[var(--brand-soft)] text-[var(--brand)]")} onClick={() => applyPeriod(item)}>{REPORT_PERIOD_LABELS[item]}</button>
+                <button key={item} className={cn("min-h-11 w-full rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc] lg:min-h-0 lg:rounded-[6px]", period === item && "bg-[var(--brand-soft)] text-[var(--brand)]")} onClick={() => applyPeriod(item)}>{REPORT_PERIOD_LABELS[item]}</button>
               ))}
               <Link href="/daily-closing" className="mt-1 flex min-h-11 items-center border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[var(--brand)] sm:min-h-0">Open daily closing</Link>
             </PopoverContent>
@@ -891,13 +891,13 @@ function PeriodPill({ value, onChange }: { value: ReportPeriod; onChange: (perio
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="inline-flex h-11 min-w-[108px] items-center justify-between gap-2 rounded-xl border border-[#dfe6f0] bg-[#fbfcfe] px-3 text-[10px] font-bold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white sm:h-7 sm:min-w-[92px] sm:rounded-[6px] sm:px-2.5 sm:text-[9.5px] sm:font-semibold">
+        <button type="button" className="inline-flex h-11 min-w-[108px] items-center justify-between gap-2 rounded-xl border border-[#dfe6f0] bg-[#fbfcfe] px-3 text-[10px] font-bold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white lg:h-7 lg:min-w-[92px] lg:rounded-[6px] lg:px-2.5 lg:text-[9.5px] lg:font-semibold">
           {REPORT_PERIOD_LABELS[value]} <ChevronDown size={11} aria-hidden="true" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={5} className="w-36 rounded-[7px] border-[#dfe7f2] p-1.5">
         {(["today", "week", "month"] as const).map((period) => (
-          <button key={period} type="button" onClick={() => onChange(period)} className={cn("min-h-11 w-full rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold text-[#405273] hover:bg-[#f2f6fc] sm:min-h-0 sm:rounded-[5px]", value === period && "bg-[var(--brand-soft)] text-[var(--brand)]")}>
+          <button key={period} type="button" onClick={() => onChange(period)} className={cn("min-h-11 w-full rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold text-[#405273] hover:bg-[#f2f6fc] lg:min-h-0 lg:rounded-[5px]", value === period && "bg-[var(--brand-soft)] text-[var(--brand)]")}>
             {REPORT_PERIOD_LABELS[period]}
           </button>
         ))}

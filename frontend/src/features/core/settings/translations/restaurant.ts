@@ -1,5 +1,6 @@
 export const restaurantEn = {
   "restaurant.addons.configure": "Configure {product}",
+  "restaurant.addons.configureHelp": "Choose the portion options and add-ons for {product} before adding it to the bill.",
   "restaurant.addons.chooseAtLeast": "Choose at least {count}",
   "restaurant.addons.optional": "Optional",
   "restaurant.addons.upTo": " · up to {count}",

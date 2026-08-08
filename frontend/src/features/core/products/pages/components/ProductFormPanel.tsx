@@ -408,7 +408,7 @@ export function ProductFormPanel({
             {editing ? t("products.form.editSubtitle") : t("products.form.addSubtitle")}
           </p>
         </div>
-        <button onClick={() => onOpenChange(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label="Close">
+        <button onClick={() => onOpenChange(false)} className="grid h-11 w-11 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label="Close">
           <X size={18} />
         </button>
       </div>
@@ -487,7 +487,7 @@ export function ProductFormPanel({
                       key={unit}
                       type="button"
                       onClick={() => form.setValue("unit", unit, { shouldDirty: true, shouldValidate: true })}
-                      className={`h-8 shrink-0 rounded-lg border px-2.5 text-[10.5px] font-extrabold capitalize transition-colors ${selectedUnit === unit ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#dfe8f5] bg-white text-[#45577a] hover:border-[#a9c5ff]"}`}
+                      className={`h-11 min-w-11 shrink-0 rounded-lg border px-2.5 text-[10.5px] font-extrabold capitalize transition-colors ${selectedUnit === unit ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#dfe8f5] bg-white text-[#45577a] hover:border-[#a9c5ff]"}`}
                     >
                       {unit}
                     </button>
@@ -937,7 +937,7 @@ function TypeButton({ active, icon, label, onClick }: { active: boolean; icon: R
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-10 items-center justify-center gap-2 rounded-[9px] text-[13px] font-bold transition-all ${
+      className={`flex h-11 items-center justify-center gap-2 rounded-[9px] text-[13px] font-bold transition-all ${
         active ? "bg-white text-[var(--brand)] shadow-[0_2px_8px_rgba(15,23,42,0.08)]" : "text-[#6d7c98] hover:text-[#13274d]"
       }`}
     >
