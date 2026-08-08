@@ -24,7 +24,7 @@ export const autoPartsPack: VerticalPack = {
   businessTypes: ["auto_parts"],
   paths: ["/fitment"],
   routes: [
-    { path: "/fitment", page: "auto-parts/fitment" },
+    { path: "/fitment", page: "auto-parts/fitment", featureName: "vehicle_fitment" },
   ],
   nav: [
     {

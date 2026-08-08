@@ -26,7 +26,7 @@ export const cosmeticsPack: VerticalPack = {
   businessTypes: ["cosmetics"],
   paths: ["/testers"],
   routes: [
-    { path: "/testers", page: "cosmetics/testers" },
+    { path: "/testers", page: "cosmetics/testers", featureName: "tester_stock" },
   ],
   nav: [
     {

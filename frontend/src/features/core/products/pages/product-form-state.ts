@@ -89,9 +89,18 @@ export interface ProductDraftPayload {
   productName?: string;
   name?: string;
   category?: string;
+  brand?: string;
   unit?: string;
+  packSizeValue?: number;
+  packSizeUnit?: string;
   barcode?: string;
+  hsn?: string;
   aliases?: string[];
+  mrp?: number;
+  gstRate?: number;
+  reorderLevel?: number;
+  description?: string;
+  imageUrl?: string;
   costPrice?: number;
   sellingPrice?: number;
   minimumSellingPrice?: number;
@@ -138,9 +147,18 @@ export function readProductDraftEventDetail(detail: unknown): ProductDraftEventD
       productName: optionalString(draftRecord, "productName"),
       name: optionalString(draftRecord, "name"),
       category: optionalString(draftRecord, "category"),
+      brand: optionalString(draftRecord, "brand"),
       unit: optionalString(draftRecord, "unit"),
+      packSizeValue: optionalNumber(draftRecord, "packSizeValue"),
+      packSizeUnit: optionalString(draftRecord, "packSizeUnit"),
       barcode: optionalString(draftRecord, "barcode"),
+      hsn: optionalString(draftRecord, "hsn"),
       aliases: optionalAliases(draftRecord),
+      mrp: optionalNumber(draftRecord, "mrp"),
+      gstRate: optionalNumber(draftRecord, "gstRate"),
+      reorderLevel: optionalNumber(draftRecord, "reorderLevel"),
+      description: optionalString(draftRecord, "description"),
+      imageUrl: optionalString(draftRecord, "imageUrl"),
       costPrice: optionalNumber(draftRecord, "costPrice"),
       sellingPrice: optionalNumber(draftRecord, "sellingPrice"),
       minimumSellingPrice: optionalNumber(draftRecord, "minimumSellingPrice"),
@@ -348,9 +366,18 @@ export function mergeDraftIntoProductForm(base: ProductFormData, draft: ProductD
     ...base,
     name: draft.name ?? draft.productName ?? base.name,
     category: draft.category ?? base.category,
+    brand: draft.brand ?? base.brand,
     unit: draft.unit ?? base.unit,
+    packSizeValue: Number(draft.packSizeValue ?? base.packSizeValue),
+    packSizeUnit: draft.packSizeUnit ?? base.packSizeUnit,
     barcode: draft.barcode ?? base.barcode,
+    hsn: draft.hsn ?? base.hsn,
     aliasesText: mergedAliases,
+    mrp: Number(draft.mrp ?? base.mrp),
+    gstRate: Number(draft.gstRate ?? base.gstRate),
+    reorderLevel: Number(draft.reorderLevel ?? base.reorderLevel),
+    description: draft.description ?? base.description,
+    imageUrl: draft.imageUrl ?? base.imageUrl,
     costPrice: Number(draft.costPrice ?? base.costPrice),
     sellingPrice: Number(draft.sellingPrice ?? base.sellingPrice),
     minimumSellingPrice: Number(draft.minimumSellingPrice ?? base.minimumSellingPrice),

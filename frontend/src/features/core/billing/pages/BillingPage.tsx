@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { BillInputBillType, BillPaymentMode, getListBillsQueryKey, useConfirmBill, useListCustomers, type Bill, type Customer, type Product, type ProductSellingUnit } from "@/lib/api/client";
 import { useListProducts } from "@/features/core/products/queries";
 import { bindProductBarcodeLocalFirst } from "@/features/core/products/local-actions";
+import type { KnownProductDetails } from "@/features/core/products/product-knowledge";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -890,13 +891,30 @@ export default function Billing() {
   }
 
   /** Genuinely new stock: open the product form with the scanned code already filled in. */
-  function createProductForScannedBarcode(code: string) {
+  function createProductForScannedBarcode(code: string, knownProduct?: KnownProductDetails) {
     setLocation("/products");
     // Same handoff the voice assistant uses: the form listens for this draft once the
     // products route has mounted.
     window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent("kirana:voice-product-draft", {
-        detail: { draft: { mode: "create", barcode: code }, merge: false },
+        detail: {
+          draft: {
+            mode: "create",
+            barcode: code,
+            ...(knownProduct ? {
+              name: knownProduct.name,
+              brand: knownProduct.brand,
+              category: knownProduct.category,
+              unit: knownProduct.unit,
+              packSizeValue: knownProduct.packSizeValue,
+              packSizeUnit: knownProduct.packSizeUnit,
+              aliases: knownProduct.aliases,
+              description: knownProduct.description,
+              imageUrl: knownProduct.imageUrl ?? undefined,
+            } : {}),
+          },
+          merge: false,
+        },
       }));
     }, 350);
   }

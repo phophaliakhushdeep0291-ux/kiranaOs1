@@ -22,6 +22,7 @@ import type { Bill, Product } from "@/lib/api/client";
 import { applyBindSheetPick, normalizeSearchText, productSearchText, productSellingPrice, resolveScanOutcome } from "../billing-calculations";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { ACTIVITY_EVENTS, trackEvent, useSearchTracking } from "@/lib/activity";
+import { lookupKnownProduct, type KnownProductDetails } from "@/features/core/products/product-knowledge";
 
 /* ─── deterministic product placeholder colour ─── */
 const PLACEHOLDER_COLORS = [
@@ -111,7 +112,7 @@ interface BillingSearchProps {
    */
   onBindBarcode: (product: Product, code: string) => Promise<void>;
   /** Open the product form pre-filled with the scanned code. */
-  onCreateProductWithBarcode: (code: string) => void;
+  onCreateProductWithBarcode: (code: string, knownProduct?: KnownProductDetails) => void;
   categories: string[];
   selectedCategory: string;
   onSelectedCategoryChange: (category: string) => void;
@@ -189,6 +190,8 @@ export function BillingSearch({
   const [bindQuery, setBindQuery] = useState("");
   const [bindError, setBindError] = useState<string | null>(null);
   const [bindingProductId, setBindingProductId] = useState<string | null>(null);
+  const [knowledgeLookupCode, setKnowledgeLookupCode] = useState<string | null>(null);
+  const knowledgeRequestRef = useRef(0);
   // "Skip" — the queue is moving and this cashier does not want to teach the catalog
   // anything right now. Picking an item then adds it and binds nothing.
   const [skipBinding, setSkipBinding] = useState(false);
@@ -219,11 +222,27 @@ export function BillingSearch({
   }
 
   function closeBindSheet() {
+    knowledgeRequestRef.current += 1;
+    setKnowledgeLookupCode(null);
     setBindCode(null);
     setBindQuery("");
     setBindError(null);
     setSkipBinding(false);
     setBindingProductId(null);
+  }
+
+  function lookupSharedProduct(code: string) {
+    const requestId = ++knowledgeRequestRef.current;
+    setKnowledgeLookupCode(code);
+    void lookupKnownProduct(code).then((knownProduct) => {
+      if (knowledgeRequestRef.current !== requestId) return;
+      setKnowledgeLookupCode(null);
+      if (!knownProduct) return;
+      closeBindSheet();
+      onSearchChange("");
+      toast({ title: `${knownProduct.name} मिला`, description: `${knownProduct.brand || knownProduct.category} · ${knownProduct.source}` });
+      onCreateProductWithBarcode(code, knownProduct);
+    });
   }
 
   /** Dismiss without binding: the code leaves the search box so the next scan is clean. */
@@ -272,6 +291,7 @@ export function BillingSearch({
     const outcome = resolveScanOutcome(code, onScreen, catalogue);
     if (outcome.kind !== "unknown-code") return false;
     openBindSheet(outcome.code);
+    lookupSharedProduct(outcome.code);
     return true;
   }
   // Held in a ref because the camera loop below is created once per scanner session and
@@ -292,6 +312,7 @@ export function BillingSearch({
     if (outcome.kind === "unknown-code") {
       trackEvent(ACTIVITY_EVENTS.BARCODE_SCANNED, { source, matched: false });
       openBindSheet(outcome.code);
+      lookupSharedProduct(outcome.code);
       return true;
     }
     return false;
@@ -665,7 +686,7 @@ export function BillingSearch({
                     {t("billing.search.bindTitle", { code: bindCode })}
                   </p>
                   <p className="mt-0.5 text-[12px] font-semibold text-[#6d7c98]">
-                    {skipBinding ? t("billing.search.bindSkipActive") : t("billing.search.bindQuestion")}
+                    {knowledgeLookupCode === bindCode ? "साझा कैटलॉग में सामान खोज रहे हैं…" : skipBinding ? t("billing.search.bindSkipActive") : t("billing.search.bindQuestion")}
                   </p>
                 </div>
                 <button
@@ -688,6 +709,7 @@ export function BillingSearch({
                     className="h-full flex-1 border-0 bg-transparent p-0 text-[14px] font-semibold text-[var(--brand-ink)] placeholder:font-medium placeholder:text-[#6b7a9a] focus-visible:ring-0 focus-visible:ring-offset-0"
                     placeholder={t("billing.search.bindSearchPlaceholder")}
                     value={bindQuery}
+                    disabled={knowledgeLookupCode === bindCode}
                     onChange={(e) => setBindQuery(e.target.value)}
                   />
                 </div>
@@ -700,7 +722,11 @@ export function BillingSearch({
               )}
 
               <div className="px-2 py-2">
-                {bindCandidates.length === 0 ? (
+                {knowledgeLookupCode === bindCode ? (
+                  <div className="flex items-center justify-center gap-2 px-2 py-8 text-[12px] font-bold text-[var(--brand)]" data-testid="barcode-knowledge-loading">
+                    <Search size={17} className="animate-pulse" /> नाम, पैक और फोटो खोज रहे हैं…
+                  </div>
+                ) : bindCandidates.length === 0 ? (
                   <p className="px-2 py-6 text-center text-[12px] font-semibold text-[#6d7c98]">
                     {t("billing.search.bindNoMatch")}
                   </p>
@@ -739,6 +765,7 @@ export function BillingSearch({
                 <button
                   type="button"
                   data-testid="barcode-bind-create"
+                  disabled={knowledgeLookupCode === bindCode}
                   onClick={() => {
                     const code = bindCode;
                     closeBindSheet();
@@ -752,6 +779,7 @@ export function BillingSearch({
                 <button
                   type="button"
                   data-testid="barcode-bind-skip"
+                  disabled={knowledgeLookupCode === bindCode}
                   onClick={() => {
                     // Never block the counter. From here a pick just adds the item.
                     setSkipBinding(true);

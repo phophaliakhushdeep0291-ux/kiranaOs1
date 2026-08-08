@@ -22,6 +22,8 @@ The software inside the bundle is priced by the shop's operating complexity. Pri
 
 Growth demonstrates its premium through staff accounts, multi-device operation, advanced pricing and reports. Business adds multi-counter and multi-store operations, advanced inventory and higher-touch support.
 
+The trade-by-trade Starter and Growth capability split is maintained in [SHOP_TYPE_PLAN_ENTITLEMENTS.md](./SHOP_TYPE_PLAN_ENTITLEMENTS.md). Starter includes the essential counter workflow for each shop type; Growth contains the non-essential operational depth for that trade.
+
 Founding customers may receive 12 months free per shop. The owner/admin applies an explicit end date; the existing subscription trial and grace dates control expiry. The intended paid plan is retained for renewal, with no deletion or migration of shop data.
 
 Every subscription snapshots its price and feature entitlement when activated. Catalog price changes apply only to new subscriptions or an explicit plan change. Existing shops are grandfathered. After expiry, the shop becomes read-only except that it can always complete sales, renew billing, and export its data.

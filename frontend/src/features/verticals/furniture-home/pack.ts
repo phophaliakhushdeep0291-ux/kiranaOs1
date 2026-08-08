@@ -23,7 +23,7 @@ export const furniturePack: VerticalPack = {
   businessTypes: ["furniture"],
   paths: ["/orders"],
   routes: [
-    { path: "/orders", page: "furniture/orders" },
+    { path: "/orders", page: "furniture/orders", featureName: "furniture_order_book" },
   ],
   nav: [
     {

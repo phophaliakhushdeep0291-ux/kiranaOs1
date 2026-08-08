@@ -99,6 +99,10 @@ export const SHOP_TYPE_FEATURES = Object.freeze([
   "restaurant_recipe_inventory",
 ]);
 
+export function hasLegacyShopTypeFeatureAccess(features, featureName) {
+  return SHOP_TYPE_FEATURES.includes(featureName) && !features.includes(SHOP_TYPE_ENTITLEMENTS_V1);
+}
+
 // Essentials are included in Starter for the trade that needs them at the
 // counter. Growth adds workflows that improve control or expand the operation;
 // Business inherits both and continues to carry multi-counter/multi-store scale.
