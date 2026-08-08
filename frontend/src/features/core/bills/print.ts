@@ -119,7 +119,16 @@ export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [],
       lineDiscount: readNumber(item.lineDiscount ?? item.line_discount, Math.max(0, rate * quantity - total)),
       gstRate: readNumber(item.gstRate ?? item.gst_rate, 0),
       hsn: typeof item.hsn === "string" ? item.hsn : null,
-      note: typeof item.note === "string" ? item.note : null,
+      note: [
+        Array.isArray(item.addons)
+          ? item.addons.map((raw) => {
+            const addon = asRecord(raw);
+            const qty = readNumber(addon.quantity, 1);
+            return `${qty > 1 ? `${qty}× ` : ""}${String(addon.name ?? "Option")}`;
+          }).join(", ")
+          : "",
+        typeof item.note === "string" ? item.note : "",
+      ].filter(Boolean).join(" · ") || null,
     };
   });
 

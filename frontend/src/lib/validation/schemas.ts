@@ -147,6 +147,14 @@ export const billItemCreationSchema = z.object({
   quantity,
   enteredUnit: z.string().trim().min(1),
   ratePerRateUnit: money,
+  baseRatePerRateUnit: money.optional(),
+  addons: z.array(z.object({
+    optionId: z.string().trim().min(1).max(60),
+    quantity: z.coerce.number().int().min(1).max(20).default(1),
+    groupName: z.string().trim().max(60).optional(),
+    name: z.string().trim().max(60).optional(),
+    price: money.optional(),
+  })).max(80).optional(),
   // Flat rupee discount for the whole line (not per unit).
   lineDiscount: money.default(0),
   note: z.string().trim().max(200).optional(),

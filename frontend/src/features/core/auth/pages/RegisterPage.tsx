@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
 import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { BrandMark } from "@/components/shared/BrandMark";
-import { BUSINESS_TYPE_DEFS, saveBusinessType, type BusinessType } from "@/features/core/settings/business-types";
+import { BUSINESS_TYPE_DEFS, offeredBusinessTypes, saveBusinessType, type BusinessType } from "@/features/core/settings/business-types";
 import { applyAccent } from "@/features/core/settings/theme";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +41,7 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-const BUSINESS_TYPES = Object.entries(BUSINESS_TYPE_DEFS) as [BusinessType, typeof BUSINESS_TYPE_DEFS[BusinessType]][];
+const BUSINESS_TYPES = offeredBusinessTypes().map((key) => [key, BUSINESS_TYPE_DEFS[key]] as const);
 
 export default function Register() {
   const [, setLocation] = useLocation();

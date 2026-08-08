@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Product } from "@/types/api";
+import type { MenuDish, Product } from "@/types/api";
 import type { CartItem } from "@/features/core/billing/pages/billing-types";
 import type { CustomerOrder } from "@/features/core/orders/api";
 import {
@@ -211,6 +211,41 @@ describe("what a guest sends", () => {
     const merged = mergeCartLines(
       [{ product: water, quantity: 1, rate: 20, unit: "bottle", sellingUnit: { id: "su1" } as CartItem["sellingUnit"] }],
       [{ product: water, quantity: 1, rate: 60, unit: "bottle", sellingUnit: { id: "su2" } as CartItem["sellingUnit"] }],
+    );
+    expect(merged).toHaveLength(2);
+  });
+
+  it("keeps a guest's portion and options, but refreshes their current prices", () => {
+    const product = {
+      id: "p1",
+      name: "Masala Dosa",
+      rateUnit: "plate",
+      defaultPricePerRateUnit: 140,
+      sellingUnits: [{ id: "half-id", unitCode: "portion-half", name: "Half", defaultPrice: 90, isActive: true }],
+    } as unknown as Product;
+    const configuredOrder = order({
+      items: [{
+        productId: "p1", name: "Masala Dosa (Half)", unit: "Half", price: 105, qty: 2,
+        variation: { unitCode: "portion-half", name: "Half", price: 80 },
+        addons: [{ optionId: "cheese", groupName: "Extras", name: "Old cheese", price: 25, quantity: 1 }],
+      }],
+    });
+    const menu = [{
+      id: "p1",
+      addonGroups: [{ id: "extras", name: "Extras", minSelect: 0, maxSelect: 2, required: false, sortOrder: 0, isActive: true, options: [{ id: "cheese", name: "Cheese", price: 30, linkedProductId: null, linkedQtyBase: 1, sortOrder: 0, isActive: true }] }],
+    }] as unknown as MenuDish[];
+    const { lines } = guestOrderCartLines(configuredOrder, [product], menu);
+    expect(lines[0].sellingUnit?.unitCode).toBe("portion-half");
+    expect(lines[0].rate).toBe(90);
+    expect(lines[0].addons).toEqual([{ optionId: "cheese", groupName: "Extras", name: "Cheese", price: 30, quantity: 1 }]);
+  });
+
+  it("never merges two differently configured dishes", () => {
+    const burger = { id: "burger", name: "Burger" } as unknown as Product;
+    const base = { product: burger, quantity: 1, rate: 150, unit: "plate" };
+    const merged = mergeCartLines(
+      [{ ...base, addons: [{ optionId: "cheese", groupName: "Extras", name: "Cheese", price: 25 }] }],
+      [{ ...base, addons: [{ optionId: "jalapeno", groupName: "Extras", name: "Jalapeño", price: 20 }] }],
     );
     expect(merged).toHaveLength(2);
   });

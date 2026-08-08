@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ApiClientError, isBrowserOnline } from "@/lib/api/http";
+import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
@@ -18,10 +18,6 @@ export interface DeleteSupplierResponse { success: true; pendingSync: true }
 export const getListSuppliersQueryKey = () => ["suppliers"] as const;
 
 type ListSuppliersQueryKey = ReturnType<typeof getListSuppliersQueryKey>;
-
-function isNetworkLikeError(error: unknown) {
-  return !(error instanceof ApiClientError) || !isBrowserOnline();
-}
 
 export async function cacheSuppliers(suppliers: Supplier[]) {
   writeInstantCache(SUPPLIERS_CACHE_KEY, suppliers);
@@ -83,7 +79,7 @@ export function useListSuppliers(options?: QueryHookOptions<ListSuppliersRespons
         void cacheSuppliers(merged);
         return merged;
       } catch (error) {
-        if (isNetworkLikeError(error)) return mergeSuppliers([], [...liveCached, ...await readSuppliersFromIndexedDB()]);
+        if (isRecoverableNetworkError(error)) return mergeSuppliers([], [...liveCached, ...await readSuppliersFromIndexedDB()]);
         throw error;
       }
     },

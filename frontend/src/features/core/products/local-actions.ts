@@ -212,6 +212,144 @@ async function assertNoLocalProductNameConflict(name: string, excludeId?: string
   }
 }
 
+/* ─── Capture-on-first-scan ─────────────────────────────────────────────────
+ *
+ * The till teaches the catalog a barcode by being used: an unknown code opens a sheet,
+ * the cashier picks the item, and the code binds. That write happens at the counter,
+ * offline, mid-queue — so the rules below are enforced here AND again by the server's
+ * unique index. This copy exists to fail fast with a message naming the owning product;
+ * it is not the guard. See backend/prisma/migrations/20260807170000_product_barcode_unique.
+ */
+
+export type ProductBarcodeBindErrorCode =
+  | "PRODUCT_BARCODE_REQUIRED"
+  | "PRODUCT_NOT_FOUND"
+  | "PRODUCT_BARCODE_ALREADY_SET"
+  | "PRODUCT_BARCODE_DUPLICATE";
+
+export class ProductBarcodeBindError extends Error {
+  code: ProductBarcodeBindErrorCode;
+  owner?: { id: string; name: string };
+
+  constructor(code: ProductBarcodeBindErrorCode, message: string, owner?: { id: string; name: string }) {
+    super(message);
+    this.name = "ProductBarcodeBindError";
+    this.code = code;
+    this.owner = owner;
+  }
+}
+
+export function normalizeBarcodeValue(raw: string | null | undefined): string {
+  return String(raw ?? "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Which product already answers to this code?
+ *
+ * Matches barcode OR sku, because resolveScanMatch() on the till scans both — a code
+ * sitting in the other column would pass a barcode-only check and still make the next
+ * scan ambiguous. Soft-deleted rows count: they can be restored, and releasing their
+ * code would let that restore create a real duplicate.
+ */
+export function findLocalBarcodeOwner(
+  code: string,
+  products: Product[],
+  excludeProductId?: string,
+): Product | undefined {
+  const needle = normalizeBarcodeValue(code).toLowerCase();
+  if (!needle) return undefined;
+  return products.find((row) => {
+    const record = row as unknown as Record<string, unknown>;
+    const isSameEntity = [record.id, record.local_id, record.server_id]
+      .some((candidate) => typeof candidate === "string" && candidate === excludeProductId);
+    if (isSameEntity) return false;
+    return [row.barcode, row.sku]
+      .some((value) => value != null && normalizeBarcodeValue(String(value)).toLowerCase() === needle);
+  });
+}
+
+/**
+ * Bind a scanned code to a product that has none yet.
+ *
+ * Never rebinds: a product that already answers to a code keeps it, because a cashier
+ * scanning the wrong packet during a queue must not be able to repoint an existing
+ * barcode. Changing one is an explicit action from the product screen.
+ *
+ * Re-binding the SAME code is a no-op success, and the outbox op is keyed deterministically
+ * on (product, code) — the outbox is keyed by clientEventId and the server dedupes on
+ * (shopId, eventId), so a bind that is queued twice, or replayed after a failed push,
+ * still lands exactly once.
+ */
+export async function bindProductBarcodeLocalFirst(productId: string, barcode: string): Promise<Product> {
+  const code = normalizeBarcodeValue(barcode);
+  if (!code) throw new ProductBarcodeBindError("PRODUCT_BARCODE_REQUIRED", "A barcode is required");
+
+  const products = await offlineDB.getAll<Product>("products").catch(() => [] as Product[]);
+  const existing = products.find((row) => {
+    const record = row as unknown as Record<string, unknown>;
+    return [record.id, record.local_id, record.server_id]
+      .some((candidate) => typeof candidate === "string" && candidate === productId);
+  });
+  if (!existing) throw new ProductBarcodeBindError("PRODUCT_NOT_FOUND", "Product not found");
+
+  const current = normalizeBarcodeValue(existing.barcode);
+  // Idempotent replay: this exact bind already landed on this device.
+  if (current && current.toLowerCase() === code.toLowerCase()) return existing;
+  if (current) {
+    throw new ProductBarcodeBindError(
+      "PRODUCT_BARCODE_ALREADY_SET",
+      `"${existing.name}" already has barcode ${current}. Change it from the product screen.`,
+      { id: existing.id, name: existing.name },
+    );
+  }
+
+  const owner = findLocalBarcodeOwner(code, products, existing.id);
+  if (owner) {
+    throw new ProductBarcodeBindError(
+      "PRODUCT_BARCODE_DUPLICATE",
+      `Barcode ${code} already belongs to "${owner.name}"`,
+      { id: owner.id, name: owner.name },
+    );
+  }
+
+  const product = touchLocalEntity({
+    ...existing,
+    barcode: code,
+    // sku mirrors barcode the way the create path does, so a scan resolves whichever
+    // column the till matches on. An sku the shop already set is left alone.
+    sku: normalizeBarcodeValue(existing.sku) ? existing.sku : code,
+  }, "pending_sync");
+
+  const auditLogs = [
+    buildAuditLogRow({
+      action: "product_barcode_bound",
+      entityType: "product",
+      entityId: existing.id,
+      entityLabel: product.name,
+      oldValue: { barcode: existing.barcode ?? null, sku: existing.sku ?? null },
+      newValue: { barcode: product.barcode, sku: product.sku },
+      summary: `Barcode ${code} bound to ${product.name}`,
+    }),
+  ];
+
+  await commitProductWrite({
+    product,
+    auditLogs,
+    outbox: {
+      entity_type: "product",
+      entity_id: existing.id,
+      operation_type: "BIND_PRODUCT_BARCODE",
+      op_id: `barcode-bind:${existing.id}:${code}`,
+      idempotency_key: `barcode-bind:${existing.id}:${code}`,
+      payload: { productId: existing.id, localProductId: existing.id, barcode: code },
+    },
+  });
+  upsertCachedListItem<Product>(CACHE_KEY, product, 1000);
+  upsertCachedListItem<Product>(INVENTORY_CACHE_KEY, product, 1000);
+  emitLocalDataChanged({ entityType: "product", action: "updated", entityId: product.id });
+  return product;
+}
+
 export async function createProductLocalFirst(data: ProductInput): Promise<Product> {
   const validated = parseOrThrow(productCreationSchema, data) as unknown as ProductInput;
   await assertNoLocalProductNameConflict(validated.name);

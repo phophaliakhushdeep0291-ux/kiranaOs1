@@ -10,7 +10,7 @@ import { createCustomer, getCustomer, recordUdharPayment, reverseUdharPayment, s
 import { damageSchema, correctionSchema, purchaseSchema } from "../inventory/inventory.schema.js";
 import { correctStock, recordDamage, recordPurchase } from "../inventory/inventory.service.js";
 import { createProductSchema, updateProductSchema } from "../products/products.schema.js";
-import { createProduct, restoreDeletedProduct, softDeleteProduct, updateProduct } from "../products/products.service.js";
+import { bindProductBarcode, createProduct, restoreDeletedProduct, softDeleteProduct, updateProduct } from "../products/products.service.js";
 import { createSupplierSchema, updateSupplierSchema } from "../suppliers/suppliers.schema.js";
 import { createSupplier, restoreSupplier, softDeleteSupplier, updateSupplier } from "../suppliers/suppliers.service.js";
 import { createExpenseSchema, updateExpenseSchema } from "../expenses/expenses.schema.js";
@@ -101,30 +101,35 @@ function publicSyncConflict(row) {
   };
 }
 
-function conflictEntityFromEvent(event) {
+export function conflictEntityFromEvent(event) {
   const type = String(event?.type ?? "UNKNOWN");
   const payload = getEventPayload(event);
   const nested = payload.product ?? payload.customer ?? payload.bill ?? payload.supplier ?? {};
-  const entityType = type.includes("PRODUCT")
-    ? "product"
-    : type.includes("CUSTOMER") || type.includes("UDHAR")
-      ? "customer"
-      : type.includes("BILL")
-        ? "bill"
-        : type.includes("SUPPLIER")
-          ? "supplier"
-          : type.includes("STOCK") || type.includes("DAMAGE")
-            ? "stock_ledger"
-            : "sync_event";
+  // Order matters: UDHAR_PAYMENT contains neither CUSTOMER nor BILL, while
+  // RECORD_SUPPLIER_PAYMENT contains SUPPLIER. Financial and stock events must
+  // never be mislabelled as a mutable contact conflict because that would make
+  // the UI offer destructive "keep local/cloud" resolution for ledger history.
+  let entityType = "sync_event";
+  if (type.includes("UDHAR") || type.includes("LEDGER_ADJUSTMENT")) entityType = "udhar";
+  else if (type.includes("PAYMENT")) entityType = "payment";
+  else if (type.includes("PURCHASE")) entityType = "purchase";
+  else if (type.includes("BILL")) entityType = "bill";
+  else if (type.includes("STOCK") || type.includes("DAMAGE")) entityType = "stock_ledger";
+  else if (type.includes("PRODUCT")) entityType = "product";
+  else if (type.includes("CUSTOMER")) entityType = "customer";
+  else if (type.includes("SUPPLIER")) entityType = "supplier";
+  const identityByEntity = {
+    product: [payload.productId, payload.localProductId],
+    customer: [payload.customerId, payload.localCustomerId],
+    supplier: [payload.supplierId, payload.localSupplierId],
+    bill: [payload.billId, payload.localBillId],
+    udhar: [payload.ledgerEntryId, payload.paymentId, payload.customerId, payload.localCustomerId],
+    payment: [payload.paymentId, payload.ledgerEntryId, payload.supplierId, payload.customerId],
+    purchase: [payload.purchaseHistoryId, payload.localPurchaseHistoryId, payload.productId, payload.localProductId],
+    stock_ledger: [payload.inventoryMovementId, payload.productId, payload.localProductId],
+  };
   const entityId = [
-    payload.productId,
-    payload.localProductId,
-    payload.customerId,
-    payload.localCustomerId,
-    payload.billId,
-    payload.localBillId,
-    payload.supplierId,
-    payload.localSupplierId,
+    ...(identityByEntity[entityType] ?? []),
     nested.id,
     nested.localId,
     nested.local_id,
@@ -599,6 +604,21 @@ const updateProductPayloadSchema = z.object({
   productId: z.string().min(1).optional(),
   id: z.string().min(1).optional(),
   changes: updateProductSchema.optional(),
+}).passthrough();
+
+/**
+ * Capture-on-first-scan, arriving from the outbox.
+ *
+ * The client may only know its own local product id when the bind is queued (the product
+ * itself can still be an unsynced CREATE_PRODUCT in the same batch), so every id spelling
+ * is accepted here and resolved through the normal id-mapping path.
+ */
+const bindProductBarcodePayloadSchema = z.object({
+  barcode: z.string().trim().min(1).max(64),
+  serverProductId: z.string().min(1).optional(),
+  productId: z.string().min(1).optional(),
+  localProductId: z.string().min(1).optional(),
+  id: z.string().min(1).optional(),
 }).passthrough();
 
 const adjustStockPayloadSchema = z.object({
@@ -1436,6 +1456,11 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyCreateProduct(shopId, event, user);
     case SYNC_EVENT_TYPES.UPDATE_PRODUCT:
       return applyUpdateProduct(shopId, event, user, context);
+    // No owner-PIN gate, matching the HTTP route: the point of capture-on-first-scan is
+    // that a cashier can teach the catalog a code without fetching the owner. The service
+    // refuses to rebind an existing code, so this cannot repoint one.
+    case SYNC_EVENT_TYPES.BIND_PRODUCT_BARCODE:
+      return applyBindProductBarcode(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_PRODUCT:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyDeleteProduct(shopId, event, context);
@@ -1901,6 +1926,50 @@ async function applyUpdateProduct(shopId, event, user, context) {
   return {
     type: event.type,
     productId: product.id,
+    updatedAt: product.updatedAt,
+  };
+}
+
+/**
+ * Capture-on-first-scan arriving from an offline till.
+ *
+ * Nothing is resolved here that the online route does not also resolve — the whole
+ * decision lives in products.service.bindProductBarcode, so an offline bind and an online
+ * one cannot drift apart. Two devices that bound the same code to different products race
+ * at the unique index inside that service: one is applied, the other throws a 409, which
+ * classifySyncError turns into `status: "conflict"`, `retryable: false`. The loser is shown
+ * the owning product's name in the Sync Status UI and nothing is overwritten.
+ */
+async function applyBindProductBarcode(shopId, event, user, context) {
+  const payload = bindProductBarcodePayloadSchema.parse(getEventPayload(event));
+  const productId = await resolveEntityReference(
+    shopId,
+    SYNC_ENTITY_TYPES.PRODUCT,
+    payload.serverProductId ?? payload.productId ?? payload.localProductId ?? payload.id,
+    context,
+  );
+  if (!productId) throw new AppError("productId required for BIND_PRODUCT_BARCODE sync event", 400);
+
+  const sourceDeviceId = pickString(
+    payload.sourceDeviceId,
+    payload.source_device_id,
+    event?.deviceId,
+    event?.device_id,
+    user?.deviceId,
+    user?.device_id,
+  );
+  const product = await bindProductBarcode(shopId, productId, payload.barcode, {
+    identity: {
+      sourceDeviceId,
+      clientProductId: pickString(payload.localProductId, payload.local_product_id, event?.entity_id),
+    },
+    userId: user?.userId ?? null,
+  });
+
+  return {
+    type: event.type,
+    productId: product.id,
+    barcode: product.barcode,
     updatedAt: product.updatedAt,
   };
 }
@@ -3357,7 +3426,7 @@ async function entityExists(shopId, entityType, id) {
   return false;
 }
 
-function looksLikeClientLocalId(id) {
+export function looksLikeClientLocalId(id) {
   const normalized = String(id).toLowerCase();
   return normalized.startsWith("local")
     || normalized.startsWith("tmp")
@@ -3374,8 +3443,7 @@ function looksLikeClientLocalId(id) {
     || normalized.startsWith("device_")
     || normalized.startsWith("audit_")
     || normalized.includes("indexeddb")
-    || normalized.includes("pending")
-    || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized);
+    || normalized.includes("pending");
 }
 
 function collectCreateBillIdentityValues(...sources) {

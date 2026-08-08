@@ -1,5 +1,6 @@
 import { ChefHat, LayoutGrid, Soup, Utensils } from "lucide-react";
 import type { VerticalPack } from "../types";
+import "./billing-addon-configurator";
 
 /**
  * Restaurant & café.
@@ -22,8 +23,8 @@ import type { VerticalPack } from "../types";
  * - **Kitchen stock** owns the recipes. Without them a restaurant's inventory is
  *   fiction: the POS decrements the dish, and nobody buys or stores a dish.
  *
- * Still to come here: modifiers as first-class options rather than line notes,
- * and splitting one table's bill across guests.
+ * Configured add-ons are first-class cart and bill rows; splitting one table's
+ * bill across guests remains a separate settlement concern.
  */
 export const restaurantPack: VerticalPack = {
   id: "restaurant",

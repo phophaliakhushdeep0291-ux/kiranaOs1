@@ -122,6 +122,26 @@ When the backend returns `SYNC_BATCH_TOO_LARGE`, the frontend must split its out
 | `conflict` | `false` | Business or validation error | Show to user/admin; not retryable |
 | `failed` | `false` | Server or permission error | Keep in outbox if `result.retryable=true`; show if `false` |
 
+### Conflict matrix — `BIND_PRODUCT_BARCODE`
+
+Capture-on-first-scan writes from the till, so two devices can bind the same code in the
+same minute. No new resolution rule was invented for it: every outcome below is the
+existing 4xx → `conflict` classification in `classifySyncError`, decided by the
+`Product_shopId_barcode_key` unique index rather than by arrival order.
+
+| Situation | Server outcome | `status` | `retryable` | Result |
+|-----------|----------------|----------|-------------|--------|
+| Code is free | Bound | `synced` | — | Product now answers to the code |
+| Same device replays the same (product, code) | Early return, no write | `synced` / `duplicate` | — | Idempotent. The outbox op is keyed `barcode-bind:<productId>:<code>`, so a replay is the *same* event id and is deduplicated by `(shopId, eventId)` before it reaches the service |
+| Two devices bind the same code to the **same** product | Second is an early return | `synced` / `duplicate` | — | Both cashiers see the bind they expected |
+| Two devices bind the same code to **different** products | Unique index rejects the loser | `conflict`, `PRODUCT_BARCODE_DUPLICATE` | `false` | Winner is whichever transaction the database committed first. The loser's product simply keeps no barcode; nothing is overwritten and no bill, payment or stock row is touched. The message names the owning product |
+| Code already belongs to another product (or to one in the recycle bin, or to a pack's `ProductSellingUnit.barcode`) | Refused before the write | `conflict`, `PRODUCT_BARCODE_DUPLICATE` | `false` | Same as above; the owner is named so the owner can fix it from the product screen |
+| Target product already has a **different** code | Refused | `conflict`, `PRODUCT_BARCODE_ALREADY_SET` | `false` | Rebinding is deliberately not reachable from the till. It is an explicit action on the product edit screen |
+| Product not found / unresolved local id | `400` | `conflict`, `INVALID_EVENT` | `false` | The bind is dropped; the scan is re-teachable at the next scan |
+
+A `conflict` is durable in the `SyncConflict` ledger and surfaces in the Sync Status UI
+like every other one. There is nothing to merge — a barcode is single-valued, and the
+losing device's correct move is to scan the packet again and pick the right item.
 
 ### localId → serverId mapping
 
@@ -415,6 +435,7 @@ GET /api/sync/pull?afterSeq=<nextServerSeq>&limit=500
 ```
 CREATE_BILL     CANCEL_BILL*    RESTORE_BILL*
 CREATE_PRODUCT  UPDATE_PRODUCT  DELETE_PRODUCT*  RESTORE_PRODUCT*
+BIND_PRODUCT_BARCODE
 ADJUST_STOCK*   CREATE_CUSTOMER UPDATE_CUSTOMER  UDHAR_PAYMENT
 ```
 

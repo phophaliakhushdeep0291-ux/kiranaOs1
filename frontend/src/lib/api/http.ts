@@ -117,7 +117,18 @@ export function getStoredRefreshToken() {
 }
 
 export function isBrowserOnline() {
-  return typeof navigator === "undefined" ? true : navigator.onLine;
+  return typeof navigator === "undefined" || typeof navigator.onLine !== "boolean" ? true : navigator.onLine;
+}
+
+/**
+ * Errors for which an offline-first read should keep serving its local replica.
+ * `navigator.onLine` only describes the network adapter: a browser can remain
+ * online while the API times out, is rate limited, or is temporarily down.
+ */
+export function isRecoverableNetworkError(error: unknown) {
+  if (!isBrowserOnline()) return true;
+  if (!(error instanceof ApiClientError)) return true;
+  return error.status === 0 || error.status === 408 || error.status === 429 || error.status >= 500;
 }
 
 export function buildQuery(params?: Record<string, unknown>) {
@@ -239,6 +250,11 @@ async function refreshAuthSession(refreshToken: string) {
     body: JSON.stringify({ refreshToken }),
     skipAuth: true,
     skipRefresh: true,
+    // Refresh is a prerequisite for the original request, not a financial
+    // write the operator can wait on. Fail quickly enough for offline/local
+    // fallbacks to render instead of holding a route behind the 30s mutation
+    // timeout when the browser is online but the backend is unreachable.
+    timeoutMs: 8_000,
   });
 }
 
@@ -329,6 +345,11 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
         if (isFinalRefreshFailure(error)) {
           throw new ApiClientError("Session expired. Please log in again.", 401, { code: "AUTH_SESSION_EXPIRED" });
         }
+        // Preserve network/timeout classification. Turning an unreachable
+        // refresh endpoint into AUTH_REQUIRED makes offline-first repositories
+        // reject their cached data and can bounce an otherwise valid operator
+        // out of the current workflow.
+        throw error;
       }
     }
   }
@@ -387,8 +408,12 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
         retryHeaders.set("Authorization", `Bearer ${refreshedToken}`);
         response = await fetchWithTimeout(url, { ...fetchOptions, headers: retryHeaders }, boundedTimeoutMs);
         updateRateLimitCooldown(path, response);
-      } catch {
-        // Fall through to the original 401 response.
+      } catch (error) {
+        // A rejected/expired refresh already clears and notifies through
+        // getSharedRefreshedAuth; parsing the original 401 keeps its server
+        // details. A temporary refresh outage must remain a network/timeout
+        // error so callers can use their local fallback instead.
+        if (!isFinalRefreshFailure(error)) throw error;
       }
     }
   }

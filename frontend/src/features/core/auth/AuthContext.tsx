@@ -14,6 +14,7 @@ import { clearSessionLockState } from "@/features/core/settings/SessionLockGate"
 import { offlineDB } from "@/lib/offline/db";
 import { ACTIVITY_EVENTS, flushActivity, resetActivitySession, trackEvent } from "@/lib/activity";
 import { AuthContext } from "./auth-context";
+import { stashPostLoginRedirect } from "./post-login-redirect";
 
 function persistAuth(data: AuthResponse) {
   const token = data.accessToken || data.token;
@@ -51,6 +52,11 @@ function isFinalAuthFailure(error: unknown) {
 function isTemporaryAuthCheckFailure(error: unknown) {
   if (!(error instanceof ApiClientError)) return true;
   return error.status === 0 || error.status === 408 || error.status === 429 || error.status >= 500;
+}
+
+function stashCurrentProtectedLocation() {
+  if (typeof window === "undefined") return;
+  stashPostLoginRedirect(window.location.pathname + window.location.search + window.location.hash);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -162,6 +168,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleSessionExpired = () => {
+      // A renewed login must return the operator to the bill, customer, or
+      // report they were using. Without this, token expiry looked like a
+      // random redirect to Dashboard after signing in again.
+      stashCurrentProtectedLocation();
       authGenerationRef.current += 1;
       clearAuthStorage();
       setAccessToken(null);
@@ -201,7 +211,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setShop(nextShop);
       setIsLoading(false);
 
-      if (!nextToken || !nextUser) setLocation("/login");
+      if (!nextToken || !nextUser) {
+        stashCurrentProtectedLocation();
+        setLocation("/login");
+      }
     };
 
     window.addEventListener("storage", handleSharedSessionChange);

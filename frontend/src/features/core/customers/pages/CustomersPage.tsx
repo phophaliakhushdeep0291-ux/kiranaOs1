@@ -56,6 +56,7 @@ import {
   applyAuthoritativeUdharSummary,
   loadCustomerDetail,
   loadCustomersWithLedger,
+  projectCustomerOutstanding,
   readCachedCustomersWithLedger,
   formatShortDate,
   toLedgerDriftCandidates,
@@ -331,6 +332,7 @@ function percentageChange(current: number, previous: number): number {
 }
 
 export default function CustomersPage() {
+  const queryClient = useQueryClient();
   const { t } = useAppLanguage();
   const { toast } = useToast();
   const { pendingCount, failedCount } = useOfflineStatus();
@@ -782,8 +784,16 @@ export default function CustomersPage() {
       toast({ title: t("customers.toast.paymentRecorded"), description: t("customers.ledger.updatedLocally") });
       setPaymentOpen(false);
       await refetch();
+      const nextOutstanding = Math.max(0, subtractMoney(outstanding, amount));
+      queryClient.setQueryData<CustomerWithLedger[]>(["customers-ledger-list"], (current) =>
+        projectCustomerOutstanding(current ?? [], paymentForm.customerId, nextOutstanding),
+      );
       await overviewQuery.refetch();
       await selectedDetail.refetch();
+      // Replace the optimistic projection with a fresh server-ledger summary.
+      // Do not await this network refresh: payment acknowledgement and the
+      // correct local balance are already durable and visible.
+      void queryClient.refetchQueries({ queryKey: ["customers-authoritative-summary-refresh"], type: "active" });
       setPaymentForm((form) => ({ ...form, amount: "", cashAmount: "", upiAmount: "", note: "" }));
     } catch (error) {
       toast({ title: t("customers.toast.paymentFailed"), description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });

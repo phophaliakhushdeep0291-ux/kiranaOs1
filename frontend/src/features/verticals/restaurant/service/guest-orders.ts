@@ -1,10 +1,11 @@
 import { offlineDB } from "@/lib/offline/db";
 import { HELD_BILLS_KEY, newBillId, upsertOpenBill } from "@/features/core/billing/pages/open-bills";
 import { productSellingPrice } from "@/features/core/billing/pages/billing-calculations";
-import type { CartItem, HeldBill } from "@/features/core/billing/pages/billing-types";
+import { cartItemKey, type CartItem, type HeldBill } from "@/features/core/billing/pages/billing-types";
 import type { CustomerOrder } from "@/features/core/orders/api";
-import type { Product } from "@/types/api";
+import type { MenuDish, Product } from "@/types/api";
 import { loadTableBills, saveTableBills, type RestaurantTable } from "./table-store";
+import { getMenuBoard } from "./restaurant-api";
 
 /**
  * A guest's own order, joined to the table they are sitting at.
@@ -58,7 +59,7 @@ export function pendingGuestOrders(orders: CustomerOrder[], acceptedIds: string[
  * and the number the customer pays must be the shop's current one, not a figure
  * that travelled through a phone.
  */
-export function guestOrderCartLines(order: CustomerOrder, products: Product[]): {
+export function guestOrderCartLines(order: CustomerOrder, products: Product[], menuDishes: MenuDish[] = []): {
   lines: CartItem[];
   skipped: string[];
 } {
@@ -73,6 +74,7 @@ export function guestOrderCartLines(order: CustomerOrder, products: Product[]): 
 
   const lines: CartItem[] = [];
   const skipped: string[] = [];
+  const menuById = new Map(menuDishes.map((dish) => [dish.id, dish]));
   for (const item of order.items ?? []) {
     const product = byId.get(item.productId);
     if (!product) {
@@ -80,11 +82,28 @@ export function guestOrderCartLines(order: CustomerOrder, products: Product[]): 
       continue;
     }
     const quantity = Number(item.qty) > 0 ? Number(item.qty) : 1;
+    const sellingUnit = item.variation?.unitCode
+      ? (product.sellingUnits ?? []).find((unit) => unit.unitCode === item.variation?.unitCode && unit.isActive !== false)
+      : undefined;
+    const dish = menuById.get(product.id);
+    const currentOptions = new Map((dish?.addonGroups ?? []).flatMap((group) => group.options.map((option) => [option.id, { ...option, groupName: group.name }] as const)));
+    const addons = (item.addons ?? []).map((addon) => {
+      const current = currentOptions.get(addon.optionId);
+      return {
+        optionId: addon.optionId,
+        groupName: current?.groupName ?? addon.groupName,
+        name: current?.name ?? addon.name,
+        price: current?.price ?? addon.price,
+        quantity: addon.quantity,
+      };
+    });
     lines.push({
       product,
       quantity,
-      rate: productSellingPrice(product, quantity),
-      unit: product.rateUnit ?? product.displayUnit ?? "piece",
+      rate: sellingUnit ? Number(sellingUnit.defaultPrice ?? 0) : productSellingPrice(product, quantity),
+      unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece",
+      sellingUnit,
+      addons,
       // Carried onto the line so the kitchen ticket shows what the guest asked
       // for. A note typed on a phone is the only thing they could not say aloud.
       note: order.note ? order.note.slice(0, 120) : undefined,
@@ -103,9 +122,8 @@ export function guestOrderCartLines(order: CustomerOrder, products: Product[]): 
 export function mergeCartLines(existing: CartItem[], incoming: CartItem[]): CartItem[] {
   const merged = [...existing];
   for (const line of incoming) {
-    const match = merged.findIndex((row) =>
-      row.product?.id === line.product?.id
-      && (row.sellingUnit?.id ?? null) === (line.sellingUnit?.id ?? null));
+    const lineKey = cartItemKey(line);
+    const match = merged.findIndex((row) => cartItemKey(row) === lineKey);
     if (match >= 0) {
       merged[match] = { ...merged[match], quantity: merged[match].quantity + line.quantity };
     } else {
@@ -135,7 +153,9 @@ export async function acceptGuestOrderToTable(
   table: RestaurantTable,
   products: Product[],
 ): Promise<AcceptGuestOrderResult> {
-  const { lines, skipped } = guestOrderCartLines(order, products);
+  const board = await getMenuBoard().catch(() => null);
+  const menuDishes = board?.courses.flatMap((section) => section.dishes) ?? [];
+  const { lines, skipped } = guestOrderCartLines(order, products, menuDishes);
 
   const [heldRaw, map] = await Promise.all([
     offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null),

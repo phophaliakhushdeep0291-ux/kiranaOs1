@@ -90,6 +90,23 @@ export async function resolveStorefrontOrderContext(context) {
   return null;
 }
 
+/**
+ * Let the trade canonicalise the lines its storefront accepts.
+ *
+ * Shared ordering still owns identity, availability and persistence. A mode
+ * only adds semantics a shelf cannot know about, such as portions and options.
+ * Null means use the ordinary productId + quantity path.
+ */
+export async function prepareStorefrontOrderLines(context) {
+  if (modes.length === 0) return null;
+  for (const mode of modes) {
+    if (typeof mode.prepareOrderLines !== "function") continue;
+    const prepared = await mode.prepareOrderLines(context);
+    if (prepared) return prepared;
+  }
+  return null;
+}
+
 /** Test seam: drop every registration so one suite cannot leak into the next. */
 export function resetStorefrontModes() {
   modes.length = 0;

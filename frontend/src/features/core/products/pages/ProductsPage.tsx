@@ -36,6 +36,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { openLabelPrintWindow } from "@/features/core/products/label-print";
 import { BulkEditDialog } from "./components/BulkEditDialog";
+import { BulkDeleteDialog } from "./components/BulkDeleteDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -112,6 +113,7 @@ export default function ProductsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [starterHint, setStarterHint] = useState(false);
   const [pendingValues, setPendingValues] = useState<ProductFormData | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
@@ -728,11 +730,13 @@ export default function ProductsPage() {
         )}
       </div>
 
+      {/* max-w-xl, not md: a third action does not fit 448px beside the count on a
+          phone, and the group wraps rather than pushing Delete off the edge. */}
       {selectedIds.size > 0 && (
-        <div className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-[calc(100%-2rem)] max-w-md items-center gap-3 rounded-2xl border border-[#d6e2f5] bg-white px-4 py-3 shadow-[0_16px_40px_rgba(15,40,90,0.18)]" data-testid="bulk-action-bar">
+        <div className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-[calc(100%-2rem)] max-w-xl flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-[#d6e2f5] bg-white px-4 py-3 shadow-[0_16px_40px_rgba(15,40,90,0.18)]" data-testid="bulk-action-bar">
           <span className="text-sm font-bold text-[#13274d]">{selectedIds.size} selected</span>
           <button className="text-xs font-semibold text-[#536383] hover:underline" onClick={() => setSelectedIds(new Set())}>{t("products.filter.clear")}</button>
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex flex-wrap justify-end gap-2">
             <Button size="sm" variant="outline" onClick={() => openLabelPrintWindow(selectedProducts) || toast({ title: t("products.toast.popupBlocked"), description: t("products.toast.popupBlockedLabels"), variant: "destructive" })}>
               <Tag size={14} className="mr-1" />Labels
             </Button>
@@ -746,6 +750,17 @@ export default function ProductsPage() {
             >
               <SlidersHorizontal size={14} className="mr-1" />Bulk edit
             </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              data-testid="bulk-delete-open"
+              onClick={() => {
+                if (!manageProducts.allowed) { toast({ title: t("products.toast.permissionDenied"), description: manageProducts.reason, variant: "destructive" }); return; }
+                setBulkDeleteOpen(true);
+              }}
+            >
+              <Trash2 size={14} className="mr-1" />Delete
+            </Button>
           </div>
         </div>
       )}
@@ -756,6 +771,16 @@ export default function ProductsPage() {
         products={selectedProducts}
         requiresOwnerPin={bulkNeedsOwnerPin}
         onDone={() => { setSelectedIds(new Set()); queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() }); }}
+      />
+
+      <BulkDeleteDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        products={selectedProducts}
+        // Deliberately does NOT clear the selection: deleted rows leave `rows`, and the
+        // visible-ids effect above drops them on its own. What survives is exactly the
+        // rows that failed, still ticked, ready to retry.
+        onDone={() => queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })}
       />
 
       <ProductFormPanel

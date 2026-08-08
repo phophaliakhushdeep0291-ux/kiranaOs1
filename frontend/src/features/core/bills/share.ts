@@ -41,6 +41,11 @@ export interface BillShareInput {
   customerName?: string;
   customerMobile?: string;
   isReturn?: boolean;
+  previousUdhar?: number;
+  gst?: number;
+  showPreviousUdhar?: boolean;
+  showGst?: boolean;
+  receiptUrl?: string;
 }
 
 function formatDate(iso?: string): string {
@@ -75,7 +80,16 @@ export function derivePaymentModeLabel(payments: AnyRow[] | undefined, credit: n
 
 /** WhatsApp-friendly plain-text receipt (proportional font — no monospace column alignment). */
 export function buildBillReceiptText(input: BillShareInput): string {
-  const lines: string[] = [];
+  const lines: string[] = [
+    `🧾 *${input.shopName || "मेरी दुकान"} से आपका बिल*`,
+    `बिल नंबर: ${input.billNo}`,
+    `कुल राशि: *${money(input.total)}*`,
+    input.showPreviousUdhar && Number(input.previousUdhar) > 0 ? `पिछला उधार: ${money(Number(input.previousUdhar))}` : "",
+    input.showGst && Number(input.gst) > 0 ? `GST: ${money(Number(input.gst))}` : "",
+    input.receiptUrl ? `बिल देखें: ${input.receiptUrl}` : "",
+    "धन्यवाद 🙏",
+    "",
+  ].filter(Boolean);
   lines.push(`🧾 *${input.shopName || "My Shop"}*`);
   if (input.shopLocation) lines.push(input.shopLocation);
   const head = [`Bill ${input.billNo}`, formatDate(input.dateIso)].filter(Boolean).join(" · ");
@@ -105,8 +119,12 @@ export function buildBillReceiptText(input: BillShareInput): string {
 }
 
 export function buildWhatsappShareUrl(input: BillShareInput): string {
-  const number = normalizeWhatsappNumber(input.customerMobile);
-  const text = encodeURIComponent(buildBillReceiptText(input));
+  return buildWhatsappMessageUrl(input.customerMobile, buildBillReceiptText(input));
+}
+
+export function buildWhatsappMessageUrl(customerMobile: string | undefined, message: string): string {
+  const number = normalizeWhatsappNumber(customerMobile);
+  const text = encodeURIComponent(message);
   return number ? `https://wa.me/${number}?text=${text}` : `https://wa.me/?text=${text}`;
 }
 
@@ -123,6 +141,11 @@ export function billRecordToShareInput(
     credit?: number;
     paymentMode?: string;
     customerMobile?: string;
+    previousUdhar?: number;
+    gst?: number;
+    showPreviousUdhar?: boolean;
+    showGst?: boolean;
+    receiptUrl?: string;
   } = {},
 ): BillShareInput {
   const rawItems = opts.items ?? (Array.isArray(bill.items) ? (bill.items as AnyRow[]) : []);
@@ -153,6 +176,11 @@ export function billRecordToShareInput(
       ?? refundModeLabel(bill.refundMode ?? bill.refund_mode),
     customerName: str(bill.customerName ?? bill.customer_name) || undefined,
     customerMobile: opts.customerMobile || str(bill.customerMobile ?? bill.customer_mobile) || undefined,
+    previousUdhar: opts.previousUdhar,
+    gst: opts.gst,
+    showPreviousUdhar: opts.showPreviousUdhar,
+    showGst: opts.showGst,
+    receiptUrl: opts.receiptUrl,
     isReturn: billType === "sales_return",
   };
 }
@@ -180,8 +208,8 @@ export async function resolveBillCustomerMobile(bill: AnyRow): Promise<string | 
 }
 
 /** Opens WhatsApp with the prefilled receipt. Returns whether a customer number was targeted. */
-export function shareBillOnWhatsapp(input: BillShareInput): { targetedCustomer: boolean } {
+export function shareBillOnWhatsapp(input: BillShareInput): { targetedCustomer: boolean; opened: boolean } {
   const url = buildWhatsappShareUrl(input);
-  if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
-  return { targetedCustomer: Boolean(normalizeWhatsappNumber(input.customerMobile)) };
+  const opened = typeof window !== "undefined" ? Boolean(window.open(url, "_blank", "noopener,noreferrer")) : false;
+  return { targetedCustomer: Boolean(normalizeWhatsappNumber(input.customerMobile)), opened };
 }

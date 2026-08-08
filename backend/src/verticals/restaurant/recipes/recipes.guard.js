@@ -1,6 +1,6 @@
 import { registerSaleGuard } from "../../../shared/sale-guards.js";
+import { decrementLocationInventory } from "../../../modules/stores/location-context.service.js";
 import { round2 } from "../../../utils/money.js";
-import { toBaseQty } from "../../../utils/units.js";
 import { effectiveQtyPerPortion } from "./recipes.service.js";
 
 /**
@@ -53,7 +53,7 @@ export function aggregateRecipeConsumption(dishPortions, components) {
 }
 
 export function registerRecipeConsumptionGuard() {
-  registerSaleGuard(async ({ shopId, tx, items, productMap }) => {
+  registerSaleGuard(async ({ shopId, tx, items, productMap, location }) => {
     const dishIds = items.map((item) => item.productId).filter(Boolean);
     if (dishIds.length === 0) return null;
 
@@ -62,14 +62,29 @@ export function registerRecipeConsumptionGuard() {
     });
     if (components.length === 0) return null;
 
-    // Portions, in the dish's own base unit. For a dish that is what a portion
-    // IS — one plate, one base unit — which is why a recipe written "per portion"
-    // and stock kept in base units need no reconciliation between them.
+    const sellingUnits = await tx.productSellingUnit.findMany({
+      where: { shopId, productId: { in: [...new Set(dishIds)] }, isActive: true },
+    });
+    const sellingUnitById = new Map(sellingUnits.map((unit) => [unit.id, unit]));
+    const sellingUnitByCode = new Map(sellingUnits.map((unit) => [`${unit.productId}:${unit.unitCode}`, unit]));
+    const defaultSellingUnitByProduct = new Map();
+    for (const unit of sellingUnits) {
+      const current = defaultSellingUnitByProduct.get(unit.productId);
+      if (!current || unit.isDefault) defaultSellingUnitByProduct.set(unit.productId, unit);
+    }
+
+    // Convert the selected menu portion to recipe portions. A Half unit commonly
+    // has conversionToBase 0.5 while Full is 1, so both billing and kitchen stock
+    // now use the exact same declared unit conversion.
     const dishPortions = new Map();
     for (const item of items) {
       const product = item.productId ? productMap[item.productId] : null;
       if (!product) continue;
-      const portions = toBaseQty(Number(item.quantity) || 0, item.enteredUnit, product.baseUnit);
+      const sellingUnit = (item.sellingUnitId ? sellingUnitById.get(item.sellingUnitId) : null)
+        ?? (item.sellingUnitCode ? sellingUnitByCode.get(`${product.id}:${item.sellingUnitCode}`) : null)
+        ?? defaultSellingUnitByProduct.get(product.id)
+        ?? null;
+      const portions = round2((Number(item.quantity) || 0) * Number(sellingUnit?.conversionToBase ?? 1));
       if (portions > 0) dishPortions.set(product.id, (dishPortions.get(product.id) ?? 0) + portions);
     }
 
@@ -77,39 +92,36 @@ export function registerRecipeConsumptionGuard() {
     if (consumption.length === 0) return null;
 
     return {
-      onConfirmed: async ({ tx: confirmTx, bill }) => {
+      onConfirmed: async ({ tx: confirmTx, bill, location: confirmedLocation }) => {
         for (const row of consumption) {
-          // updateMany rather than read-then-write: two waiters ringing up the
-          // same dish at once must subtract twice, and an absolute write would
-          // lose one of them.
-          const updated = await confirmTx.product.updateMany({
+          const ingredient = await confirmTx.product.findFirst({
             where: { id: row.ingredientProductId, shopId, deletedAt: null },
-            data: { stockBaseQty: { decrement: row.qtyBase } },
           });
           // The ingredient was deleted from the catalogue between the recipe
           // being written and the dish being sold. Nothing to move, and the
           // guest's bill is not the place to raise it — the kitchen stock screen
           // already reports the recipe line as broken.
-          if (updated.count !== 1) continue;
-
-          const fresh = await confirmTx.product.findFirst({
-            where: { id: row.ingredientProductId, shopId },
-            select: { stockBaseQty: true, name: true, baseUnit: true },
+          if (!ingredient) continue;
+          const stockResult = await decrementLocationInventory(confirmTx, {
+            shopId,
+            location: confirmedLocation ?? location,
+            product: ingredient,
+            quantityBase: row.qtyBase,
+            allowShortfall: true,
           });
-          const newStock = round2(Number(fresh?.stockBaseQty ?? 0));
           await confirmTx.stockLedger.create({
             data: {
               shopId,
-              locationId: bill.locationId ?? null,
+              locationId: (confirmedLocation ?? location).id,
               productId: row.ingredientProductId,
-              productName: fresh?.name ?? row.ingredientName,
+              productName: ingredient.name ?? row.ingredientName,
               // Its own action, not "sale": what left the fridge is an
               // ingredient, and a report that called it a sale would double-count
               // against the dish that was actually sold.
               action: "recipe_use",
               changeBaseQty: -row.qtyBase,
-              oldStockBaseQty: round2(newStock + row.qtyBase),
-              newStockBaseQty: newStock,
+              oldStockBaseQty: stockResult.oldStock,
+              newStockBaseQty: stockResult.newStock,
               billId: bill.id,
               sourceType: "bill",
               sourceId: bill.id,

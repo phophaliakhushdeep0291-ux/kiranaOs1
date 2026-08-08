@@ -30,6 +30,8 @@ const starterFeatures = [
   "supplier_entry",
   "purchase_entry",
   "stock_adjustment",
+  // One-off receipt delivery is table stakes. Bulk/scheduled reminders remain Pro.
+  "single_bill_whatsapp",
 ];
 
 const standardOnlyFeatures = [
@@ -80,8 +82,8 @@ export const PLAN_CONFIGS = {
   starter: {
     code: "starter",
     name: "Starter",
-    priceMonthlyPaise: 34900,
-    priceYearlyPaise: 299900,
+    priceMonthlyPaise: 4900,
+    priceYearlyPaise: 39900,
     maxDevices: 2,
     maxStores: 1,
     maxStaff: 0,
@@ -118,6 +120,13 @@ export const PLAN_CONFIGS = {
     features: [...starterFeatures, ...standardOnlyFeatures, ...growthOnlyFeatures, ...proOnlyFeatures],
   },
 };
+
+export const FIRST_YEAR_ONBOARDING_SKU = Object.freeze({
+  code: "FIRST_YEAR_ONBOARDING",
+  name: "First-year shop launch service",
+  amountPaise: 499900,
+  includes: ["in_person_installation", "starter_catalog_entry", "owner_and_staff_training", "supported_hardware_setup", "first_year_support"],
+});
 
 export function validatePlanCode(planCode) {
   return PLAN_CODES.includes(planCode);

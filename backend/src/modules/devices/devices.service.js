@@ -3,6 +3,7 @@
 // Backward compatibility note: Removed or blocked devices cannot receive active license.
 import db from "../../db.js";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -63,6 +64,10 @@ async function acquireShopRegistrationLock(tx, shopId) {
   }
 }
 
+function usesPostgresDatabase() {
+  return /^postgres(?:ql)?:\/\//i.test(env.DATABASE_URL || "");
+}
+
 async function withProcessShopLock(shopId, work) {
   const previous = shopDeviceLocks.get(shopId) ?? Promise.resolve();
   let release;
@@ -86,6 +91,107 @@ export async function withDeviceLifecycleTransaction(shopId, work) {
 }
 
 /**
+ * SQLite is already serialized by the per-shop process lock. Prisma 5.14's
+ * SQLite query engine can panic when several HTTP requests queue interactive
+ * transactions, leaving the whole client unusable. Resolve the slot under that
+ * lock, then commit the device and its session as one non-interactive batch.
+ * PostgreSQL keeps the advisory-lock interactive transaction below because it
+ * must coordinate multiple server processes, not only this Node process.
+ */
+async function createSqliteDeviceBoundLogin({ user, metadata, sessionData }) {
+  const effective = await getEffectivePlan(user.shopId, db);
+  const shopState = await db.shop.findUniqueOrThrow({ where: { id: user.shopId }, select: { dataEpoch: true } });
+  const allowedMaxDevices = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
+  const existing = await db.device.findUnique({
+    where: { shopId_deviceId: { shopId: user.shopId, deviceId: metadata.deviceId } },
+  });
+  const existingStatus = normalizeDeviceStatus(existing?.status);
+
+  if (existingStatus === "blocked") return { blocked: true };
+
+  const registeredDeviceCount = await db.device.count({
+    where: { shopId: user.shopId, status: { in: SLOT_OCCUPYING_STATUSES } },
+  });
+  const needsSlot = !existing || existingStatus === "revoked";
+  if (needsSlot && registeredDeviceCount >= allowedMaxDevices) {
+    return {
+      limitReached: true,
+      registeredDeviceCount,
+      allowedMaxDevices,
+      planCode: effective.planCode,
+      metadata,
+    };
+  }
+
+  const now = new Date();
+  const deviceRecordId = existing?.id ?? randomUUID();
+  const deviceSessionVersion = existing
+    ? Number(existing.sessionVersion) + (existingStatus === "revoked" ? 1 : 0)
+    : 1;
+  const deviceWrite = existing
+    ? db.device.update({
+        where: { id: existing.id },
+        data: {
+          userId: user.id,
+          deviceName: metadata.deviceName ?? existing.deviceName,
+          platform: metadata.platform ?? existing.platform,
+          deviceType: metadata.deviceType ?? existing.deviceType,
+          operatingSystem: metadata.operatingSystem ?? existing.operatingSystem,
+          browser: metadata.browser ?? existing.browser,
+          userAgent: metadata.userAgent ?? existing.userAgent,
+          appVersion: metadata.appVersion ?? existing.appVersion,
+          lastIpAddress: metadata.ipAddress ?? existing.lastIpAddress,
+          status: "active",
+          activatedAt: existing.activatedAt ?? now,
+          lastActiveAt: now,
+          lastLoginAt: now,
+          lastSeenAt: now,
+          dataEpoch: shopState.dataEpoch,
+          removedAt: null,
+          revokedAt: null,
+          revokedByUserId: null,
+          revokeReason: null,
+          ...(existingStatus === "revoked" ? { sessionVersion: { increment: 1 } } : {}),
+        },
+      })
+    : db.device.create({
+        data: {
+          id: deviceRecordId,
+          shopId: user.shopId,
+          userId: user.id,
+          deviceId: metadata.deviceId,
+          deviceName: metadata.deviceName,
+          platform: metadata.platform,
+          deviceType: metadata.deviceType,
+          operatingSystem: metadata.operatingSystem,
+          browser: metadata.browser,
+          userAgent: metadata.userAgent,
+          appVersion: metadata.appVersion,
+          lastIpAddress: metadata.ipAddress,
+          status: "active",
+          activatedAt: now,
+          lastActiveAt: now,
+          lastLoginAt: now,
+          lastSeenAt: now,
+          dataEpoch: shopState.dataEpoch,
+        },
+      });
+  const sessionWrite = db.session.create({
+    data: {
+      ...sessionData,
+      userId: user.id,
+      shopId: user.shopId,
+      deviceId: metadata.deviceId,
+      deviceRecordId,
+      deviceSessionVersion,
+      lastUsedAt: now,
+    },
+  });
+  const [device, session] = await db.$transaction([deviceWrite, sessionWrite]);
+  return { device, session };
+}
+
+/**
  * Registers/reactivates the installation and creates its refresh session as one
  * critical operation. The in-process lock protects SQLite/tests; PostgreSQL's
  * advisory transaction lock protects concurrent registrations across servers.
@@ -102,7 +208,8 @@ export async function createDeviceBoundLoginSession({ user, reqMeta, sessionData
   }
 
   return withProcessShopLock(user.shopId, async () => {
-    const result = await db.$transaction(async (tx) => {
+    const result = usesPostgresDatabase()
+      ? await db.$transaction(async (tx) => {
     await acquireShopRegistrationLock(tx, user.shopId);
     const effective = await getEffectivePlan(user.shopId, tx);
     const shopState = await tx.shop.findUniqueOrThrow({ where: { id: user.shopId }, select: { dataEpoch: true } });
@@ -191,7 +298,8 @@ export async function createDeviceBoundLoginSession({ user, reqMeta, sessionData
       },
     });
     return { device, session };
-    }, { maxWait: 5_000, timeout: 15_000 });
+        }, { maxWait: 5_000, timeout: 15_000 })
+      : await createSqliteDeviceBoundLogin({ user, metadata, sessionData });
 
   if (result.blocked) {
     throw new AppError("This device has been blocked by the shop owner.", 403, "DEVICE_BLOCKED");

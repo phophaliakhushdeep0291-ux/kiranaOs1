@@ -2,13 +2,30 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { billingEn } from "./translations/billing";
 import { customersEn } from "./translations/customers";
 import { productsEn } from "./translations/products";
+import { restaurantEn } from "./translations/restaurant";
 import { shellEn } from "./translations/shell";
 
 export type AppLanguage = "en" | "hi";
 
 const LANGUAGE_STORAGE_KEY = "kirana-os:ui-language:v1";
 
-const en = { ...shellEn, ...billingEn, ...productsEn, ...customersEn };
+const en = { ...shellEn, ...billingEn, ...productsEn, ...customersEn, ...restaurantEn };
+
+/**
+ * The registered modules, as data rather than only as a spread.
+ *
+ * The spread above is what gives `TranslationKey` its literal type; this map is what
+ * lets the completeness test say "every registered module", so adding a module to the
+ * app without adding it to the Hindi side fails a test instead of shipping an English
+ * string mid-bill. `i18n-dictionary-completeness.test.ts` asserts the two agree.
+ */
+export const EN_MODULES = {
+  shell: shellEn,
+  billing: billingEn,
+  products: productsEn,
+  customers: customersEn,
+  restaurant: restaurantEn,
+} as const;
 
 // The English dictionary is the key catalog, so a new key only has to be declared
 // once. Each Hindi table is typed against its English counterpart, which is what
@@ -59,14 +76,27 @@ interface AppLanguageContextValue {
 
 const AppLanguageContext = createContext<AppLanguageContextValue | null>(null);
 
-function getInitialLanguage(): AppLanguage {
-  if (typeof window === "undefined") return "en";
+/**
+ * Hindi is what a new shop gets.
+ *
+ * The counters this runs on are Hindi-speaking; English was the default only because
+ * it was the language the app happened to be written in. A STORED value always wins,
+ * so a shop that has already chosen English keeps it — the provider writes the
+ * preference on mount, so every existing install has one.
+ */
+export const DEFAULT_LANGUAGE: AppLanguage = "hi";
+
+export function getInitialLanguage(): AppLanguage {
+  if (typeof window === "undefined") return DEFAULT_LANGUAGE;
   const raw = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
-  return raw === "hi" ? "hi" : "en";
+  if (raw === "hi") return "hi";
+  if (raw === "en") return "en";
+  return DEFAULT_LANGUAGE;
 }
 
 // Start the fetch before the first render when the shop is already on Hindi, so a
 // Hindi counter does not watch its billing screen render in English and then swap.
+// main.tsx additionally waits on this before mounting React — see the note there.
 if (getInitialLanguage() === "hi") void loadHindiDictionary();
 
 export function AppLanguageProvider({ children }: { children: ReactNode }) {

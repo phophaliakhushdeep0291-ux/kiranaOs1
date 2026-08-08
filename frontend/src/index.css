@@ -1300,6 +1300,7 @@
   [data-mobile-task-dialog="true"] button,
   [data-mobile-task-dialog="true"] [role="combobox"] {
     min-height: 44px;
+    min-width: 44px;
   }
 
   [data-mobile-task-dialog="true"] [data-dialog-footer="true"] {

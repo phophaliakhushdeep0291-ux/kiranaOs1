@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
-  ChefHat, Clock, ExternalLink, Flame, Loader2, Palette, Search, Sparkles, Utensils,
+  ChefHat, Clock, ExternalLink, Flame, Loader2, Palette, Search, Settings2, Sparkles, Trash2, Utensils,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, useMoneyDraft, useQuantityDraft } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,8 +14,9 @@ import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
-import type { FoodType, MenuBoard, MenuDish } from "@/types/api";
-import { getMenuBoard, updateDishMenu } from "../service/restaurant-api";
+import type { FoodType, MenuAddonGroup, MenuBoard, MenuDish } from "@/types/api";
+import { getMenuBoard, listAddonGroups, saveDishAddonGroups, saveDishVariations, updateDishMenu, type DishVariationInput } from "../service/restaurant-api";
+import { AddonManagerDialog } from "./components/AddonManagerDialog";
 import {
   BLANK_BRAND, guestOrdersEnabled, MENU_THEME_OPTIONS, readMenuBrand, readRestaurantSettings,
   themeOption, toStoredBrand, type MenuBrand,
@@ -61,10 +62,14 @@ export default function MenuPage() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<MenuDish | null>(null);
   const [brandOpen, setBrandOpen] = useState(false);
+  const [addonsOpen, setAddonsOpen] = useState(false);
+  const [addonGroups, setAddonGroups] = useState<MenuAddonGroup[]>([]);
 
   const refresh = useCallback(async () => {
     try {
-      setBoard(await getMenuBoard());
+      const [nextBoard, nextAddonGroups] = await Promise.all([getMenuBoard(), listAddonGroups()]);
+      setBoard(nextBoard);
+      setAddonGroups(nextAddonGroups);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the menu.");
@@ -127,6 +132,35 @@ export default function MenuPage() {
     }
   }
 
+  /**
+   * Not optimistic, unlike the 86 switch above.
+   *
+   * A price is worth a round trip: the server is what rejects a duplicate portion
+   * name or an unpriced row, and a cart that opened on a portion the server never
+   * accepted would charge from a menu only this screen believes in.
+   */
+  async function savePortions(dish: MenuDish, rows: DishVariationInput[]) {
+    const before = dish.variations ?? [];
+    const unchanged = before.length === 0 && rows.length === 0;
+    if (unchanged) return;
+    try {
+      await saveDishVariations(dish.id, rows);
+      await refresh();
+    } catch (err) {
+      await refresh();
+      toast({
+        title: "Could not save the portions",
+        description: err instanceof Error ? err.message : "The menu was put back as it was.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function saveDishAddons(dish: MenuDish, groupIds: string[]) {
+    await saveDishAddonGroups(dish.id, groupIds);
+    await refresh();
+  }
+
   const brand = readMenuBrand(prefs);
   const guestOrders = guestOrdersEnabled(prefs);
   const menuUrl = shop?.id ? `/t/${shop.id}` : "";
@@ -148,6 +182,9 @@ export default function MenuPage() {
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => setBrandOpen(true)}>
               <Palette size={15} /> Menu look
+            </Button>
+            <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => setAddonsOpen(true)}>
+              <Settings2 size={15} /> Add-ons
             </Button>
             <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/kitchen-stock")}>
               <ChefHat size={15} /> Kitchen stock
@@ -221,8 +258,13 @@ export default function MenuPage() {
             await saveDish(editing, patchBody);
             setEditing(null);
           }}
+          onSavePortions={(rows) => savePortions(editing, rows)}
+          addonGroups={addonGroups}
+          onSaveAddons={(groupIds) => saveDishAddons(editing, groupIds)}
         />
       ) : null}
+
+      <AddonManagerDialog open={addonsOpen} groups={addonGroups} onClose={() => setAddonsOpen(false)} onChanged={refresh} />
 
       <BrandEditor
         open={brandOpen}
@@ -347,20 +389,35 @@ function DishCard({
 }
 
 function DishEditor({
-  dish, courses, usedCourses, onClose, onSave,
+  dish, courses, usedCourses, onClose, onSave, onSavePortions, addonGroups, onSaveAddons,
 }: {
   dish: MenuDish;
   courses: string[];
   usedCourses: string[];
   onClose: () => void;
   onSave: (patch: Parameters<typeof updateDishMenu>[1]) => Promise<void>;
+  onSavePortions: (rows: DishVariationInput[]) => Promise<void>;
+  addonGroups: MenuAddonGroup[];
+  onSaveAddons: (groupIds: string[]) => Promise<void>;
 }) {
   const [course, setCourse] = useState(dish.menuCourse ?? "");
   const [foodType, setFoodType] = useState<FoodType | null>(dish.foodType);
   const [spice, setSpice] = useState(dish.spiceLevel ?? 0);
   const [prep, setPrep] = useState(dish.prepMinutes ? String(dish.prepMinutes) : "");
   const [tags, setTags] = useState<string[]>(dish.tags);
+  const [portions, setPortions] = useState<DishVariationInput[]>(
+    () => (dish.variations ?? []).map((row) => ({
+      unitCode: row.unitCode,
+      name: row.name,
+      price: row.price,
+      portionFactor: row.portionFactor,
+      isDefault: row.isDefault,
+    })),
+  );
   const [saving, setSaving] = useState(false);
+  const [selectedAddonGroupIds, setSelectedAddonGroupIds] = useState<string[]>(
+    () => (dish.addonGroups ?? []).map((group) => group.id),
+  );
 
   const options = useMemo(
     () => [...new Set([...usedCourses.filter((row) => row !== "Other"), ...courses])],
@@ -369,7 +426,7 @@ function DishEditor({
 
   return (
     <Dialog open onOpenChange={(next) => { if (!next) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader><DialogTitle>{dish.name}</DialogTitle></DialogHeader>
 
         <div className="space-y-3.5 py-1">
@@ -434,6 +491,32 @@ function DishEditor({
             </div>
           </div>
 
+          <PortionEditor rows={portions} hasRecipe={dish.hasRecipe} dishPrice={dish.price} onChange={setPortions} />
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3"><Label>Add-on groups</Label><span className="text-[10.5px] text-[#64748b]">Managed from Add-ons on the menu page</span></div>
+            {addonGroups.length === 0 ? (
+              <p className="rounded-xl border border-dashed p-3 text-[11px] text-[#64748b]">No reusable groups yet. Save this dish, then create one from Add-ons.</p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {addonGroups.map((group) => {
+                  const selected = selectedAddonGroupIds.includes(group.id);
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => setSelectedAddonGroupIds((current) => selected ? current.filter((id) => id !== group.id) : [...current, group.id])}
+                      className={cn("rounded-xl border p-3 text-left transition-colors", selected ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "bg-white hover:bg-[#f8fafc]")}
+                    >
+                      <span className="block text-[12px] font-black text-[var(--brand-ink)]">{group.name}</span>
+                      <span className="mt-0.5 block text-[10.5px] text-[#64748b]">{group.options.length} choices · {group.minSelect > 0 ? `at least ${group.minSelect}` : "optional"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <div className="space-y-1.5">
             <Label>Tags</Label>
             <div className="flex flex-wrap gap-1.5">
@@ -458,14 +541,24 @@ function DishEditor({
             disabled={saving}
             onClick={async () => {
               setSaving(true);
-              await onSave({
-                menuCourse: course.trim() || null,
-                foodType,
-                spiceLevel: spice > 0 ? spice : null,
-                prepMinutes: prep.trim() ? Math.max(0, Number(prep) || 0) : null,
-                tags,
-              });
-              setSaving(false);
+              try {
+                // Price-bearing configuration first. If a portion or group is
+                // rejected, the descriptive menu fields have not half-saved.
+                const named = portions
+                  .map((row) => ({ ...row, name: row.name.trim() }))
+                  .filter((row) => row.name !== "");
+                await onSavePortions(named);
+                await onSaveAddons(selectedAddonGroupIds);
+                await onSave({
+                  menuCourse: course.trim() || null,
+                  foodType,
+                  spiceLevel: spice > 0 ? spice : null,
+                  prepMinutes: prep.trim() ? Math.max(0, Number(prep) || 0) : null,
+                  tags,
+                });
+              } finally {
+                setSaving(false);
+              }
             }}
           >
             {saving ? "Saving…" : "Save"}
@@ -473,6 +566,153 @@ function DishEditor({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Half and Full, Small and Large.
+ *
+ * A portion is priced on its own, so this is where a dish stops being one price.
+ * Billing needs nothing new to charge for it — a portion is stored as the
+ * product's selling unit, and the cart already offers those in a priced dropdown.
+ */
+function PortionEditor({
+  rows, hasRecipe, dishPrice, onChange,
+}: {
+  rows: DishVariationInput[];
+  hasRecipe: boolean;
+  dishPrice: number;
+  onChange: (next: DishVariationInput[]) => void;
+}) {
+  function update(index: number, patch: Partial<DishVariationInput>) {
+    onChange(rows.map((row, position) => (position === index ? { ...row, ...patch } : row)));
+  }
+
+  function setDefault(index: number) {
+    // Exactly one, because billing opens the cart on exactly one.
+    onChange(rows.map((row, position) => ({ ...row, isDefault: position === index })));
+  }
+
+  function add(name: string, factor: number, price: number) {
+    onChange([...rows, { name, price, portionFactor: factor, isDefault: rows.length === 0 }]);
+  }
+
+  function remove(index: number) {
+    const next = rows.filter((_, position) => position !== index);
+    // Removing the default would leave the dish with none, so the first row takes it.
+    if (next.length > 0 && !next.some((row) => row.isDefault)) next[0] = { ...next[0], isDefault: true };
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label>Portions</Label>
+      {rows.length === 0 ? (
+        <div className="rounded-[10px] border border-dashed border-[#dbe4f0] p-3">
+          <p className="text-[12px] text-[#64748b]">
+            Sold one way, at ₹{dishPrice.toLocaleString("en-IN")}. Add portions if this dish comes in more than one size.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              className="rounded-full border border-[#dbe4f0] px-3 py-1.5 text-[11px] font-bold text-[#31527e]"
+              onClick={() => {
+                // The pair almost every Indian menu uses, priced off the dish so the
+                // owner adjusts two numbers rather than inventing both.
+                add("Half", 0.5, Math.round(dishPrice * 0.6));
+                add("Full", 1, dishPrice);
+              }}
+            >
+              + Half and Full
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-[#dbe4f0] px-3 py-1.5 text-[11px] font-bold text-[#31527e]"
+              onClick={() => add("Regular", 1, dishPrice)}
+            >
+              + Add a portion
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map((row, index) => (
+            <PortionRow
+              key={row.unitCode ?? `new-${index}`}
+              row={row}
+              showFactor={hasRecipe}
+              onChange={(patch) => update(index, patch)}
+              onMakeDefault={() => setDefault(index)}
+              onRemove={() => remove(index)}
+            />
+          ))}
+          <button
+            type="button"
+            className="rounded-full border border-[#dbe4f0] px-3 py-1.5 text-[11px] font-bold text-[#31527e]"
+            onClick={() => add("", 1, dishPrice)}
+          >
+            + Add a portion
+          </button>
+          {hasRecipe ? (
+            <p className="text-[11px] leading-4 text-[#64748b]">
+              "Uses" is how much of one full portion the kitchen actually spends — a Half at 0.5
+              takes half the recipe out of stock.
+            </p>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PortionRow({
+  row, showFactor, onChange, onMakeDefault, onRemove,
+}: {
+  row: DishVariationInput;
+  showFactor: boolean;
+  onChange: (patch: Partial<DishVariationInput>) => void;
+  onMakeDefault: () => void;
+  onRemove: () => void;
+}) {
+  // Drafts, not raw onChange: committing Number("") as 0 on the keystroke that
+  // clears the box is what once wrote ₹0 across a shop's catalogue.
+  const priceProps = useMoneyDraft(row.price, (next) => onChange({ price: next }));
+  const factorProps = useQuantityDraft(row.portionFactor ?? 1, (next) => onChange({ portionFactor: next }));
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={onMakeDefault}
+        aria-label={`Open the cart on ${row.name || "this portion"}`}
+        aria-pressed={row.isDefault === true}
+        className={cn(
+          "grid h-8 w-8 shrink-0 place-items-center rounded-full border text-[10px] font-black",
+          row.isDefault ? "border-[var(--brand)] bg-[#eff6ff] text-[var(--brand)]" : "border-[#dbe4f0] text-[#94a3b8]",
+        )}
+      >
+        {row.isDefault ? "✓" : ""}
+      </button>
+      <Input
+        value={row.name}
+        placeholder="Half"
+        className="h-9 flex-1"
+        aria-label="Portion name"
+        onChange={(event) => onChange({ name: event.target.value })}
+      />
+      <Input {...priceProps} inputMode="decimal" className="h-9 w-20" aria-label="Portion price" />
+      {showFactor ? (
+        <Input {...factorProps} inputMode="decimal" className="h-9 w-16" aria-label="Portion of one full recipe" />
+      ) : null}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${row.name || "this portion"}`}
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border border-[#f1d4d8] text-[#b4404f]"
+      >
+        <Trash2 size={13} />
+      </button>
+    </div>
   );
 }
 

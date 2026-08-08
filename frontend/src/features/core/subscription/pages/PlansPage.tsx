@@ -19,9 +19,18 @@ export default function PlansPage() {
     <PageShell className="space-y-5">
       <PageHeader
         title="Plans"
-        description="Choose the right plan for your shop. Old data stays viewable even after expiry."
+        description="Choose a shop launch bundle: in-person setup, supported hardware configuration, training, support and software."
         actions={snapshot ? <PlanBadge planCode={snapshot.planCode} status={snapshot.status} /> : null}
       />
+
+      <Card className="border-primary/30 bg-primary/5">
+        <CardContent className="grid gap-3 p-5 md:grid-cols-4">
+          <div><p className="font-bold">One-time shop setup</p><p className="text-2xl font-black">Rs 4,999</p></div>
+          <div><p className="font-semibold">Installation</p><p className="text-sm text-muted-foreground">In-person launch and supported hardware setup</p></div>
+          <div><p className="font-semibold">Catalog + training</p><p className="text-sm text-muted-foreground">Starter catalog entry and owner/staff training</p></div>
+          <div><p className="font-semibold">Ongoing support</p><p className="text-sm text-muted-foreground">First-year service plus the plan below; hardware is quoted for the shop</p></div>
+        </CardContent>
+      </Card>
 
       <div className="flex justify-center">
         <div className="inline-flex rounded-lg border bg-muted/40 p-1" aria-label="Billing cycle">
@@ -43,6 +52,7 @@ export default function PlansPage() {
                 </div>
                 <CardDescription>{plan.headline}</CardDescription>
                 <div className="pt-2">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-primary">Software inside the serviced bundle</p>
                   <span className="text-3xl font-bold">Rs {billingCycle === "yearly" ? plan.annualPrice : plan.price}</span>
                   <span className="text-sm text-muted-foreground">/{billingCycle === "yearly" ? "year" : "month"}</span>
                   {billingCycle === "yearly" && <p className="mt-1 text-xs text-emerald-700">Rs {Math.round(plan.annualPrice / 12)}/month, billed annually</p>}
@@ -74,7 +84,7 @@ export default function PlansPage() {
           <ShieldCheck className="h-5 w-5 shrink-0 text-primary" />
           <div>
             <p className="font-medium text-foreground">Data stays yours</p>
-            <p>Expired subscription blocks cloud sync and premium actions, but old bills, customers, products, ledger and reports remain viewable locally.</p>
+            <p>Expiry never bricks the counter: sales, billing renewal and data export remain available. Existing bills, customers, products and ledgers remain viewable.</p>
           </div>
         </CardContent>
       </Card>

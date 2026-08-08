@@ -25,11 +25,12 @@ import {
   businessTypeFromLabel,
   getStoredBusinessType,
   isBusinessType,
+  offeredBusinessTypes,
   saveBusinessType,
   type BusinessType,
 } from "@/features/core/settings/business-types";
 
-const BUSINESS_TYPE_OPTIONS = Object.entries(BUSINESS_TYPE_DEFS) as [BusinessType, (typeof BUSINESS_TYPE_DEFS)[BusinessType]][];
+const BUSINESS_TYPE_OPTIONS = offeredBusinessTypes().map((key) => [key, BUSINESS_TYPE_DEFS[key]] as const);
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 type DayHours = { open: boolean; from: string; to: string };

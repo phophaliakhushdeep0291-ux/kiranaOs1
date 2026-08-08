@@ -29,5 +29,6 @@ describe("phone-first operational dialogs", () => {
     expect(cssSource).toContain('position: sticky');
     expect(cssSource).toContain('env(safe-area-inset-bottom)');
     expect(cssSource).toContain("min-height: 44px");
+    expect(cssSource).toContain("min-width: 44px");
   });
 });

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
-import { requireFeature } from "../feature-gates/featureGate.middleware.js";
+import { requireContinuityAction, requireFeature } from "../feature-gates/featureGate.middleware.js";
 import { validate, validateQuery } from "../../middleware/validate.js";
 import {
   dailyClosingSchema,
@@ -60,7 +60,7 @@ router.get("/payment-summary", ctrl.paymentSummary);
 router.get("/financial-ledger-reconciliation", requireRole("owner", "admin"), ctrl.financialLedgerReconciliation);
 
 // Async report export jobs. POST/cancel require owner PIN; list/status/download are owner/admin-only and shop-scoped.
-router.post("/exports", requireRole("owner", "admin"), requireOwnerPin, requireFeature("csv_import_export"), validate(exportReportSchema), ctrl.createReportExportJob);
+router.post("/exports", requireRole("owner", "admin"), requireOwnerPin, requireContinuityAction("export_data"), validate(exportReportSchema), ctrl.createReportExportJob);
 router.get("/exports", requireRole("owner", "admin"), validateQuery(exportListSchema), ctrl.listReportExportJobs);
 router.get("/exports/:jobId/download", requireRole("owner", "admin"), ctrl.downloadReportExportJob);
 router.get("/exports/:jobId", requireRole("owner", "admin"), ctrl.getReportExportJob);

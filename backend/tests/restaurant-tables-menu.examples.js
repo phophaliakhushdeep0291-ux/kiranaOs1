@@ -16,8 +16,11 @@ import {
 } from "../src/verticals/restaurant/recipes/recipes.service.js";
 import { aggregateRecipeConsumption } from "../src/verticals/restaurant/recipes/recipes.guard.js";
 import {
+  buildPortionCodes,
   groupMenuByCourse,
   parseTags,
+  planPortionWrite,
+  resolveDefaultIndex,
   SUGGESTED_COURSES,
   UNCATEGORISED_COURSE,
 } from "../src/verticals/restaurant/menu/menu.service.js";
@@ -27,8 +30,11 @@ import {
   resolveMenuBranding,
 } from "../src/verticals/restaurant/storefront/dine-in.storefront.js";
 import { createTableSchema, updateTableSchema } from "../src/verticals/restaurant/tables/tables.schema.js";
-import { updateDishMenuSchema } from "../src/verticals/restaurant/menu/menu.schema.js";
+import { setDishVariationsSchema, updateDishMenuSchema } from "../src/verticals/restaurant/menu/menu.schema.js";
 import { saveRecipeSchema } from "../src/verticals/restaurant/recipes/recipes.schema.js";
+import { addonUnitPrice, validateSelection } from "../src/verticals/restaurant/menu/addons.service.js";
+import { aggregateAddonConsumption } from "../src/verticals/restaurant/menu/addons.guard.js";
+import { saveAddonGroupSchema } from "../src/verticals/restaurant/menu/addons.schema.js";
 
 /**
  * The restaurant floor, its menu card and its recipe book.
@@ -326,6 +332,140 @@ for (const schemaPath of ["prisma/schema.prisma", "prisma-postgres/schema.prisma
   assert.ok(schema.includes("menuAvailable"), `${schemaPath} must declare the 86 switch`);
   assert.match(schema, /restaurantTables\s+RestaurantTable\[\]/, `${schemaPath} must relate tables back to the shop`);
   assert.match(schema, /dishRecipeComponents\s+DishRecipeComponent\[\]/, `${schemaPath} must relate recipes back to the shop`);
+}
+
+
+/* ── Dish portions (Half / Full) ──────────────────────────────────────────────
+ *
+ * A portion is a ProductSellingUnit, not a new table, so billing's unit dropdown,
+ * the per-unit price and the sellingUnitLabel a finalised bill snapshots all work
+ * unchanged. What these pin is the part that is NOT free: that renaming keeps
+ * history, that a billed portion is never deleted, and that a portion carries no
+ * pack arithmetic.
+ */
+
+// A name is slugged into the unit code, and the unique index is on that code.
+assert.deepStrictEqual(
+  buildPortionCodes([{ name: "Half" }, { name: "Full plate" }]),
+  ["portion-half", "portion-full-plate"],
+  "a portion code is the slug of its name",
+);
+
+// Devanagari slugs to nothing. Without the index fallback both rows would ask for
+// the same code and the database, not the shopkeeper, would decide what happened.
+assert.deepStrictEqual(
+  buildPortionCodes([{ name: "आधा" }, { name: "पूरा" }]),
+  ["portion-1", "portion-2"],
+  "a portion named in Devanagari still gets its own code",
+);
+
+// An existing portion sends its code back, which is what lets it be RENAMED in
+// place rather than retired and recreated as a stranger to its own sales history.
+assert.deepStrictEqual(
+  buildPortionCodes([{ unitCode: "portion-half", name: "Half plate" }]),
+  ["portion-half"],
+  "a renamed portion keeps the code its bills already reference",
+);
+
+{
+  // The rule that matters most: a portion that has been billed is deactivated,
+  // never deleted. Its id is stamped on historical BillItems.
+  const existing = [
+    { id: "u1", unitCode: "portion-half", billedCount: 12 },
+    { id: "u2", unitCode: "portion-full", billedCount: 0 },
+    { id: "u3", unitCode: "portion-quarter", billedCount: 3 },
+  ];
+  const plan = planPortionWrite(existing, ["portion-full"]);
+  assert.deepStrictEqual(plan.retire.map((row) => row.id), ["u1", "u3"], "billed portions are retired, not removed");
+  assert.deepStrictEqual(plan.remove.map((row) => row.id), [], "a portion that is still wanted is left alone");
+
+  const untouched = planPortionWrite(existing, ["portion-half", "portion-full", "portion-quarter"]);
+  assert.deepStrictEqual(untouched.retire, [], "nothing is retired when every portion is still on the menu");
+  assert.deepStrictEqual(untouched.remove, [], "nothing is removed when every portion is still on the menu");
+}
+
+{
+  // A portion nobody ever ordered is a typo, and deleting it keeps the dropdown
+  // honest instead of leaving a hidden row behind forever.
+  const plan = planPortionWrite([{ id: "u9", unitCode: "portion-larg", billedCount: 0 }], ["portion-large"]);
+  assert.deepStrictEqual(plan.remove.map((row) => row.id), ["u9"], "an unbilled portion is deleted outright");
+  assert.deepStrictEqual(plan.retire, [], "an unbilled portion is not retired");
+}
+
+// Billing picks one default unit, so exactly one portion must carry the flag.
+assert.strictEqual(resolveDefaultIndex([{ isDefault: false }, { isDefault: true }]), 1, "the flagged portion is the default");
+assert.strictEqual(resolveDefaultIndex([{ isDefault: false }, { isDefault: false }]), 0, "with none flagged the first portion is the default");
+assert.strictEqual(resolveDefaultIndex([{ isDefault: true }, { isDefault: true }]), 0, "with two flagged the first wins rather than both");
+
+{
+  // Zero would bill a plate of food at nothing. A free dish is priced at zero with
+  // no portions; it is not a portion that costs nothing.
+  const rejected = setDishVariationsSchema.safeParse({ variations: [{ name: "Half", price: 0 }] });
+  assert.ok(!rejected.success, "a portion priced at zero is rejected");
+
+  const accepted = setDishVariationsSchema.safeParse({ variations: [{ name: "Half", price: 180, portionFactor: 0.5 }] });
+  assert.ok(accepted.success, "a priced portion is accepted");
+  assert.strictEqual(accepted.data.variations[0].portionFactor, 0.5, "the portion factor survives parsing");
+
+  // Defaulted so an editor that only asks for a name and a price still produces a
+  // portion that depletes one full recipe rather than none.
+  const defaulted = setDishVariationsSchema.safeParse({ variations: [{ name: "Full", price: 320 }] });
+  assert.strictEqual(defaulted.data.variations[0].portionFactor, 1, "a portion factor defaults to one full portion");
+
+  const emptied = setDishVariationsSchema.safeParse({ variations: [] });
+  assert.ok(emptied.success, "clearing every portion is a legal edit");
+}
+
+/* â”€â”€ Configured add-ons â”€â”€ */
+
+{
+  const group = {
+    name: "Choose cheese",
+    minSelect: 1,
+    maxSelect: 2,
+    options: [{ id: "cheddar", isActive: true }, { id: "paneer", isActive: true }],
+  };
+  assert.equal(validateSelection(group, []).ok, false, "a required group cannot be skipped");
+  assert.equal(validateSelection(group, ["cheddar"]).ok, true);
+  assert.equal(validateSelection(group, ["cheddar", "cheddar", "paneer"]).ok, false, "option quantity counts toward the maximum");
+  assert.equal(validateSelection(group, ["foreign"]).ok, false, "a stale or foreign option is refused");
+  assert.equal(addonUnitPrice([{ price: 25, quantity: 2 }, { price: 0, quantity: 1 }]), 50);
+}
+
+{
+  const consumption = aggregateAddonConsumption([
+    { quantity: 2, options: [{ linkedProductId: "cheese", linkedQtyBase: 0.05, quantity: 2 }] },
+    { quantity: 1, options: [{ linkedProductId: "cheese", linkedQtyBase: 0.1, quantity: 1 }, { linkedProductId: null, linkedQtyBase: 1, quantity: 1 }] },
+  ]);
+  assert.equal(consumption.get("cheese"), 0.3, "linked stock is aggregated by ingredient and scaled by dish and option quantity");
+}
+
+{
+  const parsed = saveAddonGroupSchema.safeParse({
+    name: "Instructions",
+    minSelect: 0,
+    maxSelect: 2,
+    options: [{ name: "No onion", price: 0 }, { name: "Extra cheese", price: 20, linkedProductId: "cheese", linkedQtyBase: 0.05 }],
+  });
+  assert.ok(parsed.success, "zero-price instructions and stock-linked extras are both valid");
+  assert.equal(parsed.data.options[1].linkedQtyBase, 0.05);
+  assert.equal(saveAddonGroupSchema.safeParse({ name: "Broken", minSelect: 2, options: [{ name: "Only one", price: 0 }] }).success, true, "cross-row feasibility is enforced by the service transaction");
+}
+
+assert.ok(read("verticals/restaurant/menu/menu.routes.js").includes("addons.guard.js"), "mounting the menu registers authoritative option billing");
+const billService = read("modules/bills/bills.service.js");
+assert.ok(billService.includes("decorateBillItem"), "billing must let a vertical snapshot configured options inside the bill transaction");
+assert.ok(billService.includes("baseRateForCeiling"), "MRP applies to the dish price, not the configured extras on top");
+
+for (const migration of [
+  readRepo("prisma/migrations/20260808120000_menu_addons/migration.sql"),
+  readRepo("prisma-postgres/migrations/000096_menu_addons/migration.sql"),
+]) {
+  for (const model of ["MenuAddonGroup", "MenuAddonOption", "ProductAddonGroup", "BillItemAddon"]) {
+    assert.ok(migration.includes(`\"${model}\"`), `the add-on migration must create ${model}`);
+  }
+  assert.ok(migration.includes("linkedQtyBase"), "the stock quantity per option must deploy with the schema");
+  assert.ok(migration.includes("pricePaise"), "sold option money needs its integer shadow");
 }
 
 console.log("restaurant-tables-menu.examples.js OK");

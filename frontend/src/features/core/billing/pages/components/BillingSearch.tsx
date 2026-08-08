@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -19,7 +19,7 @@ import { toast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useListBills } from "@/features/core/bills/queries";
 import type { Bill, Product } from "@/lib/api/client";
-import { productSellingPrice, resolveScanMatch } from "../billing-calculations";
+import { applyBindSheetPick, normalizeSearchText, productSearchText, productSellingPrice, resolveScanOutcome } from "../billing-calculations";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { ACTIVITY_EVENTS, trackEvent, useSearchTracking } from "@/lib/activity";
 
@@ -102,7 +102,16 @@ interface BillingSearchProps {
   searchInputRef: RefObject<HTMLInputElement>;
   productsLoading: boolean;
   filteredProducts: Product[];
+  /** Whole catalogue — the bind sheet searches this, not the category-filtered grid. */
+  allProducts: Product[];
   onAddProduct: (product: Product) => void;
+  /**
+   * Capture-on-first-scan: bind the scanned code to this product, then add it to the cart.
+   * Rejects when the code is already owned; the sheet shows the reason and stays open.
+   */
+  onBindBarcode: (product: Product, code: string) => Promise<void>;
+  /** Open the product form pre-filled with the scanned code. */
+  onCreateProductWithBarcode: (code: string) => void;
   categories: string[];
   selectedCategory: string;
   onSelectedCategoryChange: (category: string) => void;
@@ -138,7 +147,10 @@ export function BillingSearch({
   searchInputRef,
   productsLoading,
   filteredProducts,
+  allProducts,
   onAddProduct,
+  onBindBarcode,
+  onCreateProductWithBarcode,
   categories,
   selectedCategory,
   onSelectedCategoryChange,
@@ -169,6 +181,25 @@ export function BillingSearch({
   const streamRef = useRef<MediaStream | null>(null);
   const displayedProducts = showAll ? filteredProducts : filteredProducts.slice(0, 10);
 
+  /* ── Capture-on-first-scan ──
+     An unknown code opens a sheet asking which item it is. Every field below is set
+     synchronously from the scan handler — nothing is fetched and nothing is awaited to
+     open the sheet, so it paints on the frame after the scan. */
+  const [bindCode, setBindCode] = useState<string | null>(null);
+  const [bindQuery, setBindQuery] = useState("");
+  const [bindError, setBindError] = useState<string | null>(null);
+  const [bindingProductId, setBindingProductId] = useState<string | null>(null);
+  // "Skip" — the queue is moving and this cashier does not want to teach the catalog
+  // anything right now. Picking an item then adds it and binds nothing.
+  const [skipBinding, setSkipBinding] = useState(false);
+  const bindSearchRef = useRef<HTMLInputElement | null>(null);
+
+  // The camera loop is started once per scanner session; adding the product lists to its
+  // effect deps would tear the camera down every time the catalogue re-renders. A ref
+  // keeps the resolver reading today's products without restarting the stream.
+  const scanPoolRef = useRef({ filteredProducts, allProducts });
+  scanPoolRef.current = { filteredProducts, allProducts };
+
   // §13. One search event per settled query, attributed to whatever the user
   // picked — that pairing is what the search auto-complete learns from.
   const { notifySelection } = useSearchTracking(search, filteredProducts.length, { screen: "/billing" });
@@ -178,6 +209,93 @@ export function BillingSearch({
   };
   const visibleCategories = showAllCategories ? categories : categories.slice(0, CATEGORY_LIMIT);
   const hasMoreCategories = categories.length > CATEGORY_LIMIT;
+
+  function openBindSheet(code: string) {
+    setBindCode(code);
+    setBindQuery("");
+    setBindError(null);
+    setSkipBinding(false);
+    setBindingProductId(null);
+  }
+
+  function closeBindSheet() {
+    setBindCode(null);
+    setBindQuery("");
+    setBindError(null);
+    setSkipBinding(false);
+    setBindingProductId(null);
+  }
+
+  /** Dismiss without binding: the code leaves the search box so the next scan is clean. */
+  function dismissBindSheet() {
+    closeBindSheet();
+    onSearchChange("");
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  }
+
+  const bindCandidates = useMemo(() => {
+    const query = normalizeSearchText(bindQuery);
+    const pool = query
+      ? allProducts.filter((product) => productSearchText(product).includes(query))
+      : allProducts;
+    return pool.slice(0, 8);
+  }, [bindQuery, allProducts]);
+
+  async function pickForBind(product: Product) {
+    const code = bindCode;
+    if (!code || bindingProductId) return;
+
+    setBindingProductId(product.id);
+    setBindError(null);
+    const outcome = await applyBindSheetPick({
+      product,
+      code,
+      skip: skipBinding,
+      bind: onBindBarcode,
+      add: addProduct,
+    });
+
+    if (outcome.error) {
+      setBindError(outcome.error || t("billing.search.bindFailed"));
+      setBindingProductId(null);
+      return;
+    }
+    dismissBindSheet();
+    if (outcome.bound) {
+      toast({ title: t("billing.search.bindSuccess"), description: `${code} → ${product.name}` });
+    }
+  }
+
+  /** Open the sheet if this code belongs to nothing. Returns true when it did. */
+  function openBindSheetIfUnknown(code: string): boolean {
+    const { filteredProducts: onScreen, allProducts: catalogue } = scanPoolRef.current;
+    const outcome = resolveScanOutcome(code, onScreen, catalogue);
+    if (outcome.kind !== "unknown-code") return false;
+    openBindSheet(outcome.code);
+    return true;
+  }
+  // Held in a ref because the camera loop below is created once per scanner session and
+  // would otherwise call whichever copy of this function the first render produced.
+  const openBindSheetIfUnknownRef = useRef(openBindSheetIfUnknown);
+  openBindSheetIfUnknownRef.current = openBindSheetIfUnknown;
+
+  /** Enter in the search box, or a camera read. Returns true when it consumed the code. */
+  function handleScannedTerm(term: string, source: "usb" | "camera"): boolean {
+    const { filteredProducts: onScreen, allProducts: catalogue } = scanPoolRef.current;
+    const outcome = resolveScanOutcome(term, onScreen, catalogue);
+    if (outcome.kind === "match") {
+      trackEvent(ACTIVITY_EVENTS.BARCODE_SCANNED, { source, matched: true, productId: outcome.product.id });
+      addProduct(outcome.product);
+      onSearchChange("");
+      return true;
+    }
+    if (outcome.kind === "unknown-code") {
+      trackEvent(ACTIVITY_EVENTS.BARCODE_SCANNED, { source, matched: false });
+      openBindSheet(outcome.code);
+      return true;
+    }
+    return false;
+  }
 
   useEffect(() => {
     if (!scannerOpen) return;
@@ -239,7 +357,11 @@ export function BillingSearch({
                 trackEvent(ACTIVITY_EVENTS.BARCODE_SCANNED, { source: "camera" });
                 onSearchChange(value);
                 setScannerOpen(false);
-                window.setTimeout(() => searchInputRef.current?.focus(), 0);
+                // A code the catalogue has never seen used to dead-end on "no results".
+                // Ask which item it is instead; otherwise hand focus back to search.
+                if (!openBindSheetIfUnknownRef.current(value)) {
+                  window.setTimeout(() => searchInputRef.current?.focus(), 0);
+                }
                 toast({ title: t("billing.search.barcodeScanned"), description: value });
                 return;
               }
@@ -276,6 +398,18 @@ export function BillingSearch({
       streamRef.current = null;
     };
   }, [scannerOpen, onSearchChange, searchInputRef]);
+
+  // Escape leaves the bind sheet. Together with the close button and the tap-away area
+  // that is three ways out — a cashier with a queue must never feel trapped by it.
+  useEffect(() => {
+    if (!bindCode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismissBindSheet();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dismissBindSheet only closes over setters
+  }, [bindCode]);
 
   const openBarcodeScanner = () => {
     setScannerMessage(t("billing.search.pointCamera"));
@@ -321,18 +455,12 @@ export function BillingSearch({
                   value={search}
                   onChange={(e) => onSearchChange(e.target.value)}
                   onKeyDown={(e) => {
-                    // Scan-to-cart: a USB scanner types the barcode + Enter.
-                    // Add the matched product and clear so the next scan is ready.
+                    // Scan-to-cart: a USB scanner types the barcode + Enter. A matched
+                    // code adds the product and clears so the next scan is ready; a code
+                    // that matches nothing opens the bind sheet instead of dead-ending on
+                    // "no results". A typed word that matches nothing still does nothing.
                     if (e.key !== "Enter") return;
-                    const match = resolveScanMatch(search, filteredProducts);
-                    if (match) {
-                      e.preventDefault();
-                      // A USB scanner types the code and hits Enter, so this is
-                      // the hardware-scan path rather than a typed search.
-                      trackEvent(ACTIVITY_EVENTS.BARCODE_SCANNED, { source: "usb", matched: true, productId: match.id });
-                      addProduct(match);
-                      onSearchChange("");
-                    }
+                    if (handleScannedTerm(search, "usb")) e.preventDefault();
                   }}
                 />
                 <kbd className="ml-auto hidden shrink-0 items-center gap-1 rounded-[7px] border border-[#e1e8f2] bg-[#f4f7fb] px-2 py-1 text-[11px] font-bold text-[#45577a] sm:flex">
@@ -504,6 +632,135 @@ export function BillingSearch({
                   className="h-11 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[var(--brand)] hover:bg-[#f5f9ff] sm:h-9"
                 >
                   {t("billing.search.typeInstead")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Capture-on-first-scan sheet ──
+            A code nothing answers to. Rather than "not found", ask which item it is:
+            picking one binds the code and adds it to the cart in the same tap. Skip
+            keeps a queue moving without teaching the catalogue anything. */}
+        {bindCode && (
+          <div className="absolute inset-0 z-40 flex flex-col justify-end bg-[#06142c]/50">
+            {/* Tap anywhere above the sheet to dismiss — one tap, always available. */}
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t("billing.search.bindDismiss")}
+              onClick={dismissBindSheet}
+              className="min-h-[56px] flex-1 cursor-default"
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("billing.search.bindQuestion")}
+              data-testid="barcode-bind-sheet"
+              className="max-h-[86%] overflow-y-auto rounded-t-[16px] border-t border-[#e6ecf4] bg-white shadow-[0_-18px_50px_rgba(3,12,30,0.28)]"
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-[#eef2f8] px-4 pb-3 pt-4">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-black text-[#13274d]">
+                    {t("billing.search.bindTitle", { code: bindCode })}
+                  </p>
+                  <p className="mt-0.5 text-[12px] font-semibold text-[#6d7c98]">
+                    {skipBinding ? t("billing.search.bindSkipActive") : t("billing.search.bindQuestion")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissBindSheet}
+                  aria-label={t("billing.search.bindDismiss")}
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd] sm:h-9 sm:w-9"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="px-4 pt-3">
+                <div className="flex h-12 items-center gap-3 rounded-[10px] border border-[#e3eaf3] bg-white px-4 focus-within:border-[var(--brand)] sm:h-[46px]">
+                  <Search size={17} className="shrink-0 text-[#6b7a9a]" aria-hidden="true" />
+                  <Input
+                    ref={bindSearchRef}
+                    data-testid="barcode-bind-search"
+                    autoFocus
+                    className="h-full flex-1 border-0 bg-transparent p-0 text-[14px] font-semibold text-[var(--brand-ink)] placeholder:font-medium placeholder:text-[#6b7a9a] focus-visible:ring-0 focus-visible:ring-offset-0"
+                    placeholder={t("billing.search.bindSearchPlaceholder")}
+                    value={bindQuery}
+                    onChange={(e) => setBindQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {bindError && (
+                <p className="mx-4 mt-3 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-700">
+                  {bindError}
+                </p>
+              )}
+
+              <div className="px-2 py-2">
+                {bindCandidates.length === 0 ? (
+                  <p className="px-2 py-6 text-center text-[12px] font-semibold text-[#6d7c98]">
+                    {t("billing.search.bindNoMatch")}
+                  </p>
+                ) : (
+                  bindCandidates.map((product) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      data-testid={`barcode-bind-option-${product.id}`}
+                      disabled={bindingProductId != null}
+                      onClick={() => void pickForBind(product)}
+                      className="flex w-full items-center gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors hover:bg-[#f5f9ff] disabled:opacity-60"
+                    >
+                      <span className={`grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[8px] text-lg ${productPlaceholderColor(product.name)}`}>
+                        {product.imageUrl
+                          ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain" />
+                          : getProductEmoji(product.name, product.category)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-extrabold text-[#14284e]">{product.name}</span>
+                        <span className="block truncate text-[11px] font-semibold text-[#6d7c98]">
+                          {product.barcode
+                            ? t("billing.search.bindHasCode", { code: String(product.barcode) })
+                            : product.category ?? ""}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[12px] font-black text-[var(--brand)]">
+                        {bindingProductId === product.id ? t("billing.search.bindSaving") : "+"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 border-t border-[#eef2f8] px-4 py-3">
+                <button
+                  type="button"
+                  data-testid="barcode-bind-create"
+                  onClick={() => {
+                    const code = bindCode;
+                    closeBindSheet();
+                    onSearchChange("");
+                    onCreateProductWithBarcode(code);
+                  }}
+                  className="h-11 flex-1 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[var(--brand)] hover:bg-[#f5f9ff] sm:h-10"
+                >
+                  {t("billing.search.bindCreateNew")}
+                </button>
+                <button
+                  type="button"
+                  data-testid="barcode-bind-skip"
+                  onClick={() => {
+                    // Never block the counter. From here a pick just adds the item.
+                    setSkipBinding(true);
+                    setBindError(null);
+                    bindSearchRef.current?.focus();
+                  }}
+                  className="h-11 rounded-[8px] border border-[#e6ecf4] px-4 text-[12px] font-extrabold text-[#45577a] hover:bg-[#f7f9fd] sm:h-10"
+                >
+                  {t("billing.search.bindSkip")}
                 </button>
               </div>
             </div>

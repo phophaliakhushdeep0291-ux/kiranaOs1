@@ -24,9 +24,16 @@ import {
 import { acquireShopMaintenanceLock, releaseShopMaintenanceLock } from "./maintenance-lock.service.js";
 
 const BACKUP_FORMAT = "kiranaos_aes256gcm_gzip_v1";
-const BACKUP_SCHEMA_VERSION = "2026-08-01-complete-v2";
+const BACKUP_SCHEMA_VERSION = "2026-08-08-complete-v3";
 const BACKUP_HEADER = Buffer.from("KOSB1", "ascii");
 const MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024;
+const RESTORE_PRESERVED_AUDIT_ACTIONS = Object.freeze([
+  "SHOP_BACKUP_REQUESTED",
+  "SHOP_BACKUP_COMPLETED",
+  "SHOP_BACKUP_DOWNLOADED",
+  "SHOP_BACKUP_RESTORE_PREVIEWED",
+  "SHOP_BACKUP_RESTORED",
+]);
 
 function appError(message, statusCode, code) {
   return new AppError(message, statusCode, code);
@@ -414,6 +421,14 @@ async function createImmediateRecoveryBackup(shopId, userId) {
 
 async function replaceRestorableShopData(tx, shopId, snapshot) {
   const { data } = assertCompleteRestoreSnapshot(snapshot, shopId);
+  // A restore intentionally rewinds the shop's business audit trail to the
+  // selected point in time. The backup/restore control trail is different: it
+  // records the owner-sensitive operation doing the rewind and must never be
+  // erased by a later rollback. Capture those rows inside the same serializable
+  // transaction, then append only rows that are not already in the artifact.
+  const preservedControlAudits = await tx.auditLog.findMany({
+    where: { shopId, action: { in: RESTORE_PRESERVED_AUDIT_ACTIONS } },
+  });
   const order = restoreModelOrder();
   for (const modelName of [...order].reverse()) {
     const delegate = tx[prismaDelegateName(modelName)];
@@ -428,6 +443,13 @@ async function replaceRestorableShopData(tx, shopId, snapshot) {
     if (!rows.length) continue;
     await tx[prismaDelegateName(modelName)].createMany({ data: rows });
     restoredRecords += rows.length;
+  }
+  const snapshotAuditIds = new Set((data.tables.AuditLog ?? []).map((row) => row?.id).filter(Boolean));
+  const controlAuditsToAppend = preservedControlAudits
+    .filter((row) => !snapshotAuditIds.has(row.id))
+    .map((row) => restoreScalarRow("AuditLog", row, shopId));
+  if (controlAuditsToAppend.length > 0) {
+    await tx.auditLog.createMany({ data: controlAuditsToAppend });
   }
   await tx.shop.update({ where: { id: shopId }, data: { dataEpoch: { increment: 1 } } });
   return { restoredRecords, restoredTables: order.length };

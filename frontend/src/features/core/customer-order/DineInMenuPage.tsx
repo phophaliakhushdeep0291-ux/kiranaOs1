@@ -57,6 +57,17 @@ type LoadState =
   | { kind: "ready"; catalog: CustomerCatalog }
   | { kind: "error"; message: string; unavailable: boolean };
 
+type GuestAddon = { optionId: string; groupName: string; name: string; price: number; quantity: number };
+type GuestCartLine = {
+  key: string;
+  itemId: string;
+  count: number;
+  unitPrice: number;
+  variationCode?: string;
+  variationName?: string;
+  addons: GuestAddon[];
+};
+
 function newIdempotencyKey(shopCode: string, tableCode: string): string {
   const random = typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -70,7 +81,7 @@ export default function DineInMenuPage() {
   const tableCode = params.tableCode ?? "";
 
   const [state, setState] = useState<LoadState>({ kind: "loading" });
-  const [qty, setQty] = useState<Record<string, number>>({});
+  const [cartLines, setCartLines] = useState<GuestCartLine[]>([]);
   const [search, setSearch] = useState("");
   const [course, setCourse] = useState("all");
   const [vegOnly, setVegOnly] = useState(false);
@@ -80,6 +91,7 @@ export default function DineInMenuPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [placed, setPlaced] = useState<SubmitOrderResult | null>(null);
   const [tracked, setTracked] = useState<CustomerOrderStatus | null>(null);
+  const [configuring, setConfiguring] = useState<CustomerMenuItem | null>(null);
 
   const reload = useCallback(() => {
     let active = true;
@@ -150,27 +162,54 @@ export default function DineInMenuPage() {
   }, [sections, course, search, vegOnly]);
 
   const chosen = useMemo(
-    () => Object.entries(qty)
-      .filter(([, count]) => count > 0)
-      .map(([id, count]) => ({ item: itemsById.get(id), count }))
-      .filter((row): row is { item: CustomerMenuItem; count: number } => Boolean(row.item)),
-    [qty, itemsById],
+    () => cartLines
+      .map((line) => ({ line, item: itemsById.get(line.itemId) }))
+      .filter((row): row is { line: GuestCartLine; item: CustomerMenuItem } => Boolean(row.item)),
+    [cartLines, itemsById],
   );
-  const total = chosen.reduce((sum, row) => sum + row.item.price * row.count, 0);
-  const itemCount = chosen.reduce((sum, row) => sum + row.count, 0);
+  const total = chosen.reduce((sum, row) => sum + row.line.unitPrice * row.line.count, 0);
+  const itemCount = chosen.reduce((sum, row) => sum + row.line.count, 0);
   // The longest single dish, not the sum: a kitchen cooks a table's order
   // together, so adding the times would promise a wait nobody is going to have.
   const waitMinutes = chosen.reduce((max, row) => Math.max(max, row.item.prepMinutes ?? 0), 0);
 
-  function setQuantity(id: string, next: number) {
-    setQty((current) => {
-      const clamped = Math.max(0, Math.min(30, next));
-      if (clamped === 0) {
-        const { [id]: _dropped, ...rest } = current;
-        return rest;
-      }
-      return { ...current, [id]: clamped };
+  function itemQuantity(itemId: string) {
+    return cartLines.filter((line) => line.itemId === itemId).reduce((sum, line) => sum + line.count, 0);
+  }
+
+  function addConfiguredLine(item: CustomerMenuItem, variationCode: string | undefined, variationName: string | undefined, basePrice: number, addons: GuestAddon[]) {
+    const fingerprint = addons.map((addon) => `${addon.optionId}x${addon.quantity}`).sort().join(",") || "plain";
+    const key = `${item.id}::${variationCode ?? "default"}::${fingerprint}`;
+    const unitPrice = basePrice + addons.reduce((sum, addon) => sum + addon.price * addon.quantity, 0);
+    setCartLines((current) => {
+      const existing = current.find((line) => line.key === key);
+      if (existing) return current.map((line) => line.key === key ? { ...line, count: Math.min(30, line.count + 1) } : line);
+      return [...current, { key, itemId: item.id, count: 1, unitPrice, variationCode, variationName, addons }];
     });
+  }
+
+  function addItem(item: CustomerMenuItem) {
+    if ((item.variations?.length ?? 0) > 0 || (item.addonGroups?.length ?? 0) > 0) {
+      setConfiguring(item);
+      return;
+    }
+    addConfiguredLine(item, undefined, undefined, item.price, []);
+  }
+
+  function removeOneItem(itemId: string) {
+    setCartLines((current) => {
+      const index = current.map((line) => line.itemId).lastIndexOf(itemId);
+      if (index < 0) return current;
+      const target = current[index];
+      if (target.count > 1) return current.map((line, row) => row === index ? { ...line, count: line.count - 1 } : line);
+      return current.filter((_, row) => row !== index);
+    });
+  }
+
+  function setLineQuantity(key: string, next: number) {
+    setCartLines((current) => current
+      .map((line) => line.key === key ? { ...line, count: Math.max(0, Math.min(30, next)) } : line)
+      .filter((line) => line.count > 0));
   }
 
   async function placeOrder() {
@@ -188,12 +227,17 @@ export default function DineInMenuPage() {
           fulfillmentType: "pickup",
           tableCode,
         },
-        chosen.map((row) => ({ productId: row.item.id, qty: row.count })),
+        chosen.map(({ item, line }) => ({
+          productId: item.id,
+          qty: line.count,
+          variationCode: line.variationCode,
+          addons: line.addons.map((addon) => ({ optionId: addon.optionId, quantity: addon.quantity })),
+        })),
         newIdempotencyKey(shopCode, tableCode),
       );
       rememberMyOrder(shopCode, result.orderId);
       setPlaced(result);
-      setQty({});
+      setCartLines([]);
       setNote("");
       setReviewOpen(false);
     } catch (err) {
@@ -294,18 +338,18 @@ export default function DineInMenuPage() {
       ) : null}
 
       <div className="sticky top-0 z-20 mt-5 px-4 pb-2 pt-2 backdrop-blur" style={{ background: "color-mix(in srgb, var(--menu-surface) 88%, transparent)" }}>
-        <div className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: "var(--menu-line)", background: "var(--menu-card)" }}>
+        <div className="flex min-h-12 items-center gap-2 rounded-xl border px-3" style={{ borderColor: "var(--menu-line)", background: "var(--menu-card)" }}>
           <Search size={15} style={{ color: "var(--menu-muted)" }} />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search the menu"
-            className="w-full bg-transparent text-[13px] outline-none placeholder:text-[color:var(--menu-muted)]"
+            className="h-11 w-full bg-transparent text-[13px] outline-none placeholder:text-[color:var(--menu-muted)]"
           />
-          {search ? <button type="button" onClick={() => setSearch("")} aria-label="Clear"><X size={14} style={{ color: "var(--menu-muted)" }} /></button> : null}
+          {search ? <button type="button" onClick={() => setSearch("")} aria-label="Clear" className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl"><X size={14} style={{ color: "var(--menu-muted)" }} /></button> : null}
         </div>
 
-        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Chip active={vegOnly} onClick={() => setVegOnly((on) => !on)} accentWhenActive="#15803d">
             <Leaf size={12} /> Veg only
           </Chip>
@@ -335,9 +379,10 @@ export default function DineInMenuPage() {
                 <DishRow
                   key={item.id}
                   item={item}
-                  qty={qty[item.id] ?? 0}
+                  qty={itemQuantity(item.id)}
                   canOrder={canOrder}
-                  onChange={(next) => setQuantity(item.id, next)}
+                  onAdd={() => addItem(item)}
+                  onRemove={() => removeOneItem(item.id)}
                 />
               ))}
             </div>
@@ -380,18 +425,19 @@ export default function DineInMenuPage() {
           >
             <div className="mb-3 flex items-center justify-between">
               <p className="font-display text-[18px] font-black">Your order · {table?.name}</p>
-              <button type="button" aria-label="Close" onClick={() => setReviewOpen(false)}><X size={20} /></button>
+              <button type="button" aria-label="Close" onClick={() => setReviewOpen(false)} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl"><X size={20} /></button>
             </div>
 
             <div className="space-y-2">
-              {chosen.map(({ item, count }) => (
-                <div key={item.id} className="flex items-center gap-3 rounded-xl border p-2.5" style={{ borderColor: "var(--menu-line)", background: "var(--menu-card)" }}>
+              {chosen.map(({ item, line }) => (
+                <div key={line.key} className="flex items-center gap-3 rounded-xl border p-2.5" style={{ borderColor: "var(--menu-line)", background: "var(--menu-card)" }}>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-bold">{item.name}</div>
-                    <div className="text-[11px]" style={{ color: "var(--menu-muted)" }}>{rupees(item.price)} each</div>
+                    <div className="truncate text-[13px] font-bold">{item.name}{line.variationName ? ` · ${line.variationName}` : ""}</div>
+                    {line.addons.length > 0 ? <div className="mt-0.5 line-clamp-2 text-[10.5px]" style={{ color: "var(--menu-muted)" }}>{line.addons.map((addon) => `${addon.quantity > 1 ? `${addon.quantity}× ` : ""}${addon.name}`).join(", ")}</div> : null}
+                    <div className="text-[11px]" style={{ color: "var(--menu-muted)" }}>{rupees(line.unitPrice)} each</div>
                   </div>
-                  <Stepper qty={count} onChange={(next) => setQuantity(item.id, next)} />
-                  <div className="w-16 text-right text-[13px] font-black">{rupees(item.price * count)}</div>
+                  <Stepper qty={line.count} onChange={(next) => setLineQuantity(line.key, next)} />
+                  <div className="w-16 text-right text-[13px] font-black">{rupees(line.unitPrice * line.count)}</div>
                 </div>
               ))}
             </div>
@@ -456,6 +502,17 @@ export default function DineInMenuPage() {
           </div>
         </div>
       ) : null}
+
+      {configuring ? (
+        <GuestDishConfigurator
+          item={configuring}
+          onCancel={() => setConfiguring(null)}
+          onConfirm={(selection) => {
+            addConfiguredLine(configuring, selection.variationCode, selection.variationName, selection.basePrice, selection.addons);
+            setConfiguring(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -472,7 +529,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-[12px] font-bold transition"
+      className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-bold transition"
       style={active
         ? { background: accentWhenActive ?? "var(--menu-accent)", borderColor: "transparent", color: "#fff" }
         : { background: "var(--menu-card)", borderColor: "var(--menu-line)", color: "var(--menu-muted)" }}
@@ -491,12 +548,13 @@ function Chip({
  * text is a menu somebody has to squint at to use.
  */
 function DishRow({
-  item, qty, canOrder, onChange,
+  item, qty, canOrder, onAdd, onRemove,
 }: {
   item: CustomerMenuItem;
   qty: number;
   canOrder: boolean;
-  onChange: (next: number) => void;
+  onAdd: () => void;
+  onRemove: () => void;
 }) {
   const mark = item.foodType ? FOOD_TYPE_MARK[item.foodType] : null;
   return (
@@ -562,15 +620,15 @@ function DishRow({
       {canOrder ? (
         <div className="flex shrink-0 items-end">
           {qty > 0
-            ? <Stepper qty={qty} onChange={onChange} />
+            ? <Stepper qty={qty} onChange={(next) => next < qty ? onRemove() : onAdd()} />
             : (
               <button
                 type="button"
-                onClick={() => onChange(1)}
-                className="rounded-xl border-[1.5px] px-3.5 py-1.5 text-[12px] font-black"
+                onClick={onAdd}
+                className="min-h-11 rounded-xl border-[1.5px] px-4 py-2 text-[12px] font-black"
                 style={{ borderColor: "var(--menu-accent)", color: "var(--menu-accent)" }}
               >
-                Add
+                {(item.variations?.length ?? 0) > 0 || (item.addonGroups?.length ?? 0) > 0 ? "Choose" : "Add"}
               </button>
             )}
         </div>
@@ -579,14 +637,123 @@ function DishRow({
   );
 }
 
+function GuestDishConfigurator({
+  item, onCancel, onConfirm,
+}: {
+  item: CustomerMenuItem;
+  onCancel: () => void;
+  onConfirm: (selection: { variationCode?: string; variationName?: string; basePrice: number; addons: GuestAddon[] }) => void;
+}) {
+  const variations = item.variations ?? [];
+  const groups = item.addonGroups ?? [];
+  const defaultVariation = variations.find((variation) => variation.isDefault) ?? variations[0];
+  const [variationCode, setVariationCode] = useState(defaultVariation?.unitCode ?? "");
+  const [selected, setSelected] = useState<Record<string, number>>({});
+  const [attempted, setAttempted] = useState(false);
+  const variation = variations.find((row) => row.unitCode === variationCode) ?? defaultVariation;
+
+  const groupState = groups.map((group) => {
+    const count = group.options.reduce((sum, option) => sum + (selected[option.id] ?? 0), 0);
+    return { group, count, valid: count >= group.minSelect && (group.maxSelect <= 0 || count <= group.maxSelect) };
+  });
+  const valid = groupState.every((row) => row.valid);
+  const addons: GuestAddon[] = groups.flatMap((group) => group.options
+    .filter((option) => (selected[option.id] ?? 0) > 0)
+    .map((option) => ({
+      optionId: option.id,
+      groupName: group.name,
+      name: option.name,
+      price: option.price,
+      quantity: selected[option.id],
+    })));
+  const basePrice = variation?.price ?? item.price;
+  const unitPrice = basePrice + addons.reduce((sum, addon) => sum + addon.price * addon.quantity, 0);
+
+  function setOption(group: NonNullable<CustomerMenuItem["addonGroups"]>[number], optionId: string, next: number) {
+    const currentCount = group.options.reduce((sum, option) => sum + (selected[option.id] ?? 0), 0);
+    const previous = selected[optionId] ?? 0;
+    const clamped = Math.max(0, Math.min(20, next));
+    if (group.maxSelect > 0 && currentCount - previous + clamped > group.maxSelect) return;
+    setSelected((current) => {
+      if (clamped <= 0) {
+        const { [optionId]: _removed, ...rest } = current;
+        return rest;
+      }
+      return { ...current, [optionId]: clamped };
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end bg-black/55" onClick={onCancel}>
+      <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl p-5" style={{ background: "var(--menu-surface)", color: "var(--menu-ink)" }} onClick={(event) => event.stopPropagation()}>
+        <div className="mx-auto max-w-xl">
+          <div className="flex items-start justify-between gap-3">
+            <div><p className="font-display text-[19px] font-black">{item.name}</p><p className="mt-0.5 text-[12px]" style={{ color: "var(--menu-muted)" }}>Make it exactly how you want it.</p></div>
+            <button type="button" aria-label="Close choices" onClick={onCancel} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--menu-line)" }}><X size={18} /></button>
+          </div>
+
+          {variations.length > 0 ? (
+            <section className="mt-4">
+              <h3 className="text-[12px] font-black uppercase tracking-wider" style={{ color: "var(--menu-accent)" }}>Choose a portion</h3>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {variations.map((row) => (
+                  <button key={row.unitCode} type="button" onClick={() => setVariationCode(row.unitCode)} className="flex min-h-12 items-center justify-between rounded-xl border p-3 text-left" style={row.unitCode === variation?.unitCode ? { borderColor: "var(--menu-accent)", background: "var(--menu-tint)" } : { borderColor: "var(--menu-line)", background: "var(--menu-card)" }}>
+                    <span className="text-[13px] font-black">{row.name}</span><span className="text-[12px] font-bold">{rupees(row.price)}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <div className="mt-4 space-y-4">
+            {groupState.map(({ group, count, valid: groupValid }) => (
+              <section key={group.id} className="rounded-2xl border p-3.5" style={{ borderColor: attempted && !groupValid ? "#fca5a5" : "var(--menu-line)", background: "var(--menu-card)" }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div><h3 className="text-[13px] font-black">{group.name}</h3><p className="text-[10.5px]" style={{ color: "var(--menu-muted)" }}>{group.minSelect > 0 ? `Choose at least ${group.minSelect}` : "Optional"}{group.maxSelect > 0 ? ` · up to ${group.maxSelect}` : ""}</p></div>
+                  <span className="rounded-full px-2 py-1 text-[10px] font-black" style={{ background: "var(--menu-tint)", color: "var(--menu-accent)" }}>{count} chosen</span>
+                </div>
+                <div className="mt-2 space-y-2">
+                  {group.options.map((option) => {
+                    const quantity = selected[option.id] ?? 0;
+                    return (
+                      <div key={option.id} className="flex min-h-12 items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: quantity > 0 ? "var(--menu-accent)" : "var(--menu-line)" }}>
+                        <button type="button" className="min-h-11 min-w-0 flex-1 text-left" onClick={() => setOption(group, option.id, quantity > 0 ? 0 : 1)}><span className="block text-[12px] font-bold">{option.name}</span><span className="text-[10.5px]" style={{ color: "var(--menu-muted)" }}>{option.price > 0 ? `+${rupees(option.price)}` : "No extra charge"}</span></button>
+                        {quantity > 0 ? <Stepper qty={quantity} onChange={(next) => setOption(group, option.id, next)} /> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                {attempted && !groupValid ? <p className="mt-2 text-[11px] font-bold text-[#b91c1c]">Please complete this choice.</p> : null}
+              </section>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAttempted(true);
+              if (!valid) return;
+              onConfirm({ variationCode: variation?.unitCode, variationName: variation?.name, basePrice, addons });
+            }}
+            className="mt-5 flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-[14px] font-black text-white"
+            style={{ background: "var(--menu-accent)" }}
+          >
+            <span>Add this dish</span><span>{rupees(unitPrice)}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Stepper({ qty, onChange }: { qty: number; onChange: (next: number) => void }) {
   return (
     <div className="flex shrink-0 items-center gap-1 rounded-xl px-1 py-1" style={{ background: "var(--menu-tint)" }}>
-      <button type="button" aria-label="One less" onClick={() => onChange(qty - 1)} className="grid h-7 w-7 place-items-center rounded-lg" style={{ color: "var(--menu-accent)" }}>
+      <button type="button" aria-label="One less" onClick={() => onChange(qty - 1)} className="grid h-11 w-11 place-items-center rounded-lg" style={{ color: "var(--menu-accent)" }}>
         <Minus size={14} />
       </button>
       <span className="min-w-[18px] text-center text-[13px] font-black" style={{ color: "var(--menu-accent)" }}>{qty}</span>
-      <button type="button" aria-label="One more" onClick={() => onChange(qty + 1)} className="grid h-7 w-7 place-items-center rounded-lg" style={{ color: "var(--menu-accent)" }}>
+      <button type="button" aria-label="One more" onClick={() => onChange(qty + 1)} className="grid h-11 w-11 place-items-center rounded-lg" style={{ color: "var(--menu-accent)" }}>
         <Plus size={14} />
       </button>
     </div>

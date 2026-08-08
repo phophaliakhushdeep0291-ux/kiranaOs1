@@ -460,11 +460,11 @@ async function assertNoActiveProductNameConflict(shopId, name, excludeId = null)
  * would pass the constraint and still make the next scan of it ambiguous, which is the
  * exact failure this feature exists to prevent.
  */
-async function assertBarcodeAvailable(shopId, code, excludeProductId = null) {
+async function assertBarcodeAvailable(shopId, code, excludeProductId = null, client = db) {
   const exclude = excludeProductId ? { NOT: { id: excludeProductId } } : {};
   // Soft-deleted products are included: they hold their code until they are purged,
   // because restoring one from the recycle bin would otherwise create a real duplicate.
-  const owner = await db.product.findFirst({
+  const owner = await client.product.findFirst({
     where: { shopId, ...exclude, OR: [{ barcode: code }, { sku: code }] },
     select: { id: true, name: true, deletedAt: true },
   });
@@ -476,7 +476,7 @@ async function assertBarcodeAvailable(shopId, code, excludeProductId = null) {
     throw err;
   }
 
-  const unitOwner = await db.productSellingUnit.findFirst({
+  const unitOwner = await client.productSellingUnit.findFirst({
     where: { shopId, barcode: code, ...(excludeProductId ? { NOT: { productId: excludeProductId } } : {}) },
     select: { productId: true, unitCode: true, product: { select: { name: true } } },
   });
@@ -504,8 +504,11 @@ async function assertBarcodeAvailable(shopId, code, excludeProductId = null) {
  *    the operation in the queue forever.
  *  - Uniqueness is checked against every column a scan can match, then enforced again by
  *    the database, so two devices binding the same code concurrently cannot both win.
+ *
+ * `client` exists so a transaction (or a test) can supply its own Prisma client, the same
+ * way createAuditLog does. It defaults to the shared one.
  */
-export async function bindProductBarcode(shopId, productId, barcode, { identity = null, req = null, userId = null } = {}) {
+export async function bindProductBarcode(shopId, productId, barcode, { identity = null, req = null, userId = null, client = db } = {}) {
   const code = compactText(barcode);
   if (!code) {
     const err = new AppError("A barcode is required", 400);
@@ -513,7 +516,7 @@ export async function bindProductBarcode(shopId, productId, barcode, { identity 
     throw err;
   }
 
-  const product = await db.product.findFirst({ where: { id: productId, shopId, deletedAt: null } });
+  const product = await client.product.findFirst({ where: { id: productId, shopId, deletedAt: null } });
   if (!product) throw new AppError("Product not found", 404);
 
   const current = compactText(product.barcode);
@@ -529,11 +532,11 @@ export async function bindProductBarcode(shopId, productId, barcode, { identity 
     throw err;
   }
 
-  await assertBarcodeAvailable(shopId, code, productId);
+  await assertBarcodeAvailable(shopId, code, productId, client);
 
   let updated;
   try {
-    updated = await db.product.update({
+    updated = await client.product.update({
       where: { id: product.id },
       // sku mirrors barcode the same way the create path does, so a scan resolves
       // whichever column the till happens to match on.
@@ -554,6 +557,11 @@ export async function bindProductBarcode(shopId, productId, barcode, { identity 
     shopId,
     userId,
     req,
+    client,
+    // A bind that arrived over sync has no request to read the device from, so the
+    // originating till is carried in the event itself. `undefined` (not null) keeps the
+    // online path falling back to the request header.
+    deviceId: identity?.sourceDeviceId ?? undefined,
     action: "product_barcode_bound",
     entityType: "product",
     entityId: product.id,

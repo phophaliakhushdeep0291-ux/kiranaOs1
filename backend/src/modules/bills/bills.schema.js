@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { moneyAmount, percentageRate, quantityAmount } from "../../utils/validationSchemas.js";
 
+export const whatsappBillSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(120),
+  customerMobile: z.string().trim().max(30).optional(),
+  showGst: z.boolean().default(true),
+  showPreviousUdhar: z.boolean().default(false),
+  mode: z.enum(["auto", "deep_link_opened"]).default("auto"),
+});
+
 const billItemSchema = z.object({
   productId: z.string().optional(),
   // The batch the counter picked for a batch-tracked product. Omitted means FEFO
@@ -15,6 +23,19 @@ const billItemSchema = z.object({
   quantity: quantityAmount({ positive: true }),
   enteredUnit: z.string(),
   ratePerRateUnit: moneyAmount(),
+  // The product/portion price before configured options are added. The server
+  // re-prices every option from its own menu and never trusts client labels or
+  // prices. Kept optional so every non-configurable retail line is unchanged.
+  baseRatePerRateUnit: moneyAmount().optional(),
+  addons: z.array(z.object({
+    optionId: z.string().trim().min(1).max(60),
+    quantity: z.coerce.number().int().min(1).max(20).default(1),
+    // Accepted only for backwards-compatible clients; canonical values are
+    // loaded from the shop menu and these claims are never persisted or priced.
+    groupName: z.string().trim().max(60).optional(),
+    name: z.string().trim().max(60).optional(),
+    price: moneyAmount().optional(),
+  })).max(80).optional(),
   // Flat rupee discount applied to this whole line (not per unit). GST is
   // computed on the discounted line total (discount reduces taxable value).
   lineDiscount: moneyAmount().default(0),

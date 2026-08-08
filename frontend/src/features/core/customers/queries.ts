@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ApiClientError, isBrowserOnline } from "@/lib/api/http";
+import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import { readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
@@ -46,10 +46,6 @@ type ListCustomersQueryKey = ReturnType<typeof getListCustomersQueryKey>;
 type CustomerKhataQueryKey = ReturnType<typeof getGetCustomerKhataQueryKey>;
 type UdharSummaryQueryKey = ReturnType<typeof getGetUdharSummaryQueryKey>;
 type UdharLedgerQueryKey = ReturnType<typeof getGetUdharLedgerQueryKey>;
-
-function isNetworkLikeError(error: unknown) {
-  return !(error instanceof ApiClientError) || !isBrowserOnline();
-}
 
 function normaliseCustomerForCache(customer: Customer): Customer {
   const parsed = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);
@@ -149,7 +145,7 @@ export function useListCustomers(
         void cacheCustomers(merged);
         return merged;
       } catch (error) {
-        if (isNetworkLikeError(error)) return filterCachedCustomers(localRows, params).map(normaliseCustomerForCache);
+        if (isRecoverableNetworkError(error)) return filterCachedCustomers(localRows, params).map(normaliseCustomerForCache);
         throw error;
       }
     },
@@ -219,7 +215,7 @@ export function useGetUdharSummary(options?: QueryHookOptions<UdharSummary, Udha
         cacheAuthoritativeSummary(summary);
         return summary;
       } catch (error) {
-        if (isNetworkLikeError(error)) return getLocalUdharSummaryAsync();
+        if (isRecoverableNetworkError(error)) return getLocalUdharSummaryAsync();
         throw error;
       }
     },
@@ -243,7 +239,7 @@ export function useGetUdharLedger(
       try {
         return await ledgerApi.getUdharLedger(params) as LedgerResult<UdharLedgerDisplayEntry>;
       } catch (error) {
-        if (isNetworkLikeError(error)) return getLocalUdharLedger(normalisedLimit) as LedgerResult<UdharLedgerDisplayEntry>;
+        if (isRecoverableNetworkError(error)) return getLocalUdharLedger(normalisedLimit) as LedgerResult<UdharLedgerDisplayEntry>;
         throw error;
       }
     },

@@ -16,7 +16,7 @@ export const PRESERVED_SHOP_MODELS = Object.freeze([
   // an older backup must not resurrect a session the owner already revoked, nor
   // re-queue repair commands a device has already run or refused.
   "SupportSession", "DeviceCommand",
-  "DeviceHealthSnapshot", "Subscription", "PaymentTransaction",
+  "DeviceHealthSnapshot", "Subscription", "OnboardingPurchase", "PaymentTransaction",
   "PaymentProviderEvent", "IntegrationApiKey", "WebhookEndpoint", "WebhookDelivery",
   "Device", "DeviceReplacementChallenge", "DeviceLicense",
 ]);
@@ -59,6 +59,10 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // disputes a line on the bill. It is short-lived on the rail, but a restore
   // that dropped it would leave the sale with nothing behind it.
   "RestaurantTable", "DishRecipeComponent", "KitchenTicket",
+  // Menu add-ons are durable shop configuration. Groups define the selection
+  // rule, options carry prices/ingredient links, and the join decides which
+  // dishes offer them; losing any one of the three changes the live menu.
+  "MenuAddonGroup", "MenuAddonOption", "ProductAddonGroup",
 ]);
 
 export const RESTORABLE_CHILD_MODELS = Object.freeze({
@@ -73,6 +77,10 @@ export const RESTORABLE_CHILD_MODELS = Object.freeze({
   // rule a restored booking would come back with no line items — no record of
   // what actually went out of the door.
   RentalBookingItem: { relation: "booking", where: { booking: { shopId: "__SHOP_ID__" } } },
+  // Sold add-ons are receipt history and intentionally carry no shopId. Restore
+  // them through their bill item so a reprinted bill still shows exactly what
+  // the guest selected and paid for.
+  BillItemAddon: { relation: "billItem", where: { billItem: { bill: { shopId: "__SHOP_ID__" } } } },
 });
 
 export const CREDENTIAL_FIELDS_ALWAYS_PRESERVED = Object.freeze([

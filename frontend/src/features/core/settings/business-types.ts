@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { AccentColor } from "./theme";
 import {
+  BUSINESS_TYPE_IDS,
   getStoredBusinessType,
   isBusinessType,
   saveBusinessType,
@@ -8,6 +9,8 @@ import {
   useBusinessTypeKey,
   type BusinessType,
 } from "./business-type-store";
+
+declare const __DORMANT_VERTICALS_ENABLED__: boolean;
 
 // The store is the trade's identity; this module is its wardrobe. Re-exported so
 // every existing caller keeps one import, while the router's registry can take
@@ -65,6 +68,15 @@ export interface BusinessTypeDefinition {
   dashboardVariant: DashboardVariant;
   navConfig: NavConfig;
   dashboard: DashboardConfig;
+}
+
+export const DORMANT_VERTICALS_ENABLED = __DORMANT_VERTICALS_ENABLED__;
+
+/** Choices that may create/change a shop. Persisted dormant types stay valid. */
+export function offeredBusinessTypes(): BusinessType[] {
+  return DORMANT_VERTICALS_ENABLED
+    ? [...BUSINESS_TYPE_IDS]
+    : ["kirana", "other"];
 }
 
 export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = {

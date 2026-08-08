@@ -64,6 +64,7 @@ model Shop {
   financialLedger               FinancialLedger[]
   billCounter                   BillCounter?
   subscriptions                 Subscription[]
+  onboardingPurchases           OnboardingPurchase[]
   paymentTransactions           PaymentTransaction[]
   devices                       Device[]
   deviceLicenses                DeviceLicense[]
@@ -114,6 +115,9 @@ model Shop {
   restaurantTables              RestaurantTable[]
   kitchenTickets                KitchenTicket[]
   dishRecipeComponents          DishRecipeComponent[]
+  menuAddonGroups               MenuAddonGroup[]
+  menuAddonOptions              MenuAddonOption[]
+  productAddonGroups            ProductAddonGroup[]
   auditRules                    AuditRule[]
   auditRuns                     AuditRun[]
   auditEvaluations              AuditEvaluation[]
@@ -547,6 +551,7 @@ model Product {
   purchaseReturnItems  PurchaseReturnItem[]
   stockCountLines      StockCountLine[]
   inventoryLots        InventoryLot[]
+  addonGroups          ProductAddonGroup[]
 
   @@unique([shopId, idempotencyKey])
   @@unique([shopId, sourceDeviceId, clientProductId])
@@ -606,68 +611,72 @@ model Customer {
 // BILL
 // ─────────────────────────────────────────────
 model Bill {
-  id                    String    @id @default(cuid())
-  shopId                String
-  locationId            String?
-  billNo                String // e.g. KOS-2026-0001
-  billType              String    @default("normal_sale") // estimate | normal_sale | gst_invoice | udhar_entry
-  status                String    @default("active") // active | cancelled
-  customerId            String?
-  customerName          String    @default("Walk-in")
-  buyerGstin            String?
-  buyerStateCode        String?
-  buyerAddress          String?
-  sellerGstin           String?
-  sellerStateCode       String?
-  sellerLegalName       String?
-  sellerTradeName       String?
-  sellerAddress         String?
-  sellerCity            String?
-  subtotal              Float     @default(0)
-  subtotalPaise         BigInt?
-  discount              Float     @default(0)
-  discountPaise         BigInt?
-  discountReason        String?
-  offerId               String?
-  offerCode             String?
-  offerDiscount         Float     @default(0)
-  offerDiscountPaise    BigInt?
-  loyaltyPointsRedeemed Int       @default(0)
-  loyaltyDiscount       Float     @default(0)
-  loyaltyDiscountPaise  BigInt?
-  giftCardAmount        Float     @default(0)
-  giftCardAmountPaise   BigInt?
-  gst                   Float     @default(0)
-  gstPaise              BigInt?
-  gstMode               String    @default("inclusive") // inclusive | exclusive | none
-  grandTotal            Float     @default(0)
-  grandTotalPaise       BigInt?
-  actualAmount          Float     @default(0) // frontend actual bill amount before let-go handling
-  actualAmountPaise     BigInt?
-  buyerPaidAmount       Float     @default(0) // amount entered/received from buyer
-  buyerPaidAmountPaise  BigInt?
-  waivedAmount          Float     @default(0) // let-go amount absorbed by shop
-  waivedAmountPaise     BigInt?
-  grossProfit           Float     @default(0)
-  grossProfitPaise      BigInt?
-  paidAmount            Float     @default(0)
-  paidAmountPaise       BigInt?
-  creditAmount          Float     @default(0) // went to udhar
-  creditAmountPaise     BigInt?
-  createdByUserId       String? // authenticated user who created the bill; nullable for legacy/offline imports
-  deviceId              String? // client device id at bill creation, if available
-  clientBillId          String?
-  idempotencyKey        String?
-  sourceDeviceId        String?
-  cancelledAt           DateTime?
-  cancelledReason       String?
-  deletedAt             DateTime?
-  deletedReason         String?
-  returnOfBillId        String? // set on billType "sales_return": the original sale this return reverses
-  refundMode            String? // cash | upi | bank | udhar | gift_card
-  businessDate          DateTime  @default(now()) // when the sale happened; differs from createdAt for delayed offline sync
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                        String    @id @default(cuid())
+  shopId                    String
+  locationId                String?
+  billNo                    String // e.g. KOS-2026-0001
+  billType                  String    @default("normal_sale") // estimate | normal_sale | gst_invoice | udhar_entry
+  status                    String    @default("active") // active | cancelled
+  customerId                String?
+  customerName              String    @default("Walk-in")
+  buyerGstin                String?
+  buyerStateCode            String?
+  buyerAddress              String?
+  sellerGstin               String?
+  sellerStateCode           String?
+  sellerLegalName           String?
+  sellerTradeName           String?
+  sellerAddress             String?
+  sellerCity                String?
+  subtotal                  Float     @default(0)
+  subtotalPaise             BigInt?
+  discount                  Float     @default(0)
+  discountPaise             BigInt?
+  discountReason            String?
+  offerId                   String?
+  offerCode                 String?
+  offerDiscount             Float     @default(0)
+  offerDiscountPaise        BigInt?
+  loyaltyPointsRedeemed     Int       @default(0)
+  loyaltyDiscount           Float     @default(0)
+  loyaltyDiscountPaise      BigInt?
+  giftCardAmount            Float     @default(0)
+  giftCardAmountPaise       BigInt?
+  gst                       Float     @default(0)
+  gstPaise                  BigInt?
+  gstMode                   String    @default("inclusive") // inclusive | exclusive | none
+  grandTotal                Float     @default(0)
+  grandTotalPaise           BigInt?
+  actualAmount              Float     @default(0) // frontend actual bill amount before let-go handling
+  actualAmountPaise         BigInt?
+  buyerPaidAmount           Float     @default(0) // amount entered/received from buyer
+  buyerPaidAmountPaise      BigInt?
+  waivedAmount              Float     @default(0) // let-go amount absorbed by shop
+  waivedAmountPaise         BigInt?
+  grossProfit               Float     @default(0)
+  grossProfitPaise          BigInt?
+  paidAmount                Float     @default(0)
+  paidAmountPaise           BigInt?
+  creditAmount              Float     @default(0) // went to udhar
+  creditAmountPaise         BigInt?
+  createdByUserId           String? // authenticated user who created the bill; nullable for legacy/offline imports
+  deviceId                  String? // client device id at bill creation, if available
+  clientBillId              String?
+  idempotencyKey            String?
+  sourceDeviceId            String?
+  cancelledAt               DateTime?
+  cancelledReason           String?
+  deletedAt                 DateTime?
+  deletedReason             String?
+  returnOfBillId            String? // set on billType "sales_return": the original sale this return reverses
+  refundMode                String? // cash | upi | bank | udhar | gift_card
+  whatsappDeliveryState     String    @default("not_sent") // not_sent | opened_share_sheet | sent_via_api | failed
+  whatsappDeliveryAt        DateTime?
+  whatsappProviderMessageId String?
+  whatsappDeliveryKey       String?   @unique
+  businessDate              DateTime  @default(now()) // when the sale happened; differs from createdAt for delayed offline sync
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   shop                 Shop                  @relation(fields: [shopId], references: [id])
   location             StoreLocation?        @relation(fields: [locationId], references: [id], onDelete: SetNull)
@@ -744,6 +753,7 @@ model BillItem {
   product        Product?                @relation(fields: [productId], references: [id])
   sellingUnit    ProductSellingUnit?     @relation(fields: [sellingUnitId], references: [id], onDelete: SetNull)
   lotAllocations BillItemLotAllocation[]
+  addons         BillItemAddon[]
 
   @@index([billId])
   @@index([originalBillItemId])
@@ -2327,25 +2337,47 @@ model Plan {
 }
 
 model Subscription {
-  id                     String    @id @default(cuid())
-  shopId                 String    @unique
-  planCode               String
-  status                 String    @default("trial") // trial | active | grace | expired | cancelled | payment_failed
-  provider               String    @default("manual") // manual | razorpay | admin
-  providerSubscriptionId String?
-  currentPeriodStart     DateTime?
-  currentPeriodEnd       DateTime?
-  trialEndsAt            DateTime?
-  graceEndsAt            DateTime?
-  cancelledAt            DateTime?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  id                      String    @id @default(cuid())
+  shopId                  String    @unique
+  planCode                String
+  status                  String    @default("trial") // trial | active | grace | expired | cancelled | payment_failed
+  provider                String    @default("manual") // manual | razorpay | admin
+  providerSubscriptionId  String?
+  currentPeriodStart      DateTime?
+  currentPeriodEnd        DateTime?
+  trialEndsAt             DateTime?
+  graceEndsAt             DateTime?
+  cancelledAt             DateTime?
+  lockedPriceMonthlyPaise Int?
+  lockedPriceYearlyPaise  Int?
+  entitledFeaturesJson    String?
+  intendedPaidPlanCode    String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   shop                Shop                 @relation(fields: [shopId], references: [id])
   paymentTransactions PaymentTransaction[]
 
   @@index([shopId, status])
   @@index([planCode])
+}
+
+model OnboardingPurchase {
+  id               String    @id @default(cuid())
+  shopId           String
+  sku              String    @default("FIRST_YEAR_ONBOARDING")
+  amountPaise      Int
+  status           String    @default("recorded")
+  includesJson     String    @default("[]")
+  recordedByUserId String?
+  deliveredAt      DateTime?
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  shop             Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, createdAt])
+  @@index([sku, status])
 }
 
 model PaymentTransaction {
@@ -2891,27 +2923,27 @@ model ActivityEvent {
 }
 
 model ActivityAggregate {
-  id     String @id @default(cuid())
+  id     String  @id @default(cuid())
   shopId String
   // The owning user, or the sentinel "*" for a shop-wide rollup (trending
   // products, shop feature adoption). A sentinel rather than NULL because both
   // SQLite and Postgres treat NULLs as distinct in a unique index, which would
   // silently let every shop-wide upsert insert a duplicate row instead of
   // incrementing the existing one.
-  userId String @default("*")
+  userId String  @default("*")
   // product_billed | product_searched | search_query | report | customer |
   // payment_method | filter | page | online_product_view | feature | task_time
   kind   String
   key    String // the thing being counted (productId, report slug, query text…)
   label  String? // display text captured at write time, so reads need no join
 
-  count Int   @default(0)
+  count           Int   @default(0)
   // Half-life decayed score. Raw counts let a product billed 500 times last year
   // outrank one billed 30 times this week; the decay keeps suggestions current.
-  score Float @default(0)
+  score           Float @default(0)
   // Summed duration, for "which tasks consume the most time" and the averages.
-  totalMs   Int @default(0)
-  durationSamples Int @default(0)
+  totalMs         Int   @default(0)
+  durationSamples Int   @default(0)
 
   metaJson    String   @default("{}")
   firstSeenAt DateTime @default(now())
@@ -2986,7 +3018,7 @@ model RentalBooking {
 }
 
 model RentalBookingItem {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   bookingId String
   // Deliberately NOT a foreign key. The line is the record of what was physically
   // handed over, so it has to survive the product being purged from the catalogue;
@@ -3081,21 +3113,21 @@ model Prescription {
 }
 
 model PrescriptionItem {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   prescriptionId String
   // Deliberately NOT a foreign key. The line is the record of what was
   // physically dispensed, so it has to survive the medicine being purged from
   // the catalogue.
-  productId String?
+  productId      String?
 
   // Copied at dispense time so renaming or deleting a product never rewrites
   // what an old register entry says went out of the door.
-  name        String
-  strength    String? // "500 mg", "5 ml"
-  dosage      String? // as written: "1-0-1 for 5 days"
-  qty         Float   @default(1)
-  unit        String  @default("strip")
-  batchNumber String? // the lot actually handed over, for a recall trace
+  name           String
+  strength       String? // "500 mg", "5 ml"
+  dosage         String? // as written: "1-0-1 for 5 days"
+  qty            Float   @default(1)
+  unit           String  @default("strip")
+  batchNumber    String? // the lot actually handed over, for a recall trace
   // Set when a generic went out against a brand written on the slip. The
   // register has to show the substitution, not hide it.
   substitutedFor String?
@@ -3138,7 +3170,7 @@ model ProductUnit {
 
   // in_stock → sold → returned. rma is "away with the service centre", and
   // lost/scrapped are terminal write-offs.
-  status String @default("in_stock")
+  status    String @default("in_stock")
   // new | open_box | refurbished. Open-box is a real shelf category here: a
   // returned handset cannot go back to the pile as new.
   condition String @default("new")
@@ -3151,13 +3183,13 @@ model ProductUnit {
 
   // Where it went. billId is not a foreign key for the same reason as above —
   // the unit's history must survive the bill being cancelled or purged.
-  billId       String?
-  billNumber   String?
-  customerId   String?
-  customerName String?
-  customerPhone String @default("")
-  soldAt       DateTime?
-  sellingPrice Float     @default(0)
+  billId        String?
+  billNumber    String?
+  customerId    String?
+  customerName  String?
+  customerPhone String    @default("")
+  soldAt        DateTime?
+  sellingPrice  Float     @default(0)
 
   // Warranty is stored as an absolute end date rather than only a duration:
   // the shop's policy can change next year, and this unit's cover cannot.
@@ -3246,13 +3278,13 @@ model PartCrossReference {
   // Set only when the alternative is something the shop actually stocks.
   alternateProductId String?
   // Always set: the number written on the box, whether or not it is stocked.
-  partNumber String
-  brand      String?
+  partNumber         String
+  brand              String?
   // oem            — the manufacturer's own number for this part
   // alternative    — a different brand that does the same job
   // supersedes     — this part replaces the referenced one
   // superseded_by  — this part has been replaced by the referenced one
-  kind String @default("alternative")
+  kind               String  @default("alternative")
 
   notes     String?
   deletedAt DateTime?
@@ -3287,13 +3319,13 @@ model FootwearSizeProfile {
   productName String
 
   // uk | us | eu | cm. India uses UK numbering, so it is not a separate system.
-  sizeSystem String @default("uk")
+  sizeSystem String  @default("uk")
   // mens | womens | kids | unisex — the conversion between systems differs by
   // last, so a UK 6 women's is not a UK 6 men's.
-  gender String @default("unisex")
+  gender     String  @default("unisex")
   // "D", "2E", "Narrow" — recorded for the shops that stock width fittings and
   // ignored by everyone else.
-  widthFit String?
+  widthFit   String?
 
   notes     String?
   deletedAt DateTime?
@@ -3329,9 +3361,9 @@ model BookList {
   // Empty rather than null on purpose: NULLs are DISTINCT in a unique index on
   // both SQLite and PostgreSQL, so a nullable column here would let the same
   // class be entered twice — the exact duplicate the index exists to stop.
-  name String @default("")
+  name         String @default("")
 
-  notes String?
+  notes    String?
   // Last year's list stays on the books for reference but should not be offered
   // at the counter, which is what this separates.
   isActive Boolean @default(true)
@@ -3361,16 +3393,16 @@ model BookListItem {
   productId String?
   name      String
 
-  qty  Float  @default(1)
-  unit String @default("piece")
+  qty        Float   @default(1)
+  unit       String  @default("piece")
   // Drawing books and the second geometry box are on many lists as optional;
   // counting them as shortfalls would make every list look unfulfillable.
   isOptional Boolean @default(false)
 
-  notes String?
+  notes     String?
   // Lists are read aloud in order — subject by subject — so the order the school
   // published them in is part of the document.
-  sortOrder Int @default(0)
+  sortOrder Int     @default(0)
 
   list BookList @relation(fields: [listId], references: [id], onDelete: Cascade)
 
@@ -3519,15 +3551,15 @@ model TesterUnit {
   productName String
   // The shade. A tester is opened per shade, not per product: "Matte Lipstick"
   // has twelve of them on the counter and they wear out at different rates.
-  variant String?
+  variant     String?
 
   // in_use → replaced (a fresh one went out) or discarded (thrown away, none
   // put back). Both are terminal; a new tester is a new row.
-  status   String   @default("in_use")
-  openedOn DateTime
+  status       String    @default("in_use")
+  openedOn     DateTime
   // How long this tester is expected to last on the counter before it is grubby,
   // dried out or empty. Per tester, because a mascara and a lipstick differ.
-  expectedDays Int      @default(90)
+  expectedDays Int       @default(90)
   closedOn     DateTime?
 
   // What the unit cost the shop. Snapshotted at opening rather than read live,
@@ -3572,7 +3604,7 @@ model TesterUnit {
 // room. The protection that matters is that a guest can only ever add to their
 // own table's order — never see a bill, a total, or another table.
 model RestaurantTable {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   shopId     String
   // Which branch's floor this table is on. Null means the shop's primary
   // location, which is every single-outlet restaurant.
@@ -3631,14 +3663,14 @@ model DishRecipeComponent {
   // Ingredient consumed per ONE portion of the dish, in the ingredient's own
   // base unit (g, ml, piece) — the same unit stock is kept in, so depletion is a
   // subtraction with no conversion to get wrong.
-  qtyBase Float @default(0)
+  qtyBase    Float   @default(0)
   // Trim, spillage and the bit left in the pan, as a percentage on top of qtyBase.
-  wastagePct Float @default(0)
+  wastagePct Float   @default(0)
   // An ingredient the dish can be served without (a garnish). Excluded from
   // "can the kitchen still make this?", so a shop that has run out of coriander
   // is not told it cannot serve dal.
-  optional Boolean @default(false)
-  note     String?
+  optional   Boolean @default(false)
+  note       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3677,7 +3709,7 @@ model KitchenTicket {
   billId    String
 
   // new | preparing | ready | served
-  status String @default("new")
+  status    String    @default("new")
   // KotLine[]: { key, name, qty, unit, note }. A fired snapshot — never queried
   // line by line, so it is one column rather than a child table.
   linesJson String    @default("[]")
@@ -3701,4 +3733,107 @@ model KitchenTicket {
   @@index([shopId, deletedAt, firedAt])
   @@index([shopId, status, firedAt])
   @@index([shopId, billId])
+}
+
+// ─────────────────────────────────────────────
+// MENU ADD-ONS — "extra cheese", "no onion", "choose your bread"
+// ─────────────────────────────────────────────
+// A group is defined ONCE per shop and attached to as many dishes as serve it.
+// Petpooja-style per-dish add-on lists mean editing the price of extra cheese in
+// forty places; here the paneer tikka and the paneer roll share one group, and a
+// price rise is one edit.
+//
+// What a group carries is the RULE, not just the list: how many options a guest
+// must pick (minSelect 1 = "choose your bread" is compulsory) and how many they
+// may (maxSelect). Those two numbers are what stop a kitchen receiving an order
+// for a burger with no bun or with four.
+model MenuAddonGroup {
+  id        String    @id @default(cuid())
+  shopId    String
+  name      String
+  // 0 = optional. 1 or more = the guest must choose that many before the line
+  // can be added, which is how a compulsory choice is expressed.
+  minSelect Int       @default(0)
+  // 0 = no ceiling. Anything else caps the picks.
+  maxSelect Int       @default(0)
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop    Shop                @relation(fields: [shopId], references: [id])
+  options MenuAddonOption[]
+  dishes  ProductAddonGroup[]
+
+  @@unique([shopId, name])
+  @@index([shopId, isActive, sortOrder])
+}
+
+model MenuAddonOption {
+  id              String  @id @default(cuid())
+  shopId          String
+  groupId         String
+  name            String
+  // May be zero, and often is: "no onion" and "less spicy" are instructions the
+  // kitchen needs and the guest is not charged for.
+  priceDelta      Float   @default(0)
+  priceDeltaPaise BigInt?
+  // The stock item this actually consumes, when it consumes one. Null means a
+  // cooking instruction rather than an ingredient, so nothing is deducted.
+  linkedProductId String?
+  linkedQtyBase   Float   @default(1)
+  sortOrder       Int     @default(0)
+  isActive        Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shop           Shop            @relation(fields: [shopId], references: [id])
+  group          MenuAddonGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  billItemAddons BillItemAddon[]
+
+  @@unique([shopId, groupId, name])
+  @@index([shopId, groupId, isActive])
+}
+
+/// Which dishes offer which group. The join is what makes a group reusable.
+model ProductAddonGroup {
+  id        String @id @default(cuid())
+  shopId    String
+  productId String
+  groupId   String
+  sortOrder Int    @default(0)
+
+  shop    Shop           @relation(fields: [shopId], references: [id])
+  product Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  group   MenuAddonGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, groupId])
+  @@index([shopId, productId])
+}
+
+/// What was actually chosen on one sold line, snapshotted.
+///
+/// Every descriptive field is copied rather than joined, for the same reason a
+/// bill item copies the product name: a receipt reprinted next year must read
+/// what was sold at the price it was sold for, not what the option is called and
+/// costs today. optionId is nullable so retiring an option never orphans a bill.
+model BillItemAddon {
+  id         String  @id @default(cuid())
+  billItemId String
+  optionId   String?
+  groupName  String
+  name       String
+  price      Float   @default(0)
+  pricePaise BigInt?
+  quantity   Float   @default(1)
+
+  createdAt DateTime @default(now())
+
+  billItem BillItem         @relation(fields: [billItemId], references: [id], onDelete: Cascade)
+  option   MenuAddonOption? @relation(fields: [optionId], references: [id], onDelete: SetNull)
+
+  @@index([billItemId])
+  @@index([optionId])
 }

@@ -1,7 +1,7 @@
 import { database as db } from "../../infrastructure/database/index.js";
 import { AppError } from "../../shared/errors/index.js";
 import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
-import { BUSINESS_PROFILES, bootstrapForShop, businessTypeFromSettings, parseShopSettings, requestedBusinessTypeFromSettings, settingsForBusinessType } from "./businessProfiles.js";
+import { BUSINESS_PROFILES, assertBusinessTypeOffered, bootstrapForShop, businessTypeFromSettings, parseShopSettings, requestedBusinessTypeFromSettings, settingsForBusinessType } from "./businessProfiles.js";
 
 export async function getShop(shopId) {
   const shop = await db.shop.findUnique({ where: { id: shopId } });
@@ -38,6 +38,7 @@ export async function updateShop(shopId, data, actor = {}) {
       throw new AppError("Only the shop owner can change business capabilities", 403, "OWNER_REQUIRED");
     }
     if (beforeType !== nextType) {
+      assertBusinessTypeOffered(nextType);
       const [productCount, billCount] = await Promise.all([
         db.product.count({ where: { shopId } }),
         db.bill.count({ where: { shopId } }),

@@ -249,6 +249,22 @@ runStep({
 runStep({ id: "migration-safety", label: "Migration safety and sequence", args: ["run", "migration:safety"] });
 runStep({ id: "release-gate", label: "Release documentation and rollback gate", args: ["run", "release:gate"] });
 runStep({
+  id: "backend-source-db",
+  label: "Prepare isolated database for source-level tests",
+  command: process.execPath,
+  args: [
+    "node_modules/prisma/build/index.js",
+    "db",
+    "push",
+    "--schema",
+    "prisma/schema.prisma",
+    "--force-reset",
+    "--accept-data-loss",
+    "--skip-generate",
+  ],
+  env: { NODE_ENV: "test", DATABASE_URL: sqliteTestUrl },
+});
+runStep({
   id: "backend-tests",
   label: "Backend source and calculation tests",
   args: ["test"],

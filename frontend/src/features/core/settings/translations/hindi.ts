@@ -5,6 +5,20 @@
 import { billingHi } from "./billing.hi";
 import { customersHi } from "./customers.hi";
 import { productsHi } from "./products.hi";
+import { restaurantHi } from "./restaurant.hi";
 import { shellHi } from "./shell.hi";
 
-export const hindiTranslations = { ...shellHi, ...billingHi, ...productsHi, ...customersHi };
+export const hindiTranslations = { ...shellHi, ...billingHi, ...productsHi, ...customersHi, ...restaurantHi };
+
+/**
+ * The same modules as EN_MODULES in i18n.tsx, keyed identically. The completeness
+ * test compares the two key-for-key, so a module added to English and forgotten here
+ * fails a test rather than shipping English strings to a Hindi counter.
+ */
+export const HI_MODULES = {
+  shell: shellHi,
+  billing: billingHi,
+  products: productsHi,
+  customers: customersHi,
+  restaurant: restaurantHi,
+} as const;

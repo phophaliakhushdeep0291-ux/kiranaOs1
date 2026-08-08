@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ApiClientError, isBrowserOnline } from "@/lib/api/http";
+import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { RECENT_CACHE_DAYS, pruneRecentRows, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { offlineDB } from "@/lib/offline/db";
 import { getQueryOptions, type QueryHookOptions } from "@/lib/api/query-options";
@@ -15,10 +15,6 @@ export type ListBillsResponse = BillListResult;
 export const getListBillsQueryKey = (params?: ListBillsParams) => ["bills", params ?? {}] as const;
 
 type ListBillsQueryKey = ReturnType<typeof getListBillsQueryKey>;
-
-function isNetworkLikeError(error: unknown) {
-  return !(error instanceof ApiClientError) || !isBrowserOnline();
-}
 
 function billCreatedAtMs(bill: Bill): number {
   const record = bill as Bill & { created_at?: unknown; billDate?: unknown; date?: unknown };
@@ -122,11 +118,11 @@ export function useListBills(
         return { ...data, bills: visibleBills, total: visibleBills.length };
       } catch (error) {
         if (liveCachedBills.length > 0) return { bills: liveCachedBills, total: liveCachedBills.length };
-        if (isNetworkLikeError(error)) {
+        if (isRecoverableNetworkError(error)) {
           const fromDB = await readBillsFromIndexedDB(params);
           if (fromDB.length > 0) { void cacheBills(fromDB); return { bills: fromDB, total: fromDB.length }; }
         }
-        if (isNetworkLikeError(error)) return { bills: liveCachedBills, total: liveCachedBills.length };
+        if (isRecoverableNetworkError(error)) return { bills: liveCachedBills, total: liveCachedBills.length };
         throw error;
       }
     },

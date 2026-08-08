@@ -22,6 +22,60 @@ export interface CartItem {
    * and the MRP the line is capped at.
    */
   batch?: SellableBatch;
+  /**
+   * "Extra cheese", "no onion" — what the guest asked for on top of the dish.
+   *
+   * Kept on the line rather than folded into `rate` so the dish's own price stays
+   * the price the MRP ceiling and the pricing engine reasoned about. The add-on
+   * money is added at the boundary where a cart line becomes a bill line.
+   */
+  addons?: SelectedAddon[];
+}
+
+/** One chosen add-on, already priced, as the cart carries it. */
+export interface SelectedAddon {
+  optionId: string;
+  groupName: string;
+  name: string;
+  /** Per unit of the dish. Two burgers with cheese are charged for two lots. */
+  price: number;
+  quantity?: number;
+}
+
+/**
+ * What the add-ons add to ONE unit of the dish.
+ *
+ * Per unit, not per line: the caller multiplies by quantity exactly once, and
+ * returning a per-line figure here is the shape that makes that easy to do twice.
+ */
+export function addonUnitPrice(addons?: SelectedAddon[]): number {
+  if (!addons?.length) return 0;
+  return addons.reduce((sum, addon) => {
+    const price = Number(addon.price ?? 0);
+    const quantity = Number(addon.quantity ?? 1);
+    if (!Number.isFinite(price) || !Number.isFinite(quantity)) return sum;
+    return sum + price * quantity;
+  }, 0);
+}
+
+/** Human-readable kitchen/receipt line, without changing the free-text note. */
+export function addonSummary(addons?: SelectedAddon[]): string {
+  if (!addons?.length) return "";
+  return addons.map((addon) => `${addon.quantity && addon.quantity > 1 ? `${addon.quantity}× ` : ""}${addon.name}`).join(", ");
+}
+
+/**
+ * A stable fingerprint of what was chosen, for the cart-line identity below.
+ *
+ * Sorted, because "cheese then jalapeño" and "jalapeño then cheese" are the same
+ * burger and must land on one line rather than two the waiter has to explain.
+ */
+export function addonFingerprint(addons?: SelectedAddon[]): string {
+  if (!addons?.length) return "plain";
+  return addons
+    .map((addon) => `${addon.optionId}x${addon.quantity ?? 1}`)
+    .sort()
+    .join(",");
 }
 
 /**
@@ -35,7 +89,12 @@ export interface CartItem {
 export function cartItemKey(item: CartItem): string {
   const unitKey = item.sellingUnit?.id ?? item.sellingUnit?.unitCode ?? item.unit ?? "default";
   const batchKey = item.batch?.id ?? "fefo";
-  return `${item.product.id}::${unitKey}::${batchKey}::${item.isCustom ? "custom" : "catalog"}`;
+  // Nor is product+pack+batch, once a dish can be ordered with extras: a burger
+  // with cheese and one without cost different amounts and are cooked
+  // differently, so merging them would bill both at one rate and send the
+  // kitchen one ticket that cannot be made.
+  const addonKey = addonFingerprint(item.addons);
+  return `${item.product.id}::${unitKey}::${batchKey}::${addonKey}::${item.isCustom ? "custom" : "catalog"}`;
 }
 
 export interface LinePricingMeta {
@@ -91,6 +150,7 @@ export interface HeldBill extends BillingDraft {
 }
 
 export interface PrintableBill {
+  billId?: string;
   billNo: string;
   createdAt: string;
   customerName: string;

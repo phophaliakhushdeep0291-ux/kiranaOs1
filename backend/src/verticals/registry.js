@@ -45,6 +45,25 @@ export const BUSINESS_PROFILES = Object.freeze(Object.fromEntries(
   BUSINESS_PROFILE_LIST.map((profile) => [profile.businessType, profile]),
 ));
 
+/**
+ * Release-surface flag. This list is only for choices presented to a user; the
+ * complete registry above remains authoritative for loading persisted shops.
+ */
+export const DORMANT_VERTICALS_ENABLED = process.env.ENABLE_DORMANT_VERTICALS === "true";
+export const OFFERED_BUSINESS_TYPES = Object.freeze(
+  DORMANT_VERTICALS_ENABLED ? [...BUSINESS_TYPES] : ["kirana", "other"],
+);
+
+export function isBusinessTypeOffered(businessType) {
+  return OFFERED_BUSINESS_TYPES.includes(businessType);
+}
+
+export function assertBusinessTypeOffered(businessType) {
+  if (!isBusinessTypeOffered(businessType)) {
+    throw new AppError("Select an available business type", 422, "BUSINESS_TYPE_NOT_OFFERED");
+  }
+}
+
 assertCompleteRegistry();
 
 function assertCompleteRegistry() {

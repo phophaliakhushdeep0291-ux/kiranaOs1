@@ -1312,23 +1312,26 @@ if (ctx.skip) {
       }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       assert.equal((await ctx.db.customer.findUnique({ where: { id: customer.id } })).name, "Counter name");
 
-      const financial = assertSuccess(await ctx.post("/api/sync/conflicts/report", {
-        client_conflict_id: "block-financial-overwrite",
-        entity_type: "payment",
-        entity_id: "payment_1",
-        reason_code: "VERSION_MISMATCH",
-        message: "Payment differs",
-        local_snapshot: { id: "payment_1", amount: 100 },
-        server_snapshot: { id: "payment_1", amount: 200 },
-      }, { token: ownerAuth.accessToken, headers: deviceHeaders })).conflict;
-      const blocked = await ctx.post("/api/sync/resolve-conflict", {
-        conflict_id: financial.id,
-        resolution: "use_local",
-        expected_version: financial.version,
-      }, { token: ownerAuth.accessToken, headers: deviceHeaders });
-      assert.equal(blocked.status, 409);
-      assert.equal(blocked.body?.code, "SYNC_CONFLICT_COMPENSATING_ENTRY_REQUIRED");
-      assert.equal((await ctx.db.syncConflict.findUnique({ where: { id: financial.id } })).status, "open");
+      for (const entityType of ["bill", "payment", "udhar", "stock_ledger", "purchase"]) {
+        const entityId = `${entityType}_1`;
+        const financial = assertSuccess(await ctx.post("/api/sync/conflicts/report", {
+          client_conflict_id: `block-${entityType}-overwrite`,
+          entity_type: entityType,
+          entity_id: entityId,
+          reason_code: "VERSION_MISMATCH",
+          message: `${entityType} differs`,
+          local_snapshot: { id: entityId, amount: 100, stock: 1 },
+          server_snapshot: { id: entityId, amount: 200, stock: 2 },
+        }, { token: ownerAuth.accessToken, headers: deviceHeaders })).conflict;
+        const blocked = await ctx.post("/api/sync/resolve-conflict", {
+          conflict_id: financial.id,
+          resolution: "use_local",
+          expected_version: financial.version,
+        }, { token: ownerAuth.accessToken, headers: deviceHeaders });
+        assert.equal(blocked.status, 409, `${entityType} history cannot be overwritten`);
+        assert.equal(blocked.body?.code, "SYNC_CONFLICT_COMPENSATING_ENTRY_REQUIRED");
+        assert.equal((await ctx.db.syncConflict.findUnique({ where: { id: financial.id } })).status, "open");
+      }
     });
 
     test("owner conflict resolution accepts whole-record snapshots as the app actually stores them", async () => {

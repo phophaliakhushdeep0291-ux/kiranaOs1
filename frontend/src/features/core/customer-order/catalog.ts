@@ -40,6 +40,15 @@ export interface CustomerMenuItem {
   hasRecipe: boolean;
   /** Deliberately coarse: "order it now or pick something else", not a count. */
   lastFew: boolean;
+  variations?: Array<{ unitCode: string; name: string; price: number; isDefault: boolean }>;
+  addonGroups?: Array<{
+    id: string;
+    name: string;
+    minSelect: number;
+    maxSelect: number;
+    required: boolean;
+    options: Array<{ id: string; name: string; price: number }>;
+  }>;
 }
 
 export interface CustomerMenuSection {
@@ -204,7 +213,12 @@ export interface SubmitOrderResult {
 export async function submitCustomerOrder(
   shopCode: string,
   details: CustomerOrderDetails,
-  items: Array<{ productId: string; qty: number }>,
+  items: Array<{
+    productId: string;
+    qty: number;
+    variationCode?: string;
+    addons?: Array<{ optionId: string; quantity?: number }>;
+  }>,
   idempotencyKey?: string,
 ): Promise<SubmitOrderResult> {
   const url = `${getApiBaseUrl()}/public/shops/${encodeURIComponent(shopCode)}/orders`;
@@ -241,7 +255,14 @@ export interface CustomerOrderStatus {
   location: Pick<CustomerStoreLocation, "id" | "name" | "address" | "city" | "phone"> | null;
   itemCount: number;
   estimatedTotal: number;
-  items: Array<{ name: string; qty: number; price: number; unit: string }>;
+  items: Array<{
+    name: string;
+    qty: number;
+    price: number;
+    unit: string;
+    variation?: { unitCode: string; name: string; price: number } | null;
+    addons?: Array<{ optionId: string; groupName: string; name: string; price: number; quantity: number }>;
+  }>;
   shopName: string;
   createdAt: string;
   updatedAt: string;

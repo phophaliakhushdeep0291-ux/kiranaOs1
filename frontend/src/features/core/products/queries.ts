@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ApiClientError, isBrowserOnline } from "@/lib/api/http";
+import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { writeInstantCache, readInstantCache } from "@/lib/offline/instant-cache";
 import { offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
@@ -19,10 +19,6 @@ export interface DeleteProductVariables { id: string; ownerPin: string; reason?:
 export const getListProductsQueryKey = (params?: ListProductsParams) => ["products", getActiveLocationId() ?? "company", params ?? {}] as const;
 
 type ListProductsQueryKey = ReturnType<typeof getListProductsQueryKey>;
-
-function isNetworkLikeError(error: unknown) {
-  return !(error instanceof ApiClientError) || !isBrowserOnline();
-}
 
 function filterCachedProducts(products: Product[], params?: ListProductsParams): Product[] {
   const q = String(params?.search ?? "").trim().toLowerCase();
@@ -132,7 +128,7 @@ export function useListProducts(
         void cacheProducts(merged);
         return merged;
       } catch (error) {
-        if (isNetworkLikeError(error)) return filterCachedProducts(localRows, params);
+        if (isRecoverableNetworkError(error)) return filterCachedProducts(localRows, params);
         throw error;
       }
     },

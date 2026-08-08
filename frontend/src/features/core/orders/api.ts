@@ -6,6 +6,9 @@ export interface CustomerOrderItem {
   unit: string;
   price: number;
   qty: number;
+  basePrice?: number;
+  variation?: { unitCode: string; name: string; price: number } | null;
+  addons?: Array<{ optionId: string; groupName: string; name: string; price: number; quantity: number }>;
 }
 
 export interface CustomerOrder {

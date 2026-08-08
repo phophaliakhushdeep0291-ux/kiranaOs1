@@ -8,7 +8,10 @@ import type {
   KitchenStock,
   MenuBoard,
   MenuDish,
+  MenuAddonGroup,
+  MenuAddonGroupInput,
   MenuDishPatch,
+  MenuDishVariation,
   RestaurantTable,
   RestaurantTableInput,
 } from "@/types/api";
@@ -109,6 +112,58 @@ export function updateDishMenu(productId: string, patch: MenuDishPatch) {
 /** How a course is reordered, and how a kitchen 86s several dishes at once. */
 export function bulkUpdateMenu(updates: Array<MenuDishPatch & { productId: string }>) {
   return apiRequest<MenuDish[]>("/restaurant/menu/bulk", { method: "PATCH", body: JSON.stringify({ updates }) });
+}
+
+/**
+ * Replace a dish's portions with exactly this list.
+ *
+ * Wholesale rather than per-portion because the editor holds the whole list: a
+ * PATCH per row would let a half-finished edit leave two portions both marked
+ * default, and billing picks exactly one.
+ */
+export function saveDishVariations(productId: string, variations: DishVariationInput[]) {
+  return apiRequest<MenuDishVariation[]>(`/restaurant/menu/${productId}/variations`, {
+    method: "PUT",
+    body: JSON.stringify({ variations }),
+  });
+}
+
+export interface DishVariationInput {
+  /** Present for a portion that already exists — that is what renames it in place. */
+  unitCode?: string;
+  name: string;
+  price: number;
+  portionFactor?: number;
+  isDefault?: boolean;
+}
+
+// Add-on groups are reusable: define "Extras" once, attach it to many dishes.
+export function listAddonGroups() {
+  return apiRequest<MenuAddonGroup[]>("/restaurant/menu/addon-groups", { background: true });
+}
+
+export function saveAddonGroup(groupId: string | null, input: MenuAddonGroupInput) {
+  return apiRequest<MenuAddonGroup>(groupId
+    ? `/restaurant/menu/addon-groups/${groupId}`
+    : "/restaurant/menu/addon-groups", {
+    method: groupId ? "PUT" : "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function removeAddonGroup(groupId: string) {
+  return apiRequest<{ id: string; deleted: boolean }>(`/restaurant/menu/addon-groups/${groupId}`, { method: "DELETE" });
+}
+
+export function listDishAddonGroups(productId: string) {
+  return apiRequest<MenuAddonGroup[]>(`/restaurant/menu/${productId}/addon-groups`, { background: true });
+}
+
+export function saveDishAddonGroups(productId: string, groupIds: string[]) {
+  return apiRequest<MenuAddonGroup[]>(`/restaurant/menu/${productId}/addon-groups`, {
+    method: "PUT",
+    body: JSON.stringify({ groupIds }),
+  });
 }
 
 // ── The recipe book ──────────────────────────────────────────────────────────

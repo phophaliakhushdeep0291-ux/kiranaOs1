@@ -18,6 +18,16 @@ export function SubscriptionStatusBanner() {
   if (loading || !snapshot) return null;
 
   const daysLeft = snapshot.isTrial ? trialDaysLeft(snapshot.trialEndsAt) : null;
+  if (snapshot.foundingCustomer && snapshot.foundingEndsAt && daysLeft !== null) {
+    return (
+      <div className="border-b bg-emerald-50 px-4 py-2 text-emerald-900">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div className="flex items-center gap-2"><Clock size={16} /><span><strong>Founding customer:</strong> {daysLeft} day{daysLeft === 1 ? "" : "s"} free remaining. Then renew on {snapshot.plan.name}; your data and billing stay available.</span></div>
+          <Link href="/subscription"><Button size="sm" variant="outline">View end date</Button></Link>
+        </div>
+      </div>
+    );
+  }
   const showTrialWarning = snapshot.isTrial && snapshot.status === "trial" && daysLeft !== null && daysLeft <= TRIAL_WARN_DAYS;
 
   if (snapshot.status === "active" && snapshot.cloudSyncAllowed && !showTrialWarning) return null;

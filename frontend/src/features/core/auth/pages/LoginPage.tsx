@@ -20,6 +20,7 @@ import { ChevronLeft, ChevronRight, Laptop, Loader2, LockKeyhole, Store } from "
 // Imported from the module, not the @/components/shared barrel: the barrel
 // re-exports ~25 components, and pulling it into an auth chunk cost ~12 kB.
 import { BrandMark } from "@/components/shared/BrandMark";
+import { LanguageToggle } from "@/features/core/settings/LanguageToggle";
 
 const schema = z.object({
   identifier: z.string().min(3, "Enter your mobile number or email"),
@@ -272,6 +273,7 @@ export default function Login() {
           </div>
           <h1 className="font-display text-3xl font-black tracking-tight text-foreground lg:mt-3">Welcome back</h1>
           <p className="mt-1 text-sm text-muted-foreground">Sign in to manage today&apos;s counter.</p>
+          <LanguageToggle />
         </div>
 
         <div className="rounded-[18px] border border-[#dce5f2] bg-white p-5 shadow-[0_12px_36px_rgba(16,35,71,0.07)]">

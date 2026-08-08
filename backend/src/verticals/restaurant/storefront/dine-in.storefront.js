@@ -1,9 +1,11 @@
 import { registerStorefrontMode } from "../../../shared/storefront-modes.js";
 import { businessTypeFromSettings } from "../../registry.js";
-import { groupMenuByCourse, parseTags, UNCATEGORISED_COURSE } from "../menu/menu.service.js";
+import { groupMenuByCourse, parseTags, PORTION_UNIT_TYPE, UNCATEGORISED_COURSE } from "../menu/menu.service.js";
+import { addonGroupsByProduct, validateSelection } from "../menu/addons.service.js";
 import { portionsPossible } from "../recipes/recipes.service.js";
 import { resolvePublicTable } from "../tables/tables.service.js";
 import db from "../../../db.js";
+import { AppError } from "../../../middleware/error.js";
 
 /**
  * What a guest sees after scanning the QR on their table.
@@ -79,7 +81,7 @@ export function guestOrderingAllowed(settings) {
   return settings?.restaurant?.dineIn?.guestOrders !== false;
 }
 
-function toMenuItem(product, { portionsLeft, hasRecipe }) {
+function toMenuItem(product, { portionsLeft, hasRecipe, addonGroups = [] }) {
   return {
     id: product.id,
     name: product.name,
@@ -101,6 +103,15 @@ function toMenuItem(product, { portionsLeft, hasRecipe }) {
     // kitchen information, and showing it invites a rush on the last two. What
     // they need is "order it now or pick something else".
     lastFew: hasRecipe && portionsLeft !== null && portionsLeft > 0 && portionsLeft <= 3,
+    variations: (product.sellingUnits ?? [])
+      .filter((unit) => unit.unitType === PORTION_UNIT_TYPE && unit.isActive !== false)
+      .map((unit) => ({
+        unitCode: unit.unitCode,
+        name: unit.name,
+        price: Number(unit.defaultPrice ?? 0),
+        isDefault: unit.isDefault === true,
+      })),
+    addonGroups,
   };
 }
 
@@ -121,9 +132,10 @@ export function dishIsOrderable(product, { components, stock }) {
 async function shapeCatalog({ shopId, shop, settings, products, request }) {
   if (!isRestaurantShop(settings)) return null;
 
-  const [components, table] = await Promise.all([
+  const [components, table, addonsByProduct] = await Promise.all([
     db.dishRecipeComponent.findMany({ where: { shopId } }),
     request?.tableCode ? resolvePublicTable(shopId, request.tableCode) : Promise.resolve(null),
+    addonGroupsByProduct(shopId),
   ]);
 
   const componentsByDish = new Map();
@@ -140,6 +152,7 @@ async function shapeCatalog({ shopId, shop, settings, products, request }) {
     items.push(toMenuItem(product, {
       hasRecipe: Boolean(dishComponents?.length),
       portionsLeft: dishComponents?.length ? portionsPossible(dishComponents, stock) : null,
+      addonGroups: addonsByProduct.get(product.id) ?? [],
     }));
   }
 
@@ -195,8 +208,82 @@ async function resolveOrderContext({ shopId, settings, body }) {
   };
 }
 
+/** Server-authoritative restaurant line pricing for public QR orders. */
+async function prepareOrderLines({ shopId, settings, rawItems, products, orderableIds }) {
+  if (!isRestaurantShop(settings)) return null;
+  const addonsByProduct = await addonGroupsByProduct(shopId);
+  const byId = new Map(products.map((product) => [product.id, product]));
+  const lines = [];
+
+  for (const raw of rawItems) {
+    const productId = String(raw?.productId ?? "");
+    const product = byId.get(productId);
+    const qty = Math.round(Math.max(0, Number(raw?.qty ?? raw?.quantity ?? 0)) * 100) / 100;
+    if (!product || qty <= 0 || (orderableIds && !orderableIds.has(productId))) continue;
+
+    const variations = (product.sellingUnits ?? []).filter(
+      (unit) => unit.unitType === PORTION_UNIT_TYPE && unit.isActive !== false,
+    );
+    const requestedVariation = String(raw?.variationCode ?? "").trim();
+    const variation = requestedVariation
+      ? variations.find((unit) => unit.unitCode === requestedVariation)
+      : variations.find((unit) => unit.isDefault) ?? null;
+    if (requestedVariation && !variation) {
+      throw new AppError(`That portion of ${product.name} is no longer available`, 409, "MENU_VARIATION_UNAVAILABLE");
+    }
+
+    const groups = addonsByProduct.get(productId) ?? [];
+    const requested = Array.isArray(raw?.addons) ? raw.addons : [];
+    const requestedById = new Map();
+    for (const row of requested) {
+      const optionId = String(row?.optionId ?? "");
+      const quantity = Math.max(1, Math.min(20, Math.trunc(Number(row?.quantity ?? 1))));
+      if (optionId) requestedById.set(optionId, (requestedById.get(optionId) ?? 0) + quantity);
+    }
+
+    const matched = new Set();
+    const addons = [];
+    for (const group of groups) {
+      const chosenIds = [];
+      for (const option of group.options ?? []) {
+        const quantity = requestedById.get(option.id) ?? 0;
+        if (quantity <= 0) continue;
+        matched.add(option.id);
+        for (let count = 0; count < quantity; count += 1) chosenIds.push(option.id);
+        addons.push({
+          optionId: option.id,
+          groupName: group.name,
+          name: option.name,
+          price: Number(option.price ?? 0),
+          quantity,
+        });
+      }
+      const valid = validateSelection(group, chosenIds);
+      if (!valid.ok) throw new AppError(valid.reason, 409, "MENU_ADDON_SELECTION_INVALID");
+    }
+    if ([...requestedById.keys()].some((id) => !matched.has(id))) {
+      throw new AppError(`An option on ${product.name} is no longer available`, 409, "MENU_ADDON_SELECTION_INVALID");
+    }
+
+    const basePrice = Number(variation?.defaultPrice ?? product.storefrontPrice ?? product.defaultPricePerRateUnit ?? 0);
+    const addonPrice = addons.reduce((sum, option) => sum + option.price * option.quantity, 0);
+    const price = Math.round((basePrice + addonPrice + Number.EPSILON) * 100) / 100;
+    lines.push({
+      productId,
+      name: variation ? `${product.name} (${variation.name})` : product.name,
+      unit: variation?.name ?? product.rateUnit ?? product.displayUnit ?? "plate",
+      price,
+      basePrice,
+      qty,
+      variation: variation ? { unitCode: variation.unitCode, name: variation.name, price: basePrice } : null,
+      addons,
+    });
+  }
+  return lines;
+}
+
 export function registerDineInStorefront() {
-  registerStorefrontMode({ id: "dine_in", shapeCatalog, resolveOrderContext });
+  registerStorefrontMode({ id: "dine_in", shapeCatalog, resolveOrderContext, prepareOrderLines });
 }
 
 // Loading this module registers the storefront. It is reached through the

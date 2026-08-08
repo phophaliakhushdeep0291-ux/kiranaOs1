@@ -7,6 +7,11 @@ export const SYNC_EVENT_TYPES = Object.freeze({
   SALE_RETURN: 'SALE_RETURN',
   CREATE_PRODUCT: 'CREATE_PRODUCT',
   UPDATE_PRODUCT: 'UPDATE_PRODUCT',
+  // Capture-on-first-scan. Deliberately its own event rather than an UPDATE_PRODUCT
+  // carrying a barcode: this one is queued by a cashier mid-queue, so it must be able
+  // to say exactly one thing, and a duplicate code has to come back as a conflict
+  // naming the owning product instead of silently losing to last-write-wins.
+  BIND_PRODUCT_BARCODE: 'BIND_PRODUCT_BARCODE',
   DELETE_PRODUCT: 'DELETE_PRODUCT',
   RESTORE_PRODUCT: 'RESTORE_PRODUCT',
   ADJUST_STOCK: 'ADJUST_STOCK',
