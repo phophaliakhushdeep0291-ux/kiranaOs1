@@ -10,7 +10,9 @@ import {
   validatePlanCode,
   deserializeFeatures,
   FIRST_YEAR_ONBOARDING_SKU,
+  getPlanConfigForBusinessType,
 } from "./planConfig.js";
+import { businessTypeFromSettings, parseShopSettings } from "../shops/businessProfiles.js";
 
 export async function seedPlans(tx = db) {
   const plans = [];
@@ -46,10 +48,10 @@ export async function seedPlans(tx = db) {
   return plans;
 }
 
-export async function listPlans() {
+export async function listPlans(businessType = "kirana") {
   await ensurePlansSeeded();
   const plans = await db.plan.findMany({ where: { isActive: true }, orderBy: { priceMonthlyPaise: "asc" } });
-  return plans.map(serializePlan);
+  return plans.map((plan) => serializePlan(planForBusinessType(plan, businessType)));
 }
 
 export async function ensurePlansSeeded(client = db) {
@@ -76,7 +78,10 @@ export async function ensurePlansSeeded(client = db) {
 export async function getCurrentSubscription(shopId, client = db) {
   await ensurePlansSeeded(client);
   const subscription = await client.subscription.findUnique({ where: { shopId } });
-  if (!subscription) return fallbackSubscription(shopId);
+  if (!subscription) {
+    const businessType = await getShopBusinessType(shopId, client);
+    return fallbackSubscription(shopId, getPlanConfigForBusinessType("starter", businessType));
+  }
   const normalized = normalizeSubscriptionDates(subscription);
   const plan = await getPlanByCode(normalized.planCode, client);
   const entitledPlan = subscriptionPlanSnapshot(plan, normalized);
@@ -109,7 +114,7 @@ export async function getEffectivePlan(shopId, client = db) {
 export async function activateManualSubscription(shopId, planCode, period = "monthly", options = {}) {
   if (!validatePlanCode(planCode)) throw new AppError("Invalid plan code", 400);
   await ensurePlansSeeded();
-  const plan = await getPlanByCode(planCode);
+  const plan = await getBillablePlan(shopId, planCode);
   const now = options.paidAt ? new Date(options.paidAt) : new Date();
   const currentPeriodEnd = addPeriod(now, period);
   const amountPaise = options.amountPaise ?? (period === "yearly" ? plan.priceYearlyPaise : plan.priceMonthlyPaise);
@@ -188,6 +193,7 @@ export async function activateSubscriptionAfterPayment({
 
   const now = new Date();
   const current = await tx.subscription.findUnique({ where: { shopId } });
+  const paidPlan = await getBillablePlan(shopId, planCode, tx);
   const currentActive = isSubscriptionActive(current);
   const samePlan = current?.planCode === planCode;
   const startsAt = currentActive && samePlan && current.currentPeriodEnd && current.currentPeriodEnd > now
@@ -208,9 +214,9 @@ export async function activateSubscriptionAfterPayment({
       trialEndsAt: null,
       graceEndsAt: addDays(endsAt, DEFAULT_GRACE_DAYS),
       cancelledAt: null,
-      lockedPriceMonthlyPaise: current?.planCode === planCode && current?.lockedPriceMonthlyPaise != null ? current.lockedPriceMonthlyPaise : (await getPlanByCode(planCode, tx)).priceMonthlyPaise,
-      lockedPriceYearlyPaise: current?.planCode === planCode && current?.lockedPriceYearlyPaise != null ? current.lockedPriceYearlyPaise : (await getPlanByCode(planCode, tx)).priceYearlyPaise,
-      entitledFeaturesJson: current?.planCode === planCode && current?.entitledFeaturesJson ? current.entitledFeaturesJson : (await getPlanByCode(planCode, tx)).featuresJson,
+      lockedPriceMonthlyPaise: paidPlan.priceMonthlyPaise,
+      lockedPriceYearlyPaise: paidPlan.priceYearlyPaise,
+      entitledFeaturesJson: paidPlan.featuresJson,
       intendedPaidPlanCode: planCode,
     },
     create: {
@@ -222,9 +228,9 @@ export async function activateSubscriptionAfterPayment({
       currentPeriodStart: startsAt,
       currentPeriodEnd: endsAt,
       graceEndsAt: addDays(endsAt, DEFAULT_GRACE_DAYS),
-      lockedPriceMonthlyPaise: (await getPlanByCode(planCode, tx)).priceMonthlyPaise,
-      lockedPriceYearlyPaise: (await getPlanByCode(planCode, tx)).priceYearlyPaise,
-      entitledFeaturesJson: (await getPlanByCode(planCode, tx)).featuresJson,
+      lockedPriceMonthlyPaise: paidPlan.priceMonthlyPaise,
+      lockedPriceYearlyPaise: paidPlan.priceYearlyPaise,
+      entitledFeaturesJson: paidPlan.featuresJson,
       intendedPaidPlanCode: planCode,
     },
   });
@@ -296,7 +302,7 @@ export async function reconcileSubscriptionAfterRefund({
 export async function changePlan(shopId, planCode) {
   if (!validatePlanCode(planCode)) throw new AppError("Invalid plan code", 400);
   await ensurePlansSeeded();
-  const nextPlan = await getPlanByCode(planCode);
+  const nextPlan = await getBillablePlan(shopId, planCode);
   const now = new Date();
   const current = await db.subscription.findUnique({ where: { shopId } });
   if (!current) {
@@ -332,7 +338,7 @@ export async function grantFoundingCustomer(shopId, intendedPaidPlanCode = "star
   const now = options.startsAt ? new Date(options.startsAt) : new Date();
   const trialEndsAt = options.endsAt ? new Date(options.endsAt) : addDays(now, 365);
   if (!(trialEndsAt > now)) throw new AppError("Founding-customer end date must be in the future", 400);
-  const plan = await getPlanByCode(intendedPaidPlanCode);
+  const plan = await getBillablePlan(shopId, intendedPaidPlanCode);
   return db.subscription.upsert({
     where: { shopId },
     update: {
@@ -370,7 +376,9 @@ export async function listOnboardingPurchases(shopId) {
 export async function getBillablePlan(shopId, planCode, client = db) {
   const plan = await getPlanByCode(planCode, client);
   const current = await client.subscription.findUnique({ where: { shopId } });
-  return current?.planCode === planCode ? subscriptionPlanSnapshot(plan, current) : plan;
+  if (current?.planCode === planCode) return subscriptionPlanSnapshot(plan, current);
+  const businessType = await getShopBusinessType(shopId, client);
+  return planForBusinessType(plan, businessType);
 }
 
 export async function cancelSubscription(shopId) {
@@ -453,7 +461,7 @@ export async function getPlanByCode(planCode, client = db) {
   };
 }
 
-function fallbackSubscription(shopId) {
+function fallbackSubscription(shopId, starterPlan = getPlanConfig("starter")) {
   const now = new Date();
   const trialEndsAt = addDays(now, DEFAULT_TRIAL_DAYS);
   return {
@@ -472,7 +480,7 @@ function fallbackSubscription(shopId) {
     updatedAt: now,
     active: true,
     source: "fallback/trial",
-    plan: serializePlan(getPlanConfig("starter")),
+    plan: serializePlan(starterPlan),
     warning: "No persisted subscription found; using starter trial fallback.",
   };
 }
@@ -508,6 +516,17 @@ function subscriptionPlanSnapshot(plan, subscription) {
     priceYearlyPaise: subscription.lockedPriceYearlyPaise ?? plan.priceYearlyPaise,
     featuresJson: subscription.entitledFeaturesJson ?? plan.featuresJson,
   };
+}
+
+function planForBusinessType(plan, businessType) {
+  if (!plan || plan.code === "standard") return plan;
+  const pricing = getPlanConfigForBusinessType(plan.code, businessType);
+  return { ...plan, priceMonthlyPaise: pricing.priceMonthlyPaise, priceYearlyPaise: pricing.priceYearlyPaise };
+}
+
+async function getShopBusinessType(shopId, client = db) {
+  const shop = await client.shop.findUnique({ where: { id: shopId }, select: { settingsJson: true } });
+  return businessTypeFromSettings(parseShopSettings(shop?.settingsJson));
 }
 
 function warningForSubscription(subscription) {

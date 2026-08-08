@@ -57,7 +57,7 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
   }
   assertRazorpayConfigured();
   await ensurePlansSeeded();
-  const plan = await getPlanByCode(planCode);
+  const plan = await getBillablePlan(shopId, planCode);
   if (!plan?.isActive) {
     const err = new AppError("Plan is not active", 400);
     err.code = "PLAN_NOT_ACTIVE";
@@ -184,9 +184,9 @@ export function applySubscriptionCoupon({ couponCode, planCode, billingCycle, ba
   return { couponCode: normalizedCode, discountPaise, finalAmountPaise: baseAmountPaise - discountPaise };
 }
 
-export async function validateSubscriptionCoupon({ couponCode, planCode, billingCycle }) {
+export async function validateSubscriptionCoupon({ couponCode, planCode, billingCycle, shopId = null }) {
   await ensurePlansSeeded();
-  const plan = await getBillablePlan(shopId, planCode);
+  const plan = shopId ? await getBillablePlan(shopId, planCode) : await getPlanByCode(planCode);
   if (!plan?.isActive) {
     const err = new AppError("Plan is not active", 400);
     err.code = "PLAN_NOT_ACTIVE";

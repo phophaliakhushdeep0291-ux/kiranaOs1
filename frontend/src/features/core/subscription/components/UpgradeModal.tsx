@@ -11,7 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { PLAN_DEFINITIONS, type BillingCycle, type PlanCode } from "@/features/core/subscription/plans";
+import { getPlanForBusinessType, type BillingCycle, type PlanCode } from "@/features/core/subscription/plans";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { subscriptionRefreshLocalFirst } from "@/features/core/subscription/local-actions";
 import {
   writeSubscriptionRequest,
@@ -179,7 +180,8 @@ export function UpgradeModal({
   const [appliedCoupon, setAppliedCoupon] = useState<CouponValidationDto | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>(billingCycle);
-  const target = PLAN_DEFINITIONS[targetPlanCode ?? "growth"];
+  const businessType = useBusinessTypeKey();
+  const target = getPlanForBusinessType(targetPlanCode ?? "growth", businessType);
 
   useEffect(() => {
     setSelectedCycle(billingCycle);

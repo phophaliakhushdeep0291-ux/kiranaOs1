@@ -44,6 +44,31 @@ if (ctx.skip) {
       assert.equal(paymentCount, 1);
     });
 
+    test("returns market-banded prices for every shop type", async () => {
+      const expected = {
+        kirana: [24900, 59900, 99900], stationery: [24900, 59900, 99900], other: [24900, 59900, 99900],
+        clothing: [34900, 69900, 109900], footwear: [34900, 69900, 109900], cosmetics: [34900, 69900, 109900],
+        auto_parts: [39900, 79900, 119900], electronics: [39900, 79900, 119900], furniture: [39900, 79900, 119900],
+        pharmacy: [49900, 89900, 129900], restaurant: [59900, 99900, 149900],
+      };
+      for (const [businessType, monthlyPrices] of Object.entries(expected)) {
+        const plans = assertSuccess(await ctx.get(`/api/plans?businessType=${businessType}`));
+        assert.deepEqual(plans.map((plan) => plan.priceMonthlyPaise), monthlyPrices, businessType);
+      }
+    });
+
+    test("snapshots the shop-type price when a new pharmacy subscription is activated", async () => {
+      const { tenant, ownerAuth } = await ownerCtx({ planCode: null });
+      await ctx.db.shop.update({ where: { id: tenant.shop.id }, data: { settingsJson: JSON.stringify({
+        storeProfile: { businessTypeKey: "pharmacy" }, businessProfile: { businessType: "pharmacy" },
+      }) }});
+      const activated = assertSuccess(await ctx.post("/api/subscription/manual-activate", {
+        planCode: "starter", period: "yearly",
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(activated.subscription.lockedPriceMonthlyPaise, 49900);
+      assert.equal(activated.subscription.lockedPriceYearlyPaise, 499900);
+    });
+
     test("grandfathers an existing subscription's original price and feature set", async () => {
       const { tenant, ownerAuth } = await ownerCtx({ planCode: "starter" });
       const oldFeatures = ["basic_billing", "csv_import_export", "legacy_shop_feature"];
