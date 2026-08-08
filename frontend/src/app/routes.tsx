@@ -34,6 +34,7 @@ const NewReturnPage = lazy(() => import("@/features/core/returns/pages/NewReturn
 const Products = lazy(() => import("@/features/core/products/pages/ProductsPage"));
 const ProductPricing = lazy(() => import("@/features/core/pricing/pages/ProductPricingPage"));
 const Customers = lazy(() => import("@/features/core/customers/pages/CustomersPage"));
+const Udhar = lazy(() => import("@/features/core/udhar/pages/UdharPage"));
 const CustomerDetailPage = lazy(() => import("@/features/core/customers/pages/CustomerDetailPage"));
 const Inventory = lazy(() => import("@/features/core/inventory/pages/InventoryPage"));
 const StockIn = lazy(() => import("@/features/core/inventory/pages/StockInPage"));
@@ -386,7 +387,7 @@ export function AppRoutes() {
           is redirected in one place rather than rewritten at each call site —
           the server can still send "/udhar" at any time. */}
       <Route path="/udhar">
-        <Redirect to="/customers?filter=udhar" />
+        <ProtectedRoute component={Udhar} />
       </Route>
       <Route path="/inventory/stock-in">
         <ProtectedRoute component={StockIn} />

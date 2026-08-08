@@ -59,6 +59,7 @@ model Shop {
   financialLedger             FinancialLedger[]
   billCounter                 BillCounter?
   subscriptions               Subscription[]
+  onboardingPurchases        OnboardingPurchase[]
   paymentTransactions         PaymentTransaction[]
   devices                     Device[]
   deviceLicenses              DeviceLicense[]
@@ -2312,6 +2313,10 @@ model Subscription {
   trialEndsAt            DateTime?
   graceEndsAt            DateTime?
   cancelledAt            DateTime?
+  lockedPriceMonthlyPaise Int?
+  lockedPriceYearlyPaise  Int?
+  entitledFeaturesJson    String?
+  intendedPaidPlanCode    String?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -2320,6 +2325,24 @@ model Subscription {
 
   @@index([shopId, status])
   @@index([planCode])
+}
+
+model OnboardingPurchase {
+  id               String   @id @default(cuid())
+  shopId           String
+  sku              String   @default("FIRST_YEAR_ONBOARDING")
+  amountPaise      Int
+  status           String   @default("recorded")
+  includesJson     String   @default("[]")
+  recordedByUserId String?
+  deliveredAt      DateTime?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  shop             Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, createdAt])
+  @@index([sku, status])
 }
 
 model PaymentTransaction {

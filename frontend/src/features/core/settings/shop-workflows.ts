@@ -109,7 +109,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
       { label: "Part-number catalogue", detail: "Store maker, part number, and fitment notes", href: "/products?add=1", icon: "products" },
       { label: "Supplier purchasing", detail: "Receive parts and update weighted cost", href: "/purchase-bills", icon: "purchase" },
       { label: "Godown stock count", detail: "Reconcile bins, shelves, and fasteners", href: "/inventory/stock-counts", icon: "inventory" },
-      { label: "Party khata", detail: "Track workshop and mechanic balances", href: "/customers?filter=udhar", icon: "payment" },
+      { label: "Party khata", detail: "Track workshop and mechanic balances", href: "/udhar", icon: "payment" },
     ],
     productEntry: {
       helper: "Put the manufacturer part number in SKU and vehicle or machine compatibility in notes for faster lookup.",
@@ -157,7 +157,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
       { label: "Batch and expiry", detail: "Review expiry, quarantine, and recall", href: "/inventory/batches", icon: "inventory" },
       { label: "Receive medicines", detail: "Capture purchase and lot details", href: "/purchase-bills", icon: "purchase" },
       { label: "Low-stock medicines", detail: "Prevent missed prescriptions", href: "/inventory", icon: "products" },
-      { label: "Patient accounts", detail: "Collect and review pending balances", href: "/customers?filter=udhar", icon: "payment" },
+      { label: "Patient accounts", detail: "Collect and review pending balances", href: "/udhar", icon: "payment" },
     ],
     productEntry: {
       helper: "Enable batch and expiry for medicines that require lot control; checkout will consume saleable stock by earliest expiry.",
@@ -205,7 +205,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
       { label: "Showroom catalogue", detail: "Add dimensions, material, and images", href: "/products?add=1", icon: "products" },
       { label: "Create estimate", detail: "Quote before confirming the sale", href: "/billing?billType=estimate", icon: "billing" },
       { label: "Customer orders", detail: "Review placed orders and fulfilment", href: "/orders-received", icon: "reports" },
-      { label: "Collect balance", detail: "Track advances and pending dues", href: "/customers?filter=udhar", icon: "payment" },
+      { label: "Collect balance", detail: "Track advances and pending dues", href: "/udhar", icon: "payment" },
     ],
     productEntry: {
       helper: "Add a clear image and dimensions in notes so staff can quote the correct model without measuring again.",

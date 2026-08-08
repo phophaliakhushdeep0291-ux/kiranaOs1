@@ -19,6 +19,7 @@ import {
   reconcileSubscriptionAfterRefund,
   ensurePlansSeeded,
   getPlanByCode,
+  getBillablePlan,
 } from "../subscription/subscription.service.js";
 import { confirmRetailIntentFromWebhook } from "./retailPayment.service.js";
 
@@ -185,7 +186,7 @@ export function applySubscriptionCoupon({ couponCode, planCode, billingCycle, ba
 
 export async function validateSubscriptionCoupon({ couponCode, planCode, billingCycle }) {
   await ensurePlansSeeded();
-  const plan = await getPlanByCode(planCode);
+  const plan = await getBillablePlan(shopId, planCode);
   if (!plan?.isActive) {
     const err = new AppError("Plan is not active", 400);
     err.code = "PLAN_NOT_ACTIVE";

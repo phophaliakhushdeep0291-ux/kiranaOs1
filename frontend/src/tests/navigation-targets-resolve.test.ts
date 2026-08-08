@@ -63,6 +63,6 @@ describe("every navigation target resolves to a registered route", () => {
 
   it("keeps the /udhar alias pointing at the customer credit view", () => {
     expect(isRegistered("/udhar")).toBe(true);
-    expect(routesSource).toContain('<Redirect to="/customers?filter=udhar" />');
+    expect(routesSource).toContain('<ProtectedRoute component={Udhar} />');
   });
 });
