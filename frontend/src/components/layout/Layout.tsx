@@ -875,12 +875,16 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
 }
 
 function BackendUnreachableBanner({ apiBaseUrl }: { apiBaseUrl: string }) {
-  const isLocalhost = apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1");
+  // A localhost URL is actionable developer information, but it is misleading
+  // in an installed production/PWA build: the cashier only needs to know that
+  // cloud backup is paused and local billing remains safe.
+  const showLocalhostDiagnostic = import.meta.env.DEV
+    && (apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1"));
   return (
     <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
       <WifiOff size={15} className="shrink-0 text-amber-600" aria-hidden="true" />
       <span className="flex-1 leading-tight">
-        {isLocalhost ? "Backend URL points to localhost. Make sure the backend server is running on this machine. " : "Cloud backup is paused because the backend is not reachable. Local billing still works. "}
+        {showLocalhostDiagnostic ? "Backend URL points to localhost. Make sure the backend server is running on this machine. " : "Cloud backup is paused because the backend is not reachable. Local billing still works. "}
         <Link href="/sync-status" className="font-semibold underline underline-offset-2">Open Sync Status -&gt;</Link>
       </span>
     </div>

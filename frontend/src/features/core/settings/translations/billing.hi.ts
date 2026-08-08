@@ -236,7 +236,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.search.knowledgeLooking": "साझा कैटलॉग में सामान खोज रहे हैं…",
   "billing.search.knowledgeLoading": "नाम, पैक और फोटो खोज रहे हैं…",
   "billing.search.knowledgeFound": "{name} मिल गया",
-  "billing.search.knowledgeFoundDetail": "{detail} · {source}",
+  "billing.search.knowledgeFoundDetail": "जानकारी: {detail} · स्रोत: {source}",
   "billing.search.bindSearchPlaceholder": "नाम से चीज़ खोजें…",
   "billing.search.bindNoMatch": "कोई चीज़ नहीं मिली। इसे नए स्टॉक के रूप में बनाएं।",
   "billing.search.bindHasCode": "इस पर पहले से कोड {code} है",

@@ -304,13 +304,30 @@
     {
       "id": "channel_order_settlement",
       "domain": "omnichannel_loyalty",
-      "weight": 30,
-      "status": "absent",
+      "weight": 20,
+      "status": "verified",
       "proofKind": "code_controlled",
-      "summary": "Marketplace order ingestion and order-level payout reconciliation are not yet implemented.",
+      "summary": "Provider-neutral CSV settlement import, exact payout math, order suggestions, variance diagnosis, outlet rollups and owner-audited match/ignore/reverse decisions are implemented without automatic ledger posting.",
       "competitorEvidence": [
         { "product": "Petpooja", "url": "https://www.petpooja.com/poss/online-order-reconciliation", "claim": "Order ID matching, status/amount variance, missing-order detection and outlet rollups are benchmark capabilities." },
         { "product": "ONDC", "url": "https://resources.ondc.org/reconsiliationandsettlementframework", "claim": "Standardized end-to-end reconciliation and settlement is the network benchmark." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/finance/channel-settlement.service.js", "backend/src/modules/finance/accounting.routes.js", "frontend/src/features/core/reports/pages/ChannelSettlementsPage.tsx"],
+        "testCommands": ["cd backend && npm run test:channel-settlement", "cd backend && npm run test:integration", "cd frontend && npm test"]
+      },
+      "lastVerifiedAt": "2026-08-08"
+    },
+    {
+      "id": "native_channel_order_ingestion",
+      "domain": "omnichannel_loyalty",
+      "weight": 10,
+      "status": "absent",
+      "proofKind": "external_runtime",
+      "summary": "Credentialed native marketplace or ONDC order ingestion is not implemented; the verified workflow imports provider-neutral settlement CSV files and must not be described as a live channel connector.",
+      "competitorEvidence": [
+        { "product": "Petpooja", "url": "https://www.petpooja.com/poss/online-order-reconciliation", "claim": "Marketplace order consolidation and reconciliation are benchmark omnichannel capabilities." },
+        { "product": "ONDC", "url": "https://resources.ondc.org/reconsiliationandsettlementframework", "claim": "Network-native order, reconciliation and settlement flows are the open-network benchmark." }
       ],
       "kiranaEvidence": { "sourcePaths": [], "testCommands": [] },
       "lastVerifiedAt": "2026-08-08"
@@ -439,7 +456,7 @@
     { "domain": "gst_compliance", "maxScore": 8, "requiresVerifiedClaims": ["gst_legal_submission"], "reason": "No legal-submission parity claim without credentialed GSP proof." },
     { "domain": "multi_store", "maxScore": 8.5, "requiresVerifiedClaims": ["warehouse_repackaging"], "reason": "Full multi-store parity requires warehouse and replenishment workflows." },
     { "domain": "hardware_payments", "maxScore": 6, "requiresVerifiedClaims": ["local_print_bridge", "razorpay_adapter", "integrated_terminals_dynamic_qr", "store_peripherals"], "reason": "Adapter code is not equivalent to certified physical/provider integration." },
-    { "domain": "omnichannel_loyalty", "maxScore": 7, "requiresVerifiedClaims": ["channel_order_settlement"], "reason": "Omnichannel parity requires native channel order and payout reconciliation." },
+    { "domain": "omnichannel_loyalty", "maxScore": 7, "requiresVerifiedClaims": ["channel_order_settlement", "native_channel_order_ingestion"], "reason": "Omnichannel parity requires both payout reconciliation and credentialed native channel-order ingestion." },
     { "domain": "production_maturity", "maxScore": 6.5, "requiresVerifiedClaims": ["postgres_redis_proof", "live_cloud_proof", "dr_container_release_proof"], "reason": "Local tests cannot prove deployed production maturity." },
     { "domain": "ux_accessibility", "maxScore": 7.5, "requiresVerifiedClaims": ["live_ui_matrix", "formal_accessibility_audit"], "reason": "Automated component tests cannot certify end-to-end UX or accessibility alone." }
   ]

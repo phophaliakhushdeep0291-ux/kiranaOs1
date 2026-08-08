@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Database,
+  Download,
   FileClock,
   RefreshCcw,
   RotateCcw,
@@ -12,6 +13,8 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -27,6 +30,14 @@ import {
 } from "@/features/core/recovery/health";
 import { retryFailedSyncOperations, runSyncCycle } from "@/features/core/sync";
 import { OfflineConfidenceMeter } from "@/features/core/innovation/components/OfflineConfidenceMeter";
+import {
+  createEncryptedLocalBackup,
+  LOCAL_BACKUP_CONFIRMATION,
+  previewEncryptedLocalBackup,
+  restoreEncryptedLocalBackup,
+  saveEncryptedLocalBackup,
+  type LocalBackupPreview,
+} from "@/features/core/recovery/local-backup";
 
 const BILLING_DRAFT_KEY = "kirana-os:billing-draft:v1";
 
@@ -120,6 +131,13 @@ export default function RecoveryModePage() {
   const { toast } = useToast();
   const [snapshot, setSnapshot] = useState<RecoverySnapshot>(initialSnapshot);
   const [busy, setBusy] = useState(false);
+  const [backupBusy, setBackupBusy] = useState<"export" | "preview" | "restore" | null>(null);
+  const [exportPassphrase, setExportPassphrase] = useState("");
+  const [restorePassphrase, setRestorePassphrase] = useState("");
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restorePreview, setRestorePreview] = useState<LocalBackupPreview | null>(null);
+  const [restoreConfirmation, setRestoreConfirmation] = useState("");
+  const [replaceExisting, setReplaceExisting] = useState(false);
 
   const refresh = useCallback(() => {
     void readRecoverySnapshot().then(setSnapshot);
@@ -158,13 +176,62 @@ export default function RecoveryModePage() {
     }
   };
 
+  const exportLocalBackup = async () => {
+    setBackupBusy("export");
+    try {
+      const backup = await createEncryptedLocalBackup(exportPassphrase);
+      saveEncryptedLocalBackup(backup.blob, backup.createdAt);
+      toast({
+        title: "Encrypted local backup saved",
+        description: `${backup.rowCount.toLocaleString("en-IN")} local rows, including the pending sync queue, were exported. Keep the passphrase separately.`,
+      });
+    } catch (error) {
+      toast({ title: "Local backup failed", description: error instanceof Error ? error.message : "Could not create the local backup.", variant: "destructive" });
+    } finally {
+      setBackupBusy(null);
+    }
+  };
+
+  const inspectLocalBackup = async () => {
+    if (!restoreFile) return;
+    setBackupBusy("preview");
+    setRestorePreview(null);
+    try {
+      setRestorePreview(await previewEncryptedLocalBackup(restoreFile, restorePassphrase));
+    } catch (error) {
+      toast({ title: "Backup preview failed", description: error instanceof Error ? error.message : "Could not read the local backup.", variant: "destructive" });
+    } finally {
+      setBackupBusy(null);
+    }
+  };
+
+  const restoreLocalBackup = async () => {
+    if (!restoreFile || !restorePreview) return;
+    setBackupBusy("restore");
+    try {
+      const result = await restoreEncryptedLocalBackup(restoreFile, restorePassphrase, {
+        confirmation: restoreConfirmation,
+        replaceExisting,
+      });
+      toast({
+        title: "Local backup restored",
+        description: `${result.restoredRows.toLocaleString("en-IN")} rows restored atomically. Reloading the app now.`,
+      });
+      window.setTimeout(() => window.location.reload(), 800);
+    } catch (error) {
+      toast({ title: "Local restore stopped safely", description: error instanceof Error ? error.message : "Could not restore the local backup.", variant: "destructive" });
+      setBackupBusy(null);
+    }
+  };
+
   return (
     <div className="w-full max-w-none space-y-6 p-4 sm:p-6">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Recovery mode</h1>
           <p className="mt-2 text-muted-foreground">
             Safe tools for unsaved bills, local database health, pending sync
-            recovery, and encrypted portable backups. Nothing here hard-deletes financial data.
+            recovery, and encrypted portable backups. A restore only replaces
+            local rows after a decrypted preview and explicit confirmation.
           </p>
         </div>
 
@@ -231,17 +298,81 @@ export default function RecoveryModePage() {
           </RecoveryActionCard>
 
           <RecoveryActionCard
-            title="Encrypted portable backups"
-            description="Create and download server-backed, encrypted shop snapshots."
+            title="Encrypted local emergency backup"
+            description="Export or restore this shop's IndexedDB and pending sync queue without internet."
             icon={Database}
-            status="Server-backed"
+            status="Works offline"
           >
-            <p className="mb-3 text-sm text-muted-foreground">
-              View real backup history, create a transactionally consistent
-              encrypted artifact, and download it with owner approval. Restore
-              drills remain an operator-run production procedure.
-            </p>
-            <Link href="/settings/sync"><Button variant="outline">Open backup history</Button></Link>
+            <div className="space-y-4">
+              <div className="rounded-xl border bg-muted/30 p-3">
+                <Label htmlFor="local-backup-passphrase">New backup passphrase</Label>
+                <Input
+                  id="local-backup-passphrase"
+                  className="mt-1"
+                  type="password"
+                  autoComplete="new-password"
+                  value={exportPassphrase}
+                  onChange={(event) => setExportPassphrase(event.target.value)}
+                  placeholder="At least 10 characters"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">The passphrase is never stored or sent anywhere. Without it, the file cannot be opened.</p>
+                <Button className="mt-3" onClick={() => void exportLocalBackup()} disabled={backupBusy !== null}>
+                  <Download className="h-4 w-4" /> {backupBusy === "export" ? "Encrypting…" : "Export local backup"}
+                </Button>
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/60 dark:bg-amber-950/20">
+                <div>
+                  <Label htmlFor="local-backup-file">Restore a .kalb file</Label>
+                  <Input
+                    id="local-backup-file"
+                    className="mt-1"
+                    type="file"
+                    accept=".kalb,application/vnd.artha.local-backup+json"
+                    onChange={(event) => {
+                      setRestoreFile(event.target.files?.[0] ?? null);
+                      setRestorePreview(null);
+                      setRestoreConfirmation("");
+                      setReplaceExisting(false);
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="local-restore-passphrase">Backup passphrase</Label>
+                  <Input id="local-restore-passphrase" className="mt-1" type="password" value={restorePassphrase} onChange={(event) => setRestorePassphrase(event.target.value)} />
+                </div>
+                <Button variant="outline" onClick={() => void inspectLocalBackup()} disabled={!restoreFile || backupBusy !== null}>
+                  {backupBusy === "preview" ? "Checking…" : "Decrypt and preview"}
+                </Button>
+
+                {restorePreview && (
+                  <div className="space-y-3 rounded-lg border bg-background p-3 text-xs">
+                    <p className="font-bold">Created {new Date(restorePreview.createdAt).toLocaleString("en-IN")}</p>
+                    <p>{restorePreview.totalRows.toLocaleString("en-IN")} rows across {Object.keys(restorePreview.tableCounts).length} tables · {restorePreview.pendingSyncCount.toLocaleString("en-IN")} pending/failed sync operations.</p>
+                    {restorePreview.requiresReplace && <p className="font-semibold text-amber-800 dark:text-amber-200">This device already has {restorePreview.existingLocalRows.toLocaleString("en-IN")} local rows. Replacement is atomic, but current local rows will be replaced by this reviewed file.</p>}
+                    {restorePreview.requiresReplace && (
+                      <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2">
+                        <input type="checkbox" className="h-5 w-5" checked={replaceExisting} onChange={(event) => setReplaceExisting(event.target.checked)} />
+                        <span>I reviewed the preview and want to replace this shop's current local rows.</span>
+                      </label>
+                    )}
+                    <div>
+                      <Label htmlFor="local-restore-confirmation">Type {LOCAL_BACKUP_CONFIRMATION}</Label>
+                      <Input id="local-restore-confirmation" className="mt-1 font-mono" value={restoreConfirmation} onChange={(event) => setRestoreConfirmation(event.target.value)} />
+                    </div>
+                    <Button
+                      variant="destructive"
+                      onClick={() => void restoreLocalBackup()}
+                      disabled={backupBusy !== null || (restorePreview.requiresReplace && !replaceExisting) || restoreConfirmation.trim().toUpperCase() !== LOCAL_BACKUP_CONFIRMATION}
+                    >
+                      {backupBusy === "restore" ? "Restoring atomically…" : "Restore reviewed local backup"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <Link href="/settings/sync"><Button variant="outline">Cloud backup history (internet required)</Button></Link>
+            </div>
           </RecoveryActionCard>
 
           <RecoveryActionCard

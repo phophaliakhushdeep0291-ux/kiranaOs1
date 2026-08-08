@@ -50,6 +50,7 @@ function stampServiceWorkerBuild() {
         "src/features/core/purchases/pages/PurchaseBillsPage.tsx",
         "src/features/core/reports/pages/ReportsPage.tsx",
         "src/features/core/sync/pages/SyncStatusPage.tsx",
+        "src/features/core/recovery/pages/RecoveryModePage.tsx",
       ];
       const coreAssets = new Set<string>();
       const visited = new Set<string>();

@@ -6,6 +6,7 @@ import path from "node:path";
 const FRONTEND_URL = process.env.QA_OFFLINE_FRONTEND_URL || "http://localhost:51977";
 const FRONTEND_ORIGIN = new URL(FRONTEND_URL).origin;
 const API_URL = process.env.QA_API_URL || "http://127.0.0.1:3000/api";
+const API_HEALTH_URL = `${API_URL.replace(/\/api$/, "")}/health`;
 const CHROME_PATH = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const DEBUG_PORT = Number(process.env.QA_OFFLINE_DEBUG_PORT || 9484);
 const OUTPUT_DIR = path.resolve(process.env.QA_OFFLINE_OUTPUT_DIR || "qa-artifacts/offline-core-restart");
@@ -23,6 +24,7 @@ const ROUTES = [
   ["OQA-RPT-01", "/reports"],
   ["OQA-SET-01", "/settings"],
   ["OQA-SYNC-01", "/sync-status"],
+  ["OQA-REC-01", "/recovery-mode"],
 ];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const assert = (value, message) => { if (!value) throw new Error(message); };
@@ -211,25 +213,36 @@ async function setOffline(client) {
 }
 
 async function auditOfflineRoute(client, qaId, route) {
+  const startedAt = Date.now();
   await client.send("Page.navigate", { url: `${FRONTEND_URL}${route}` });
   await waitForPage(client, `document.readyState === "complete" && location.pathname === ${JSON.stringify(route)}`, 60_000);
   await waitForPage(client, `document.body && document.body.innerText.trim().length > 30`, 60_000);
-  await sleep(1_200);
-  const metrics = await client.evaluate(`(()=>{const text=document.body.innerText;return{path:location.pathname,online:navigator.onLine,controlled:Boolean(navigator.serviceWorker?.controller),documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,genericFailure:/something went wrong|unexpected error|page failed to load|application failed to start/i.test(text),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[],hasSeedProduct:text.includes("Offline Matrix Rice"),hasSeedCustomer:text.includes("Offline Matrix Customer")}})()`);
+  if (route === "/products") await waitForPage(client, `document.body.innerText.includes("Offline Matrix Rice")`, 15_000);
+  if (route === "/customers") await waitForPage(client, `document.body.innerText.includes("Offline Matrix Customer")`, 15_000);
+  if (route === "/recovery-mode") await waitForPage(client, `/Database open|Local database problem detected/.test(document.body.innerText)`, 15_000);
+  const readyMs = Date.now() - startedAt;
+  await sleep(500);
+  // navigator.onLine is only a network-interface hint and can remain true while
+  // every request is blocked. Prove the cut with an uncached cross-origin fetch.
+  const networkBlocked = await client.evaluate(`fetch(${JSON.stringify(API_HEALTH_URL)}+"?offlineProbe="+Date.now(),{cache:"no-store"}).then(()=>false).catch(()=>true)`);
+  const metrics = await client.evaluate(`(()=>{const text=document.body.innerText,main=document.getElementById("main-content");return{path:location.pathname,online:navigator.onLine,controlled:Boolean(navigator.serviceWorker?.controller),windowScrollTop:Math.round(window.scrollY),mainScrollTop:Math.round(main?.scrollTop||0),documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,genericFailure:/something went wrong|unexpected error|page failed to load|application failed to start/i.test(text),localDbProblem:text.includes("Local database problem detected"),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[],hasSeedProduct:text.includes("Offline Matrix Rice"),hasSeedCustomer:text.includes("Offline Matrix Customer")}})()`);
   const screenshot = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
   const filename = `${qaId.toLowerCase()}-${VIEWPORT.width}x${VIEWPORT.height}.png`;
   await mkdir(OUTPUT_DIR, { recursive: true });
   await writeFile(path.join(OUTPUT_DIR, filename), Buffer.from(screenshot.data, "base64"));
   assert(metrics.path === route, `${qaId} bounced from ${route} to ${metrics.path}`);
-  assert(metrics.online === false, `${qaId} was not tested with browser networking disabled`);
+  assert(networkBlocked, `${qaId} reached an uncached backend probe while the network was meant to be disabled`);
   assert(metrics.controlled, `${qaId} was not served under the installed service worker`);
+  assert(readyMs <= 10_000, `${qaId} took ${readyMs}ms to become usable after an offline cold restart`);
+  assert(metrics.windowScrollTop <= 1 && metrics.mainScrollTop <= 1, `${qaId} opened at a stale scroll position: ${JSON.stringify(metrics)}`);
   assert(metrics.documentWidth <= VIEWPORT.width + 1 && metrics.bodyWidth <= VIEWPORT.width + 1, `${qaId} overflowed offline: ${JSON.stringify(metrics)}`);
   assert(!metrics.genericFailure, `${qaId} rendered a fatal offline error`);
   assert(!metrics.stuckLoading, `${qaId} remained stuck loading offline`);
   assert(metrics.runtimeErrors.length === 0, `${qaId} runtime errors offline: ${metrics.runtimeErrors.join(" | ")}`);
   if (route === "/products") assert(metrics.hasSeedProduct, `${qaId} did not restore cached product data`);
   if (route === "/customers") assert(metrics.hasSeedCustomer, `${qaId} did not restore cached customer data`);
-  return { qaId, route, ...metrics, screenshot: filename };
+  if (route === "/recovery-mode") assert(!metrics.localDbProblem, `${qaId} falsely reported a local database problem`);
+  return { qaId, route, networkBlocked, readyMs, ...metrics, screenshot: filename };
 }
 
 async function main() {

@@ -14,6 +14,12 @@ describe("shared touch-target primitives", () => {
     expect(readFileSync("src/components/ui/select.tsx", "utf8")).toContain("h-11 min-h-11");
   });
 
+  it("keeps the shared dialog close affordance 44px at every breakpoint", () => {
+    const source = readFileSync("src/components/ui/dialog.tsx", "utf8");
+    expect(source).toContain("grid h-11 w-11 place-items-center");
+    expect(source).not.toContain("sm:h-8 sm:w-8");
+  });
+
   it("keeps the mobile home target at 44px", () => {
     const css = readFileSync("src/index.css", "utf8");
     expect(css).toMatch(/\.mobile-brand-mark\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*flex:\s*0 0 44px;/s);

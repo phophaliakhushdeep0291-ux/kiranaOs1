@@ -19,6 +19,7 @@ describe("premium restaurant phone controls", () => {
   it("keeps staff add-on steppers and stock controls phone-safe", () => {
     expect(billingConfigurator).toContain('className="h-11 w-11" aria-label={`Decrease ${option.name}`}');
     expect(billingConfigurator).toContain('className="h-11 w-11" aria-label={`Increase ${option.name}`}');
+    expect(billingConfigurator).toContain('className="flex min-h-11 min-w-0 flex-1');
     expect(billingConfigurator).toContain('<DialogFooter className="gap-2 max-sm:!flex-col sm:justify-between">');
     expect(billingConfigurator).toContain('t("restaurant.addons.configureHelp", { product: product.name })');
     expect(billingConfigurator).not.toContain('className="h-7 w-7"');

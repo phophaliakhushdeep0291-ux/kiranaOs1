@@ -65,7 +65,7 @@ function AddonConfigurator({ product, data, onConfirm, onCancel }: ProductConfig
                   const quantity = selected[option.id] ?? 0;
                   return (
                     <div key={option.id} className={cn("flex min-h-12 items-center gap-3 rounded-xl border px-3 py-2", quantity > 0 ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "bg-white")}>
-                      <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setQuantity(group, option.id, quantity > 0 ? 0 : 1)}>
+                      <button type="button" className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setQuantity(group, option.id, quantity > 0 ? 0 : 1)}>
                         <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-md border", quantity > 0 && "border-[var(--brand)] bg-[var(--brand)] text-white")}>{quantity > 0 ? <Check size={12} /> : null}</span>
                         <span className="min-w-0"><span className="block truncate text-[12px] font-bold">{option.name}</span><span className="text-[10.5px] text-[#64748b]">{option.price > 0 ? `+₹${option.price.toLocaleString("en-IN")}` : t("restaurant.addons.noExtraCharge")}</span></span>
                       </button>
