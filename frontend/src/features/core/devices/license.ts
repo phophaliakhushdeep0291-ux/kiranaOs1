@@ -11,6 +11,7 @@ import {
 import {
   PLAN_DEFINITIONS,
   getPlan,
+  isKnownFeatureName,
   type FeatureName,
   type PlanCode,
 } from "@/features/core/subscription/plans";
@@ -85,26 +86,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isFeatureName(value: string): value is FeatureName {
-  return (
-    Object.prototype.hasOwnProperty.call(
-      PLAN_DEFINITIONS.starter.features.reduce<Record<string, true>>(
-        (acc, item) => ({ ...acc, [item]: true }),
-        {},
-      ),
-      value,
-    ) ||
-    Object.values(PLAN_DEFINITIONS).some((plan) =>
-      plan.features.includes(value as FeatureName),
-    )
-  );
-}
-
 function normalizeFeatures(value: unknown, plan: PlanCode): FeatureName[] {
   if (Array.isArray(value)) {
     const features = value.filter(
       (item): item is FeatureName =>
-        typeof item === "string" && isFeatureName(item),
+        typeof item === "string" && isKnownFeatureName(item),
     );
     if (features.length > 0) return features;
   }
@@ -112,7 +98,7 @@ function normalizeFeatures(value: unknown, plan: PlanCode): FeatureName[] {
     const features = Object.entries(value)
       .filter(([, enabled]) => enabled === true)
       .map(([key]) => key)
-      .filter(isFeatureName);
+      .filter(isKnownFeatureName);
     if (features.length > 0) return features;
   }
   return PLAN_DEFINITIONS[plan].features;

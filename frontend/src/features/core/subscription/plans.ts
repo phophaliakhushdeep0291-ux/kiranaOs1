@@ -74,7 +74,21 @@ export type FeatureName =
   | "smart_price_memory"
   | "no_barcode_fast_billing"
   | "offline_confidence_meter"
-  | "recovery_mode";
+  | "recovery_mode"
+  | "shop_type_entitlements_v1"
+  | "product_variants"
+  | "clothing_rentals"
+  | "footwear_size_runs"
+  | "vehicle_fitment"
+  | "serial_imei_tracking"
+  | "prescription_tracking"
+  | "academic_book_lists"
+  | "furniture_order_book"
+  | "tester_stock"
+  | "restaurant_tables"
+  | "restaurant_kot"
+  | "restaurant_menu"
+  | "restaurant_recipe_inventory";
 
 export interface PlanDefinition {
   code: PlanCode;
@@ -260,11 +274,136 @@ const BUSINESS_TYPE_PRICES: Record<BusinessType, Record<Exclude<PlanCode, "stand
   restaurant:  { starter: [599, 5999], growth: [999, 8999], pro: [1499, 13999] },
 };
 
+export const SHOP_TYPE_ENTITLEMENTS_V1: FeatureName = "shop_type_entitlements_v1";
+
+interface BusinessTypePlanEntitlements {
+  starter: FeatureName[];
+  growth: FeatureName[];
+  starterBullets: string[];
+  growthBullets: string[];
+}
+
+const BUSINESS_TYPE_PLAN_ENTITLEMENTS: Record<BusinessType, BusinessTypePlanEntitlements> = {
+  kirana: {
+    starter: ["batch_expiry"],
+    growth: ["advanced_inventory"],
+    starterBullets: ["Loose-item and pack-size billing with udhar", "Batch, expiry, low-stock and daily closing"],
+    growthBullets: ["Advanced inventory control with staff roles", "Customer pricing, quantity pricing and monthly profit reports"],
+  },
+  clothing: {
+    starter: ["product_variants"],
+    growth: ["clothing_rentals", "loyalty_program"],
+    starterBullets: ["Size and colour variants for everyday sales", "Exchanges and regular stock control"],
+    growthBullets: ["Rental bookings and loyalty", "Staff roles, advanced pricing and monthly reports"],
+  },
+  footwear: {
+    starter: ["product_variants", "footwear_size_runs"],
+    growth: ["loyalty_program"],
+    starterBullets: ["UK, US and EU size runs with pair-level stock", "Size-aware selling and exchanges"],
+    growthBullets: ["Loyalty, staff roles and advanced pricing", "Monthly profit and payment-mode reporting"],
+  },
+  auto_parts: {
+    starter: ["vehicle_fitment"],
+    growth: ["advanced_inventory"],
+    starterBullets: ["Vehicle fitment and alternative-part lookup", "Part-number stock, purchases and quotations"],
+    growthBullets: ["Advanced inventory and wholesale pricing", "Staff controls, audit logs and deeper reports"],
+  },
+  electronics: {
+    starter: ["serial_imei_tracking"],
+    growth: ["advanced_inventory"],
+    starterBullets: ["IMEI and serial-number unit register", "Warranty-linked sales, returns and service history"],
+    growthBullets: ["Repair and open-box operations with advanced inventory", "Staff controls, audit logs and profit reporting"],
+  },
+  pharmacy: {
+    starter: ["batch_expiry", "prescription_tracking"],
+    growth: ["advanced_inventory"],
+    starterBullets: ["Prescription register for controlled dispensing", "Batch, expiry and medicine stock control"],
+    growthBullets: ["Advanced inventory and staff roles", "Deeper purchase, payment and profit reporting"],
+  },
+  stationery: {
+    starter: ["academic_book_lists"],
+    growth: [],
+    starterBullets: ["Academic book lists that open directly in billing", "ISBN-ready catalog and loose stationery sales"],
+    growthBullets: ["Bulk and customer-specific pricing", "Staff roles, CSV workflows and monthly reports"],
+  },
+  furniture: {
+    starter: ["product_variants", "furniture_order_book"],
+    growth: ["advanced_inventory"],
+    starterBullets: ["Quotation and custom-order book", "Advances, stock reservations and delivery tracking"],
+    growthBullets: ["Advanced inventory and staff roles", "Customer pricing, audit logs and profit reporting"],
+  },
+  cosmetics: {
+    starter: ["product_variants", "batch_expiry", "tester_stock"],
+    growth: ["loyalty_program"],
+    starterBullets: ["Shade variants with batch and expiry control", "Tester stock and its real product cost"],
+    growthBullets: ["Loyalty and customer-specific pricing", "Staff controls, audit logs and monthly reports"],
+  },
+  restaurant: {
+    starter: ["batch_expiry", "restaurant_tables", "restaurant_kot", "restaurant_menu"],
+    growth: ["restaurant_recipe_inventory", "advanced_inventory"],
+    starterBullets: ["Menu, tables, KOT and kitchen display", "Split billing plus batch/expiry for perishable stock"],
+    growthBullets: ["Recipe-level ingredient and kitchen-stock control", "Staff roles, audit logs and advanced reports"],
+  },
+  other: {
+    starter: [],
+    growth: [],
+    starterBullets: ["Billing, inventory, purchases and supplier records", "Customer credit, reports and automatic backup"],
+    growthBullets: ["Staff roles and customer-specific pricing", "CSV workflows, audit logs and monthly reports"],
+  },
+};
+
+function uniqueFeatures(...groups: FeatureName[][]): FeatureName[] {
+  return [...new Set(groups.flat())];
+}
+
+function shopTypeFeatures(code: PlanCode, businessType: BusinessType): FeatureName[] {
+  const base = PLAN_DEFINITIONS[code].features;
+  if (code === "standard") return base;
+  const profile = BUSINESS_TYPE_PLAN_ENTITLEMENTS[businessType] ?? BUSINESS_TYPE_PLAN_ENTITLEMENTS.other;
+  const growth = code === "growth" || code === "pro" ? profile.growth : [];
+  return uniqueFeatures(base, [SHOP_TYPE_ENTITLEMENTS_V1], profile.starter, growth);
+}
+
+function shopTypeBullets(code: PlanCode, businessType: BusinessType): string[] {
+  const base = PLAN_DEFINITIONS[code].bullets;
+  if (code === "standard") return base;
+  const profile = BUSINESS_TYPE_PLAN_ENTITLEMENTS[businessType] ?? BUSINESS_TYPE_PLAN_ENTITLEMENTS.other;
+  if (code === "starter") return [base[0], ...profile.starterBullets, ...base.slice(1)];
+  if (code === "growth") return [base[0], ...profile.growthBullets, ...base.slice(1)];
+  return [base[0], `All ${businessType.replaceAll("_", " ")} Starter and Growth workflows`, ...base.slice(1)];
+}
+
 export function getPlanForBusinessType(code: PlanCode, businessType: BusinessType): PlanDefinition {
   const base = PLAN_DEFINITIONS[code];
   if (code === "standard") return base;
   const [price, annualPrice] = BUSINESS_TYPE_PRICES[businessType]?.[code] ?? BUSINESS_TYPE_PRICES.other[code];
-  return { ...base, price, annualPrice };
+  return {
+    ...base,
+    price,
+    annualPrice,
+    features: shopTypeFeatures(code, businessType),
+    bullets: shopTypeBullets(code, businessType),
+  };
+}
+
+/**
+ * Existing subscriptions predate shop-type plan gates, so every vertical page
+ * they could already open remains available. Generic plan features still come
+ * from their original plan; only the newly introduced vertical gates are
+ * grandfathered here.
+ */
+export function getPlanForEntitlementSnapshot(
+  code: PlanCode,
+  businessType: BusinessType,
+  entitledFeatures: readonly string[] | null,
+): PlanDefinition {
+  if (entitledFeatures?.includes(SHOP_TYPE_ENTITLEMENTS_V1)) return getPlanForBusinessType(code, businessType);
+  const base = PLAN_DEFINITIONS[code];
+  const vertical = BUSINESS_TYPE_PLAN_ENTITLEMENTS[businessType] ?? BUSINESS_TYPE_PLAN_ENTITLEMENTS.other;
+  const grandfatheredVerticalFeatures = [...vertical.starter, ...vertical.growth].filter((feature) =>
+    feature !== "batch_expiry" && feature !== "advanced_inventory" && feature !== "loyalty_program",
+  );
+  return { ...base, features: uniqueFeatures(base.features, grandfatheredVerticalFeatures) };
 }
 
 export const FEATURE_LABELS: Record<FeatureName, string> = {
@@ -329,6 +468,20 @@ export const FEATURE_LABELS: Record<FeatureName, string> = {
   no_barcode_fast_billing: "No-barcode fast billing",
   offline_confidence_meter: "Offline confidence meter",
   recovery_mode: "Restore and recover data",
+  shop_type_entitlements_v1: "Shop-type plan access",
+  product_variants: "Size, colour and product variants",
+  clothing_rentals: "Clothing rental bookings",
+  footwear_size_runs: "Footwear size-run stock",
+  vehicle_fitment: "Vehicle fitment and alternative parts",
+  serial_imei_tracking: "Serial number and IMEI tracking",
+  prescription_tracking: "Prescription register",
+  academic_book_lists: "Academic book lists",
+  furniture_order_book: "Furniture quotations and order book",
+  tester_stock: "Tester stock control",
+  restaurant_tables: "Restaurant table management",
+  restaurant_kot: "Kitchen order tickets and display",
+  restaurant_menu: "Restaurant menu management",
+  restaurant_recipe_inventory: "Recipe and ingredient inventory",
 };
 
 export function getPlan(code: string | null | undefined): PlanDefinition {
@@ -340,8 +493,15 @@ export function getPlan(code: string | null | undefined): PlanDefinition {
   return PLAN_DEFINITIONS[(PLAN_ORDER as readonly string[]).includes(normalized) ? normalized as PlanCode : "starter"];
 }
 
-export function getRequiredPlanForFeature(featureName: FeatureName): PlanDefinition {
-  return PLAN_DEFINITIONS[PLAN_ORDER.find((code) => PLAN_DEFINITIONS[code].features.includes(featureName)) ?? "pro"];
+export function getRequiredPlanForFeature(featureName: FeatureName, businessType: BusinessType = "other"): PlanDefinition {
+  return getPlanForBusinessType(
+    (["starter", "growth", "pro"] as const).find((code) => getPlanForBusinessType(code, businessType).features.includes(featureName)) ?? "pro",
+    businessType,
+  );
+}
+
+export function isKnownFeatureName(value: string): value is FeatureName {
+  return Object.hasOwn(FEATURE_LABELS, value);
 }
 
 export function planRank(code: string | null | undefined): number {
