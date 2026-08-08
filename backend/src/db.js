@@ -14,10 +14,27 @@ const prismaPackage = useIsolatedIntegrationClient
   : require("@prisma/client");
 const { PrismaClient } = prismaPackage;
 
+// SQLite has exactly one writer, but Prisma still opens a pool of connections
+// against the file. When a second connection touches the database while an
+// interactive transaction is open, the 5.14 query engine panics
+// (`unreachable` in libs/user-facing-errors/src/quaint.rs) instead of
+// reporting a busy database — and a panic kills the whole client, not just
+// that query. Two concurrent logins are enough to trigger it. Pinning the pool
+// to a single connection makes the driver queue, which is SQLite's real
+// concurrency model anyway. PostgreSQL (production) is untouched.
+function sqlitePoolUrl(url) {
+  if (!url.startsWith("file:")) return null;
+  if (/[?&]connection_limit=/.test(url)) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}connection_limit=1`;
+}
+
+const sqliteUrl = sqlitePoolUrl(databaseUrl);
+
 // Singleton pattern — reuse the same client across the app
 // In production with PostgreSQL, connection pooling is handled at the DB layer
 const db = new PrismaClient({
   log: process.env.NODE_ENV === "development" ? ["query", "warn", "error"] : ["warn", "error"],
+  ...(sqliteUrl ? { datasources: { db: { url: sqliteUrl } } } : {}),
 });
 
 export default db;
