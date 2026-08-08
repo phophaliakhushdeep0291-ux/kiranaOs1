@@ -1,9 +1,13 @@
 name: KiranaOS Release Certification
 
 on:
+  # Certify on push only. A pull_request trigger ran this same job a second time
+  # against refs/pull/N/merge, so every change was billed twice — and it was not
+  # buying a pre-merge gate: pull requests here are merged within minutes of the
+  # branch push, while this job takes tens of minutes, so the PR run was still
+  # in progress when the merge landed. Certifying main is also the result that
+  # matters, since it is main's evidence artifact that records the release.
   push:
-    branches: [main, master]
-  pull_request:
     branches: [main, master]
   workflow_dispatch:
 
@@ -11,15 +15,13 @@ permissions:
   contents: read
 
 concurrency:
-  # Pull requests coalesce: pushing again supersedes that PR's in-flight run.
-  #
-  # Pushes to main must not. Merges here land minutes apart while this job runs
-  # for tens of minutes, so a shared group cancelled the run certifying the
-  # previous commit — main went red with nothing actually broken. Keying pushes
-  # by SHA also stops a third merge from displacing the second while it is still
-  # queued, since a group holds only one pending run.
-  group: kiranaos-release-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # One run per commit, never cancelled. This job produces the certification
+  # evidence for one exact commit, so a merge landing behind it must not kill
+  # it — that is what turned main red with nothing actually broken. Keying by
+  # SHA rather than ref also stops a third merge from displacing the second
+  # while it is still queued, since a group holds only one pending run.
+  group: kiranaos-release-${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   certify:
@@ -81,6 +83,21 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
+
+      # setup-node's cache above is keyed to the backend npm lockfile, so the
+      # frontend pnpm store is fetched from the registry on every single run.
+      # Caching it keeps that download out of the billed minutes.
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        working-directory: frontend
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
 
       - name: Reject tracked generated and runtime artifacts
         run: node scripts/check-repository-hygiene.mjs

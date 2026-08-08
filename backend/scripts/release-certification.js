@@ -327,7 +327,12 @@ runStep({
   blockedReason: "set POSTGRES_TEST_DATABASE_URL to an isolated *_test or *_ci database",
   // This proof always targets an isolated test database. Exercise the guarded
   // legacy-money backfill, then verify every paise shadow column is consistent.
-  env: { ALLOW_MONEY_PAISE_BACKFILL: "true" },
+  //
+  // The schema validate, contract check and production check above are static —
+  // they read files, never the database — so the proof is told not to repeat
+  // them. What stays is everything that genuinely needs PostgreSQL: migrations,
+  // integration and concurrency tests, and the paise reconciliation.
+  env: { ALLOW_MONEY_PAISE_BACKFILL: "true", RELEASE_CERT_STATIC_ALREADY_RAN: "true" },
 });
 runStep({
   id: "redis-worker-runtime",
