@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 import { assertSafePostgresTestDatabaseUrl, maskDatabaseUrl } from "./test-db-utils.js";

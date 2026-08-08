@@ -9,7 +9,11 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm ci --omit=dev=false
+# NODE_ENV=production above makes npm omit devDependencies by default, but the
+# next step needs the prisma CLI, which is one. --include=dev keeps it; the
+# earlier --omit=dev=false was not valid npm syntax (npm warned "invalid config"
+# and only kept dev by accident of how the bad value was discarded).
+RUN npm ci --include=dev
 
 COPY prisma ./prisma
 COPY prisma-postgres ./prisma-postgres
