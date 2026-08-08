@@ -35,6 +35,20 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   "AuditEvaluation", "AuditFinding", "AuditFindingRule", "AuditEvidenceRequirement",
   "AuditEvidence", "AuditFindingStatusHistory", "AuditReview", "AuditCase",
   "AuditCaseFinding", "AuditBaseline",
+  // Marketplace settlements, the delivery-platform twin of the BankStatement /
+  // BankReconciliation rows above: what Swiggy or Zomato said it was paying, what the
+  // shop calculated it was owed, and the paise of variance between the two.
+  //
+  // This is money the shop is still chasing, and the per-order lines carry the
+  // commission, payment fee, TCS and TDS a return is filed on — so it is business
+  // history, not install state. The Event rows are the append-only record of who
+  // resolved which mismatch and why; dropping them would leave the resolved rows with
+  // no explanation behind them.
+  //
+  // All three carry their own shopId, so they are shop models rather than children.
+  // Row depends on Import and Event on Row, but restoreModelOrder() derives that from
+  // the Prisma relation metadata, so their position in this list does not matter.
+  "ChannelSettlementImport", "ChannelSettlementRow", "ChannelSettlementEvent",
   // A booking is business history — who took which garment, for which days, and
   // what money is still owed on it. It restores with the rest of the ledger.
   "RentalBooking",
@@ -63,6 +77,11 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // rule, options carry prices/ingredient links, and the join decides which
   // dishes offer them; losing any one of the three changes the live menu.
   "MenuAddonGroup", "MenuAddonOption", "ProductAddonGroup",
+  // What a combo actually contains — 2 roti in a thali. Same category as
+  // DishRecipeComponent above: the shop authored it, and a restore that dropped it
+  // would hand back combos that contain nothing and break "which combos include
+  // roti?", the question asked every time a dish is 86'd or repriced.
+  "MenuComboComponent",
 ]);
 
 export const RESTORABLE_CHILD_MODELS = Object.freeze({

@@ -11,6 +11,7 @@ import type {
   MenuAddonGroup,
   MenuAddonGroupInput,
   MenuDishPatch,
+  MenuComboComponent,
   MenuDishVariation,
   RestaurantTable,
   RestaurantTableInput,
@@ -126,6 +127,27 @@ export function saveDishVariations(productId: string, variations: DishVariationI
     method: "PUT",
     body: JSON.stringify({ variations }),
   });
+}
+
+/**
+ * Replace a combo's dish list with exactly this one.
+ *
+ * There is no price here: a combo IS a product and is sold at that product's own
+ * price, edited on the Products screen like any other. This is only the list of
+ * what the guest receives, which is what the kitchen cooks and stock loses.
+ */
+export function saveComboComponents(productId: string, components: ComboComponentInput[]) {
+  return apiRequest<MenuComboComponent[]>(`/restaurant/menu/${productId}/combo`, {
+    method: "PUT",
+    body: JSON.stringify({ components }),
+  });
+}
+
+export interface ComboComponentInput {
+  componentProductId: string;
+  quantity: number;
+  sortOrder?: number;
+  note?: string | null;
 }
 
 export interface DishVariationInput {

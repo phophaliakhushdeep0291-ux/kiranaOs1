@@ -7,7 +7,9 @@ import { requireCapability } from "../../../modules/shops/businessProfile.middle
 import { validate } from "../../../middleware/validate.js";
 import { bulkUpdateMenuSchema, setDishVariationsSchema, updateDishMenuSchema } from "./menu.schema.js";
 import { saveAddonGroupSchema, setDishAddonGroupsSchema } from "./addons.schema.js";
+import { setComboComponentsSchema } from "./combos.schema.js";
 import "./addons.guard.js";
+import "./combos.guard.js";
 import * as ctrl from "./menu.controller.js";
 
 const router = Router();
@@ -29,6 +31,8 @@ router.patch("/bulk", validate(bulkUpdateMenuSchema), ctrl.bulkUpdate);
 // but keeping the more specific route first matches the ordering above.
 router.get("/:productId/variations", ctrl.dishVariations);
 router.put("/:productId/variations", validate(setDishVariationsSchema), ctrl.setDishVariations);
+router.get("/:productId/combo", ctrl.comboComponents);
+router.put("/:productId/combo", validate(setComboComponentsSchema), ctrl.setComboComponents);
 router.get("/:productId/addon-groups", ctrl.dishAddonGroups);
 router.put("/:productId/addon-groups", validate(setDishAddonGroupsSchema), ctrl.setDishAddonGroups);
 

@@ -1707,6 +1707,16 @@ export interface MenuDish {
    */
   variations: MenuDishVariation[];
   addonGroups: MenuAddonGroup[];
+  /**
+   * The dishes a thali or meal deal is made of. Empty for an ordinary dish.
+   *
+   * Having components IS what makes a product a combo — `isCombo` is derived from
+   * this list rather than stored, so no flag can disagree with it.
+   */
+  comboComponents: MenuComboComponent[];
+  isCombo: boolean;
+  /** What the parts cost separately and what the guest saves. Null unless a combo. */
+  comboValue: ComboValue | null;
 }
 
 export interface MenuAddonOption {
@@ -1761,6 +1771,32 @@ export interface MenuDishVariation {
   /** How much of one full portion this is — Half = 0.5. Drives recipe depletion. */
   portionFactor: number;
   isDefault: boolean;
+}
+
+/** One dish inside a combo, with how many of it the combo includes. */
+export interface MenuComboComponent {
+  componentProductId: string;
+  name: string;
+  /** 2 roti in a thali. Fractional is legal — half a portion of raita. */
+  quantity: number;
+  sortOrder: number;
+  note: string | null;
+}
+
+/**
+ * A combo's price against its parts.
+ *
+ * Both numbers, not just the saving: "₹30 off" means nothing on a menu without
+ * the ₹180 it came off, and a combo priced ABOVE its parts is a mistake the owner
+ * should see rather than a negative number to hide.
+ */
+export interface ComboValue {
+  /** What the components cost bought à la carte. */
+  separately: number;
+  price: number;
+  /** Never negative — a combo dearer than its parts saves nothing. */
+  saving: number;
+  dearerThanParts: boolean;
 }
 
 export interface MenuCourseSection {

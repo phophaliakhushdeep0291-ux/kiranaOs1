@@ -34,6 +34,7 @@ import { setDishVariationsSchema, updateDishMenuSchema } from "../src/verticals/
 import { saveRecipeSchema } from "../src/verticals/restaurant/recipes/recipes.schema.js";
 import { addonUnitPrice, validateSelection } from "../src/verticals/restaurant/menu/addons.service.js";
 import { aggregateAddonConsumption } from "../src/verticals/restaurant/menu/addons.guard.js";
+import { comboSaving, expandComboPortions } from "../src/verticals/restaurant/menu/combos.service.js";
 import { saveAddonGroupSchema } from "../src/verticals/restaurant/menu/addons.schema.js";
 
 /**
@@ -466,6 +467,109 @@ for (const migration of [
   }
   assert.ok(migration.includes("linkedQtyBase"), "the stock quantity per option must deploy with the schema");
   assert.ok(migration.includes("pricePaise"), "sold option money needs its integer shadow");
+}
+
+
+/* ── Combos (a thali, a meal deal) ────────────────────────────────────────────
+ *
+ * A combo is a Product sold at its own price, so nothing in the money path is
+ * under test here. What is under test is the expansion: what a sold thali takes
+ * out of the kitchen, and that it cannot be built into a shape that loops.
+ */
+
+{
+  // Two roti in a thali, two thalis sold, plus a thali that shares a component.
+  const components = [
+    { comboProductId: "thali", componentProductId: "roti", componentName: "Roti", quantity: 2 },
+    { comboProductId: "thali", componentProductId: "dal", componentName: "Dal", quantity: 1 },
+    { comboProductId: "mini", componentProductId: "roti", componentName: "Roti", quantity: 1 },
+  ];
+  const expanded = expandComboPortions(new Map([["thali", 2], ["mini", 1]]), components);
+  const byId = new Map(expanded.map((row) => [row.componentProductId, row.portions]));
+  // 2 thalis x 2 roti + 1 mini x 1 roti. Aggregated to ONE roti figure: two
+  // movements for one ingredient makes the kitchen ledger read like two events.
+  assert.equal(byId.get("roti"), 5, "a component shared by two combos aggregates into one figure");
+  assert.equal(byId.get("dal"), 2);
+  assert.equal(expanded.length, 2);
+}
+
+{
+  // A half thali must take half of everything, which is what the caller passes in
+  // after scaling by the selected portion's conversionToBase.
+  const expanded = expandComboPortions(new Map([["thali", 0.5]]), [
+    { comboProductId: "thali", componentProductId: "rice", componentName: "Rice", quantity: 1 },
+  ]);
+  assert.equal(expanded[0].portions, 0.5, "a half combo consumes half of each component");
+}
+
+{
+  // A combo nobody ordered, and a component quantity of zero, both consume nothing
+  // rather than producing a zero-quantity stock movement.
+  assert.deepStrictEqual(expandComboPortions(new Map(), [
+    { comboProductId: "thali", componentProductId: "rice", componentName: "Rice", quantity: 1 },
+  ]), []);
+  assert.deepStrictEqual(expandComboPortions(new Map([["thali", 1]]), [
+    { comboProductId: "thali", componentProductId: "rice", componentName: "Rice", quantity: 0 },
+  ]), []);
+}
+
+{
+  const prices = new Map([["roti", 15], ["dal", 90], ["rice", 60]]);
+  const components = [
+    { componentProductId: "roti", quantity: 2 },
+    { componentProductId: "dal", quantity: 1 },
+    { componentProductId: "rice", quantity: 1 },
+  ];
+  const value = comboSaving(150, components, prices);
+  assert.equal(value.separately, 180, "the parts are priced at their own à la carte rates");
+  assert.equal(value.saving, 30);
+  assert.equal(value.dearerThanParts, false);
+
+  // A combo priced ABOVE its parts saves nothing — it does not "save minus forty".
+  // The owner pricing it should see the flag rather than a negative number.
+  const bad = comboSaving(200, components, prices);
+  assert.equal(bad.saving, 0, "a combo dearer than its parts saves nothing");
+  assert.equal(bad.dearerThanParts, true, "and says so, so an owner can see the mistake");
+
+  // A component deleted from the catalogue prices as nothing rather than NaN,
+  // which would render as "₹NaN off" on a menu.
+  assert.equal(comboSaving(150, [{ componentProductId: "gone", quantity: 1 }], prices).separately, 0);
+}
+
+{
+  const combosGuard = read("verticals/restaurant/menu/combos.guard.js");
+  // Two traps that a later edit could silently reintroduce, both invisible in a
+  // passing unit test, so they are pinned against the source.
+  //
+  // 1. The ledger action must stay "recipe_use". The assurance rule for stock
+  //    moved after a daily-closing lock skips exactly "sale" and "recipe_use", so
+  //    a new action would raise a finding per component of every combo served
+  //    after the lock.
+  assert.ok(combosGuard.includes('action: "recipe_use"'), "combo consumption must reuse the recipe_use ledger action");
+  assert.ok(!combosGuard.includes('action: "sale"'), "combo components must not be logged as sales, which would double-count the thali");
+  // 2. The idempotency key must NOT share the recipe guard's prefix. A dish sold
+  //    both a la carte and inside a thali produces a movement from each guard for
+  //    one ingredient; a shared key makes the second a duplicate and under-depletes.
+  assert.ok(combosGuard.includes("`combo:${bill.id}:"), "combo movements need their own idempotency prefix");
+  assert.ok(!combosGuard.includes("`recipe:${bill.id}:"), "sharing the recipe prefix would drop one of two legitimate movements");
+}
+
+{
+  const service = read("verticals/restaurant/menu/combos.service.js");
+  // Depth one, enforced in both directions, is what makes a cycle unwritable —
+  // so the sale path never has to detect one when the only answer left would be
+  // to refuse a guest's bill.
+  assert.ok(service.includes("cannot contain itself"), "a combo must refuse to contain itself");
+  assert.ok(service.includes("is itself a combo"), "a combo must refuse a nested combo");
+  assert.ok(service.includes("already a dish inside another combo"), "and must refuse the reverse nesting too");
+}
+
+for (const migration of [
+  readRepo("prisma/migrations/20260808140000_menu_combos/migration.sql"),
+  readRepo("prisma-postgres/migrations/000097_menu_combos/migration.sql"),
+]) {
+  assert.ok(migration.includes('"MenuComboComponent"'), "the combo migration must create MenuComboComponent");
+  assert.ok(migration.includes("componentName"), "the component name is copied so a report reads without a join");
 }
 
 console.log("restaurant-tables-menu.examples.js OK");

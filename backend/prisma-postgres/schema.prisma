@@ -113,6 +113,7 @@ model Shop {
   menuAddonGroups               MenuAddonGroup[]
   menuAddonOptions              MenuAddonOption[]
   productAddonGroups            ProductAddonGroup[]
+  menuComboComponents           MenuComboComponent[]
   auditRules                    AuditRule[]
   auditRuns                     AuditRun[]
   auditEvaluations              AuditEvaluation[]
@@ -3733,4 +3734,42 @@ model ChannelSettlementEvent {
 
   @@index([shopId, rowId, createdAt])
   @@index([shopId, action, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// COMBOS — a thali, a meal deal, "burger + fries + coke"
+// ─────────────────────────────────────────────
+// A combo needs no pricing of its own: it IS a Product, sold at that product's
+// price, taxed and reported through the same path as any dish. What it adds is
+// the list of dishes a guest actually receives, which is what the kitchen has to
+// cook and what stock has to lose.
+//
+// Depth is deliberately ONE. A component must be a plain dish, never another
+// combo. That is not a simplification for its own sake: it makes a cycle
+// impossible to write, so no query can loop and no thali can contain itself.
+// combos.service.js enforces it with a sentence rather than a stack overflow.
+model MenuComboComponent {
+  id     String @id @default(cuid())
+  shopId String
+
+  /// The sellable combo. Its own price is what the guest pays.
+  comboProductId     String
+  componentProductId String
+  /// Copied so a combo report reads without a join, like a recipe's ingredientName.
+  componentName      String
+
+  /// How many of this dish the combo includes — 2 roti in a thali.
+  quantity  Float @default(1)
+  sortOrder Int   @default(0)
+  note      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, comboProductId, componentProductId])
+  @@index([shopId, comboProductId])
+  /// "Which combos include roti?" — asked whenever a dish is 86'd or repriced.
+  @@index([shopId, componentProductId])
 }

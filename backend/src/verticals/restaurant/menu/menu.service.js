@@ -3,6 +3,7 @@ import { AppError } from "../../../middleware/error.js";
 import { listProducts } from "../../../modules/products/products.service.js";
 import { listRecipeComponents, portionsPossible } from "../recipes/recipes.service.js";
 import { addonGroupsByProduct } from "./addons.service.js";
+import { comboComponentsByProduct, comboSaving } from "./combos.service.js";
 
 /**
  * The menu card.
@@ -91,7 +92,7 @@ export function groupMenuByCourse(dishes) {
   }));
 }
 
-export function serializeDish(product, { portionsLeft = null, hasRecipe = false, addonGroups = [] } = {}) {
+export function serializeDish(product, { portionsLeft = null, hasRecipe = false, addonGroups = [], comboComponents = [], comboValue = null } = {}) {
   return {
     id: product.id,
     name: product.name,
@@ -125,6 +126,14 @@ export function serializeDish(product, { portionsLeft = null, hasRecipe = false,
     // "Extra cheese", "no onion". Empty for most dishes, and for every dish in a
     // shop that has not set any up, so a kirana catalogue is unaffected.
     addonGroups,
+    // The dishes a thali or meal deal is made of. Empty means an ordinary dish —
+    // having components IS what makes a product a combo, so there is no separate
+    // flag that could disagree with the list.
+    comboComponents,
+    isCombo: comboComponents.length > 0,
+    // What the parts cost separately, and what the guest saves. Null for anything
+    // that is not a combo.
+    comboValue,
     // A dish that is cooked to order has no meaningful stock of its own — the
     // ingredients are the stock. Saying so explicitly stops every screen from
     // re-deriving it and getting it differently.
@@ -143,13 +152,17 @@ export function serializeDish(product, { portionsLeft = null, hasRecipe = false,
  * second request to land.
  */
 export async function getMenuBoard(shopId, { locationId, includeUnavailable = true } = {}) {
-  const [products, components, addonsByProduct] = await Promise.all([
+  const [products, components, addonsByProduct, combosByProduct] = await Promise.all([
     listProducts(shopId, { locationId }),
     listRecipeComponents(shopId),
     addonGroupsByProduct(shopId),
+    comboComponentsByProduct(shopId),
   ]);
 
   const stock = new Map(products.map((product) => [product.id, Number(product.stockBaseQty ?? 0)]));
+  // À la carte price per dish, so a combo can be shown against what its parts
+  // would cost bought separately.
+  const priceByProduct = new Map(products.map((product) => [product.id, Number(product.defaultPricePerRateUnit ?? 0)]));
   const componentsByDish = new Map();
   for (const component of components) {
     if (!componentsByDish.has(component.dishProductId)) componentsByDish.set(component.dishProductId, []);
@@ -160,10 +173,15 @@ export async function getMenuBoard(shopId, { locationId, includeUnavailable = tr
     .filter((product) => product.status !== "inactive" && product.isActive !== false)
     .map((product) => {
       const recipe = componentsByDish.get(product.id);
+      const comboComponents = combosByProduct.get(product.id) ?? [];
       return serializeDish(product, {
         hasRecipe: Boolean(recipe?.length),
         portionsLeft: recipe?.length ? portionsPossible(recipe, stock) : null,
         addonGroups: addonsByProduct.get(product.id) ?? [],
+        comboComponents,
+        comboValue: comboComponents.length > 0
+          ? comboSaving(Number(product.defaultPricePerRateUnit ?? 0), comboComponents, priceByProduct)
+          : null,
       });
     })
     .filter((dish) => includeUnavailable || dish.menuAvailable);

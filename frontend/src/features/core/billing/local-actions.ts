@@ -218,6 +218,10 @@ function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode
       rate_per_rate_unit: item.ratePerRateUnit,
       baseRatePerRateUnit: item.baseRatePerRateUnit ?? item.ratePerRateUnit,
       base_rate_per_rate_unit: item.baseRatePerRateUnit ?? item.ratePerRateUnit,
+      // What the guest asked for on top of the dish. Their money is already inside
+      // ratePerRateUnit above; this is the record of WHAT was charged for, which
+      // the receipt and the kitchen ticket read. Empty rather than null so every
+      // consumer can map over it without a guard.
       addons: item.addons ?? [],
       lineDiscount,
       line_discount: lineDiscount,
