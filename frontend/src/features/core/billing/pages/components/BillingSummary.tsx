@@ -375,7 +375,7 @@ export function BillingSummary({
             </div>
             <button
               onClick={() => setShowCustomerOptions((v) => !v)}
-              className="ml-auto inline-flex min-h-[40px] shrink-0 items-center px-2 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
+              className="ml-auto inline-flex min-h-11 shrink-0 items-center px-2 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
             >
               {t("billing.summary.change")}
             </button>
@@ -519,8 +519,8 @@ export function BillingSummary({
               onRemoveItem={onRemoveItem}
             />
             {cart.length > 0 && (
-              <div className="flex h-[43px] items-center border-t border-[#edf1f6] px-3.5">
-                <button className="text-[12px] font-extrabold text-[var(--brand)] hover:underline">
+              <div className="flex min-h-11 items-center border-t border-[#edf1f6] px-3.5">
+                <button className="inline-flex min-h-11 items-center text-[12px] font-extrabold text-[var(--brand)] hover:underline">
                   {t("billing.summary.addMoreItems")}
                 </button>
                 <span className="ml-auto text-[12px] font-bold text-[#536383]">
@@ -608,7 +608,7 @@ export function BillingSummary({
                 )}
                 <button
                   onClick={() => setEditingDiscount((v) => !v)}
-                  className="inline-flex h-9 items-center rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-3 text-[11px] font-extrabold text-[var(--brand)] hover:bg-[#eaf2ff]"
+                  className="inline-flex h-11 items-center rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-3 text-[11px] font-extrabold text-[var(--brand)] hover:bg-[#eaf2ff]"
                 >
                   {safeDiscount > 0 && !editingDiscount ? t("billing.summary.edit") : t("billing.summary.apply")}
                 </button>
@@ -651,7 +651,7 @@ export function BillingSummary({
           </div>
 
           {/* Coupon box — dashed blue */}
-          <button onClick={() => setCouponExpanded((value) => !value)} aria-expanded={couponExpanded} className="flex h-[42px] w-full items-center gap-2.5 rounded-[9px] border border-dashed border-[#b9cdf6] bg-white px-3.5 transition-colors hover:bg-[#f5f9ff]">
+          <button onClick={() => setCouponExpanded((value) => !value)} aria-expanded={couponExpanded} className="flex h-11 w-full items-center gap-2.5 rounded-[9px] border border-dashed border-[#b9cdf6] bg-white px-3.5 transition-colors hover:bg-[#f5f9ff]">
             <Tag size={15} className="text-[var(--brand)]" />
             <span className="text-[12px] font-extrabold text-[var(--brand)]">{t("billing.summary.applyCoupon")}</span>
             <ChevronRight size={15} className={`ml-auto text-[var(--brand)] transition-transform ${couponExpanded ? "rotate-90" : ""}`} />
@@ -659,14 +659,14 @@ export function BillingSummary({
           {couponExpanded && (
             <div className="rounded-[9px] border border-[#dbe8ff] bg-[#f8fbff] p-2.5">
               <div className="flex items-center gap-2">
-                <input autoFocus value={couponCode} onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); onCouponApplied?.(null, 0, ""); setCouponMsg(null); }} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder={t("billing.summary.couponPlaceholder")} className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[var(--brand)]" />
-                <button onClick={() => void handleApplyCoupon()} disabled={couponBusy || !couponCode.trim() || subtotal <= 0} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-[var(--brand)] px-3 text-[11px] font-semibold text-white hover:bg-[#0054e8] disabled:opacity-50">{couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply</button>
+                <input autoFocus value={couponCode} onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); onCouponApplied?.(null, 0, ""); setCouponMsg(null); }} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder={t("billing.summary.couponPlaceholder")} className="h-11 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[var(--brand)]" />
+                <button onClick={() => void handleApplyCoupon()} disabled={couponBusy || !couponCode.trim() || subtotal <= 0} className="inline-flex h-11 items-center gap-1 rounded-[7px] bg-[var(--brand)] px-3 text-[11px] font-semibold text-white hover:bg-[#0054e8] disabled:opacity-50">{couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply</button>
               </div>
               {couponMsg && <p className={`pt-1.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}
             </div>
           )}
 
-          <button onClick={() => setLoyaltyExpanded((value) => !value)} aria-expanded={loyaltyExpanded} className="flex min-h-[42px] w-full items-center gap-2.5 rounded-[9px] border border-violet-200 bg-violet-50/60 px-3.5 py-2 transition-colors hover:bg-violet-50">
+          <button onClick={() => setLoyaltyExpanded((value) => !value)} aria-expanded={loyaltyExpanded} className="flex min-h-11 w-full items-center gap-2.5 rounded-[9px] border border-violet-200 bg-violet-50/60 px-3.5 py-2 transition-colors hover:bg-violet-50">
             <Award size={15} className="text-violet-700" />
             <span className="text-left text-[12px] font-extrabold text-violet-800">{t("billing.summary.useLoyalty")}</span>
             {loyaltyCustomerSelected && loyaltyActive && !loyaltyLoading ? <span className="ml-auto text-[10px] font-black text-violet-700">{t("billing.summary.loyaltyAvailableChip", { points: loyaltyBalance.toLocaleString("en-IN") })}</span> : null}
@@ -681,9 +681,9 @@ export function BillingSummary({
                       : loyaltyBalance < loyaltyMinimumPoints ? <p className="text-[11px] font-semibold text-slate-600">{t("billing.summary.loyaltyBelowMinimum", { tier: loyaltyTier ? t("billing.summary.loyaltyTierPrefix", { tier: loyaltyTier }) : "", points: loyaltyBalance.toLocaleString("en-IN"), minimum: loyaltyMinimumPoints.toLocaleString("en-IN") })}</p>
                         : <>
                             <div className="flex items-center gap-2">
-                              <Input type="number" min={loyaltyMinimumPoints} max={loyaltyMaxPoints} {...loyaltyProps} placeholder={t("billing.summary.loyaltyMinPlaceholder", { minimum: loyaltyMinimumPoints })} className="h-9 bg-white text-xs" />
-                              <Button type="button" variant="outline" className="h-9 shrink-0 border-violet-200 text-[11px] font-black text-violet-700" disabled={loyaltyMaxPoints < loyaltyMinimumPoints} onClick={() => setLoyaltyPoints(loyaltyMaxPoints)}>{t("billing.summary.loyaltyUseMax")}</Button>
-                              {loyaltyPoints > 0 ? <Button type="button" variant="ghost" className="h-9 px-2 text-[11px] font-bold text-slate-500" onClick={() => setLoyaltyPoints(0)}>{t("billing.summary.loyaltyClear")}</Button> : null}
+                              <Input type="number" min={loyaltyMinimumPoints} max={loyaltyMaxPoints} {...loyaltyProps} placeholder={t("billing.summary.loyaltyMinPlaceholder", { minimum: loyaltyMinimumPoints })} className="h-11 bg-white text-xs" />
+                              <Button type="button" variant="outline" className="h-11 shrink-0 border-violet-200 text-[11px] font-black text-violet-700" disabled={loyaltyMaxPoints < loyaltyMinimumPoints} onClick={() => setLoyaltyPoints(loyaltyMaxPoints)}>{t("billing.summary.loyaltyUseMax")}</Button>
+                              {loyaltyPoints > 0 ? <Button type="button" variant="ghost" className="h-11 px-2 text-[11px] font-bold text-slate-500" onClick={() => setLoyaltyPoints(0)}>{t("billing.summary.loyaltyClear")}</Button> : null}
                             </div>
                             <p className="mt-2 text-[10px] font-semibold text-violet-700">{t("billing.summary.loyaltySaveNote", { tier: loyaltyTier ? t("billing.summary.loyaltyTierShortPrefix", { tier: loyaltyTier }) : "", points: loyaltyBalance.toLocaleString("en-IN"), amount: fmtRs(loyaltyDiscount) })}</p>
                             {loyaltyMaxPoints < loyaltyMinimumPoints ? <p className="mt-1 text-[10px] font-semibold text-amber-700">{t("billing.summary.loyaltyBelowRedeemable")}</p> : null}
@@ -788,7 +788,7 @@ export function BillingSummary({
           <button
             data-testid="button-clear-cart"
             onClick={onClearCart}
-            className="mt-1 w-full rounded-lg py-1.5 text-xs font-medium text-[#536383] hover:bg-red-50 hover:text-red-600"
+            className="mt-1 min-h-11 w-full rounded-lg py-1.5 text-xs font-medium text-[#536383] hover:bg-red-50 hover:text-red-600"
           >
             {t("billing.summary.clearCart")}
           </button>

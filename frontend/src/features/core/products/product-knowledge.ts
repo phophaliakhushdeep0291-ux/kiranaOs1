@@ -3,6 +3,7 @@ import { offlineDB } from "@/lib/offline/db";
 
 const CACHE_PREFIX = "product-knowledge:v1:";
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const MISS_TTL_MS = 6 * 60 * 60 * 1000;
 
 export interface KnownProductDetails {
   found: true;
@@ -37,7 +38,8 @@ function cacheKey(barcode: string) {
 export async function lookupKnownProduct(barcode: string, { online = typeof navigator === "undefined" || navigator.onLine !== false, now = Date.now() } = {}) {
   const code = barcode.trim();
   const cached = await offlineDB.getSetting<CachedKnowledge>(cacheKey(code)).catch(() => null);
-  if (cached && now - cached.checkedAt < CACHE_TTL_MS) return cached.value;
+  const cachedTtl = cached?.value ? CACHE_TTL_MS : MISS_TTL_MS;
+  if (cached && now - cached.checkedAt < cachedTtl) return cached.value;
   if (!online) return cached?.value ?? null;
   try {
     const result = await apiRequest<KnownProductDetails | KnowledgeResponse>(`/products/knowledge/${encodeURIComponent(code)}`, {

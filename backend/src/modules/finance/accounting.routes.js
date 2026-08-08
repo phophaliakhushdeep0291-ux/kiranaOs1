@@ -16,6 +16,13 @@ import {
 } from "./bank-reconciliation.schema.js";
 import * as controller from "./accounting-control.controller.js";
 import * as bankController from "./bank-reconciliation.controller.js";
+import {
+  channelSettlementImportQuerySchema,
+  channelSettlementImportSchema,
+  channelSettlementReportQuerySchema,
+  channelSettlementResolveSchema,
+} from "./channel-settlement.schema.js";
+import * as channelController from "./channel-settlement.controller.js";
 
 const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated(), requireRole("owner"));
@@ -27,5 +34,9 @@ router.post("/bank-transactions/:id/match", requireFeature("csv_import_export"),
 router.post("/bank-transactions/:id/unmatch", requireFeature("csv_import_export"), requireOwnerPin, validate(bankReconciliationUnmatchSchema), bankController.unmatch);
 router.post("/bank-transactions/:id/ignore", requireFeature("csv_import_export"), requireOwnerPin, validate(bankReconciliationIgnoreSchema), bankController.ignore);
 router.post("/bank-transactions/:id/restore", requireFeature("csv_import_export"), requireOwnerPin, validate(bankReconciliationRestoreSchema), bankController.restore);
+router.get("/channel-settlement-imports", requireFeature("channel_settlement"), validateQuery(channelSettlementImportQuerySchema), channelController.imports);
+router.post("/channel-settlements/import", requireFeature("channel_settlement"), requireOwnerPin, validate(channelSettlementImportSchema), channelController.importSettlement);
+router.get("/channel-settlements", requireFeature("channel_settlement"), validateQuery(channelSettlementReportQuerySchema), channelController.report);
+router.post("/channel-settlement-rows/:id/resolve", requireFeature("channel_settlement"), requireOwnerPin, validate(channelSettlementResolveSchema), channelController.resolve);
 
 export default router;

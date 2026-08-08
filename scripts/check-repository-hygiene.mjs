@@ -1,8 +1,13 @@
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+const repositoryRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
 
 const tracked = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8", maxBuffer: 20 * 1024 * 1024 })
   .split("\0")
   .filter(Boolean);
+const trackedAndPresent = tracked.filter((file) => existsSync(resolve(repositoryRoot, file)));
 
 const forbidden = [
   { pattern: /(^|\/)(node_modules|dist|build|coverage|qa-artifacts|test-results|playwright-report)(\/|$)/i, reason: "generated build or test output" },
@@ -18,7 +23,7 @@ const forbidden = [
   { pattern: /^ci\d+\//i, reason: "historical CI run artifact" },
 ];
 
-const violations = tracked.flatMap((file) => forbidden
+const violations = trackedAndPresent.flatMap((file) => forbidden
   .filter(({ pattern }) => pattern.test(file))
   .map(({ reason }) => `${file} (${reason})`));
 
@@ -31,7 +36,9 @@ const requiredSeedAssets = [
   "frontend/src/features/core/products/starter-catalog/starter-catalog.ts",
 ];
 const trackedSet = new Set(tracked);
-const missingSeedAssets = requiredSeedAssets.filter((file) => !trackedSet.has(file));
+const missingSeedAssets = requiredSeedAssets.filter((file) => (
+  !trackedSet.has(file) || !existsSync(resolve(repositoryRoot, file))
+));
 
 if (violations.length) {
   console.error("Repository hygiene check failed. Remove these tracked artifacts and rely on CI artifact storage:");
@@ -45,4 +52,4 @@ if (missingSeedAssets.length) {
   process.exit(1);
 }
 
-console.log(`Repository hygiene check passed (${tracked.length} tracked files inspected; ${requiredSeedAssets.length} new-shop seed assets preserved).`);
+console.log(`Repository hygiene check passed (${trackedAndPresent.length} tracked files inspected; ${requiredSeedAssets.length} new-shop seed assets preserved).`);

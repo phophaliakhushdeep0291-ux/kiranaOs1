@@ -240,7 +240,13 @@ export function BillingSearch({
       if (!knownProduct) return;
       closeBindSheet();
       onSearchChange("");
-      toast({ title: `${knownProduct.name} मिला`, description: `${knownProduct.brand || knownProduct.category} · ${knownProduct.source}` });
+      toast({
+        title: t("billing.search.knowledgeFound", { name: knownProduct.name }),
+        description: t("billing.search.knowledgeFoundDetail", {
+          detail: knownProduct.brand || knownProduct.category,
+          source: knownProduct.source,
+        }),
+      });
       onCreateProductWithBarcode(code, knownProduct);
     });
   }
@@ -686,7 +692,7 @@ export function BillingSearch({
                     {t("billing.search.bindTitle", { code: bindCode })}
                   </p>
                   <p className="mt-0.5 text-[12px] font-semibold text-[#6d7c98]">
-                    {knowledgeLookupCode === bindCode ? "साझा कैटलॉग में सामान खोज रहे हैं…" : skipBinding ? t("billing.search.bindSkipActive") : t("billing.search.bindQuestion")}
+                    {knowledgeLookupCode === bindCode ? t("billing.search.knowledgeLooking") : skipBinding ? t("billing.search.bindSkipActive") : t("billing.search.bindQuestion")}
                   </p>
                 </div>
                 <button
@@ -724,7 +730,7 @@ export function BillingSearch({
               <div className="px-2 py-2">
                 {knowledgeLookupCode === bindCode ? (
                   <div className="flex items-center justify-center gap-2 px-2 py-8 text-[12px] font-bold text-[var(--brand)]" data-testid="barcode-knowledge-loading">
-                    <Search size={17} className="animate-pulse" /> नाम, पैक और फोटो खोज रहे हैं…
+                    <Search size={17} className="animate-pulse" /> {t("billing.search.knowledgeLoading")}
                   </div>
                 ) : bindCandidates.length === 0 ? (
                   <p className="px-2 py-6 text-center text-[12px] font-semibold text-[#6d7c98]">

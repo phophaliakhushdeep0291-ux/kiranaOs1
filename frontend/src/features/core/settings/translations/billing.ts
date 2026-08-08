@@ -243,6 +243,10 @@ export const billingEn = {
   // Capture-on-first-scan: an unknown code asks which item it is instead of dead-ending.
   "billing.search.bindTitle": "New barcode {code}",
   "billing.search.bindQuestion": "Which item is this?",
+  "billing.search.knowledgeLooking": "Looking in the shared product catalog…",
+  "billing.search.knowledgeLoading": "Finding the name, pack and photo…",
+  "billing.search.knowledgeFound": "Found {name}",
+  "billing.search.knowledgeFoundDetail": "{detail} · {source}",
   "billing.search.bindSearchPlaceholder": "Search the item by name…",
   "billing.search.bindNoMatch": "No item matches. Create it as new stock.",
   "billing.search.bindHasCode": "Already has code {code}",

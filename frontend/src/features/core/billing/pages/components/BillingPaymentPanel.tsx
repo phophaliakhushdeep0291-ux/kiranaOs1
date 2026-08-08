@@ -164,7 +164,7 @@ export function BillingPaymentPanel({
       {showPaymentMode && paymentMode === BillPaymentMode.gift_card ? (
         <div className="space-y-3 rounded-xl border border-pink-200 bg-pink-50/60 p-3">
           <div><p className="text-xs font-black text-pink-950">{t("billing.pay.gift.title")}</p><p className="mt-0.5 text-[11px] leading-4 text-pink-700">{t("billing.pay.gift.help")}</p></div>
-          <div className="flex gap-2"><Input value={giftCardCode} onChange={(event) => setGiftCardCode(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 40))} placeholder="KOS-XXXX-XXXX-XXXX" className="h-9 bg-white font-mono text-xs" autoComplete="off" /><button type="button" onClick={onLookupGiftCard} disabled={!isOnline || giftCardCode.replace(/[^A-Z0-9]/g, "").length < 10 || giftCardLoading} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-pink-600 px-3 text-xs font-black text-white disabled:opacity-50">{giftCardLoading ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}{t("billing.pay.gift.check")}</button></div>
+          <div className="flex gap-2"><Input value={giftCardCode} onChange={(event) => setGiftCardCode(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 40))} placeholder="KOS-XXXX-XXXX-XXXX" className="h-11 bg-white font-mono text-xs" autoComplete="off" /><button type="button" onClick={onLookupGiftCard} disabled={!isOnline || giftCardCode.replace(/[^A-Z0-9]/g, "").length < 10 || giftCardLoading} className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-pink-600 px-3 text-xs font-black text-white disabled:opacity-50">{giftCardLoading ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}{t("billing.pay.gift.check")}</button></div>
           {!isOnline ? <p className="text-[11px] font-bold text-amber-700">{t("billing.pay.gift.offline")}</p> : giftCardError ? <p className="text-[11px] font-bold text-rose-700">{giftCardError}</p> : giftCardBalance !== null ? <div className="grid gap-2 sm:grid-cols-2"><div className="rounded-lg bg-white p-2.5"><p className="text-[10px] font-bold uppercase text-slate-500">{t("billing.pay.gift.available")}</p><p className="mt-0.5 text-base font-black text-pink-700">{fmtRs(giftCardBalance)}</p></div><div><label className="mb-1 block text-[10px] font-bold uppercase text-slate-500">{t("billing.pay.gift.useFromCard")}</label><Input type="number" min="0.01" max={Math.min(giftCardBalance, grandTotal)} step="0.01" value={giftCardAmount || ""} onChange={(event) => setGiftCardAmount(clampAmount(Number(event.target.value) || 0, 0, Math.min(giftCardBalance, grandTotal)))} className="h-9 bg-white font-bold" /></div><p className="text-[11px] font-semibold text-slate-600 sm:col-span-2">{giftCardAmount < grandTotal ? t("billing.pay.gift.remainderCash", { amount: fmtRs(grandTotal - giftCardAmount) }) : t("billing.pay.gift.coversBill")}</p></div> : null}
         </div>
       ) : null}
@@ -187,7 +187,7 @@ export function BillingPaymentPanel({
 
       {/* Amount received (cash/UPI mode) */}
       {showPaymentMode && paymentMode !== SPLIT_PAYMENT && paymentMode !== BillPaymentMode.credit && paymentMode !== BillPaymentMode.gift_card && !(showReceivedAmount || typeof paidAmount === "number" || allowAdvancePayment) ? (
-        <button type="button" onClick={() => setShowReceivedAmount(true)} className="w-full rounded-[8px] border border-dashed border-[#d7e2f1] py-2 text-[11px] font-semibold text-[#536383] transition-colors hover:border-[#b9cdf6] hover:bg-[#f8fbff] hover:text-[var(--brand)]">
+        <button type="button" onClick={() => setShowReceivedAmount(true)} className="min-h-11 w-full rounded-[8px] border border-dashed border-[#d7e2f1] py-2 text-[11px] font-semibold text-[#536383] transition-colors hover:border-[#b9cdf6] hover:bg-[#f8fbff] hover:text-[var(--brand)]">
           {t("billing.pay.enterPartial")}
         </button>
       ) : null}
@@ -255,7 +255,7 @@ export function BillingPaymentPanel({
                   type="button"
                   data-testid={`tender-chip-${amount}`}
                   onClick={() => setCashTendered(amount)}
-                  className="rounded-full border border-[#dbe3ef] bg-white px-2.5 py-1 text-[12px] font-bold text-[#31527e] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-[#dbe3ef] bg-white px-2.5 py-1 text-[12px] font-bold text-[#31527e] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
                 >
                   {fmtRs(amount)}
                 </button>
@@ -291,7 +291,7 @@ export function BillingPaymentPanel({
                 data-testid="input-split-cash"
                 type="number"
                 inputMode="decimal"
-                className="h-9 font-semibold"
+                className="h-11 font-semibold"
                 placeholder="0"
                 value={splitCashAmount}
                 max={grandTotal}
@@ -311,7 +311,7 @@ export function BillingPaymentPanel({
                 data-testid="input-split-upi"
                 type="number"
                 inputMode="decimal"
-                className="h-9 font-semibold"
+                className="h-11 font-semibold"
                 placeholder="0"
                 value={splitUpiAmount}
                 max={Math.max(0, grandTotal - splitCash)}

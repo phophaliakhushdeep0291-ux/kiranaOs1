@@ -47,6 +47,7 @@ export const FEATURE_REGISTRY = {
   staff_performance_report: { minimumPlan: "pro", description: "Staff performance report" },
   advanced_analytics: { minimumPlan: "pro", description: "Advanced analytics" },
   api_webhook_later: { minimumPlan: "pro", description: "API/webhook later" },
+  channel_settlement: { minimumPlan: "pro", description: "Channel order and payout reconciliation" },
   premium_support: { minimumPlan: "pro", description: "Premium support" },
   product_variants: { minimumPlan: "starter", description: "Size, colour and product variants" },
   clothing_rentals: { minimumPlan: "growth", description: "Clothing rental bookings" },

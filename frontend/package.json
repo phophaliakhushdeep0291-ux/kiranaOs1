@@ -23,7 +23,8 @@
                     "prod:check":  "npm run typecheck && npm run i18n:check && npm run test && npm run build && npm run security:check",
                     "qa:purchase-receive":  "node scripts/capture-purchase-receive-ui.mjs",
                     "qa:supplier-settlement":  "node scripts/capture-supplier-settlement-ui.mjs",
-                    "qa:mobile-core-matrix":  "node scripts/capture-mobile-core-matrix-v1.mjs"
+                    "qa:mobile-core-matrix":  "node scripts/capture-mobile-core-matrix-v1.mjs",
+                    "qa:offline-core-restart":  "node scripts/verify-offline-core-restart.mjs"
                 },
     "dependencies":  {
                          "@hookform/resolvers":  "^3.10.0",

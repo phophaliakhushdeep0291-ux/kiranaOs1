@@ -75,6 +75,7 @@ const proOnlyFeatures = [
   "staff_performance_report",
   "advanced_analytics",
   "api_webhook_later",
+  "channel_settlement",
   "premium_support",
 ];
 

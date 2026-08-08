@@ -67,6 +67,7 @@ export type FeatureName =
   | "staff_performance_report"
   | "advanced_analytics"
   | "api_webhook_later"
+  | "channel_settlement"
   | "premium_support"
   | "hindi_voice_billing"
   | "smart_daily_closing"
@@ -174,6 +175,7 @@ const proExtra: FeatureName[] = [
   "staff_performance_report",
   "advanced_analytics",
   "api_webhook_later",
+  "channel_settlement",
   "premium_support",
   "hindi_voice_billing",
 ];
@@ -460,6 +462,7 @@ export const FEATURE_LABELS: Record<FeatureName, string> = {
   staff_performance_report: "Staff performance report",
   advanced_analytics: "Advanced analytics",
   api_webhook_later: "Business integrations",
+  channel_settlement: "Channel order and payout reconciliation",
   premium_support: "Premium support",
   hindi_voice_billing: "Hindi/Hinglish voice billing",
   smart_daily_closing: "Smart daily closing",
