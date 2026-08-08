@@ -114,6 +114,9 @@ model Shop {
   restaurantTables              RestaurantTable[]
   kitchenTickets                KitchenTicket[]
   dishRecipeComponents          DishRecipeComponent[]
+  menuAddonGroups               MenuAddonGroup[]
+  menuAddonOptions              MenuAddonOption[]
+  productAddonGroups            ProductAddonGroup[]
   auditRules                    AuditRule[]
   auditRuns                     AuditRun[]
   auditEvaluations              AuditEvaluation[]
@@ -547,6 +550,7 @@ model Product {
   purchaseReturnItems  PurchaseReturnItem[]
   stockCountLines      StockCountLine[]
   inventoryLots        InventoryLot[]
+  addonGroups          ProductAddonGroup[]
 
   @@unique([shopId, idempotencyKey])
   @@unique([shopId, sourceDeviceId, clientProductId])
@@ -665,6 +669,10 @@ model Bill {
   deletedReason         String?
   returnOfBillId        String? // set on billType "sales_return": the original sale this return reverses
   refundMode            String? // cash | upi | bank | udhar | gift_card
+  whatsappDeliveryState String    @default("not_sent") // not_sent | opened_share_sheet | sent_via_api | failed
+  whatsappDeliveryAt    DateTime?
+  whatsappProviderMessageId String?
+  whatsappDeliveryKey   String?   @unique
   businessDate          DateTime  @default(now()) // when the sale happened; differs from createdAt for delayed offline sync
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
@@ -744,6 +752,7 @@ model BillItem {
   product        Product?                @relation(fields: [productId], references: [id])
   sellingUnit    ProductSellingUnit?     @relation(fields: [sellingUnitId], references: [id], onDelete: SetNull)
   lotAllocations BillItemLotAllocation[]
+  addons         BillItemAddon[]
 
   @@index([billId])
   @@index([originalBillItemId])
@@ -3701,4 +3710,107 @@ model KitchenTicket {
   @@index([shopId, deletedAt, firedAt])
   @@index([shopId, status, firedAt])
   @@index([shopId, billId])
+}
+
+// ─────────────────────────────────────────────
+// MENU ADD-ONS — "extra cheese", "no onion", "choose your bread"
+// ─────────────────────────────────────────────
+// A group is defined ONCE per shop and attached to as many dishes as serve it.
+// Petpooja-style per-dish add-on lists mean editing the price of extra cheese in
+// forty places; here the paneer tikka and the paneer roll share one group, and a
+// price rise is one edit.
+//
+// What a group carries is the RULE, not just the list: how many options a guest
+// must pick (minSelect 1 = "choose your bread" is compulsory) and how many they
+// may (maxSelect). Those two numbers are what stop a kitchen receiving an order
+// for a burger with no bun or with four.
+model MenuAddonGroup {
+  id        String    @id @default(cuid())
+  shopId    String
+  name      String
+  // 0 = optional. 1 or more = the guest must choose that many before the line
+  // can be added, which is how a compulsory choice is expressed.
+  minSelect Int       @default(0)
+  // 0 = no ceiling. Anything else caps the picks.
+  maxSelect Int       @default(0)
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop    Shop                @relation(fields: [shopId], references: [id])
+  options MenuAddonOption[]
+  dishes  ProductAddonGroup[]
+
+  @@unique([shopId, name])
+  @@index([shopId, isActive, sortOrder])
+}
+
+model MenuAddonOption {
+  id              String  @id @default(cuid())
+  shopId          String
+  groupId         String
+  name            String
+  // May be zero, and often is: "no onion" and "less spicy" are instructions the
+  // kitchen needs and the guest is not charged for.
+  priceDelta      Float   @default(0)
+  priceDeltaPaise BigInt?
+  // The stock item this actually consumes, when it consumes one. Null means a
+  // cooking instruction rather than an ingredient, so nothing is deducted.
+  linkedProductId String?
+  linkedQtyBase   Float   @default(1)
+  sortOrder       Int     @default(0)
+  isActive        Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shop           Shop            @relation(fields: [shopId], references: [id])
+  group          MenuAddonGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  billItemAddons BillItemAddon[]
+
+  @@unique([shopId, groupId, name])
+  @@index([shopId, groupId, isActive])
+}
+
+/// Which dishes offer which group. The join is what makes a group reusable.
+model ProductAddonGroup {
+  id        String @id @default(cuid())
+  shopId    String
+  productId String
+  groupId   String
+  sortOrder Int    @default(0)
+
+  shop    Shop           @relation(fields: [shopId], references: [id])
+  product Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  group   MenuAddonGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, groupId])
+  @@index([shopId, productId])
+}
+
+/// What was actually chosen on one sold line, snapshotted.
+///
+/// Every descriptive field is copied rather than joined, for the same reason a
+/// bill item copies the product name: a receipt reprinted next year must read
+/// what was sold at the price it was sold for, not what the option is called and
+/// costs today. optionId is nullable so retiring an option never orphans a bill.
+model BillItemAddon {
+  id         String  @id @default(cuid())
+  billItemId String
+  optionId   String?
+  groupName  String
+  name       String
+  price      Float   @default(0)
+  pricePaise BigInt?
+  quantity   Float   @default(1)
+
+  createdAt DateTime @default(now())
+
+  billItem BillItem         @relation(fields: [billItemId], references: [id], onDelete: Cascade)
+  option   MenuAddonOption? @relation(fields: [optionId], references: [id], onDelete: SetNull)
+
+  @@index([billItemId])
+  @@index([optionId])
 }

@@ -781,7 +781,7 @@ export function BillingSummary({
           <SecBtn onClick={onHoldBill} disabled={cart.length === 0} icon={<PauseCircle size={13} />} label={t("billing.summary.hold")} shortcut="F9" />
           <SecBtn onClick={onPrintBill} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Printer size={13} />} label={t("billing.summary.print")} />
           {/* Free for all plans: opens WhatsApp with a text receipt (wa.me deep link, no paid API). */}
-          <SecBtn onClick={onSharePdf} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Smartphone size={13} />} label={t("billing.summary.whatsapp")} />
+          <SecBtn primary onClick={onSharePdf} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Smartphone size={13} />} label={t("billing.summary.whatsapp")} />
         </div>
 
         {cart.length > 0 && (
@@ -823,6 +823,7 @@ function SecBtn({
   icon,
   label,
   shortcut,
+  primary,
 }: {
   testId?: string;
   onClick?: () => void;
@@ -830,13 +831,14 @@ function SecBtn({
   icon: React.ReactNode;
   label: string;
   shortcut?: string;
+  primary?: boolean;
 }) {
   return (
     <button
       data-testid={testId}
       onClick={onClick}
       disabled={disabled}
-      className="flex flex-col items-center gap-1 rounded-[9px] border border-[#e2eaf5] bg-white py-2 text-xs font-bold text-[#13274d] transition-colors hover:bg-[#f7f9fd] disabled:pointer-events-none disabled:opacity-40"
+      className={primary ? "flex flex-col items-center gap-1 rounded-[9px] border border-[#15803d] bg-[#16a34a] py-2 text-xs font-bold text-white transition-colors hover:bg-[#15803d] disabled:pointer-events-none disabled:opacity-40" : "flex flex-col items-center gap-1 rounded-[9px] border border-[#e2eaf5] bg-white py-2 text-xs font-bold text-[#13274d] transition-colors hover:bg-[#f7f9fd] disabled:pointer-events-none disabled:opacity-40"}
     >
       {icon}
       <span>{label}</span>

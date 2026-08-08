@@ -172,6 +172,43 @@ export function applyAuthoritativeUdharSummary(
   return reconciled.sort((a, b) => b.ledgerBalance - a.ledgerBalance || a.name.localeCompare(b.name));
 }
 
+/**
+ * Keep the visible customer total in lock-step with a local payment while the
+ * server summary is being refreshed. Sync can confirm a payment faster than
+ * React Query refreshes the summary; without this projection the old summary
+ * briefly wins again and the page shows the pre-payment amount until reload.
+ */
+export function projectCustomerOutstanding(
+  customers: CustomerWithLedger[],
+  customerId: string,
+  outstanding: number,
+): CustomerWithLedger[] {
+  const balance = roundMoney(Math.max(0, outstanding));
+  return customers.map((customer) => {
+    if (!customerIdentityValues(customer).includes(customerId)) return customer;
+    return {
+      ...customer,
+      type: balance > 0 ? "udhar" : customer.type === "udhar" ? "regular" : customer.type,
+      ledgerBalance: balance,
+      totalUdhar: balance,
+      udharAmount: balance,
+      balance_source: "local_payment_projection",
+      ledgerMetrics: {
+        ...customer.ledgerMetrics,
+        balance,
+        ageing: {
+          ...customer.ledgerMetrics.ageing,
+          total: balance,
+          zeroToSeven: balance,
+          sevenToThirty: 0,
+          thirtyPlus: 0,
+        },
+        isBadCustomer: balance > readNumber(customer.udharLimit, Number.POSITIVE_INFINITY),
+      },
+    };
+  });
+}
+
 
 function readNumber(value: unknown, fallback = 0): number {
   const num = Number(value ?? fallback);

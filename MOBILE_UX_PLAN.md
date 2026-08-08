@@ -1,7 +1,7 @@
 # Mobile UX Plan
 
 Status: Execution baseline  
-Last updated: 2026-07-18
+Last updated: 2026-08-08
 
 ## Outcome
 
@@ -57,6 +57,7 @@ Use existing components and routes; avoid page rewrites where a shared primitive
 - 2026-07-18: Supplier-due settlement was upgraded from a mutable purchase overwrite to dedicated `RECORD_SUPPLIER_PAYMENT` and owner-gated `REVERSE_SUPPLIER_PAYMENT` events. Each payment has an immutable local row, an exactly-once append-only financial-ledger entry, transactional due reconciliation and audited reversal. Focused frontend tests pass 8/8 and backend sync integration passes 37/37.
 - MQA-PUR-01 is verified for PO create, receipt/stock mutation, partial supplier settlement, owner reversal and lost-ack replay. The focused 390px verifier proved full-screen 390x844 geometry, 44px controls, zero overflow/runtime errors and exact due movement ₹900 -> ₹700 -> ₹900 across replay. Artifacts: `supplier-payment-task-390.png` and `supplier-payment-reversal-task-390.png`; verifier: `frontend/scripts/capture-supplier-settlement-ui.mjs`.
 - 2026-08-01: MQA-BILL-01/MQA-SET-01 receipt software paths passed live 390x844 QA. The premium 80mm preview reacts to GST and previous-Udhar toggles; HTML download records Saved, browser printing records Dialog opened, and bill duplicate-print leaves the cancelled bill unchanged. Printer, bill-share and email-dialog actions measure 44px, the page remains 390px wide and console errors are zero. External message delivery and physical-printer certification were intentionally not claimed.
+- 2026-08-08: MQA-SYNC-01 passed the mutable-customer two-device recovery flow at 390x844. Devices A and B saved different offline names from the same base record; after A synced, B showed one actionable customer conflict with a plain local/cloud comparison and valid timestamps, not duplicate cards. Historical in-UI `Keep cloud` recovery removed the customer review and converged B; the fresh owner-authenticated decision also left zero open customer rows and a server audit. One unrelated historical bill review remains intentionally unresolved because financial conflicts require compensating entries. The final fresh post-resolution screenshot was not recaptured after the QA browser reopened onto a policy-blocked connection-error page; HTTP/database/audit evidence closes the server decision while the earlier live interaction supplies the UI-convergence proof.
 
 ## Live audit procedure
 

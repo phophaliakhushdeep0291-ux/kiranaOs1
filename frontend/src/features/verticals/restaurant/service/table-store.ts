@@ -1,5 +1,6 @@
 import { offlineDB } from "@/lib/offline/db";
-import { cartItemKey, type BillingDraft, type CartItem, type HeldBill } from "@/features/core/billing/pages/billing-types";
+import { addonSummary, cartItemKey, type BillingDraft, type CartItem, type HeldBill } from "@/features/core/billing/pages/billing-types";
+import { cartItemNet } from "@/features/core/billing/pages/billing-calculations";
 
 /**
  * Table service and kitchen tickets for a restaurant.
@@ -198,10 +199,7 @@ export interface TableOccupancy {
 }
 
 export function cartRunningTotal(cart: CartItem[] | undefined): number {
-  return (cart ?? []).reduce((sum, item) => {
-    const gross = (Number(item.rate) || 0) * (Number(item.quantity) || 0);
-    return sum + gross - (Number(item.lineDiscount) || 0);
-  }, 0);
+  return (cart ?? []).reduce((sum, item) => sum + cartItemNet(item), 0);
 }
 
 function cartLineLabel(item: CartItem): string {
@@ -235,7 +233,7 @@ export function pendingKotLines(cart: CartItem[] | undefined, tickets: KotTicket
       name: cartLineLabel(item),
       qty: Math.round(outstanding * 1000) / 1000,
       unit: item.unit ?? "piece",
-      note: item.note,
+      note: [addonSummary(item.addons), item.note].filter(Boolean).join(" · ") || undefined,
     });
   }
   return pending;

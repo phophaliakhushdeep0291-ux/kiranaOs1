@@ -24,6 +24,7 @@ import { sendTransactionalEmail } from "../../lib/authEmail.js";
 
 const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
+const BILL_ITEMS_WITH_OPTIONS = { include: { addons: true } };
 
 function resolveBillBusinessDate(actor = {}) {
   const receivedAt = new Date();
@@ -69,7 +70,7 @@ export async function listBills(shopId, { from, to, status, customerId, location
   const [bills, total] = await Promise.all([
     db.bill.findMany({
       where,
-      include: { items: true, payments: true, location: true, giftCardTransactions: true },
+      include: { items: BILL_ITEMS_WITH_OPTIONS, payments: true, location: true, giftCardTransactions: true },
       orderBy: { businessDate: "desc" },
       skip: (page - 1) * limit,
       take: limit,
@@ -86,7 +87,7 @@ export async function listBills(shopId, { from, to, status, customerId, location
 export async function getBill(shopId, id) {
   const bill = await db.bill.findFirst({
     where: { id, shopId, deletedAt: null },
-    include: { items: true, payments: true, customer: true, location: true, giftCardTransactions: true },
+    include: { items: BILL_ITEMS_WITH_OPTIONS, payments: true, customer: true, location: true, giftCardTransactions: true },
   });
   if (!bill) throw new AppError("Bill not found", 404);
   return bill;
@@ -253,8 +254,8 @@ export async function confirmBill(shopId, body, actor = {}) {
     // Schedule H medicine leave without a doctor's slip. Billing never names a
     // trade; verticals register guards and this asks the registry. No guards
     // registered is one array-length check.
-    const { refusal: saleRefusal, onConfirmed: saleGuardHooks } = await evaluateSaleGuards({
-      shopId, tx, body, items, productMap, isEstimate,
+    const { refusal: saleRefusal, onConfirmed: saleGuardHooks, decorateBillItem: saleItemDecorators } = await evaluateSaleGuards({
+      shopId, tx, body, items, productMap, isEstimate, location,
     });
     if (saleRefusal) {
       const error = new AppError(saleRefusal.message, saleRefusal.status ?? 409, saleRefusal.code);
@@ -328,7 +329,7 @@ export async function confirmBill(shopId, body, actor = {}) {
     const billItems = [];
     const stockUpdates = []; // collect stock changes to apply after
 
-    for (const item of items) {
+    for (const [itemIndex, item] of items.entries()) {
       const product = item.productId ? productMap[item.productId] : null;
 
       if (item.productId && !product) {
@@ -387,7 +388,8 @@ export async function confirmBill(shopId, body, actor = {}) {
       const maximumPrice = product
         ? sellingUnitMaxPrice(sellingUnit, product, defaultSellingUnitByProduct.get(product.id), batchMrp)
         : 0;
-      if (maximumPrice > 0 && item.ratePerRateUnit > maximumPrice + 0.005) {
+      const baseRateForCeiling = item.baseRatePerRateUnit ?? item.ratePerRateUnit;
+      if (maximumPrice > 0 && baseRateForCeiling > maximumPrice + 0.005) {
         const error = new AppError(
           batchMrp > 0
             ? `Price for "${product?.name ?? item.name}" exceeds the MRP printed on the batch being dispensed (Rs ${maximumPrice})`
@@ -420,7 +422,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       totalGst = addMoney(totalGst, gstAmount);
       itemProfit = addMoney(itemProfit, lineProfit);
 
-      billItems.push({
+      const billItem = {
         productId: item.productId ?? null,
         sellingUnitId: sellingUnit?.id ?? null,
         sellingUnitCode: sellingUnit?.unitCode ?? item.sellingUnitCode ?? null,
@@ -451,7 +453,12 @@ export async function confirmBill(shopId, body, actor = {}) {
         priceOverrideReason: item.priceOverrideReason ?? null,
         priceApprovedByUserId: item.wasPriceOverridden ? createdByUserId : null,
         ...moneyShadows({ ratePerRateUnit: item.ratePerRateUnit, costPerRateUnit, lineDiscount, lineTotal, lineCost, lineProfit, originalUnitPrice: item.originalUnitPrice ?? item.ratePerRateUnit }),
-      });
+      };
+      for (const decorate of saleItemDecorators) {
+        const decoration = await decorate({ item, itemIndex, product, billItem });
+        if (decoration && typeof decoration === "object") Object.assign(billItem, decoration);
+      }
+      billItems.push(billItem);
 
       if (product) {
         stockUpdates.push({
@@ -641,14 +648,14 @@ export async function confirmBill(shopId, body, actor = {}) {
         items: { create: billItems },
         payments: { create: paymentRows },
       },
-      include: { items: true, payments: true, loyaltyTransactions: true },
+      include: { items: BILL_ITEMS_WITH_OPTIONS, payments: true, loyaltyTransactions: true },
     });
     await redeemOfferInTransaction(tx, shopId, validatedOffer, { isEstimate });
     await allocateLotsForBill(tx, { shopId, locationId: location.id, bill, chosenLotByProduct });
 
     // Whatever a guard needs to record about the sale it permitted — the pharmacy
     // closes its register entry against this bill here.
-    for (const hook of saleGuardHooks) await hook({ tx, bill, billNo });
+    for (const hook of saleGuardHooks) await hook({ tx, bill, billNo, location });
 
     await recordBillLoyaltyRedemption(tx, {
       shopId,
@@ -1526,7 +1533,7 @@ function hasBillIdentity(identity) {
 
 async function findExistingBillByIdentity(client, shopId, identity) {
   if (!hasBillIdentity(identity)) return null;
-  const include = { items: true, payments: true };
+  const include = { items: BILL_ITEMS_WITH_OPTIONS, payments: true };
   if (identity.idempotencyKey) {
     const byKey = await client.bill.findFirst({
       where: { shopId, idempotencyKey: identity.idempotencyKey },

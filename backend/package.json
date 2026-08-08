@@ -70,6 +70,8 @@
     "proof:dr": "node scripts/disaster-recovery-proof.js",
     "migration:safety": "node scripts/migration-safety-check.js",
     "check:barcode-uniqueness": "node scripts/check-barcode-uniqueness.js",
+    "backup:drill": "node scripts/run-with-env.js PRISMA_CLIENT_VARIANT=integration -- node scripts/backup-drill.js",
+    "backup:drill:verify": "node scripts/backup-drill-verify.js",
     "release:gate": "node scripts/release-gate.js",
     "release:manifest": "node scripts/release-manifest.js",
     "release:certify:local": "node scripts/release-certification.js --mode=local",

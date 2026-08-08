@@ -3,7 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { listProducts } from "../products/products.service.js";
 import { priceCatalogProducts } from "../pricing/pricing.service.js";
 import { unavailableProductIds } from "../../shared/catalog-availability.js";
-import { resolveStorefrontOrderContext, shapeStorefrontCatalog } from "../../shared/storefront-modes.js";
+import { prepareStorefrontOrderLines, resolveStorefrontOrderContext, shapeStorefrontCatalog } from "../../shared/storefront-modes.js";
 import { parseShopSettings } from "../shops/businessProfiles.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { toBaseQty } from "../../utils/units.js";
@@ -124,7 +124,14 @@ function parseOrderLines(json) {
   try {
     const parsed = JSON.parse(json || "[]");
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((l) => ({ name: l.name, qty: l.qty, price: l.price, unit: l.unit }));
+    return parsed.map((l) => ({
+      name: l.name,
+      qty: l.qty,
+      price: l.price,
+      unit: l.unit,
+      variation: l.variation ?? null,
+      addons: Array.isArray(l.addons) ? l.addons : [],
+    }));
   } catch {
     return [];
   }
@@ -268,8 +275,11 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   });
   const orderableIds = storefront ? new Set(storefront.products.map((p) => p.id)) : null;
 
-  const lines = [];
-  for (const [productId, qty] of normalizedItems) {
+  const preparedLines = await prepareStorefrontOrderLines({
+    shopId, shop, settings, rawItems, products: candidates, orderableIds,
+  });
+  const lines = preparedLines ?? [];
+  for (const [productId, qty] of preparedLines ? [] : normalizedItems) {
     const product = byId.get(productId);
     if (!product || qty <= 0) continue;
     if (orderableIds) {

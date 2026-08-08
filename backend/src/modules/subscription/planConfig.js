@@ -30,6 +30,8 @@ const starterFeatures = [
   "supplier_entry",
   "purchase_entry",
   "stock_adjustment",
+  // One-off receipt delivery is table stakes. Bulk/scheduled reminders remain Pro.
+  "single_bill_whatsapp",
 ];
 
 const standardOnlyFeatures = [

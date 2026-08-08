@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ApiClientError, isBrowserOnline } from "@/lib/api/http";
+import { isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
@@ -32,10 +32,6 @@ export const getGetStockLedgerQueryKey = (params?: QueryParams) => ["inventory",
 type InventoryQueryKey = ReturnType<typeof getGetInventoryQueryKey>;
 type LowStockQueryKey = ReturnType<typeof getGetLowStockQueryKey>;
 type StockLedgerQueryKey = ReturnType<typeof getGetStockLedgerQueryKey>;
-
-function isNetworkLikeError(error: unknown) {
-  return !(error instanceof ApiClientError) || !isBrowserOnline();
-}
 
 function readCachedInventory(): InventoryItem[] {
   return readInstantCache<InventoryItem[]>(INVENTORY_CACHE_KEY, readInstantCache<Product[]>(PRODUCTS_CACHE_KEY, []) as InventoryItem[])
@@ -84,7 +80,7 @@ export function useGetInventory(options?: QueryHookOptions<InventoryResponse, In
         return fresh;
       } catch (error) {
         if (liveCached.length > 0) return liveCached;
-        if (isNetworkLikeError(error)) {
+        if (isRecoverableNetworkError(error)) {
           const fromDB = await readInventoryFromIndexedDB();
           if (fromDB.length > 0) {
             writeInstantCache(INVENTORY_CACHE_KEY, fromDB);
@@ -129,7 +125,7 @@ export function useGetLowStock(options?: QueryHookOptions<InventoryResponse, Low
         return (await inventoryApi.getLowStock()).map((item) => normalizeInventoryItem(item));
       } catch (error) {
         if (liveCached.length > 0) return liveCached;
-        if (isNetworkLikeError(error)) return readLowStockFromIndexedDB();
+        if (isRecoverableNetworkError(error)) return readLowStockFromIndexedDB();
         throw error;
       }
     },
@@ -157,7 +153,7 @@ export function useGetStockLedger(
       try {
         return await inventoryApi.getStockLedger(params) as InventoryLedgerResponse;
       } catch (error) {
-        if (liveCached.entries.length > 0 || isNetworkLikeError(error)) return liveCached;
+        if (liveCached.entries.length > 0 || isRecoverableNetworkError(error)) return liveCached;
         throw error;
       }
     },

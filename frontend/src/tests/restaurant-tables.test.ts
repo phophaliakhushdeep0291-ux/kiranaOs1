@@ -27,6 +27,7 @@ describe("restaurant tables", () => {
     expect(cartRunningTotal([line("Paneer", 1, 240), line("Naan", 2, 45)])).toBe(330);
     expect(cartRunningTotal([{ ...line("Paneer", 1, 240), lineDiscount: 40 }])).toBe(200);
     expect(cartRunningTotal(undefined)).toBe(0);
+    expect(cartRunningTotal([{ ...line("Burger", 2, 150), addons: [{ optionId: "cheese", groupName: "Extras", name: "Cheese", price: 25 }] }])).toBe(350);
   });
 
   it("fires only what the kitchen has not been told about", () => {
@@ -47,6 +48,11 @@ describe("restaurant tables", () => {
   it("carries the line note through to the ticket, since that is the instruction", () => {
     const [pending] = pendingKotLines([line("Paneer", 1, 240, "less spicy")], []);
     expect(pending.note).toBe("less spicy");
+    const [configured] = pendingKotLines([{
+      ...line("Burger", 1, 150, "well done"),
+      addons: [{ optionId: "cheese", groupName: "Extras", name: "Cheese", price: 25, quantity: 2 }],
+    }], []);
+    expect(configured.note).toBe("2× Cheese · well done");
   });
 
   it("frees a table whose bill was settled, and one left holding an emptied cart", () => {

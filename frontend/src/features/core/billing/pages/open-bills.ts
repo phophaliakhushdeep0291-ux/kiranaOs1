@@ -95,14 +95,21 @@ export interface ImportedCartResult {
   skipped: string[];
 }
 
+export interface ImportedCartItem extends EncodedCartItem {
+  variation?: { unitCode: string; name: string; price: number } | null;
+  addons?: Array<{ optionId: string; groupName: string; name: string; price: number; quantity: number }>;
+}
+
 /** Stable identity for deciding whether an existing draft contains this order. */
-export function importedCartFingerprint(items: EncodedCartItem[]): string {
+export function importedCartFingerprint(items: ImportedCartItem[]): string {
   const quantities = new Map<string, number>();
   for (const item of items) {
     const productId = String(item.productId ?? "").trim();
     const qty = Number(item.qty ?? 0);
     if (!productId || !Number.isFinite(qty) || qty <= 0) continue;
-    quantities.set(productId, Math.round(((quantities.get(productId) ?? 0) + qty) * 1_000) / 1_000);
+    const options = (item.addons ?? []).map((addon) => `${addon.optionId}x${addon.quantity ?? 1}`).sort().join(",");
+    const key = `${productId}::${item.variation?.unitCode ?? "default"}::${options}`;
+    quantities.set(key, Math.round(((quantities.get(key) ?? 0) + qty) * 1_000) / 1_000);
   }
   return JSON.stringify([...quantities.entries()].sort(([left], [right]) => left.localeCompare(right)));
 }
@@ -121,7 +128,7 @@ function productIdentityKeys(product: Product): string[] {
  */
 export function billFromImportedCart(
   products: Product[],
-  items: EncodedCartItem[],
+  items: ImportedCartItem[],
   opts: { now?: () => number; label?: string; sourceOrderId?: string } = {},
 ): ImportedCartResult {
   // Online orders carry the server product id, while an offline-first catalog
@@ -135,20 +142,25 @@ export function billFromImportedCart(
   }
   const cart: CartItem[] = [];
   const skipped: string[] = [];
-  const matchedItems: EncodedCartItem[] = [];
-  for (const { productId, qty } of items) {
+  const matchedItems: ImportedCartItem[] = [];
+  for (const { productId, qty, variation, addons } of items) {
     const product = byId.get(productId);
     if (!product) {
       skipped.push(productId);
       continue;
     }
     const quantity = qty > 0 ? qty : 1;
-    matchedItems.push({ productId, qty: quantity });
+    matchedItems.push({ productId, qty: quantity, variation, addons });
+    const sellingUnit = variation?.unitCode
+      ? (product.sellingUnits ?? []).find((unit) => unit.unitCode === variation.unitCode && unit.isActive !== false)
+      : undefined;
     cart.push({
       product,
       quantity,
-      rate: productSellingPrice(product, quantity),
-      unit: product.rateUnit ?? product.displayUnit ?? "piece",
+      rate: sellingUnit ? Number(sellingUnit.defaultPrice ?? 0) : productSellingPrice(product, quantity),
+      unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece",
+      sellingUnit,
+      addons: addons?.map((addon) => ({ ...addon, quantity: addon.quantity ?? 1 })),
     });
   }
   const id = newBillId();

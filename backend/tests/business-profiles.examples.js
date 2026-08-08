@@ -3,12 +3,31 @@ import assert from "node:assert/strict";
 import {
   BUSINESS_PROFILES,
   BUSINESS_TYPES,
+  OFFERED_BUSINESS_TYPES,
   CAPABILITIES,
   bootstrapForShop,
   businessTypeFromSettings,
   requestedBusinessTypeFromSettings,
   settingsForBusinessType,
 } from "../src/modules/shops/businessProfiles.js";
+
+test("signup/settings offer only shipped types unless dormant verticals are enabled", () => {
+  assert.deepEqual(
+    OFFERED_BUSINESS_TYPES,
+    process.env.ENABLE_DORMANT_VERTICALS === "true" ? BUSINESS_TYPES : ["kirana", "other"],
+  );
+});
+
+test("a hidden restaurant shop is still fully honoured", () => {
+  const shop = { id: "restaurant_1", name: "Existing Cafe", settingsJson: JSON.stringify(settingsForBusinessType("restaurant")) };
+  const bootstrap = bootstrapForShop(shop, "owner");
+  assert.equal(bootstrap.shop.businessType, "restaurant");
+  assert.equal(bootstrap.engine, "RESTAURANT");
+  assert.ok(bootstrap.navigation.includes("tables"));
+  assert.ok(bootstrap.navigation.includes("kitchen-kot"));
+  assert.ok(bootstrap.capabilities.includes("KOT"));
+  assert.ok(bootstrap.capabilities.includes("TABLE_MANAGEMENT"));
+});
 
 test("every supported business type has a versioned capability preset", () => {
   assert.deepEqual(Object.keys(BUSINESS_PROFILES).sort(), [...BUSINESS_TYPES].sort());

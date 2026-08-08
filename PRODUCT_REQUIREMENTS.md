@@ -71,10 +71,10 @@ IDs are permanent. Split a requirement instead of reusing or renumbering an ID.
 | ID | Requirement | Acceptance evidence | Current repository evidence | Priority |
 |---|---|---|---|---|
 | SYNC-001 | Local reads/writes remain usable offline and queue transparently. | Offline mutation tests; airplane-mode billing QA. | Live 390px cash-bill proof covers stable local save, reload durability, automatic reconciliation and one visible synced bill. Offline mutation/sync suites cover retry paths; full airplane-mode toggle QA remains open. | P0 |
-| SYNC-002 | Retries and multiple devices cannot duplicate financial or stock effects. | Idempotency/concurrency tests; two-device QA. | Backend sync integration passes 40/40, including exact-once financial ledger, stock, same-bill replay and multi-device acknowledgement. A live same-content repeat-sale defect was fixed by requiring durable identity parity before repair-time merging; regression and live cash/split proof preserve both genuine bills. | P0 |
-| SYNC-003 | Conflicts are deterministic, visible and recoverable without data loss. | Conflict-policy tests; forced-conflict QA. | Backend integration proves persisted redacted conflicts, idempotent reporting and optimistic audited owner resolution across devices. Live forced-conflict/two-device QA remains open. | P0 |
+| SYNC-002 | Retries and multiple devices cannot duplicate financial or stock effects. | Idempotency/concurrency tests; two-device QA. | Backend sync integration covers exact-once financial ledger, stock, same-bill replay and multi-device acknowledgement. Repair requires durable identity parity so distinct repeat sales remain distinct. For mutable customer edits, the synced `baseUpdatedAt` is an exact optimistic version guard and a rejected event reuses one durable conflict instead of creating a second review row. Targeted two-device integration passes 1/1 and focused frontend coverage passes 33/33. | P0 |
+| SYNC-003 | Conflicts are deterministic, visible and recoverable without data loss. | Conflict-policy tests; forced-conflict QA. | Live 390x844 forced-conflict QA showed one customer card with Device B local data, Device A cloud data and valid ISO timestamps. Owner-authenticated `use_server` resolution moved the only open customer row to resolved, wrote an owner/device audit and preserved the ledger; historical in-UI recovery also proved client convergence. Immutable bill/payment/stock conflicts remain correction/reversal-only and still require the full entity certification tracked by BUG-008. | P0 |
 | SYNC-004 | User sees pending, failed, last-success and actionable recovery status. | State tests; offline/failed/recovered mobile QA. | Live 390px Cloud Backup shows online backend, last success under one minute, pending/failed/conflicts 0, current-device sequence lag 0 and no overflow; failed/recovered live QA remains open. | P0 |
-| SYNC-005 | Backup and restore are documented, tested and meet declared RPO/RTO. | Automated restore proof and signed run record. | Backup artifacts and disaster-recovery scripts. | P0 |
+| SYNC-005 | Backup and restore are documented, tested and meet declared RPO/RTO. | Automated restore proof and signed run record. | Local tenant-logical proof restores 1,781 records across 77 tables in 0.616s with 0 paise/unit variance; corruption, deliberate one-paise/unit drift, stale-device replay and audited recovery rollback are covered. The runbook declares a <=60s small-shop logical RTO target. Production <=24h RPO is not yet proven because shop artifacts are on-demand and the required daily PostgreSQL/provider backup plus managed restore drill remain external gate work. | P0 |
 
 ### Reports and owner control
 
@@ -119,3 +119,24 @@ IDs are permanent. Split a requirement instead of reusing or renumbering an ID.
 ## Change control
 
 Every pull request must cite requirement IDs, test evidence, and QA flow IDs. New scope first changes this document; defects go to `BUG_BACKLOG.md`; release evidence goes to `RELEASE_GATE.md`. A requirement is complete only when implementation, automated evidence and QA evidence all exist.
+# Vertical release surface
+
+The shipped acquisition surface is Kirana / General Store (`kirana`) plus the
+Custom / Other (`other`) escape hatch. The remaining profiles—clothing,
+footwear, auto parts, electronics, pharmacy, stationery/books, furniture/home,
+beauty/cosmetics, and restaurant—are dormant by default and can be offered by
+building/deploying both frontend and backend with
+`ENABLE_DORMANT_VERTICALS=true`.
+
+The flag controls only what signup and settings offer. Existing shops retain
+full backward-compatible behavior for their stored business type regardless of
+the flag. Dormant source and database schema remain intact; no tables or data
+are dropped when the flag is off.
+
+## WhatsApp bill delivery
+
+Sending one completed bill on WhatsApp is included in Starter and every higher
+plan. A configured WhatsApp Business API provider is selected automatically;
+otherwise the app opens a prefilled `wa.me` share. Only bulk and scheduled
+customer reminders remain gated by the Business-plan `whatsapp_reminders`
+feature. Deep-link handoff is labelled **Opened in WhatsApp**, never sent.

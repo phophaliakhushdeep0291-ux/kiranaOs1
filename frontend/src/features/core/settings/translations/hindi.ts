@@ -5,9 +5,10 @@
 import { billingHi } from "./billing.hi";
 import { customersHi } from "./customers.hi";
 import { productsHi } from "./products.hi";
+import { restaurantHi } from "./restaurant.hi";
 import { shellHi } from "./shell.hi";
 
-export const hindiTranslations = { ...shellHi, ...billingHi, ...productsHi, ...customersHi };
+export const hindiTranslations = { ...shellHi, ...billingHi, ...productsHi, ...customersHi, ...restaurantHi };
 
 /**
  * The same modules as EN_MODULES in i18n.tsx, keyed identically. The completeness
@@ -19,4 +20,5 @@ export const HI_MODULES = {
   billing: billingHi,
   products: productsHi,
   customers: customersHi,
+  restaurant: restaurantHi,
 } as const;

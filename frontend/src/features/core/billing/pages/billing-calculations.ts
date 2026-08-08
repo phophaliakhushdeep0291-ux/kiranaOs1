@@ -1,6 +1,6 @@
 import { applyRoundOff, roundMoney, roundToRupee } from "@/lib/money";
 import type { Product } from "@/lib/api/client";
-import type { CartItem } from "./billing-types";
+import { addonUnitPrice, type CartItem } from "./billing-types";
 
 export function clampAmount(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -217,7 +217,12 @@ export function lineNeedsOwnerApproval(item: CartItem): boolean {
 
 /** Gross line amount before any per-line discount. */
 export function cartItemGross(item: CartItem): number {
-  return roundMoney(Number(item.quantity) * Number(item.rate));
+  return roundMoney(Number(item.quantity) * cartItemUnitRate(item));
+}
+
+/** Dish/pack price plus its configured options, per sold unit. */
+export function cartItemUnitRate(item: CartItem): number {
+  return roundMoney(Number(item.rate) + addonUnitPrice(item.addons));
 }
 
 /** Effective per-line discount, clamped to the line's own gross amount. */
@@ -249,7 +254,7 @@ export function computeBillSavings(cart: CartItem[], billDiscount: number): numb
 
 export function cartItemProfit(item: CartItem): number {
   if (item.isCustom) return 0;
-  return roundMoney((Number(item.rate) - productCostPrice(item.product)) * Number(item.quantity) - cartItemLineDiscount(item));
+  return roundMoney((cartItemUnitRate(item) - productCostPrice(item.product)) * Number(item.quantity) - cartItemLineDiscount(item));
 }
 
 export function profitClass(value: number): string {

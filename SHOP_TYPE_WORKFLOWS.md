@@ -75,3 +75,16 @@ The first release only launches workflows that already have reliable routes and 
 4. Pharmacy and cosmetics visibly recommend batch tracking.
 5. No UI claims that unsupported serial, variant, table, or delivery state already exists.
 6. Generic retail behavior remains available for `other`.
+# Shipped and dormant verticals
+
+The default release offers **Kirana / General Store** (`kirana`) and **Custom /
+Other** (`other`) at signup and in Store Profile. Clothing, footwear, auto
+parts, electronics, pharmacy, stationery/books, furniture/home,
+beauty/cosmetics, and restaurant remain implemented but dormant behind the
+single build flag `ENABLE_DORMANT_VERTICALS=true`.
+
+This is an offering flag, not a runtime entitlement. A persisted shop on any
+dormant type continues to resolve its original workflow, profile, navigation,
+capabilities, routes, and data. Never use this flag to reject or rewrite an
+existing shop. With the flag absent or any value other than the literal
+`true`, only `kirana` and `other` may be newly selected.

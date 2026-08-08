@@ -37,3 +37,5 @@ dev.db
 # 2026-07-13 that nothing reads.
 release-certification-*.json
 release-certification-*.md
+# Unrelated prototypes retained outside the product build/test/lint/CI surface.
+archive/

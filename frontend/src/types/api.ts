@@ -463,6 +463,15 @@ export interface BillInputItem {
   quantity: number;
   enteredUnit: string;
   ratePerRateUnit: number;
+  /** Product/portion rate before configured options. The server prices options. */
+  baseRatePerRateUnit?: number;
+  addons?: Array<{
+    optionId: string;
+    quantity?: number;
+    groupName?: string;
+    name?: string;
+    price?: number;
+  }>;
   /** Flat rupee discount applied to the whole line (not per unit). */
   lineDiscount?: number;
   /** Free-text callout for this line ("no bag", weight callout) — printed on the receipt. */
@@ -1692,6 +1701,66 @@ export interface MenuDish {
   hasRecipe: boolean;
   portionsLeft: number | null;
   stockBaseQty: number;
+  /**
+   * Half and Full, Small and Large. Empty for a dish sold one way, which is most
+   * of them — the dish's own `price` is what a guest pays then.
+   */
+  variations: MenuDishVariation[];
+  addonGroups: MenuAddonGroup[];
+}
+
+export interface MenuAddonOption {
+  id: string;
+  name: string;
+  price: number;
+  linkedProductId: string | null;
+  linkedQtyBase: number;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface MenuAddonGroup {
+  id: string;
+  name: string;
+  minSelect: number;
+  maxSelect: number;
+  sortOrder: number;
+  isActive: boolean;
+  required: boolean;
+  options: MenuAddonOption[];
+}
+
+export interface MenuAddonGroupInput {
+  name: string;
+  minSelect?: number;
+  maxSelect?: number;
+  sortOrder?: number;
+  isActive?: boolean;
+  options: Array<{
+    id?: string;
+    name: string;
+    price: number;
+    linkedProductId?: string | null;
+    linkedQtyBase?: number;
+    sortOrder?: number;
+  }>;
+}
+
+/**
+ * One portion of a dish.
+ *
+ * Stored as the product's selling unit, which is why billing needs no new code to
+ * charge for it: the cart already offers a unit dropdown priced per unit, and a
+ * finalised bill already snapshots which one was sold.
+ */
+export interface MenuDishVariation {
+  /** Stable id for this portion. Sending it back on an edit renames in place. */
+  unitCode: string;
+  name: string;
+  price: number;
+  /** How much of one full portion this is — Half = 0.5. Drives recipe depletion. */
+  portionFactor: number;
+  isDefault: boolean;
 }
 
 export interface MenuCourseSection {

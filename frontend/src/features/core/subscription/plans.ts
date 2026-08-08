@@ -58,6 +58,7 @@ export type FeatureName =
   | "gst_reports"
   | "tally_export"
   | "whatsapp_reminders"
+  | "single_bill_whatsapp"
   | "owner_mobile_dashboard"
   | "cloud_bill_archive"
   | "yearly_reports"
@@ -108,6 +109,7 @@ const starterFeatures: FeatureName[] = [
   "stock_adjustment",
   "no_barcode_fast_billing",
   "offline_confidence_meter",
+  "single_bill_whatsapp",
 ];
 
 const standardExtra: FeatureName[] = [
@@ -289,6 +291,7 @@ export const FEATURE_LABELS: Record<FeatureName, string> = {
   gst_reports: "GST reports",
   tally_export: "Tally export",
   whatsapp_reminders: "Automated WhatsApp reminders",
+  single_bill_whatsapp: "Send individual bills on WhatsApp",
   owner_mobile_dashboard: "Owner mobile dashboard",
   cloud_bill_archive: "Bills safely backed up",
   yearly_reports: "Yearly reports",

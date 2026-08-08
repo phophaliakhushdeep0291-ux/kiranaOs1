@@ -20,12 +20,13 @@ import { BillingOrderQrButton } from "@/features/core/customer-order/BillingOrde
 import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills, upsertOpenBill } from "./open-bills";
 import { updateCustomerOrder } from "@/features/core/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
-import { applyRoundOff, billNeedsCustomer, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
+import { applyRoundOff, billNeedsCustomer, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, cartItemUnitRate, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
 import { resolveLinePrice } from "@/features/core/pricing/resolve-line-price";
 import { sellingUnitMaxPrice } from "@/features/core/products/pages/product-pricing";
 import { useShopPricingRules } from "@/features/core/pricing/pricing-rules-cache";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
 import { shareBillOnWhatsapp, derivePaymentModeLabel, type BillShareInput } from "@/features/core/bills/share";
+import { deliverBillWhatsapp } from "@/features/core/bills/whatsapp-delivery";
 import { getPrinterConfigSync, loadPrinterConfig } from "@/features/core/settings/printer-config";
 import { getTaxConfigSync, loadTaxConfig } from "@/features/core/settings/tax-config";
 import { isActionProtected, loadSecurityPolicy } from "@/features/core/settings/security-policy";
@@ -36,7 +37,8 @@ import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { billingSlotsFor } from "@/features/core/billing/billing-slots";
-import { SPLIT_PAYMENT, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
+import { productConfiguratorFor, type ProductConfigurator } from "@/features/core/billing/product-configurators";
+import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 import { getRetailPaymentReadiness, verifyRetailPayment } from "../retail-payment";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/core/loyalty/api";
@@ -163,6 +165,12 @@ export default function Billing() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [cart, setCart] = useState<CartItem[]>(() => readBillingDraft().cart ?? []);
+  const [pendingProductConfiguration, setPendingProductConfiguration] = useState<{
+    product: Product;
+    configurator: ProductConfigurator;
+    data: unknown;
+  } | null>(null);
+  const [configuringProductId, setConfiguringProductId] = useState<string | null>(null);
   const [scaleReadingLineKey, setScaleReadingLineKey] = useState<string | null>(null);
   const [discount, setDiscount] = useState(() => readBillingDraft().discount ?? 0);
   const [discountReason, setDiscountReason] = useState(() => readBillingDraft().discountReason ?? "");
@@ -295,7 +303,7 @@ export default function Billing() {
   })();
   const gstBreakdown = useMemo(
     () => computeGstBreakdown(
-      cart.map((item) => ({ price: item.rate, quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })),
+      cart.map((item) => ({ price: cartItemUnitRate(item), quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })),
       getTaxConfigSync().mode,
       { sellerStateCode, buyerStateCode },
     ),
@@ -682,10 +690,10 @@ export default function Billing() {
         setAppliedOffer(null);
         const pendingPrint = pendingAutoPrintRef.current;
         const printableForSavedBill = pendingPrint
-          ? { ...pendingPrint.printable, billNo, createdAt: data.createdAt ?? pendingPrint.printable.createdAt }
+          ? { ...pendingPrint.printable, billId: data.id, billNo, createdAt: data.createdAt ?? pendingPrint.printable.createdAt }
           : null;
         setLastBillNo(billNo);
-        setLastPrintableBill((previous) => printableForSavedBill ?? (previous ? { ...previous, billNo, createdAt: data.createdAt ?? previous.createdAt } : null));
+        setLastPrintableBill((previous) => printableForSavedBill ?? (previous ? { ...previous, billId: data.id, billNo, createdAt: data.createdAt ?? previous.createdAt } : null));
         if (pendingPrint && printableForSavedBill) {
           try {
             writeBillingReceiptWindow(pendingPrint.popup, printableForSavedBill, { autoPrint: true });
@@ -808,7 +816,7 @@ export default function Billing() {
     };
   }
 
-  function addToCart(product: Product, options?: { custom?: boolean }) {
+  function commitAddToCart(product: Product, options?: { custom?: boolean; addons?: CartItem["addons"] }) {
     setCart((previous) => {
       const sellingUnit = defaultSellingUnit(product);
       const candidate: CartItem = {
@@ -818,6 +826,7 @@ export default function Billing() {
         unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece",
         sellingUnit,
         isCustom: options?.custom,
+        addons: options?.addons,
       };
       const candidateKey = cartItemKey(candidate);
       const existing = previous.find((item) => cartItemKey(item) === candidateKey);
@@ -828,7 +837,7 @@ export default function Billing() {
       }
       const quantity = 1;
       const priced = resolveLine(product, quantity, sellingUnit);
-      return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priced.rate, unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece", sellingUnit, isCustom: options?.custom, manualRate: options?.custom, pricing: options?.custom ? undefined : priced.pricing }];
+      return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priced.rate, unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece", sellingUnit, isCustom: options?.custom, manualRate: options?.custom, pricing: options?.custom ? undefined : priced.pricing, addons: options?.addons }];
     });
     rememberRecentProduct(product.id);
     if (billingStartedAtRef.current === null) billingStartedAtRef.current = Date.now();
@@ -836,6 +845,33 @@ export default function Billing() {
       trackEvent(ACTIVITY_EVENTS.PRODUCT_ADDED_TO_BILL, { productId: product.id, productName: product.name });
     }
     setSearch("");
+  }
+
+  function addToCart(product: Product, options?: { custom?: boolean }) {
+    if (options?.custom) {
+      commitAddToCart(product, options);
+      return;
+    }
+    const configurator = productConfiguratorFor(product);
+    if (!configurator) {
+      commitAddToCart(product);
+      return;
+    }
+    if (configuringProductId) return;
+    setConfiguringProductId(product.id);
+    void configurator.load(product)
+      .then((data) => {
+        if (data) setPendingProductConfiguration({ product, configurator, data });
+        else commitAddToCart(product);
+      })
+      .catch((error: unknown) => {
+        toast({
+          title: "Could not load this item's choices",
+          description: error instanceof Error ? error.message : "Try again.",
+          variant: "destructive",
+        });
+      })
+      .finally(() => setConfiguringProductId(null));
   }
 
   /**
@@ -1474,7 +1510,14 @@ export default function Billing() {
           name: item.product.name,
           quantity: item.quantity,
           enteredUnit: item.unit,
-          ratePerRateUnit: item.rate,
+          // The one place add-on money enters the money path. Everything
+          // downstream — net, GST, totals, the server's recompute and the
+          // assurance rules — sees a unit rate and needs no knowledge of add-ons.
+          // The dish's own rate is what the MRP ceiling and the pricing engine
+          // reasoned about, and it stays that way above this line.
+          ratePerRateUnit: roundMoney(item.rate + addonUnitPrice(item.addons)),
+          baseRatePerRateUnit: roundMoney(item.rate),
+          addons: item.addons?.length ? item.addons : undefined,
           lineDiscount: cartItemLineDiscount(item),
           note: item.note?.trim() || undefined,
           originalUnitPrice: item.pricing?.originalUnitPrice,
@@ -1596,7 +1639,7 @@ export default function Billing() {
     writeBillingReceiptWindow(popup, snapshot, { autoPrint: true });
   }
 
-  function shareLastBillOnWhatsapp() {
+  async function shareLastBillOnWhatsapp() {
     const snapshot = lastPrintableBill ?? makePrintableBill(billType, effectivePaidAmount, creditAmount);
     const shareInput: BillShareInput = {
       shopName: snapshot.shop?.name ?? t("billing.page.defaultShopName"),
@@ -1615,7 +1658,16 @@ export default function Billing() {
       paymentMode: derivePaymentModeLabel(snapshot.payments, snapshot.credit, snapshot.total),
       customerName: snapshot.customerName,
       customerMobile: snapshot.customerMobile,
+      previousUdhar: snapshot.previousUdhar,
+      showPreviousUdhar: getPrinterConfigSync().showPreviousUdhar,
+      showGst: getPrinterConfigSync().showGstBreakup,
     };
+    if (snapshot.billId) {
+      const printer = getPrinterConfigSync();
+      const result = await deliverBillWhatsapp({ billId: snapshot.billId, idempotencyKey: crypto.randomUUID(), input: shareInput, showGst: printer.showGstBreakup, showPreviousUdhar: printer.showPreviousUdhar });
+      toast({ title: result.queued ? "WhatsApp queued" : result.state === "sent_via_api" ? "WhatsApp sent" : "Opened in WhatsApp", description: result.queued ? "It will be delivered once this device reconnects." : undefined });
+      return;
+    }
     const { targetedCustomer } = shareBillOnWhatsapp(shareInput);
     toast({
       title: t("billing.page.openingWhatsapp"),
@@ -1885,7 +1937,7 @@ export default function Billing() {
         onSaveEstimate={() => handleConfirm(BillInputBillType.estimate)}
         onHoldBill={holdCurrentBill}
         onPrintBill={() => printBillSnapshot()}
-        onSharePdf={() => shareLastBillOnWhatsapp()}
+        onSharePdf={() => { void shareLastBillOnWhatsapp(); }}
         onClearCart={clearCartWithConfirmation}
         onUpdateQty={updateQty}
         onUpdateRate={updateRate}
@@ -1937,6 +1989,21 @@ export default function Billing() {
           </div>
         </div>
       )}
+
+      {pendingProductConfiguration ? (() => {
+        const Configurator = pendingProductConfiguration.configurator.Component;
+        return (
+          <Configurator
+            product={pendingProductConfiguration.product}
+            data={pendingProductConfiguration.data}
+            onCancel={() => setPendingProductConfiguration(null)}
+            onConfirm={(result) => {
+              commitAddToCart(pendingProductConfiguration.product, { addons: result.addons });
+              setPendingProductConfiguration(null);
+            }}
+          />
+        );
+      })() : null}
 
       <OwnerPinModal
         open={sensitivePinOpen}

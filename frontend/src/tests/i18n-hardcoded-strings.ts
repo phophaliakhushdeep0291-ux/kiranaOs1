@@ -28,6 +28,10 @@ function isUserVisibleText(value: string): boolean {
   // Format-only fragments and code-ish tokens.
   if (/^[{<]/.test(text)) return false;
   if (/^(https?:|\/|#|data:)/.test(text)) return false;
+  // A call expression is code, not prose: `window.print()`, `roundMoney(entry.x)`.
+  // An identifier immediately followed by "(" never occurs in a label; real UI text
+  // that uses brackets puts a space first, as in "Amount (₹)".
+  if (/\w\(/.test(text)) return false;
   return true;
 }
 
@@ -46,7 +50,10 @@ export function findHardcodedStrings(source: string): HardcodedString[] {
   const found: HardcodedString[] = [];
 
   // 1. Bare JSX text: >Move to recycle bin<
-  for (const match of cleaned.matchAll(/>([^<>{}\n]+)</g)) {
+  //    The lookbehind keeps `=>`, `<=` and `>=` from opening a match: an arrow
+  //    function followed by a comparison or a generic reads as ">text<" otherwise,
+  //    and `() => apiRequest<{...}>` was reported as the user-visible word "apiRequest".
+  for (const match of cleaned.matchAll(/(?<![=!<>])>(?!=)([^<>{}\n]+)</g)) {
     if (isUserVisibleText(match[1])) {
       found.push({ line: lineOf(match.index ?? 0), kind: "jsx-text", text: match[1].trim() });
     }

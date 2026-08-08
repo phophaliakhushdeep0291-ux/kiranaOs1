@@ -25,6 +25,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/api/http";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
+import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
+import { deliverBillWhatsapp, type BillWhatsappState } from "@/features/core/bills/whatsapp-delivery";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
 type AnyRow = Record<string, unknown>;
@@ -155,6 +157,7 @@ export default function BillDetailPage() {
   const [receiptEmail, setReceiptEmail] = useState("");
   const [emailSending, setEmailSending] = useState(false);
   const [emailError, setEmailError] = useState("");
+  const [whatsappState, setWhatsappState] = useState<BillWhatsappState>("not_sent");
 
   const bill = data?.bill;
   const embeddedItems = useMemo(() => Array.isArray(bill?.items) ? bill.items as AnyRow[] : [], [bill]);
@@ -211,11 +214,19 @@ export default function BillDetailPage() {
       paid,
       credit,
       customerMobile,
+      previousUdhar: Math.max(0, data.customerLedgerBalance - credit),
+      gst: readNumber((bill as AnyRow).gst, 0),
+      showPreviousUdhar: getPrinterConfigSync().showPreviousUdhar,
+      showGst: getPrinterConfigSync().showGstBreakup,
     });
-    const { targetedCustomer } = shareBillOnWhatsapp(shareInput);
+    const serverId = String((bill as AnyRow).server_id ?? (bill as AnyRow).serverId ?? bill.id);
+    const printer = getPrinterConfigSync();
+    const result = await deliverBillWhatsapp({ billId: serverId, idempotencyKey: crypto.randomUUID(), input: shareInput, showGst: printer.showGstBreakup, showPreviousUdhar: printer.showPreviousUdhar });
+    setWhatsappState(result.state);
+    const targetedCustomer = Boolean(shareInput.customerMobile);
     toast({
       title: "Opening WhatsApp…",
-      description: targetedCustomer ? "Ready to send to the customer's number." : "Pick a chat to send this bill.",
+      description: result.queued ? "Queued until this device reconnects." : result.state === "sent_via_api" ? "Sent via the configured provider." : targetedCustomer ? "Opened for the customer's number." : "Pick a chat to send this bill.",
     });
   }
 
@@ -310,8 +321,9 @@ export default function BillDetailPage() {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <Button className="h-11 w-full sm:w-auto" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />WhatsApp</Button>
           <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={printBill}><Printer size={15} className="mr-1" />Print duplicate</Button>
-          <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />WhatsApp</Button>
+          <span className="self-center text-xs text-muted-foreground">{whatsappState === "sent_via_api" ? "Sent via API" : whatsappState === "opened_share_sheet" ? "Opened in WhatsApp" : whatsappState === "failed" ? "Delivery failed" : "Not sent"}</span>
           <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={() => { setEmailError(""); setEmailOpen(true); }}><Mail size={15} className="mr-1" />Email receipt</Button>
           {isDeleted(bill) ? (
             <Button onClick={() => requestPinAction("restore")}><RotateCcw size={15} className="mr-1" />Restore</Button>

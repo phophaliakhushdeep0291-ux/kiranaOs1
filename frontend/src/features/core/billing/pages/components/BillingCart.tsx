@@ -3,7 +3,7 @@ import { BadgePercent, Loader2, Pencil, Scale, ShoppingCart, X } from "lucide-re
 import { cn } from "@/lib/utils";
 import { useQuantityDraft } from "@/components/ui/input";
 import { cartItemGross, cartItemLineDiscount, cartItemNet, productMinSellingPrice, roundMoney } from "../billing-calculations";
-import { cartItemKey, type CartItem } from "../billing-types";
+import { addonUnitPrice, cartItemKey, type CartItem } from "../billing-types";
 import { BatchPicker } from "./BatchPicker";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { getProductEmoji, productPlaceholderColor } from "./BillingSearch";
@@ -176,6 +176,15 @@ function CartRow({
         <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#13274d]">
           {item.product.name}
         </p>
+        {item.addons?.length ? (
+          <div className="mt-1 flex max-w-full flex-wrap gap-1" data-testid={`addons-${item.product.id}`}>
+            {item.addons.map((addon) => (
+              <span key={addon.optionId} className="rounded-full bg-[#fff7ed] px-1.5 py-0.5 text-[9.5px] font-bold text-[#9a3412]">
+                {addon.quantity && addon.quantity > 1 ? `${addon.quantity}× ` : ""}{addon.name}{addon.price > 0 ? ` +₹${(addon.price * (addon.quantity ?? 1)).toLocaleString("en-IN")}` : ""}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {sellingUnits.length > 1 ? (
           <select
             aria-label={t("billing.cart.sellingUnitFor", { name: item.product.name })}
@@ -236,7 +245,10 @@ function CartRow({
             )}
             title={t("billing.cart.editRateHint")}
           >
-            <span className="tabular-nums">₹{item.rate.toLocaleString("en-IN")}/{item.unit}</span>
+            <span className="tabular-nums">
+              ₹{item.rate.toLocaleString("en-IN")}/{item.unit}
+              {addonUnitPrice(item.addons) > 0 ? ` + ₹${addonUnitPrice(item.addons).toLocaleString("en-IN")} options` : ""}
+            </span>
             {isBelowMin ? <span className="font-semibold">{t("billing.cart.belowMin")}</span> : null}
             <Pencil size={10} className="text-[#9aa7bd] group-hover:text-[var(--brand)]" aria-hidden="true" />
           </button>

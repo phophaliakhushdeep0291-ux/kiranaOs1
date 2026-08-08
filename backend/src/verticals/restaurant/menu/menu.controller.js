@@ -1,4 +1,5 @@
 import * as svc from "./menu.service.js";
+import * as addons from "./addons.service.js";
 import { createAuditLog } from "../../../modules/audit/audit.service.js";
 
 export async function board(req, res, next) {
@@ -35,6 +36,71 @@ export async function bulkUpdate(req, res, next) {
     await createAuditLog({
       shopId: req.shopId, userId: req.user?.id, action: "menu_bulk_updated",
       entityType: "product", entityId: null, after: { dishes: data.length }, req,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function dishVariations(req, res, next) {
+  try { res.json({ success: true, data: await svc.listDishVariations(req.shopId, req.params.productId) }); }
+  catch (err) { next(err); }
+}
+
+/** Replaces the dish's portions wholesale — the editor always sends the full list. */
+export async function setDishVariations(req, res, next) {
+  try {
+    const data = await svc.setDishVariations(req.shopId, req.params.productId, req.body.variations ?? []);
+    await createAuditLog({
+      shopId: req.shopId, userId: req.user?.id, action: "menu_variations_updated",
+      entityType: "product", entityId: req.params.productId,
+      after: { portions: data.map((row) => ({ name: row.name, price: row.price })) }, req,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+// ── Add-ons ──────────────────────────────────────────────────────────────────
+
+export async function addonGroups(req, res, next) {
+  try { res.json({ success: true, data: await addons.listAddonGroups(req.shopId) }); }
+  catch (err) { next(err); }
+}
+
+export async function saveAddonGroup(req, res, next) {
+  try {
+    const data = await addons.saveAddonGroup(req.shopId, req.params.groupId ?? null, req.body);
+    await createAuditLog({
+      shopId: req.shopId, userId: req.user?.id, action: "menu_addon_group_saved",
+      entityType: "menu_addon_group", entityId: data.id,
+      after: { name: data.name, options: data.options.length, required: data.required }, req,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function deleteAddonGroup(req, res, next) {
+  try {
+    const data = await addons.deleteAddonGroup(req.shopId, req.params.groupId);
+    await createAuditLog({
+      shopId: req.shopId, userId: req.user?.id, action: "menu_addon_group_deleted",
+      entityType: "menu_addon_group", entityId: req.params.groupId, after: null, req,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function dishAddonGroups(req, res, next) {
+  try { res.json({ success: true, data: await addons.listDishAddonGroups(req.shopId, req.params.productId) }); }
+  catch (err) { next(err); }
+}
+
+export async function setDishAddonGroups(req, res, next) {
+  try {
+    const data = await addons.setDishAddonGroups(req.shopId, req.params.productId, req.body.groupIds ?? []);
+    await createAuditLog({
+      shopId: req.shopId, userId: req.user?.id, action: "menu_dish_addons_updated",
+      entityType: "product", entityId: req.params.productId,
+      after: { groups: data.map((group) => group.name) }, req,
     });
     res.json({ success: true, data });
   } catch (err) { next(err); }

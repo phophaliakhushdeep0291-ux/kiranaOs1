@@ -2,6 +2,7 @@ import db from "../../../db.js";
 import { AppError } from "../../../middleware/error.js";
 import { listProducts } from "../../../modules/products/products.service.js";
 import { listRecipeComponents, portionsPossible } from "../recipes/recipes.service.js";
+import { addonGroupsByProduct } from "./addons.service.js";
 
 /**
  * The menu card.
@@ -90,7 +91,7 @@ export function groupMenuByCourse(dishes) {
   }));
 }
 
-export function serializeDish(product, { portionsLeft = null, hasRecipe = false } = {}) {
+export function serializeDish(product, { portionsLeft = null, hasRecipe = false, addonGroups = [] } = {}) {
   return {
     id: product.id,
     name: product.name,
@@ -108,6 +109,22 @@ export function serializeDish(product, { portionsLeft = null, hasRecipe = false 
     tags: parseTags(product.menuTags),
     menuAvailable: product.menuAvailable !== false,
     menuSortOrder: Number(product.menuSortOrder ?? 0),
+    // Folded into the board rather than fetched per dish: a menu of 200 dishes
+    // would otherwise be 200 extra requests to draw the price a guest reads first.
+    // listProducts already includes sellingUnits, so this costs no extra query.
+    variations: (product.sellingUnits ?? [])
+      .filter((unit) => unit.unitType === PORTION_UNIT_TYPE && unit.isActive !== false)
+      .map((unit) => ({
+        unitCode: unit.unitCode,
+        name: unit.name,
+        price: Number(unit.defaultPrice ?? 0),
+        portionFactor: Number(unit.conversionToBase ?? 1),
+        isDefault: unit.isDefault === true,
+      }))
+      .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.price - b.price),
+    // "Extra cheese", "no onion". Empty for most dishes, and for every dish in a
+    // shop that has not set any up, so a kirana catalogue is unaffected.
+    addonGroups,
     // A dish that is cooked to order has no meaningful stock of its own — the
     // ingredients are the stock. Saying so explicitly stops every screen from
     // re-deriving it and getting it differently.
@@ -126,9 +143,10 @@ export function serializeDish(product, { portionsLeft = null, hasRecipe = false 
  * second request to land.
  */
 export async function getMenuBoard(shopId, { locationId, includeUnavailable = true } = {}) {
-  const [products, components] = await Promise.all([
+  const [products, components, addonsByProduct] = await Promise.all([
     listProducts(shopId, { locationId }),
     listRecipeComponents(shopId),
+    addonGroupsByProduct(shopId),
   ]);
 
   const stock = new Map(products.map((product) => [product.id, Number(product.stockBaseQty ?? 0)]));
@@ -145,6 +163,7 @@ export async function getMenuBoard(shopId, { locationId, includeUnavailable = tr
       return serializeDish(product, {
         hasRecipe: Boolean(recipe?.length),
         portionsLeft: recipe?.length ? portionsPossible(recipe, stock) : null,
+        addonGroups: addonsByProduct.get(product.id) ?? [],
       });
     })
     .filter((dish) => includeUnavailable || dish.menuAvailable);
@@ -209,4 +228,165 @@ export async function listCourses(shopId) {
   });
   const used = rows.map((row) => row.menuCourse).filter(Boolean);
   return [...new Set([...used, ...SUGGESTED_COURSES])];
+}
+
+/**
+ * The unit type that marks a selling unit as a menu portion rather than a retail
+ * pack. Everything below keys off it, so "Half" and "500 g packet" can sit on the
+ * same product without either editor treating the other's rows as its own.
+ */
+export const PORTION_UNIT_TYPE = "portion";
+
+function portionSlug(name) {
+  return String(name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Build a stable unit code per portion.
+ *
+ * A name written in Devanagari slugs to nothing, and two such names would collide
+ * on one code — which the [shopId, productId, unitCode] unique index would reject
+ * with a database error rather than a sentence a shopkeeper can act on. The index
+ * fallback keeps every portion addressable whatever alphabet it is written in.
+ */
+export function buildPortionCodes(variations) {
+  const used = new Set();
+  return variations.map((variation, index) => {
+    if (variation.unitCode) {
+      used.add(variation.unitCode);
+      return variation.unitCode;
+    }
+    const slug = portionSlug(variation.name);
+    let code = `${PORTION_UNIT_TYPE}-${slug || index + 1}`;
+    if (used.has(code)) code = `${PORTION_UNIT_TYPE}-${slug || "p"}-${index + 1}`;
+    used.add(code);
+    return code;
+  });
+}
+
+/**
+ * Decide what happens to each existing portion row, without touching a database.
+ *
+ * Split out and exported so the rule that matters most here can be tested on its
+ * own: a portion that has ever been billed is DEACTIVATED, never deleted. Its id
+ * is stamped on historical BillItems, and deleting it would either break the
+ * foreign key or, worse, succeed and leave finalised bills pointing at nothing.
+ */
+export function planPortionWrite(existingPortions, desiredCodes) {
+  const wanted = new Set(desiredCodes);
+  const retire = [];
+  const remove = [];
+  for (const row of existingPortions) {
+    if (wanted.has(row.unitCode)) continue;
+    if (row.billedCount > 0) retire.push(row);
+    else remove.push(row);
+  }
+  return { retire, remove };
+}
+
+/** Exactly one default across the dish's active units, because billing picks one. */
+export function resolveDefaultIndex(variations) {
+  const flagged = variations.findIndex((variation) => variation.isDefault);
+  return flagged >= 0 ? flagged : 0;
+}
+
+function serializeVariation(unit) {
+  return {
+    unitCode: unit.unitCode,
+    name: unit.name,
+    price: Number(unit.defaultPrice ?? 0),
+    portionFactor: Number(unit.conversionToBase ?? 1),
+    isDefault: unit.isDefault === true,
+    isActive: unit.isActive !== false,
+  };
+}
+
+/** The portions a dish is sold in, newest state, active rows only. */
+export async function listDishVariations(shopId, productId) {
+  const units = await db.productSellingUnit.findMany({
+    where: { shopId, productId, unitType: PORTION_UNIT_TYPE, isActive: true },
+    orderBy: [{ isDefault: "desc" }, { defaultPrice: "asc" }],
+  });
+  return units.map(serializeVariation);
+}
+
+/**
+ * Replace a dish's portions with exactly the list given.
+ *
+ * Retail pack rows on the same product are deliberately left alone: a cafe that
+ * sells coffee by the cup and also sells a 250 g bag of beans is not making a
+ * mistake, and an editor that silently deleted the bag would be.
+ */
+export async function setDishVariations(shopId, productId, variations = []) {
+  const product = await db.product.findFirst({ where: { id: productId, shopId, deletedAt: null } });
+  if (!product) throw new AppError("That dish is not on this shop's menu", 404);
+
+  const seen = new Set();
+  for (const variation of variations) {
+    const key = variation.name.trim().toLowerCase();
+    // Two portions with one name give the waiter a dropdown with two identical
+    // rows and no way to tell which price he is about to charge.
+    if (seen.has(key)) throw new AppError(`This dish already has a portion called "${variation.name}"`, 400);
+    seen.add(key);
+  }
+
+  const codes = buildPortionCodes(variations);
+  const duplicateCode = codes.find((code, index) => codes.indexOf(code) !== index);
+  if (duplicateCode) throw new AppError(`Two portions resolved to the same code (${duplicateCode}). Rename one of them.`, 400);
+
+  const existing = await db.productSellingUnit.findMany({
+    where: { shopId, productId },
+    include: { _count: { select: { billItems: true } } },
+  });
+  const portions = existing
+    .filter((unit) => unit.unitType === PORTION_UNIT_TYPE)
+    .map((unit) => ({ ...unit, billedCount: unit._count?.billItems ?? 0 }));
+  const packs = existing.filter((unit) => unit.unitType !== PORTION_UNIT_TYPE);
+
+  const defaultIndex = resolveDefaultIndex(variations);
+  const { retire, remove } = planPortionWrite(portions, codes);
+  const byCode = new Map(portions.map((unit) => [unit.unitCode, unit]));
+
+  await db.$transaction(async (tx) => {
+    for (const row of remove) {
+      await tx.productSellingUnit.delete({ where: { id: row.id } });
+    }
+    for (const row of retire) {
+      // Kept so old bills still resolve their unit, hidden so nobody can order it.
+      await tx.productSellingUnit.update({ where: { id: row.id }, data: { isActive: false, isDefault: false } });
+    }
+
+    for (const [index, variation] of variations.entries()) {
+      const data = {
+        name: variation.name.trim(),
+        unitType: PORTION_UNIT_TYPE,
+        unitCode: codes[index],
+        // Null, not zero: a portion is not a pack, so none of the packet
+        // arithmetic (grams per pack, MRP scaled per pack) should find a number here.
+        packSizeValue: null,
+        packSizeUnit: null,
+        conversionToBase: Number(variation.portionFactor ?? 1),
+        defaultPrice: Number(variation.price),
+        isDefault: index === defaultIndex,
+        isActive: true,
+      };
+      const current = byCode.get(codes[index]);
+      if (current) await tx.productSellingUnit.update({ where: { id: current.id }, data });
+      else await tx.productSellingUnit.create({ data: { ...data, shopId, productId } });
+    }
+
+    // One default across the whole dish. A pack row left holding the flag would
+    // make the cart open on "500 g packet" for a dish now sold by the plate.
+    if (variations.length > 0) {
+      for (const pack of packs.filter((unit) => unit.isDefault)) {
+        await tx.productSellingUnit.update({ where: { id: pack.id }, data: { isDefault: false } });
+      }
+    }
+  });
+
+  return listDishVariations(shopId, productId);
 }

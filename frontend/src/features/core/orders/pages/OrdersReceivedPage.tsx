@@ -204,7 +204,12 @@ export default function OrdersReceivedPage() {
   }
 
   async function loadIntoBilling(order: CustomerOrder) {
-    const requestedItems = order.items.map((item) => ({ productId: item.productId, qty: item.qty }));
+    const requestedItems = order.items.map((item) => ({
+      productId: item.productId,
+      qty: item.qty,
+      variation: item.variation,
+      addons: item.addons,
+    }));
     const requestedFingerprint = importedCartFingerprint(requestedItems);
     let catalogProducts = products;
     if (catalogProducts.length === 0 && productsQuery.isFetching) {

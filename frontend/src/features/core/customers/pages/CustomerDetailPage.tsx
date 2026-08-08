@@ -23,7 +23,7 @@ import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { apiRequest } from "@/lib/api/http";
 import { moneyExceeds, roundMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 
 interface PaymentFormState { amount: string; mode: "cash" | "upi" | "bank"; note: string }
 interface ReverseFormState { paymentId: string }
@@ -108,11 +108,22 @@ function billNumber(row: Record<string, unknown>): string {
   return String(row.billNumber ?? row.billNo ?? row.id ?? "Bill");
 }
 
-function printStatement(customerName: string, ledgerRows: Array<{ display_date: string; display_type: string; signed_amount: number; running_balance: number; note?: string | null }>) {
+/**
+ * The printed statement is a generated HTML document, so its headings have to be
+ * INTERPOLATED — `${t(...)}` and not `{t(...)}`. A bare JSX-style call here printed
+ * the string `{t("customers.ledger.date")}` onto real customers' statements; the
+ * translator is passed in so the document is written in the shop's language.
+ */
+function printStatement(
+  customerName: string,
+  ledgerRows: Array<{ display_date: string; display_type: string; signed_amount: number; running_balance: number; note?: string | null }>,
+  t: Translate,
+) {
   const rows = ledgerRows.map((row) => `<tr><td>${formatDateTime(row.display_date)}</td><td>${row.display_type}</td><td>${row.note ?? ""}</td><td style="text-align:right">${formatMoney(row.signed_amount)}</td><td style="text-align:right">${formatMoney(Math.max(0, row.running_balance))}${row.running_balance < 0 ? " *" : ""}</td></tr>`).join("");
   const win = window.open("", "_blank", "width=720,height=840");
   if (!win) return false;
-  win.document.write(`<!doctype html><html><head><title>${customerName} statement</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:8px;font-size:12px}h1{font-size:20px}</style></head><body><h1>${customerName} - Customer Statement</h1><table><thead><tr><th>{t("customers.ledger.date")}</th><th>{t("customers.ledger.type")}</th><th>Note</th><th>Amount</th><th>{t("customers.ledger.balance")}</th></tr></thead><tbody>${rows}</tbody></table><script>window.print()</script></body></html>`);
+  const statementTitle = t("customers.statement.title");
+  win.document.write(`<!doctype html><html><head><title>${customerName} ${statementTitle}</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:8px;font-size:12px}h1{font-size:20px}</style></head><body><h1>${customerName} - ${statementTitle}</h1><table><thead><tr><th>${t("customers.ledger.date")}</th><th>${t("customers.ledger.type")}</th><th>${t("customers.statement.note")}</th><th>${t("customers.statement.amount")}</th><th>${t("customers.ledger.balance")}</th></tr></thead><tbody>${rows}</tbody></table><script>window.print()</script></body></html>`);
   win.document.close();
   return true;
 }
@@ -239,7 +250,7 @@ export default function CustomerDetailPage() {
   }
 
   if (isLoading) return <div className="app-page-shell"><div className="h-48 animate-pulse rounded-[18px] border border-[#e2e8f2] bg-white shadow-sm" /></div>;
-  if (!customer) return <div className="app-page-shell space-y-4"><Link href="/customers"><Button variant="outline"><ArrowLeft size={15} className="mr-1" />Back</Button></Link><Card><CardContent className="py-14 text-center text-muted-foreground">Customer not found.</CardContent></Card></div>;
+  if (!customer) return <div className="app-page-shell space-y-4"><Link href="/customers"><Button variant="outline"><ArrowLeft size={15} className="mr-1" />{t("customers.account.back")}</Button></Link><Card><CardContent className="py-14 text-center text-muted-foreground">{t("customers.account.notFound")}</CardContent></Card></div>;
 
   return (
     <div className="app-page-shell w-full max-w-none space-y-5">
@@ -248,15 +259,15 @@ export default function CustomerDetailPage() {
           <div className="flex min-w-0 items-center gap-4">
             <Link href="/customers"><Button size="icon" variant="outline" className="h-10 w-10 shrink-0 rounded-[12px]" aria-label={t("customers.action.backToCustomers")}><ArrowLeft size={17} /></Button></Link>
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[var(--brand-soft)] text-sm font-black text-[var(--brand)]">{customer.name.split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase()}</span>
-            <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#7b879b]">Customer account</p><h1 className="mt-1 truncate font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)]">{customer.name}</h1><p className="mt-1 truncate text-xs font-medium text-[#66758f]">{customer.mobile || t("customers.detail.noPhone")} {customer.address ? `• ${customer.address}` : ""}</p></div>
+            <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#7b879b]">{t("customers.account.title")}</p><h1 className="mt-1 truncate font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)]">{customer.name}</h1><p className="mt-1 truncate text-xs font-medium text-[#66758f]">{customer.mobile || t("customers.detail.noPhone")} {customer.address ? `• ${customer.address}` : ""}</p></div>
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end">
             <FeatureGate featureName="whatsapp_reminders" fallback={<UpgradePrompt compact featureName="whatsapp_reminders" description={t("customers.toast.whatsappNeedsPro")} />}>
               <Button variant="outline" disabled={reminder.isPending || !customer.mobile || Number(customer.ledgerBalance || 0) <= 0} onClick={() => reminder.mutate(customer.id)} title={!customer.mobile ? t("customers.toast.needMobileFirst") : Number(customer.ledgerBalance || 0) <= 0 ? t("customers.toast.noPendingRemind") : undefined}>{reminder.isPending ? <Loader2 size={15} className="mr-1 animate-spin" /> : <MessageCircle size={15} className="mr-1" />}WhatsApp reminder</Button>
             </FeatureGate>
-            <Button variant="outline" onClick={() => { const ok = printStatement(customer.name, ledger); if (!ok) toast({ title: t("customers.toast.printBlocked"), variant: "destructive" }); }}><FileText size={15} className="mr-1" />{t("customers.action.statement")}</Button>
+            <Button variant="outline" onClick={() => { const ok = printStatement(customer.name, ledger, t); if (!ok) toast({ title: t("customers.toast.printBlocked"), variant: "destructive" }); }}><FileText size={15} className="mr-1" />{t("customers.action.statement")}</Button>
             <Button variant="outline" onClick={() => setAdjustOpen(true)}><ShieldAlert size={15} className="mr-1" />{t("customers.detail.adjustment")}</Button>
-            <Button disabled={customer.ledgerBalance <= 0} onClick={() => setPaymentOpen(true)} title={customer.ledgerBalance <= 0 ? t("customers.toast.noPendingCollect") : undefined}><CreditCard size={15} className="mr-1" />Record payment</Button>
+            <Button disabled={customer.ledgerBalance <= 0} onClick={() => setPaymentOpen(true)} title={customer.ledgerBalance <= 0 ? t("customers.toast.noPendingCollect") : undefined}><CreditCard size={15} className="mr-1" />{t("customers.account.recordPayment")}</Button>
           </div>
         </div>
       </section>
@@ -265,25 +276,25 @@ export default function CustomerDetailPage() {
       {hasNegativeLedgerHistory ? <Card className="border-amber-300 bg-amber-50"><CardContent className="py-3 text-sm font-medium text-amber-900">Old overpayment data was detected in this ledger. Current udhar never goes below {formatMoney(0)}; affected historical balances are marked for reconciliation.</CardContent></Card> : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <Card className="border-t-2 border-t-rose-500"><CardHeader className="pb-2"><CardTitle className="text-sm">Current udhar</CardTitle></CardHeader><CardContent className="text-2xl font-black text-destructive">{formatMoney(Math.max(0, customer.ledgerBalance))}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Trust score</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{customer.ledgerMetrics.trustScore}/100</div><Badge variant={customer.ledgerMetrics.isBadCustomer ? "destructive" : "outline"}>{customer.ledgerMetrics.isBadCustomer ? t("customers.detail.badCustomerWarning") : t("customers.detail.acceptable")}</Badge></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Udhar limit</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{typeof customer.udharLimit === "number" ? formatMoney(customer.udharLimit) : "—"}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Due date</CardTitle></CardHeader><CardContent className="font-semibold"><CalendarClock size={15} className="inline mr-1" />{formatShortDate(customer.dueDate)}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Promise date</CardTitle></CardHeader><CardContent className="font-semibold">{formatShortDate(customer.promiseToPayDate)}</CardContent></Card>
+        <Card className="border-t-2 border-t-rose-500"><CardHeader className="pb-2"><CardTitle className="text-sm">{t("customers.account.currentUdhar")}</CardTitle></CardHeader><CardContent className="text-2xl font-black text-destructive">{formatMoney(Math.max(0, customer.ledgerBalance))}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">{t("customers.account.trustScore")}</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{customer.ledgerMetrics.trustScore}/100</div><Badge variant={customer.ledgerMetrics.isBadCustomer ? "destructive" : "outline"}>{customer.ledgerMetrics.isBadCustomer ? t("customers.detail.badCustomerWarning") : t("customers.detail.acceptable")}</Badge></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">{t("customers.account.udharLimit")}</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{typeof customer.udharLimit === "number" ? formatMoney(customer.udharLimit) : "—"}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">{t("customers.account.dueDate")}</CardTitle></CardHeader><CardContent className="font-semibold"><CalendarClock size={15} className="inline mr-1" />{formatShortDate(customer.dueDate)}</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">{t("customers.account.promiseDate")}</CardTitle></CardHeader><CardContent className="font-semibold">{formatShortDate(customer.promiseToPayDate)}</CardContent></Card>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <Card className="border-t-2 border-t-emerald-500"><CardHeader className="pb-2"><CardTitle className="text-sm">0–7 days</CardTitle></CardHeader><CardContent className="text-xl font-black">{formatMoney(customer.ledgerMetrics.ageing.zeroToSeven)}</CardContent></Card>
-        <Card className="border-t-2 border-t-amber-500"><CardHeader className="pb-2"><CardTitle className="text-sm">7–30 days</CardTitle></CardHeader><CardContent className="text-xl font-black">{formatMoney(customer.ledgerMetrics.ageing.sevenToThirty)}</CardContent></Card>
-        <Card className="border-t-2 border-t-rose-500"><CardHeader className="pb-2"><CardTitle className="text-sm">30+ days</CardTitle></CardHeader><CardContent className="text-xl font-black text-destructive">{formatMoney(customer.ledgerMetrics.ageing.thirtyPlus)}</CardContent></Card>
+        <Card className="border-t-2 border-t-emerald-500"><CardHeader className="pb-2"><CardTitle className="text-sm">{t("customers.account.aging0to7")}</CardTitle></CardHeader><CardContent className="text-xl font-black">{formatMoney(customer.ledgerMetrics.ageing.zeroToSeven)}</CardContent></Card>
+        <Card className="border-t-2 border-t-amber-500"><CardHeader className="pb-2"><CardTitle className="text-sm">{t("customers.account.aging7to30")}</CardTitle></CardHeader><CardContent className="text-xl font-black">{formatMoney(customer.ledgerMetrics.ageing.sevenToThirty)}</CardContent></Card>
+        <Card className="border-t-2 border-t-rose-500"><CardHeader className="pb-2"><CardTitle className="text-sm">{t("customers.account.aging30plus")}</CardTitle></CardHeader><CardContent className="text-xl font-black text-destructive">{formatMoney(customer.ledgerMetrics.ageing.thirtyPlus)}</CardContent></Card>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-5">
         <Card>
-          <CardHeader><CardTitle>Activity timeline</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("customers.account.timeline")}</CardTitle></CardHeader>
           <CardContent className="space-y-2 max-h-[420px] overflow-auto" data-testid="customer-timeline">
-            {timeline.length === 0 ? <div className="text-center py-8 text-muted-foreground">No activity yet — bills, payments and adjustments will appear here.</div> : timeline.map((event) => {
+            {timeline.length === 0 ? <div className="text-center py-8 text-muted-foreground">{t("customers.account.timelineEmpty")}</div> : timeline.map((event) => {
               const inner = <TimelineRow event={event} />;
               return event.href
                 ? <Link key={event.id} href={event.href}><div className="rounded-lg border p-3 hover:bg-muted/40 cursor-pointer">{inner}</div></Link>
@@ -292,7 +303,7 @@ export default function CustomerDetailPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Full ledger / customer statement</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("customers.account.fullLedger")}</CardTitle></CardHeader>
           <CardContent className="space-y-2 max-h-[560px] overflow-auto">
             {ledger.length === 0 ? <div className="text-center py-8 text-muted-foreground">{t("customers.ledger.emptyYet")}</div> : ledger.map((entry) => {
               const type = normaliseLedgerType(entry.type, entry.source_type);
@@ -310,28 +321,28 @@ export default function CustomerDetailPage() {
 
         <div className="space-y-5">
           <Card>
-            <CardHeader><CardTitle>Recent bills</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t("customers.account.recentBills")}</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {bills.slice(0, 8).map((bill) => <Link key={String(bill.id)} href={`/bills/${String(bill.id)}`}><div className="rounded-lg border p-3 hover:bg-muted/40 cursor-pointer"><div className="flex justify-between"><span className="font-medium">{billNumber(bill)}</span><span className="font-semibold">{formatMoney(readNumber(bill.grandTotal ?? bill.totalAmount))}</span></div><p className="text-xs text-muted-foreground">{formatDateTime(bill.businessDate ?? bill.business_date ?? bill.createdAt ?? bill.created_at)} • {String(bill.status ?? bill.billType ?? "bill")}</p></div></Link>)}
-              {bills.length === 0 ? <p className="text-sm text-muted-foreground">No bills linked.</p> : null}
+              {bills.length === 0 ? <p className="text-sm text-muted-foreground">{t("customers.account.noBills")}</p> : null}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>Recent payments</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t("customers.account.recentPayments")}</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {payments.slice(0, 8).map((row) => <div key={String(row.id)} className="rounded-lg border p-3"><div className="flex justify-between gap-3"><div><p className="font-medium">{formatMoney(readNumber(row.amount))} • {String(row.mode ?? "payment").toUpperCase()}</p><p className="text-xs text-muted-foreground">{formatDateTime(row.paidAt ?? row.paid_at ?? row.createdAt ?? row.created_at)} {row.reversed_at || row.reversedAt ? "• Reversed" : ""}</p></div>{!row.reversed_at && !row.reversedAt && row.derived_from_ledger !== true ? <Button size="sm" variant="outline" onClick={() => { if (!reversePaymentPermission.allowed) { toast({ title: t("customers.toast.permissionDenied"), description: reversePaymentPermission.reason, variant: "destructive" }); return; } setReverse({ paymentId: String(row.id) }); setReverseOpen(true); }}><RotateCcw size={13} className="mr-1" />Reverse</Button> : <Badge variant="secondary">{row.derived_from_ledger === true && !row.reversed_at && !row.reversedAt ? t("customers.tab.ledger") : t("customers.detail.reversed")}</Badge>}</div></div>)}
-              {payments.length === 0 ? <p className="text-sm text-muted-foreground">No payments yet.</p> : null}
-              {activePayments.length === 0 && payments.length > 0 ? <p className="text-xs text-muted-foreground">All visible payments are corrected/reversed.</p> : null}
+              {payments.slice(0, 8).map((row) => <div key={String(row.id)} className="rounded-lg border p-3"><div className="flex justify-between gap-3"><div><p className="font-medium">{formatMoney(readNumber(row.amount))} • {String(row.mode ?? "payment").toUpperCase()}</p><p className="text-xs text-muted-foreground">{formatDateTime(row.paidAt ?? row.paid_at ?? row.createdAt ?? row.created_at)} {row.reversed_at || row.reversedAt ? "• Reversed" : ""}</p></div>{!row.reversed_at && !row.reversedAt && row.derived_from_ledger !== true ? <Button size="sm" variant="outline" onClick={() => { if (!reversePaymentPermission.allowed) { toast({ title: t("customers.toast.permissionDenied"), description: reversePaymentPermission.reason, variant: "destructive" }); return; } setReverse({ paymentId: String(row.id) }); setReverseOpen(true); }}><RotateCcw size={13} className="mr-1" />{t("customers.account.reverse")}</Button> : <Badge variant="secondary">{row.derived_from_ledger === true && !row.reversed_at && !row.reversedAt ? t("customers.tab.ledger") : t("customers.detail.reversed")}</Badge>}</div></div>)}
+              {payments.length === 0 ? <p className="text-sm text-muted-foreground">{t("customers.account.noPayments")}</p> : null}
+              {activePayments.length === 0 && payments.length > 0 ? <p className="text-xs text-muted-foreground">{t("customers.account.allReversed")}</p> : null}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>Customer-specific pricing</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t("customers.account.customerPricing")}</CardTitle></CardHeader>
             <CardContent className="text-sm text-muted-foreground">{customer.notes || t("customers.notes.noPricing")}</CardContent>
           </Card>
         </div>
       </div>
 
-      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>Amount *</Label><Input type="number" inputMode="decimal" min="0" step="0.01" max={Math.max(0, customer.ledgerBalance)} className="mt-1" value={payment.amount} onChange={(event) => setPayment((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Mode</Label><Select value={payment.mode} onValueChange={(value) => setPayment((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="upi">UPI</SelectItem><SelectItem value="bank">Bank</SelectItem></SelectContent></Select></div><div><Label>Note</Label><Input className="mt-1" value={payment.note} onChange={(event) => setPayment((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void savePayment()}>{saving ? "Saving..." : t("customers.detail.saveOffline")}</Button></div></DialogContent></Dialog>
+      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>{t("customers.account.recordPayment")}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>{t("customers.account.amountRequired")}</Label><Input type="number" inputMode="decimal" min="0" step="0.01" max={Math.max(0, customer.ledgerBalance)} className="mt-1" value={payment.amount} onChange={(event) => setPayment((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>{t("customers.account.mode")}</Label><Select value={payment.mode} onValueChange={(value) => setPayment((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">{t("customers.account.modeCash")}</SelectItem><SelectItem value="upi">{t("customers.account.modeUpi")}</SelectItem><SelectItem value="bank">{t("customers.account.modeBank")}</SelectItem></SelectContent></Select></div><div><Label>{t("customers.account.note")}</Label><Input className="mt-1" value={payment.note} onChange={(event) => setPayment((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>{t("customers.account.cancel")}</Button><Button disabled={saving} onClick={() => void savePayment()}>{saving ? "Saving..." : t("customers.detail.saveOffline")}</Button></div></DialogContent></Dialog>
       <OwnerPinModal
         open={reverseOpen}
         title="Reverse payment"
@@ -342,7 +353,7 @@ export default function CustomerDetailPage() {
         onCancel={() => setReverseOpen(false)}
         onConfirm={({ ownerPin, reason }) => void saveReverse(ownerPin, reason)}
       />
-      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Manual ledger adjustment</DialogTitle></DialogHeader><div className="space-y-4"><p className="text-sm text-muted-foreground">Positive amount increases udhar. Negative amount reduces udhar. This creates an append-only ledger correction.</p><div><Label>Amount *</Label><Input type="number" inputMode="decimal" step="0.01" className="mt-1" value={adjust.amount} onChange={(event) => setAdjust((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Owner PIN *</Label><Input type="password" className="mt-1" value={adjust.ownerPin} onChange={(event) => setAdjust((form) => ({ ...form, ownerPin: event.target.value }))} /></div><div><Label>Reason</Label><Textarea className="mt-1" value={adjust.note} onChange={(event) => setAdjust((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setAdjustOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void saveAdjustment()}>{saving ? "Saving..." : t("customers.detail.saveCorrection")}</Button></div></DialogContent></Dialog>
+      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>{t("customers.account.manualAdjustment")}</DialogTitle></DialogHeader><div className="space-y-4"><p className="text-sm text-muted-foreground">{t("customers.account.adjustmentHint")}</p><div><Label>{t("customers.account.amountRequired")}</Label><Input type="number" inputMode="decimal" step="0.01" className="mt-1" value={adjust.amount} onChange={(event) => setAdjust((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>{t("customers.account.ownerPinRequired")}</Label><Input type="password" className="mt-1" value={adjust.ownerPin} onChange={(event) => setAdjust((form) => ({ ...form, ownerPin: event.target.value }))} /></div><div><Label>{t("customers.account.reason")}</Label><Textarea className="mt-1" value={adjust.note} onChange={(event) => setAdjust((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setAdjustOpen(false)}>{t("customers.account.cancel")}</Button><Button disabled={saving} onClick={() => void saveAdjustment()}>{saving ? "Saving..." : t("customers.detail.saveCorrection")}</Button></div></DialogContent></Dialog>
     </div>
   );
 }
