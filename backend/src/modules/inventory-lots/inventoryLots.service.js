@@ -90,7 +90,7 @@ export async function changeLotStatus(shopId, lotId, status, note) {
 
 export async function recordReceiptLot(tx, { shopId, locationId, product, receiptItemId, quantityBaseQty, actualRate, batchNumber, manufacturedOn, expiresOn, mrp, note }) {
   if (!product.batchTrackingEnabled && !batchNumber && !expiresOn) return null;
-  await requireFeatureAccess(shopId, "batch_expiry");
+  await requireFeatureAccess(shopId, "batch_expiry", tx);
   if (!product.batchTrackingEnabled) throw new AppError(`${product.name} does not have batch tracking enabled`, 409, "BATCH_TRACKING_NOT_ENABLED");
   if (!batchNumber || !expiresOn) throw new AppError(`${product.name} requires batch number and expiry date`, 422, "BATCH_DETAILS_REQUIRED");
   const expiry = parseDay(expiresOn, "Expiry date");

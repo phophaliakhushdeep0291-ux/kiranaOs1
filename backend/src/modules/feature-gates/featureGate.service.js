@@ -20,9 +20,14 @@ export function isOldDataViewFeature(featureName) {
   return featureName === OLD_DATA_VIEW_FEATURE;
 }
 
-export async function requireFeatureAccess(shopId, featureName) {
+// `client` matters when this is called from inside a transaction: reading the
+// plan on the root client there is a second connection, which SQLite's
+// single-connection pool cannot grant until the transaction ends — the caller
+// then stalls until its own transaction expires. Pass `tx` and the read joins
+// the transaction instead.
+export async function requireFeatureAccess(shopId, featureName, client) {
   if (isOldDataViewFeature(featureName)) return { allowed: true };
-  const effective = await getEffectivePlan(shopId);
+  const effective = await getEffectivePlan(shopId, client);
   if (!isSubscriptionActive(effective.subscription)) {
     const err = new AppError("Active subscription required", 402);
     err.code = "SUBSCRIPTION_INACTIVE";
