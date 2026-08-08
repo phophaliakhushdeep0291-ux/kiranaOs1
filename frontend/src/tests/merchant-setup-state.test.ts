@@ -5,7 +5,19 @@ import {
   normaliseMerchantSetupState,
   type MerchantSetupFacts,
 } from "@/features/core/settings/merchant-setup-state";
+import { englishTranslations, type Translate } from "@/features/core/settings/i18n";
 import { KIRANA_STARTER_CATALOG_COUNT } from "@/features/core/products/starter-catalog/kirana-catalog-summary.generated";
+
+/**
+ * The real English catalogue rather than a key-echoing stub, so a key this module asks
+ * for that does not exist fails here as well as in the completeness test — and the
+ * assertions below keep reading as the sentences a shopkeeper sees.
+ */
+const t: Translate = (key, vars) =>
+  Object.entries(vars ?? {}).reduce<string>(
+    (text, [name, value]) => text.split(`{${name}}`).join(String(value)),
+    englishTranslations[key],
+  );
 
 const EMPTY_FACTS: MerchantSetupFacts = {
   storeProfileReady: false,
@@ -20,6 +32,7 @@ describe("merchant setup readiness", () => {
     const progress = buildMerchantSetupProgress(
       { ...EMPTY_FACTS, storeProfileReady: true, productCount: 10 },
       createMerchantSetupState(),
+      t,
     );
 
     expect(progress.requiredComplete).toBe(false);
@@ -38,6 +51,7 @@ describe("merchant setup readiness", () => {
     const progress = buildMerchantSetupProgress(
       { ...EMPTY_FACTS, storeProfileReady: true, productCount: 125 },
       state,
+      t,
     );
 
     expect(progress.requiredComplete).toBe(true);
@@ -53,6 +67,7 @@ describe("merchant setup readiness", () => {
     const progress = buildMerchantSetupProgress(
       { ...EMPTY_FACTS, storeProfileReady: true, productCount: 1 },
       state,
+      t,
     );
 
     const customers = progress.steps.find((step) => step.id === "customers");
@@ -79,6 +94,7 @@ describe("merchant setup readiness", () => {
         billCount: 1,
       },
       state,
+      t,
     );
 
     expect(progress.completedCount).toBe(progress.totalCount);
@@ -89,7 +105,7 @@ describe("merchant setup readiness", () => {
 
 describe("built-in starter catalog offer", () => {
   const quickActionFor = (facts: Partial<MerchantSetupFacts>) =>
-    buildMerchantSetupProgress({ ...EMPTY_FACTS, ...facts }, createMerchantSetupState())
+    buildMerchantSetupProgress({ ...EMPTY_FACTS, ...facts }, createMerchantSetupState(), t)
       .steps.find((step) => step.id === "products")?.quickAction;
 
   it("offers the catalog to a kirana shop with no products", () => {

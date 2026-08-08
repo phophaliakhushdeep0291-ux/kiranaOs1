@@ -16,6 +16,10 @@ const ROUTES = [
   ["MQA-CUST-01", "/customers"], ["MQA-INV-01", "/inventory"],
   ["MQA-PUR-01", "/purchase-bills"], ["MQA-RPT-01", "/reports"],
   ["MQA-SET-01", "/settings"], ["MQA-SYNC-01", "/sync-status"],
+  // /udhar is the one-tap khata screen. It shipped with only a source-level assertion
+  // that claimed four widths without measuring one, so it belongs in the harness that
+  // actually resizes a viewport.
+  ["MQA-UDHAR-01", "/udhar"],
 ];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const assert = (value, message) => { if (!value) throw new Error(message); };

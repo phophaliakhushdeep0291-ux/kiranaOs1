@@ -8,6 +8,9 @@ describe("mobile core QA matrix harness", () => {
     for (const qaId of [
       "MQA-BILL-01", "MQA-PROD-01", "MQA-CUST-01", "MQA-INV-01",
       "MQA-PUR-01", "MQA-RPT-01", "MQA-SET-01", "MQA-SYNC-01",
+      // The udhar khata is a first-tap screen, so it is a required flow here rather than
+      // relying on the source-level guards in udhar-home.test.ts.
+      "MQA-UDHAR-01",
     ]) expect(source).toContain(qaId);
     for (const viewport of ["[375, 667]", "[390, 844]", "[430, 932]", "[768, 1024]"]) {
       expect(source).toContain(viewport);

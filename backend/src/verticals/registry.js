@@ -46,13 +46,16 @@ export const BUSINESS_PROFILES = Object.freeze(Object.fromEntries(
 ));
 
 /**
- * Release-surface flag. This list is only for choices presented to a user; the
- * complete registry above remains authoritative for loading persisted shops.
+ * What signup and Store Profile may offer: every registered trade.
+ *
+ * This was briefly narrowed to kirana/other behind an `ENABLE_DORMANT_VERTICALS`
+ * build flag. The flag is gone — a shop already running on one of the other nine
+ * verticals could no longer see its own trade in the selector, and the frontend
+ * half was inlined at build time, so re-opening it meant a cache-less redeploy
+ * rather than a setting. The guard below stays: register and business-type
+ * change still want one clear 422 for a key no profile implements.
  */
-export const DORMANT_VERTICALS_ENABLED = process.env.ENABLE_DORMANT_VERTICALS === "true";
-export const OFFERED_BUSINESS_TYPES = Object.freeze(
-  DORMANT_VERTICALS_ENABLED ? [...BUSINESS_TYPES] : ["kirana", "other"],
-);
+export const OFFERED_BUSINESS_TYPES = Object.freeze([...BUSINESS_TYPES]);
 
 export function isBusinessTypeOffered(businessType) {
   return OFFERED_BUSINESS_TYPES.includes(businessType);

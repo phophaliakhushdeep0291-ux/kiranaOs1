@@ -867,8 +867,8 @@ export default function Billing() {
       })
       .catch((error: unknown) => {
         toast({
-          title: "Could not load this item's choices",
-          description: error instanceof Error ? error.message : "Try again.",
+          title: t("billing.page.unitChoicesFailed"),
+          description: error instanceof Error ? error.message : t("billing.page.tryAgain"),
           variant: "destructive",
         });
       })
@@ -1382,11 +1382,11 @@ export default function Billing() {
       return;
     }
     if (appliedOffer && Math.abs(appliedOffer.subtotal - subtotal) > 0.005) {
-      toast({ title: "Reapply coupon", description: t("billing.page.couponStale"), variant: "destructive" });
+      toast({ title: t("billing.page.reapplyCoupon"), description: t("billing.page.couponStale"), variant: "destructive" });
       return;
     }
     if (appliedOffer && safeDiscount + 0.005 < appliedOffer.discount) {
-      toast({ title: "Reapply coupon", description: t("billing.page.couponMismatch"), variant: "destructive" });
+      toast({ title: t("billing.page.reapplyCoupon"), description: t("billing.page.couponMismatch"), variant: "destructive" });
       return;
     }
     const nextBillType = overrideBillType ?? billType;
@@ -1479,7 +1479,7 @@ export default function Billing() {
           pendingAutoPrintRef.current = { popup, printable };
           writeBillingReceiptPendingWindow(popup, printable);
         } else {
-          toast({ title: "Print blocked", description: t("billing.page.popupsBlockedSave"), variant: "destructive" });
+          toast({ title: t("billing.page.printBlocked"), description: t("billing.page.popupsBlockedSave"), variant: "destructive" });
         }
       }
     }
@@ -1651,7 +1651,7 @@ export default function Billing() {
   function printBillSnapshot(snapshot = lastPrintableBill ?? makePrintableBill(billType, effectivePaidAmount, creditAmount)) {
     const popup = window.open("", "_blank", "width=460,height=760");
     if (!popup) {
-      toast({ title: "Print blocked", description: t("billing.page.popupsBlocked"), variant: "destructive" });
+      toast({ title: t("billing.page.printBlocked"), description: t("billing.page.popupsBlocked"), variant: "destructive" });
       return;
     }
     writeBillingReceiptWindow(popup, snapshot, { autoPrint: true });

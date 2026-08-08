@@ -70,13 +70,9 @@ export interface BusinessTypeDefinition {
   dashboard: DashboardConfig;
 }
 
-export const DORMANT_VERTICALS_ENABLED = __DORMANT_VERTICALS_ENABLED__;
-
-/** Choices that may create/change a shop. Persisted dormant types stay valid. */
+/** Choices that may create/change a shop — mirrors OFFERED_BUSINESS_TYPES on the server. */
 export function offeredBusinessTypes(): BusinessType[] {
-  return DORMANT_VERTICALS_ENABLED
-    ? [...BUSINESS_TYPE_IDS]
-    : ["kirana", "other"];
+  return [...BUSINESS_TYPE_IDS];
 }
 
 export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = {
