@@ -33,9 +33,21 @@ describe("udhar route and phone-first shell", () => {
     expect(routes).toContain('const Udhar = lazy(() => import("@/features/core/udhar/pages/UdharPage"))');
     expect(routes).toContain("<ProtectedRoute component={Udhar} />");
   });
-  it.each([375, 390, 430, 768])("guards %ipx against horizontal overflow and small controls", () => {
+  /**
+   * This was written as `it.each([375, 390, 430, 768])` over the same four source
+   * assertions, which never read the width and so reported four passes for one check —
+   * it looked like proof that /udhar survives 375px when nothing had measured a
+   * viewport. There is no DOM environment here, so the honest split is: source keeps the
+   * structural guards below, and the real widths are measured by the CDP matrix in
+   * scripts/capture-mobile-core-matrix-v1.mjs, which /udhar is now part of.
+   */
+  it("keeps the structural guards that make the page survive a narrow viewport", () => {
     expect(page).toContain("overflow-x-hidden");
     expect(page).toContain("min-w-0");
+  });
+
+  it("keeps primary controls at or above the 44px touch target", () => {
+    // h-12 is 48px in this scale; the reminder button is the one a shopkeeper hits most.
     expect(page).toContain('className="h-12 w-full');
     expect(page).toContain('className="h-12 w-12');
   });

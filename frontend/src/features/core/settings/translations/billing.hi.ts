@@ -343,6 +343,10 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.cartClearedDetail": "चालू बिल हटा दिया गया।",
   "billing.page.popupsBlocked": "प्रिंट या PDF के लिए पॉप-अप चालू करें।",
   "billing.page.popupsBlockedSave": "बिल सेव हो जाएगा। सेव के बाद प्रिंट दबाएं या पॉप-अप चालू करें।",
+  "billing.page.printBlocked": "प्रिंट रुका",
+  "billing.page.reapplyCoupon": "कूपन दोबारा लगाएं",
+  "billing.page.unitChoicesFailed": "इस माल के विकल्प नहीं खुले",
+  "billing.page.tryAgain": "दोबारा कोशिश करें।",
   "billing.page.openingWhatsapp": "WhatsApp खुल रहा है…",
   "billing.page.pickAChat": "यह बिल भेजने के लिए चैट चुनें।",
   "billing.page.billingLocked": "बिलिंग बंद है",
@@ -376,4 +380,16 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.originalCustomerCopy": "ग्राहक की असली कॉपी",
   "billing.page.estimateCopy": "कच्चे बिल की कॉपी",
   "billing.page.negativeStockTitle": "स्टॉक माइनस में चला जाएगा",
+
+  "billing.search.searchedBefore": "पहले खोजा",
+  "billing.search.packSizes": "{count} पैक साइज़",
+
+  "billing.batch.loading": "बैच आ रहे हैं…",
+  "billing.batch.empty": "इस ब्रांच में बेचने लायक कोई बैच नहीं है।",
+  "billing.batch.chooseFor": "{name} का बैच चुनें",
+  "billing.batch.selected": "बैच {number}",
+  "billing.batch.nearestExpiry": "सबसे पहले एक्सपायरी",
+  "billing.batch.nearestExpiryAuto": "सबसे पहले एक्सपायरी (अपने आप)",
+  "billing.batch.expiredAgo": "{days} दिन पहले एक्सपायर",
+  "billing.batch.daysLeft": "{days} दिन बाकी",
 };

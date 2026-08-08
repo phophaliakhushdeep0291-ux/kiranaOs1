@@ -35,6 +35,13 @@ function isUserVisibleText(value: string): boolean {
   // JSX ternary glue: `</div> : cond ? <div>` reads as ">text<" to this regex.
   // No user-visible label begins with ":" or ")".
   if (/^[:)]/.test(text)) return false;
+  // Operators and type syntax that a label can never contain. Without these, a JSX
+  // guard (`{points > 0 && <Badge/>}`) and a generic signature
+  // (`loadSettingList<T>(key: string, fallback: T[]): Promise<T[]>`) both read as
+  // ">text<" and were counted as untranslated prose — which kept whole files pinned
+  // to the allowlist over strings that do not exist. Reporting code as debt is worse
+  // than missing it: it makes the list unshrinkable and teaches people to ignore it.
+  if (/&&|\|\||=>|\[\]/.test(text)) return false;
   return true;
 }
 

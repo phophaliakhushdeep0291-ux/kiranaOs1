@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { SettingsShell } from "../SettingsShell";
 import { Badge, Card, CardHead } from "../ui";
+import { useAppLanguage } from "../i18n";
 import { useSettingsPrefs } from "../use-settings-prefs";
 import { SHOP_BOOTSTRAP_QUERY_KEY } from "../business-profile-bootstrap";
 import { updateShopSetupStatus } from "../api";
@@ -104,6 +105,7 @@ function ReadyPill({ step }: { step: MerchantSetupStep }) {
 
 export default function MerchantSetupPage() {
   const [, navigate] = useLocation();
+  const { t } = useAppLanguage();
   const { prefs, shop, hydrated } = useSettingsPrefs();
   const queryClient = useQueryClient();
   const [facts, setFacts] = useState<MerchantSetupFacts>(EMPTY_FACTS);
@@ -140,7 +142,7 @@ export default function MerchantSetupPage() {
     };
   }, [refresh]);
 
-  const progress = useMemo(() => buildMerchantSetupProgress(facts, state), [facts, state]);
+  const progress = useMemo(() => buildMerchantSetupProgress(facts, state, t), [facts, state, t]);
 
   useEffect(() => {
     if (!progress.requiredComplete) return;
@@ -200,23 +202,25 @@ export default function MerchantSetupPage() {
       await refresh();
       if (result.cancelled) {
         toast({
-          title: `Stopped after ${result.created} items`,
-          description: "The items already added are kept. Run it again to add the rest — it will not duplicate them.",
+          title: t("setup.starterCatalog.stopped", { count: result.created }),
+          description: t("setup.starterCatalog.cancelled"),
         });
         return;
       }
       toast({
-        title: result.created > 0 ? `Added ${result.created} items` : "Nothing to add",
+        title: result.created > 0
+          ? t("setup.starterCatalog.added", { count: result.created })
+          : t("setup.starterCatalog.nothingToAdd"),
         description: result.created > 0
-          ? "Review them by category and delete anything you don't sell."
-          : "This shop already has every item in the starter catalog.",
+          ? t("setup.starterCatalog.reviewHint")
+          : t("setup.starterCatalog.alreadyComplete"),
       });
       // Land him where the deleting happens, filtered, rather than on a list of 560.
       navigate("/products?starter=1");
     } catch (error) {
       toast({
-        title: "Could not load the starter catalog",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: t("setup.starterCatalog.failed"),
+        description: error instanceof Error ? error.message : t("setup.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -232,16 +236,15 @@ export default function MerchantSetupPage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={progress.requiredComplete ? "green" : "blue"}>
-                <BadgeCheck size={12} /> {progress.requiredComplete ? "Ready to bill" : "Setup in progress"}
+                <BadgeCheck size={12} /> {progress.requiredComplete ? t("setup.readyToBill") : t("setup.inProgress")}
               </Badge>
               <span className="text-[12px] font-semibold text-[#64748b]">
-                {progress.completedCount} of {progress.totalCount} checks complete
+                {t("setup.checksComplete", { done: progress.completedCount, total: progress.totalCount })}
               </span>
             </div>
-            <h2 className="mt-3 font-display text-[24px] font-black tracking-tight text-[#071735]">Merchant setup</h2>
+            <h2 className="mt-3 font-display text-[24px] font-black tracking-tight text-[#071735]">{t("setup.title")}</h2>
             <p className="mt-1 max-w-[720px] text-[13px] leading-6 text-[#52627e]">
-              A production shop should not discover missing GST, printer, product, or udhar setup while serving a customer.
-              This checklist uses real local data and only marks important items ready after they are actually configured or confirmed.
+              {t("setup.intro")}
             </p>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#eef2f8]">
               <div
@@ -252,9 +255,9 @@ export default function MerchantSetupPage() {
           </div>
           <div className="flex min-w-0 flex-col justify-between rounded-[12px] border border-[#e7edf7] bg-[#f8fbff] p-4">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-[#64748b]">Next best action</p>
-              <p className="mt-1 text-[15px] font-black text-[var(--brand-ink)]">{continueStep?.title ?? "Run a final bill test"}</p>
-              <p className="mt-1 text-[12px] text-[#64748b]">{continueStep?.detail ?? "Your setup checks are complete."}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{t("setup.nextBestAction")}</p>
+              <p className="mt-1 text-[15px] font-black text-[var(--brand-ink)]">{continueStep?.title ?? t("setup.allDoneTitle")}</p>
+              <p className="mt-1 text-[12px] text-[#64748b]">{continueStep?.detail ?? t("setup.allDoneDetail")}</p>
             </div>
             <Button
               className="mt-4 w-full rounded-[9px] bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]"
@@ -296,8 +299,8 @@ export default function MerchantSetupPage() {
                             <>
                               <p className="text-[12px] font-bold text-[var(--brand-ink)]" data-testid="starter-catalog-progress">
                                 {starterCatalogRun.total > 0
-                                  ? `Adding ${starterCatalogRun.created} of ${starterCatalogRun.total}...`
-                                  : "Preparing the catalog..."}
+                                  ? t("setup.starterCatalog.progress", { created: starterCatalogRun.created, total: starterCatalogRun.total })
+                                  : t("setup.starterCatalog.preparing")}
                               </p>
                               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e2ecf9]">
                                 <div
@@ -311,9 +314,9 @@ export default function MerchantSetupPage() {
                                 data-testid="starter-catalog-cancel"
                                 onClick={cancelStarterCatalog}
                               >
-                                Stop
+                                {t("setup.starterCatalog.stop")}
                               </Button>
-                              <p className="mt-2 text-[11px] text-[#64748b]">Items already added are kept.</p>
+                              <p className="mt-2 text-[11px] text-[#64748b]">{t("setup.starterCatalog.keptNote")}</p>
                             </>
                           ) : (
                             <>

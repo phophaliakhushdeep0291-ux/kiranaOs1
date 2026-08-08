@@ -10,7 +10,10 @@
  * test fails if a listed file no longer exists or no longer has any hardcoded string,
  * so the list cannot rot or be padded.
  *
- * Counted at 2791 strings across 145 files.
+ * Counted at 2662 strings across 138 files. The previous count (2791/145) was taken
+ * before the checker stopped reporting JSX guards and generic signatures as prose, so
+ * part of that drop is debt that never existed; the rest is billing and first-run setup
+ * being translated out of this list.
  */
 export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "app/providers.tsx", // 3
@@ -51,9 +54,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/auth/pages/RegisterPage.tsx", // 16
   "features/core/auth/pages/ResetPasswordPage.tsx", // 4
   "features/core/auth/pages/VerifyEmailPage.tsx", // 1
-  "features/core/billing/pages/BillingPage.tsx", // 8
-  "features/core/billing/pages/components/BatchPicker.tsx", // 2
-  "features/core/billing/pages/components/BillingSearch.tsx", // 6
   "features/core/bills/components/EditBillDialog.tsx", // 13
   "features/core/bills/pages/BillDetailPage.tsx", // 53
   "features/core/bills/pages/BillsPage.tsx", // 46
@@ -112,7 +112,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/settings/i18n.tsx", // 1
   "features/core/settings/pages/AdvancedSettingsPage.tsx", // 40
   "features/core/settings/pages/IntegrationsSettingsPage.tsx", // 59
-  "features/core/settings/pages/MerchantSetupPage.tsx", // 6
   "features/core/settings/pages/ModulesSettingsPage.tsx", // 4
   "features/core/settings/pages/NotificationsSettingsPage.tsx", // 40
   "features/core/settings/pages/PrinterSettingsPage.tsx", // 48

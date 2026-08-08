@@ -1,6 +1,7 @@
 // Counts only — the catalog itself is loaded with a dynamic import when the shop taps
 // the action. Importing the data module here would put 560 rows in the settings chunk.
 import { KIRANA_STARTER_CATALOG_COUNT } from "@/features/core/products/starter-catalog/kirana-catalog-summary.generated";
+import type { Translate } from "@/features/core/settings/i18n";
 
 export const MERCHANT_SETUP_KEY = "onboarding:merchant-setup:v1";
 
@@ -89,7 +90,7 @@ export function normaliseMerchantSetupState(value: unknown): MerchantSetupState 
   };
 }
 
-function countLabel(count: number, singular: string, plural = `${singular}s`) {
+function countLabel(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
@@ -101,18 +102,25 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
  * decisions about names and prices, and the catalog's starting prices are not better
  * information than the ones the shop typed in.
  */
-function starterCatalogQuickAction(facts: MerchantSetupFacts): MerchantSetupQuickAction | undefined {
+function starterCatalogQuickAction(facts: MerchantSetupFacts, t: Translate): MerchantSetupQuickAction | undefined {
   if (facts.businessTypeKey !== "kirana" || facts.productCount !== 0) return undefined;
   return {
     id: "load-starter-catalog",
-    label: `Load ${KIRANA_STARTER_CATALOG_COUNT} common kirana items`,
-    hint: "You can delete what you don't sell.",
+    label: t("setup.starterCatalog.label", { count: KIRANA_STARTER_CATALOG_COUNT }),
+    hint: t("setup.starterCatalog.hint"),
   };
 }
 
+/**
+ * `t` is a parameter rather than a context read because this module is pure state, and
+ * the strings it returns are rendered straight onto the first screen a new shop sees.
+ * Hardcoding them here would have made the whole checklist untranslatable no matter what
+ * the page above it did.
+ */
 export function buildMerchantSetupProgress(
   facts: MerchantSetupFacts,
   state: MerchantSetupState,
+  t: Translate,
 ): MerchantSetupProgress {
   const confirmed = state.confirmed ?? {};
   const skipped = state.skipped ?? {};
@@ -120,97 +128,105 @@ export function buildMerchantSetupProgress(
   const steps: MerchantSetupStep[] = [
     {
       id: "store-profile",
-      title: "Store profile",
-      description: "Shop name, mobile number, city, and address used on bills and customer QR ordering.",
+      title: t("setup.step.storeProfile.title"),
+      description: t("setup.step.storeProfile.description"),
       href: "/settings/store-profile",
-      actionLabel: "Open profile",
+      actionLabel: t("setup.step.storeProfile.action"),
       required: true,
       complete: facts.storeProfileReady,
       skipped: false,
-      detail: facts.storeProfileReady ? "Required business details are present" : "Add shop name, phone, and address",
+      detail: facts.storeProfileReady ? t("setup.step.storeProfile.ready") : t("setup.step.storeProfile.todo"),
     },
     {
       id: "taxes",
-      title: "Tax and bill rules",
-      description: "GST mode, invoice naming, round-off, and kacha/estimate bill behavior.",
+      title: t("setup.step.taxes.title"),
+      description: t("setup.step.taxes.description"),
       href: "/settings/taxes",
-      actionLabel: "Open tax settings",
+      actionLabel: t("setup.step.taxes.action"),
       required: true,
       confirmable: true,
       complete: Boolean(confirmed.taxes),
       skipped: false,
-      detail: confirmed.taxes ? "Owner confirmed tax settings" : "Review once and mark ready",
+      detail: confirmed.taxes ? t("setup.step.taxes.ready") : t("setup.step.taxes.todo"),
     },
     {
       id: "billing",
-      title: "Billing preferences",
-      description: "Receipt defaults, payment modes, print preview, and owner approval rules.",
+      title: t("setup.step.billing.title"),
+      description: t("setup.step.billing.description"),
       href: "/settings/billing",
-      actionLabel: "Open billing",
+      actionLabel: t("setup.step.billing.action"),
       required: true,
       confirmable: true,
       complete: Boolean(confirmed.billing),
       skipped: false,
-      detail: confirmed.billing ? "Owner confirmed billing behavior" : "Review payment and bill defaults",
+      detail: confirmed.billing ? t("setup.step.billing.ready") : t("setup.step.billing.todo"),
     },
     {
       id: "printer",
-      title: "Printer setup",
-      description: "Thermal receipt format, test print, and print-after-bill behavior.",
+      title: t("setup.step.printer.title"),
+      description: t("setup.step.printer.description"),
       href: "/settings/printer",
-      actionLabel: "Open printer",
+      actionLabel: t("setup.step.printer.action"),
       required: true,
       confirmable: true,
       complete: Boolean(confirmed.printer),
       skipped: false,
-      detail: confirmed.printer ? "Printer flow confirmed" : "Connect or confirm manual printing",
+      detail: confirmed.printer ? t("setup.step.printer.ready") : t("setup.step.printer.todo"),
     },
     {
       id: "products",
-      title: "Products and stock",
-      description: "Import or add sellable products with price, unit, pack size, and stock.",
+      title: t("setup.step.products.title"),
+      description: t("setup.step.products.description"),
       href: "/products?import=1",
-      actionLabel: "Import products",
+      actionLabel: t("setup.step.products.action"),
       required: true,
       complete: facts.productCount > 0,
       skipped: false,
-      detail: facts.productCount > 0 ? countLabel(facts.productCount, "product") : "No products added yet",
-      quickAction: starterCatalogQuickAction(facts),
+      detail: facts.productCount > 0
+        ? countLabel(facts.productCount, t("setup.count.product"), t("setup.count.products"))
+        : t("setup.step.products.todo"),
+      quickAction: starterCatalogQuickAction(facts, t),
     },
     {
       id: "customers",
-      title: "Customers and udhar",
-      description: "Add frequent customers before using credit, reminders, and statements.",
+      title: t("setup.step.customers.title"),
+      description: t("setup.step.customers.description"),
       href: "/customers",
-      actionLabel: "Open customers",
+      actionLabel: t("setup.step.customers.action"),
       required: false,
       skippable: true,
       complete: facts.customerCount > 0 || Boolean(skipped.customers),
       skipped: Boolean(skipped.customers),
-      detail: facts.customerCount > 0 ? countLabel(facts.customerCount, "customer") : "Optional before first sale",
+      detail: facts.customerCount > 0
+        ? countLabel(facts.customerCount, t("setup.count.customer"), t("setup.count.customers"))
+        : t("setup.step.customers.todo"),
     },
     {
       id: "suppliers",
-      title: "Suppliers and purchases",
-      description: "Add main suppliers before tracking purchase dues and stock-in purchase history.",
+      title: t("setup.step.suppliers.title"),
+      description: t("setup.step.suppliers.description"),
       href: "/suppliers",
-      actionLabel: "Open suppliers",
+      actionLabel: t("setup.step.suppliers.action"),
       required: false,
       skippable: true,
       complete: facts.supplierCount > 0 || Boolean(skipped.suppliers),
       skipped: Boolean(skipped.suppliers),
-      detail: facts.supplierCount > 0 ? countLabel(facts.supplierCount, "supplier") : "Optional before first sale",
+      detail: facts.supplierCount > 0
+        ? countLabel(facts.supplierCount, t("setup.count.supplier"), t("setup.count.suppliers"))
+        : t("setup.step.suppliers.todo"),
     },
     {
       id: "first-bill",
-      title: "First test bill",
-      description: "Create one real or test bill and confirm totals, stock, udhar, and receipt output.",
+      title: t("setup.step.firstBill.title"),
+      description: t("setup.step.firstBill.description"),
       href: "/billing",
-      actionLabel: "Open billing",
+      actionLabel: t("setup.step.firstBill.action"),
       required: false,
       complete: facts.billCount > 0,
       skipped: false,
-      detail: facts.billCount > 0 ? countLabel(facts.billCount, "bill") : "Run after products are ready",
+      detail: facts.billCount > 0
+        ? countLabel(facts.billCount, t("setup.count.bill"), t("setup.count.bills"))
+        : t("setup.step.firstBill.todo"),
     },
   ];
 

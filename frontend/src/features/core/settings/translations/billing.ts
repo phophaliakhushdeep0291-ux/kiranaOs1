@@ -354,6 +354,13 @@ export const billingEn = {
   "billing.page.cartClearedDetail": "Current bill was cleared.",
   "billing.page.popupsBlocked": "Allow pop-ups to print or save PDF.",
   "billing.page.popupsBlockedSave": "Bill will save. Use Print after saving or allow pop-ups.",
+  // Titles for the toasts whose bodies were already translated below. A half-migrated
+  // toast is the worst case: the shopkeeper reads a Hindi explanation under an English
+  // headline, which looks like a broken app rather than a translated one.
+  "billing.page.printBlocked": "Print blocked",
+  "billing.page.reapplyCoupon": "Reapply coupon",
+  "billing.page.unitChoicesFailed": "Could not load this item's choices",
+  "billing.page.tryAgain": "Try again.",
   "billing.page.openingWhatsapp": "Opening WhatsApp…",
   "billing.page.pickAChat": "Pick a chat to send this bill.",
   "billing.page.billingLocked": "Billing locked",
@@ -387,4 +394,23 @@ export const billingEn = {
   "billing.page.originalCustomerCopy": "Original customer copy",
   "billing.page.estimateCopy": "Estimate copy",
   "billing.page.negativeStockTitle": "Stock will go negative",
+
+  // Search strip
+  "billing.search.searchedBefore": "Searched before",
+  // Not caught by the hardcoded-string check (interpolation hides it from the JSX-text
+  // regex), but it sits on every product tile on the busiest screen in the app.
+  "billing.search.packSizes": "{count} pack sizes",
+
+  // Batch picker — shown while choosing which lot of a batched item is being sold.
+  // The aria-label and the two duration strings are invisible to the hardcoded-string
+  // check (it skips attributes and template literals), so they are translated here by
+  // reading the component rather than by trusting the checker.
+  "billing.batch.loading": "Loading batches…",
+  "billing.batch.empty": "No saleable batches at this branch.",
+  "billing.batch.chooseFor": "Choose batch for {name}",
+  "billing.batch.selected": "Batch {number}",
+  "billing.batch.nearestExpiry": "Nearest expiry",
+  "billing.batch.nearestExpiryAuto": "Nearest expiry (automatic)",
+  "billing.batch.expiredAgo": "expired {days}d ago",
+  "billing.batch.daysLeft": "{days}d left",
 } as const;

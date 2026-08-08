@@ -20,7 +20,7 @@ import { Link } from "wouter";
 import { useListBills } from "@/features/core/bills/queries";
 import type { Bill, Product } from "@/lib/api/client";
 import { applyBindSheetPick, normalizeSearchText, productSearchText, productSellingPrice, resolveScanOutcome } from "../billing-calculations";
-import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { ACTIVITY_EVENTS, trackEvent, useSearchTracking } from "@/lib/activity";
 import { lookupKnownProduct, type KnownProductDetails } from "@/features/core/products/product-knowledge";
 
@@ -520,7 +520,7 @@ export function BillingSearch({
             {/* Recent products — its own bordered box */}
             {recentProducts.length > 0 && !search && (
               <div className="hidden shrink-0 px-1 py-1 xl:block">
-                <p className="mb-1.5 text-[11px] font-semibold text-[#536383]">Recent Products</p>
+                <p className="mb-1.5 text-[11px] font-semibold text-[#536383]">{t("billing.search.recentProducts")}</p>
                 <div className="flex items-center gap-2.5">
                   {recentProducts.slice(0, 3).map((p) => {
                     const sellingUnit = (p.sellingUnits ?? []).filter((unit) => unit.isActive !== false).find((unit) => unit.isDefault)
@@ -559,7 +559,7 @@ export function BillingSearch({
               empty counter screen stays quiet. */}
           {search.trim().length > 0 && searchSuggestions.length > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] font-semibold text-[#8290a8]">Searched before</span>
+              <span className="text-[11px] font-semibold text-[#8290a8]">{t("billing.search.searchedBefore")}</span>
               {searchSuggestions.map((suggestion) => (
                 <button
                   key={suggestion}
@@ -835,6 +835,7 @@ export function BillingSearch({
                     product={product}
                     onAdd={() => addProduct(product)}
                     trending={trendingProductIds?.has(product.id) ?? false}
+                    t={t}
                   />
                 ))}
               </div>
@@ -942,7 +943,9 @@ export function BillingSearch({
 }
 
 /* ─── Product card — spec: 176px height, absolute price + add button ─── */
-function ProductCard({ product, onAdd, trending = false }: { product: Product; onAdd: () => void; trending?: boolean }) {
+// `t` arrives as a prop rather than from the context: this renders once per tile in the
+// product grid, and the page above it already holds the translator.
+function ProductCard({ product, onAdd, trending = false, t }: { product: Product; onAdd: () => void; trending?: boolean; t: Translate }) {
   const sellingUnits = (product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
   const defaultUnit = sellingUnits.find((unit) => unit.isDefault) ?? sellingUnits[0];
   const price = defaultUnit?.defaultPrice ?? productSellingPrice(product, 1);
@@ -963,13 +966,13 @@ function ProductCard({ product, onAdd, trending = false }: { product: Product; o
       <div className="relative mb-2.5 flex h-[76px] items-center justify-center overflow-hidden rounded-[7px] bg-[#f8fafc]">
         {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain p-1" /> : <span className="text-[40px] leading-none" aria-hidden="true">{emoji}</span>}
         {stock <= 0 ? (
-          <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">Out</span>
+          <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">{t("billing.search.stockOut")}</span>
         ) : stock <= 5 ? (
-          <span className="absolute bottom-1 right-1 rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">Low</span>
+          <span className="absolute bottom-1 right-1 rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">{t("billing.search.stockLow")}</span>
         ) : null}
         {sellingUnits.length > 1 ? (
           <span className="absolute left-1.5 top-1.5 rounded-md border border-[var(--brand-border)] bg-white/95 px-1.5 py-0.5 text-[8.5px] font-black text-[var(--brand)] shadow-sm">
-            {sellingUnits.length} pack sizes
+            {t("billing.search.packSizes", { count: sellingUnits.length })}
           </span>
         ) : trending ? (
           /* §13: this product is being viewed a lot in online sessions right
