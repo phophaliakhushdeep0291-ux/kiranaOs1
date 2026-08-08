@@ -4,6 +4,11 @@ import { mkdir, open, readFile, rename } from "node:fs/promises";
 
 const VERSION = 1;
 
+function normalizePayloadFingerprint(value) {
+  const fingerprint = String(value || "").trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(fingerprint) ? fingerprint : null;
+}
+
 export function defaultJournalPath() {
   return process.env.KIRANA_BRIDGE_JOB_JOURNAL
     ? path.resolve(process.env.KIRANA_BRIDGE_JOB_JOURNAL)
@@ -31,9 +36,11 @@ export class PrintJobJournal {
     if (parsed?.version !== VERSION || !Array.isArray(parsed.jobs)) throw new Error(`Print job journal has an unsupported format: ${this.filePath}`);
     for (const row of parsed.jobs) {
       if (!row || typeof row.jobId !== "string" || !Number.isInteger(row.requestedCopies) || !Number.isInteger(row.completedCopies)) continue;
+      const requestedCopies = Math.min(5, Math.max(1, row.requestedCopies));
       this.jobs.set(row.jobId, {
-        requestedCopies: Math.min(5, Math.max(1, row.requestedCopies)),
-        completedCopies: Math.min(row.requestedCopies, Math.max(0, row.completedCopies)),
+        requestedCopies,
+        completedCopies: Math.min(requestedCopies, Math.max(0, row.completedCopies)),
+        payloadFingerprint: normalizePayloadFingerprint(row.payloadFingerprint),
         updatedAt: Number(row.updatedAt) || Date.now(),
       });
     }
@@ -45,13 +52,21 @@ export class PrintJobJournal {
     return row ? { ...row } : null;
   }
 
-  async begin(jobId, requestedCopies) {
+  async begin(jobId, requestedCopies, payloadFingerprint) {
+    const normalizedFingerprint = normalizePayloadFingerprint(payloadFingerprint);
+    if (!normalizedFingerprint) throw Object.assign(new Error("Print payload fingerprint is invalid"), { status: 400 });
     const existing = this.jobs.get(jobId);
     if (existing) {
       if (existing.requestedCopies !== requestedCopies) throw Object.assign(new Error("Print job id was already used with a different copy count"), { status: 409 });
+      if (!existing.payloadFingerprint) {
+        throw Object.assign(new Error("Print job predates payload verification; inspect the printer and use a new job id"), { status: 409 });
+      }
+      if (existing.payloadFingerprint !== normalizedFingerprint) {
+        throw Object.assign(new Error("Print job id was already used for a different receipt payload"), { status: 409 });
+      }
       return { ...existing };
     }
-    this.jobs.set(jobId, { requestedCopies, completedCopies: 0, updatedAt: Date.now() });
+    this.jobs.set(jobId, { requestedCopies, completedCopies: 0, payloadFingerprint: normalizedFingerprint, updatedAt: Date.now() });
     try { this.prune(); }
     catch (error) { this.jobs.delete(jobId); throw error; }
     await this.persist();

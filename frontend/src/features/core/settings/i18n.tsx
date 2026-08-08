@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { billingEn } from "./translations/billing";
 import { customersEn } from "./translations/customers";
 import { productsEn } from "./translations/products";
+import { reportsEn } from "./translations/reports";
 import { restaurantEn } from "./translations/restaurant";
 import { shellEn } from "./translations/shell";
 
@@ -9,7 +10,7 @@ export type AppLanguage = "en" | "hi";
 
 const LANGUAGE_STORAGE_KEY = "kirana-os:ui-language:v1";
 
-const en = { ...shellEn, ...billingEn, ...productsEn, ...customersEn, ...restaurantEn };
+const en = { ...shellEn, ...billingEn, ...productsEn, ...customersEn, ...restaurantEn, ...reportsEn };
 
 /**
  * The registered modules, as data rather than only as a spread.
@@ -25,6 +26,7 @@ export const EN_MODULES = {
   products: productsEn,
   customers: customersEn,
   restaurant: restaurantEn,
+  reports: reportsEn,
 } as const;
 
 // The English dictionary is the key catalog, so a new key only has to be declared

@@ -16,6 +16,7 @@ describe("offline shell and readiness contract", () => {
       "PurchaseBillsPage.tsx",
       "ReportsPage.tsx",
       "SyncStatusPage.tsx",
+      "RecoveryModePage.tsx",
     ]) expect(vite).toContain(route);
     expect(vite).toContain("for (const imported of record.imports ?? []) includeRecord(imported, assets, seen)");
     expect(vite).not.toContain("collectAssets(assetsRoot)");

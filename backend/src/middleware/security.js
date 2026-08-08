@@ -144,11 +144,42 @@ export const apiLimiter = rateLimit({
   handler: rateLimitHandler,
 });
 
+const RATE_LIMITED_AUTH_PATHS = new Set([
+  "/register",
+  "/login",
+  "/google",
+  "/verify-email",
+  "/resend-verification",
+  "/password/forgot",
+  "/password/reset",
+  "/refresh",
+  "/device-replacement/complete",
+  "/pin/verify",
+  "/change-password",
+]);
+
+function authRoutePath(req) {
+  const raw = String(req.path || req.originalUrl || req.url || "").split("?")[0];
+  return raw.replace(/^\/api\/auth(?=\/|$)/, "") || "/";
+}
+
+/**
+ * The brute-force limiter belongs on credential/token/PIN verification only.
+ * Applying the same small anonymous-IP bucket to authenticated reads such as
+ * /auth/me made normal page navigation consume login attempts and eventually
+ * returned AUTH_RATE_LIMITED during session recovery.
+ */
+export function shouldSkipAuthRateLimit(req) {
+  if (req.method === "OPTIONS") return true;
+  return !RATE_LIMITED_AUTH_PATHS.has(authRoutePath(req));
+}
+
 export const authLimiter = rateLimit({
   windowMs: env.AUTH_RATE_LIMIT_WINDOW_MS,
   max: env.AUTH_RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: shouldSkipAuthRateLimit,
   handler: (req, res) =>
     res.status(429).json({
       success: false,

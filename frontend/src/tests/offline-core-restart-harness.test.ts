@@ -21,7 +21,7 @@ describe("offline cold-restart QA harness", () => {
   it("covers every core route and fails on bounce, blank/error, loading, overflow or runtime failure", () => {
     for (const route of [
       "/dashboard", "/billing", "/products", "/customers", "/inventory",
-      "/bills", "/purchase-bills", "/reports", "/settings", "/sync-status",
+      "/bills", "/purchase-bills", "/reports", "/settings", "/sync-status", "/recovery-mode",
     ]) expect(source).toContain(`\"${route}\"`);
     expect(source).toContain("bounced from");
     expect(source).toContain("rendered a fatal offline error");

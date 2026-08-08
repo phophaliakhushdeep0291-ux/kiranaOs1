@@ -15,7 +15,7 @@ export interface LocalDbHealthReport {
   checks: LocalDbHealthCheck[];
 }
 
-const CORE_TABLES = ["products", "customers", "bills", "bill_items", "payments", "customer_ledger", "sync_outbox"] as const;
+const CORE_TABLES = ["products", "customers", "bills", "bill_items", "payments", "customer_ledger", "inventory_movements", "sync_outbox"] as const;
 
 function worstStatus(checks: LocalDbHealthCheck[]): LocalDbHealthStatus {
   if (checks.some((check) => check.status === "problem")) return "problem";
@@ -47,7 +47,9 @@ export async function runLocalDbHealthCheck(): Promise<LocalDbHealthReport> {
 
   for (const tableName of CORE_TABLES) {
     try {
-      const count = await dexieDB.table(tableName).count();
+      // Use the scoped facade so a browser profile containing more than one
+      // shop reports only the active shop's rows.
+      const count = (await offlineDB.getAll<Record<string, unknown>>(tableName)).length;
       checks.push({ name: `Table: ${tableName}`, status: "healthy", message: `${count.toLocaleString("en-IN")} local row${count === 1 ? "" : "s"} readable.` });
     } catch (error) {
       checks.push({ name: `Table: ${tableName}`, status: "problem", message: "Could not read this local table.", detail: error instanceof Error ? error.message : String(error) });
@@ -73,11 +75,11 @@ export async function runLocalDbHealthCheck(): Promise<LocalDbHealthReport> {
   }
 
   try {
-    const [bills, billItems, payments, inventory] = await Promise.all([
+    const [bills, billItems, payments, products] = await Promise.all([
       offlineDB.getAll<Record<string, unknown>>("bills"),
       offlineDB.getAll<Record<string, unknown>>("bill_items"),
       offlineDB.getAll<Record<string, unknown>>("payments"),
-      offlineDB.getAll<Record<string, unknown>>("inventory"),
+      offlineDB.getAll<Record<string, unknown>>("products"),
     ]);
     const billIds = new Set<string>();
     const duplicateBillIds = new Set<string>();
@@ -97,8 +99,12 @@ export async function runLocalDbHealthCheck(): Promise<LocalDbHealthReport> {
     };
     const orphanItems = billItems.filter(referencesMissingBill).length;
     const orphanPayments = payments.filter(referencesMissingBill).length;
-    const negativeStock = inventory.filter((row) => {
-      const value = Number(row.quantity ?? row.currentStock ?? row.current_stock ?? 0);
+    const negativeStock = products.filter((row) => {
+      const value = Number(
+        row.stockBaseQty ?? row.stock_base_qty
+        ?? row.currentStockBaseQty ?? row.current_stock_base_qty
+        ?? row.currentStock ?? row.current_stock ?? row.quantity ?? 0,
+      );
       return Number.isFinite(value) && value < 0;
     }).length;
     const issues = duplicateBillIds.size + orphanItems + orphanPayments + negativeStock;

@@ -84,5 +84,6 @@ describe("hardcoded user-visible strings", () => {
     expect(findHardcodedStrings("<span>₹1,240.00</span>")).toEqual([]);
     expect(findHardcodedStrings("<span>उधार खाता</span>")).toEqual([]);
     expect(findHardcodedStrings("<span>· ×</span>")).toEqual([]);
+    expect(findHardcodedStrings("{loading ? <A /> : query.isError ? <B /> : <C />}")).toEqual([]);
   });
 });

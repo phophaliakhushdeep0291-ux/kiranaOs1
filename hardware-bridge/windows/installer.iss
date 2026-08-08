@@ -46,6 +46,7 @@ Name: "{commondesktop}\Hardware Bridge Setup"; Filename: "{app}\KiranaOS.Hardwar
 Name: "desktopicon"; Description: "Create a Hardware Bridge Setup shortcut"; Flags: checkedonce
 
 [Run]
+Filename: "{sys}\icacls.exe"; Parameters: """{commonappdata}\KiranaOS\HardwareBridge"" /inheritance:r /grant:r ""*S-1-5-18:(OI)(CI)F"" ""*S-1-5-32-544:(OI)(CI)F"""; Flags: runhidden waituntilterminated
 Filename: "{app}\KiranaOSHardwareBridge.exe"; Parameters: "install"; Flags: runhidden waituntilterminated
 Filename: "{app}\KiranaOS.HardwareBridge.Setup.exe"; Description: "Choose printer and pair KiranaOS"; Flags: postinstall waituntilterminated skipifsilent
 
