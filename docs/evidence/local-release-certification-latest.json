@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "type": "kiranaos_release_certification",
+  "status": "local-passed",
+  "mode": "local",
+  "startedAt": "2026-08-08T10:28:14.779Z",
+  "completedAt": "2026-08-08T10:34:08.251Z",
+  "durationMs": 353472,
+  "repository": {
+    "commit": "09021c44c93dc8549cd5ce84918e54c0160b4ad4",
+    "branch": "feat/diagnostics-audit-exports-eventbus",
+    "dirty": true
+  },
+  "runtime": {
+    "node": "v24.12.0",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "infrastructure": {
+    "postgresConfigured": false,
+    "redisWorkerConfigured": false,
+    "liveApiConfigured": false,
+    "cloudStorageConfigured": false,
+    "restoreDrillConfigured": false,
+    "dockerAvailable": false,
+    "releaseMetadataConfigured": false
+  },
+  "summary": {
+    "passed": 12,
+    "failed": 0,
+    "blocked": 0,
+    "skipped": 9
+  },
+  "results": [
+    {
+      "id": "release-metadata",
+      "label": "Release approval and rollback metadata",
+      "status": "skipped",
+      "required": false,
+      "reason": "set RELEASE_VERSION, RELEASE_APPROVER, RELEASE_APPROVED=true, and RELEASE_ROLLBACK_IMAGE",
+      "durationMs": 0
+    },
+    {
+      "id": "prisma-sqlite-validate",
+      "label": "Validate SQLite Prisma schema",
+      "status": "passed",
+      "required": true,
+      "durationMs": 572,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\02-prisma-sqlite-validate.log"
+    },
+    {
+      "id": "prisma-postgres-validate",
+      "label": "Validate PostgreSQL Prisma schema",
+      "status": "passed",
+      "required": true,
+      "durationMs": 551,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\03-prisma-postgres-validate.log"
+    },
+    {
+      "id": "migration-safety",
+      "label": "Migration safety and sequence",
+      "status": "passed",
+      "required": true,
+      "durationMs": 475,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\04-migration-safety.log"
+    },
+    {
+      "id": "release-gate",
+      "label": "Release documentation and rollback gate",
+      "status": "passed",
+      "required": true,
+      "durationMs": 450,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\05-release-gate.log"
+    },
+    {
+      "id": "backend-source-db",
+      "label": "Prepare isolated database for source-level tests",
+      "status": "passed",
+      "required": true,
+      "durationMs": 6332,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\06-backend-source-db.log"
+    },
+    {
+      "id": "backend-tests",
+      "label": "Backend source and calculation tests",
+      "status": "passed",
+      "required": true,
+      "durationMs": 74599,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\07-backend-tests.log"
+    },
+    {
+      "id": "backend-integration-sqlite",
+      "label": "Backend regression and integration tests (isolated SQLite)",
+      "status": "passed",
+      "required": true,
+      "durationMs": 209751,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\08-backend-integration-sqlite.log"
+    },
+    {
+      "id": "backend-production-check",
+      "label": "Backend production readiness checks",
+      "status": "passed",
+      "required": true,
+      "durationMs": 1042,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\09-backend-production-check.log"
+    },
+    {
+      "id": "api-contract",
+      "label": "Static API contract proof",
+      "status": "passed",
+      "required": true,
+      "durationMs": 445,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\10-api-contract.log"
+    },
+    {
+      "id": "razorpay-fixtures",
+      "label": "Razorpay signature fixture proof",
+      "status": "passed",
+      "required": true,
+      "durationMs": 1026,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\11-razorpay-fixtures.log"
+    },
+    {
+      "id": "frontend-production-check",
+      "label": "Frontend typecheck, tests, build, and security checks",
+      "status": "passed",
+      "required": true,
+      "durationMs": 57648,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\12-frontend-production-check.log"
+    },
+    {
+      "id": "local-storage-proof",
+      "label": "Local object storage read/write/delete proof",
+      "status": "passed",
+      "required": true,
+      "durationMs": 432,
+      "logPath": "release-artifacts\\logs\\2026-08-08T10-28-14-777Z\\13-local-storage-proof.log"
+    },
+    {
+      "id": "postgres-production-proof",
+      "label": "PostgreSQL migrations, regression, integration, concurrency, and reconciliation",
+      "status": "skipped",
+      "required": false,
+      "reason": "set POSTGRES_TEST_DATABASE_URL to an isolated *_test or *_ci database",
+      "durationMs": 0
+    },
+    {
+      "id": "redis-worker-runtime",
+      "label": "Redis queue and worker execution proof",
+      "status": "skipped",
+      "required": false,
+      "reason": "set QUEUES_ENABLED=true and REDIS_URL",
+      "durationMs": 0
+    },
+    {
+      "id": "worker-heartbeat",
+      "label": "Deployed worker heartbeat freshness",
+      "status": "skipped",
+      "required": false,
+      "reason": "start the production worker and set PROOF_REQUIRE_WORKER=true with Redis configured",
+      "durationMs": 0
+    },
+    {
+      "id": "live-api-contract",
+      "label": "Live API contract smoke",
+      "status": "skipped",
+      "required": false,
+      "reason": "set PROOF_BASE_URL or CONTRACT_SMOKE_BASE_URL",
+      "durationMs": 0
+    },
+    {
+      "id": "live-api-smoke",
+      "label": "Live backend workflow smoke",
+      "status": "skipped",
+      "required": false,
+      "reason": "set PROOF_BASE_URL or SMOKE_BASE_URL",
+      "durationMs": 0
+    },
+    {
+      "id": "cloud-storage-proof",
+      "label": "Production object storage signed URL and cleanup proof",
+      "status": "skipped",
+      "required": false,
+      "reason": "configure a non-local STORAGE_PROVIDER and its bucket credentials",
+      "durationMs": 0
+    },
+    {
+      "id": "disaster-recovery-proof",
+      "label": "PostgreSQL backup and isolated restore drill",
+      "status": "skipped",
+      "required": false,
+      "reason": "set RESTORE_TEST_DATABASE_URL and ALLOW_RESTORE_TEST_DB=true",
+      "durationMs": 0
+    },
+    {
+      "id": "docker-build",
+      "label": "Production Docker image build",
+      "status": "skipped",
+      "required": false,
+      "reason": "Docker engine is unavailable",
+      "durationMs": 0
+    }
+  ]
+}

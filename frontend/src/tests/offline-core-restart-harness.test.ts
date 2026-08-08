@@ -7,13 +7,17 @@ describe("offline cold-restart QA harness", () => {
   it("builds and serves the production app before cutting the network", () => {
     expect(source).toContain('VITE_API_BASE_URL: API_URL');
     expect(source).toContain('KIRANA_BUILD_ID: BUILD_ID');
+    expect(source).toContain('KIRANA_OUT_DIR: BUILD_DIR');
+    expect(source).toContain('path.join(OUTPUT_DIR, "dist")');
     expect(source).toContain('"node_modules/vite/bin/vite.js", "preview"');
     expect(source).toContain('navigator.serviceWorker.controller !== null');
   });
 
   it("closes and relaunches Chrome before checking offline routes", () => {
-    expect(source).toContain('await closeChrome(onlineBrowser.client, onlineBrowser.chrome)');
-    expect(source).toContain('offlineBrowser = await launchChrome("about:blank")');
+    expect(source).toContain('await closeChrome(onlineBrowser.client, onlineBrowser.chrome, onlineBrowser.debugPort)');
+    expect(source).toContain('offlineBrowser = await launchChrome("about:blank", DEBUG_PORT + 1)');
+    expect(source).toContain("waitForUrlDown");
+    expect(source).toContain("persistent profile's file locks");
     expect(source).toContain('offline: true');
     expect(source).toContain('networkDisabled: true');
   });
@@ -35,5 +39,6 @@ describe("offline cold-restart QA harness", () => {
     expect(source).toContain("Offline Matrix Customer");
     expect(source).toContain("did not restore cached product data");
     expect(source).toContain("did not restore cached customer data");
+    expect(source).toContain("did not expose the encrypted local backup tool offline");
   });
 });

@@ -89,7 +89,7 @@ IDs are permanent. Split a requirement instead of reusing or renumbering an ID.
 
 | ID | Requirement | Acceptance evidence | Current repository evidence | Priority |
 |---|---|---|---|---|
-| HW-001 | Certified thermal printers support print, retry and observable failure. | Per-model certification record. | Hardware bridge exists; real-device certification required. | P1 |
+| HW-001 | Certified thermal printers support print, retry and observable failure. | Per-model certification record. | Software bridge passes 15/15 for loopback/origin/token security, single-use credential-rotating pairing, payload-bound exact-job replay, restart recovery, paper/disconnect/power simulations, installer ACL/version/hash/signing contracts and upgrade-safe service replacement. Physical TVS RP 3160 Gold and Epson TM-T82III certification is still required. | P1 |
 | HW-002 | Certified scanners, cash drawers and weighing scales work in billing. | Per-model certification record and live QA. | Gap/certification required. | P1 |
 | PAY-001 | Razorpay/UPI/card confirmation and failure reconcile idempotently. | Webhook/payment tests; sandbox and device QA. | Payment provider and webhook tests. | P1 |
 | ORD-001 | Customer can browse a shop link/QR and place pickup/delivery order. | Public catalog/order tests; customer-phone QA. | Public catalog/customer-order modules/tests. | P1 |
