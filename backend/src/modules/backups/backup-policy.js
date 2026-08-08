@@ -16,7 +16,7 @@ export const PRESERVED_SHOP_MODELS = Object.freeze([
   // an older backup must not resurrect a session the owner already revoked, nor
   // re-queue repair commands a device has already run or refused.
   "SupportSession", "DeviceCommand",
-  "DeviceHealthSnapshot", "Subscription", "PaymentTransaction",
+  "DeviceHealthSnapshot", "Subscription", "OnboardingPurchase", "PaymentTransaction",
   "PaymentProviderEvent", "IntegrationApiKey", "WebhookEndpoint", "WebhookDelivery",
   "Device", "DeviceReplacementChallenge", "DeviceLicense",
 ]);

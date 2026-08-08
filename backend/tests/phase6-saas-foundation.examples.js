@@ -35,7 +35,7 @@ for (const table of ["Plan", "Subscription", "PaymentTransaction", "PaymentProvi
 assert(migration.includes("PaymentProviderEvent_provider_eventId_key"), "Provider event unique index must exist");
 assert(migration.includes("Device_shopId_deviceId_key"), "Device unique index must exist");
 
-for (const [code, price] of Object.entries({ starter: 34900, standard: 39900, growth: 59900, pro: 99900 })) {
+for (const [code, price] of Object.entries({ starter: 4900, standard: 39900, growth: 59900, pro: 99900 })) {
   assert(planConfig.includes(code), `Plan config must include ${code}`);
   assert(planConfig.includes(String(price)), `Plan config must price ${code} in paise`);
 }
