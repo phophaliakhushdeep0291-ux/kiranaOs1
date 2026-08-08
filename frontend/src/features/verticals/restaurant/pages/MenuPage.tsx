@@ -15,7 +15,7 @@ import { CHIP_TONES } from "@/lib/chip-tones";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import type { FoodType, MenuAddonGroup, MenuBoard, MenuDish } from "@/types/api";
-import { getMenuBoard, listAddonGroups, saveDishAddonGroups, saveDishVariations, updateDishMenu, type DishVariationInput } from "../service/restaurant-api";
+import { getMenuBoard, listAddonGroups, saveComboComponents, saveDishAddonGroups, saveDishVariations, updateDishMenu, type ComboComponentInput, type DishVariationInput } from "../service/restaurant-api";
 import { AddonManagerDialog } from "./components/AddonManagerDialog";
 import {
   BLANK_BRAND, guestOrdersEnabled, MENU_THEME_OPTIONS, readMenuBrand, readRestaurantSettings,
@@ -93,6 +93,12 @@ export default function MenuPage() {
       .filter((section) => section.dishes.length > 0);
   }, [board, search]);
 
+  /** Every dish on the board, for building a combo out of the menu that exists. */
+  const allDishes = useMemo(
+    () => board?.courses.flatMap((section) => section.dishes) ?? [],
+    [board],
+  );
+
   const stats = useMemo(() => {
     const all = board?.courses.flatMap((section) => section.dishes) ?? [];
     return {
@@ -150,6 +156,29 @@ export default function MenuPage() {
       await refresh();
       toast({
         title: "Could not save the portions",
+        description: err instanceof Error ? err.message : "The menu was put back as it was.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  /**
+   * Also a round trip, and for a sharper reason than portions.
+   *
+   * The server is what refuses a combo that contains itself or another combo —
+   * the rule that makes expansion terminate. A screen that accepted one
+   * optimistically would show a thali it can never sell.
+   */
+  async function saveCombo(dish: MenuDish, rows: ComboComponentInput[]) {
+    const before = dish.comboComponents ?? [];
+    if (before.length === 0 && rows.length === 0) return;
+    try {
+      await saveComboComponents(dish.id, rows);
+      await refresh();
+    } catch (err) {
+      await refresh();
+      toast({
+        title: "Could not save the combo",
         description: err instanceof Error ? err.message : "The menu was put back as it was.",
         variant: "destructive",
       });
@@ -259,6 +288,8 @@ export default function MenuPage() {
             setEditing(null);
           }}
           onSavePortions={(rows) => savePortions(editing, rows)}
+          allDishes={allDishes}
+          onSaveCombo={(rows) => saveCombo(editing, rows)}
           addonGroups={addonGroups}
           onSaveAddons={(groupIds) => saveDishAddons(editing, groupIds)}
         />
@@ -389,7 +420,7 @@ function DishCard({
 }
 
 function DishEditor({
-  dish, courses, usedCourses, onClose, onSave, onSavePortions, addonGroups, onSaveAddons,
+  dish, courses, usedCourses, onClose, onSave, onSavePortions, allDishes, onSaveCombo, addonGroups, onSaveAddons,
 }: {
   dish: MenuDish;
   courses: string[];
@@ -397,6 +428,9 @@ function DishEditor({
   onClose: () => void;
   onSave: (patch: Parameters<typeof updateDishMenu>[1]) => Promise<void>;
   onSavePortions: (rows: DishVariationInput[]) => Promise<void>;
+  /** Every dish, so a combo can be built out of the menu that already exists. */
+  allDishes: MenuDish[];
+  onSaveCombo: (rows: ComboComponentInput[]) => Promise<void>;
   addonGroups: MenuAddonGroup[];
   onSaveAddons: (groupIds: string[]) => Promise<void>;
 }) {
@@ -405,6 +439,12 @@ function DishEditor({
   const [spice, setSpice] = useState(dish.spiceLevel ?? 0);
   const [prep, setPrep] = useState(dish.prepMinutes ? String(dish.prepMinutes) : "");
   const [tags, setTags] = useState<string[]>(dish.tags);
+  const [comboRows, setComboRows] = useState<ComboComponentInput[]>(
+    () => (dish.comboComponents ?? []).map((row) => ({
+      componentProductId: row.componentProductId,
+      quantity: row.quantity,
+    })),
+  );
   const [portions, setPortions] = useState<DishVariationInput[]>(
     () => (dish.variations ?? []).map((row) => ({
       unitCode: row.unitCode,
@@ -493,6 +533,13 @@ function DishEditor({
 
           <PortionEditor rows={portions} hasRecipe={dish.hasRecipe} dishPrice={dish.price} onChange={setPortions} />
 
+          <ComboEditor
+            rows={comboRows}
+            dish={dish}
+            allDishes={allDishes}
+            onChange={setComboRows}
+          />
+
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-3"><Label>Add-on groups</Label><span className="text-[10.5px] text-[#64748b]">Managed from Add-ons on the menu page</span></div>
             {addonGroups.length === 0 ? (
@@ -548,6 +595,7 @@ function DishEditor({
                   .map((row) => ({ ...row, name: row.name.trim() }))
                   .filter((row) => row.name !== "");
                 await onSavePortions(named);
+              await onSaveCombo(comboRows.filter((row) => row.componentProductId && row.quantity > 0));
                 await onSaveAddons(selectedAddonGroupIds);
                 await onSave({
                   menuCourse: course.trim() || null,
@@ -663,6 +711,125 @@ function PortionEditor({
       )}
     </div>
   );
+}
+
+/**
+ * Build a thali or meal deal out of dishes already on the menu.
+ *
+ * There is no price field here on purpose: a combo IS a product and is sold at
+ * its own price, set on the Products screen like every other dish. What this
+ * edits is only the list of what the guest receives — and what it shows back is
+ * the number that decides whether the combo is worth offering: the parts' total
+ * against the combo's price.
+ */
+function ComboEditor({
+  rows, dish, allDishes, onChange,
+}: {
+  rows: ComboComponentInput[];
+  dish: MenuDish;
+  allDishes: MenuDish[];
+  onChange: (next: ComboComponentInput[]) => void;
+}) {
+  const [picking, setPicking] = useState("");
+
+  const priceById = useMemo(
+    () => new Map(allDishes.map((row) => [row.id, row.price])),
+    [allDishes],
+  );
+  const nameById = useMemo(
+    () => new Map(allDishes.map((row) => [row.id, row.name])),
+    [allDishes],
+  );
+
+  /**
+   * A combo may not contain itself, and may not contain another combo — that is
+   * what makes the expansion terminate, and the server refuses both. Leaving them
+   * out of the picker means the shopkeeper never gets the refusal at all.
+   */
+  const choosable = useMemo(
+    () => allDishes.filter((row) => (
+      row.id !== dish.id
+      && !row.isCombo
+      && !rows.some((chosen) => chosen.componentProductId === row.id)
+    )),
+    [allDishes, dish.id, rows],
+  );
+
+  const separately = rows.reduce(
+    (sum, row) => sum + (priceById.get(row.componentProductId) ?? 0) * row.quantity,
+    0,
+  );
+  const saving = separately - dish.price;
+
+  function add(componentProductId: string) {
+    if (!componentProductId) return;
+    onChange([...rows, { componentProductId, quantity: 1 }]);
+    setPicking("");
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label>Combo dishes</Label>
+      {rows.length === 0 ? (
+        <p className="text-[12px] text-[#64748b]">
+          Add dishes to turn this into a thali or meal deal. It keeps its own price of {rupees(dish.price)}.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map((row, index) => (
+            <div key={row.componentProductId} className="flex items-center gap-1.5">
+              <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[var(--brand-ink)]">
+                {nameById.get(row.componentProductId) ?? "Dish"}
+              </span>
+              <ComboQuantity
+                quantity={row.quantity}
+                onChange={(next) => onChange(rows.map((entry, position) => (
+                  position === index ? { ...entry, quantity: next } : entry
+                )))}
+              />
+              <button
+                type="button"
+                aria-label={`Remove ${nameById.get(row.componentProductId) ?? "this dish"} from the combo`}
+                onClick={() => onChange(rows.filter((_, position) => position !== index))}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border border-[#f1d4d8] text-[#b4404f]"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+          <div className="flex items-baseline justify-between rounded-[8px] bg-[#f4f9ff] px-2.5 py-2">
+            <span className="text-[11px] text-[#64748b]">Separately {rupees(separately)}</span>
+            {/* A combo dearer than its parts is a pricing mistake, and saying so is
+                more use to an owner than showing a negative "saving". */}
+            <span className={cn("text-[11px] font-bold", saving > 0 ? "text-[#15803d]" : "text-[#b4404f]")}>
+              {saving > 0 ? `Guest saves ${rupees(saving)}` : saving === 0 ? "Same as buying separately" : `Dearer by ${rupees(-saving)}`}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {choosable.length > 0 ? (
+        <select
+          value={picking}
+          aria-label="Add a dish to this combo"
+          onChange={(event) => add(event.target.value)}
+          className="h-9 w-full rounded-[8px] border border-[#dbe4f0] bg-white px-2 text-[12px] font-semibold text-[#31527e]"
+        >
+          <option value="">+ Add a dish…</option>
+          {choosable.map((row) => (
+            <option key={row.id} value={row.id}>{row.name} · {rupees(row.price)}</option>
+          ))}
+        </select>
+      ) : null}
+    </div>
+  );
+}
+
+function ComboQuantity({ quantity, onChange }: { quantity: number; onChange: (next: number) => void }) {
+  // A draft, not raw onChange: committing Number("") as 0 on the keystroke that
+  // clears the box would drop the dish out of the combo as the shopkeeper typed.
+  const props = useQuantityDraft(quantity, onChange);
+  return <Input {...props} inputMode="decimal" className="h-8 w-16" aria-label="How many of this dish" />;
 }
 
 function PortionRow({

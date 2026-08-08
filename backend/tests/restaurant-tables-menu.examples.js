@@ -566,7 +566,7 @@ for (const migration of [
 
 for (const migration of [
   readRepo("prisma/migrations/20260808140000_menu_combos/migration.sql"),
-  readRepo("prisma-postgres/migrations/000097_menu_combos/migration.sql"),
+  readRepo("prisma-postgres/migrations/000100_menu_combos/migration.sql"),
 ]) {
   assert.ok(migration.includes('"MenuComboComponent"'), "the combo migration must create MenuComboComponent");
   assert.ok(migration.includes("componentName"), "the component name is copied so a report reads without a join");
