@@ -84,6 +84,101 @@ export function resolveScanMatch(rawSearch: string, filtered: Product[]): Produc
   return filtered.length === 1 ? filtered[0] : null;
 }
 
+/**
+ * Does this look like a scanned code rather than someone typing a product name?
+ *
+ * This decides whether an unmatched Enter opens the bind sheet or does nothing, so it is
+ * deliberately narrow: a scanner emits an unbroken run of digits (EAN-8/13, UPC-A/E) or an
+ * alphanumeric Code-128/39 payload, never spaces. "sug" pressed by an impatient cashier
+ * must NOT be treated as a new barcode — the shortest real symbology is 8 digits, so the
+ * length floor sits there for digits and higher for mixed codes.
+ */
+export function looksLikeScannedBarcode(rawSearch: string): boolean {
+  const term = rawSearch.trim();
+  if (!term || /\s/.test(term) || term.length > 48) return false;
+  if (/^\d{8,}$/.test(term)) return true;
+  return /^[A-Za-z0-9][A-Za-z0-9._/-]{9,}$/.test(term) && /\d/.test(term);
+}
+
+export type ScanOutcome =
+  | { kind: "match"; product: Product }
+  | { kind: "unknown-code"; code: string }
+  | { kind: "none" };
+
+/**
+ * What should Enter (or a camera read) do with the current search box?
+ *
+ * The exact-code lookup runs over the WHOLE catalogue, not the filtered grid, because
+ * `filtered` is narrowed by the category chips and capped at 30 rows. Resolving only
+ * against it would report a code the shop already owns as unknown, and the cashier would
+ * be offered a bind that the service is then obliged to reject.
+ */
+export function resolveScanOutcome(
+  rawSearch: string,
+  filtered: Product[],
+  all: Product[],
+): ScanOutcome {
+  const term = rawSearch.trim();
+  if (!term) return { kind: "none" };
+
+  // Only an exact code match counts at catalogue scope. resolveScanMatch's other rule —
+  // "the sole row on screen" — is about a narrowed grid and would be nonsense here.
+  const lower = term.toLowerCase();
+  const exact = all.find(
+    (product) =>
+      (product.barcode && String(product.barcode).trim().toLowerCase() === lower) ||
+      (product.sku && String(product.sku).trim().toLowerCase() === lower),
+  );
+  if (exact) return { kind: "match", product: exact };
+
+  const onScreen = resolveScanMatch(term, filtered);
+  if (onScreen) return { kind: "match", product: onScreen };
+
+  return looksLikeScannedBarcode(term) ? { kind: "unknown-code", code: term } : { kind: "none" };
+}
+
+export interface BindSheetPickInput {
+  product: Product;
+  code: string;
+  /** True once the cashier pressed Skip: the queue matters more than the catalogue. */
+  skip: boolean;
+  bind: (product: Product, code: string) => Promise<void>;
+  add: (product: Product) => void;
+}
+
+export interface BindSheetPickResult {
+  bound: boolean;
+  added: boolean;
+  error?: string;
+}
+
+/**
+ * What happens when the cashier picks an item in the capture-on-first-scan sheet.
+ *
+ * Binding and adding are ONE action — the cashier said "this code is that item", and the
+ * item they just identified is the item they are selling. The add happens only after the
+ * bind resolves, so a code that turned out to belong to something else leaves the cart
+ * honest and the sheet open with the reason.
+ *
+ * Skip binds nothing and still adds: a cashier with a queue is never made to teach the
+ * catalogue before they can sell.
+ */
+export async function applyBindSheetPick(input: BindSheetPickInput): Promise<BindSheetPickResult> {
+  if (input.skip) {
+    input.add(input.product);
+    return { bound: false, added: true };
+  }
+
+  try {
+    await input.bind(input.product, input.code);
+  } catch (error) {
+    return { bound: false, added: false, error: error instanceof Error ? error.message : String(error) };
+  }
+
+  input.add(input.product);
+  return { bound: true, added: true };
+}
+
 export function productCostPrice(product: Product): number {
   return roundMoney(Number(product.averageCostPrice ?? product.costPrice ?? product.costPerRateUnit ?? 0));
 }

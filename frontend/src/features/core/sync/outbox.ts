@@ -10,6 +10,10 @@ export type SyncOutboxOperationType =
   | "DELETE_CUSTOMER_PENDING"
   | "CREATE_PRODUCT"
   | "UPDATE_PRODUCT"
+  // Capture-on-first-scan: one scanned code bound to one product. Kept separate from
+  // UPDATE_PRODUCT so a cashier's bind can never carry an arbitrary product edit, and so
+  // a code already owned elsewhere comes back as a conflict instead of last-write-wins.
+  | "BIND_PRODUCT_BARCODE"
   | "DELETE_PRODUCT_PENDING"
   | "CREATE_BILL"
   | "CREATE_SALE_RETURN"

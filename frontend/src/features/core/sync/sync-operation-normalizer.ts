@@ -429,6 +429,25 @@ function normaliseProductLifecyclePayload(
   };
 }
 
+/**
+ * A bind queued offline may name the product by its local id, because the product itself
+ * can still be an unsynced CREATE_PRODUCT. Send every spelling the backend resolves so the
+ * id-mapping path can find it whichever way round the two events land.
+ */
+function normaliseBindBarcodePayload(
+  backendType: string,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  if (backendType !== "BIND_PRODUCT_BARCODE") return payload;
+  const productId = payload.serverProductId ?? payload.productId ?? payload.localProductId ?? payload.id;
+  return {
+    ...payload,
+    productId,
+    localProductId: payload.localProductId ?? payload.productId ?? payload.id,
+    barcode: typeof payload.barcode === "string" ? payload.barcode.trim() : payload.barcode,
+  };
+}
+
 function normaliseLedgerPayload(payload: Record<string, unknown>): Record<string, unknown> {
   return {
     ...payload,
@@ -466,6 +485,7 @@ export function buildBackendSyncOperation(
   }
   payload = normaliseBillLifecyclePayload(backendType, payload);
   payload = normaliseProductLifecyclePayload(backendType, payload);
+  payload = normaliseBindBarcodePayload(backendType, payload);
   payload = normaliseCustomerLifecyclePayload(backendType, payload);
   if (backendType === "CREATE_LEDGER_ADJUSTMENT" || backendType === "REVERSE_UDHAR_PAYMENT") payload = normaliseLedgerPayload(payload);
   payload = normaliseStockPayload(backendType, rawType, payload);

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { BillInputBillType, BillPaymentMode, getListBillsQueryKey, useConfirmBill, useListCustomers, type Bill, type Customer, type Product, type ProductSellingUnit } from "@/lib/api/client";
 import { useListProducts } from "@/features/core/products/queries";
+import { bindProductBarcodeLocalFirst } from "@/features/core/products/local-actions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -144,7 +145,7 @@ export default function Billing() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { shop, user } = useAuth();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { isOnline } = useOfflineStatus();
   const newBillingFeature = useFeature("new_billing");
   const createBillPermission = usePermission("create_bill");
@@ -835,6 +836,33 @@ export default function Billing() {
       trackEvent(ACTIVITY_EVENTS.PRODUCT_ADDED_TO_BILL, { productId: product.id, productName: product.name });
     }
     setSearch("");
+  }
+
+  /**
+   * Capture-on-first-scan: bind the code the till just read to the item the cashier picked.
+   *
+   * Local-first, so it works with no network and the next scan of the same packet resolves
+   * on this device immediately. The cached product list is patched in place rather than
+   * refetched for the same reason — a refetch would need the internet the shop may not
+   * have, and would undo the point of binding offline.
+   */
+  async function bindScannedBarcode(product: Product, code: string) {
+    const updated = await bindProductBarcodeLocalFirst(product.id, code);
+    queryClient.setQueriesData<Product[]>({ queryKey: ["products"] }, (rows) =>
+      Array.isArray(rows) ? rows.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)) : rows,
+    );
+  }
+
+  /** Genuinely new stock: open the product form with the scanned code already filled in. */
+  function createProductForScannedBarcode(code: string) {
+    setLocation("/products");
+    // Same handoff the voice assistant uses: the form listens for this draft once the
+    // products route has mounted.
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("kirana:voice-product-draft", {
+        detail: { draft: { mode: "create", barcode: code }, merge: false },
+      }));
+    }, 350);
   }
 
   function parseVoiceDraft(commandOverride?: string) {
@@ -1699,7 +1727,10 @@ export default function Billing() {
           searchInputRef={searchInputRef}
           productsLoading={products.isLoading || products.isFetching}
           filteredProducts={filteredProducts}
+          allProducts={allProducts}
           onAddProduct={addToCart}
+          onBindBarcode={bindScannedBarcode}
+          onCreateProductWithBarcode={createProductForScannedBarcode}
           categories={categories}
           selectedCategory={selectedCategory}
           onSelectedCategoryChange={chooseCategory}
