@@ -99,6 +99,23 @@ jobs:
           key: pnpm-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
+      # The certification's image proof rebuilt every layer each run — apt
+      # install, a second full npm ci, prisma generate — because nothing carried
+      # over between jobs. buildx plus a persisted layer cache reuses all of
+      # that whenever the Dockerfile, the lockfile and the Prisma schemas are
+      # unchanged, which is every commit that only touches source.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: buildx-${{ runner.os }}-${{ hashFiles('backend/Dockerfile', 'backend/package-lock.json', 'backend/prisma/schema.prisma', 'backend/prisma-postgres/schema.prisma') }}-${{ github.sha }}
+          restore-keys: |
+            buildx-${{ runner.os }}-${{ hashFiles('backend/Dockerfile', 'backend/package-lock.json', 'backend/prisma/schema.prisma', 'backend/prisma-postgres/schema.prisma') }}-
+            buildx-${{ runner.os }}-
+
       - name: Reject tracked generated and runtime artifacts
         run: node scripts/check-repository-hygiene.mjs
 
@@ -112,6 +129,10 @@ jobs:
 
       - name: Run CI release certification
         working-directory: backend
+        env:
+          # Consumed by scripts/docker-build.js. Unset, the image proof runs the
+          # same uncached `docker build .` it always did.
+          DOCKER_BUILD_CACHE_DIR: /tmp/.buildx-cache
         run: npm run release:certify:ci
 
       - name: Upload certification evidence

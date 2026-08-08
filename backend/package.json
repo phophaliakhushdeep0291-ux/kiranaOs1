@@ -52,7 +52,7 @@
     "worker": "node --import ./src/instrumentation.js src/workers/index.js",
     "worker:dev": "node --watch --import ./src/instrumentation.js src/workers/index.js",
     "daily-closing:run": "node scripts/run-daily-closing.js",
-    "docker:build": "docker build .",
+    "docker:build": "node scripts/docker-build.js",
     "worker:verify": "node scripts/verify-worker-runtime.js",
     "smoke:test": "node scripts/smoke-test.js",
     "storage:verify": "node scripts/verify-object-storage.js",
