@@ -77,7 +77,7 @@ function AddonConfigurator({ product, data, onConfirm, onCancel }: ProductConfig
             </section>
           ))}
         </div>
-        <DialogFooter className="gap-2 sm:justify-between">
+        <DialogFooter className="gap-2 max-sm:!flex-col sm:justify-between">
           <div className="mr-auto text-left"><p className="text-[10px] uppercase tracking-wide text-[#64748b]">{t("restaurant.addons.optionsAdd")}</p><p className="text-[15px] font-black">₹{extra.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</p></div>
           <Button variant="outline" onClick={onCancel}>{t("restaurant.addons.cancel")}</Button>
           <Button onClick={() => {

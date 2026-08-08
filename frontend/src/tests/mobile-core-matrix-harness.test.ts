@@ -17,7 +17,7 @@ describe("mobile core QA matrix harness", () => {
   it("fails on route bounce, overflow, desktop chrome, loading stalls, or runtime errors", () => {
     expect(source).toContain("redirected from");
     expect(source).toContain("horizontal overflow");
-    expect(source).toContain("desktopAsideVisible");
+    expect(source).toContain("desktopSidebarVisible");
     expect(source).toContain("remained in a loading state");
     expect(source).toContain("runtime errors");
   });
@@ -25,7 +25,7 @@ describe("mobile core QA matrix harness", () => {
   it("retains screenshots and machine-readable measurements and enforces 44px targets", () => {
     expect(source).toContain("Page.captureScreenshot");
     expect(source).toContain('"report.json"');
-    expect(source).toContain("control.width < 44 || control.height < 44");
+    expect(source).toMatch(/control\s*=>\s*control\.width\s*<\s*44\s*\|\|\s*control\.height\s*<\s*44/);
     expect(source).toContain("undersized.length === 0");
   });
 });

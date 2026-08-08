@@ -516,6 +516,9 @@ export function useFeature(featureName: FeatureName): FeatureDecision {
       cloudSyncAllowed: true,
       canCreateNewBills: true,
       message: "Checking subscription...",
+      foundingCustomer: false,
+      foundingEndsAt: null,
+      intendedPaidPlanCode: "starter" as PlanCode,
       source: "default-trial" as const,
     };
     return { ...decideFeature(safeSnapshot, featureName), loading, refresh };

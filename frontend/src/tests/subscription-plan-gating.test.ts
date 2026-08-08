@@ -62,6 +62,9 @@ function snapshot(planCode: PlanCode, overrides: Partial<SubscriptionSnapshot> =
     cloudSyncAllowed: true,
     canCreateNewBills: true,
     message: "Subscription active.",
+    foundingCustomer: false,
+    foundingEndsAt: null,
+    intendedPaidPlanCode: plan.code,
     source: "local-cache",
     ...overrides,
   };
@@ -112,7 +115,7 @@ describe("subscription and plan gating", () => {
 
   it("publishes three annual-first plans while retaining Legacy Standard internally", () => {
     expect(PUBLIC_PLAN_ORDER).toEqual(["starter", "growth", "pro"]);
-    expect(PLAN_DEFINITIONS.starter).toMatchObject({ price: 349, annualPrice: 2999, maxDevices: 2 });
+    expect(PLAN_DEFINITIONS.starter).toMatchObject({ price: 49, annualPrice: 399, maxDevices: 2 });
     expect(PLAN_DEFINITIONS.growth).toMatchObject({ price: 599, annualPrice: 4999, maxDevices: 5, maxStaff: 5 });
     expect(PLAN_DEFINITIONS.pro).toMatchObject({ name: "Business", price: 999, annualPrice: 8999, maxDevices: 10, maxStaff: 20 });
     expect(PLAN_DEFINITIONS.standard.legacy).toBe(true);
@@ -290,7 +293,7 @@ describe("subscription and plan gating", () => {
     expect(premiumAction.allowed).toBe(false);
   });
 
-  it("grace expired blocks new billing but does not block viewing old data", async () => {
+  it("grace expiry preserves emergency billing and old-data access while locking cloud and premium actions", async () => {
     mockState.subscriptionRows = [cachedSubscription({
       planCode: "starter",
       status: "active",
@@ -301,11 +304,15 @@ describe("subscription and plan gating", () => {
     const current = await getCurrentSubscriptionSnapshot();
     const billing = decideFeature(current, "new_billing");
     const oldData = decideFeature(current, "view_old_data");
+    const cloudBackup = decideFeature(current, "cloud_backup");
+    const stockAdjustment = decideFeature(current, "stock_adjustment");
 
     expect(current.graceActive).toBe(false);
     expect(current.isExpired).toBe(true);
-    expect(current.canCreateNewBills).toBe(false);
-    expect(billing.allowed).toBe(false);
+    expect(current.canCreateNewBills).toBe(true);
+    expect(billing.allowed).toBe(true);
     expect(oldData.allowed).toBe(true);
+    expect(cloudBackup.allowed).toBe(false);
+    expect(stockAdjustment.allowed).toBe(false);
   });
 });

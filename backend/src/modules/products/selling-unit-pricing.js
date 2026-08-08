@@ -45,6 +45,13 @@ function mrpForPack(mrp, sellingUnit, defaultSellingUnit) {
  */
 export function sellingUnitMaxPrice(sellingUnit, product, defaultSellingUnit, batchMrp) {
   const ownMax = round2(Number(sellingUnit?.maximumPrice ?? 0));
+
+  // A restaurant portion is a menu-price row, not a packet. Its conversion is
+  // how much recipe/stock one portion consumes, so applying pack or batch MRP
+  // arithmetic to it creates a fake ceiling (Large 590 at factor 1.4 became
+  // 588 from the dish's 420 MRP). An owner may still set an explicit ceiling.
+  if (String(sellingUnit?.unitType ?? "").trim().toLowerCase() === "portion") return ownMax;
+
   const batchCeiling = mrpForPack(Number(batchMrp ?? 0), sellingUnit, defaultSellingUnit);
 
   if (batchCeiling > 0) {

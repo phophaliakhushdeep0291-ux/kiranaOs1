@@ -27,6 +27,7 @@ import { apiRequest } from "@/lib/api/http";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
 import { deliverBillWhatsapp, type BillWhatsappState } from "@/features/core/bills/whatsapp-delivery";
+import { billItemAddons } from "@/features/core/bills/bill-item-options";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
 type AnyRow = Record<string, unknown>;
@@ -389,7 +390,28 @@ export default function BillDetailPage() {
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/60 text-muted-foreground"><tr><th className="px-4 py-3 text-left">Item</th><th className="px-4 py-3 text-right">Qty</th><th className="px-4 py-3 text-right">Rate</th><th className="px-4 py-3 text-right">Total</th></tr></thead>
-            <tbody>{visibleItems.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No item rows found.</td></tr> : visibleItems.map((item, index) => <tr className="border-t" key={String(item.id ?? index)}><td className="px-4 py-3 font-medium">{String(item.name ?? item.productName ?? "Item")}</td><td className="px-4 py-3 text-right">{readNumber(item.quantity, 0)} {String(item.enteredUnit ?? item.entered_unit ?? "")}</td><td className="px-4 py-3 text-right">{money(readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0))}</td><td className="px-4 py-3 text-right font-semibold">{money(itemTotal(item))}</td></tr>)}</tbody>
+            <tbody>{visibleItems.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No item rows found.</td></tr> : visibleItems.map((item, index) => {
+              const addons = billItemAddons(item);
+              const variation = String(item.sellingUnitLabel ?? item.selling_unit_label ?? "").trim();
+              const note = String(item.note ?? "").trim();
+              return <tr className="border-t align-top" key={String(item.id ?? index)}>
+                <td className="px-4 py-3">
+                  <div className="font-medium">{String(item.name ?? item.productName ?? "Item")}</div>
+                  {variation ? <div className="mt-1 text-xs font-semibold text-muted-foreground">Portion: {variation}</div> : null}
+                  {addons.length > 0 ? <div className="mt-2 flex max-w-[28rem] flex-wrap gap-1.5" aria-label="Selected add-ons">
+                    {addons.map((addon, addonIndex) => <span className="inline-flex min-h-7 items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-950" key={`${addon.optionId ?? addon.name}-${addonIndex}`}>
+                      {addon.groupName ? <span className="mr-1 text-amber-700">{addon.groupName}:</span> : null}
+                      {addon.quantity > 1 ? `${addon.quantity}× ` : ""}{addon.name}
+                      {addon.price > 0 ? <span className="ml-1 text-amber-800">+{money(addon.price * addon.quantity)}</span> : null}
+                    </span>)}
+                  </div> : null}
+                  {note ? <div className="mt-1.5 text-xs text-muted-foreground">{note}</div> : null}
+                </td>
+                <td className="px-4 py-3 text-right">{readNumber(item.quantity, 0)} {String(item.enteredUnit ?? item.entered_unit ?? "")}</td>
+                <td className="px-4 py-3 text-right">{money(readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0))}</td>
+                <td className="px-4 py-3 text-right font-semibold">{money(itemTotal(item))}</td>
+              </tr>;
+            })}</tbody>
           </table>
         </CardContent>
       </Card>

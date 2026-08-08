@@ -12,7 +12,7 @@ import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { DEFAULT_PRINTER_CONFIG, PRINTER_CONNECTION_LABELS, type PrinterConfig, type PrinterConnection } from "@/features/core/settings/printer-config";
 import { buildReceiptHtml, openConfiguredReceiptWindow, type ReceiptPaperSize } from "@/features/core/receipts/receipt-print";
 import { sampleReceiptSnapshot } from "@/features/core/settings/receipt-preview-sample";
-import { checkHardwareBridge, getHardwareBridgeToken, openCashDrawerViaHardwareBridge, readScaleViaHardwareBridge, setHardwareBridgeToken, type HardwareBridgeHealth } from "@/features/core/hardware/local-hardware-bridge";
+import { checkHardwareBridge, getHardwareBridgeToken, openCashDrawerViaHardwareBridge, pairHardwareBridge, readScaleViaHardwareBridge, type HardwareBridgeHealth } from "@/features/core/hardware/local-hardware-bridge";
 
 const sampleSnapshot = sampleReceiptSnapshot;
 
@@ -43,7 +43,8 @@ export default function PrinterSettingsPage() {
   const [scanResult, setScanResult] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [jobs, setJobs] = useState<PrintJob[]>([]);
-  const [bridgeToken, setBridgeToken] = useState(() => getHardwareBridgeToken());
+  const [pairingCode, setPairingCode] = useState("");
+  const [bridgePaired, setBridgePaired] = useState(() => Boolean(getHardwareBridgeToken()));
   const [bridgeHealth, setBridgeHealth] = useState<HardwareBridgeHealth | null>(null);
   const [scaleReading, setScaleReading] = useState("");
   useEffect(() => { const t = setTimeout(() => setPreviewCfg(cfg), 300); return () => clearTimeout(t); }, [cfg]);
@@ -103,7 +104,6 @@ export default function PrinterSettingsPage() {
     }
     if (cfg.connection === "bridge") {
       try {
-        setHardwareBridgeToken(bridgeToken);
         const health = await checkHardwareBridge(cfg.bridgeUrl);
         setBridgeHealth(health);
         if (!health.capabilities?.print) throw new Error("The local bridge is online, but no printer transport is configured.");
@@ -123,10 +123,12 @@ export default function PrinterSettingsPage() {
     setConnecting(true);
     try {
       if (cfg.connection === "bridge") {
-        if (bridgeToken.trim().length < 32) throw new Error("Use the bridge's random pairing token of at least 32 characters.");
-        setHardwareBridgeToken(bridgeToken);
-        const health = await checkHardwareBridge(cfg.bridgeUrl);
+        const health = pairingCode.trim()
+          ? await pairHardwareBridge(cfg.bridgeUrl, pairingCode)
+          : await checkHardwareBridge(cfg.bridgeUrl);
         setBridgeHealth(health);
+        setBridgePaired(true);
+        setPairingCode("");
         if (!health.capabilities?.print) throw new Error("The bridge is online, but its printer transport is not configured.");
       }
       await patch({ printer: cfg }, { immediate: true });
@@ -176,7 +178,7 @@ export default function PrinterSettingsPage() {
   const systemQueueConnection = ["browser", "bluetooth", "usb", "network"].includes(cfg.connection);
   const connectionStatus = systemQueueConnection || (cfg.connection === "bridge" && bridgeHealth?.ok && bridgeHealth.capabilities?.print)
     ? "ready"
-    : cfg.connection === "bridge" && bridgeToken.trim().length >= 32
+    : cfg.connection === "bridge" && bridgePaired
       ? "configured"
       : "not_set";
 
@@ -212,7 +214,7 @@ export default function PrinterSettingsPage() {
                   </Select>
                 </Fld>
               </div>
-              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-11 sm:h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="Per-device pairing token" hint="Stored only in this browser, never synced to the cloud."><Input type="password" className="h-11 sm:h-10" value={bridgeToken} onChange={(event) => setBridgeToken(event.target.value)} placeholder="Pairing token from the bridge" /></Fld>{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>Test drawer</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>Read scale</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
+              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-11 sm:h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="6-character pairing code" hint="Open Hardware Bridge Setup and type the code shown there. The private device token is exchanged automatically and never synced."><Input className="h-11 font-mono uppercase tracking-[0.3em] sm:h-10" value={pairingCode} maxLength={6} autoComplete="one-time-code" onChange={(event) => setPairingCode(event.target.value.replace(/[^2-9A-HJ-NP-Z]/gi, "").toUpperCase())} placeholder={bridgePaired ? "PAIRED" : "ABC234"} /></Fld>{bridgeHealth?.update?.available ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">Hardware Bridge v{bridgeHealth.update.latestVersion} is available. Open Hardware Bridge Setup to update.</div> : null}{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Badge tone="green">Paired · v{bridgeHealth.version}</Badge><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>Test drawer</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>Read scale</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
               <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
                 <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:h-9" onClick={() => void scanPrinters()}><Search size={14} /> Scan</Button>
                 <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:h-9" onClick={() => void connectPrinter()} disabled={connecting}><Cable size={14} /> {connecting ? "Saving..." : "Connect"}</Button>

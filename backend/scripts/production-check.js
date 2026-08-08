@@ -967,7 +967,7 @@ if (exists("prisma/schema.prisma") && exists("prisma-postgres/schema.prisma")) {
 
 if (exists("src/modules/subscription/planConfig.js")) {
   const planConfig = read("src/modules/subscription/planConfig.js");
-  for (const snippet of ["starter", "standard", "growth", "pro", "34900", "39900", "59900", "99900", "staff_login", "whatsapp_reminders"]) {
+  for (const snippet of ["starter", "standard", "growth", "pro", "24900", "39900", "59900", "99900", "staff_login", "whatsapp_reminders"]) {
     if (!planConfig.includes(snippet)) errors.push(`planConfig.js missing plan/feature snippet: ${snippet}`);
   }
 }

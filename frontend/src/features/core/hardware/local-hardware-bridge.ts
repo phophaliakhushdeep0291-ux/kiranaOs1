@@ -6,6 +6,7 @@ export interface HardwareBridgeHealth {
   version?: string;
   deviceName?: string;
   capabilities?: { print?: boolean; cutter?: boolean; cashDrawer?: boolean; scale?: boolean };
+  update?: { available?: boolean; currentVersion?: string; latestVersion?: string; downloadUrl?: string };
 }
 
 export interface HardwareScaleReading {
@@ -45,6 +46,33 @@ export function setHardwareBridgeToken(token: string) {
     if (value) localStorage.setItem(TOKEN_KEY, value);
     else localStorage.removeItem(TOKEN_KEY);
   } catch { /* per-device credential is best effort */ }
+}
+
+export async function pairHardwareBridge(bridgeUrl: string, pairingCode: string) {
+  const code = pairingCode.trim().toUpperCase();
+  if (!/^[2-9A-HJ-NP-Z]{6}$/.test(code)) throw new Error("Enter the 6-character code shown in Hardware Bridge Setup.");
+  const base = normalizeHardwareBridgeUrl(bridgeUrl);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${base}/v1/pair`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    const body = await response.json().catch(() => ({})) as { token?: string; message?: string };
+    if (!response.ok) throw new Error(body.message || "Pairing was not completed.");
+    if (typeof body.token !== "string" || body.token.length < 32) throw new Error("The bridge returned an invalid device credential.");
+    setHardwareBridgeToken(body.token);
+    return checkHardwareBridge(base);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw new Error("Hardware bridge did not respond in time.");
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export function normalizeHardwareBridgeUrl(value: string) {

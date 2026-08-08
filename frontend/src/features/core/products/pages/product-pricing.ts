@@ -104,6 +104,12 @@ export function sellingUnitMaxPrice(
   const ownMax = Number(sellingUnit?.maximumPrice ?? 0);
   if (ownMax > 0) return round2(ownMax);
 
+  // Restaurant portions are menu choices, not retail packs. Their
+  // conversionToBase is a recipe-consumption factor (for example Large = 1.4
+  // portions), so scaling a product MRP by it invents a ceiling that was never
+  // configured. A portion is uncapped unless it carries its own explicit max.
+  if (String(sellingUnit?.unitType ?? "").trim().toLowerCase() === "portion") return 0;
+
   const productMrp = Number(product?.mrp ?? 0);
   if (!(productMrp > 0)) return 0;
   if (!sellingUnit || sellingUnit.isDefault) return round2(productMrp);

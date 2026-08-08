@@ -166,8 +166,8 @@ export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
   starter: {
     code: "starter",
     name: "Starter",
-    price: 49,
-    annualPrice: 399,
+    price: 249,
+    annualPrice: 2499,
     maxStores: 1,
     maxDevices: 2,
     maxStaff: 0,

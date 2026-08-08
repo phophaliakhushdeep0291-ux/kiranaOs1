@@ -82,8 +82,8 @@ export const PLAN_CONFIGS = {
   starter: {
     code: "starter",
     name: "Starter",
-    priceMonthlyPaise: 4900,
-    priceYearlyPaise: 39900,
+    priceMonthlyPaise: 24900,
+    priceYearlyPaise: 249900,
     maxDevices: 2,
     maxStores: 1,
     maxStaff: 0,
@@ -120,6 +120,34 @@ export const PLAN_CONFIGS = {
     features: [...starterFeatures, ...standardOnlyFeatures, ...growthOnlyFeatures, ...proOnlyFeatures],
   },
 };
+
+// New-sale pricing by trade, benchmarked against Indian POS list prices on
+// 2026-08-08. Existing subscriptions never read this matrix: their price and
+// feature snapshots remain authoritative until an explicit plan change.
+export const BUSINESS_TYPE_PLAN_PRICING = Object.freeze({
+  kirana:      { starter: [24900, 249900], growth: [59900, 499900], pro: [99900, 899900] },
+  stationery:  { starter: [24900, 249900], growth: [59900, 499900], pro: [99900, 899900] },
+  other:       { starter: [24900, 249900], growth: [59900, 499900], pro: [99900, 899900] },
+  clothing:    { starter: [34900, 349900], growth: [69900, 599900], pro: [109900, 999900] },
+  footwear:    { starter: [34900, 349900], growth: [69900, 599900], pro: [109900, 999900] },
+  cosmetics:   { starter: [34900, 349900], growth: [69900, 599900], pro: [109900, 999900] },
+  auto_parts:  { starter: [39900, 399900], growth: [79900, 699900], pro: [119900, 1099900] },
+  electronics: { starter: [39900, 399900], growth: [79900, 699900], pro: [119900, 1099900] },
+  furniture:   { starter: [39900, 399900], growth: [79900, 699900], pro: [119900, 1099900] },
+  pharmacy:    { starter: [49900, 499900], growth: [89900, 799900], pro: [129900, 1199900] },
+  restaurant:  { starter: [59900, 599900], growth: [99900, 899900], pro: [149900, 1399900] },
+});
+
+export function normalizeBusinessType(businessType) {
+  return Object.hasOwn(BUSINESS_TYPE_PLAN_PRICING, businessType) ? businessType : "other";
+}
+
+export function getPlanConfigForBusinessType(planCode = "starter", businessType = "kirana") {
+  const base = getPlanConfig(planCode);
+  if (planCode === "standard") return base;
+  const [priceMonthlyPaise, priceYearlyPaise] = BUSINESS_TYPE_PLAN_PRICING[normalizeBusinessType(businessType)][planCode] ?? [];
+  return { ...base, priceMonthlyPaise: priceMonthlyPaise ?? base.priceMonthlyPaise, priceYearlyPaise: priceYearlyPaise ?? base.priceYearlyPaise };
+}
 
 export const FIRST_YEAR_ONBOARDING_SKU = Object.freeze({
   code: "FIRST_YEAR_ONBOARDING",
