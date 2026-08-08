@@ -45,6 +45,25 @@ export async function extendGrace(req, res, next) {
   } catch (err) { next(err); }
 }
 
+export async function foundingCustomer(req, res, next) {
+  try {
+    const data = await service.grantFoundingCustomer(req.shopId, req.body.intendedPaidPlanCode, { endsAt: req.body.endsAt });
+    res.status(201).json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function onboardingPurchases(req, res, next) {
+  try { res.json({ success: true, data: await service.listOnboardingPurchases(req.shopId) }); }
+  catch (err) { next(err); }
+}
+
+export async function recordOnboardingPurchase(req, res, next) {
+  try {
+    const data = await service.recordOnboardingPurchase(req.shopId, req.user?.userId ?? req.user?.id, req.body);
+    res.status(201).json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 
 export async function checkout(req, res, next) {
   try {

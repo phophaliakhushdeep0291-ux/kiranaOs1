@@ -10,7 +10,7 @@ import { formatMoney, roundMoney } from "@/lib/money";
 import { getLocalUdharSummaryAsync } from "@/features/core/payments/local-actions";
 import { applyAuthoritativeUdharSummary, loadCustomersWithLedger, type CustomerWithLedger } from "@/features/core/customers/customer-ledger-data";
 import { resolveAuthoritativeUdharSummary } from "@/features/core/ledger/authoritative-balances";
-import { getLedgerCustomerId, getLedgerDate, normaliseLedgerType, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
+import { dedupeLedgerEntries, getLedgerCustomerId, getLedgerDate, normaliseLedgerType, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 import { customerMatchesUdharSearch } from "../udhar-search";
 import { buildUdharReminderUrl } from "../reminder";
 import { useAuth } from "@/features/core/auth/useAuth";
@@ -34,8 +34,9 @@ async function loadUdharHome(): Promise<UdharHomeData> {
   const lastPaymentByCustomer = new Map<string, string>();
   let todayCollected = 0;
   const now = new Date();
-  for (const entry of ledger) {
+  for (const entry of dedupeLedgerEntries(ledger)) {
     if (normaliseLedgerType(entry.type, entry.source_type) !== "PAYMENT") continue;
+    if (entry.reversed_at || entry.reversedAt) continue;
     const customerId = getLedgerCustomerId(entry);
     const date = getLedgerDate(entry);
     if (customerId && (!lastPaymentByCustomer.get(customerId) || date > String(lastPaymentByCustomer.get(customerId)))) lastPaymentByCustomer.set(customerId, date);

@@ -231,6 +231,7 @@ export async function resetDatabase(db) {
     db.dailyClosingSnapshot.deleteMany(),
     db.paymentProviderEvent.deleteMany(),
     db.paymentTransaction.deleteMany(),
+    db.onboardingPurchase.deleteMany(),
     db.subscription.deleteMany(),
     db.plan.deleteMany(),
     db.offlineSyncEvent.deleteMany(),

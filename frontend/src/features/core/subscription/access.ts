@@ -35,6 +35,9 @@ export interface SubscriptionSnapshot {
   cloudSyncAllowed: boolean;
   canCreateNewBills: boolean;
   message: string;
+  foundingCustomer: boolean;
+  foundingEndsAt: string | null;
+  intendedPaidPlanCode: PlanCode;
   source: "license-cache" | "local-cache" | "default-trial";
 }
 
@@ -223,8 +226,11 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
       graceActive,
       localOnlyAfterExpiry: license.state !== "valid",
       cloudSyncAllowed: license.cloudSyncAllowed,
-      canCreateNewBills: license.billingAllowed,
+      canCreateNewBills: true,
       message: license.message,
+      foundingCustomer: false,
+      foundingEndsAt: null,
+      intendedPaidPlanCode: plan.code,
       source: "license-cache",
     };
   }
@@ -249,14 +255,17 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
       graceActive,
       localOnlyAfterExpiry: status === "expired",
       cloudSyncAllowed: status === "trial" || graceActive,
-      canCreateNewBills: status === "trial" || graceActive,
+      canCreateNewBills: true,
       message:
         status === "trial"
           ? "Starter trial active. Your old data will always stay viewable."
           : graceActive
             ? "Trial ended. Billing is in offline grace, cloud sync may be limited."
-            : "Trial grace ended. Old data is viewable, but new billing and cloud sync are blocked until renewal.",
+            : "Trial grace ended. Sales and data export remain available; other changes and cloud sync wait for renewal.",
       source: "default-trial",
+      foundingCustomer: false,
+      foundingEndsAt: null,
+      intendedPaidPlanCode: plan.code,
     };
   }
 
@@ -311,7 +320,9 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
     payload.syncAllowed !== false &&
     payload.sync_enabled !== false;
   const canCreateNewBills =
-    !isExpired && !isPaymentFailed && plan.features.includes("new_billing");
+    plan.features.includes("new_billing");
+  const foundingCustomer = String(payload.provider ?? "") === "founding" || payload.foundingCustomer === true;
+  const intendedPaidPlanCode = getPlan(String(payload.intendedPaidPlanCode ?? payload.intended_paid_plan_code ?? plan.code)).code;
 
   return {
     plan,
@@ -328,15 +339,18 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
     cloudSyncAllowed,
     canCreateNewBills,
     message: isPaymentFailed
-      ? "Payment failed. Old data is safe and viewable, but cloud sync and premium actions are locked."
+      ? "Payment failed. Sales and data export stay available; other changes and cloud sync are locked."
       : isExpired
-        ? "Subscription expired. Old data is viewable locally, but cloud sync and premium actions are locked."
+        ? "Subscription expired. You can still finish sales, bill again, and export your data; other changes and cloud sync are locked."
         : graceActive
           ? "Subscription is in offline grace. Billing can continue locally, but cloud sync may be limited."
         : status === "trial"
           ? "Trial active. Your data is safe locally and can be backed up when sync is allowed."
           : "Subscription active. Cloud backup and allowed plan features are available.",
     source: "local-cache",
+    foundingCustomer,
+    foundingEndsAt: foundingCustomer ? trialEndsAt : null,
+    intendedPaidPlanCode,
   };
 }
 

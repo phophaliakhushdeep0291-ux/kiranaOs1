@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
-import { requireFeature } from "../feature-gates/featureGate.middleware.js";
+import { requireContinuityAction, requireFeature } from "../feature-gates/featureGate.middleware.js";
 import { validate, validateQuery } from "../../middleware/validate.js";
 import { confirmBillSchema, cancelBillSchema, billQuerySchema, emailReceiptSchema, saleReturnSchema, whatsappBillSchema } from "./bills.schema.js";
 import * as ctrl from "./bills.controller.js";
@@ -22,7 +22,7 @@ router.get("/", requireLocationAccess("view"), validateQuery(billQuerySchema), c
 router.get("/:id", ctrl.get);
 router.post("/:id/email", requireFeature("basic_billing"), validate(emailReceiptSchema), ctrl.emailReceipt);
 router.post("/:id/whatsapp", requireFeature("single_bill_whatsapp"), validate(whatsappBillSchema), ctrl.whatsappReceipt);
-router.post("/confirm", requireLocationAccess("sell"), requireFeature("basic_billing"), validate(confirmBillSchema), requireSensitiveBillApproval, ctrl.confirm);
+router.post("/confirm", requireLocationAccess("sell"), requireContinuityAction("complete_sale"), validate(confirmBillSchema), requireSensitiveBillApproval, ctrl.confirm);
 router.post("/returns", requireLocationAccess("sell"), requireFeature("basic_billing"), requireOwnerPin, validate(saleReturnSchema), ctrl.saleReturn);
 router.post("/:id/cancel", requireOwnerPin, validate(cancelBillSchema), ctrl.cancel);
 router.post("/:id/delete", requireOwnerPin, validate(cancelBillSchema), ctrl.remove);

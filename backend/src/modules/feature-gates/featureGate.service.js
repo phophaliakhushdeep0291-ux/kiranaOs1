@@ -34,6 +34,19 @@ export async function requireFeatureAccess(shopId, featureName) {
   return { allowed: true, planCode: effective.planCode };
 }
 
+// Continuity actions are deliberately narrow: a lapsed shop can finish the sale
+// at the counter and take its data away. This does not reopen any other mutation.
+export async function requireContinuityAccess(shopId, featureName) {
+  const effective = await getEffectivePlan(shopId);
+  if (!isSubscriptionActive(effective.subscription)) {
+    if (["complete_sale", "export_data"].includes(featureName)) return { allowed: true, continuityMode: true };
+    throw new AppError("Action is unavailable after subscription expiry", 402, "SUBSCRIPTION_INACTIVE");
+  }
+  const entitledFeature = featureName === "complete_sale" ? "basic_billing" : "csv_import_export";
+  if (featureName === "complete_sale" || effective.features.includes(entitledFeature)) return { allowed: true, continuityMode: false };
+  throw new AppError("Feature not available on current plan", 403, "FEATURE_NOT_INCLUDED");
+}
+
 export async function requireActiveSubscriptionAccess(shopId) {
   const status = await getSubscriptionStatus(shopId);
   if (!status.active) {

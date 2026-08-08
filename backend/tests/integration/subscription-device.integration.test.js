@@ -1,7 +1,7 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
-import { createTenant, login } from "./factories.js";
+import { billPayload, createProduct, createTenant, login } from "./factories.js";
 
 const ctx = await createIntegrationContext();
 
@@ -21,7 +21,7 @@ if (ctx.skip) {
     test("plans endpoint returns the three public plans and hides Legacy Standard", async () => {
       const plans = assertSuccess(await ctx.get("/api/plans"));
       assert.deepEqual(plans.map((p) => p.code), ["starter", "growth", "pro"]);
-      assert.deepEqual(plans.map((p) => p.priceMonthlyPaise), [34900, 59900, 99900]);
+      assert.deepEqual(plans.map((p) => p.priceMonthlyPaise), [4900, 59900, 99900]);
     });
 
     test("current subscription returns fallback/trial for shop without subscription", async () => {
@@ -42,6 +42,54 @@ if (ctx.skip) {
       assert.equal(result.subscription.status, "active");
       const paymentCount = await ctx.db.paymentTransaction.count({ where: { shopId: tenant.shop.id } });
       assert.equal(paymentCount, 1);
+    });
+
+    test("grandfathers an existing subscription's original price and feature set", async () => {
+      const { tenant, ownerAuth } = await ownerCtx({ planCode: "starter" });
+      const oldFeatures = ["basic_billing", "csv_import_export", "legacy_shop_feature"];
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: {
+        lockedPriceMonthlyPaise: 34900, lockedPriceYearlyPaise: 299900,
+        entitledFeaturesJson: JSON.stringify(oldFeatures),
+      }});
+      await ctx.get("/api/plans"); // reseed the new public catalog
+      const current = assertSuccess(await ctx.get("/api/subscription/current", { token: ownerAuth.accessToken }));
+      assert.equal(current.plan.priceMonthlyPaise, 34900);
+      assert.equal(current.plan.priceYearlyPaise, 299900);
+      assert.deepEqual(current.plan.features, oldFeatures);
+    });
+
+    test("founding period expires through grace into its intended paid plan without data loss", async () => {
+      const { tenant, ownerAuth } = await ownerCtx({ planCode: "starter" });
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "Founding catalog item" });
+      const endsAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      const founding = assertSuccess(await ctx.post("/api/subscription/founding-customer", {
+        intendedPaidPlanCode: "growth", endsAt,
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(founding.provider, "founding");
+      assert.equal(founding.intendedPaidPlanCode, "growth");
+      const past = new Date(Date.now() - 10_000);
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { trialEndsAt: past, currentPeriodEnd: past, graceEndsAt: past } });
+      const expired = assertSuccess(await ctx.get("/api/subscription/current", { token: ownerAuth.accessToken }));
+      assert.equal(expired.active, false);
+      assert.equal(expired.intendedPaidPlanCode, "growth");
+      assert.ok(await ctx.db.product.findUnique({ where: { id: product.id } }));
+      const paid = assertSuccess(await ctx.post("/api/subscription/manual-activate", {
+        planCode: "growth", period: "yearly",
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(paid.subscription.planCode, "growth");
+      assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id } }), 1);
+    });
+
+    test("expired subscription can still complete a sale and export its data", async () => {
+      const { tenant, ownerAuth } = await ownerCtx({ planCode: "starter" });
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10 });
+      const past = new Date(Date.now() - 10_000);
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { status: "expired", currentPeriodEnd: past, graceEndsAt: past } });
+      const sale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product), { token: ownerAuth.accessToken }), 201);
+      assert.ok(sale.id);
+      const exported = await ctx.get("/api/reports/export/bills", { token: ownerAuth.accessToken, headers: { "x-owner-pin": tenant.ownerPin } });
+      assert.equal(exported.status, 200, JSON.stringify(exported.body));
+      assert.equal(await ctx.db.bill.count({ where: { shopId: tenant.shop.id } }), 1);
     });
 
     test("device activation enforces plan maxDevices and removed devices stop counting", async () => {

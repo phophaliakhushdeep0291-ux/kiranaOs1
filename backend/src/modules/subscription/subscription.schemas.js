@@ -22,6 +22,19 @@ export const extendGraceSchema = z.object({
   days: z.coerce.number().int().min(1).max(30),
 });
 
+export const foundingCustomerSchema = z.object({
+  intendedPaidPlanCode: planCode.default("starter"),
+  endsAt: z.coerce.date().optional(),
+});
+
+export const onboardingPurchaseSchema = z.object({
+  amountPaise: z.coerce.number().int().nonnegative().optional(),
+  status: z.enum(["recorded", "delivered", "waived", "refunded"]).default("recorded"),
+  deliveredAt: z.coerce.date().optional(),
+  notes: z.string().trim().max(500).optional(),
+  includes: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+});
+
 export const checkoutSchema = z.object({
   planCode,
   billingCycle: billingCycle.default("monthly"),

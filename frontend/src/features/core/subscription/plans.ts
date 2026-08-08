@@ -166,12 +166,12 @@ export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
   starter: {
     code: "starter",
     name: "Starter",
-    price: 349,
-    annualPrice: 2999,
+    price: 49,
+    annualPrice: 399,
     maxStores: 1,
     maxDevices: 2,
     maxStaff: 0,
-    headline: "Billing, inventory and udhar for an owner-run shop.",
+    headline: "Serviced launch bundle for an owner-run shop.",
     features: [...starterFeatures, ...standardExtra],
     bullets: [
       "1 store, 2 registered devices and 1 billing counter",

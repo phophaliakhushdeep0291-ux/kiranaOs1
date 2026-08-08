@@ -19,5 +19,9 @@ export function customerUdharSearchText(customer: CustomerWithLedger): string {
 
 export function customerMatchesUdharSearch(customer: CustomerWithLedger, query: string): boolean {
   const needle = normalizeUdharSearch(query);
-  return !needle || customerUdharSearchText(customer).includes(needle);
+  if (!needle) return true;
+  const haystack = customerUdharSearchText(customer);
+  if (haystack.includes(needle)) return true;
+  const skeleton = (value: string) => value.replace(/[aeiou\s]/g, "");
+  return haystack.split(/\s+/).some((token) => skeleton(token).includes(skeleton(needle)));
 }

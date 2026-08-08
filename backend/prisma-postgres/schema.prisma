@@ -33,103 +33,103 @@ model Shop {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  users                       User[]
-  products                    Product[]
-  customers                   Customer[]
-  bills                       Bill[]
-  payments                    Payment[]
-  retailPaymentIntents        RetailPaymentIntent[]
-  stockLedger                 StockLedger[]
-  udharLedger                 UdharLedger[]
-  suppliers                   Supplier[]
-  purchaseHistory             PurchaseHistory[]
-  purchaseOrders              PurchaseOrder[]
-  purchaseReceipts            PurchaseReceipt[]
-  purchaseReturns             PurchaseReturn[]
-  userLocationAccess          UserLocationAccess[]
-  aiActionLogs                AiActionLog[]
-  auditLogs                   AuditLog[]
-  sessions                    Session[]
-  authTokens                  AuthToken[]
-  offlineSyncEvents           OfflineSyncEvent[]
-  syncConflicts               SyncConflict[]
-  syncIdMappings              SyncIdMapping[]
-  syncCommands                SyncCommand[]
-  changeLogs                  ChangeLog[]
-  financialLedger             FinancialLedger[]
-  billCounter                 BillCounter?
-  subscriptions               Subscription[]
-  onboardingPurchases        OnboardingPurchase[]
-  paymentTransactions         PaymentTransaction[]
-  devices                     Device[]
-  deviceLicenses              DeviceLicense[]
-  deviceReplacementChallenges DeviceReplacementChallenge[]
-  reportExportJobs            ReportExportJob[]
-  reminderTemplates           ReminderTemplate[]
-  reminderLogs                ReminderLog[]
-  dailyClosingSnapshots       DailyClosingSnapshot[]
-  expenses                    Expense[]
-  offers                      Offer[]
-  customerOrders              CustomerOrder[]
-  pricingRules                PricingRule[]
-  inventoryLots               InventoryLot[]
-  productSellingUnits         ProductSellingUnit[]
-  pricingDecisionEvents       PricingDecisionEvent[]
-  integrationApiKeys          IntegrationApiKey[]
-  webhookEndpoints            WebhookEndpoint[]
-  webhookDeliveries           WebhookDelivery[]
-  storeLocations              StoreLocation[]
-  locationStocks              LocationStock[]
-  stockTransfers              StockTransfer[]
-  transferDocumentCounters    TransferDocumentCounter[]
-  loyaltyPrograms             LoyaltyProgram[]
-  loyaltyAccounts             LoyaltyAccount[]
-  loyaltyTransactions         LoyaltyTransaction[]
-  complianceDocuments         ComplianceDocument[]
-  stockCountSessions          StockCountSession[]
-  giftCards                   GiftCard[]
-  giftCardTransactions        GiftCardTransaction[]
-  backupArtifacts             BackupArtifact[]
-  errorGroups                 ErrorGroup[]
-  errorEvents                 ErrorEvent[]
-  supportRequests             SupportRequest[]
-  deviceHealthSnapshots       DeviceHealthSnapshot[]
-  supportSessions             SupportSession[]
-  deviceCommands              DeviceCommand[]
-  activityEvents              ActivityEvent[]
-  activityAggregates          ActivityAggregate[]
-  rentalBookings              RentalBooking[]
-  prescriptions               Prescription[]
-  productUnits                ProductUnit[]
-  partFitments                PartFitment[]
-  partCrossReferences         PartCrossReference[]
-  footwearSizeProfiles        FootwearSizeProfile[]
-  bookLists                   BookList[]
-  furnitureOrders             FurnitureOrder[]
-  testerUnits                 TesterUnit[]
-  restaurantTables            RestaurantTable[]
-  kitchenTickets              KitchenTicket[]
-  dishRecipeComponents        DishRecipeComponent[]
+  users                         User[]
+  products                      Product[]
+  customers                     Customer[]
+  bills                         Bill[]
+  payments                      Payment[]
+  retailPaymentIntents          RetailPaymentIntent[]
+  stockLedger                   StockLedger[]
+  udharLedger                   UdharLedger[]
+  suppliers                     Supplier[]
+  purchaseHistory               PurchaseHistory[]
+  purchaseOrders                PurchaseOrder[]
+  purchaseReceipts              PurchaseReceipt[]
+  purchaseReturns               PurchaseReturn[]
+  userLocationAccess            UserLocationAccess[]
+  aiActionLogs                  AiActionLog[]
+  auditLogs                     AuditLog[]
+  sessions                      Session[]
+  authTokens                    AuthToken[]
+  offlineSyncEvents             OfflineSyncEvent[]
+  syncConflicts                 SyncConflict[]
+  syncIdMappings                SyncIdMapping[]
+  syncCommands                  SyncCommand[]
+  changeLogs                    ChangeLog[]
+  financialLedger               FinancialLedger[]
+  billCounter                   BillCounter?
+  subscriptions                 Subscription[]
+  onboardingPurchases           OnboardingPurchase[]
+  paymentTransactions           PaymentTransaction[]
+  devices                       Device[]
+  deviceLicenses                DeviceLicense[]
+  deviceReplacementChallenges   DeviceReplacementChallenge[]
+  reportExportJobs              ReportExportJob[]
+  reminderTemplates             ReminderTemplate[]
+  reminderLogs                  ReminderLog[]
+  dailyClosingSnapshots         DailyClosingSnapshot[]
+  expenses                      Expense[]
+  offers                        Offer[]
+  customerOrders                CustomerOrder[]
+  pricingRules                  PricingRule[]
+  inventoryLots                 InventoryLot[]
+  productSellingUnits           ProductSellingUnit[]
+  pricingDecisionEvents         PricingDecisionEvent[]
+  integrationApiKeys            IntegrationApiKey[]
+  webhookEndpoints              WebhookEndpoint[]
+  webhookDeliveries             WebhookDelivery[]
+  storeLocations                StoreLocation[]
+  locationStocks                LocationStock[]
+  stockTransfers                StockTransfer[]
+  transferDocumentCounters      TransferDocumentCounter[]
+  loyaltyPrograms               LoyaltyProgram[]
+  loyaltyAccounts               LoyaltyAccount[]
+  loyaltyTransactions           LoyaltyTransaction[]
+  complianceDocuments           ComplianceDocument[]
+  stockCountSessions            StockCountSession[]
+  giftCards                     GiftCard[]
+  giftCardTransactions          GiftCardTransaction[]
+  backupArtifacts               BackupArtifact[]
+  errorGroups                   ErrorGroup[]
+  errorEvents                   ErrorEvent[]
+  supportRequests               SupportRequest[]
+  deviceHealthSnapshots         DeviceHealthSnapshot[]
+  supportSessions               SupportSession[]
+  deviceCommands                DeviceCommand[]
+  activityEvents                ActivityEvent[]
+  activityAggregates            ActivityAggregate[]
+  rentalBookings                RentalBooking[]
+  prescriptions                 Prescription[]
+  productUnits                  ProductUnit[]
+  partFitments                  PartFitment[]
+  partCrossReferences           PartCrossReference[]
+  footwearSizeProfiles          FootwearSizeProfile[]
+  bookLists                     BookList[]
+  furnitureOrders               FurnitureOrder[]
+  testerUnits                   TesterUnit[]
+  restaurantTables              RestaurantTable[]
+  kitchenTickets                KitchenTicket[]
+  dishRecipeComponents          DishRecipeComponent[]
   menuAddonGroups               MenuAddonGroup[]
   menuAddonOptions              MenuAddonOption[]
   productAddonGroups            ProductAddonGroup[]
-  auditRules                  AuditRule[]
-  auditRuns                   AuditRun[]
-  auditEvaluations            AuditEvaluation[]
-  auditFindings               AuditFinding[]
-  auditFindingRules           AuditFindingRule[]
-  auditEvidenceRequirements   AuditEvidenceRequirement[]
-  auditEvidence               AuditEvidence[]
-  auditFindingStatusHistory   AuditFindingStatusHistory[]
-  auditReviews                AuditReview[]
-  auditCases                  AuditCase[]
-  auditCaseFindings           AuditCaseFinding[]
-  auditBaselines              AuditBaseline[]
-  bankStatementImports        BankStatementImport[]
-  bankStatementTransactions   BankStatementTransaction[]
+  auditRules                    AuditRule[]
+  auditRuns                     AuditRun[]
+  auditEvaluations              AuditEvaluation[]
+  auditFindings                 AuditFinding[]
+  auditFindingRules             AuditFindingRule[]
+  auditEvidenceRequirements     AuditEvidenceRequirement[]
+  auditEvidence                 AuditEvidence[]
+  auditFindingStatusHistory     AuditFindingStatusHistory[]
+  auditReviews                  AuditReview[]
+  auditCases                    AuditCase[]
+  auditCaseFindings             AuditCaseFinding[]
+  auditBaselines                AuditBaseline[]
+  bankStatementImports          BankStatementImport[]
+  bankStatementTransactions     BankStatementTransaction[]
   bankReconciliationAllocations BankReconciliationAllocation[]
-  bankReconciliationEvents    BankReconciliationEvent[]
-  maintenanceLock             ShopMaintenanceLock?
+  bankReconciliationEvents      BankReconciliationEvent[]
+  maintenanceLock               ShopMaintenanceLock?
 }
 
 model ShopMaintenanceLock {
@@ -291,39 +291,39 @@ model PricingDecisionEvent {
 // itemsJson is a storefront snapshot: [{ productId, name, unit, price, qty }].
 // ─────────────────────────────────────────────
 model CustomerOrder {
-  id              String    @id @default(cuid())
-  shopId          String
-  locationId      String?
-  customerName    String
-  customerMobile  String
-  customerAddress String?
-  itemsJson       String    @default("[]")
-  itemCount       Int       @default(0)
-  estimatedTotal  Float     @default(0)
-  note            String?
-  fulfillmentType  String    @default("delivery") // delivery | pickup | dine_in
-  promisedSlot     String?
+  id                String    @id @default(cuid())
+  shopId            String
+  locationId        String?
+  customerName      String
+  customerMobile    String
+  customerAddress   String?
+  itemsJson         String    @default("[]")
+  itemCount         Int       @default(0)
+  estimatedTotal    Float     @default(0)
+  note              String?
+  fulfillmentType   String    @default("delivery") // delivery | pickup | dine_in
+  promisedSlot      String?
   // Where the guest is sitting, when the order came off a table's QR code. Both
   // the id and the name are kept: the id is how the floor screen finds the table,
   // the name is what the kitchen ticket prints and must survive the table being
   // renamed or removed from the floor plan.
-  tableId          String?
-  tableName        String?
-  guestCount       Int?
-  sourceChannel    String    @default("customer_portal") // pos | customer_portal | api | marketplace
-  externalOrderId  String?
-  paymentStatus    String    @default("unpaid") // unpaid | partially_paid | paid | refunded
-  fulfillmentStatus String   @default("unfulfilled") // unfulfilled | preparing | ready | fulfilled | cancelled
-  status           String    @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
-  billId          String?
-  idempotencyKey  String?
-  acceptedAt      DateTime?
-  readyAt         DateTime?
-  fulfilledAt     DateTime?
-  rejectedAt      DateTime?
-  cancelledAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  tableId           String?
+  tableName         String?
+  guestCount        Int?
+  sourceChannel     String    @default("customer_portal") // pos | customer_portal | api | marketplace
+  externalOrderId   String?
+  paymentStatus     String    @default("unpaid") // unpaid | partially_paid | paid | refunded
+  fulfillmentStatus String    @default("unfulfilled") // unfulfilled | preparing | ready | fulfilled | cancelled
+  status            String    @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
+  billId            String?
+  idempotencyKey    String?
+  acceptedAt        DateTime?
+  readyAt           DateTime?
+  fulfilledAt       DateTime?
+  rejectedAt        DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   shop     Shop           @relation(fields: [shopId], references: [id])
   location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
@@ -586,72 +586,72 @@ model Customer {
 // BILL
 // ─────────────────────────────────────────────
 model Bill {
-  id                    String    @id @default(cuid())
-  shopId                String
-  locationId            String?
-  billNo                String // e.g. KOS-2026-0001
-  billType              String    @default("normal_sale") // estimate | normal_sale | gst_invoice | udhar_entry
-  status                String    @default("active") // active | cancelled
-  customerId            String?
-  customerName          String    @default("Walk-in")
-  buyerGstin            String?
-  buyerStateCode        String?
-  buyerAddress          String?
-  sellerGstin           String?
-  sellerStateCode       String?
-  sellerLegalName       String?
-  sellerTradeName       String?
-  sellerAddress         String?
-  sellerCity            String?
-  subtotal              Float     @default(0)
-  subtotalPaise         BigInt?
-  discount              Float     @default(0)
-  discountPaise         BigInt?
-  discountReason        String?
-  offerId               String?
-  offerCode             String?
-  offerDiscount         Float     @default(0)
-  offerDiscountPaise    BigInt?
-  loyaltyPointsRedeemed Int       @default(0)
-  loyaltyDiscount       Float     @default(0)
-  loyaltyDiscountPaise  BigInt?
-  giftCardAmount        Float     @default(0)
-  giftCardAmountPaise   BigInt?
-  gst                   Float     @default(0)
-  gstPaise              BigInt?
-  gstMode               String    @default("inclusive") // inclusive | exclusive | none
-  grandTotal            Float     @default(0)
-  grandTotalPaise       BigInt?
-  actualAmount          Float     @default(0) // frontend actual bill amount before let-go handling
-  actualAmountPaise     BigInt?
-  buyerPaidAmount       Float     @default(0) // amount entered/received from buyer
-  buyerPaidAmountPaise  BigInt?
-  waivedAmount          Float     @default(0) // let-go amount absorbed by shop
-  waivedAmountPaise     BigInt?
-  grossProfit           Float     @default(0)
-  grossProfitPaise      BigInt?
-  paidAmount            Float     @default(0)
-  paidAmountPaise       BigInt?
-  creditAmount          Float     @default(0) // went to udhar
-  creditAmountPaise     BigInt?
-  createdByUserId       String? // authenticated user who created the bill; nullable for legacy/offline imports
-  deviceId              String? // client device id at bill creation, if available
-  clientBillId          String?
-  idempotencyKey        String?
-  sourceDeviceId        String?
-  cancelledAt           DateTime?
-  cancelledReason       String?
-  deletedAt             DateTime?
-  deletedReason         String?
-  returnOfBillId        String? // set on billType "sales_return": the original sale this return reverses
-  refundMode            String? // cash | upi | bank | udhar | gift_card
-  whatsappDeliveryState String    @default("not_sent") // not_sent | opened_share_sheet | sent_via_api | failed
-  whatsappDeliveryAt    DateTime?
+  id                        String    @id @default(cuid())
+  shopId                    String
+  locationId                String?
+  billNo                    String // e.g. KOS-2026-0001
+  billType                  String    @default("normal_sale") // estimate | normal_sale | gst_invoice | udhar_entry
+  status                    String    @default("active") // active | cancelled
+  customerId                String?
+  customerName              String    @default("Walk-in")
+  buyerGstin                String?
+  buyerStateCode            String?
+  buyerAddress              String?
+  sellerGstin               String?
+  sellerStateCode           String?
+  sellerLegalName           String?
+  sellerTradeName           String?
+  sellerAddress             String?
+  sellerCity                String?
+  subtotal                  Float     @default(0)
+  subtotalPaise             BigInt?
+  discount                  Float     @default(0)
+  discountPaise             BigInt?
+  discountReason            String?
+  offerId                   String?
+  offerCode                 String?
+  offerDiscount             Float     @default(0)
+  offerDiscountPaise        BigInt?
+  loyaltyPointsRedeemed     Int       @default(0)
+  loyaltyDiscount           Float     @default(0)
+  loyaltyDiscountPaise      BigInt?
+  giftCardAmount            Float     @default(0)
+  giftCardAmountPaise       BigInt?
+  gst                       Float     @default(0)
+  gstPaise                  BigInt?
+  gstMode                   String    @default("inclusive") // inclusive | exclusive | none
+  grandTotal                Float     @default(0)
+  grandTotalPaise           BigInt?
+  actualAmount              Float     @default(0) // frontend actual bill amount before let-go handling
+  actualAmountPaise         BigInt?
+  buyerPaidAmount           Float     @default(0) // amount entered/received from buyer
+  buyerPaidAmountPaise      BigInt?
+  waivedAmount              Float     @default(0) // let-go amount absorbed by shop
+  waivedAmountPaise         BigInt?
+  grossProfit               Float     @default(0)
+  grossProfitPaise          BigInt?
+  paidAmount                Float     @default(0)
+  paidAmountPaise           BigInt?
+  creditAmount              Float     @default(0) // went to udhar
+  creditAmountPaise         BigInt?
+  createdByUserId           String? // authenticated user who created the bill; nullable for legacy/offline imports
+  deviceId                  String? // client device id at bill creation, if available
+  clientBillId              String?
+  idempotencyKey            String?
+  sourceDeviceId            String?
+  cancelledAt               DateTime?
+  cancelledReason           String?
+  deletedAt                 DateTime?
+  deletedReason             String?
+  returnOfBillId            String? // set on billType "sales_return": the original sale this return reverses
+  refundMode                String? // cash | upi | bank | udhar | gift_card
+  whatsappDeliveryState     String    @default("not_sent") // not_sent | opened_share_sheet | sent_via_api | failed
+  whatsappDeliveryAt        DateTime?
   whatsappProviderMessageId String?
-  whatsappDeliveryKey   String?   @unique
-  businessDate          DateTime  @default(now()) // when the sale happened; differs from createdAt for delayed offline sync
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  whatsappDeliveryKey       String?   @unique
+  businessDate              DateTime  @default(now()) // when the sale happened; differs from createdAt for delayed offline sync
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   shop                 Shop                  @relation(fields: [shopId], references: [id])
   location             StoreLocation?        @relation(fields: [locationId], references: [id], onDelete: SetNull)
@@ -791,10 +791,10 @@ model RetailPaymentIntent {
 }
 
 model StoreLocation {
-  id        String   @id @default(cuid())
-  shopId    String
-  code      String
-  name      String
+  id                  String   @id @default(cuid())
+  shopId              String
+  code                String
+  name                String
   address             String?
   city                String?
   gstNumber           String?
@@ -803,10 +803,10 @@ model StoreLocation {
   gstTradeName        String?
   gstRegistrationType String?
   phone               String?
-  isPrimary Boolean  @default(false)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isPrimary           Boolean  @default(false)
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   shop                 Shop                   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   stocks               LocationStock[]
@@ -1004,26 +1004,26 @@ model StockTransfer {
 }
 
 model StockTransferItem {
-  id                            String @id @default(cuid())
-  transferId                    String
-  productId                     String
-  productName                   String
-  quantityBaseQty               Float
-  baseUnit                      String
-  hsn                           String?
-  gstRate                       Float  @default(0)
-  taxableValue                  Float  @default(0)
-  taxableValuePaise             BigInt?
-  cgst                          Float  @default(0)
-  cgstPaise                     BigInt?
-  sgst                          Float  @default(0)
-  sgstPaise                     BigInt?
-  igst                          Float  @default(0)
-  igstPaise                     BigInt?
-  taxTotal                      Float  @default(0)
-  taxTotalPaise                 BigInt?
-  totalValue                    Float  @default(0)
-  totalValuePaise               BigInt?
+  id                String  @id @default(cuid())
+  transferId        String
+  productId         String
+  productName       String
+  quantityBaseQty   Float
+  baseUnit          String
+  hsn               String?
+  gstRate           Float   @default(0)
+  taxableValue      Float   @default(0)
+  taxableValuePaise BigInt?
+  cgst              Float   @default(0)
+  cgstPaise         BigInt?
+  sgst              Float   @default(0)
+  sgstPaise         BigInt?
+  igst              Float   @default(0)
+  igstPaise         BigInt?
+  taxTotal          Float   @default(0)
+  taxTotalPaise     BigInt?
+  totalValue        Float   @default(0)
+  totalValuePaise   BigInt?
 
   transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   product  Product       @relation(fields: [productId], references: [id])
@@ -1280,13 +1280,13 @@ model Expense {
   shop     Shop           @relation(fields: [shopId], references: [id])
   location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
+  @@unique([shopId, idempotencyKey])
+  @@unique([shopId, sourceDeviceId, clientExpenseId])
   @@index([shopId])
   @@index([shopId, deletedAt])
   @@index([shopId, spentAt])
   @@index([shopId, locationId, spentAt])
   @@index([shopId, updatedAt, id])
-  @@unique([shopId, idempotencyKey])
-  @@unique([shopId, sourceDeviceId, clientExpenseId])
 }
 
 // ─────────────────────────────────────────────
@@ -1428,37 +1428,37 @@ model PurchaseOrderItem {
 }
 
 model PurchaseReceipt {
-  id                    String    @id @default(cuid())
-  shopId                String
-  locationId            String
-  purchaseOrderId       String
-  supplierId            String?
-  receiptNumber         String
-  supplierInvoiceNumber String?
-  supplierInvoiceAmount Float?
+  id                         String    @id @default(cuid())
+  shopId                     String
+  locationId                 String
+  purchaseOrderId            String
+  supplierId                 String?
+  receiptNumber              String
+  supplierInvoiceNumber      String?
+  supplierInvoiceAmount      Float?
   supplierInvoiceAmountPaise BigInt?
-  expectedGoodsAmount   Float     @default(0)
-  expectedGoodsAmountPaise BigInt?
-  priceVarianceAmount   Float     @default(0)
-  priceVarianceAmountPaise BigInt?
-  invoiceVarianceAmount Float?
+  expectedGoodsAmount        Float     @default(0)
+  expectedGoodsAmountPaise   BigInt?
+  priceVarianceAmount        Float     @default(0)
+  priceVarianceAmountPaise   BigInt?
+  invoiceVarianceAmount      Float?
   invoiceVarianceAmountPaise BigInt?
-  matchStatus           String    @default("invoice_pending")
-  varianceReason        String?
-  varianceApprovedByUserId String?
-  varianceApprovedAt    DateTime?
-  idempotencyKey        String?
-  totalAmount           Float
-  totalAmountPaise      BigInt?
-  paidAmount            Float     @default(0)
-  paidAmountPaise       BigInt?
-  dueAmount             Float     @default(0)
-  dueAmountPaise        BigInt?
-  paymentMode           String?
-  dueDate               DateTime?
-  note                  String?
-  receivedByUserId      String?
-  createdAt             DateTime  @default(now())
+  matchStatus                String    @default("invoice_pending")
+  varianceReason             String?
+  varianceApprovedByUserId   String?
+  varianceApprovedAt         DateTime?
+  idempotencyKey             String?
+  totalAmount                Float
+  totalAmountPaise           BigInt?
+  paidAmount                 Float     @default(0)
+  paidAmountPaise            BigInt?
+  dueAmount                  Float     @default(0)
+  dueAmountPaise             BigInt?
+  paymentMode                String?
+  dueDate                    DateTime?
+  note                       String?
+  receivedByUserId           String?
+  createdAt                  DateTime  @default(now())
 
   shop          Shop                  @relation(fields: [shopId], references: [id], onDelete: Cascade)
   location      StoreLocation         @relation(fields: [locationId], references: [id], onDelete: Restrict)
@@ -2073,6 +2073,7 @@ model BankReconciliationEvent {
   @@index([shopId, createdAt])
   @@index([bankStatementTransactionId, createdAt])
 }
+
 model SyncIdMapping {
   id            String   @id @default(cuid())
   shopId        String
@@ -2302,23 +2303,23 @@ model Plan {
 }
 
 model Subscription {
-  id                     String    @id @default(cuid())
-  shopId                 String    @unique
-  planCode               String
-  status                 String    @default("trial") // trial | active | grace | expired | cancelled | payment_failed
-  provider               String    @default("manual") // manual | razorpay | admin
-  providerSubscriptionId String?
-  currentPeriodStart     DateTime?
-  currentPeriodEnd       DateTime?
-  trialEndsAt            DateTime?
-  graceEndsAt            DateTime?
-  cancelledAt            DateTime?
+  id                      String    @id @default(cuid())
+  shopId                  String    @unique
+  planCode                String
+  status                  String    @default("trial") // trial | active | grace | expired | cancelled | payment_failed
+  provider                String    @default("manual") // manual | razorpay | admin
+  providerSubscriptionId  String?
+  currentPeriodStart      DateTime?
+  currentPeriodEnd        DateTime?
+  trialEndsAt             DateTime?
+  graceEndsAt             DateTime?
+  cancelledAt             DateTime?
   lockedPriceMonthlyPaise Int?
   lockedPriceYearlyPaise  Int?
   entitledFeaturesJson    String?
   intendedPaidPlanCode    String?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   shop                Shop                 @relation(fields: [shopId], references: [id])
   paymentTransactions PaymentTransaction[]
@@ -2328,18 +2329,18 @@ model Subscription {
 }
 
 model OnboardingPurchase {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   shopId           String
-  sku              String   @default("FIRST_YEAR_ONBOARDING")
+  sku              String    @default("FIRST_YEAR_ONBOARDING")
   amountPaise      Int
-  status           String   @default("recorded")
-  includesJson     String   @default("[]")
+  status           String    @default("recorded")
+  includesJson     String    @default("[]")
   recordedByUserId String?
   deliveredAt      DateTime?
   notes            String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  shop             Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  shop             Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId, createdAt])
   @@index([sku, status])
@@ -2886,27 +2887,27 @@ model ActivityEvent {
 }
 
 model ActivityAggregate {
-  id     String @id @default(cuid())
+  id     String  @id @default(cuid())
   shopId String
   // The owning user, or the sentinel "*" for a shop-wide rollup (trending
   // products, shop feature adoption). A sentinel rather than NULL because both
   // SQLite and Postgres treat NULLs as distinct in a unique index, which would
   // silently let every shop-wide upsert insert a duplicate row instead of
   // incrementing the existing one.
-  userId String @default("*")
+  userId String  @default("*")
   // product_billed | product_searched | search_query | report | customer |
   // payment_method | filter | page | online_product_view | feature | task_time
   kind   String
   key    String // the thing being counted (productId, report slug, query text…)
   label  String? // display text captured at write time, so reads need no join
 
-  count Int   @default(0)
+  count           Int   @default(0)
   // Half-life decayed score. Raw counts let a product billed 500 times last year
   // outrank one billed 30 times this week; the decay keeps suggestions current.
-  score Float @default(0)
+  score           Float @default(0)
   // Summed duration, for "which tasks consume the most time" and the averages.
-  totalMs   Int @default(0)
-  durationSamples Int @default(0)
+  totalMs         Int   @default(0)
+  durationSamples Int   @default(0)
 
   metaJson    String   @default("{}")
   firstSeenAt DateTime @default(now())
@@ -3039,11 +3040,11 @@ model Prescription {
 }
 
 model PrescriptionItem {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   prescriptionId String
   // Deliberately not a foreign key — the line records what was physically
   // dispensed and must outlive the product row.
-  productId String?
+  productId      String?
 
   name           String
   strength       String?
@@ -3163,7 +3164,7 @@ model PartCrossReference {
   partNumber         String
   brand              String?
   // oem | alternative | supersedes | superseded_by
-  kind String @default("alternative")
+  kind               String  @default("alternative")
 
   notes     String?
   deletedAt DateTime?
@@ -3217,7 +3218,7 @@ model BookList {
   academicYear String // "2026-27" — Indian academic years straddle two calendar years
   // Empty rather than null: NULLs are DISTINCT in a unique index, so a
   // nullable column would let the same class be entered twice.
-  name         String  @default("")
+  name         String @default("")
 
   notes    String?
   isActive Boolean @default(true)
@@ -3374,7 +3375,7 @@ model TesterUnit {
   productId   String
   productName String
   // The shade: a tester is opened per shade, not per product.
-  variant String?
+  variant     String?
 
   status       String    @default("in_use") // in_use | replaced | discarded
   openedOn     DateTime
@@ -3495,10 +3496,10 @@ model KitchenTicket {
   tableName String
   // The sitting this belongs to, so a re-seated table starts owing the kitchen
   // everything on the new order rather than inheriting the last party's tally.
-  billId String
+  billId    String
 
   // new | preparing | ready | served
-  status String @default("new")
+  status    String    @default("new")
   // KotLine[]: { key, name, qty, unit, note }. A fired snapshot — never queried
   // line by line, so it is one column rather than a child table.
   linesJson String    @default("[]")
