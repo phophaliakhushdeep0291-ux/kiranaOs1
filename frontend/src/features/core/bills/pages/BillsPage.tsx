@@ -334,8 +334,24 @@ function compactBillNo(value: string) {
   return match ? String(Number(match[1])) : value;
 }
 
+let billHistoryRepairTimer: ReturnType<typeof setTimeout> | null = null;
+let billHistoryRepairSweep: Promise<number> | null = null;
+
+function scheduleBillHistoryRepair() {
+  if (billHistoryRepairTimer !== null || billHistoryRepairSweep !== null) return;
+  // History is a local-first operational screen. A repair sweep can involve an
+  // IndexedDB transaction and must never delay the first readable bill list.
+  // The sweep already emits kirana:sync-queue-updated when it changes anything,
+  // which invalidates this query and refreshes the badges after the first paint.
+  billHistoryRepairTimer = setTimeout(() => {
+    billHistoryRepairTimer = null;
+    billHistoryRepairSweep = repairStaleSyncedBillOutboxFailures()
+      .catch(() => 0)
+      .finally(() => { billHistoryRepairSweep = null; });
+  }, 0);
+}
+
 async function loadBills(): Promise<BillRecord[]> {
-  await repairStaleSyncedBillOutboxFailures().catch(() => 0);
   const [dbRows, outboxRows] = await Promise.all([
     offlineDB.getAll<BillRecord>("bills").catch(() => []),
     offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
@@ -348,6 +364,7 @@ async function loadBills(): Promise<BillRecord[]> {
   const displayRows = dedupeBillsForDisplay(rows.filter((row) => !isDeleted(row) && !isMergedTwin(row))) as unknown as BillRecord[];
   const annotatedDisplayRows = annotateBillSyncStatuses(displayRows, outboxRows) as BillRecord[];
   const deletedRows = annotateBillSyncStatuses(rows.filter((row) => isDeleted(row) && !isMergedTwin(row)), outboxRows) as BillRecord[];
+  scheduleBillHistoryRepair();
   return [...annotatedDisplayRows, ...deletedRows].sort((a, b) => billDate(b).localeCompare(billDate(a)));
 }
 
