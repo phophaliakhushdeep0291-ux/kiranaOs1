@@ -118,7 +118,14 @@ for (const snippet of ["STORAGE_PROVIDER", "EXPORT_DOWNLOADS_PUBLIC", "STORAGE_P
 
 const packageJson = JSON.parse(read("package.json"));
 assert(packageJson.scripts["worker:verify"] === "node scripts/verify-worker-runtime.js", "worker:verify script must exist");
-assert(packageJson.scripts["docker:build"] === "docker build .", "docker:build script must exist");
+// The image proof moved behind a wrapper so CI can reuse buildx layers between
+// runs. Pinning the old literal `docker build .` made this assertion fail from
+// the moment that landed. Pin the wrapper instead, and assert the wrapper still
+// performs a real build — a cache-only script would leave the image proof
+// proving nothing.
+assert(packageJson.scripts["docker:build"] === "node scripts/docker-build.js", "docker:build must run the image-proof wrapper");
+const dockerBuild = read("scripts/docker-build.js");
+assert(dockerBuild.includes('docker(["build", "."])'), "the image proof must still run a real docker build");
 assert(packageJson.scripts["test:billing"].includes("phase14-production-ci-deployment.examples.js"), "Phase 14 test must be wired into npm test");
 
 const productionCheck = read("scripts/production-check.js");
