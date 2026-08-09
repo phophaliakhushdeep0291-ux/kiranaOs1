@@ -244,52 +244,26 @@ tolerance. Run backend `npm test` and the integration suite.
 
 ---
 
-## Prompt 5 — Hide the non-kirana verticals behind a flag
+## Prompt 5 — withdrawn (hide the non-kirana verticals behind a flag)
 
-```text
-Reduce the shipped surface to the one trade that has a customer.
+This prompt was run on 2026-08-08 and its result was reverted on 2026-08-09. Do
+not run it again as written.
 
-Current state: backend/src/verticals/ registers 11 business profiles (kirana,
-clothing, footwear, auto-parts, electronics, pharmacy, stationery-books,
-furniture-home, beauty-cosmetics, restaurant, custom) via registry.js. The schema
-carries RentalBooking, Prescription, RestaurantTable, DishRecipeComponent,
-FootwearSizeProfile, PartFitment and more. Zero of these has a paying user, and
-every one is support surface and test surface you are paying for.
+It asked for a build-time flag that offered only `kirana` and `custom` at signup
+and in Store Profile. What shipped was correct to the letter — existing shops on
+a dormant trade kept resolving their profile, navigation and capabilities — and
+still wrong in practice: the owner of a restaurant or a pharmacy opened Store
+Profile and found their own trade missing from the selector, which then rendered
+blank because the stored value matched no option. The frontend half was inlined
+by Vite at build time, so undoing it needed a cache-less redeploy rather than a
+setting.
 
-Build:
+The hotel-demo/ and hotel-pitch/ removal it also asked for is done and is
+guarded by `scripts/check-repository-hygiene.mjs`.
 
-1. A single build-time flag (env, default off) that controls which business types
-   are offered at signup and in settings. With it off, only `kirana` and `custom`
-   appear. Do not delete the code — flag it.
-
-2. Existing shops on a hidden business type must keep working exactly as they do
-   now. The flag governs what is OFFERED, never what is HONOURED. Prove this with
-   a test: a shop with businessType `restaurant` still resolves its profile,
-   navigation and capabilities when the flag is off.
-
-3. Trim the shipped frontend. Vertical-specific routes and pages under
-   frontend/src/features/verticals/ must not enter the startup bundle for a
-   kirana shop. Report the startup bundle size before and after.
-
-4. Remove hotel-demo/ and hotel-pitch/ from the repo (they are unrelated
-   prototypes), or move them to a clearly separate archive directory excluded
-   from build, test, lint and CI.
-
-5. Do NOT drop any database tables or write a destructive migration. Hiding is
-   reversible; dropping is not.
-
-6. Update SHOP_TYPE_WORKFLOWS.md and PRODUCT_REQUIREMENTS.md to state which
-   verticals are shipped and which are dormant behind the flag.
-
-Tests (required):
-- with the flag off, signup offers only kirana and custom
-- an existing restaurant shop resolves profile/navigation/capabilities unchanged
-- kirana startup bundle excludes vertical-specific chunks
-- full backend and frontend suites still pass with the flag off AND on
-
-Constraints: no destructive migrations, no deleted vertical source. Run the full
-backend and frontend suites in both flag states.
-```
+If the acquisition surface genuinely needs narrowing, gate it on something read
+at runtime, and always keep a shop's persisted type in its own selector. See the
+note in `SHOP_TYPE_WORKFLOWS.md`.
 
 ---
 
