@@ -17,7 +17,7 @@ import { cosmeticsPack } from "./beauty-cosmetics/pack";
 import { restaurantPack } from "./restaurant/pack";
 import { customPack } from "./custom/pack";
 
-export type { VerticalId, VerticalPack, VerticalRoute, VerticalNavEntry, VerticalPageId, Capability } from "./types";
+export type { VerticalId, VerticalPack, VerticalRoute, VerticalNavEntry, VerticalPageId, VerticalSlotId, Capability } from "./types";
 
 /** Every shop type owns exactly one explicit pack, even before it has exclusive screens. */
 export const VERTICAL_PACKS: readonly VerticalPack[] = [

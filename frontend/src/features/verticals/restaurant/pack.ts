@@ -1,6 +1,5 @@
 import { ChefHat, LayoutGrid, Soup, Utensils } from "lucide-react";
 import type { VerticalPack } from "../types";
-import "./billing-addon-configurator";
 
 /**
  * Restaurant & café.
@@ -72,6 +71,9 @@ export const restaurantPack: VerticalPack = {
       mobile: { group: "Catalogue", helper: "Recipes, what's left and what can't be served" },
     },
   ],
+  // Contributes the add-on dialog to shared billing, so core never imports
+  // restaurant. Named rather than imported — see `VerticalSlotId`.
+  billingSlots: ["restaurant/addons"],
   capabilities: [
     // Mirrors backend/src/verticals/restaurant/capabilities.js. The two lists
     // are read by DIFFERENT gates and must agree: this one drives

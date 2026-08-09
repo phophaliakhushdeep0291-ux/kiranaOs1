@@ -82,6 +82,35 @@ describe("vertical boundaries", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps a pack's entry point free of that pack's own screens", () => {
+    // Every pack.ts is startup code for EVERY shop: the registry imports all
+    // eleven to answer "which pack serves this shop?". So an import from a pack
+    // into its own screens or controls does not just load early for that trade —
+    // it puts that trade's UI in the entry chunk of every kirana, footwear and
+    // restaurant till too, and no bundler setting can undo it.
+    //
+    // Two packs shipped exactly that bug, the second after the first was found:
+    // pharmacy's `import "./prescriptions/billing-slot"` and restaurant's
+    // `import "./billing-addon-configurator"`. This test is here so there is not
+    // a third.
+    //
+    // Pages are named via `VerticalPageId` and loaded by app/routes.tsx;
+    // controls are named via `VerticalSlotId` and loaded by
+    // app/vertical-slots.ts. Both keep the dynamic import outside the pack.
+    const packDirs = readdirSync(VERTICALS).filter((entry) => statSync(join(VERTICALS, entry)).isDirectory());
+    const offenders: string[] = [];
+
+    for (const pack of packDirs) {
+      for (const specifier of importsOf(join(VERTICALS, pack, "pack.ts"))) {
+        if (specifier.startsWith("./") || specifier.startsWith(`@/features/verticals/${pack}/`)) {
+          offenders.push(`${pack}/pack.ts -> ${specifier}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   it("claims every business type exactly once", () => {
     const claims = new Map<BusinessType, string[]>();
     for (const pack of VERTICAL_PACKS) {
