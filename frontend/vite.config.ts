@@ -6,7 +6,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
-const dormantVerticalsEnabled = process.env.ENABLE_DORMANT_VERTICALS === "true";
 const buildOutDir = process.env.KIRANA_OUT_DIR
   ? path.resolve(projectRoot, process.env.KIRANA_OUT_DIR)
   : path.resolve(projectRoot, "dist/public");
@@ -108,7 +107,6 @@ export default defineConfig({
   base: basePath,
   define: {
     __KIRANA_BUILD_ID__: JSON.stringify(buildId),
-    __DORMANT_VERTICALS_ENABLED__: JSON.stringify(dormantVerticalsEnabled),
   },
   plugins: [react(), tailwindcss(), stampServiceWorkerBuild()],
   resolve: {

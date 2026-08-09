@@ -10,8 +10,6 @@ import {
   type BusinessType,
 } from "./business-type-store";
 
-declare const __DORMANT_VERTICALS_ENABLED__: boolean;
-
 // The store is the trade's identity; this module is its wardrobe. Re-exported so
 // every existing caller keeps one import, while the router's registry can take
 // the store alone and leave the copy below out of the startup shell.

@@ -121,17 +121,16 @@ IDs are permanent. Split a requirement instead of reusing or renumbering an ID.
 Every pull request must cite requirement IDs, test evidence, and QA flow IDs. New scope first changes this document; defects go to `BUG_BACKLOG.md`; release evidence goes to `RELEASE_GATE.md`. A requirement is complete only when implementation, automated evidence and QA evidence all exist.
 # Vertical release surface
 
-The shipped acquisition surface is Kirana / General Store (`kirana`) plus the
-Custom / Other (`other`) escape hatch. The remaining profiles—clothing,
-footwear, auto parts, electronics, pharmacy, stationery/books, furniture/home,
-beauty/cosmetics, and restaurant—are dormant by default and can be offered by
-building/deploying both frontend and backend with
-`ENABLE_DORMANT_VERTICALS=true`.
+All eleven business profiles are offered at signup and in Store Profile:
+kirana, clothing, footwear, auto parts, electronics, pharmacy,
+stationery/books, furniture/home, beauty/cosmetics, restaurant, and custom /
+other.
 
-The flag controls only what signup and settings offer. Existing shops retain
-full backward-compatible behavior for their stored business type regardless of
-the flag. Dormant source and database schema remain intact; no tables or data
-are dropped when the flag is off.
+The `ENABLE_DORMANT_VERTICALS` flag that briefly restricted this to `kirana`
+and `other` has been removed; see `SHOP_TYPE_WORKFLOWS.md` for why. Any future
+narrowing of the acquisition surface must still show an existing shop its own
+stored type, and must be readable at runtime rather than inlined into the
+frontend bundle at build time.
 
 ## WhatsApp bill delivery
 

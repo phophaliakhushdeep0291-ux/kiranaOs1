@@ -11,14 +11,11 @@ import {
   settingsForBusinessType,
 } from "../src/modules/shops/businessProfiles.js";
 
-test("signup/settings offer only shipped types unless dormant verticals are enabled", () => {
-  assert.deepEqual(
-    OFFERED_BUSINESS_TYPES,
-    process.env.ENABLE_DORMANT_VERTICALS === "true" ? BUSINESS_TYPES : ["kirana", "other"],
-  );
+test("signup/settings offer every registered business type", () => {
+  assert.deepEqual([...OFFERED_BUSINESS_TYPES], [...BUSINESS_TYPES]);
 });
 
-test("a hidden restaurant shop is still fully honoured", () => {
+test("an existing restaurant shop is fully honoured", () => {
   const shop = { id: "restaurant_1", name: "Existing Cafe", settingsJson: JSON.stringify(settingsForBusinessType("restaurant")) };
   const bootstrap = bootstrapForShop(shop, "owner");
   assert.equal(bootstrap.shop.businessType, "restaurant");

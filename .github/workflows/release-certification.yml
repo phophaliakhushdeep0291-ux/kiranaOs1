@@ -9,6 +9,16 @@ on:
   # matters, since it is main's evidence artifact that records the release.
   push:
     branches: [main, master]
+    # Actions minutes are billed on this private repo, and a documentation-only
+    # merge cannot change what the certification proves. Anything touching code,
+    # schema, lockfiles or this workflow still certifies.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  schedule:
+    # One full certification a week, image proof included. Merges to main carry
+    # everything else; see RELEASE_CERT_SKIP_IMAGE below.
+    - cron: "17 3 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -68,6 +78,11 @@ jobs:
       RAZORPAY_ENABLED: "false"
       STORAGE_PROVIDER: local
       LOG_LEVEL: silent
+      # The image build is the most expensive step in the run, and on a private
+      # repo every merge to main pays for it again. Merges defer it; the weekly
+      # and manual runs carry it. Deferral is recorded as a skip in the evidence
+      # report, never as a silent pass, and strict certification still demands it.
+      RELEASE_CERT_SKIP_IMAGE: ${{ github.event_name == 'push' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -105,9 +120,11 @@ jobs:
       # that whenever the Dockerfile, the lockfile and the Prisma schemas are
       # unchanged, which is every commit that only touches source.
       - name: Set up Docker Buildx
+        if: github.event_name != 'push'
         uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers
+        if: github.event_name != 'push'
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
@@ -142,4 +159,7 @@ jobs:
           name: release-certification-${{ github.run_id }}
           path: backend/release-artifacts
           if-no-files-found: error
-          retention-days: 30
+          # Artifact storage is billed alongside the minutes. A week is long
+          # enough to read the evidence for a merge; the report itself is small
+          # and the bulk is per-step logs.
+          retention-days: 7
