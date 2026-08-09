@@ -65,6 +65,28 @@ export type VerticalPageId =
   | "restaurant/menu"
   | "restaurant/kitchen-stock";
 
+/**
+ * A control one trade contributes to a shared core screen — see
+ * `core/billing/billing-slots` and `core/billing/product-configurators` for the
+ * seams themselves.
+ *
+ * Named here for the same reason a page is, and for a sharper one. Every pack is
+ * statically reachable from the app entry, because the registry imports all
+ * eleven to answer "which pack serves this shop?". So a pack that *imports* its
+ * own control puts that trade's UI in the startup shell of every shop, of every
+ * trade. Both packs that had a control did exactly that: pharmacy's
+ * `import "./prescriptions/billing-slot"` pulled the prescription control and
+ * its API layer into the entry chunk, and restaurant's
+ * `import "./billing-addon-configurator"` did the same with the add-on dialog —
+ * so a kirana till downloaded both before it could paint.
+ *
+ * Naming the slot keeps `pack.ts` metadata-only; `VERTICAL_SLOTS` in
+ * `app/vertical-slots.ts` owns the dynamic import and runs it for the active
+ * pack alone. `vertical-boundaries.test.ts` fails the build if a pack reaches
+ * for its own screens again.
+ */
+export type VerticalSlotId = "pharmacy/prescription" | "restaurant/addons";
+
 export interface VerticalRoute {
   /** Wouter pattern, e.g. "/rentals" or "/tables/:id". */
   path: string;
@@ -96,6 +118,11 @@ export interface VerticalPack {
   paths: string[];
   routes: VerticalRoute[];
   nav: VerticalNavEntry[];
+  /**
+   * Controls this trade adds to shared core screens. Loaded once, when a shop
+   * running this pack starts up; a shop of another trade never fetches them.
+   */
+  billingSlots?: readonly VerticalSlotId[];
   /**
    * What this trade can do. Declared on the client rather than only read from
    * the server bootstrap because the POS has to answer "does this shop sell

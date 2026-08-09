@@ -10,6 +10,7 @@ import { SessionLockGate } from "@/features/core/settings/SessionLockGate";
 import { peekPostLoginRedirect, stashPostLoginRedirect } from "@/features/core/auth/post-login-redirect";
 import { FeatureGate } from "@/features/core/subscription/components/FeatureGate";
 import { useActiveVerticalPack, type VerticalPageId } from "@/features/verticals/registry";
+import { loadVerticalSlots } from "./vertical-slots";
 import { useScreenTracking } from "@/lib/activity";
 import type { FeatureName } from "@/features/core/subscription/plans";
 import { isPathInBusinessProfile, profileHasCapability, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
@@ -255,6 +256,15 @@ export function AppRoutes() {
   // events, so it is excluded here to keep a shopper's browsing out of the POS
   // page ranking.
   useScreenTracking(location, isAuthenticated && !isCustomerOrderPath);
+
+  // The controls this trade adds to shared core screens — pharmacy's
+  // prescription attach and restaurant's add-on dialog. Registered from here
+  // rather than from the pack, because every pack is startup code for every
+  // shop; see `VerticalSlotId`.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void loadVerticalSlots(verticalPack);
+  }, [isAuthenticated, verticalPack]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
