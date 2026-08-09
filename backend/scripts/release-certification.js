@@ -385,13 +385,23 @@ runStep({
   configured: hasRestore,
   blockedReason: "set RESTORE_TEST_DATABASE_URL and ALLOW_RESTORE_TEST_DB=true",
 });
+// The image build is the most expensive step in a certification run. On a
+// private repo, paying for it on every merge is what exhausts the Actions
+// allowance, so the workflow defers it to the weekly and manual runs. Deferral
+// is reported as a skip with its reason — never as a pass — and strict
+// certification still requires the image, so a release is never certified
+// without one.
+const skipImageProof = boolEnv("RELEASE_CERT_SKIP_IMAGE");
+
 runStep({
   id: "docker-build",
   label: "Production Docker image build",
   args: ["run", "docker:build"],
-  requiredFor: ["ci", "strict"],
-  configured: hasDocker,
-  blockedReason: "Docker engine is unavailable",
+  requiredFor: skipImageProof ? ["strict"] : ["ci", "strict"],
+  configured: hasDocker && !skipImageProof,
+  blockedReason: skipImageProof
+    ? "deferred to the scheduled/manual certification run (RELEASE_CERT_SKIP_IMAGE)"
+    : "Docker engine is unavailable",
 });
 
 if (!sqliteTestExisted) {

@@ -30,9 +30,24 @@ function plainBuild(reason) {
   finish(docker(["build", "."]));
 }
 
+// `--cache-to type=local` is refused outright by the default `docker` driver
+// ("Cache export is not supported for the docker driver"). That aborts the
+// build before a single layer is read, so the certification would report a
+// failed image proof for a reason that has nothing to do with the image. Only
+// a builder that can export a cache is asked to.
+function cacheExportSupported() {
+  const inspect = spawnSync("docker", ["buildx", "inspect"], { encoding: "utf8" });
+  if (inspect.status !== 0) return false;
+  const driver = /^\s*Driver:\s*(\S+)/im.exec(inspect.stdout || "")?.[1];
+  return Boolean(driver) && driver !== "docker";
+}
+
 if (!cacheDir) plainBuild("");
 if (spawnSync("docker", ["buildx", "version"], { encoding: "utf8" }).status !== 0) {
   plainBuild("docker buildx is unavailable");
+}
+if (!cacheExportSupported()) {
+  plainBuild("the active buildx builder cannot export a layer cache");
 }
 
 // buildx's local exporter rewrites the whole directory each time and grows

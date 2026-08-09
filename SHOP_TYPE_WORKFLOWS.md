@@ -75,16 +75,22 @@ The first release only launches workflows that already have reliable routes and 
 4. Pharmacy and cosmetics visibly recommend batch tracking.
 5. No UI claims that unsupported serial, variant, table, or delivery state already exists.
 6. Generic retail behavior remains available for `other`.
-# Shipped and dormant verticals
+# Offered verticals
 
-The default release offers **Kirana / General Store** (`kirana`) and **Custom /
-Other** (`other`) at signup and in Store Profile. Clothing, footwear, auto
-parts, electronics, pharmacy, stationery/books, furniture/home,
-beauty/cosmetics, and restaurant remain implemented but dormant behind the
-single build flag `ENABLE_DORMANT_VERTICALS=true`.
+All eleven business types are offered at signup and in Store Profile: kirana,
+clothing, footwear, auto parts, electronics, pharmacy, stationery/books,
+furniture/home, beauty/cosmetics, restaurant, and custom/other.
 
-This is an offering flag, not a runtime entitlement. A persisted shop on any
-dormant type continues to resolve its original workflow, profile, navigation,
-capabilities, routes, and data. Never use this flag to reject or rewrite an
-existing shop. With the flag absent or any value other than the literal
-`true`, only `kirana` and `other` may be newly selected.
+An `ENABLE_DORMANT_VERTICALS` build flag briefly narrowed that to `kirana` and
+`other`. It was removed. The frontend half was inlined by Vite at build time,
+so a shop already trading as a restaurant or a pharmacy lost its own trade from
+the selector — which then rendered blank, because the stored value matched no
+option — and re-opening it needed a cache-less redeploy rather than a setting.
+If the acquisition surface has to be narrowed again, gate it on something read
+at runtime, and always keep the shop's persisted type in the list.
+
+`OFFERED_BUSINESS_TYPES` in `backend/src/verticals/registry.js` and
+`offeredBusinessTypes()` in
+`frontend/src/features/core/settings/business-types.ts` are the two lists. They
+must agree: anything the picker offers but the server does not is rejected with
+422 `BUSINESS_TYPE_NOT_OFFERED`.

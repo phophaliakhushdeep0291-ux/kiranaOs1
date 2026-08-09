@@ -31,7 +31,7 @@ Run against a clean checkout with supported Node versions and frozen installs.
 | Integration tests | Isolated DB run, including billing/sync/tenant paths | SQLite baseline: 153 passed, 1 PostgreSQL-only suite skipped; current restaurant add-on database integration passes 3/3 and subscription/device integration passes 9/9 |
 | Migration safety | `cd backend && npm run migration:safety` | Local working tree passed 2026-08-08 with 0 warnings; replay-safety proof recognizes 28 guarded migrations |
 | Existing release gate | `cd backend && npm run release:gate` | Local working tree passed 2026-08-08; human approval warning remains |
-| CI certification | `.github/workflows/release-certification.yml` run URL | Candidate run URL not recorded |
+| CI certification | `.github/workflows/release-certification.yml` run URL | Candidate run URL not recorded. Run #316 (2026-08-09) was refused by GitHub before it started — "recent account payments have failed or your spending limit needs to be increased" — so no certification evidence exists for the current commit. Merge runs now defer the Docker image proof to the weekly and manual runs (`RELEASE_CERT_SKIP_IMAGE`), where it is recorded as a skip with its reason; strict certification still requires the image, so a release cannot be certified without one. |
 
 Any failure is red. Skips require a written exception below; P0 financial, migration, tenant or offline safety checks cannot be waived.
 
