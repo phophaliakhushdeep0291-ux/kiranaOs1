@@ -27,7 +27,13 @@
     <link rel="manifest" href="/manifest.webmanifest" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="artha-boot-wait" role="status" aria-live="polite" style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:24rem;margin:22vh auto 0;padding:0 1.25rem;text-align:center;color:#0f1e3d">
+        <div style="font-size:2rem;font-weight:900;letter-spacing:-0.06em;color:#075fff">Artha</div>
+        <p style="font-size:0.95rem;font-weight:700;margin:0.65rem 0 0.2rem">Opening your counter&hellip;</p>
+        <p style="font-size:0.78rem;color:#64748b;margin:0">Your saved shop data stays available while the app starts.</p>
+      </div>
+    </div>
     <script>
       // Runtime polyfills (ES5) for APIs missing on iOS Safari < 15.4. esbuild
       // transpiles syntax for the build target but never polyfills these methods,
@@ -69,7 +75,8 @@
         var shown = false;
         function rootEmpty() {
           var root = document.getElementById("root");
-          return !root || root.childNodes.length === 0;
+          var wait = document.getElementById("artha-boot-wait");
+          return !root || root.childNodes.length === 0 || (wait && wait.parentNode === root && root.childNodes.length === 1);
         }
         function show(detail) {
           if (shown || !rootEmpty()) return;
@@ -116,7 +123,7 @@
           if (rootEmpty()) show(reason && reason.message ? reason.message : String(reason || ""));
         });
         // Old engines ignore type=module scripts entirely — no error event at all.
-        setTimeout(function () { show("The app did not finish loading (timeout)."); }, 12000);
+        setTimeout(function () { show("The app did not finish loading (timeout)."); }, 20000);
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
