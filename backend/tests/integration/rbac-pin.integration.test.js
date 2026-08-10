@@ -178,6 +178,42 @@ if (ctx.skip) {
       assert.equal(response.code, "OWNER_NOT_EDITABLE");
     });
 
+    test("a required staff-audit failure rolls the staff mutation back", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { planCode: "growth" } });
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_staff_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STAFF_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced staff audit failure');
+        END
+      `);
+
+      let failure;
+      try {
+        await authService.inviteStaff(tenant.shop.id, {
+          name: "Must Roll Back",
+          mobile: "9000000099",
+          password: "StaffPass123",
+          role: "staff",
+        }, tenant.owner.id);
+      } catch (error) {
+        failure = error;
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_staff_audit_failure");
+      }
+
+      assert.equal(failure?.statusCode, 503);
+      assert.equal(failure?.code, "STAFF_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.user.count({
+        where: { shopId: tenant.shop.id, disabledAt: null, role: { in: ["staff", "admin"] } },
+      }), 0, "the staff row must roll back when its required audit cannot be stored");
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "STAFF_CREATED" },
+      }), 0);
+    });
+
     test("simultaneous staff invitations cannot exceed the plan seat limit", async () => {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { planCode: "growth" } });

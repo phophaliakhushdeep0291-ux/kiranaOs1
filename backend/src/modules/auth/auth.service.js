@@ -676,13 +676,14 @@ export async function updateStaffRole(shopId, staffId, role, requestingUserId, r
 }
 
 export async function removeStaff(shopId, staffId, requestingUserId, reqMeta = {}) {
-  const user = await db.user.findFirst({ where: { id: staffId, shopId, disabledAt: null } });
-  if (!user) throw new AppError("Staff member not found", 404);
-  if (user.id === requestingUserId) throw new AppError("Cannot remove yourself", 400);
-  if (user.role === "owner") throw new AppError("Cannot remove the owner", 403);
-
   const disabledAt = new Date();
-  await db.$transaction(async (tx) => {
+  return db.$transaction(async (tx) => {
+    await requireFeatureAccess(shopId, "staff_login", tx);
+    const user = await tx.user.findFirst({ where: { id: staffId, shopId, disabledAt: null } });
+    if (!user) throw new AppError("Staff member not found", 404);
+    if (user.id === requestingUserId) throw new AppError("Cannot remove yourself", 400);
+    if (user.role === "owner") throw new AppError("Cannot remove the owner", 403);
+
     await tx.session.updateMany({
       where: { userId: staffId, shopId, revokedAt: null },
       data: { revokedAt: disabledAt, revokedReason: "STAFF_DISABLED" },
@@ -706,9 +707,8 @@ export async function removeStaff(shopId, staffId, requestingUserId, reqMeta = {
       metadata: { removedRole: user.role, removedAt: disabledAt.toISOString() },
       req: reqMeta.req,
     }, tx);
+    return { success: true, disabledAt };
   });
-
-  return { success: true, disabledAt };
 }
 
 export async function changePassword(userId, shopId, { currentPassword, newPassword }) {
