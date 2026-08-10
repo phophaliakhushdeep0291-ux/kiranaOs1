@@ -109,6 +109,7 @@ interface BillingSummaryProps {
   confirmBillPending: boolean;
   hasLastPrintableBill: boolean;
   onConfirmBill: () => void;
+  onNewBill: () => void;
   onSaveEstimate: () => void;
   onHoldBill: () => void;
   onPrintBill: () => void;
@@ -239,6 +240,7 @@ export function BillingSummary({
   confirmBillPending,
   hasLastPrintableBill,
   onConfirmBill,
+  onNewBill,
   onSaveEstimate,
   onHoldBill,
   onPrintBill,
@@ -768,14 +770,16 @@ export function BillingSummary({
           data-testid="button-confirm-bill"
           style={{ background: "linear-gradient(180deg, var(--brand) 0%, var(--brand-strong) 100%)" }}
           className="relative h-[54px] w-full rounded-[10px] text-[16px] font-black text-white shadow-[0_12px_24px_rgba(0,77,255,0.28)] hover:opacity-95"
-          onClick={onConfirmBill}
-          disabled={confirmBillPending || cart.length === 0 || !newBillingAllowed || !createBillAllowed}
+          onClick={cart.length === 0 && lastBillNo ? onNewBill : onConfirmBill}
+          disabled={confirmBillPending || (!lastBillNo && cart.length === 0) || (cart.length > 0 && (!newBillingAllowed || !createBillAllowed))}
         >
           {confirmBillPending ? (
             <>
               <Loader2 size={18} className="mr-2 animate-spin" />
               {t("billing.summary.saving")}
             </>
+          ) : cart.length === 0 && lastBillNo ? (
+            <>Start new bill</>
           ) : (
             <>
               {isEstimateBill
@@ -788,14 +792,17 @@ export function BillingSummary({
           )}
         </Button>
 
-        {/* Secondary actions */}
-        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <SecBtn testId="button-save-as-estimate" onClick={onSaveEstimate} disabled={confirmBillPending || cart.length === 0} icon={<FileText size={13} />} label={t("billing.summary.saveEstimate")} />
-          <SecBtn onClick={onHoldBill} disabled={cart.length === 0} icon={<PauseCircle size={13} />} label={t("billing.summary.hold")} shortcut="F9" />
-          <SecBtn onClick={onPrintBill} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Printer size={13} />} label={t("billing.summary.print")} />
-          {/* Free for all plans: opens WhatsApp with a text receipt (wa.me deep link, no paid API). */}
-          <SecBtn primary onClick={onSharePdf} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Smartphone size={13} />} label={t("billing.summary.whatsapp")} />
-        </div>
+        {cart.length > 0 ? (
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <SecBtn testId="button-save-as-estimate" onClick={onSaveEstimate} disabled={confirmBillPending} icon={<FileText size={13} />} label={t("billing.summary.saveEstimate")} />
+            <SecBtn onClick={onHoldBill} icon={<PauseCircle size={13} />} label={t("billing.summary.hold")} shortcut="F9" />
+          </div>
+        ) : hasLastPrintableBill ? (
+          <div className="mt-2 grid grid-cols-2 gap-1.5" aria-label="Saved bill actions">
+            <SecBtn onClick={onPrintBill} icon={<Printer size={13} />} label={t("billing.summary.print")} />
+            <SecBtn primary onClick={onSharePdf} icon={<Smartphone size={13} />} label={t("billing.summary.whatsapp")} />
+          </div>
+        ) : null}
 
         {cart.length > 0 && (
           <button

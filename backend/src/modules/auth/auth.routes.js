@@ -40,7 +40,7 @@ router.get("/staff",          requireAuth, requireShop, requireRole("owner"), re
 router.post("/staff",         requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin, validate(inviteStaffSchema), ctrl.inviteStaff);
 router.patch("/staff/:id", requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin,
   validate(updateStaffSchema), ctrl.updateStaff);
-router.patch("/staff/:id/role", requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin,
+router.patch("/staff/:id/role", requireAuth, requireShop, requireRole("owner"), requireFeature("role_based_access"), requireOwnerPin,
   validate(z.object({ role: z.enum(["staff","admin"]) })), ctrl.updateStaffRole);
 router.delete("/staff/:id",   requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin, ctrl.removeStaff);
 router.get("/staff/:id/locations", requireAuth, requireShop, requireRole("owner"), requireFeature("role_based_access"), ctrl.getStaffLocations);

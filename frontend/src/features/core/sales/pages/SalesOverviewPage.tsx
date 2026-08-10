@@ -581,6 +581,13 @@ function MetricCard({ label, value, current, previous, icon, iconClass, color, s
 }) {
   const change = pctChange(current, previous);
   const bad = positiveIsBad ? change > 0 : change < 0;
+  const comparison = Math.abs(current) < 0.005 && Math.abs(previous) < 0.005
+    ? { label: "No change", tone: "text-[#64748b]" }
+    : Math.abs(previous) < 0.005
+      ? { label: "New activity", tone: positiveIsBad ? "text-[#ff314f]" : "text-[#10a948]" }
+      : Math.abs(current) < 0.005
+        ? { label: "No activity this period", tone: positiveIsBad ? "text-[#10a948]" : "text-[#ff314f]" }
+        : { label: `${Math.abs(change)}%`, tone: bad ? "text-[#ff314f]" : "text-[#10a948]" };
   const points = spark.length > 1 ? spark.map((item, index) => ({ index, value: item })) : [{ index: 0, value: previous }, { index: 1, value: current }];
   const gradientId = `sales-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
@@ -590,7 +597,7 @@ function MetricCard({ label, value, current, previous, icon, iconClass, color, s
           <div className="flex min-w-0 items-center gap-3"><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[9px]", iconClass)}>{icon}</span><p className="min-w-0 text-[11px] font-bold leading-snug text-[#34486e]">{label}</p></div>
           <p className="mt-3 text-[22px] font-black leading-none text-[var(--brand-ink)]">{value}</p>
           <div className="mt-2 flex items-center gap-1 text-[10px]">
-            <span className={cn("inline-flex items-center gap-0.5 font-black", change === 0 ? "text-[#64748b]" : bad ? "text-[#ff314f]" : "text-[#10a948]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}%</span>
+            <span className={cn("inline-flex items-center gap-0.5 font-black", comparison.tone)}>{Math.abs(previous) >= 0.005 && Math.abs(current) >= 0.005 ? (change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />) : null}{comparison.label}</span>
             <span className="font-medium text-[#7a879f]">vs last week</span>
           </div>
           <div className="mt-2 h-[28px]">
@@ -612,7 +619,7 @@ function Panel({ title, action, children }: { title: string; action?: ReactNode;
 }
 
 function ChartFrame({ loading, empty, children }: { loading: boolean; empty: boolean; children: ReactNode }) {
-  return <div className="h-[214px] px-3 pb-3">{loading ? <Skeleton className="h-full" /> : empty ? <EmptyState label="No sales in this period" /> : children}</div>;
+  return <div className="h-[214px] px-3 pb-3">{loading ? <Skeleton className="h-full" /> : empty ? <EmptyState label="No sales in this period. Change the date range or create a new sale." /> : children}</div>;
 }
 
 function EmptyState({ label }: { label: string }) {

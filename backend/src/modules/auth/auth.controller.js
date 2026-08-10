@@ -125,7 +125,7 @@ export async function updateStaff(req, res, next) {
 
 export async function updateStaffRole(req, res, next) {
   try {
-    const data = await authService.updateStaffRole(req.user.shopId, req.params.id, req.body.role);
+    const data = await authService.updateStaffRole(req.user.shopId, req.params.id, req.body.role, req.user.userId, { req });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

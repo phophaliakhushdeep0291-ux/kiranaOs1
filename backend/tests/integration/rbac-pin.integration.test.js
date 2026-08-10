@@ -127,6 +127,56 @@ if (ctx.skip) {
       assert.deepEqual(ownerAllClosing.location, { id: "all", code: "ALL", name: "All locations" });
     });
 
+    test("owner staff edits are audited atomically and password changes revoke active staff sessions", async () => {
+      const { tenant, staff, ownerAuth, staffAuth } = await authPair();
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { planCode: "pro" } });
+
+      const updated = assertSuccess(await ctx.request("PATCH", `/api/auth/staff/${staff.staff.id}`, {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+        body: {
+          name: "Updated Counter Manager",
+          email: "counter.manager@example.com",
+          role: "admin",
+          password: "NewStaffPass123",
+        },
+      }));
+      assert.equal(updated.id, staff.staff.id);
+      assert.equal(updated.name, "Updated Counter Manager");
+      assert.equal(updated.email, "counter.manager@example.com");
+      assert.equal(updated.mobile, staff.staffMobile, "an omitted identity field must be retained");
+      assert.equal(updated.role, "admin");
+      assert.equal("passwordHash" in updated, false);
+
+      assertFailure(await ctx.get("/api/auth/me", { token: staffAuth.accessToken }), 401);
+      assertFailure(await ctx.post("/api/auth/login", { mobile: staff.staffMobile, password: staff.staffPassword }), 401);
+      assertSuccess(await ctx.post("/api/auth/login", { mobile: staff.staffMobile, password: "NewStaffPass123" }));
+
+      const revoked = await ctx.db.session.count({
+        where: { userId: staff.staff.id, shopId: tenant.shop.id, revokedReason: "STAFF_PASSWORD_CHANGED" },
+      });
+      assert.ok(revoked >= 1, "every active staff session should be revoked with an explicit reason");
+      const audit = await ctx.db.auditLog.findFirst({
+        where: { shopId: tenant.shop.id, action: "STAFF_UPDATED", entityId: staff.staff.id },
+        orderBy: { createdAt: "desc" },
+      });
+      assert.ok(audit, "the owner-sensitive edit must have a durable audit row");
+      assert.match(audit.metadataJson || "", /"passwordChanged":true/);
+      assert.match(audit.metadataJson || "", /"sessionsRevoked":true/);
+      assert.doesNotMatch(audit.metadataJson || "", /NewStaffPass123/);
+    });
+
+    test("staff management cannot edit the owner account", async () => {
+      const { tenant, ownerAuth } = await authPair();
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { planCode: "pro" } });
+      const response = assertFailure(await ctx.request("PATCH", `/api/auth/staff/${tenant.owner.id}`, {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+        body: { name: "Unexpected owner rewrite" },
+      }), 403);
+      assert.equal(response.code, "OWNER_NOT_EDITABLE");
+    });
+
     test("customer DELETE without owner PIN fails for staff", async () => {
       const { tenant, staffAuth } = await authPair();
       const customer = await createCustomer(ctx.db, tenant.shop.id);

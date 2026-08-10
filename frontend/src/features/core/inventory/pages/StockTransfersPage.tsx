@@ -418,13 +418,13 @@ export default function StockTransfersPage() {
                   </span>
                 </div>
                 <div><div className="flex items-center gap-3 text-sm font-bold text-slate-800"><span className="truncate">{transfer.fromLocation.name}</span><ArrowRight className="shrink-0 text-blue-500" size={16} /><span className="truncate">{transfer.toLocation.name}</span></div><span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black ${treatmentTone(transfer.gstTreatment)}`}>{treatmentLabel(transfer.gstTreatment)}</span></div>
-                <div className="lg:text-right"><p className="text-sm font-black text-slate-900">{money.format(transfer.consignmentValue || 0)}</p><p className="text-[11px] text-slate-500">{transfer.items.length} product line{transfer.items.length === 1 ? "" : "s"} · {transfer.receiptSummary.completedLineCount}/{transfer.receiptSummary.lineCount} received</p></div>
+                <div className="lg:text-right"><p className="text-sm font-black text-slate-900">{money.format(transfer.consignmentValue || 0)}</p><p className="text-[11px] text-slate-500">{transfer.items.length} product line{transfer.items.length === 1 ? "" : "s"} · {transfer.receiptSummary.completedLineCount}/{transfer.receiptSummary.lineCount} fully received</p></div>
               </div>
               <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                 {transfer.items.map((item) => (
                   <div key={item.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                     <div className="flex items-center justify-between gap-3"><p className="truncate text-xs font-black text-slate-800">{item.productName}</p><span className="shrink-0 text-[10px] font-bold text-slate-500">{item.baseUnit}</span></div>
-                    <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] text-slate-500"><span>Ordered<br /><b className="text-slate-800">{item.quantityBaseQty}</b></span><span>Received<br /><b className="text-emerald-700">{item.receivedBaseQty}</b></span><span>Remaining<br /><b className={item.remainingBaseQty > 0 ? "text-amber-700" : "text-slate-700"}>{item.remainingBaseQty}</b></span></div>
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] text-slate-500"><span>Ordered<br /><b className="text-slate-800">{item.quantityBaseQty}</b></span><span>Received<br /><b className="text-emerald-700">{item.receivedBaseQty}</b></span><span>{transfer.status === "cancelled" ? "Returned" : "Remaining"}<br /><b className={item.remainingBaseQty > 0 ? (transfer.status === "cancelled" ? "text-slate-700" : "text-amber-700") : "text-slate-700"}>{item.remainingBaseQty}</b></span></div>
                   </div>
                 ))}
               </div>

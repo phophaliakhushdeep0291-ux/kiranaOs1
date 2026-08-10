@@ -80,7 +80,7 @@ export const OWNER_PIN_REQUIRED_PERMISSIONS: PermissionName[] = [
 export function normalizeStaffRole(role: string | null | undefined): StaffRole {
   const normalized = String(role ?? "owner").trim().toLowerCase();
   if (normalized === "owner") return "owner";
-  if (normalized === "manager") return "manager";
+  if (normalized === "manager" || normalized === "admin") return "manager";
   if (normalized === "cashier" || normalized === "staff") return "cashier";
   if (normalized === "viewer" || normalized === "read_only" || normalized === "readonly") return "viewer";
   return "cashier";

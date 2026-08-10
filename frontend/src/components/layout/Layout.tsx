@@ -13,18 +13,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useOfflineStatus } from "@/features/core/sync/useOfflineStatus";
 import {
-  Activity,
   BarChart3,
   Bell,
   ChevronDown,
   ChevronRight,
   LayoutDashboard,
   Landmark,
-  Gift,
   LogOut,
   Menu,
   Package,
-  PercentSquare,
   RefreshCw,
   Search,
   Settings,
@@ -185,26 +182,19 @@ const NAV: NavItem[] = [
   },
   { kind: "link", href: "/returns", label: "Returns", Icon: Undo2 },
   { kind: "link", href: "/reports", label: "Reports", Icon: BarChart3 },
-  { kind: "link", href: "/activity-insights", label: "Activity & Insights", Icon: Activity },
   { kind: "link", href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
   {
-    kind: "group", id: "assurance", label: "Financial Assurance", Icon: ShieldCheck, overviewHref: "/assurance",
-    triggerPaths: ["/assurance"],
+    kind: "group", id: "business-tools", label: "Business Tools", Icon: ShieldCheck,
+    triggerPaths: ["/assurance", "/activity-insights", "/offers", "/loyalty", "/gift-cards"],
     children: [
-      { href: "/assurance", label: "Dashboard" },
-      { href: "/assurance/findings", label: "Findings" },
-      { href: "/assurance/review-queue", label: "Review Queue" },
-      { href: "/assurance/evidence", label: "Evidence Requests" },
-      { href: "/assurance/cases", label: "Investigation Cases" },
-      { href: "/assurance/runs", label: "Audit Runs" },
-      { href: "/assurance/rules", label: "Rules & Thresholds" },
-      { href: "/assurance/report", label: "Assurance Report" },
+      { href: "/activity-insights", label: "Activity & Insights" },
+      { href: "/offers", label: "Offers & Discounts" },
+      { href: "/loyalty", label: "Loyalty" },
+      { href: "/gift-cards", label: "Gift Cards" },
+      { href: "/assurance", label: "Financial Assurance" },
     ],
   },
   { kind: "link", href: "/expenses", label: "Expenses", Icon: Wallet },
-  { kind: "link", href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
-  { kind: "link", href: "/loyalty", label: "Loyalty", Icon: Gift },
-  { kind: "link", href: "/gift-cards", label: "Gift Cards", Icon: Gift },
   { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
 ];
 
@@ -573,7 +563,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
           ) : (
             <>
               {/* Sync status */}
-              <div className="app-sidebar-sync-card">
+              {(attentionCount > 0 || !isOnline) && <div className="app-sidebar-sync-card">
                 <div className="flex items-center gap-2">
                   <span className={cn("h-2 w-2 shrink-0 rounded-full", connectionDotClass, !isOnline && "animate-pulse")} />
                   <span className="text-sm font-semibold text-white">
@@ -585,7 +575,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
                 <Link href="/sync-status" className="app-sidebar-sync-link">
                   <RefreshCw size={13} aria-hidden="true" /> Sync Now
                 </Link>
-              </div>
+              </div>}
 
               {/* Store + logout */}
               <DropdownMenu>

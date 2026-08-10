@@ -1961,6 +1961,7 @@ export default function Billing() {
         confirmBillPending={confirmBill.isPending}
         hasLastPrintableBill={Boolean(lastPrintableBill)}
         onConfirmBill={() => handleConfirm()}
+        onNewBill={newBill}
         onSaveEstimate={() => handleConfirm(BillInputBillType.estimate)}
         onHoldBill={holdCurrentBill}
         onPrintBill={() => printBillSnapshot()}
