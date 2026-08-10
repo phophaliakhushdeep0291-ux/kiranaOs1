@@ -60,13 +60,27 @@ export function applyRoundOff(rawTotal: unknown, enabled: boolean): { payable: n
   return { payable, roundOff: roundMoney(payable - raw) };
 }
 
+/**
+ * Building an Intl.NumberFormat costs orders of magnitude more than using one,
+ * and formatMoney runs per money value per render — a cart plus its totals is
+ * hundreds of calls. Only two shapes exist, so they are built once here.
+ */
+const RUPEE_FORMAT = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+const RUPEE_PAISE_FORMAT = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 export function formatMoney(value: unknown): string {
   const rounded = roundMoney(Number(value));
   const hasPaise = Math.abs(toPaise(rounded)) % 100 !== 0;
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: hasPaise ? 2 : 0,
-    maximumFractionDigits: 2,
-  }).format(rounded);
+  return (hasPaise ? RUPEE_PAISE_FORMAT : RUPEE_FORMAT).format(rounded);
 }

@@ -37,7 +37,8 @@ type Approval = { type: "import" } | { type: "resolve"; row: ChannelSettlementRo
 type ResolveInput = { action: "match" | "ignore" | "reverse"; customerOrderId?: string; billId?: string; bankStatementTransactionId?: string; reason?: string };
 
 function normalize(value: string) { return value.trim().toLowerCase().replace(/[^a-z0-9]/g, ""); }
-function money(amount = 0) { return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(amount); }
+const MONEY_FORMAT = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+function money(amount = 0) { return MONEY_FORMAT.format(amount); }
 export function parseHeader(text: string) {
   const line = text.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
   const values: string[] = []; let field = ""; let quoted = false;

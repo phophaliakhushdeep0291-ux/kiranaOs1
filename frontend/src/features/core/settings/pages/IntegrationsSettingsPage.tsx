@@ -39,9 +39,11 @@ const STATUS: Record<ProviderStatus, { label: string; tone: Tone }> = {
   upgrade_required: { label: "Upgrade required", tone: "amber" },
 };
 
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" });
+
 function readableDate(value?: string | null) {
   if (!value) return "Never";
-  return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return DATE_TIME_FORMAT.format(new Date(value));
 }
 
 function errorMessage(error: unknown) {

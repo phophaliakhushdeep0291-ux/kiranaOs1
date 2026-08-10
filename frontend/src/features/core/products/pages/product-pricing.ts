@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import type { Product, ProductSellingUnit } from "@/lib/api/client";
 
 export const UNITS = [
@@ -51,16 +52,13 @@ const UNIT_FACTOR_TO_BASE: Record<string, number> = {
   custom: 1,
 };
 
-export function round2(value: number): number {
-  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
-}
 
 export function baseUnitFor(unit: string): string {
   return UNIT_TO_BASE_UNIT[unit] ?? unit ?? "piece";
 }
 
 export function sellingUnitConversion(packSizeValue: number, packSizeUnit: string): number {
-  return round2(Number(packSizeValue || 0) * (UNIT_FACTOR_TO_BASE[packSizeUnit] ?? 1));
+  return roundMoney(Number(packSizeValue || 0) * (UNIT_FACTOR_TO_BASE[packSizeUnit] ?? 1));
 }
 
 export function sellingUnitName(unitType: string, packSizeValue?: number | null, packSizeUnit?: string | null): string {
@@ -79,11 +77,11 @@ export function sellingUnitCode(unitType: string, packSizeValue?: number | null,
 }
 
 export function toBaseQty(quantity: number, unit: string): number {
-  return round2(Number(quantity || 0) * (UNIT_FACTOR_TO_BASE[unit] ?? 1));
+  return roundMoney(Number(quantity || 0) * (UNIT_FACTOR_TO_BASE[unit] ?? 1));
 }
 
 export function fromBaseQty(baseQty: number | undefined, unit: string | null | undefined): number {
-  return round2(Number(baseQty || 0) / (UNIT_FACTOR_TO_BASE[unit || "piece"] ?? 1));
+  return roundMoney(Number(baseQty || 0) / (UNIT_FACTOR_TO_BASE[unit || "piece"] ?? 1));
 }
 
 /**
@@ -102,7 +100,7 @@ export function sellingUnitMaxPrice(
   defaultUnit?: ProductSellingUnit | null,
 ): number {
   const ownMax = Number(sellingUnit?.maximumPrice ?? 0);
-  if (ownMax > 0) return round2(ownMax);
+  if (ownMax > 0) return roundMoney(ownMax);
 
   // Restaurant portions are menu choices, not retail packs. Their
   // conversionToBase is a recipe-consumption factor (for example Large = 1.4
@@ -112,18 +110,18 @@ export function sellingUnitMaxPrice(
 
   const productMrp = Number(product?.mrp ?? 0);
   if (!(productMrp > 0)) return 0;
-  if (!sellingUnit || sellingUnit.isDefault) return round2(productMrp);
+  if (!sellingUnit || sellingUnit.isDefault) return roundMoney(productMrp);
 
   const defaultConversion = Number(defaultUnit?.conversionToBase ?? 0);
   const unitConversion = Number(sellingUnit.conversionToBase ?? 0);
-  if (!(defaultConversion > 0) || !(unitConversion > 0)) return round2(productMrp);
-  if (defaultConversion === unitConversion) return round2(productMrp);
+  if (!(defaultConversion > 0) || !(unitConversion > 0)) return roundMoney(productMrp);
+  if (defaultConversion === unitConversion) return roundMoney(productMrp);
 
-  return round2((productMrp / defaultConversion) * unitConversion);
+  return roundMoney((productMrp / defaultConversion) * unitConversion);
 }
 
 export function averageCost(product?: Product): number {
-  return round2(Number(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? 0));
+  return roundMoney(Number(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? 0));
 }
 
 export function productDisplayUnit(product: Product): string {
@@ -131,15 +129,15 @@ export function productDisplayUnit(product: Product): string {
 }
 
 export function productMinimumPrice(product: Product): number {
-  return round2(product.minimumSellingPrice ?? product.minPricePerRateUnit ?? 0);
+  return roundMoney(product.minimumSellingPrice ?? product.minPricePerRateUnit ?? 0);
 }
 
 export function productRetailPrice(product: Product): number {
-  return round2(product.retailPrice ?? product.retailPricePerRateUnit ?? product.defaultPricePerRateUnit);
+  return roundMoney(product.retailPrice ?? product.retailPricePerRateUnit ?? product.defaultPricePerRateUnit);
 }
 
 export function productWholesalePrice(product: Product): number {
-  return round2(product.wholesalePrice ?? product.wholesalePricePerRateUnit ?? product.defaultPricePerRateUnit);
+  return roundMoney(product.wholesalePrice ?? product.wholesalePricePerRateUnit ?? product.defaultPricePerRateUnit);
 }
 
 export function isLowStock(product: Product): boolean {

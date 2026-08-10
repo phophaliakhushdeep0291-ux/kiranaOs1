@@ -26,8 +26,15 @@ type VoiceSummary = {
   udharBalance: number;
 };
 
-function formatMoney(amount: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
+/**
+ * Deliberately NOT lib/money's formatMoney: this text gets read aloud, and
+ * "one thousand two hundred thirty four rupees fifty paise" is worse to listen
+ * to than the rounded figure. Whole rupees only, built once rather than per call.
+ */
+const SPOKEN_RUPEE_FORMAT = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
+
+function formatSpokenMoney(amount: number) {
+  return SPOKEN_RUPEE_FORMAT.format(amount);
 }
 
 function readNumber(value: unknown): number {
@@ -67,7 +74,7 @@ async function loadVoiceSummary(): Promise<VoiceSummary> {
 
 async function buildDashboardSummaryMessage() {
   const summary = await loadVoiceSummary();
-  return `Today: ${summary.billCount} bills, ${formatMoney(summary.revenue)} sales, ${formatMoney(summary.udharBalance)} net udhar ledger impact, ${summary.pendingSync} pending sync${summary.failedSync ? `, ${summary.failedSync} failed sync` : ""}.`;
+  return `Today: ${summary.billCount} bills, ${formatSpokenMoney(summary.revenue)} sales, ${formatSpokenMoney(summary.udharBalance)} net udhar ledger impact, ${summary.pendingSync} pending sync${summary.failedSync ? `, ${summary.failedSync} failed sync` : ""}.`;
 }
 
 async function buildPendingSyncMessage() {

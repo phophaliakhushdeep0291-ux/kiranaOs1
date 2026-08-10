@@ -1,4 +1,5 @@
 import { offlineDB } from "@/lib/offline/db";
+import { roundMoney } from "@/lib/money";
 
 /**
  * End-of-day drawer counts — the shopkeeper types what cash is actually in
@@ -20,10 +21,6 @@ export interface DrawerCount {
 const STORE_KEY = "kirana:drawer-counts:v1";
 const MAX_ENTRIES = 90;
 
-function round2(value: number): number {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-}
-
 /** Pure upsert: replaces the same-date entry, newest date first, capped. */
 export function upsertDrawerCount(list: DrawerCount[], entry: DrawerCount, cap = MAX_ENTRIES): DrawerCount[] {
   return [entry, ...list.filter((row) => row.date !== entry.date)]
@@ -32,13 +29,13 @@ export function upsertDrawerCount(list: DrawerCount[], entry: DrawerCount, cap =
 }
 
 export function buildDrawerCount(date: string, expectedCash: number, countedCash: number): DrawerCount {
-  const expected = round2(expectedCash);
-  const counted = round2(countedCash);
+  const expected = roundMoney(expectedCash);
+  const counted = roundMoney(countedCash);
   return {
     date,
     expectedCash: expected,
     countedCash: counted,
-    variance: round2(counted - expected),
+    variance: roundMoney(counted - expected),
     countedAt: new Date().toISOString(),
   };
 }

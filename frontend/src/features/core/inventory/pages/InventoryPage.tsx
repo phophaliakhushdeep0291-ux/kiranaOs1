@@ -174,10 +174,6 @@ const initialForm: MovementForm = {
   sellingMarginPercent: "",
 };
 
-function round2(value: number) {
-  return roundInventoryValue(value);
-}
-
 function isLowStock(product: InventoryItem) {
   if ((product.stockTrackingEnabled ?? product.trackStock ?? true) === false) return false;
   // Both sides are base units; no threshold (0) means never "low" — matches the backend filter.
@@ -357,8 +353,8 @@ export default function InventoryPage() {
       products: rows.length,
       lowStock: (remoteLowStock.length > 0 ? remoteLowStock : localLowStock).length,
       outOfStock: tracked.filter((item) => Number(item.stockBaseQty ?? 0) <= 0).length,
-      totalQuantity: round2(totalQuantity),
-      stockValue: round2(stockValue),
+      totalQuantity: roundInventoryValue(totalQuantity),
+      stockValue: roundInventoryValue(stockValue),
       turnover30: totalQuantity > 0 ? Math.round((soldLast30Days / totalQuantity) * 10) / 10 : 0,
     };
   }, [allInventoryRows, lowStock.data, movementRows]);
@@ -378,7 +374,7 @@ export default function InventoryPage() {
     const damage = movementRows.filter((row) => (row.action ?? row.type) === "damage").length;
     const purchasePaidTotal = purchaseRows.reduce((sum, row) => sum + purchasePaid(row), 0);
     const purchaseDueTotal = purchaseRows.reduce((sum, row) => sum + purchaseDue(row), 0);
-    return { purchases, sales, damage, purchasePaidTotal: round2(purchasePaidTotal), purchaseDueTotal: round2(purchaseDueTotal) };
+    return { purchases, sales, damage, purchasePaidTotal: roundInventoryValue(purchasePaidTotal), purchaseDueTotal: roundInventoryValue(purchaseDueTotal) };
   }, [movementRows]);
 
 
@@ -440,7 +436,7 @@ export default function InventoryPage() {
   const selectedCostRateUnit = purchaseConversionToBase
     ? selectedProductSimpleUnit
     : selectedProduct?.rateUnit ?? selectedProduct?.unit ?? selectedProduct?.displayUnit ?? selectedProductSimpleUnit;
-  const currentAverageCost = round2(Number(selectedProduct?.averageCostPrice ?? selectedProduct?.costPrice ?? selectedProduct?.costPerRateUnit ?? 0));
+  const currentAverageCost = roundInventoryValue(Number(selectedProduct?.averageCostPrice ?? selectedProduct?.costPrice ?? selectedProduct?.costPerRateUnit ?? 0));
   const purchaseQuantity = Math.max(Number(form.quantity) || 0, 0);
   const priceSuggestions = calculateInventoryPriceSuggestions({
     currentStockBaseQty: Number(selectedProduct?.stockBaseQty ?? 0),
@@ -473,15 +469,15 @@ export default function InventoryPage() {
     }
     return [...options.entries()].map(([value, label]) => ({ value, label }));
   }, [selectedProduct]);
-  const purchaseBillAmount = form.billAmount ? round2(Number(form.billAmount)) : round2(purchaseQuantity * (purchaseUnitCost || 0));
+  const purchaseBillAmount = form.billAmount ? roundInventoryValue(Number(form.billAmount)) : roundInventoryValue(purchaseQuantity * (purchaseUnitCost || 0));
   const purchasePaidAmount = form.movementType === "purchase"
     ? form.purchasePaymentStatus === "due"
       ? 0
       : form.purchasePaymentStatus === "paid"
         ? purchaseBillAmount
-        : round2(Number(form.purchasePaidAmount || 0))
+        : roundInventoryValue(Number(form.purchasePaidAmount || 0))
     : 0;
-  const purchaseDueAmount = form.movementType === "purchase" ? Math.max(0, round2(purchaseBillAmount - purchasePaidAmount)) : 0;
+  const purchaseDueAmount = form.movementType === "purchase" ? Math.max(0, roundInventoryValue(purchaseBillAmount - purchasePaidAmount)) : 0;
 
   function applyMarginPrices() {
     setForm((current) => ({
@@ -518,7 +514,7 @@ export default function InventoryPage() {
       const qty = inventoryDisplayQuantity(item);
       const cost = inventoryAverageUnitCost(item);
       const status = Number(item.stockBaseQty ?? 0) <= 0 ? "Out of stock" : isLowStock(item) ? "Low stock" : "In stock";
-      return [item.name, item.sku ?? item.barcode ?? "", item.category ?? "", item.brand ?? "", unit, qty, cost, round2(qty * cost), status];
+      return [item.name, item.sku ?? item.barcode ?? "", item.category ?? "", item.brand ?? "", unit, qty, cost, roundInventoryValue(qty * cost), status];
     });
     const csv = [header, ...lines]
       .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
