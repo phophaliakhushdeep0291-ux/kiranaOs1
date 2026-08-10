@@ -16,6 +16,38 @@ const REFRESH_TOKEN_TTL_DAYS = 30;
 const AUTH_TOKEN_BYTES = 32;
 const EMAIL_VERIFICATION_TTL_HOURS = 24;
 const PASSWORD_RESET_TTL_MINUTES = 30;
+const staffInviteLocks = new Map();
+
+function usesPostgresDatabase() {
+  return /^postgres(?:ql)?:\/\//i.test(env.DATABASE_URL || "");
+}
+
+async function withProcessStaffInviteLock(shopId, work) {
+  const previous = staffInviteLocks.get(shopId) ?? Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  const tail = previous.then(() => current);
+  staffInviteLocks.set(shopId, tail);
+  await previous;
+  try {
+    return await work();
+  } finally {
+    release();
+    if (staffInviteLocks.get(shopId) === tail) staffInviteLocks.delete(shopId);
+  }
+}
+
+async function withStaffInviteTransaction(shopId, work) {
+  return withProcessStaffInviteLock(shopId, () => db.$transaction(async (tx) => {
+    if (usesPostgresDatabase()) {
+      await tx.$queryRawUnsafe(
+        "SELECT pg_advisory_xact_lock(hashtext($1))::text AS lock_result",
+        `staff-invite:${shopId}`,
+      );
+    }
+    return work(tx);
+  }));
+}
 
 export async function registerShop({ shopName, ownerName, city, address, mobile, email, password, ownerPin, gstNumber, phone, businessType }, reqMeta = {}) {
   assertBusinessTypeOffered(businessType);
@@ -518,33 +550,33 @@ export async function setStaffLocationAssignments(shopId, staffId, locations, re
 }
 
 export async function inviteStaff(shopId, { name, mobile, email, password, role = "staff" }, requestingUserId, reqMeta = {}) {
-  await requireFeatureAccess(shopId, "staff_login");
   if (role === "owner") {
     const err = new AppError("Owner role cannot be invited through staff management", 400);
     err.code = "OWNER_ROLE_NOT_INVITABLE";
     throw err;
   }
 
-  const limit = await canAddStaff(shopId);
-  if (!limit.allowed) {
-    const err = new AppError("Staff limit exceeded for current plan", 403);
-    err.code = "STAFF_LIMIT_EXCEEDED";
-    err.meta = limit;
-    throw err;
-  }
-
   const normalizedEmail = normalizeEmail(email);
-  const existing = await db.user.findFirst({
-    where: {
-      shopId,
-      disabledAt: null,
-      OR: [mobile ? { mobile } : null, normalizedEmail ? { email: normalizedEmail } : null].filter(Boolean),
-    },
-  });
-  if (existing) throw new AppError("A user with this mobile or email already exists in your shop", 409, "STAFF_IDENTITY_EXISTS");
-
   const passwordHash = await bcrypt.hash(password, 10);
-  const user = await db.$transaction(async (tx) => {
+  const user = await withStaffInviteTransaction(shopId, async (tx) => {
+    await requireFeatureAccess(shopId, "staff_login", tx);
+    const limit = await canAddStaff(shopId, tx);
+    if (!limit.allowed) {
+      const err = new AppError("Staff limit exceeded for current plan", 403);
+      err.code = "STAFF_LIMIT_EXCEEDED";
+      err.meta = limit;
+      throw err;
+    }
+
+    const existing = await tx.user.findFirst({
+      where: {
+        shopId,
+        disabledAt: null,
+        OR: [mobile ? { mobile } : null, normalizedEmail ? { email: normalizedEmail } : null].filter(Boolean),
+      },
+    });
+    if (existing) throw new AppError("A user with this mobile or email already exists in your shop", 409, "STAFF_IDENTITY_EXISTS");
+
     const created = await tx.user.create({
       data: { shopId, name, mobile, email: normalizedEmail, passwordHash, role },
     });

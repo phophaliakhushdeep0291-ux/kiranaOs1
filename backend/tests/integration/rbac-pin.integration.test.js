@@ -2,6 +2,7 @@ import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { activateDeviceViaApi, billPayload, createCustomer, createProduct, createStaff, createTenant, customerPayload, login, productPayload } from "./factories.js";
+import * as authService from "../../src/modules/auth/auth.service.js";
 
 const ctx = await createIntegrationContext();
 
@@ -175,6 +176,37 @@ if (ctx.skip) {
         body: { name: "Unexpected owner rewrite" },
       }), 403);
       assert.equal(response.code, "OWNER_NOT_EDITABLE");
+    });
+
+    test("simultaneous staff invitations cannot exceed the plan seat limit", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { planCode: "growth" } });
+
+      const responses = await Promise.allSettled(Array.from({ length: 6 }, (_, index) => authService.inviteStaff(
+        tenant.shop.id,
+        {
+          name: `Concurrent Staff ${index + 1}`,
+          mobile: String(9000000100 + index),
+          password: "StaffPass123",
+          role: "staff",
+        },
+        tenant.owner.id,
+      )));
+
+      const successes = responses.filter((response) => response.status === "fulfilled");
+      const rejected = responses.filter((response) => response.status === "rejected");
+      assert.equal(successes.length, 5, JSON.stringify(responses));
+      assert.equal(rejected.length, 1, JSON.stringify(responses));
+      assert.equal(rejected[0].reason?.code, "STAFF_LIMIT_EXCEEDED");
+      assert.equal(rejected[0].reason?.meta?.staffCount, 5);
+      assert.equal(rejected[0].reason?.meta?.maxStaff, 5);
+
+      const [staffCount, auditCount] = await Promise.all([
+        ctx.db.user.count({ where: { shopId: tenant.shop.id, role: { in: ["staff", "admin"] } } }),
+        ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "STAFF_CREATED" } }),
+      ]);
+      assert.equal(staffCount, 5, "the database must contain no over-limit sixth seat");
+      assert.equal(auditCount, 5, "each admitted seat must have exactly one durable audit row");
     });
 
     test("customer DELETE without owner PIN fails for staff", async () => {

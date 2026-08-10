@@ -1,7 +1,7 @@
 # Bug Backlog
 
 Status: Active  
-Last triage: 2026-08-10
+Last triage: 2026-08-11
 
 ## Severity and workflow
 
@@ -49,6 +49,8 @@ States: `New -> Reproduced -> In progress -> Fixed -> Verified -> Closed`; use `
 | BUG-031 | P1 | Verified | QUAL-003, QUAL-004 | A cold route import could leave Customers/Udhar on a long loading fallback, while the 12-second boot guard could show a fatal timeout just before a slow development start completed. | Billing, Customers and Udhar now share cached route loaders, warm during dashboard idle time and on pointer/focus/touch intent. The HTML shell renders an immediate neutral startup state and reserves the fatal timeout for 20 seconds while still surfacing real script/rejection failures immediately. Live desktop and 390x844 checks opened Customers and Udhar without the old fallback, retained the correct ₹354 balance and had no horizontal overflow; focused route/boot tests and the full production gate pass. |
 | BUG-032 | P1 | Verified | QUAL-002, QUAL-005 | Customer statement printouts emitted translation calls such as `{t("customers.ledger.udharAmount")}` as literal text; generated customer/order/report HTML also inserted names, notes and product text without escaping. | Both Khata statement paths now interpolate the active language and every dynamic print cell passes through the shared HTML escaper. The same protection covers public QR-order slips and Daily Closing product rows, preventing print-window markup injection from customer-entered content. Focused coverage passes 17/17 and the exact-current production gate passes 1,350 tests, typecheck, translation parity, build, bundle budgets and production-app checks. |
 | BUG-033 | P2 | Verified | QUAL-005 | The persistent mobile subscription banner rendered `Owner details` only 36px high, so every affected phone page retained an undersized global action even after its page-specific controls passed. | The shared banner and action now use a 44px minimum height. Focused regression coverage passes 9/9; live 390x844 Sync Status QA measures Owner details at 118x44, diagnostics refresh at 44x44, document width 390/390, zero horizontal overflow and zero remaining undersized active controls. |
+
+| BUG-034 | P1 | Verified | ADM-001, QUAL-002, QUAL-004 | Staff administration could report locally cached/offline changes as if access had changed on the server; backend staff mutations did not consistently make the owner audit part of the same transaction, a password edit left existing staff sessions active, and simultaneous invitations could pass the plan-seat check together. | Staff create/edit/deactivate is now server-authoritative and the offline cache is read-only. Create, update, role, disable and location-scope mutations require a durable audit inside their transaction; password edits revoke active sessions with `STAFF_PASSWORD_CHANGED`. Staff invitation performs feature, seat, duplicate, create and audit checks under a per-shop lock: SQLite/tests serialize in process and PostgreSQL uses an advisory transaction lock. The isolated owner/RBAC integration passes 17/17 on 2026-08-11, including exactly five admitted Growth seats, one deterministic sixth-seat rejection, five user rows and five `STAFF_CREATED` audits; focused frontend server-authority coverage passes 3/3. |
 
 ## Fixed findings awaiting historical closure
 

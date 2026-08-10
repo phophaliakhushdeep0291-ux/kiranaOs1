@@ -89,6 +89,24 @@ interface DraftTransferLine {
   hsn?: string | null;
 }
 
+interface ReplenishmentSuggestion {
+  destinationLocation: Location;
+  productId: string;
+  productName: string;
+  baseUnit: string;
+  stockBaseQty: number;
+  lowStockThreshold: number;
+  incomingBaseQty: number;
+  projectedBaseQty: number;
+  sourceAvailableBaseQty: number;
+  targetBaseQty: number;
+  recommendedTransferBaseQty: number;
+  supplyLimited: boolean;
+  reasonCode: "out_of_stock" | "below_branch_threshold";
+  explanation: string;
+}
+interface ReplenishmentResponse { generatedAt: string; sourceLocation: Location | null; suggestions: ReplenishmentSuggestion[] }
+
 type RegistrationMode = "inherit" | "distinct" | "unregistered";
 type EWayReviewDecision = "external_reference_recorded" | "not_required_after_review";
 type TransferTreatment = "pending" | "incomplete" | Transfer["gstTreatment"];
@@ -172,6 +190,7 @@ export default function StockTransfersPage() {
 
   const locationsQ = useQuery({ queryKey: ["store-locations"], queryFn: () => apiRequest<LocationsResponse>("/stores") });
   const transfersQ = useQuery({ queryKey: ["stock-transfers"], queryFn: () => apiRequest<Transfer[]>("/stores/transfers?limit=100") });
+  const replenishmentQ = useQuery({ queryKey: ["branch-replenishment-suggestions"], queryFn: () => apiRequest<ReplenishmentResponse>("/stores/replenishment-suggestions") });
   const sourceQ = useQuery({ queryKey: ["location-inventory", fromId], queryFn: () => apiRequest<LocationInventory>(`/stores/${fromId}/inventory`), enabled: Boolean(fromId) });
 
   const locations = (locationsQ.data?.locations ?? []).filter((row) => row.active);
@@ -243,6 +262,18 @@ export default function StockTransfersPage() {
   };
 
   const resetTransfer = () => { setProductId(""); setQuantity(""); setDeclaredTaxableValue(""); setDraftLines([]); setFulfillmentMode("shipment"); setExpectedArrivalDate(""); setCarrierName(""); setTrackingNumber(""); setMovementReason("branch_transfer"); setDocumentNumber(""); setDocumentDate(today()); setNote(""); setOwnerPin(""); };
+  const prepareReplenishment = (suggestion: ReplenishmentSuggestion) => {
+    const sourceLocationId = replenishmentQ.data?.sourceLocation?.id;
+    if (!sourceLocationId) return;
+    resetTransfer();
+    setFromId(sourceLocationId);
+    setToId(suggestion.destinationLocation.id);
+    setProductId(suggestion.productId);
+    setQuantity(String(suggestion.recommendedTransferBaseQty));
+    setFulfillmentMode("shipment");
+    setNote(`Threshold replenishment for ${suggestion.destinationLocation.name}`);
+    setTransferOpen(true);
+  };
   const transferMutation = useMutation({
     mutationFn: () => apiRequest<Transfer>("/stores/transfers", {
       method: "POST",
@@ -264,13 +295,13 @@ export default function StockTransfersPage() {
         ownerPin,
       }),
     }),
-    onSuccess: (data) => { void queryClient.invalidateQueries({ queryKey: ["stock-transfers"] }); void queryClient.invalidateQueries({ queryKey: ["location-inventory"] }); setTransferOpen(false); resetTransfer(); toast({ title: data.status === "completed" ? "Stock transfer completed" : "Shipment dispatched", description: data.status === "completed" ? `${data.referenceNo} recorded in both locations.` : `${data.referenceNo} reserved at source until destination receipt.` }); },
+    onSuccess: (data) => { void queryClient.invalidateQueries({ queryKey: ["stock-transfers"] }); void queryClient.invalidateQueries({ queryKey: ["location-inventory"] }); void queryClient.invalidateQueries({ queryKey: ["branch-replenishment-suggestions"] }); setTransferOpen(false); resetTransfer(); toast({ title: data.status === "completed" ? "Stock transfer completed" : "Shipment dispatched", description: data.status === "completed" ? `${data.referenceNo} recorded in both locations.` : `${data.referenceNo} reserved at source until destination receipt.` }); },
     onError: (error: Error) => toast({ title: "Transfer not completed", description: error.message, variant: "destructive" }),
   });
   const resetLocation = () => { setLocationName(""); setLocationCode(""); setLocationCity(""); setLocationAddress(""); setRegistrationMode("inherit"); setLocationGstin(""); setLocationLegalName(""); setLocationTradeName(""); };
   const locationMutation = useMutation({
     mutationFn: () => apiRequest<Location>("/stores", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: locationName, code: locationCode, city: locationCity || undefined, address: locationAddress || undefined, ...(registrationMode === "distinct" ? { gstNumber: locationGstin, gstLegalName: locationLegalName || undefined, gstTradeName: locationTradeName || undefined, gstRegistrationType: "regular" } : registrationMode === "unregistered" ? { gstNumber: null, gstRegistrationType: "unregistered" } : {}) }) }),
-    onSuccess: (data) => { void queryClient.invalidateQueries({ queryKey: ["store-locations"] }); setLocationOpen(false); resetLocation(); toast({ title: "Store location created", description: data.taxRegistration?.formatValid ? `${data.name} uses ${data.taxRegistration.gstin}. Format validated locally.` : `${data.name} can now receive stock.` }); },
+    onSuccess: (data) => { void queryClient.invalidateQueries({ queryKey: ["store-locations"] }); void queryClient.invalidateQueries({ queryKey: ["branch-replenishment-suggestions"] }); setLocationOpen(false); resetLocation(); toast({ title: "Store location created", description: data.taxRegistration?.formatValid ? `${data.name} uses ${data.taxRegistration.gstin}. Format validated locally.` : `${data.name} can now receive stock.` }); },
     onError: (error: Error) => toast({ title: "Location not created", description: error.message, variant: "destructive" }),
   });
   const resetReview = () => {
@@ -327,6 +358,7 @@ export default function StockTransfersPage() {
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ["stock-transfers"] });
       void queryClient.invalidateQueries({ queryKey: ["location-inventory"] });
+      void queryClient.invalidateQueries({ queryKey: ["branch-replenishment-suggestions"] });
       resetReceipt();
       toast({ title: data.status === "completed" ? "Shipment fully received" : "Partial receipt recorded", description: data.status === "completed" ? "Every line is now available at the destination." : `${data.receiptSummary.openLineCount} line${data.receiptSummary.openLineCount === 1 ? " remains" : "s remain"} in transit.` });
     },
@@ -343,6 +375,7 @@ export default function StockTransfersPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["stock-transfers"] });
       void queryClient.invalidateQueries({ queryKey: ["location-inventory"] });
+      void queryClient.invalidateQueries({ queryKey: ["branch-replenishment-suggestions"] });
       resetCancellation();
       toast({ title: "Shipment cancelled", description: "Only the unreceived remainder was returned to source availability; received stock was retained." });
     },
@@ -356,6 +389,7 @@ export default function StockTransfersPage() {
   const cancellationReady = cancelReason.trim().length >= 8 && cancelOwnerPin.length === 4;
   const locationReady = locationName.trim().length >= 2 && locationCode.trim().length >= 2 && (registrationMode !== "distinct" || locationGstin.length === 15);
   const usage = locationsQ.data?.usage;
+  const replenishmentSuggestions = replenishmentQ.data?.suggestions ?? [];
   return (
     <div className="space-y-5 pb-10">
       <section className="overflow-hidden rounded-[24px] border border-blue-100 bg-[radial-gradient(circle_at_top_right,#dbeafe_0,transparent_38%),linear-gradient(135deg,#071a3b,#0b3574)] p-6 text-white shadow-[0_24px_60px_rgba(15,49,104,0.18)] sm:p-8">
@@ -378,6 +412,26 @@ export default function StockTransfersPage() {
         <div className={`${card} p-5`}><p className="text-xs font-bold uppercase tracking-wider text-slate-500">E-way reviews</p><div className="mt-2 flex items-center gap-2 text-3xl font-black text-slate-900">{eWayReviewCount > 0 && <TriangleAlert className="text-amber-500" size={24} />}{eWayReviewCount}</div><p className="mt-1 text-xs text-slate-500">Applicability review, not a submission claim</p></div>
         <div className={`${card} p-5`}><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Allocation health</p><div className="mt-2 flex items-center gap-2 text-xl font-black text-slate-900">{allocationWarnings.length ? <><TriangleAlert className="text-amber-500" /> Review</> : <><CheckCircle2 className="text-emerald-500" /> Balanced</>}</div><p className="mt-1 text-xs text-slate-500">Primary stock equals total less branches</p></div>
       </div>
+
+      <section className={`${card} overflow-hidden`}>
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div><h2 className="flex items-center gap-2 text-base font-black text-slate-900"><ClipboardCheck className="text-blue-600" size={19} /> Branch replenishment queue</h2><p className="mt-1 text-xs leading-5 text-slate-500">Deterministic suggestions use each branch threshold, open incoming shipments, configured reorder batch, and currently available primary stock. Nothing moves without owner review.</p></div>
+          {replenishmentQ.data?.sourceLocation && <span className="shrink-0 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-800">Source: {replenishmentQ.data.sourceLocation.name}</span>}
+        </div>
+        {replenishmentQ.isLoading ? <div className="p-6 text-sm text-slate-500">Checking branch thresholds…</div> : replenishmentQ.isError ? <div className="p-6 text-sm text-rose-700">Replenishment suggestions could not be loaded. Existing stock and transfers remain available.</div> : replenishmentSuggestions.length === 0 ? (
+          <div className="flex items-center gap-3 p-6"><span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><CheckCircle2 size={21} /></span><div><p className="text-sm font-black text-slate-900">Every branch is covered</p><p className="mt-1 text-xs text-slate-500">No below-threshold branch needs primary stock after counting open incoming shipments.</p></div></div>
+        ) : (
+          <div className="grid gap-3 p-4 lg:grid-cols-2">
+            {replenishmentSuggestions.slice(0, 8).map((suggestion) => (
+              <article key={`${suggestion.destinationLocation.id}:${suggestion.productId}`} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-black text-slate-900">{suggestion.productName}</p><p className="mt-1 truncate text-xs font-semibold text-blue-700">{suggestion.destinationLocation.name}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${suggestion.reasonCode === "out_of_stock" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{suggestion.reasonCode === "out_of_stock" ? "Out of stock" : "Below threshold"}</span></div>
+                <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-white p-3 text-[10px] text-slate-500"><span>At branch<br /><b className="text-slate-900">{suggestion.stockBaseQty} {suggestion.baseUnit}</b></span><span>Incoming<br /><b className="text-blue-700">{suggestion.incomingBaseQty} {suggestion.baseUnit}</b></span><span>Primary free<br /><b className="text-slate-900">{suggestion.sourceAvailableBaseQty} {suggestion.baseUnit}</b></span></div>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[11px] text-slate-500">Recommended movement</p><p className="text-lg font-black text-slate-900">{suggestion.recommendedTransferBaseQty} {suggestion.baseUnit}</p>{suggestion.supplyLimited && <p className="text-[10px] font-bold text-amber-700">Limited by source availability</p>}</div><Button size="sm" onClick={() => prepareReplenishment(suggestion)}><ArrowRightLeft size={14} /> Prepare transfer</Button></div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className={`${card} p-5`}>
         <div className="mb-4 flex items-center justify-between"><div><h2 className="text-base font-black text-slate-900">Store network</h2><p className="text-xs text-slate-500">Operational locations and locally validated registration identity</p></div><MapPin className="text-blue-600" size={20} /></div>

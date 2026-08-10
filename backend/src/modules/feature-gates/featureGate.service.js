@@ -83,8 +83,8 @@ export async function requirePlanAtLeastAccess(shopId, planCode) {
   return effective;
 }
 
-export async function getPlanLimits(shopId) {
-  return (await getEffectivePlan(shopId)).limits;
+export async function getPlanLimits(shopId, client = db) {
+  return (await getEffectivePlan(shopId, client)).limits;
 }
 
 export async function canUseDevice(shopId) {
@@ -93,9 +93,9 @@ export async function canUseDevice(shopId) {
   return { allowed: activeCount < limits.maxDevices, activeCount, maxDevices: limits.maxDevices };
 }
 
-export async function canAddStaff(shopId) {
-  const limits = await getPlanLimits(shopId);
-  const staffCount = await db.user.count({ where: { shopId, role: { in: ["staff", "admin"] } } });
+export async function canAddStaff(shopId, client = db) {
+  const limits = await getPlanLimits(shopId, client);
+  const staffCount = await client.user.count({ where: { shopId, role: { in: ["staff", "admin"] } } });
   return { allowed: staffCount < limits.maxStaff, staffCount, maxStaff: limits.maxStaff };
 }
 

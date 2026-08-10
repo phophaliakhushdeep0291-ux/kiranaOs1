@@ -1,6 +1,7 @@
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
 import { parseOrThrow } from "@/lib/offline/actions/utils";
 import { writeAuditLog } from "@/features/core/audit-logs/local-actions";
+import { verifyOwnerPin } from "@/features/core/settings/api";
 
 export interface DataExportApprovalInput {
   ownerPin: string;
@@ -19,6 +20,10 @@ export async function recordDataExportLocalFirst(input: DataExportApprovalInput)
     reason: input.reason,
     entityId: input.reportType,
   });
+
+  // Export is irreversible disclosure, so a four-digit shape check is not
+  // authorization. Verify with the server before the browser creates a file.
+  await verifyOwnerPin(input.ownerPin);
 
   return writeAuditLog({
     action: "data_exported",

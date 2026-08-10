@@ -165,7 +165,7 @@ async function inventorySnapshot(client, shopId, location) {
     client.product.findMany({
       where: { shopId, deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, barcode: true, sku: true, baseUnit: true, displayUnit: true, stockBaseQty: true, lowStockThreshold: true, hsn: true, gstRate: true },
+      select: { id: true, name: true, barcode: true, sku: true, baseUnit: true, displayUnit: true, stockBaseQty: true, lowStockThreshold: true, reorderLevel: true, hsn: true, gstRate: true },
     }),
     client.locationStock.findMany({ where: { shopId }, select: { locationId: true, productId: true, stockBaseQty: true, lowStockThreshold: true } }),
     client.stockTransferItem.findMany({
@@ -206,6 +206,90 @@ export async function getLocationInventory(shopId, locationId) {
   const location = await db.storeLocation.findFirst({ where: { id: locationId, shopId } });
   if (!location) throw new AppError("Store location not found", 404, "STORE_LOCATION_NOT_FOUND");
   return { location: locationWithRegistrationStatus(location), products: await inventorySnapshot(db, shopId, location) };
+}
+
+export async function getBranchReplenishmentSuggestions(shopId, user = null) {
+  await ensurePrimaryLocation(shopId);
+  const accessibleIds = user ? await accessibleLocationIds(shopId, user.userId, user.role) : null;
+  const locations = await db.storeLocation.findMany({
+    where: { shopId, active: true, ...(accessibleIds && { id: { in: accessibleIds } }) },
+    orderBy: [{ isPrimary: "desc" }, { name: "asc" }],
+  });
+  const primary = locations.find((location) => location.isPrimary);
+  const destinations = locations.filter((location) => !location.isPrimary);
+  if (!primary || destinations.length === 0) {
+    return { generatedAt: new Date().toISOString(), sourceLocation: primary ? locationWithRegistrationStatus(primary) : null, suggestions: [] };
+  }
+
+  const [primaryInventory, incomingItems] = await Promise.all([
+    inventorySnapshot(db, shopId, primary),
+    db.stockTransferItem.findMany({
+      where: {
+        transfer: {
+          shopId,
+          toLocationId: { in: destinations.map((location) => location.id) },
+          status: { in: ["in_transit", "partially_received"] },
+        },
+      },
+      select: {
+        productId: true,
+        quantityBaseQty: true,
+        receivedBaseQty: true,
+        transfer: { select: { toLocationId: true } },
+      },
+    }),
+  ]);
+  const primaryByProduct = new Map(primaryInventory.map((product) => [product.id, product]));
+  const incomingByLocationProduct = new Map();
+  for (const item of incomingItems) {
+    const key = `${item.transfer.toLocationId}:${item.productId}`;
+    const remaining = Math.max(0, Number(item.quantityBaseQty) - Number(item.receivedBaseQty));
+    incomingByLocationProduct.set(key, (incomingByLocationProduct.get(key) ?? 0) + remaining);
+  }
+
+  const destinationInventories = await Promise.all(destinations.map(async (location) => ({
+    location,
+    products: await inventorySnapshot(db, shopId, location),
+  })));
+  const suggestions = [];
+  for (const { location, products } of destinationInventories) {
+    for (const product of products) {
+      const threshold = Number(product.lowStockThreshold || 0);
+      if (!(threshold > 0) || Number(product.stockBaseQty) > threshold) continue;
+      const incomingBaseQty = Number(incomingByLocationProduct.get(`${location.id}:${product.id}`) ?? 0);
+      const projectedBaseQty = Number(product.stockBaseQty) + incomingBaseQty;
+      if (projectedBaseQty > threshold) continue;
+      const sourceAvailableBaseQty = Math.max(0, Number(primaryByProduct.get(product.id)?.stockBaseQty ?? 0));
+      if (!(sourceAvailableBaseQty > 0)) continue;
+      const configuredBatch = Math.max(0, Number(product.reorderLevel || 0));
+      const targetBaseQty = threshold + Math.max(threshold, configuredBatch);
+      const requestedBaseQty = Math.max(0, targetBaseQty - projectedBaseQty);
+      const recommendedTransferBaseQty = Math.min(sourceAvailableBaseQty, requestedBaseQty);
+      if (!(recommendedTransferBaseQty > 0)) continue;
+      suggestions.push({
+        destinationLocation: locationWithRegistrationStatus(location),
+        productId: product.id,
+        productName: product.name,
+        baseUnit: product.baseUnit,
+        stockBaseQty: Number(product.stockBaseQty),
+        lowStockThreshold: threshold,
+        incomingBaseQty,
+        projectedBaseQty,
+        sourceAvailableBaseQty,
+        targetBaseQty,
+        recommendedTransferBaseQty,
+        supplyLimited: recommendedTransferBaseQty < requestedBaseQty,
+        reasonCode: Number(product.stockBaseQty) <= 0 ? "out_of_stock" : "below_branch_threshold",
+        explanation: `${location.name} has ${Number(product.stockBaseQty)} ${product.baseUnit}, ${incomingBaseQty} incoming, and a ${threshold} ${product.baseUnit} low-stock threshold. Move ${recommendedTransferBaseQty} ${product.baseUnit} from ${primary.name}${recommendedTransferBaseQty < requestedBaseQty ? " (limited by source availability)" : ""}.`,
+      });
+    }
+  }
+  suggestions.sort((left, right) => {
+    const leftRatio = left.projectedBaseQty / left.lowStockThreshold;
+    const rightRatio = right.projectedBaseQty / right.lowStockThreshold;
+    return leftRatio - rightRatio || left.destinationLocation.name.localeCompare(right.destinationLocation.name) || left.productName.localeCompare(right.productName);
+  });
+  return { generatedAt: new Date().toISOString(), sourceLocation: locationWithRegistrationStatus(primary), suggestions };
 }
 
 function normalizeItems(items) {

@@ -72,55 +72,6 @@ export async function readCustomerLedgerEntries(customerId: string): Promise<Cus
   });
 }
 
-export async function refreshCustomerBalanceFromLedger(customerId: string): Promise<number> {
-  // readCustomerLedgerEntries reads customers and id_mappings for itself, so
-  // these three full-table reads overlap rather than queueing behind each other.
-  const [ledger, customers, mappings] = await Promise.all([
-    readCustomerLedgerEntries(customerId),
-    offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []),
-    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
-  ]);
-  const balance = roundMoney(Math.max(0, calculateLedgerBalance(ledger)));
-  const customer = customers.find((row) => expandIdsWithMappings(customerIdentitySet(row), mappings).has(customerId));
-  if (customer) {
-    const updated = {
-      ...customer,
-      type: balance > 0 ? "udhar" : customer.type ?? "regular",
-      udharAmount: balance,
-      totalUdhar: balance,
-      updatedAt: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      sync_status: customer.sync_status === "synced" ? "synced" : "pending_sync",
-    };
-    await offlineDB.put("customers", updated);
-    upsertCachedListItem<Customer & Record<string, unknown>>(CUSTOMER_CACHE_KEY, updated, 1000);
-  }
-  return balance;
-}
-
-export async function appendCustomerLedgerEntry(entry: Omit<CustomerLedgerEntry, "id" | "createdAt" | "created_at" | "entry_at"> & { id?: string; entry_at?: string; createdAt?: string; created_at?: string }): Promise<CustomerLedgerEntry> {
-  const now = new Date().toISOString();
-  const customerId = entry.customerId ?? entry.customer_id;
-  const row = makeLocalEntity({
-    ...entry,
-    id: entry.id ?? createLocalId("ledger"),
-    customerId,
-    customer_id: customerId,
-    entry_at: entry.entry_at ?? now,
-    createdAt: entry.createdAt ?? now,
-    created_at: entry.created_at ?? now,
-  }, "ledger_entry", "pending_sync") as unknown as CustomerLedgerEntry;
-
-  await offlineDB.put("customer_ledger", row);
-  upsertCachedListItem<CustomerLedgerEntry>(LEDGER_CACHE_KEY, row, 1500);
-  if (typeof customerId === "string" && customerId.length > 0) {
-    const balance = await refreshCustomerBalanceFromLedger(customerId);
-    await offlineDB.put("customer_ledger", { ...row, balance_after: balance, sync_status: "pending_sync" });
-  }
-  emitLocalDataChanged({ type: "ledger", id: row.id, customerId, action: "appended" });
-  return row;
-}
-
 export interface CreateLedgerAdjustmentInput {
   customerId: string;
   amount: number;

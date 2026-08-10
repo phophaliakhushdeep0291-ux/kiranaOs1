@@ -12,6 +12,7 @@ const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated());
 router.get("/", controller.listLocations);
 router.get("/transfers", requireFeature("multi_store"), controller.transfers);
+router.get("/replenishment-suggestions", requireFeature("multi_store"), controller.replenishmentSuggestions);
 router.get("/:id/inventory", requireLocationParamAccess("view"), controller.inventory);
 router.post("/", requireRole("owner", "admin"), requireFeature("multi_store"), validate(createLocationSchema), controller.createLocation);
 router.patch("/:id", requireRole("owner", "admin"), requireFeature("multi_store"), validate(updateLocationSchema), controller.updateLocation);

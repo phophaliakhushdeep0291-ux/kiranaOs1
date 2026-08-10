@@ -3,7 +3,7 @@ import { getOfflineScope } from "@/lib/offline/context";
 import { billCreationSchema, ownerPinRequiredActionSchema } from "@/lib/validation";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { createLocalId, emitLocalDataChanged, normaliseInstantCacheValue, readInstantCache, upsertCachedListItem, writeInstantMemoryCache } from "@/lib/offline/instant-cache";
-import { buildOutboxOperation, enqueueOutboxOperation } from "@/features/core/sync/outbox";
+import { buildOutboxOperation } from "@/features/core/sync/outbox";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import { applyRoundOff } from "@/lib/money";
 import { normaliseLocalCustomer } from "@/features/core/customers/local-actions";
@@ -25,7 +25,6 @@ function readSensitiveBillActions(input: BillInput): SensitiveBillAction[] {
     .map((action) => String(action).trim())
     .filter(Boolean)));
 }
-
 function validateSensitiveBillApproval(input: BillInput, actions: SensitiveBillAction[]) {
   if (actions.length === 0) return;
   const action = actions.includes("large_discount") ? "large_discount" : "price_below_minimum";
@@ -806,21 +805,5 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   emitLocalDataChanged({ type: "bill", id: billId, action: "created" });
   updatedProducts.forEach((product) => emitLocalDataChanged({ type: "product", id: product.id, action: "stock-updated" }));
   if (ledgerEntry) emitLocalDataChanged({ type: "ledger", id: ledgerEntry.id, customerId: billData.customerId, action: "appended" });
-  return bill;
-}
-
-export async function cancelBillLocalFirst(id: string, reason?: string): Promise<Bill> {
-  const now = new Date().toISOString();
-  const existing = await offlineDB.getAll<Bill>("bills").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
-  const bill = withBillAliases({ ...(existing ?? { id, billNo: id, billType: "normal_sale", status: "pending_sync" }), status: "cancelled", updatedAt: now });
-  await offlineDB.put("bills", { ...bill, cancelled_at: now, deleted_at: null, sync_status: "pending_sync", isSynced: false, is_synced: false });
-  upsertCachedListItem<Bill>(BILL_CACHE_KEY, { ...bill, isSynced: false, is_synced: false }, 500);
-  await enqueueOutboxOperation({
-    entity_type: "bill",
-    entity_id: id,
-    operation_type: "CANCEL_BILL_PENDING",
-    payload: { billId: id, reason },
-  });
-  emitLocalDataChanged({ type: "bill", id, action: "cancelled" });
   return bill;
 }
