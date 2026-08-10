@@ -95,7 +95,9 @@ export async function canUseDevice(shopId) {
 
 export async function canAddStaff(shopId, client = db) {
   const limits = await getPlanLimits(shopId, client);
-  const staffCount = await client.user.count({ where: { shopId, role: { in: ["staff", "admin"] } } });
+  const staffCount = await client.user.count({
+    where: { shopId, disabledAt: null, role: { in: ["staff", "admin"] } },
+  });
   return { allowed: staffCount < limits.maxStaff, staffCount, maxStaff: limits.maxStaff };
 }
 

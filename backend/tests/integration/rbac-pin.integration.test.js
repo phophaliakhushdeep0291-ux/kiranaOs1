@@ -207,6 +207,32 @@ if (ctx.skip) {
       ]);
       assert.equal(staffCount, 5, "the database must contain no over-limit sixth seat");
       assert.equal(auditCount, 5, "each admitted seat must have exactly one durable audit row");
+
+      const disabledStaff = successes[0].value;
+      const disabled = await authService.removeStaff(
+        tenant.shop.id,
+        disabledStaff.id,
+        tenant.owner.id,
+      );
+      assert.equal(disabled.success, true);
+      const replacement = await authService.inviteStaff(tenant.shop.id, {
+        name: "Replacement Staff",
+        mobile: "9000000199",
+        password: "StaffPass123",
+        role: "staff",
+      }, tenant.owner.id);
+      assert.ok(replacement.id);
+
+      const [activeAfterReplacement, historicalStaffRows, createdAudits, disabledAudits] = await Promise.all([
+        ctx.db.user.count({ where: { shopId: tenant.shop.id, disabledAt: null, role: { in: ["staff", "admin"] } } }),
+        ctx.db.user.count({ where: { shopId: tenant.shop.id, role: { in: ["staff", "admin"] } } }),
+        ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "STAFF_CREATED" } }),
+        ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "STAFF_DISABLED" } }),
+      ]);
+      assert.equal(activeAfterReplacement, 5, "a disabled user must release exactly one active plan seat");
+      assert.equal(historicalStaffRows, 6, "deactivation must retain the historical user row");
+      assert.equal(createdAudits, 6);
+      assert.equal(disabledAudits, 1);
     });
 
     test("customer DELETE without owner PIN fails for staff", async () => {

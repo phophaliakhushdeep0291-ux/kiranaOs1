@@ -60,6 +60,11 @@ describe("multi-GSTIN transfer and reporting UI", () => {
       "/cancel",
       "only unreceived quantities return to source availability",
       "Owner PIN approval",
+      "/stores/replenishment-suggestions",
+      "Branch replenishment queue",
+      "open incoming shipments",
+      "Prepare transfer",
+      "Nothing moves without owner review",
     ]) expect(transfers).toContain(contract);
   });
 
