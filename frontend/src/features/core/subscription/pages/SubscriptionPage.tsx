@@ -32,7 +32,13 @@ export default function SubscriptionPage() {
     try {
       await subscriptionRefreshLocalFirst(snapshot?.planCode ?? "starter");
       await refresh();
-      toast({ title: "Subscription refresh queued", description: "It will sync when cloud backup is allowed and internet is available." });
+      toast({ title: "Subscription refreshed", description: "Plan and payment status were confirmed by the server." });
+    } catch (error) {
+      toast({
+        title: "Could not refresh subscription",
+        description: error instanceof Error ? error.message : "Reconnect and try again.",
+        variant: "destructive",
+      });
     } finally {
       setRefreshing(false);
     }

@@ -530,6 +530,37 @@ describe("front office local-first cashier flow", () => {
     expect(rows("sync_outbox").find((row) => row.operation_type === "REVERSE_SUPPLIER_PAYMENT")?.payload).toEqual(expect.objectContaining({ paymentId: lastPayment.id }));
   });
 
+  it("serializes stale supplier payments so two tabs cannot overpay one purchase", async () => {
+    await recordPurchaseLocalFirst({
+      productId: "product_sugar",
+      quantity: 6,
+      enteredUnit: "kg",
+      supplierName: "Govind Traders",
+      invoiceNumber: "INV-RACE",
+      billAmount: 300,
+      purchasePaymentStatus: "due",
+      purchasePaidAmount: 0,
+      purchaseDueAmount: 300,
+    });
+    const movement = rows("inventory_movements").find((row) => row.action === "purchase");
+    const stale = purchaseDisplayRow({ id: String(movement?.id), amount: 300, paid: 0, due: 300 });
+
+    const results = await Promise.allSettled([
+      recordPurchasePaymentLocal(stale, { amount: 200, mode: "cash" }),
+      recordPurchasePaymentLocal(stale, { amount: 200, mode: "upi" }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(String((results.find((result) => result.status === "rejected") as PromiseRejectedResult).reason)).toMatch(/₹100|due amount/i);
+    expect(rows("inventory_movements").find((row) => row.id === movement?.id)).toEqual(expect.objectContaining({
+      purchase_paid_amount: 200,
+      purchase_due_amount: 100,
+    }));
+    expect(rows("payments").filter((row) => row.kind === "supplier_payment")).toHaveLength(1);
+    expect(rows("sync_outbox").filter((row) => row.operation_type === "RECORD_SUPPLIER_PAYMENT")).toHaveLength(1);
+  });
+
   it("keeps udhar unchanged when a bill is hidden or restored from history", async () => {
     const bill = await createBillLocalFirst(billInput());
     expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200 }));
