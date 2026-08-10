@@ -16,11 +16,14 @@ assert.match(pkg.scripts["prisma:deploy"] ?? "", /prisma:deploy:postgres/, "the 
 assert.match(pkg.scripts["deploy:migrate"] ?? "", /deploy:migrate:postgres/, "the generic deploy helper must route to PostgreSQL");
 assert.match(updater, /databaseUrl\.startsWith\("file:"\)/, "the local updater must reject non-SQLite URLs");
 assert.match(updater, /db", "push", "--skip-generate"/, "the local updater must use Prisma schema push");
+assert.match(updater, /"generate", "--generator", "client"/, "local updates must never regenerate the integration-test client");
 assert.doesNotMatch(updater, /accept-data-loss/, "the local updater must never auto-accept destructive changes");
 assert.match(updater, /filename\.includes\("prod"\)/, "the local updater must reject production-looking files");
 assert.match(resetter, /NODE_ENV === "production"/, "the resetter must refuse production mode");
 assert.match(resetter, /\["dev\.db", "test\.db"\]/, "the resetter must allow only explicit local database names");
 assert.match(resetter, /"--force-reset"/, "the explicit reset command must actually rebuild the local schema");
 assert.match(resetter, /"--accept-data-loss"/, "only the explicitly named reset command may accept data loss");
+assert.match(resetter, /"generate", "--generator", "client"/, "local resets must never regenerate the integration-test client");
+assert.match(pkg.scripts["prisma:generate"] ?? "", /--generator client/, "normal client generation must not touch the integration-test engine");
 
 console.log("local-sqlite-schema-workflow.examples.js OK");

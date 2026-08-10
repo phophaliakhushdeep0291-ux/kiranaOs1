@@ -3,6 +3,8 @@ import fs from "node:fs";
 
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const runner = fs.readFileSync("scripts/run-db-example-tests.js", "utf8");
+const setup = fs.readFileSync("scripts/setup-test-db.js", "utf8");
+const certification = fs.readFileSync("scripts/release-certification.js", "utf8");
 
 for (const snippet of [
   "buildTestEnv",
@@ -41,6 +43,8 @@ for (const file of [
   assert.ok(pkg.scripts["test:packaging-db"].includes(file), `test:packaging-db must cover ${file}`);
 }
 assert.ok(pkg.scripts.posttest.includes("test:packaging-db"), "the default backend suite must run DB packaging safety examples");
+assert.match(setup, /generated["'], ["']integration-prisma-client/, "skip-generation checks must validate the isolated client, not the default client");
+assert.match(certification, /id: "backend-tests"[\s\S]*?SKIP_PRISMA_GENERATE: "true"/, "certification must reuse the integration client prepared by backend-source-db");
 
 for (const [name, command] of Object.entries(pkg.scripts)) {
   if (/node tests\/(activity-personalization|audit-timeline|device-health|diagnostics-error-store|incident-report|packaging-mode-guard|per-pack-(?:low-stock|return|stock-in|stock-out|sync-stock)|remote-support(?:-http|-playbooks|-settings)?|sync-diagnostics)\.examples\.js/.test(command)) {

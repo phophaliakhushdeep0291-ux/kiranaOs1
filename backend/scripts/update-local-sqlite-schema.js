@@ -34,7 +34,6 @@ function runPrisma(args) {
 console.log(`Updating local SQLite schema at ${maskDatabaseUrl(databaseUrl)} without destructive acceptance flags.`);
 runPrisma(["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"]);
 if (process.env.SKIP_LOCAL_PRISMA_GENERATE !== "true") {
-  runPrisma(["generate", "--schema", "prisma/schema.prisma"]);
+  runPrisma(["generate", "--generator", "client", "--schema", "prisma/schema.prisma"]);
 }
 console.log("Local SQLite schema is aligned with prisma/schema.prisma.");
-

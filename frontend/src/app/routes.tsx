@@ -15,6 +15,7 @@ import { useScreenTracking } from "@/lib/activity";
 import type { FeatureName } from "@/features/core/subscription/plans";
 import { isPathInBusinessProfile, profileHasCapability, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { PermissionDenied } from "@/components/shared/PermissionDenied";
+import { loadBillingRoute, loadCustomersRoute, loadUdharRoute } from "./route-preload";
 
 const Login = lazy(() => import("@/features/core/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/core/auth/pages/RegisterPage"));
@@ -26,7 +27,7 @@ const CustomerOrder = lazy(() => import("@/features/core/customer-order/Customer
 const DineInMenu = lazy(() => import("@/features/core/customer-order/DineInMenuPage"));
 const ImportOrder = lazy(() => import("@/features/core/customer-order/ImportOrderPage"));
 const Dashboard = lazy(() => import("@/features/core/dashboard/pages/DashboardPage"));
-const Billing = lazy(() => import("@/features/core/billing/pages/BillingPage"));
+const Billing = lazy(loadBillingRoute);
 const BillsPage = lazy(() => import("@/features/core/bills/pages/BillsPage"));
 const BillDetailPage = lazy(() => import("@/features/core/bills/pages/BillDetailPage"));
 const OrdersReceivedPage = lazy(() => import("@/features/core/orders/pages/OrdersReceivedPage"));
@@ -34,8 +35,8 @@ const SalesOverviewPage = lazy(() => import("@/features/core/sales/pages/SalesOv
 const NewReturnPage = lazy(() => import("@/features/core/returns/pages/NewReturnPage"));
 const Products = lazy(() => import("@/features/core/products/pages/ProductsPage"));
 const ProductPricing = lazy(() => import("@/features/core/pricing/pages/ProductPricingPage"));
-const Customers = lazy(() => import("@/features/core/customers/pages/CustomersPage"));
-const Udhar = lazy(() => import("@/features/core/udhar/pages/UdharPage"));
+const Customers = lazy(loadCustomersRoute);
+const Udhar = lazy(loadUdharRoute);
 const CustomerDetailPage = lazy(() => import("@/features/core/customers/pages/CustomerDetailPage"));
 const Inventory = lazy(() => import("@/features/core/inventory/pages/InventoryPage"));
 const StockIn = lazy(() => import("@/features/core/inventory/pages/StockInPage"));

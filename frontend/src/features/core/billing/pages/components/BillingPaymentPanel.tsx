@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount, computeChangeDue, suggestCashTenders } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
-import { ArrowLeftRight, Banknote, Gift, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeftRight, Banknote, ChevronDown, Gift, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildUpiPaymentUri, getPaymentConfigSync } from "@/features/core/settings/payment-config";
 import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
@@ -84,6 +84,7 @@ export function BillingPaymentPanel({
 }: BillingPaymentPanelProps) {
   const { t } = useAppLanguage();
   const [showReceivedAmount, setShowReceivedAmount] = useState(false);
+  const [showMorePaymentMethods, setShowMorePaymentMethods] = useState(false);
   // Cash-tendered → change-due calculator. Panel-local and informational only:
   // it never changes what the bill records (the shop keeps grandTotal), it just
   // tells the cashier how much cash to hand back.
@@ -109,7 +110,7 @@ export function BillingPaymentPanel({
       <p className="text-[12px] font-extrabold text-[#13274d]">{t("billing.pay.method")}</p>
 
       {showPaymentMode ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-3 gap-2">
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.cash}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e9fff0] text-[#16a34a]"><Banknote size={17} /></span>}
@@ -127,22 +128,6 @@ export function BillingPaymentPanel({
             onClick={() => setPaymentMode(BillPaymentMode.upi)}
           />
           <PayModeBtn
-            testId={`button-payment-${BillPaymentMode.bank}`}
-            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eaf3ff] text-[var(--brand)]"><Landmark size={17} /></span>}
-            label={t("billing.pay.bank")}
-            selected={paymentMode === BillPaymentMode.bank}
-            activeClass="border-[var(--brand-border)] bg-[#f3f7ff] text-[var(--brand)]"
-            onClick={() => setPaymentMode(BillPaymentMode.bank)}
-          />
-          <PayModeBtn
-            testId={`button-payment-${SPLIT_PAYMENT}`}
-            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eef4ff] text-[var(--brand)]"><ArrowLeftRight size={17} /></span>}
-            label={t("billing.pay.split")}
-            selected={paymentMode === SPLIT_PAYMENT}
-            activeClass="border-[var(--brand-border)] bg-[#f4f8ff] text-[var(--brand)]"
-            onClick={() => setPaymentMode(SPLIT_PAYMENT)}
-          />
-          <PayModeBtn
             testId={`button-payment-${BillPaymentMode.credit}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#fff3e4] text-[#f97316]"><UserRound size={17} /></span>}
             label={t("billing.pay.udhar")}
@@ -150,14 +135,23 @@ export function BillingPaymentPanel({
             activeClass="border-[#fed7aa] bg-[#fff7ed] text-[#f97316]"
             onClick={() => setPaymentMode(BillPaymentMode.credit)}
           />
-          <PayModeBtn
-            testId={`button-payment-${BillPaymentMode.gift_card}`}
-            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#fff1f8] text-[#db2777]"><Gift size={17} /></span>}
-            label={t("billing.pay.giftCard")}
-            selected={paymentMode === BillPaymentMode.gift_card}
-            activeClass="border-[#fbcfe8] bg-[#fdf2f8] text-[#be185d]"
-            onClick={() => setPaymentMode(BillPaymentMode.gift_card)}
-          />
+        </div>
+      ) : null}
+
+      {showPaymentMode ? (
+        <div className="rounded-xl border border-[#e5ebf4] bg-[#f8fbff]">
+          <button type="button" onClick={() => setShowMorePaymentMethods((value) => !value)} aria-expanded={showMorePaymentMethods} className="flex min-h-11 w-full items-center px-3 text-left text-[11px] font-black text-[#536383]">
+            {t("billing.pay.moreOptions")}
+            <span className="ml-2 text-[10px] font-semibold text-[#8290a8]">{t("billing.pay.moreOptionsHint")}</span>
+            <ChevronDown size={15} className={`ml-auto transition-transform ${showMorePaymentMethods ? "rotate-180" : ""}`} />
+          </button>
+          {(showMorePaymentMethods || paymentMode === BillPaymentMode.bank || paymentMode === SPLIT_PAYMENT || paymentMode === BillPaymentMode.gift_card) ? (
+            <div className="grid grid-cols-3 gap-2 border-t border-[#e5ebf4] p-2">
+              <PayModeBtn testId={`button-payment-${BillPaymentMode.bank}`} icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eaf3ff] text-[var(--brand)]"><Landmark size={17} /></span>} label={t("billing.pay.bank")} selected={paymentMode === BillPaymentMode.bank} activeClass="border-[var(--brand-border)] bg-[#f3f7ff] text-[var(--brand)]" onClick={() => setPaymentMode(BillPaymentMode.bank)} />
+              <PayModeBtn testId={`button-payment-${SPLIT_PAYMENT}`} icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eef4ff] text-[var(--brand)]"><ArrowLeftRight size={17} /></span>} label={t("billing.pay.split")} selected={paymentMode === SPLIT_PAYMENT} activeClass="border-[var(--brand-border)] bg-[#f4f8ff] text-[var(--brand)]" onClick={() => setPaymentMode(SPLIT_PAYMENT)} />
+              <PayModeBtn testId={`button-payment-${BillPaymentMode.gift_card}`} icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#fff1f8] text-[#db2777]"><Gift size={17} /></span>} label={t("billing.pay.giftCard")} selected={paymentMode === BillPaymentMode.gift_card} activeClass="border-[#fbcfe8] bg-[#fdf2f8] text-[#be185d]" onClick={() => setPaymentMode(BillPaymentMode.gift_card)} />
+            </div>
+          ) : null}
         </div>
       ) : null}
 

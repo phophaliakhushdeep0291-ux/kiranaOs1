@@ -43,7 +43,7 @@ if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
 
 if (process.env.SKIP_LOCAL_PRISMA_GENERATE !== "true") {
-  const generated = spawnSync(process.execPath, [prismaCli, "generate", "--schema", "prisma/schema.prisma"], {
+  const generated = spawnSync(process.execPath, [prismaCli, "generate", "--generator", "client", "--schema", "prisma/schema.prisma"], {
     cwd: process.cwd(),
     env: process.env,
     stdio: "inherit",

@@ -8,6 +8,7 @@ import { BillInputBillType, type Customer } from "@/lib/api/client";
 import {
   CheckCircle,
   Award,
+  ChevronDown,
   ChevronRight,
   FileText,
   Loader2,
@@ -269,6 +270,7 @@ export function BillingSummary({
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [couponExpanded, setCouponExpanded] = useState(false);
   const [loyaltyExpanded, setLoyaltyExpanded] = useState(false);
+  const [showSaleExtras, setShowSaleExtras] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -650,6 +652,13 @@ export function BillingSummary({
             </div>
           </div>
 
+          <button type="button" onClick={() => setShowSaleExtras((value) => !value)} aria-expanded={showSaleExtras} className="flex min-h-11 w-full items-center rounded-[9px] border border-[#dfe8f5] bg-[#f8fbff] px-3.5 text-left text-[12px] font-extrabold text-[#536383]">
+            {t("billing.summary.moreOptions")}
+            <span className="ml-2 text-[10px] font-semibold text-[#8290a8]">{t("billing.summary.moreOptionsHint")}</span>
+            <ChevronDown size={15} className={`ml-auto transition-transform ${showSaleExtras ? "rotate-180" : ""}`} />
+          </button>
+
+          {showSaleExtras ? <>
           {/* Coupon box — dashed blue */}
           <button onClick={() => setCouponExpanded((value) => !value)} aria-expanded={couponExpanded} className="flex h-11 w-full items-center gap-2.5 rounded-[9px] border border-dashed border-[#b9cdf6] bg-white px-3.5 transition-colors hover:bg-[#f5f9ff]">
             <Tag size={15} className="text-[var(--brand)]" />
@@ -690,6 +699,7 @@ export function BillingSummary({
                           </>}
             </div>
           )}
+          </> : null}
 
           {/* Payment panel */}
           <BillingPaymentPanel
@@ -729,9 +739,12 @@ export function BillingSummary({
 
           {/* Last bill saved */}
           {lastBillNo && (
-            <div className="flex items-center gap-2 text-sm text-emerald-700">
-              <CheckCircle size={14} />
-              <span>{t("billing.summary.lastBill", { billNo: lastBillNo })}</span>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-900" role="status">
+              <div className="flex items-center gap-2 text-sm font-black">
+                <CheckCircle size={16} />
+                <span>{t("billing.summary.billSavedSafely")}</span>
+              </div>
+              <p className="mt-1 text-[11px] font-semibold text-emerald-700">{t("billing.summary.nextBillReady", { billNo: lastBillNo })}</p>
             </div>
           )}
         </div>

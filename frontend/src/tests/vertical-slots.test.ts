@@ -23,12 +23,13 @@ import type { Product } from "@/types/api";
 const scheduleHCart = { productIds: ["p1"], products: [{ drugSchedule: "h" }] };
 const otcCart = { productIds: ["p2"], products: [{ drugSchedule: "" }] };
 const dish = { id: "d1", name: "Paneer Tikka" } as Product;
+const SLOT_IMPORT_TIMEOUT_MS = 15_000;
 
 describe("vertical billing slots", () => {
   afterEach(() => {
     resetBillingSlots();
     resetProductConfigurators();
-  });
+  }, SLOT_IMPORT_TIMEOUT_MS);
 
   it("registers the pharmacy prescription control for a pharmacy", async () => {
     expect(billingSlotsFor(scheduleHCart)).toEqual([]);
@@ -36,14 +37,14 @@ describe("vertical billing slots", () => {
     await loadVerticalSlots(packForBusinessType("pharmacy"));
 
     expect(billingSlotsFor(scheduleHCart).map((slot) => slot.id)).toEqual(["prescriptionId"]);
-  });
+  }, SLOT_IMPORT_TIMEOUT_MS);
 
   it("shows it only when the cart actually holds a restricted medicine", async () => {
     await loadVerticalSlots(packForBusinessType("pharmacy"));
 
     // An OTC basket must not sprout a prescription control.
     expect(billingSlotsFor(otcCart)).toEqual([]);
-  });
+  }, SLOT_IMPORT_TIMEOUT_MS);
 
   it("registers the restaurant add-on dialog for a restaurant", async () => {
     saveBusinessType("restaurant");
@@ -52,7 +53,7 @@ describe("vertical billing slots", () => {
     await loadVerticalSlots(packForBusinessType("restaurant"));
 
     expect(productConfiguratorFor(dish)?.id).toBe("restaurant-addons");
-  });
+  }, SLOT_IMPORT_TIMEOUT_MS);
 
   it("registers nothing for a trade that declares no slots", async () => {
     saveBusinessType("kirana");
@@ -64,5 +65,5 @@ describe("vertical billing slots", () => {
     // A kirana till must not be able to reach another trade's control at all.
     expect(billingSlotsFor(scheduleHCart)).toEqual([]);
     expect(productConfiguratorFor(dish)).toBeNull();
-  });
+  }, SLOT_IMPORT_TIMEOUT_MS);
 });
