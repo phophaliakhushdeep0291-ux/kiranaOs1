@@ -1396,8 +1396,10 @@ export async function findDuplicateLocalPaymentForServerPayment(
 }
 
 export async function refreshBillAndPaymentCaches(): Promise<void> {
-  const bills = await offlineDB.getAll<Record<string, unknown>>("bills");
-  const payments = await offlineDB.getAll<Record<string, unknown>>("payments");
+  const [bills, payments] = await Promise.all([
+    offlineDB.getAll<Record<string, unknown>>("bills"),
+    offlineDB.getAll<Record<string, unknown>>("payments"),
+  ]);
   writeInstantCache(
     "bills",
     pruneRecentRows(dedupeBillsForDisplay(bills) as unknown as Bill[], 30),

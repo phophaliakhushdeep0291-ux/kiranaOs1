@@ -336,19 +336,18 @@
       "id": "local_release_certification",
       "domain": "production_maturity",
       "weight": 35,
-      "status": "partial",
+      "status": "verified",
       "proofKind": "runtime_required",
-      "summary": "The local release gate proves schemas, migrations, backend, integration, frontend, contracts, payments and local storage in one report.",
+      "summary": "A durable local attestation proves SQLite and PostgreSQL schemas, migration safety, isolated backend integration, frontend production checks, API contracts, Razorpay fixtures and local object storage; it does not claim deployed infrastructure.",
       "competitorEvidence": [
         { "product": "Zoho POS", "url": "https://www.zoho.com/en-us/pos/features/", "claim": "Reliable cloud and offline operation establish the production benchmark." }
       ],
       "kiranaEvidence": {
         "sourcePaths": ["backend/scripts/release-certification.js"],
         "testCommands": ["cd backend && npm run release:certify:local"],
-        "externalProofRequirements": ["Regenerate a durable local certification attestation after the current change set"],
-        "runtimeProof": { "status": "missing", "artifact": null }
+        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/local-release-certification-latest.json" }
       },
-      "lastVerifiedAt": "2026-08-08"
+      "lastVerifiedAt": "2026-08-09"
     },
     {
       "id": "postgres_redis_proof",

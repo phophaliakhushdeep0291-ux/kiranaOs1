@@ -24,4 +24,11 @@ describe("shared touch-target primitives", () => {
     const css = readFileSync("src/index.css", "utf8");
     expect(css).toMatch(/\.mobile-brand-mark\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*flex:\s*0 0 44px;/s);
   });
+
+  it("keeps the sync diagnostics refresh action at 44px", () => {
+    const source = readFileSync("src/features/core/sync/pages/SyncDiagnosticsSection.tsx", "utf8");
+    expect(source).toContain('aria-label="Refresh sync diagnostics"');
+    expect(source).toContain("grid h-11 w-11 shrink-0");
+    expect(source).not.toContain("grid h-9 w-9 shrink-0");
+  });
 });

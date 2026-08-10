@@ -72,7 +72,7 @@ export function SyncDiagnosticsSection() {
           type="button"
           onClick={load}
           aria-label="Refresh sync diagnostics"
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border text-muted-foreground transition-colors hover:bg-muted"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border text-muted-foreground transition-colors hover:bg-muted"
         >
           <RefreshCcw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" />
         </button>

@@ -303,10 +303,12 @@ export async function confirmBill(shopId, body, actor = {}) {
     // the one that leaves the shelf. Empty for every shop without batch tracking.
     const batchTrackedIds = new Set(dbProducts.filter((product) => product.batchTrackingEnabled).map((product) => product.id));
     const chosenLotByProduct = new Map();
+    const batchQtyByProduct = new Map();
     for (const item of items) {
-      if (item.productId && item.inventoryLotId && batchTrackedIds.has(item.productId)) {
-        chosenLotByProduct.set(item.productId, item.inventoryLotId);
-      }
+      if (!item.productId || !batchTrackedIds.has(item.productId)) continue;
+      if (item.inventoryLotId) chosenLotByProduct.set(item.productId, item.inventoryLotId);
+      const baseQty = Math.abs(Number(baseQtyForItem(item, productMap[item.productId]) || 0));
+      batchQtyByProduct.set(item.productId, (batchQtyByProduct.get(item.productId) ?? 0) + baseQty);
     }
     const batchCeilingByProduct = batchTrackedIds.size > 0
       ? await batchMrpCeilings(tx, {
@@ -315,9 +317,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         requests: [...batchTrackedIds].map((productId) => ({
           productId,
           inventoryLotId: chosenLotByProduct.get(productId) ?? null,
-          quantityBaseQty: round2(items
-            .filter((item) => item.productId === productId)
-            .reduce((sum, item) => sum + Math.abs(Number(baseQtyForItem(item, productMap[productId]) || 0)), 0)),
+          quantityBaseQty: round2(batchQtyByProduct.get(productId) ?? 0),
         })),
       })
       : new Map();

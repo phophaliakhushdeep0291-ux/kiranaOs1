@@ -25,6 +25,7 @@ describe("channel settlement operator UI", () => {
     expect(source).toContain('t("reports.settlement.evidenceHint")');
     expect(reportsTranslations).toContain("Nothing is posted automatically");
     expect(source).toContain('action: "match" | "ignore" | "reverse"');
+    expect(source).toContain("approval?.type ?? lastApprovalType.current");
     expect(apiSource).toContain("/accounting/channel-settlements/import");
     expect(apiSource).toContain("/accounting/channel-settlement-rows/");
   });

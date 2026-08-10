@@ -15,7 +15,8 @@ import { getShopWorkflow } from "@/features/core/settings/shop-workflows";
 import { useFeature } from "@/features/core/subscription";
 import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAliases } from "@/features/core/products/product-reliability";
 import { fetchGroqAliasSuggestions } from "../product-aliases";
-import { baseUnitFor, isScaleUnit, round2, sellingUnitCode, sellingUnitConversion, sellingUnitName, UNITS } from "../product-pricing";
+import { baseUnitFor, isScaleUnit, sellingUnitCode, sellingUnitConversion, sellingUnitName, UNITS } from "../product-pricing";
+import { roundMoney } from "@/lib/money";
 import { useShopCapability } from "@/features/core/settings/capabilities";
 import { VariantGridEditor } from "./VariantGridEditor";
 import type { ProductFormData } from "../product-form-state";
@@ -165,11 +166,11 @@ export function ProductFormPanel({
   // bill screen will enforce.
   function packCeiling(conversionToBase: number, ownMaximumPrice?: number | null): number {
     const own = Number(ownMaximumPrice ?? 0);
-    if (own > 0) return round2(own);
+    if (own > 0) return roundMoney(own);
     if (!(productMrp > 0)) return 0;
     const conversion = Number(conversionToBase || 0);
-    if (!(packBaseQuantity > 0) || !(conversion > 0) || conversion === packBaseQuantity) return round2(productMrp);
-    return round2((productMrp / packBaseQuantity) * conversion);
+    if (!(packBaseQuantity > 0) || !(conversion > 0) || conversion === packBaseQuantity) return roundMoney(productMrp);
+    return roundMoney((productMrp / packBaseQuantity) * conversion);
   }
   const suggestedExtraPackMrp = packCeiling(
     sellingUnitConversion(Number(extraPack.packSizeValue) || 0, extraPack.packSizeUnit),

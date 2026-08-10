@@ -5,6 +5,7 @@ import { Input, useQuantityDraft } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { roundMoney } from "@/lib/money";
 import { createSaleReturnLocalFirst, type RefundMode } from "@/features/core/returns/local-actions";
 import { createBillLocalFirst } from "@/features/core/billing/local-actions";
 import { useListProducts } from "@/features/core/products/queries";
@@ -70,10 +71,6 @@ interface ReturnDialogProps {
   onDone?: () => void;
 }
 
-function round2(n: number) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
 export function ReturnDialog({ open, onOpenChange, lines, customerId, customerName, originalBillId, gstMode = "inclusive", onDone }: ReturnDialogProps) {
   const { toast } = useToast();
   const { isOnline } = useOfflineStatus();
@@ -91,12 +88,12 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
 
   const getQty = (i: number) => (qty[i] ?? 0);
   const refundTotal = useMemo(
-    () => round2(lines.reduce((sum, line, i) => {
+    () => roundMoney(lines.reduce((sum, line, i) => {
       const returnQty = getQty(i);
       const fraction = line.soldQty > 0 ? returnQty / line.soldQty : 1;
       const soldNet = typeof line.soldLineTotal === "number" && Number.isFinite(line.soldLineTotal) ? Math.abs(line.soldLineTotal) : Math.max(0, line.soldQty * Number(line.ratePerRateUnit || 0) - Number(line.lineDiscount || 0));
-      const net = round2(soldNet * fraction);
-      const tax = gstMode === "exclusive" ? round2(net * Number(line.gstRate ?? 0) / 100) : 0;
+      const net = roundMoney(soldNet * fraction);
+      const tax = gstMode === "exclusive" ? roundMoney(net * Number(line.gstRate ?? 0) / 100) : 0;
       return sum + net + tax;
     }, 0)),
     [gstMode, lines, qty],
@@ -106,18 +103,18 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
   const products = productsQuery.data ?? [];
   const isExchange = exchangeOpen && exchangeLines.some((line) => line.quantity > 0);
   const exchangeTotal = useMemo(
-    () => round2(exchangeLines.reduce((sum, line) => sum + line.quantity * line.ratePerRateUnit, 0)),
+    () => roundMoney(exchangeLines.reduce((sum, line) => sum + line.quantity * line.ratePerRateUnit, 0)),
     [exchangeLines],
   );
   // Positive = customer pays the shop; negative = shop refunds the customer.
-  const exchangeDifference = round2(exchangeTotal - refundTotal);
+  const exchangeDifference = roundMoney(exchangeTotal - refundTotal);
   // Both documents settle fully in the SAME immediate tender; the drawer nets to
   // the difference on its own, so daily close and reports stay double-entry clean.
   const settleMode: ExchangeSettleMode = refundMode === "upi" || refundMode === "bank" ? refundMode : "cash";
 
   function setLineQty(i: number, value: number, max: number) {
     const capped = max > 0 ? Math.max(0, Math.min(value, max)) : Math.max(0, value);
-    setQty((prev) => ({ ...prev, [i]: round2(capped) }));
+    setQty((prev) => ({ ...prev, [i]: roundMoney(capped) }));
   }
 
   function addExchangeLine() {
@@ -127,7 +124,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
       productId: product.id,
       name: product.name,
       enteredUnit: String(product.displayUnit ?? product.unit ?? product.rateUnit ?? "piece"),
-      ratePerRateUnit: round2(Number(product.defaultPricePerRateUnit ?? product.sellingPrice ?? product.mrp ?? 0)),
+      ratePerRateUnit: roundMoney(Number(product.defaultPricePerRateUnit ?? product.sellingPrice ?? product.mrp ?? 0)),
       gstRate: Number(product.gstRate ?? 0),
       quantity: 1,
     }]);
@@ -135,7 +132,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
   }
 
   function setExchangeQty(productId: string, value: number) {
-    setExchangeLines((current) => current.map((line) => line.productId === productId ? { ...line, quantity: Math.max(0, round2(value)) } : line));
+    setExchangeLines((current) => current.map((line) => line.productId === productId ? { ...line, quantity: Math.max(0, roundMoney(value)) } : line));
   }
 
   function resetForm() {
@@ -167,7 +164,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
         originalUnitPrice: line.originalUnitPrice,
         gstRate: line.gstRate ?? 0,
         hsn: line.hsn,
-        lineDiscount: line.soldQty > 0 ? round2(Number(line.lineDiscount ?? 0) * returnQty / line.soldQty) : 0,
+        lineDiscount: line.soldQty > 0 ? roundMoney(Number(line.lineDiscount ?? 0) * returnQty / line.soldQty) : 0,
         damaged: isDamaged,
       }));
     if (items.length === 0) {

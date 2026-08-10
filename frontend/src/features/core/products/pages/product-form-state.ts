@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { Product, ProductInput, ProductSellingUnit } from "@/lib/api/client";
 import { mergeProductAliasSuggestions, splitProductAliases } from "@/features/core/products/product-reliability";
-import { averageCost, baseUnitFor, fromBaseQty, round2, sellingUnitCode, sellingUnitConversion, sellingUnitName, toBaseQty } from "./product-pricing";
+import { averageCost, baseUnitFor, fromBaseQty, sellingUnitCode, sellingUnitConversion, sellingUnitName, toBaseQty } from "./product-pricing";
+import { roundMoney } from "@/lib/money";
 
 const sellingUnitFormSchema = z.object({
   id: z.string().optional(),
@@ -199,10 +200,10 @@ export function productToForm(product?: Product): ProductFormData {
     wholesalePrice: product?.wholesalePrice ?? product?.wholesalePricePerRateUnit ?? sellingPrice,
     wholesaleFromQuantity: product?.wholesaleFromQuantity ?? 10,
     stockQuantity: defaultUnit?.conversionToBase
-      ? round2(Number(product?.stockBaseQty ?? 0) / defaultUnit.conversionToBase)
+      ? roundMoney(Number(product?.stockBaseQty ?? 0) / defaultUnit.conversionToBase)
       : fromBaseQty(product?.stockBaseQty, unit),
     lowStockAlert: defaultUnit?.conversionToBase
-      ? round2(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
+      ? roundMoney(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
       : fromBaseQty(product?.lowStockThreshold, unit),
     batchTrackingEnabled: product?.batchTrackingEnabled ?? false,
     drugSchedule: product?.drugSchedule ?? null,
@@ -219,11 +220,11 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
   const conversionToBase = values.isLooseItem
     ? toBaseQty(1, values.unit)
     : sellingUnitConversion(values.packSizeValue, values.packSizeUnit);
-  const sellingPrice = round2(values.sellingPrice);
-  const minPrice = round2(values.minimumSellingPrice);
-  const retailPrice = round2(values.retailPrice || sellingPrice);
-  const wholesalePrice = round2(values.wholesalePrice || sellingPrice);
-  const avgCost = round2(values.costPrice);
+  const sellingPrice = roundMoney(values.sellingPrice);
+  const minPrice = roundMoney(values.minimumSellingPrice);
+  const retailPrice = roundMoney(values.retailPrice || sellingPrice);
+  const wholesalePrice = roundMoney(values.wholesalePrice || sellingPrice);
+  const avgCost = roundMoney(values.costPrice);
   const previousDefault = values.sellingUnits.find((row) => row.isDefault);
   const defaultUnitCode = sellingUnitCode(values.unit, values.packSizeValue, values.packSizeUnit);
   const defaultUnitId = previousDefault?.id && previousDefault.unitCode === defaultUnitCode
@@ -246,7 +247,7 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     barcode: values.barcode?.trim() || null,
     defaultPrice: sellingPrice,
     minimumPrice: minPrice || null,
-    maximumPrice: round2(values.mrp) || null,
+    maximumPrice: roundMoney(values.mrp) || null,
     costPrice: avgCost || null,
     // The default pack is edited through the main stock fields, so its per-pack
     // count comes from those rather than from a second input the form never shows.
@@ -289,10 +290,10 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
   // Each cell holds its own pieces, so the product's own figure is their sum.
   // The server does not recompute it, and everything that asks "how many of this
   // shirt are there?" without opening the grid reads this number.
-  const gridQty = round2(variantRows.reduce((sum, row) => sum + (Number(row.onHandQty) || 0), 0));
+  const gridQty = roundMoney(variantRows.reduce((sum, row) => sum + (Number(row.onHandQty) || 0), 0));
   const stockQuantity = hasGrid ? gridQty : values.stockQuantity;
   // A cell is one piece, never a pack, so the grid's total is already in base units.
-  const stockBaseQty = hasGrid ? gridQty : round2(values.stockQuantity * conversionToBase);
+  const stockBaseQty = hasGrid ? gridQty : roundMoney(values.stockQuantity * conversionToBase);
 
   return {
     name: values.name.trim(),
@@ -331,13 +332,13 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     // A grid always counts per row — that is what makes "which size is out?"
     // answerable, and the server forces it anyway.
     packagingMode: hasGrid ? "per_pack" : values.packagingMode,
-    mrp: round2(values.mrp),
+    mrp: roundMoney(values.mrp),
     gstRate: Number(values.gstRate || 0),
     reorderLevel: Number(values.reorderLevel || 0),
     description: values.description?.trim() || undefined,
     imageUrl: values.imageUrl || undefined,
     isLooseItem: values.isLooseItem,
-    lowStockThreshold: round2(values.lowStockAlert * conversionToBase),
+    lowStockThreshold: roundMoney(values.lowStockAlert * conversionToBase),
     batchTrackingEnabled: values.batchTrackingEnabled,
     lowStockAlert: values.lowStockAlert,
     isActive: values.isActive,

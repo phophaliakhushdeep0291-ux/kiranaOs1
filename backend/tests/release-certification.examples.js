@@ -13,6 +13,10 @@ for (const script of ["release:certify", "release:certify:ci", "release:certify:
 for (const status of ["passed", "failed", "blocked", "skipped"]) {
   assert.ok(runner.includes(`\"${status}\"`), `certification report must represent ${status} checks`);
 }
+assert.ok(
+  runner.includes('SKIP_PRISMA_GENERATE: "true"'),
+  "local certification must reuse its prepared integration client between DB-backed suites"
+);
 for (const evidence of [
   "frontend-production-check",
   "backend-integration-sqlite",

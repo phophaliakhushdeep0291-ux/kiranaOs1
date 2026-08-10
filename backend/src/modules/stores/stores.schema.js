@@ -47,17 +47,35 @@ const documentDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Document date must
 export const createTransferSchema = z.object({
   fromLocationId: z.string().min(1),
   toLocationId: z.string().min(1),
+  fulfillmentMode: z.enum(["instant", "shipment"]).default("instant"),
   movementReason: z.enum(["branch_transfer", "own_use", "job_work", "repair", "other"]).default("branch_transfer"),
   documentType: z.enum(["delivery_challan", "tax_invoice", "bill_of_supply"]).optional().nullable(),
   documentNumber: z.string().trim().min(1).max(16).regex(/^[A-Za-z0-9/-]+$/, "Use only letters, numbers, slash, or hyphen").optional().nullable(),
   documentDate: documentDate.optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
+  expectedArrivalDate: documentDate.optional().nullable(),
+  carrierName: optionalText(120),
+  trackingNumber: z.string().trim().max(80).regex(/^[A-Za-z0-9 ./_-]+$/, "Use a valid tracking reference").optional().nullable(),
   ownerPin: z.string().regex(/^\d{4}$/).optional(),
   items: z.array(z.object({
     productId: z.string().min(1),
     quantityBaseQty: z.coerce.number().positive().finite(),
     declaredTaxableValue: moneyAmount({ positive: true }).optional(),
   })).min(1).max(100),
+});
+
+export const receiveTransferSchema = z.object({
+  items: z.array(z.object({
+    transferItemId: z.string().min(1),
+    quantityBaseQty: z.coerce.number().positive().finite(),
+  })).min(1).max(100),
+  note: z.string().trim().max(500).optional().nullable(),
+  ownerPin: z.string().regex(/^\d{4}$/).optional(),
+});
+
+export const cancelTransferSchema = z.object({
+  reason: z.string().trim().min(8, "Enter a clear cancellation reason").max(500),
+  ownerPin: z.string().regex(/^\d{4}$/).optional(),
 });
 export const transferComplianceReviewSchema = z.object({
   decision: z.enum(["external_reference_recorded", "not_required_after_review"]),

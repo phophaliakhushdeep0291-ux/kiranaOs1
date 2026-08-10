@@ -49,12 +49,19 @@ test("when both a batch price and a configured maximum apply, the lower wins", (
   assert.equal(sellingUnitMaxPrice({ ...DEFAULT_PACK, maximumPrice: 45 }, product, DEFAULT_PACK, 48), 45);
 });
 
-/** A transaction stub that serves lots for one product and honours the where filter. */
+/**
+ * A transaction stub that serves lots per product and honours the where filter.
+ *
+ * Rows carry their own `productId`, as real ones do — the service asks for every
+ * product's lots in one query and groups the answer by that column.
+ */
 function fakeTx(lotsByProduct) {
+  const rows = Object.entries(lotsByProduct)
+    .flatMap(([productId, lots]) => lots.map((lot) => ({ ...lot, productId })));
   return {
     inventoryLot: {
-      findMany: async ({ where }) => (lotsByProduct[where.productId] ?? [])
-        .filter((lot) => lot.availableBaseQty > 0),
+      findMany: async ({ where }) => rows
+        .filter((lot) => where.productId.in.includes(lot.productId) && lot.availableBaseQty > 0),
     },
   };
 }

@@ -140,6 +140,32 @@ export async function listSellableBatches(shopId, { locationId, productId }) {
 }
 
 /**
+ * Every saleable batch for a set of products, in FEFO order, grouped by product.
+ *
+ * One query for the whole bill rather than one per line. Both the price ceiling
+ * and the allocation need exactly these rows in exactly this order, and both run
+ * inside the checkout transaction — where each extra round-trip is time the rest
+ * of the shop spends waiting on the write lock.
+ */
+async function saleableLotsByProduct(tx, { shopId, locationId, productIds }) {
+  const byProduct = new Map();
+  const wanted = [...new Set(productIds)];
+  if (wanted.length === 0) return byProduct;
+
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const lots = await tx.inventoryLot.findMany({
+    where: { shopId, locationId, productId: { in: wanted }, status: "active", availableBaseQty: { gt: 0 }, expiresOn: { gte: today } },
+    orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }],
+  });
+  for (const lot of lots) {
+    const bucket = byProduct.get(lot.productId);
+    if (bucket) bucket.push(lot);
+    else byProduct.set(lot.productId, [lot]);
+  }
+  return byProduct;
+}
+
+/**
  * The MRP each batch-tracked product must be billed under, keyed by productId.
  *
  * Resolved BEFORE pricing and from the same FEFO order the allocation will use,
@@ -156,13 +182,10 @@ export async function listSellableBatches(shopId, { locationId, productId }) {
  */
 export async function batchMrpCeilings(tx, { shopId, locationId, requests }) {
   const ceilings = new Map();
-  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const lotsByProduct = await saleableLotsByProduct(tx, { shopId, locationId, productIds: requests.map((request) => request.productId) });
 
   for (const request of requests) {
-    const lots = await tx.inventoryLot.findMany({
-      where: { shopId, locationId, productId: request.productId, status: "active", availableBaseQty: { gt: 0 }, expiresOn: { gte: today } },
-      orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }],
-    });
+    const lots = lotsByProduct.get(request.productId) ?? [];
 
     if (request.inventoryLotId) {
       const chosen = lots.find((lot) => lot.id === request.inventoryLotId);
@@ -206,10 +229,10 @@ export async function allocateLotsForBill(tx, { shopId, locationId, bill, chosen
     byProduct.set(item.productId, row);
   }
   const tracked = await tx.product.findMany({ where: { shopId, id: { in: [...byProduct.keys()] }, batchTrackingEnabled: true }, select: { id: true, name: true, baseUnit: true } });
-  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const lotsByProduct = await saleableLotsByProduct(tx, { shopId, locationId, productIds: tracked.map((product) => product.id) });
   for (const product of tracked) {
     const requested = byProduct.get(product.id);
-    const allLots = await tx.inventoryLot.findMany({ where: { shopId, locationId, productId: product.id, status: "active", availableBaseQty: { gt: 0 }, expiresOn: { gte: today } }, orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }] });
+    const allLots = lotsByProduct.get(product.id) ?? [];
     // A named batch must cover the whole line on its own. Topping the remainder
     // up from the next batch would silently span two printed MRPs while the line
     // carries the chosen batch's ceiling.

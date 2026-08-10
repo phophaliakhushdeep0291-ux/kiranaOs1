@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import type { Product, ProductInput } from "@/types/api";
 
 /**
@@ -24,10 +25,6 @@ export interface BulkEditIntent {
   stockValue: number | null;
 }
 
-function round2(value: number): number {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-}
-
 function round3(value: number): number {
   return Math.round((Number(value) + Number.EPSILON) * 1000) / 1000;
 }
@@ -50,11 +47,11 @@ export function nextSellingPrice(product: Product & Record<string, unknown>, int
   if (intent.priceValue === null) return base;
   const value = Math.max(0, Number(intent.priceValue) || 0);
   switch (intent.priceMode) {
-    case "increase_pct": return round2(base * (1 + value / 100));
-    case "decrease_pct": return round2(base * (1 - value / 100));
-    case "increase_flat": return round2(base + value);
-    case "decrease_flat": return round2(Math.max(0, base - value));
-    case "set": return round2(value);
+    case "increase_pct": return roundMoney(base * (1 + value / 100));
+    case "decrease_pct": return roundMoney(base * (1 - value / 100));
+    case "increase_flat": return roundMoney(base + value);
+    case "decrease_flat": return roundMoney(Math.max(0, base - value));
+    case "set": return roundMoney(value);
     default: return base;
   }
 }
@@ -93,7 +90,7 @@ export function computeBulkPatch(product: Product & Record<string, unknown>, int
     const floor = minPrice(product);
     let price = nextSellingPrice(product, intent);
     if (floor > 0 && price < floor) {
-      price = round2(floor);
+      price = roundMoney(floor);
       flooredToMinimum = true;
     }
     if (price !== currentSellingPrice(product)) {

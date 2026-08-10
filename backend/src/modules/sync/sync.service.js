@@ -2549,6 +2549,21 @@ async function resolvePurchaseLocatorIds(shopId, entityType, payload, keys, cont
   return [...new Set(resolved)];
 }
 
+/**
+ * The first of `ids` that actually exists, in caller priority order.
+ *
+ * `ids` is a short priority list of locator candidates — the earlier key wins —
+ * so one `in` query beats walking it with a findFirst apiece. The priority is
+ * re-applied in memory over the rows that came back.
+ */
+async function findFirstExistingById(delegate, where, ids) {
+  if (ids.length === 0) return null;
+  const rows = await delegate.findMany({ where: { ...where, id: { in: ids } } });
+  if (rows.length === 0) return null;
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ids.map((id) => byId.get(id)).find(Boolean) ?? null;
+}
+
 function normalizeStockPurchaseSyncPayload(payload) {
   const source = payload && typeof payload === "object" ? payload : {};
   const billAmount = round2(Number(source.billAmount ?? source.bill_amount ?? source.purchaseBillAmount ?? source.purchase_bill_amount ?? 0));
@@ -2622,10 +2637,8 @@ async function findPurchaseHistoryTarget(shopId, payload, context) {
     "serverId",
     "id",
   ], context);
-  for (const id of ids) {
-    const row = await db.purchaseHistory.findFirst({ where: { shopId, id } });
-    if (row) return row;
-  }
+  const located = await findFirstExistingById(db.purchaseHistory, { shopId }, ids);
+  if (located) return located;
 
   const match = payload.match ?? payload;
   const productId = compactText(readPurchaseLocator(payload, "productId"));
@@ -2652,10 +2665,8 @@ async function findStockLedgerPurchaseTarget(shopId, payload, context) {
     "serverId",
     "id",
   ], context);
-  for (const id of ids) {
-    const row = await db.stockLedger.findFirst({ where: { shopId, id, action: "purchase" } });
-    if (row) return row;
-  }
+  const located = await findFirstExistingById(db.stockLedger, { shopId, action: "purchase" }, ids);
+  if (located) return located;
 
   const match = payload.match ?? payload;
   const productId = compactText(readPurchaseLocator(payload, "productId"));

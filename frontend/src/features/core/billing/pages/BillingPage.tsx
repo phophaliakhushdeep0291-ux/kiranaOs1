@@ -1197,8 +1197,17 @@ export default function Billing() {
   // A pharmacy puts the authorising prescription here; every other shop keeps an
   // empty object and renders nothing.
   const [billingSlotValues, setBillingSlotValues] = useState<Record<string, unknown>>({});
-  const slotProducts = cart.filter((item) => !item.isCustom).map((item) => item.product as unknown as Record<string, unknown>);
-  const activeBillingSlots = billingSlotsFor({ productIds: slotProducts.map((p) => String(p.id)), products: slotProducts });
+  // Keyed on the cart rather than recomputed per render: this page re-renders on
+  // every keystroke in the search box, and ten of the eleven trades register no
+  // slot at all — so all of this walking is thrown away almost every time.
+  const { slotProducts, slotProductIds } = useMemo(() => {
+    const products = cart.filter((item) => !item.isCustom).map((item) => item.product as unknown as Record<string, unknown>);
+    return { slotProducts: products, slotProductIds: products.map((product) => String(product.id)) };
+  }, [cart]);
+  const activeBillingSlots = useMemo(
+    () => billingSlotsFor({ productIds: slotProductIds, products: slotProducts }),
+    [slotProductIds, slotProducts],
+  );
 
   function updateLineBatch(lineKey: string, batch?: SellableBatch) {
     setCart((previous) => previous.map((item) => (
@@ -1867,7 +1876,7 @@ export default function Billing() {
             {activeBillingSlots.map(({ id, Component }) => (
               <Component
                 key={id}
-                productIds={slotProducts.map((product) => String(product.id))}
+                productIds={slotProductIds}
                 value={billingSlotValues[id]}
                 onChange={(value) => setBillingSlotValues((previous) => ({ ...previous, [id]: value }))}
               />

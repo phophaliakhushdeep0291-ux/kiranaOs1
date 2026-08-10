@@ -73,6 +73,20 @@ export function clearSessionLockState() {
   }
 }
 
+/**
+ * A successful password/Google/registration sign-in is already an explicit
+ * presence check. Mark this browser session as started so the cold-start rule
+ * applies on the next real browser start, not immediately after authentication.
+ */
+export function markAuthenticatedSessionActive(at = Date.now()) {
+  try {
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(at));
+    sessionStorage.setItem(SESSION_STARTED_KEY, String(at));
+  } catch {
+    /* storage unavailable — the mounted gate still tracks activity in memory */
+  }
+}
+
 export function SessionLockGate({ children }: { children: ReactNode }) {
   const { logout, user } = useAuth();
   const [policy, setPolicy] = useState<SecurityPolicy>(() => getSecurityPolicySync());

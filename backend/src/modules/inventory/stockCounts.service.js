@@ -127,8 +127,14 @@ export async function applyStockCount(shopId, locationId, sessionId, actor = {})
     if (movements > 0) throw new AppError("Stock moved after this count started. Cancel it and start a fresh count to avoid erasing real sales or receipts.", 409, "STOCK_COUNT_STALE");
     const claimed = await tx.stockCountSession.updateMany({ where: { id: sessionId, shopId, status: "review" }, data: { status: "applied", activeKey: null, appliedAt: new Date(), approvedByUserId: actor.userId ?? null } });
     if (claimed.count !== 1) throw new AppError("Stock count was already processed", 409, "STOCK_COUNT_ALREADY_PROCESSED");
+    // A session holds one line per product (@@unique([sessionId, productId])), so
+    // no line moves stock a later line still has to read. That makes the whole set
+    // safe to read up front rather than a query per line — a full-shop count is
+    // hundreds of lines, and this runs inside the transaction.
+    const products = await tx.product.findMany({ where: { shopId, id: { in: productIds }, deletedAt: null } });
+    const productById = new Map(products.map((product) => [product.id, product]));
     for (const line of session.lines) {
-      const product = await tx.product.findFirst({ where: { id: line.productId, shopId, deletedAt: null } });
+      const product = productById.get(line.productId);
       if (!product) throw new AppError(`Product ${line.productName} is no longer available`, 409, "STOCK_COUNT_PRODUCT_UNAVAILABLE");
       const result = await setLocationInventory(tx, { shopId, location, product, newStockBaseQty: line.countedBaseQty });
       if (result.difference !== 0) await tx.stockLedger.create({ data: {

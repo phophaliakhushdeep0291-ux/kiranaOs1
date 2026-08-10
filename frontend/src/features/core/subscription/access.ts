@@ -118,7 +118,12 @@ async function getOrCreateDefaultTrial(): Promise<{
   const existing = await dexieDB.settings
     .get(DEFAULT_TRIAL_KEY)
     .catch(() => undefined);
-  if (existing && isRecord(existing.value)) {
+  if (
+    existing &&
+    existing.tenant_id === scope.tenant_id &&
+    existing.store_id === scope.store_id &&
+    isRecord(existing.value)
+  ) {
     return {
       trialStartedAt: toIso(existing.value.trialStartedAt) ?? nowIso(),
       trialEndsAt: toIso(existing.value.trialEndsAt) ?? addDays(new Date(), 7),

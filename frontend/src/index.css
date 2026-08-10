@@ -614,6 +614,9 @@
     left: 1rem;
     top: 1rem;
     z-index: 200;
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
     translate: 0 -160%;
     border-radius: 0.75rem;
     background: hsl(var(--primary));

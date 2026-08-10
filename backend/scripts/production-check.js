@@ -393,6 +393,16 @@ for (const file of rootZipFiles) {
   errors.push(`Local zip file is present in project root; remove before packaging: ${file}`);
 }
 
+const mutationArtifactFiles = ["src", "tests"]
+  .flatMap((directory) => fs.existsSync(path.join(root, directory))
+    ? fs.readdirSync(path.join(root, directory), { recursive: true })
+      .map((name) => normalize(path.join(directory, name)))
+    : [])
+  .filter((file) => /(^|\/)(zz-mutant[^/]*|[^/]*\.mutant\.[^/]*)$/i.test(file));
+for (const file of mutationArtifactFiles) {
+  errors.push(`Mutation-test artifact must not ship in application source: ${file}`);
+}
+
 if (exists("package.json") && exists("package-lock.json")) {
   const packageJson = readJson("package.json");
   const packageLock = readJson("package-lock.json");

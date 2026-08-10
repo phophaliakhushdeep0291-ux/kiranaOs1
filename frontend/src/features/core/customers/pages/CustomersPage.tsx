@@ -77,6 +77,7 @@ import {
 } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { validateGstin } from "@/lib/gstin";
+import { escapeHtml } from "@/lib/escape-html";
 
 interface CustomerFormState {
   name: string;
@@ -740,9 +741,10 @@ export default function CustomersPage() {
     if (!popup) { toast({ title: t("customers.toast.allowPopups"), description: t("customers.toast.enablePopups"), variant: "destructive" }); return; }
     const rows = (selectedDetail.data?.ledger ?? []).map((row) => {
       const signed = Number(row.signed_amount ?? 0);
-      return `<tr><td>${formatShortDate(row.display_date)}</td><td>${String(row.note || row.source_id || row.display_type)}</td><td style="text-align:right">${signed > 0 ? fmtMoney(signed) : "-"}</td><td style="text-align:right">${signed < 0 ? fmtMoney(Math.abs(signed)) : "-"}</td><td style="text-align:right">${fmtMoney(row.running_balance)}</td></tr>`;
+      return `<tr><td>${escapeHtml(formatShortDate(row.display_date))}</td><td>${escapeHtml(row.note || row.source_id || row.display_type)}</td><td style="text-align:right">${escapeHtml(signed > 0 ? fmtMoney(signed) : "-")}</td><td style="text-align:right">${escapeHtml(signed < 0 ? fmtMoney(Math.abs(signed)) : "-")}</td><td style="text-align:right">${escapeHtml(fmtMoney(row.running_balance))}</td></tr>`;
     }).join("");
-    popup.document.write(`<!doctype html><html><head><title>Khata Statement — ${selectedCustomer.name}</title><style>body{font-family:Arial;font-size:12px;padding:18px;color:#111827}h1{font-size:17px;margin:0}p{margin:3px 0;color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #e2e8f0;padding:6px 4px;text-align:left;font-size:11px}th{background:#f5f8fc;text-transform:uppercase;font-size:10px}strong.due{color:#ef4444}</style></head><body><h1>Khata Statement — ${selectedCustomer.name}</h1><p>${selectedCustomer.mobile ?? ""}</p><p>As on ${formatShortDate(new Date().toISOString())} · Outstanding: <strong class="due">${fmtMoney(Math.max(0, money(selectedCustomer.ledgerBalance)))}</strong></p><table><thead><tr><th>Date</th><th>Particulars</th><th style="text-align:right">{t("customers.ledger.udharAmount")}</th><th style="text-align:right">{t("customers.ledger.paidAmount")}</th><th style="text-align:right">{t("customers.ledger.balanceAmount")}</th></tr></thead><tbody>${rows || `<tr><td colspan="5">{t("customers.ledger.empty")}</td></tr>`}</tbody></table><script>setTimeout(function(){window.print()},300)</script></body></html>`);
+    const customerName = escapeHtml(selectedCustomer.name);
+    popup.document.write(`<!doctype html><html><head><title>Khata Statement — ${customerName}</title><style>body{font-family:Arial;font-size:12px;padding:18px;color:#111827}h1{font-size:17px;margin:0}p{margin:3px 0;color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #e2e8f0;padding:6px 4px;text-align:left;font-size:11px}th{background:#f5f8fc;text-transform:uppercase;font-size:10px}strong.due{color:#ef4444}</style></head><body><h1>Khata Statement — ${customerName}</h1><p>${escapeHtml(selectedCustomer.mobile)}</p><p>As on ${escapeHtml(formatShortDate(new Date().toISOString()))} · Outstanding: <strong class="due">${escapeHtml(fmtMoney(Math.max(0, money(selectedCustomer.ledgerBalance))))}</strong></p><table><thead><tr><th>${escapeHtml(t("customers.ledger.date"))}</th><th>${escapeHtml(t("customers.ledger.particulars"))}</th><th style="text-align:right">${escapeHtml(t("customers.ledger.udharAmount"))}</th><th style="text-align:right">${escapeHtml(t("customers.ledger.paidAmount"))}</th><th style="text-align:right">${escapeHtml(t("customers.ledger.balanceAmount"))}</th></tr></thead><tbody>${rows || `<tr><td colspan="5">${escapeHtml(t("customers.ledger.empty"))}</td></tr>`}</tbody></table><script>setTimeout(function(){window.print()},300)</script></body></html>`);
     popup.document.close();
   }
 

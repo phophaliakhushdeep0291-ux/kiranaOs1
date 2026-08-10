@@ -19,10 +19,12 @@ const skipGenerate = process.env.SKIP_PRISMA_GENERATE === "true";
 const useIsolatedClient = !isPostgres && process.env.PRISMA_CLIENT_VARIANT === "integration";
 
 function assertCompatibleGeneratedClient() {
-  const generatedSchemaPath = path.join(process.cwd(), "node_modules", ".prisma", "client", "schema.prisma");
+  const generatedSchemaPath = useIsolatedClient
+    ? path.join(process.cwd(), "generated", "integration-prisma-client", "schema.prisma")
+    : path.join(process.cwd(), "node_modules", ".prisma", "client", "schema.prisma");
   if (!fs.existsSync(generatedSchemaPath)) {
     throw new Error(
-      "SKIP_PRISMA_GENERATE=true requires an existing generated Prisma client. Run npm run prisma:generate first."
+      `SKIP_PRISMA_GENERATE=true requires an existing ${useIsolatedClient ? "integration" : "default"} Prisma client. Generate that client first.`
     );
   }
 

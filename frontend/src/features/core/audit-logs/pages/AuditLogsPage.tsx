@@ -51,8 +51,10 @@ function compactJson(value: unknown) {
 }
 
 async function loadAuditRows(): Promise<AuditLogRow[]> {
-  const auditRows = await offlineDB.getAll<AuditLogRow>("local_audit_logs").catch(() => []);
-  const conflictRows = await offlineDB.getAll<ConflictRow>("sync_conflicts").catch(() => []);
+  const [auditRows, conflictRows] = await Promise.all([
+    offlineDB.getAll<AuditLogRow>("local_audit_logs").catch(() => []),
+    offlineDB.getAll<ConflictRow>("sync_conflicts").catch(() => []),
+  ]);
   const conflictAuditRows: AuditLogRow[] = conflictRows.map((conflict) => ({
     id: `audit_${conflict.id}`,
     action: "sync_conflict",

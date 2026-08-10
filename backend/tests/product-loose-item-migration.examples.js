@@ -68,12 +68,10 @@ assert.ok(!/DROP\s+TABLE|DROP\s+COLUMN|TRUNCATE|DELETE\s+FROM/i.test(migration),
 assert.ok(pkg.scripts["deploy:migrate"], "package.json must expose deploy:migrate");
 assert.ok(pkg.scripts["deploy:migrate:postgres"], "package.json must expose deploy:migrate:postgres");
 assert.ok(pkg.scripts["verify:product-schema"], "package.json must expose verify:product-schema");
-assert.ok(pkg.scripts["deploy:migrate"].includes("npx prisma migrate deploy"), "deploy:migrate must run npx prisma migrate deploy");
-assert.ok(pkg.scripts["deploy:migrate"].includes("npx prisma generate"), "deploy:migrate must run npx prisma generate");
-assert.ok(pkg.scripts["deploy:migrate"].includes("scripts/verify-product-schema.js"), "deploy:migrate must verify Product DB columns");
-assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("npx prisma migrate deploy --schema prisma-postgres/schema.prisma"), "Postgres deploy helper must run migrate deploy with the Postgres schema");
-assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("npx prisma generate --schema prisma-postgres/schema.prisma"), "Postgres deploy helper must generate with the Postgres schema");
-assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("scripts/verify-product-schema.js"), "Postgres deploy helper must verify Product DB columns");
+assert.ok(pkg.scripts["deploy:migrate"].includes("deploy:migrate:postgres"), "deploy:migrate must route to the PostgreSQL helper");
+assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("prisma:deploy:postgres"), "Postgres deploy helper must run the guarded migration deploy");
+assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("prisma:generate:postgres"), "Postgres deploy helper must generate the PostgreSQL client");
+assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("verify:product-schema"), "Postgres deploy helper must verify Product DB columns");
 
 assert.ok(dockerfile.includes("npm run deploy:migrate:postgres && npm start"), "Dockerfile must run the migration helper before startup");
 assert.ok(deployDocs.includes("npm run deploy:migrate:postgres"), "DEPLOY.md must document the one-command migration helper");

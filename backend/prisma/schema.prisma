@@ -989,7 +989,8 @@ model StockTransfer {
   referenceNo           String
   fromLocationId        String
   toLocationId          String
-  status                String    @default("completed") // completed | cancelled
+  status                String    @default("completed") // in_transit | partially_received | completed | cancelled
+  fulfillmentMode       String    @default("instant") // instant | shipment
   movementReason        String    @default("branch_transfer")
   documentType          String?
   documentNumber        String?
@@ -1022,6 +1023,17 @@ model StockTransfer {
   consignmentValuePaise BigInt?
   note                  String?
   createdByUserId       String?
+  approvedByUserId      String?
+  approvedAt            DateTime?
+  dispatchedAt          DateTime?
+  expectedArrivalDate   DateTime?
+  carrierName           String?
+  trackingNumber        String?
+  receivedByUserId      String?
+  lastReceivedAt        DateTime?
+  cancelledAt           DateTime?
+  cancelledByUserId     String?
+  cancelReason          String?
   completedAt           DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
@@ -1045,6 +1057,7 @@ model StockTransferItem {
   productId         String
   productName       String
   quantityBaseQty   Float
+  receivedBaseQty   Float   @default(0)
   baseUnit          String
   hsn               String?
   gstRate           Float   @default(0)
@@ -1980,7 +1993,7 @@ model ChangeLog {
   payloadJson String   @default("{}")
   createdAt   DateTime @default(now())
 
-  shop Shop @relation(fields: [shopId], references: [id])
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId, seq])
   @@index([shopId, entityType, entityId])

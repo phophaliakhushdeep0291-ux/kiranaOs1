@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { AlertTriangle, Clock, CloudOff, CreditCard, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ChevronRight, Clock, CloudOff, CreditCard, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
 
@@ -49,15 +49,21 @@ export function SubscriptionStatusBanner() {
 
   const isDanger = snapshot.isExpired || snapshot.isPaymentFailed;
   const Icon = snapshot.cloudSyncAllowed ? ShieldCheck : snapshot.isPaymentFailed ? CreditCard : CloudOff;
+  const plainMessage = snapshot.graceActive
+    ? "Billing is available. New bills stay safe on this device and cloud backup will resume after renewal."
+    : snapshot.localOnlyAfterExpiry
+      ? "Your saved records are available on this device. Renew to resume cloud backup."
+      : snapshot.message;
   return (
-    <div className={`border-b px-4 py-2 ${isDanger ? "bg-destructive/10 text-destructive" : "bg-amber-50 text-amber-800"}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <div className="flex items-center gap-2">
+    <div className={`border-b px-3 py-1.5 sm:px-4 ${isDanger ? "bg-amber-50 text-amber-950" : "bg-amber-50 text-amber-800"}`}>
+      <div className="flex min-h-9 items-center gap-2 text-xs sm:text-sm">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {snapshot.graceActive ? <AlertTriangle size={16} /> : <Icon size={16} />}
-          <span>{snapshot.message}</span>
-          {snapshot.localOnlyAfterExpiry && <span className="font-medium">Local-only mode: old data remains viewable.</span>}
+          <span className="truncate sm:whitespace-normal">{plainMessage}</span>
         </div>
-        <Link href="/subscription"><Button size="sm" variant={isDanger ? "destructive" : "outline"}>Manage subscription</Button></Link>
+        <Link href="/subscription" className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-2 font-black text-current hover:bg-black/5">
+          Owner details <ChevronRight size={14} aria-hidden="true" />
+        </Link>
       </div>
     </div>
   );

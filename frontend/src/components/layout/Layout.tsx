@@ -57,6 +57,7 @@ import { MobileBottomNav, MobileTopBar } from "./MobileAppChrome";
 import { apiRequest, getApiBaseUrl } from "@/lib/api/http";
 import { getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/core/stores/location-context";
 import { cn } from "@/lib/utils";
+import { preloadCoreRoute, scheduleCoreRoutePreload } from "@/app/route-preload";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -206,6 +207,18 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/gift-cards", label: "Gift Cards", Icon: Gift },
   { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
 ];
+
+// The counter is a task surface, not the owner's ERP index. Staff retain direct
+// access to the five things they use during a shift; every owner-only control
+// remains available to owners and administrators through the full navigation.
+const CASHIER_NAV_PATHS = new Set([
+  "/dashboard",
+  "/billing",
+  "/bills",
+  "/customers",
+  "/inventory",
+  "/products",
+]);
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -399,8 +412,20 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
         ({ kind: "link", href: entry.href, label: entry.label, Icon: entry.Icon }));
       items.splice(tail === -1 ? items.length : tail, 0, ...extras);
     }
-    return items;
-  }, [businessProfile.data?.navigation, isHrefEnabled, verticalPack]);
+    if (user?.role !== "staff") return items;
+
+    return items.flatMap((item): NavItem[] => {
+      if (item.kind === "link") return CASHIER_NAV_PATHS.has(item.href) ? [item] : [];
+      const children = item.children.filter((child) => CASHIER_NAV_PATHS.has(child.href));
+      if (!children.length && (!item.overviewHref || !CASHIER_NAV_PATHS.has(item.overviewHref))) return [];
+      return [{
+        ...item,
+        children,
+        triggerPaths: item.triggerPaths.filter((path) => CASHIER_NAV_PATHS.has(path)),
+        overviewHref: item.overviewHref && CASHIER_NAV_PATHS.has(item.overviewHref) ? item.overviewHref : undefined,
+      }];
+    });
+  }, [businessProfile.data?.navigation, isHrefEnabled, user?.role, verticalPack]);
 
   // auto-expand groups when child route is active
   useEffect(() => {
@@ -414,6 +439,18 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   useEffect(() => {
     if (loc !== "/customers") return;
     setExpandedGroups((current) => current.size > 0 ? new Set<string>() : current);
+  }, [loc]);
+
+  useEffect(() => {
+    if (loc !== "/dashboard") return;
+    const cancelBilling = scheduleCoreRoutePreload("/billing", 1_500);
+    const cancelCustomers = scheduleCoreRoutePreload("/customers", 2_000);
+    const cancelUdhar = scheduleCoreRoutePreload("/udhar", 3_000);
+    return () => {
+      cancelBilling();
+      cancelCustomers();
+      cancelUdhar();
+    };
   }, [loc]);
 
   useEffect(() => { liveW.current = sidebarWidth; writeLS(SIDEBAR_WIDTH_KEY, String(sidebarWidth)); }, [sidebarWidth]);
@@ -734,6 +771,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
           onSwitchLocation={switchLocation}
           onOpenSearch={() => setPaletteOpen(true)}
           onLogout={logout}
+          userRole={user?.role}
         />
       </div>
       <div className="hidden lg:contents">
@@ -753,7 +791,12 @@ function SidebarLink({ item, loc, collapsed, labelOverride }: {
   const active = isActive(loc, item.href);
   const label = labelOverride ?? item.label;
   return (
-    <Link href={item.href}>
+    <Link
+      href={item.href}
+      onMouseEnter={() => void preloadCoreRoute(item.href)?.catch(() => undefined)}
+      onFocus={() => void preloadCoreRoute(item.href)?.catch(() => undefined)}
+      onTouchStart={() => void preloadCoreRoute(item.href)?.catch(() => undefined)}
+    >
       <div
         role="menuitem"
         aria-current={active ? "page" : undefined}

@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { useModuleVisibility } from "@/features/core/settings/modules";
 import { useActiveVerticalPack } from "@/features/verticals/registry";
 import { isPathAllowedByCapabilities, isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
+import { preloadCoreRoute } from "@/app/route-preload";
 import {
   Drawer,
   DrawerClose,
@@ -73,6 +74,7 @@ interface MobileBottomNavProps {
   onSwitchLocation: (locationId: string) => void;
   onOpenSearch: () => void;
   onLogout: () => void;
+  userRole?: string;
 }
 
 type NavIcon = LucideIcon;
@@ -286,7 +288,9 @@ function MoreSection({ item, location }: { item: NavigationItem & { children: No
   );
 }
 
-function MoreNavigation({ location }: { location: string }) {
+const CASHIER_MORE_PATHS = new Set(["/bills", "/products", "/inventory", "/sync-status"]);
+
+function MoreNavigation({ location, userRole }: { location: string; userRole?: string }) {
   const { isHrefEnabled } = useModuleVisibility();
   const verticalPack = useActiveVerticalPack();
   const businessProfile = useShopBusinessProfile();
@@ -297,7 +301,15 @@ function MoreNavigation({ location }: { location: string }) {
     const navigation = businessProfile.data?.navigation;
     const reachable = (path: string) => isHrefEnabled(path) && isPathInBusinessProfile(path, navigation);
     const extras = verticalPack.nav.filter((entry) => entry.mobile && isHrefEnabled(entry.href));
-    return MORE_GROUPS
+    const visibleGroups = userRole === "staff"
+      ? MORE_GROUPS.map((group) => ({
+          ...group,
+          items: group.items
+            .filter((item) => CASHIER_MORE_PATHS.has(item.href))
+            .map((item) => item.children ? { ...item, children: undefined } : item),
+        }))
+      : MORE_GROUPS;
+    return visibleGroups
       .map((group) => ({
         ...group,
         items: ([
@@ -315,7 +327,7 @@ function MoreNavigation({ location }: { location: string }) {
           }),
       }))
       .filter((group) => group.items.length > 0);
-  }, [businessProfile.data?.navigation, isHrefEnabled, verticalPack]);
+  }, [businessProfile.data?.navigation, isHrefEnabled, userRole, verticalPack]);
 
   return (
     <div className="mobile-more-groups">
@@ -359,6 +371,7 @@ export function MobileBottomNav({
   onSwitchLocation,
   onOpenSearch,
   onLogout,
+  userRole,
 }: MobileBottomNavProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const { isHrefEnabled } = useModuleVisibility();
@@ -377,7 +390,15 @@ export function MobileBottomNav({
         {tabs.map(({ href, label, Icon, matches }) => {
           const active = pathMatches(location, matches);
           return (
-            <Link key={href} href={href} className={cn("mobile-tab", active && "mobile-tab-active")} aria-current={active ? "page" : undefined}>
+            <Link
+              key={href}
+              href={href}
+              className={cn("mobile-tab", active && "mobile-tab-active")}
+              aria-current={active ? "page" : undefined}
+              onMouseEnter={() => void preloadCoreRoute(href)?.catch(() => undefined)}
+              onFocus={() => void preloadCoreRoute(href)?.catch(() => undefined)}
+              onTouchStart={() => void preloadCoreRoute(href)?.catch(() => undefined)}
+            >
               <span className="mobile-tab-icon"><Icon size={21} strokeWidth={active ? 2.35 : 2} aria-hidden="true" /></span>
               <span>{label}</span>
             </Link>
@@ -433,7 +454,7 @@ export function MobileBottomNav({
               ) : null}
             </DrawerHeader>
             <div className="mobile-more-scroll">
-              <MoreNavigation location={location} />
+              <MoreNavigation location={location} userRole={userRole} />
               <button type="button" onClick={onLogout} className="mobile-logout-button"><LogOut size={18} aria-hidden="true" /> Sign out safely</button>
             </div>
           </DrawerContent>

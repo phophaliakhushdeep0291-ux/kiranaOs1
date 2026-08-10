@@ -63,6 +63,96 @@ if (ctx.skip) {
       assert.equal(overdraw.code, "INSUFFICIENT_LOCATION_STOCK");
     });
 
+    test("dispatches multi-line shipments, reserves in-transit stock, and receives them partially", async () => {
+      const { tenant, auth } = await ownerContext();
+      const rice = await createProduct(ctx.db, tenant.shop.id, { name: "Shipment Rice", stockBaseQty: 20, gstRate: 5, hsn: "1006" });
+      const oil = await createProduct(ctx.db, tenant.shop.id, { name: "Shipment Oil", stockBaseQty: 10, gstRate: 5, hsn: "1507" });
+      const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
+      const branch = assertSuccess(await ctx.post("/api/stores", { name: "Shipment Branch", code: "SHIP01", city: "Pune" }, { token: auth.accessToken }), 201);
+
+      const transfer = assertSuccess(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        fulfillmentMode: "shipment",
+        expectedArrivalDate: "2026-08-12",
+        carrierName: "Local branch van",
+        trackingNumber: "VAN-2026-001",
+        items: [
+          { productId: rice.id, quantityBaseQty: 7, declaredTaxableValue: 350 },
+          { productId: oil.id, quantityBaseQty: 4, declaredTaxableValue: 400 },
+        ],
+        note: "Weekly replenishment",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(transfer.status, "in_transit");
+      assert.equal(transfer.fulfillmentMode, "shipment");
+      assert.equal(transfer.items.length, 2);
+      assert.equal(transfer.items.every((item) => item.receivedBaseQty === 0), true);
+
+      const whileMovingMain = assertSuccess(await ctx.get(`/api/stores/${primary.id}/inventory`, { token: auth.accessToken }));
+      const whileMovingBranch = assertSuccess(await ctx.get(`/api/stores/${branch.id}/inventory`, { token: auth.accessToken }));
+      assert.equal(whileMovingMain.products.find((row) => row.id === rice.id).stockBaseQty, 13, "dispatched primary stock must not remain sellable");
+      assert.equal(whileMovingMain.products.find((row) => row.id === oil.id).stockBaseQty, 6);
+      assert.equal(whileMovingBranch.products.find((row) => row.id === rice.id).stockBaseQty, 0, "destination stock appears only after receipt");
+
+      const riceLine = transfer.items.find((item) => item.productId === rice.id);
+      const oilLine = transfer.items.find((item) => item.productId === oil.id);
+      const partial = assertSuccess(await ctx.post(`/api/stores/transfers/${transfer.id}/receive`, {
+        items: [
+          { transferItemId: riceLine.id, quantityBaseQty: 3 },
+          { transferItemId: oilLine.id, quantityBaseQty: 4 },
+        ],
+        note: "First van unload",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(partial.status, "partially_received");
+      assert.equal(partial.receiptSummary.openLineCount, 1);
+      assert.equal(partial.items.find((item) => item.id === riceLine.id).remainingBaseQty, 4);
+
+      const afterPartialMain = assertSuccess(await ctx.get(`/api/stores/${primary.id}/inventory`, { token: auth.accessToken }));
+      const afterPartialBranch = assertSuccess(await ctx.get(`/api/stores/${branch.id}/inventory`, { token: auth.accessToken }));
+      assert.equal(afterPartialMain.products.find((row) => row.id === rice.id).stockBaseQty, 13, "partial receipt must not release the unreceived reservation");
+      assert.equal(afterPartialBranch.products.find((row) => row.id === rice.id).stockBaseQty, 3);
+      assert.equal(afterPartialBranch.products.find((row) => row.id === oil.id).stockBaseQty, 4);
+
+      const overReceive = assertFailure(await ctx.post(`/api/stores/transfers/${transfer.id}/receive`, {
+        items: [{ transferItemId: riceLine.id, quantityBaseQty: 5 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(overReceive.code, "TRANSFER_RECEIPT_EXCEEDS_REMAINING");
+
+      const completed = assertSuccess(await ctx.post(`/api/stores/transfers/${transfer.id}/receive`, {
+        items: [{ transferItemId: riceLine.id, quantityBaseQty: 4 }],
+        note: "Final unload",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(completed.status, "completed");
+      assert.equal(completed.receiptSummary.openLineCount, 0);
+      const finalBranch = assertSuccess(await ctx.get(`/api/stores/${branch.id}/inventory`, { token: auth.accessToken }));
+      assert.equal(finalBranch.products.find((row) => row.id === rice.id).stockBaseQty, 7);
+      assert.equal((await ctx.db.product.findUnique({ where: { id: rice.id } })).stockBaseQty, 20, "shipments never change company-wide stock");
+
+      const cancellable = assertSuccess(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        fulfillmentMode: "shipment",
+        items: [{ productId: rice.id, quantityBaseQty: 2, declaredTaxableValue: 100 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      const cancelled = assertSuccess(await ctx.post(`/api/stores/transfers/${cancellable.id}/cancel`, {
+        reason: "Carrier could not collect the shipment",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(cancelled.status, "cancelled");
+      const afterCancelMain = assertSuccess(await ctx.get(`/api/stores/${primary.id}/inventory`, { token: auth.accessToken }));
+      assert.equal(afterCancelMain.products.find((row) => row.id === rice.id).stockBaseQty, 13, "cancelling returns the unreceived reservation to source");
+
+      const audits = await ctx.db.auditLog.findMany({ where: { shopId: tenant.shop.id, entityId: transfer.id } });
+      assert.equal(audits.some((row) => row.action === "STOCK_TRANSFER_DISPATCHED"), true);
+      assert.equal(audits.some((row) => row.action === "STOCK_TRANSFER_PARTIALLY_RECEIVED"), true);
+      assert.equal(audits.some((row) => row.action === "STOCK_TRANSFER_RECEIVED"), true);
+    });
+
     test("validates location GSTINs, documents distinct-registration transfers, and preserves bill seller snapshots", async () => {
       const { tenant, auth } = await ownerContext();
       const product = await createProduct(ctx.db, tenant.shop.id, {

@@ -28,6 +28,7 @@ import type { BillingDraft, HeldBill } from "@/features/core/billing/pages/billi
 import { alertCustomerOnWhatsapp } from "../notify";
 import { listCustomerOrders, updateCustomerOrder, type CustomerOrder } from "../api";
 import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
+import { escapeHtml } from "@/lib/escape-html";
 
 const STATUS_TABS: Array<{ value: string; label: string }> = [
   { value: "new", label: "New" },
@@ -294,21 +295,21 @@ export default function OrdersReceivedPage() {
       return;
     }
     const rows = order.items
-      .map((it, i) => `<tr><td>${i + 1}</td><td>${it.qty}× ${it.name}</td><td style="text-align:right">${fmtMoney(it.qty * it.price)}</td></tr>`)
+      .map((it, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(it.qty)}× ${escapeHtml(it.name)}</td><td style="text-align:right">${escapeHtml(fmtMoney(it.qty * it.price))}</td></tr>`)
       .join("");
     popup.document.write(
-      `<!doctype html><html><head><title>Order slip ${orderCode(order.id)}</title></head>` +
+      `<!doctype html><html><head><title>Order slip ${escapeHtml(orderCode(order.id))}</title></head>` +
         `<body style="font-family:system-ui,sans-serif;padding:20px;margin:0;color:#111">` +
-        `<h2 style="margin:0 0 2px">${shopName || "Order slip"}</h2>` +
-        `<p style="margin:0 0 12px;color:#555;font-size:12px">${orderCode(order.id)} · ${fullDateTime(order.createdAt)}</p>` +
-        `<p style="margin:0 0 12px;font-size:13px"><b>${order.customerName}</b> · ${order.customerMobile}` +
-        `${order.customerAddress ? `<br/>${order.customerAddress}` : ""}</p>` +
+        `<h2 style="margin:0 0 2px">${escapeHtml(shopName || "Order slip")}</h2>` +
+        `<p style="margin:0 0 12px;color:#555;font-size:12px">${escapeHtml(orderCode(order.id))} · ${escapeHtml(fullDateTime(order.createdAt))}</p>` +
+        `<p style="margin:0 0 12px;font-size:13px"><b>${escapeHtml(order.customerName)}</b> · ${escapeHtml(order.customerMobile)}` +
+        `${order.customerAddress ? `<br/>${escapeHtml(order.customerAddress)}` : ""}</p>` +
         `<table style="width:100%;border-collapse:collapse;font-size:13px">` +
         `<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>#</th><th>Item</th><th style="text-align:right">Rs</th></tr></thead>` +
         `<tbody>${rows}</tbody>` +
-        `<tfoot><tr style="border-top:1px solid #ccc;font-weight:bold"><td></td><td>Estimated total</td><td style="text-align:right">${fmtMoney(order.estimatedTotal)}</td></tr></tfoot>` +
+        `<tfoot><tr style="border-top:1px solid #ccc;font-weight:bold"><td></td><td>Estimated total</td><td style="text-align:right">${escapeHtml(fmtMoney(order.estimatedTotal))}</td></tr></tfoot>` +
         `</table>` +
-        `${order.note ? `<p style="margin-top:12px;font-size:12px;font-style:italic">"${order.note}"</p>` : ""}` +
+        `${order.note ? `<p style="margin-top:12px;font-size:12px;font-style:italic">"${escapeHtml(order.note)}"</p>` : ""}` +
         `<p style="margin-top:14px;font-size:11px;color:#888">Final price is set at billing.</p>` +
         `<script>window.onload=function(){window.print()}</script></body></html>`,
     );

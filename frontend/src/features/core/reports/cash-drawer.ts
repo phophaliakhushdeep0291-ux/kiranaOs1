@@ -1,4 +1,5 @@
 import { offlineDB } from "@/lib/offline/db";
+import { roundMoney } from "@/lib/money";
 
 /**
  * The till, as opposed to the takings.
@@ -40,13 +41,9 @@ const FLOAT_KEY = "kirana:opening-float:v1";
 const MOVEMENT_KEY = "kirana:cash-movements:v1";
 const MAX_DAYS = 90;
 
-function round2(value: number): number {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-}
-
 function sanitizeAmount(value: unknown): number {
   const amount = Number(value);
-  return Number.isFinite(amount) && amount > 0 ? round2(amount) : 0;
+  return Number.isFinite(amount) && amount > 0 ? roundMoney(amount) : 0;
 }
 
 /** Pure upsert: one float per date, newest first, capped. */
@@ -75,8 +72,8 @@ export function buildCashMovement(date: string, kind: CashMovementKind, amount: 
 export function summarizeCashMovements(list: CashMovement[], date: string): { cashIn: number; cashOut: number } {
   const forDate = list.filter((row) => row.date === date);
   return {
-    cashIn: round2(forDate.filter((row) => row.kind === "in").reduce((sum, row) => sum + row.amount, 0)),
-    cashOut: round2(forDate.filter((row) => row.kind === "out").reduce((sum, row) => sum + row.amount, 0)),
+    cashIn: roundMoney(forDate.filter((row) => row.kind === "in").reduce((sum, row) => sum + row.amount, 0)),
+    cashOut: roundMoney(forDate.filter((row) => row.kind === "out").reduce((sum, row) => sum + row.amount, 0)),
   };
 }
 

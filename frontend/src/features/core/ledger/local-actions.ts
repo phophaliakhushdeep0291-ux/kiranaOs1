@@ -50,8 +50,10 @@ function expandIdsWithMappings(ids: Set<string>, mappings: Array<Record<string, 
 }
 
 async function resolveCustomerIdentitySet(customerId: string): Promise<Set<string>> {
-  const customers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
-  const mappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
+  const [customers, mappings] = await Promise.all([
+    offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
+  ]);
   const customer = customers.find((row) => {
     const ids = expandIdsWithMappings(customerIdentitySet(row), mappings);
     return ids.has(customerId);
@@ -69,10 +71,14 @@ export async function readCustomerLedgerEntries(customerId: string): Promise<Cus
 }
 
 export async function refreshCustomerBalanceFromLedger(customerId: string): Promise<number> {
-  const ledger = await readCustomerLedgerEntries(customerId);
+  // readCustomerLedgerEntries reads customers and id_mappings for itself, so
+  // these three full-table reads overlap rather than queueing behind each other.
+  const [ledger, customers, mappings] = await Promise.all([
+    readCustomerLedgerEntries(customerId),
+    offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
+  ]);
   const balance = roundMoney(Math.max(0, calculateLedgerBalance(ledger)));
-  const customers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
-  const mappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
   const customer = customers.find((row) => expandIdsWithMappings(customerIdentitySet(row), mappings).has(customerId));
   if (customer) {
     const updated = {

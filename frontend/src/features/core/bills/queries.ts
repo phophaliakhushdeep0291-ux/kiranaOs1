@@ -24,7 +24,13 @@ function billCreatedAtMs(bill: Bill): number {
 }
 
 function newestBillsFirst(bills: Bill[]): Bill[] {
-  return [...bills].sort((a, b) => billCreatedAtMs(b) - billCreatedAtMs(a));
+  // billCreatedAtMs walks a six-field fallback chain and parses a date, so
+  // calling it from the comparator costs ~2n·log n parses over the shop's whole
+  // bill history. Stamp each bill once and sort on the stamp.
+  return bills
+    .map((bill) => ({ bill, at: billCreatedAtMs(bill) }))
+    .sort((a, b) => b.at - a.at)
+    .map((entry) => entry.bill);
 }
 
 function withDedupedBillPayments(bill: Bill): Bill {

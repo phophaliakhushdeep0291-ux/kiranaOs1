@@ -32,8 +32,10 @@ const statusStyle: Record<StockCountSession["status"], string> = {
   cancelled: "bg-slate-100 text-slate-600 ring-slate-200",
 };
 
+const QTY_FORMAT = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
+
 function displayQty(value: number | null | undefined) {
-  return value === null || value === undefined ? "—" : new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(value);
+  return value === null || value === undefined ? "—" : QTY_FORMAT.format(value);
 }
 
 function batches<T>(items: T[], size: number) {
