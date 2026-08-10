@@ -16,6 +16,38 @@ const REFRESH_TOKEN_TTL_DAYS = 30;
 const AUTH_TOKEN_BYTES = 32;
 const EMAIL_VERIFICATION_TTL_HOURS = 24;
 const PASSWORD_RESET_TTL_MINUTES = 30;
+const staffInviteLocks = new Map();
+
+function usesPostgresDatabase() {
+  return /^postgres(?:ql)?:\/\//i.test(env.DATABASE_URL || "");
+}
+
+async function withProcessStaffInviteLock(shopId, work) {
+  const previous = staffInviteLocks.get(shopId) ?? Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  const tail = previous.then(() => current);
+  staffInviteLocks.set(shopId, tail);
+  await previous;
+  try {
+    return await work();
+  } finally {
+    release();
+    if (staffInviteLocks.get(shopId) === tail) staffInviteLocks.delete(shopId);
+  }
+}
+
+async function withStaffInviteTransaction(shopId, work) {
+  return withProcessStaffInviteLock(shopId, () => db.$transaction(async (tx) => {
+    if (usesPostgresDatabase()) {
+      await tx.$queryRawUnsafe(
+        "SELECT pg_advisory_xact_lock(hashtext($1))::text AS lock_result",
+        `staff-invite:${shopId}`,
+      );
+    }
+    return work(tx);
+  }));
+}
 
 export async function registerShop({ shopName, ownerName, city, address, mobile, email, password, ownerPin, gstNumber, phone, businessType }, reqMeta = {}) {
   assertBusinessTypeOffered(businessType);
@@ -447,6 +479,18 @@ async function requireManageableStaff(shopId, staffId, client = db) {
   return staff;
 }
 
+async function writeRequiredStaffAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Staff access was not changed because its audit record could not be saved",
+      503,
+      "STAFF_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
 export async function getStaffLocationAssignments(shopId, staffId) {
   const [staff, locations, assignments] = await Promise.all([
     requireManageableStaff(shopId, staffId),
@@ -491,48 +535,119 @@ export async function setStaffLocationAssignments(shopId, staffId, locations, re
     await tx.userLocationAccess.createMany({
       data: locations.map((location) => ({ shopId, userId: staffId, ...location, active: true })),
     });
+    await writeRequiredStaffAudit({
+      shopId,
+      userId: requestingUserId,
+      action: "STAFF_LOCATION_ACCESS_UPDATED",
+      entityType: "User",
+      entityId: staffId,
+      metadata: { locations },
+      req: reqMeta.req,
+    }, tx);
     return { staff, assignedLocationCount: locations.length };
-  });
-
-  await createAuditLog({
-    shopId,
-    userId: requestingUserId,
-    action: "STAFF_LOCATION_ACCESS_UPDATED",
-    entityType: "User",
-    entityId: staffId,
-    metadata: { locations },
-    req: reqMeta.req,
   });
   return { ...result, assignments: await getStaffLocationAssignments(shopId, staffId) };
 }
 
-export async function inviteStaff(shopId, { name, mobile, password, role = "staff" }) {
-  await requireFeatureAccess(shopId, "staff_login");
+export async function inviteStaff(shopId, { name, mobile, email, password, role = "staff" }, requestingUserId, reqMeta = {}) {
   if (role === "owner") {
     const err = new AppError("Owner role cannot be invited through staff management", 400);
     err.code = "OWNER_ROLE_NOT_INVITABLE";
     throw err;
   }
 
-  const limit = await canAddStaff(shopId);
-  if (!limit.allowed) {
-    const err = new AppError("Staff limit exceeded for current plan", 403);
-    err.code = "STAFF_LIMIT_EXCEEDED";
-    err.meta = limit;
-    throw err;
-  }
-
-  const existing = await db.user.findFirst({ where: { shopId, mobile, disabledAt: null } });
-  if (existing) throw new AppError("A user with this mobile already exists in your shop", 409);
-
+  const normalizedEmail = normalizeEmail(email);
   const passwordHash = await bcrypt.hash(password, 10);
-  const user = await db.user.create({
-    data: { shopId, name, mobile, passwordHash, role },
+  const user = await withStaffInviteTransaction(shopId, async (tx) => {
+    await requireFeatureAccess(shopId, "staff_login", tx);
+    const limit = await canAddStaff(shopId, tx);
+    if (!limit.allowed) {
+      const err = new AppError("Staff limit exceeded for current plan", 403);
+      err.code = "STAFF_LIMIT_EXCEEDED";
+      err.meta = limit;
+      throw err;
+    }
+
+    const existing = await tx.user.findFirst({
+      where: {
+        shopId,
+        disabledAt: null,
+        OR: [mobile ? { mobile } : null, normalizedEmail ? { email: normalizedEmail } : null].filter(Boolean),
+      },
+    });
+    if (existing) throw new AppError("A user with this mobile or email already exists in your shop", 409, "STAFF_IDENTITY_EXISTS");
+
+    const created = await tx.user.create({
+      data: { shopId, name, mobile, email: normalizedEmail, passwordHash, role },
+    });
+    await writeRequiredStaffAudit({
+      shopId,
+      userId: requestingUserId,
+      action: "STAFF_CREATED",
+      entityType: "User",
+      entityId: created.id,
+      metadata: { name: created.name, mobile: created.mobile, email: created.email, role: created.role },
+      req: reqMeta.req,
+    }, tx);
+    return created;
   });
   return sanitizeUser(user);
 }
 
-export async function updateStaffRole(shopId, staffId, role) {
+export async function updateStaff(shopId, staffId, input, requestingUserId, reqMeta = {}) {
+  await requireFeatureAccess(shopId, "staff_login");
+  if (input.role !== undefined) await requireFeatureAccess(shopId, "role_based_access");
+
+  const normalizedEmail = input.email === undefined ? undefined : normalizeEmail(input.email);
+  const passwordChanged = input.password !== undefined;
+  const data = {
+    ...(input.name !== undefined ? { name: input.name } : {}),
+    ...(input.mobile !== undefined ? { mobile: input.mobile } : {}),
+    ...(input.email !== undefined ? { email: normalizedEmail } : {}),
+    ...(input.role !== undefined ? { role: input.role } : {}),
+    ...(passwordChanged ? { passwordHash: await bcrypt.hash(input.password, 10) } : {}),
+  };
+  const updated = await db.$transaction(async (tx) => {
+    const current = await tx.user.findFirst({ where: { id: staffId, shopId, disabledAt: null } });
+    if (!current) throw new AppError("Staff member not found", 404, "STAFF_NOT_FOUND");
+    if (current.role === "owner") throw new AppError("Owner account cannot be edited from staff management", 403, "OWNER_NOT_EDITABLE");
+
+    const identityConditions = [
+      input.mobile ? { mobile: input.mobile } : null,
+      normalizedEmail ? { email: normalizedEmail } : null,
+    ].filter(Boolean);
+    if (identityConditions.length > 0) {
+      const duplicate = await tx.user.findFirst({
+        where: { shopId, id: { not: staffId }, disabledAt: null, OR: identityConditions },
+        select: { id: true },
+      });
+      if (duplicate) throw new AppError("A user with this mobile or email already exists in your shop", 409, "STAFF_IDENTITY_EXISTS");
+    }
+
+    const changed = await tx.user.update({ where: { id: staffId }, data });
+    if (passwordChanged) {
+      await tx.session.updateMany({
+        where: { userId: staffId, shopId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: "STAFF_PASSWORD_CHANGED" },
+      });
+    }
+    await writeRequiredStaffAudit({
+      shopId,
+      userId: requestingUserId,
+      action: "STAFF_UPDATED",
+      entityType: "User",
+      entityId: staffId,
+      before: { name: current.name, mobile: current.mobile, email: current.email, role: current.role },
+      after: { name: changed.name, mobile: changed.mobile, email: changed.email, role: changed.role },
+      metadata: { passwordChanged, sessionsRevoked: passwordChanged },
+      req: reqMeta.req,
+    }, tx);
+    return changed;
+  });
+  return sanitizeUser(updated);
+}
+
+export async function updateStaffRole(shopId, staffId, role, requestingUserId, reqMeta = {}) {
   await requireFeatureAccess(shopId, "role_based_access");
   if (role === "owner") {
     const err = new AppError("Owner role changes require a separate owner-transfer flow", 400);
@@ -540,23 +655,35 @@ export async function updateStaffRole(shopId, staffId, role) {
     throw err;
   }
 
-  const user = await db.user.findFirst({ where: { id: staffId, shopId, disabledAt: null } });
-  if (!user) throw new AppError("Staff member not found", 404);
-  if (user.role === "owner") throw new AppError("Owner role cannot be changed from staff management", 403);
-
-  return sanitizeUser(
-    await db.user.update({ where: { id: staffId }, data: { role } })
-  );
+  const updated = await db.$transaction(async (tx) => {
+    const user = await tx.user.findFirst({ where: { id: staffId, shopId, disabledAt: null } });
+    if (!user) throw new AppError("Staff member not found", 404);
+    if (user.role === "owner") throw new AppError("Owner role cannot be changed from staff management", 403);
+    const changed = await tx.user.update({ where: { id: staffId }, data: { role } });
+    await writeRequiredStaffAudit({
+      shopId,
+      userId: requestingUserId,
+      action: "STAFF_ROLE_UPDATED",
+      entityType: "User",
+      entityId: staffId,
+      before: { role: user.role },
+      after: { role: changed.role },
+      req: reqMeta.req,
+    }, tx);
+    return changed;
+  });
+  return sanitizeUser(updated);
 }
 
 export async function removeStaff(shopId, staffId, requestingUserId, reqMeta = {}) {
-  const user = await db.user.findFirst({ where: { id: staffId, shopId, disabledAt: null } });
-  if (!user) throw new AppError("Staff member not found", 404);
-  if (user.id === requestingUserId) throw new AppError("Cannot remove yourself", 400);
-  if (user.role === "owner") throw new AppError("Cannot remove the owner", 403);
-
   const disabledAt = new Date();
-  await db.$transaction(async (tx) => {
+  return db.$transaction(async (tx) => {
+    await requireFeatureAccess(shopId, "staff_login", tx);
+    const user = await tx.user.findFirst({ where: { id: staffId, shopId, disabledAt: null } });
+    if (!user) throw new AppError("Staff member not found", 404);
+    if (user.id === requestingUserId) throw new AppError("Cannot remove yourself", 400);
+    if (user.role === "owner") throw new AppError("Cannot remove the owner", 403);
+
     await tx.session.updateMany({
       where: { userId: staffId, shopId, revokedAt: null },
       data: { revokedAt: disabledAt, revokedReason: "STAFF_DISABLED" },
@@ -571,19 +698,17 @@ export async function removeStaff(shopId, staffId, requestingUserId, reqMeta = {
         email: null,
       },
     });
+    await writeRequiredStaffAudit({
+      shopId,
+      userId: requestingUserId,
+      action: "STAFF_DISABLED",
+      entityType: "User",
+      entityId: staffId,
+      metadata: { removedRole: user.role, removedAt: disabledAt.toISOString() },
+      req: reqMeta.req,
+    }, tx);
+    return { success: true, disabledAt };
   });
-
-  await createAuditLog({
-    shopId,
-    userId: requestingUserId,
-    action: "STAFF_DISABLED",
-    entityType: "User",
-    entityId: staffId,
-    metadata: { removedRole: user.role, removedAt: disabledAt.toISOString() },
-    req: reqMeta.req,
-  });
-
-  return { success: true, disabledAt };
 }
 
 export async function changePassword(userId, shopId, { currentPassword, newPassword }) {

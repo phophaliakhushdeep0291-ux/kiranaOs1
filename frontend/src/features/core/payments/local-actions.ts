@@ -39,6 +39,7 @@ import {
   buildAuditLogOutboxInput,
   buildAuditLogRow,
 } from "@/features/core/audit-logs/local-actions";
+import { withCustomerFinancialLock } from "@/features/core/ledger/customer-financial-lock";
 
 const CUSTOMER_CACHE_KEY = "customers";
 const PAYMENT_CACHE_KEY = "payments";
@@ -417,7 +418,7 @@ async function resolveCachedAuthoritativePaymentBalance(input: {
   return roundMoney(Math.max(0, base + pendingDeltaForIds(deltas, ids)));
 }
 
-export async function recordPaymentLocalFirst(
+async function recordPaymentLocalFirstUnlocked(
   customerId: string,
   data: UdharPaymentInput,
   options: RecordPaymentOptions = {},
@@ -454,13 +455,14 @@ export async function recordPaymentLocalFirst(
   // (UDHAR_PAYMENT_EXCEEDS_OUTSTANDING); the offline path must enforce the same
   // rule so it can't drive the balance negative or queue an event that will fail
   // to sync. A tiny epsilon absorbs paise-level float drift.
+  const projectedCustomerBalance = (existing as CustomerRecord).balance_derived_from_local_ledger === true
+    ? Math.max(0, readNumber(existing.udharAmount ?? existing.totalUdhar, 0))
+    : null;
   const currentBalance = roundMoney(authoritativeBalance !== null
-    ? Math.max(
-        authoritativeBalance,
-        localCanLead ? ledgerBalance : 0,
-        localCanLead ? expectedOutstanding : 0,
-      )
-    : Math.max(ledgerBalance, expectedOutstanding));
+    ? Math.max(authoritativeBalance, localCanLead ? ledgerBalance : 0)
+    : projectedCustomerBalance !== null
+      ? Math.max(ledgerBalance, projectedCustomerBalance)
+      : Math.max(ledgerBalance, expectedOutstanding));
   const outstanding = roundMoney(Math.max(0, currentBalance));
   if (moneyExceeds(amount, outstanding)) {
     const error = new Error(
@@ -626,6 +628,15 @@ export async function recordPaymentLocalFirst(
     action: "appended",
   });
   return { success: true, paymentId, customerId, amount, pendingSync: true };
+}
+
+export function recordPaymentLocalFirst(
+  customerId: string,
+  data: UdharPaymentInput,
+  options: RecordPaymentOptions = {},
+): Promise<LocalPaymentResult> {
+  return withCustomerFinancialLock(customerId, () =>
+    recordPaymentLocalFirstUnlocked(customerId, data, options));
 }
 
 export async function reversePaymentWithOwnerPinLocalFirst(input: {

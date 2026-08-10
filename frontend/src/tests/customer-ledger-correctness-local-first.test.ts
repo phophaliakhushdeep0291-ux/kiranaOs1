@@ -10,6 +10,7 @@ const dbState = vi.hoisted(() => ({
   },
   committed: {} as Record<string, Array<Record<string, unknown>>>,
   idCounter: 0,
+  failTransactionBeforeCommit: false,
 }));
 
 function clone<T>(value: T): T {
@@ -80,6 +81,7 @@ vi.mock("@/lib/offline/db", () => ({
         }, staged)),
       };
       await callback(tx);
+      if (dbState.failTransactionBeforeCommit) throw new Error("simulated transaction commit failure");
       dbState.committed = staged;
     }),
   },
@@ -105,6 +107,7 @@ import { applyAuthoritativeUdharSummary, reconcileCustomerWithAuthoritativeSumma
 
 function resetTables() {
   dbState.idCounter = 0;
+  dbState.failTransactionBeforeCommit = false;
   dbState.committed = {
     customers: [],
     bills: [],
@@ -289,8 +292,57 @@ describe("customer ledger correctness", () => {
       note: "clear udhar",
       expectedOutstanding: 630,
     });
-    expect(entry).toEqual(expect.objectContaining({ type: "ADJUSTMENT", amount: -630 }));
+    expect(entry).toEqual(expect.objectContaining({ type: "ADJUSTMENT", amount: -630, balance_after: 0 }));
+    expect(scopedRows("customers").find((row) => row.id === "customer_1")).toEqual(
+      expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }),
+    );
+    expect(scopedRows("local_audit_logs")).toEqual([
+      expect.objectContaining({ action: "ledger_adjusted", entity_id: entry.id, owner_pin_provided: true }),
+    ]);
     expect(scopedRows("sync_outbox").some((row) => row.operation_type === "CREATE_LEDGER_ADJUSTMENT")).toBe(true);
+  });
+
+  it("projects an adjustment from the displayed authoritative balance in one atomic write", async () => {
+    const entry = await createLedgerAdjustmentLocalFirst({
+      customerId: "customer_1",
+      amount: -30,
+      ownerPin: "1234",
+      note: "correct old balance",
+      expectedOutstanding: 630,
+    });
+
+    expect(entry).toEqual(expect.objectContaining({ amount: -30, balance_after: 600 }));
+    expect(scopedRows("customers").find((row) => row.id === "customer_1")).toEqual(
+      expect.objectContaining({ udharAmount: 600, totalUdhar: 600 }),
+    );
+    const adjustment = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_LEDGER_ADJUSTMENT");
+    expect(adjustment).toEqual(expect.objectContaining({
+      entity_id: entry.id,
+      idempotency_key: `ledger-adjustment:customer_1:${entry.id}`,
+      payload: expect.objectContaining({
+        ledgerEntryId: entry.id,
+        clientLedgerId: entry.id,
+        idempotencyKey: `ledger-adjustment:customer_1:${entry.id}`,
+      }),
+    }));
+  });
+
+  it("rolls back the adjustment, customer projection, audit, and outbox together", async () => {
+    dbState.failTransactionBeforeCommit = true;
+
+    await expect(createLedgerAdjustmentLocalFirst({
+      customerId: "customer_1",
+      amount: 75,
+      ownerPin: "1234",
+      note: "opening correction",
+    })).rejects.toThrow("simulated transaction commit failure");
+
+    expect(scopedRows("customer_ledger")).toHaveLength(0);
+    expect(scopedRows("local_audit_logs")).toHaveLength(0);
+    expect(scopedRows("sync_outbox")).toHaveLength(0);
+    expect(scopedRows("customers").find((row) => row.id === "customer_1")).toEqual(
+      expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }),
+    );
   });
 
   it("payment validates against the authoritative balance, not the drifted local ledger", async () => {
@@ -314,7 +366,25 @@ describe("customer ledger correctness", () => {
     // The guard still holds — it just measures against the authoritative number.
     await expect(
       recordPaymentLocalFirst("customer_1", { amount: 900, mode: "cash" }, { expectedOutstanding: 300 }),
-    ).rejects.toThrow(/exceeds outstanding udhar ₹300/);
+    ).rejects.toThrow(/exceeds outstanding udhar ₹150/);
+  });
+
+  it("serializes concurrent payments and revalidates against the committed projection", async () => {
+    const attempts = await Promise.allSettled([
+      recordPaymentLocalFirst("customer_1", { amount: 200, mode: "cash" }, { expectedOutstanding: 300 }),
+      recordPaymentLocalFirst("customer_1", { amount: 200, mode: "upi" }, { expectedOutstanding: 300 }),
+    ]);
+
+    expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
+    const rejected = attempts.find((attempt): attempt is PromiseRejectedResult => attempt.status === "rejected");
+    expect(rejected?.reason).toEqual(expect.objectContaining({ code: "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING" }));
+    expect(String(rejected?.reason?.message)).toMatch(/exceeds outstanding udhar ₹100/);
+    expect(scopedRows("payments")).toHaveLength(1);
+    expect(scopedRows("customer_ledger").filter((row) => row.type === "PAYMENT")).toHaveLength(1);
+    expect(scopedRows("customers").find((row) => row.id === "customer_1")).toEqual(
+      expect.objectContaining({ udharAmount: 100, totalUdhar: 100 }),
+    );
+    expect(scopedRows("sync_outbox").filter((row) => row.operation_type === "RECORD_PAYMENT")).toHaveLength(1);
   });
 
   it("CANCELLED_BILL reverses udhar impact by appending a correction without mutating the original BILL ledger entry", async () => {

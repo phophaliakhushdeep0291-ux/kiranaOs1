@@ -358,6 +358,51 @@ if (ctx.skip) {
       assert.equal(history.purchaseDueDate.toISOString().slice(0, 10), "2026-06-18");
     });
 
+    test("CREATE_LEDGER_ADJUSTMENT rejects missing and wrong owner PIN without changing udhar", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id);
+      const basePayload = {
+        customerId: customer.id,
+        amount: 200,
+        note: "unauthorised correction",
+      };
+
+      const missingPin = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{
+          type: "CREATE_LEDGER_ADJUSTMENT",
+          eventId: "ladj-missing-pin",
+          payload: {
+            ...basePayload,
+            idempotencyKey: "ledger-adjust:missing-pin",
+            clientLedgerId: "ledger-adjust:missing-pin",
+          },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(missingPin.summary.failed, 1);
+      assert.equal(missingPin.results[0].code, "PERMISSION_DENIED");
+
+      const wrongPin = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{
+          type: "CREATE_LEDGER_ADJUSTMENT",
+          eventId: "ladj-wrong-pin",
+          payload: {
+            ...basePayload,
+            ownerPin: "0000",
+            idempotencyKey: "ledger-adjust:wrong-pin",
+            clientLedgerId: "ledger-adjust:wrong-pin",
+          },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(wrongPin.summary.failed, 1);
+      assert.equal(wrongPin.results[0].code, "PERMISSION_DENIED");
+
+      assert.equal(await ctx.db.udharLedger.count({
+        where: { shopId: tenant.shop.id, customerId: customer.id, mode: "adjustment" },
+      }), 0);
+      const unchanged = await ctx.db.customer.findUnique({ where: { id: customer.id } });
+      assert.equal(unchanged.udharAmount, 0);
+    });
+
     test("CREATE_LEDGER_ADJUSTMENT replayed under a new event id applies to udhar once", async () => {
       // A manual udhar adjustment that committed but lost its ack gets re-pushed under a new event
       // id. Event-level idempotency cannot catch this (different event ids), and a double apply
@@ -369,6 +414,7 @@ if (ctx.skip) {
         customerId: customer.id,
         amount: 200, // debit adjustment: +₹200
         note: "manual correction",
+        ownerPin: "1234",
         idempotencyKey: "ledger-adjust:test:1",
         clientLedgerId: "ledger-adjust:test:1",
       };
@@ -397,6 +443,7 @@ if (ctx.skip) {
             customerId: customer.id,
             amount: 200,
             note: "opening correction",
+            ownerPin: "1234",
             idempotencyKey: "ledger-adjust:negative-seed",
             clientLedgerId: "ledger-adjust:negative-seed",
           },
@@ -411,6 +458,7 @@ if (ctx.skip) {
             customerId: customer.id,
             amount: -60,
             note: "reduce wrong opening balance",
+            ownerPin: "1234",
             idempotencyKey: "ledger-adjust:negative-1",
             clientLedgerId: "ledger-adjust:negative-1",
           },

@@ -2,6 +2,7 @@ import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { activateDeviceViaApi, billPayload, createCustomer, createProduct, createStaff, createTenant, customerPayload, login, productPayload } from "./factories.js";
+import * as authService from "../../src/modules/auth/auth.service.js";
 
 const ctx = await createIntegrationContext();
 
@@ -125,6 +126,149 @@ if (ctx.skip) {
       const ownerAllClosing = assertSuccess(await ctx.get("/api/reports/daily-closing?source=live", { token: ownerAuth.accessToken, headers: { "x-location-id": "all" } }));
       assert.equal(ownerAllClosing.totalBills, 1);
       assert.deepEqual(ownerAllClosing.location, { id: "all", code: "ALL", name: "All locations" });
+    });
+
+    test("owner staff edits are audited atomically and password changes revoke active staff sessions", async () => {
+      const { tenant, staff, ownerAuth, staffAuth } = await authPair();
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { planCode: "pro" } });
+
+      const updated = assertSuccess(await ctx.request("PATCH", `/api/auth/staff/${staff.staff.id}`, {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+        body: {
+          name: "Updated Counter Manager",
+          email: "counter.manager@example.com",
+          role: "admin",
+          password: "NewStaffPass123",
+        },
+      }));
+      assert.equal(updated.id, staff.staff.id);
+      assert.equal(updated.name, "Updated Counter Manager");
+      assert.equal(updated.email, "counter.manager@example.com");
+      assert.equal(updated.mobile, staff.staffMobile, "an omitted identity field must be retained");
+      assert.equal(updated.role, "admin");
+      assert.equal("passwordHash" in updated, false);
+
+      assertFailure(await ctx.get("/api/auth/me", { token: staffAuth.accessToken }), 401);
+      assertFailure(await ctx.post("/api/auth/login", { mobile: staff.staffMobile, password: staff.staffPassword }), 401);
+      assertSuccess(await ctx.post("/api/auth/login", { mobile: staff.staffMobile, password: "NewStaffPass123" }));
+
+      const revoked = await ctx.db.session.count({
+        where: { userId: staff.staff.id, shopId: tenant.shop.id, revokedReason: "STAFF_PASSWORD_CHANGED" },
+      });
+      assert.ok(revoked >= 1, "every active staff session should be revoked with an explicit reason");
+      const audit = await ctx.db.auditLog.findFirst({
+        where: { shopId: tenant.shop.id, action: "STAFF_UPDATED", entityId: staff.staff.id },
+        orderBy: { createdAt: "desc" },
+      });
+      assert.ok(audit, "the owner-sensitive edit must have a durable audit row");
+      assert.match(audit.metadataJson || "", /"passwordChanged":true/);
+      assert.match(audit.metadataJson || "", /"sessionsRevoked":true/);
+      assert.doesNotMatch(audit.metadataJson || "", /NewStaffPass123/);
+    });
+
+    test("staff management cannot edit the owner account", async () => {
+      const { tenant, ownerAuth } = await authPair();
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { planCode: "pro" } });
+      const response = assertFailure(await ctx.request("PATCH", `/api/auth/staff/${tenant.owner.id}`, {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+        body: { name: "Unexpected owner rewrite" },
+      }), 403);
+      assert.equal(response.code, "OWNER_NOT_EDITABLE");
+    });
+
+    test("a required staff-audit failure rolls the staff mutation back", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { planCode: "growth" } });
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_staff_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STAFF_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced staff audit failure');
+        END
+      `);
+
+      let failure;
+      try {
+        await authService.inviteStaff(tenant.shop.id, {
+          name: "Must Roll Back",
+          mobile: "9000000099",
+          password: "StaffPass123",
+          role: "staff",
+        }, tenant.owner.id);
+      } catch (error) {
+        failure = error;
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_staff_audit_failure");
+      }
+
+      assert.equal(failure?.statusCode, 503);
+      assert.equal(failure?.code, "STAFF_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.user.count({
+        where: { shopId: tenant.shop.id, disabledAt: null, role: { in: ["staff", "admin"] } },
+      }), 0, "the staff row must roll back when its required audit cannot be stored");
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "STAFF_CREATED" },
+      }), 0);
+    });
+
+    test("simultaneous staff invitations cannot exceed the plan seat limit", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      await ctx.db.subscription.update({ where: { shopId: tenant.shop.id }, data: { planCode: "growth" } });
+
+      const responses = await Promise.allSettled(Array.from({ length: 6 }, (_, index) => authService.inviteStaff(
+        tenant.shop.id,
+        {
+          name: `Concurrent Staff ${index + 1}`,
+          mobile: String(9000000100 + index),
+          password: "StaffPass123",
+          role: "staff",
+        },
+        tenant.owner.id,
+      )));
+
+      const successes = responses.filter((response) => response.status === "fulfilled");
+      const rejected = responses.filter((response) => response.status === "rejected");
+      assert.equal(successes.length, 5, JSON.stringify(responses));
+      assert.equal(rejected.length, 1, JSON.stringify(responses));
+      assert.equal(rejected[0].reason?.code, "STAFF_LIMIT_EXCEEDED");
+      assert.equal(rejected[0].reason?.meta?.staffCount, 5);
+      assert.equal(rejected[0].reason?.meta?.maxStaff, 5);
+
+      const [staffCount, auditCount] = await Promise.all([
+        ctx.db.user.count({ where: { shopId: tenant.shop.id, role: { in: ["staff", "admin"] } } }),
+        ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "STAFF_CREATED" } }),
+      ]);
+      assert.equal(staffCount, 5, "the database must contain no over-limit sixth seat");
+      assert.equal(auditCount, 5, "each admitted seat must have exactly one durable audit row");
+
+      const disabledStaff = successes[0].value;
+      const disabled = await authService.removeStaff(
+        tenant.shop.id,
+        disabledStaff.id,
+        tenant.owner.id,
+      );
+      assert.equal(disabled.success, true);
+      const replacement = await authService.inviteStaff(tenant.shop.id, {
+        name: "Replacement Staff",
+        mobile: "9000000199",
+        password: "StaffPass123",
+        role: "staff",
+      }, tenant.owner.id);
+      assert.ok(replacement.id);
+
+      const [activeAfterReplacement, historicalStaffRows, createdAudits, disabledAudits] = await Promise.all([
+        ctx.db.user.count({ where: { shopId: tenant.shop.id, disabledAt: null, role: { in: ["staff", "admin"] } } }),
+        ctx.db.user.count({ where: { shopId: tenant.shop.id, role: { in: ["staff", "admin"] } } }),
+        ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "STAFF_CREATED" } }),
+        ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "STAFF_DISABLED" } }),
+      ]);
+      assert.equal(activeAfterReplacement, 5, "a disabled user must release exactly one active plan seat");
+      assert.equal(historicalStaffRows, 6, "deactivation must retain the historical user row");
+      assert.equal(createdAudits, 6);
+      assert.equal(disabledAudits, 1);
     });
 
     test("customer DELETE without owner PIN fails for staff", async () => {

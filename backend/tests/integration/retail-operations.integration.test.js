@@ -65,10 +65,18 @@ if (ctx.skip) {
 
     test("dispatches multi-line shipments, reserves in-transit stock, and receives them partially", async () => {
       const { tenant, auth } = await ownerContext();
-      const rice = await createProduct(ctx.db, tenant.shop.id, { name: "Shipment Rice", stockBaseQty: 20, gstRate: 5, hsn: "1006" });
-      const oil = await createProduct(ctx.db, tenant.shop.id, { name: "Shipment Oil", stockBaseQty: 10, gstRate: 5, hsn: "1507" });
+      const rice = await createProduct(ctx.db, tenant.shop.id, { name: "Shipment Rice", stockBaseQty: 20, lowStockThreshold: 5, reorderLevel: 10, gstRate: 5, hsn: "1006" });
+      const oil = await createProduct(ctx.db, tenant.shop.id, { name: "Shipment Oil", stockBaseQty: 10, lowStockThreshold: 0, gstRate: 5, hsn: "1507" });
       const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
       const branch = assertSuccess(await ctx.post("/api/stores", { name: "Shipment Branch", code: "SHIP01", city: "Pune" }, { token: auth.accessToken }), 201);
+
+      const initialReplenishment = assertSuccess(await ctx.get("/api/stores/replenishment-suggestions", { token: auth.accessToken }));
+      assert.equal(initialReplenishment.sourceLocation.id, primary.id);
+      assert.equal(initialReplenishment.suggestions.length, 1);
+      assert.equal(initialReplenishment.suggestions[0].destinationLocation.id, branch.id);
+      assert.equal(initialReplenishment.suggestions[0].productId, rice.id);
+      assert.equal(initialReplenishment.suggestions[0].recommendedTransferBaseQty, 15);
+      assert.equal(initialReplenishment.suggestions[0].reasonCode, "out_of_stock");
 
       const transfer = assertSuccess(await ctx.post("/api/stores/transfers", {
         fromLocationId: primary.id,
@@ -94,6 +102,8 @@ if (ctx.skip) {
       assert.equal(whileMovingMain.products.find((row) => row.id === rice.id).stockBaseQty, 13, "dispatched primary stock must not remain sellable");
       assert.equal(whileMovingMain.products.find((row) => row.id === oil.id).stockBaseQty, 6);
       assert.equal(whileMovingBranch.products.find((row) => row.id === rice.id).stockBaseQty, 0, "destination stock appears only after receipt");
+      const coveredReplenishment = assertSuccess(await ctx.get("/api/stores/replenishment-suggestions", { token: auth.accessToken }));
+      assert.equal(coveredReplenishment.suggestions.some((row) => row.destinationLocation.id === branch.id && row.productId === rice.id), false, "open incoming stock must prevent duplicate replenishment advice");
 
       const riceLine = transfer.items.find((item) => item.productId === rice.id);
       const oilLine = transfer.items.find((item) => item.productId === oil.id);

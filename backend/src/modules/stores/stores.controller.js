@@ -63,6 +63,10 @@ export async function inventory(req, res, next) {
   try { res.json({ success: true, data: await service.getLocationInventory(req.shopId, req.params.id) }); } catch (error) { next(error); }
 }
 
+export async function replenishmentSuggestions(req, res, next) {
+  try { res.json({ success: true, data: await service.getBranchReplenishmentSuggestions(req.shopId, req.user) }); } catch (error) { next(error); }
+}
+
 export async function transfers(req, res, next) {
   try { res.json({ success: true, data: await service.listTransfers(req.shopId, req.query, req.user) }); } catch (error) { next(error); }
 }

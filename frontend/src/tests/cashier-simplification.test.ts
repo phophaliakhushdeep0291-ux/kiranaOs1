@@ -34,6 +34,7 @@ describe("cashier-first product simplification", () => {
   it("uses one plain-language recovery message and an owner-only detail link", () => {
     expect(subscriptionBanner).toContain("Billing is available. New bills stay safe on this device");
     expect(subscriptionBanner).toContain("Owner details");
+    expect(subscriptionBanner).toContain('className="inline-flex min-h-11 shrink-0');
     expect(subscriptionBanner).not.toContain("Local-only mode: old data remains viewable.");
   });
 });

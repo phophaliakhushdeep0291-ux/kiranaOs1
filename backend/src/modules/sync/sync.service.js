@@ -1480,6 +1480,7 @@ async function applySyncEvent(shopId, event, user, context) {
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyReverseUdharPayment(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_LEDGER_ADJUSTMENT:
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyLedgerAdjustment(shopId, event, context);
     case SYNC_EVENT_TYPES.DELETE_CUSTOMER:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));

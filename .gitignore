@@ -11,6 +11,7 @@ build/
 coverage/
 
 *.db
+*.db.corrupt
 *.sqlite
 *.sqlite3
 dev.db

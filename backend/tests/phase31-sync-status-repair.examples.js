@@ -25,7 +25,7 @@ function run() {
   assert.equal(SYNC_EVENT_TYPES.UDHAR_PAYMENT, 'UDHAR_PAYMENT', 'frontend RECORD_PAYMENT must normalize to UDHAR_PAYMENT');
   assert.equal(OWNER_SYNC_EVENT_TYPES.has(SYNC_EVENT_TYPES.DELETE_CUSTOMER), true, 'customer delete must still be owner-gated');
   assert.equal(OWNER_SYNC_EVENT_TYPES.has(SYNC_EVENT_TYPES.RESTORE_CUSTOMER), true, 'customer restore must still be owner-gated');
-  assert.equal(OWNER_SYNC_EVENT_TYPES.has(SYNC_EVENT_TYPES.CREATE_LEDGER_ADJUSTMENT), false, 'ledger adjustments should not be blocked by owner-gate set before service handling');
+  assert.equal(OWNER_SYNC_EVENT_TYPES.has(SYNC_EVENT_TYPES.CREATE_LEDGER_ADJUSTMENT), true, 'manual ledger adjustments must remain owner-gated during offline replay');
   assert.equal(OWNER_SYNC_EVENT_TYPES.has(SYNC_EVENT_TYPES.STOCK_PURCHASE), false, 'stock purchase sync should not be blocked by owner-gate set before service handling');
   assert.equal(OWNER_SYNC_EVENT_TYPES.has(SYNC_EVENT_TYPES.STOCK_SALE), false, 'stock sale sync should not be blocked by owner-gate set before service handling');
 

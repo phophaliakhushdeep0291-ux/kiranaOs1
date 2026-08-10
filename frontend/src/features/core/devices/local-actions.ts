@@ -1,55 +1,60 @@
 import { dexieDB } from "@/lib/offline/db";
-import { getOfflineScope, nowIso } from "@/lib/offline/context";
-import { createLocalId } from "@/lib/offline/instant-cache";
-import { enqueueOutboxOperation } from "@/features/core/sync/outbox";
-import { createPendingDeviceRegistration, markDeviceRemovePending, type DeviceRegistration } from "@/features/core/devices/license";
+import { nowIso } from "@/lib/offline/context";
+import { emitLocalDataChanged } from "@/lib/offline/instant-cache";
+import { activateDevice, removeDevice } from "@/features/core/devices/api";
+import {
+  listCachedDevices,
+  markCurrentDeviceActivated,
+  writeOfflineLicenseToken,
+  type DeviceRegistration,
+} from "@/features/core/devices/license";
 
+function record(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+/** Register the current browser only after the device service accepts it. */
 export async function addDeviceLocalFirst(deviceName: string): Promise<DeviceRegistration> {
   const name = deviceName.trim();
   if (name.length < 2) throw new Error("Enter a device name before adding.");
-  const device = await createPendingDeviceRegistration(name);
-  await enqueueOutboxOperation({
-    entity_type: "device_license",
-    entity_id: device.id,
-    operation_type: "DEVICE_ADD_PENDING",
-    payload: { device, requested_at: nowIso() },
-    idempotency_key: `device-add:${device.tenant_id}:${device.store_id}:${device.id}`,
-  });
-  await writeDeviceAudit("device_activation", device.id, { device_name: name });
-  return device;
+  const response = await activateDevice(name);
+  if (response.license) await writeOfflineLicenseToken(response.license, "backend-activation");
+  return markCurrentDeviceActivated(name);
 }
 
+/**
+ * Device removal is security-sensitive and cannot be queued offline. The local
+ * fallback list changes only after the backend has revoked the device/session.
+ */
 export async function removeDeviceLocalFirst(deviceId: string, ownerPin: string): Promise<DeviceRegistration> {
-  const device = await markDeviceRemovePending(deviceId, ownerPin);
-  await enqueueOutboxOperation({
-    entity_type: "device_license",
-    entity_id: device.id,
-    operation_type: "DEVICE_REMOVE_PENDING",
-    payload: { device_id: device.device_id, row_id: device.id, owner_pin_provided: true, requested_at: nowIso() },
-    idempotency_key: `device-remove:${device.tenant_id}:${device.store_id}:${device.id}`,
-  });
-  await writeDeviceAudit("device_remove_requested", device.id, { device_id: device.device_id });
-  return device;
-}
+  if (!/^\d{4}$/.test(ownerPin.trim())) throw new Error("Owner PIN is required to remove a device.");
+  const devices = await listCachedDevices();
+  const target = devices.find((device) => device.id === deviceId || device.device_id === deviceId);
+  if (!target) throw new Error("Device not found in the saved device list.");
 
-async function writeDeviceAudit(action: string, entityId: string, after: Record<string, unknown>) {
-  const scope = getOfflineScope();
+  await removeDevice(target.device_id, ownerPin, { removeCurrentDevice: target.is_current_device });
+
   const now = nowIso();
-  await dexieDB.local_audit_logs.put({
-    id: createLocalId("audit"),
-    action,
-    entity_type: "device_license",
-    entity_id: entityId,
-    after,
-    actor_id: "owner",
-    tenant_id: scope.tenant_id,
-    store_id: scope.store_id,
-    device_id: scope.device_id,
-    created_at: now,
-    updated_at: now,
-    deleted_at: null,
-    version: 1,
-    sync_status: "pending_sync",
-    last_modified_by: "owner",
-  });
+  const cached = await dexieDB.device_license_cache.get(target.id).catch(() => undefined);
+  if (cached) {
+    const payload = record(cached.payload);
+    await dexieDB.device_license_cache.put({
+      ...cached,
+      status: "removed",
+      payload: { ...payload, status: "removed", removed_at: now, owner_action_required: false },
+      updated_at: now,
+      deleted_at: now,
+      sync_status: "synced",
+    }).catch(() => undefined);
+    emitLocalDataChanged();
+  }
+  return {
+    ...target,
+    status: "removed",
+    sync_status: "synced",
+    removed_at: now,
+    owner_action_required: false,
+  };
 }

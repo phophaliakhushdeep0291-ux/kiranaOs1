@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "KiranaOS competitive capability evidence",
-  "generatedAt": "2026-08-08",
+  "generatedAt": "2026-08-11",
   "scoreScale": 10,
   "statusFactors": {
     "verified": 1,
@@ -13,6 +13,7 @@
     "www.zoho.com",
     "www.petpooja.com",
     "www.gofrugal.com",
+    "help.shopify.com",
     "resources.ondc.org",
     "pos.toasttab.com",
     "www.lightspeedhq.com"
@@ -165,28 +166,34 @@
       "weight": 40,
       "status": "verified",
       "proofKind": "code_controlled",
-      "summary": "Location stock, branch purchasing, transfers, closing and reports are implemented with tenant isolation.",
+      "summary": "Location stock, branch purchasing, deterministic threshold replenishment, multi-line transfer orders, in-transit reservation, partial receiving, remainder cancellation, closing and reports are implemented with tenant isolation and immutable audit events.",
       "competitorEvidence": [
-        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/multi-store-pos/", "claim": "Centralized inventory and branch operations are multi-store benchmarks." }
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/multi-store-pos/", "claim": "Centralized inventory and branch operations are multi-store benchmarks." },
+        { "product": "Zoho Inventory", "url": "https://www.zoho.com/us/inventory/help/warehouses/transfer-orders.html", "claim": "Transfer orders benchmark multi-line shipment, approval, tracking, serial or batch handling and receipt workflows." },
+        { "product": "Shopify", "url": "https://help.shopify.com/manual/products/inventory/transfer-locations", "claim": "Inventory transfers benchmark shipment tracking and partial destination receiving." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/src/modules/stores/stores.service.js", "frontend/src/features/core/inventory/pages/StockTransfersPage.tsx"],
-        "testCommands": ["cd backend && npm run test:integration", "cd frontend && npm test"]
+        "sourcePaths": ["backend/src/modules/stores/stores.service.js", "backend/src/modules/stores/stores.routes.js", "backend/tests/integration/retail-operations.integration.test.js", "frontend/src/features/core/inventory/pages/StockTransfersPage.tsx"],
+        "testCommands": ["cd backend && npm run test:integration", "cd backend && npm run test:compliance", "cd frontend && npm test"]
       },
-      "lastVerifiedAt": "2026-08-08"
+      "lastVerifiedAt": "2026-08-11"
     },
     {
       "id": "warehouse_repackaging",
       "domain": "multi_store",
       "weight": 25,
-      "status": "absent",
+      "status": "partial",
       "proofKind": "code_controlled",
-      "summary": "Central warehouse binning, bulk repackaging and automatic branch replenishment are not implemented as complete workflows.",
+      "summary": "Warehouse-grade transfer orders now support multiple product lines, approval, in-transit reservation, carrier tracking, partial receiving, safe remainder cancellation and reviewable branch replenishment recommendations that account for open incoming stock. Bin locations, bulk repackaging and unattended replenishment execution remain incomplete.",
       "competitorEvidence": [
-        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "Central warehousing, repackaging and outlet replenishment are leading multi-store capabilities." }
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "Central warehousing, repackaging and outlet replenishment are leading multi-store capabilities." },
+        { "product": "Zoho Inventory", "url": "https://www.zoho.com/us/inventory/help/warehouses/transfer-orders.html", "claim": "Transfer orders benchmark in-transit and instant modes, approvals, tracking and manual receipt." }
       ],
-      "kiranaEvidence": { "sourcePaths": [], "testCommands": [] },
-      "lastVerifiedAt": "2026-08-08"
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/prisma/schema.prisma", "backend/prisma-postgres/migrations/000102_stock_transfer_lifecycle/migration.sql", "backend/src/modules/stores/stores.service.js", "backend/src/modules/stores/stores.routes.js", "backend/tests/integration/retail-operations.integration.test.js", "frontend/src/features/core/inventory/pages/StockTransfersPage.tsx"],
+        "testCommands": ["cd backend && npm run test:integration", "cd backend && npm run migration:safety", "cd frontend && npm test"]
+      },
+      "lastVerifiedAt": "2026-08-11"
     },
     {
       "id": "local_print_bridge",
