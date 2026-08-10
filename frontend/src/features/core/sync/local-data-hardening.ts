@@ -114,6 +114,22 @@ function rowPriority(row: MutableRow): number {
   return score;
 }
 
+/**
+ * Sort rows by rowPriority without paying for it inside the comparator.
+ *
+ * rowPriority reads eight candidate date fields and parses one, so calling it
+ * from a comparator costs ~2n·log n evaluations — over a whole table that is the
+ * bulk of a repair pass. Stamping each row once and sorting the stamps keeps the
+ * order identical (the sort stays stable either way) for n evaluations.
+ */
+function sortedByPriority(rows: MutableRow[], order: "highest-first" | "lowest-first"): MutableRow[] {
+  const direction = order === "highest-first" ? 1 : -1;
+  return rows
+    .map((row) => ({ row, priority: rowPriority(row) }))
+    .sort((a, b) => direction * (b.priority - a.priority))
+    .map((entry) => entry.row);
+}
+
 function timeBucket(row: MutableRow): string {
   const raw = readStringFrom(row, ["paid_at", "paidAt", "entry_at", "entryAt", "created_at", "createdAt", "updated_at", "updatedAt"]);
   if (!raw) return "unknown-time";
@@ -435,12 +451,11 @@ async function repairDuplicateBillEchoRows(): Promise<number> {
     await dexieDB.bills.filter(rowMatchesCurrentScope).toArray().catch(() => []),
   ) as MutableRow[];
   const activeRows = rows.filter((row) => !isDeleted(row));
-  const serverRows = activeRows
-    .filter(rowHasServerProof)
-    .sort((a, b) => rowPriority(b) - rowPriority(a));
-  const localEchoRows = activeRows
-    .filter((row) => rowLooksLocalEcho(row) && !rowHasServerProof(row))
-    .sort((a, b) => rowPriority(a) - rowPriority(b));
+  const serverRows = sortedByPriority(activeRows.filter(rowHasServerProof), "highest-first");
+  const localEchoRows = sortedByPriority(
+    activeRows.filter((row) => rowLooksLocalEcho(row) && !rowHasServerProof(row)),
+    "lowest-first",
+  );
 
   let merged = 0;
   const usedLocalIds = new Set<string>();

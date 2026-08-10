@@ -25,6 +25,7 @@ describe("premium UX foundations", () => {
     expect(routeTransition).toContain('aria-live="polite"');
     expect(routeTransition).toContain("page loaded");
     expect(styles).toContain(".app-skip-link:focus");
+    expect(styles).toMatch(/\.app-skip-link\s*\{[\s\S]*?min-height:\s*44px/);
   });
 
   it("gives reusable form controls stable relationships and live validation", () => {

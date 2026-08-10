@@ -560,11 +560,17 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
           if (cancelled) return;
           const activeRows = rows.filter(activeProduct);
           setProductsById(Object.fromEntries(activeRows.map((product) => [product.id, product])));
-          setRecentProducts(
-            activeRows
-              .sort((a, b) => sortTime(b.updatedAt ?? b.updated_at ?? b.createdAt ?? b.created_at) - sortTime(a.updatedAt ?? a.updated_at ?? a.createdAt ?? a.created_at))
-              .slice(0, 8),
-          );
+          // sortTime parses a date, and calling it inside the comparator costs
+          // ~2n·log n parses across the whole catalogue just to surface eight
+          // rows — on every local-data-changed event. Stamp each row once and
+          // sort on the number. Also leaves activeRows unsorted, since .sort()
+          // would otherwise reorder the array in place.
+          const byRecency = activeRows
+            .map((product) => ({ product, at: sortTime(product.updatedAt ?? product.updated_at ?? product.createdAt ?? product.created_at) }))
+            .sort((a, b) => b.at - a.at)
+            .slice(0, 8)
+            .map((entry) => entry.product);
+          setRecentProducts(byRecency);
         })
         .catch(() => {
           if (!cancelled) {
