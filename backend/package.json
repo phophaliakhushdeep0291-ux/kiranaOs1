@@ -94,7 +94,7 @@
     "test:remote-support": "node scripts/run-db-example-tests.js tests/remote-support.examples.js tests/remote-support-playbooks.examples.js tests/remote-support-settings.examples.js tests/remote-support-http.examples.js",
     "test:event-bus": "node tests/event-bus.examples.js",
     "test:activity": "node scripts/run-db-example-tests.js tests/activity-personalization.examples.js",
-    "test:packaging-db": "node scripts/run-db-example-tests.js tests/packaging-mode-guard.examples.js tests/per-pack-low-stock.examples.js tests/per-pack-return.examples.js tests/per-pack-stock-in.examples.js tests/per-pack-stock-out.examples.js tests/per-pack-sync-stock.examples.js",
+    "test:packaging-db": "node scripts/run-db-example-tests.js tests/change-log-shop-cascade.examples.js tests/packaging-mode-guard.examples.js tests/per-pack-low-stock.examples.js tests/per-pack-return.examples.js tests/per-pack-stock-in.examples.js tests/per-pack-stock-out.examples.js tests/per-pack-sync-stock.examples.js",
     "test:rentals": "node tests/rental-availability.examples.js",
     "test:verticals": "node tests/business-vertical-architecture.examples.js && node tests/shop-type-plan-entitlements.examples.js",
     "test:batch-mrp": "node tests/batch-mrp.examples.js",

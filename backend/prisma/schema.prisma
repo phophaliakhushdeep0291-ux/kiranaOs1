@@ -1980,7 +1980,7 @@ model ChangeLog {
   payloadJson String   @default("{}")
   createdAt   DateTime @default(now())
 
-  shop Shop @relation(fields: [shopId], references: [id])
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId, seq])
   @@index([shopId, entityType, entityId])

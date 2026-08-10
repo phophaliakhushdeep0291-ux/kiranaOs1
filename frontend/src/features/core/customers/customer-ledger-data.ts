@@ -454,10 +454,15 @@ function scheduleFinancialHardening(): void {
 export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
   scheduleFinancialHardening();
   const cached = readInstantCache<Customer[]>("customers", []);
-  const dbCustomers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
+  // Three independent full-table reads: nothing here needs one to issue the
+  // next, so they overlap instead of costing three round trips in series.
+  const [dbCustomers, ledgerRows, idMappings] = await Promise.all([
+    offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []),
+    offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
+  ]);
   const customers = uniqueById([...cached, ...dbCustomers].filter((customer) => !isDeleted(customer as unknown as Record<string, unknown>)) as Array<Customer & Record<string, unknown>>);
-  const ledger = dedupeLedgerEntries(await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []));
-  const idMappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
+  const ledger = dedupeLedgerEntries(ledgerRows);
   const knownCustomerIds = new Set(customers.flatMap((customer) => [...expandIdsWithMappings(customerIds(customer), idMappings)]));
   const ledgerByCustomerId = new Map<string, CustomerLedgerEntry[]>();
   const ledgerOnlyGroups = new Map<string, CustomerLedgerEntry[]>();
@@ -495,26 +500,37 @@ export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
 }
 
 export async function loadCustomerDetail(customerId: string): Promise<CustomerDetailData | null> {
-  const customers = await loadCustomersWithLedger();
-  const idMappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
+  const [customers, idMappings] = await Promise.all([
+    loadCustomersWithLedger(),
+    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
+  ]);
   const customer = customers.find((row) => expandIdsWithMappings(customerIds(row), idMappings).has(customerId));
   if (!customer) return null;
   const ids = expandIdsWithMappings(customerIds(customer), idMappings);
-  const ledgerSource = dedupeLedgerEntries(await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []));
+  // Everything below reads a different table and filters it by `ids`. The reads
+  // do not depend on each other, so they go out together — this is a screen the
+  // user is sitting in front of. Issued only once the customer is known to
+  // exist, so a miss still costs nothing extra.
+  const [ledgerRows, dbBills, paymentRows, auditRows] = await Promise.all([
+    offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []),
+    offlineDB.getAll<Bill & Record<string, unknown>>("bills").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("local_audit_logs").catch(() => []),
+  ]);
+  const ledgerSource = dedupeLedgerEntries(ledgerRows);
   const ledgerEntries = ledgerSource
     .filter((entry) => {
       const id = getCustomerId(entry);
       return id ? ids.has(id) : false;
     });
   const cachedBills = readInstantCache<Array<Bill & Record<string, unknown>>>("bills", []);
-  const dbBills = await offlineDB.getAll<Bill & Record<string, unknown>>("bills").catch(() => []);
   const bills = dedupeBillsForDisplay(uniqueById([...cachedBills, ...dbBills].filter((bill) => !isDeleted(bill)) as Array<Bill & Record<string, unknown>>))
     .filter((bill) => {
       const id = getBillCustomerId(bill);
       return id ? ids.has(id) : false;
     })
     .sort((a, b) => String(b.businessDate ?? b.business_date ?? b.createdAt ?? b.created_at ?? "").localeCompare(String(a.businessDate ?? a.business_date ?? a.createdAt ?? a.created_at ?? "")));
-  const storedPayments = (await offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []))
+  const storedPayments = paymentRows
     .filter((payment) => {
       const id = getPaymentCustomerId(payment);
       return id ? ids.has(id) : false;
@@ -524,7 +540,7 @@ export async function loadCustomerDetail(customerId: string): Promise<CustomerDe
     .filter((payment): payment is Record<string, unknown> => payment !== null);
   const payments = dedupePaymentsForDisplay([...storedPayments, ...ledgerPayments])
     .sort((a, b) => String(b.paidAt ?? b.paid_at ?? b.createdAt ?? b.created_at ?? "").localeCompare(String(a.paidAt ?? a.paid_at ?? a.createdAt ?? a.created_at ?? "")));
-  const audit = (await offlineDB.getAll<Record<string, unknown>>("local_audit_logs").catch(() => []))
+  const audit = auditRows
     .filter((row) => String(row.entity_id ?? "") === customer.id || String(row.customerId ?? row.customer_id ?? "") === customer.id)
     .sort((a, b) => String(b.createdAt ?? b.created_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? "")));
   return { customer, bills, payments, ledger: buildLedgerStatement(ledgerEntries), audit };

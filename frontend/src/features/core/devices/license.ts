@@ -273,12 +273,26 @@ function payloadFromRow(row: DeviceLicenseCacheRow): Record<string, unknown> {
     : (row as unknown as Record<string, unknown>);
 }
 
+export function licenseMatchesScope(
+  token: OfflineLicenseToken | null,
+  scope = getOfflineScope(),
+): token is OfflineLicenseToken {
+  return Boolean(
+    token &&
+      token.tenant_id === scope.tenant_id &&
+      token.store_id === scope.store_id,
+  );
+}
+
 export async function readOfflineLicenseToken(): Promise<OfflineLicenseToken | null> {
   await dexieDB.open();
   const row = await dexieDB.device_license_cache
     .get(OFFLINE_LICENSE_TOKEN_ID)
     .catch(() => undefined);
-  return parseOfflineLicenseToken(row ? payloadFromRow(row) : null);
+  const token = parseOfflineLicenseToken(row ? payloadFromRow(row) : null);
+  // This table has a fixed primary key. A direct Dexie lookup bypasses the
+  // normal scoped query helpers, so reject a previous shop's entitlements.
+  return licenseMatchesScope(token) ? token : null;
 }
 
 export async function writeOfflineLicenseToken(

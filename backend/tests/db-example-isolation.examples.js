@@ -30,6 +30,7 @@ for (const name of guardedScripts) {
 }
 
 for (const file of [
+  "change-log-shop-cascade.examples.js",
   "packaging-mode-guard.examples.js",
   "per-pack-low-stock.examples.js",
   "per-pack-return.examples.js",
