@@ -38,6 +38,7 @@ for (const command of ["npm ci", "prisma:generate:postgres", "prisma:deploy:post
 assert.ok(productionCheck.includes("internal registry URLs"), "production-check must reject internal registry lockfile URLs");
 assert.ok(productionCheck.includes("package-lock root dependency"), "production-check must verify package-lock sync");
 assert.ok(productionCheck.includes("health/ready"), "production-check must verify readiness endpoint docs");
+assert.ok(productionCheck.includes("Mutation-test artifact must not ship"), "production-check must reject mutation-test debris");
 
 const pkg = JSON.parse(read("package.json"));
 assert.ok(pkg.scripts.test, "npm test must exist");

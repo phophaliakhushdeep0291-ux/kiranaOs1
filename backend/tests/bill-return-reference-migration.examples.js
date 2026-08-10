@@ -29,7 +29,7 @@ for (const snippet of ["REQUIRED_BILL_COLUMNS", "returnOfBillId", 'PRAGMA table_
   assert.ok(verifier.includes(snippet), `startup schema verification must include ${snippet}`);
 }
 
-assert.ok(pkg.scripts["prisma:deploy"], "SQLite migration deployment script must exist");
+assert.ok(pkg.scripts["prisma:deploy"].includes("prisma:deploy:postgres"), "the generic production deploy script must route to PostgreSQL");
 assert.ok(pkg.scripts["prisma:deploy:postgres"], "PostgreSQL migration deployment script must exist");
 assert.ok(pkg.scripts["prisma:generate"], "Prisma generation script must exist");
 

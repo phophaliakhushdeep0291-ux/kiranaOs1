@@ -442,8 +442,8 @@ Frontend UI changes are not included in Step 11. The required frontend manual ch
 npm run dev                # local development
 npm start                  # production start
 npm run prisma:generate    # generate Prisma client
-npm run prisma:migrate     # local migration workflow
-npm run prisma:deploy      # production migration deploy
+npm run prisma:migrate     # safely align the local SQLite schema
+npm run prisma:deploy      # production PostgreSQL migration deploy
 npm run seed               # seed demo data
 npm test                   # run all automated checks
 npm run prod:check         # verify deployment files / no forbidden local files
@@ -484,6 +484,7 @@ ALLOWED_ORIGINS=https://yourdomain.com
 Then run migrations in production with:
 
 ```bash
+npm run prisma:generate:postgres
 npm run prisma:deploy
 npm start
 ```

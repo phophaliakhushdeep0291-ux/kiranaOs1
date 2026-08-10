@@ -277,6 +277,11 @@ runStep({
     TEST_DATABASE_URL: sqliteTestUrl,
     PRISMA_CLIENT_VARIANT: "integration",
     FORCE_DB_TESTS: "true",
+    // backend-source-db generated the isolated client immediately above. The
+    // DB-example runner resets data repeatedly, but regenerating the same
+    // Windows query-engine DLL while a just-finished test still releases it is
+    // racy (EPERM). Reuse the already validated client throughout this stage.
+    SKIP_PRISMA_GENERATE: "true",
     LOG_LEVEL: "silent",
   },
 });

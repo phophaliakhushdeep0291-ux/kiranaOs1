@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeftRight, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, RotateCcw, ShieldCheck, Upload, XCircle } from "lucide-react";
 import { Link } from "wouter";
@@ -93,6 +93,11 @@ export default function ChannelSettlementsPage() {
   const [draft, setDraft] = useState<{ row: ChannelSettlementRow; input: ResolveInput } | null>(null);
   const [approval, setApproval] = useState<Approval>(null);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const lastApprovalType = useRef<"import" | "resolve">("import");
+  if (approval) lastApprovalType.current = approval.type;
+  // Radix keeps dialog content mounted briefly for its exit animation. Keep the
+  // just-completed copy stable instead of flashing the other approval variant.
+  const approvalType = approval?.type ?? lastApprovalType.current;
 
   const requiredReady = Boolean(mapping.externalOrderId && mapping.orderDate && mapping.gross && mapping.paidNet && provider.trim() && csvText);
   const summary = reportQ.data?.summary;
@@ -196,6 +201,6 @@ export default function ChannelSettlementsPage() {
       </DialogContent>
     </Dialog>
 
-    <OwnerPinModal open={Boolean(approval)} title={t(approval?.type === "import" ? "reports.settlement.approveImport" : "reports.settlement.approveDecision")} description={t(approval?.type === "import" ? "reports.settlement.approveImportHint" : "reports.settlement.approveDecisionHint")} confirmLabel={t(approval?.type === "import" ? "reports.settlement.importEvidence" : "reports.settlement.recordDecision")} loading={importM.isPending || resolveM.isPending} error={approvalError} onCancel={() => { if (!importM.isPending && !resolveM.isPending) { setApproval(null); setApprovalError(null); } }} onConfirm={({ ownerPin }) => { if (approval?.type === "import") importM.mutate(ownerPin); else if (approval?.type === "resolve") resolveM.mutate({ ownerPin, row: approval.row, input: approval.input }); }} />
+    <OwnerPinModal open={Boolean(approval)} title={t(approvalType === "import" ? "reports.settlement.approveImport" : "reports.settlement.approveDecision")} description={t(approvalType === "import" ? "reports.settlement.approveImportHint" : "reports.settlement.approveDecisionHint")} confirmLabel={t(approvalType === "import" ? "reports.settlement.importEvidence" : "reports.settlement.recordDecision")} loading={importM.isPending || resolveM.isPending} error={approvalError} onCancel={() => { if (!importM.isPending && !resolveM.isPending) { setApproval(null); setApprovalError(null); } }} onConfirm={({ ownerPin }) => { if (approval?.type === "import") importM.mutate(ownerPin); else if (approval?.type === "resolve") resolveM.mutate({ ownerPin, row: approval.row, input: approval.input }); }} />
   </div>;
 }
