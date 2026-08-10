@@ -4,7 +4,7 @@ import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
 import { validate } from "../../middleware/validate.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { requireFeature } from "../feature-gates/featureGate.middleware.js";
-import { createLocationSchema, createTransferSchema, transferComplianceReviewSchema, updateLocationSchema } from "./stores.schema.js";
+import { cancelTransferSchema, createLocationSchema, createTransferSchema, receiveTransferSchema, transferComplianceReviewSchema, updateLocationSchema } from "./stores.schema.js";
 import * as controller from "./stores.controller.js";
 import { requireLocationParamAccess } from "./location-access.service.js";
 
@@ -16,6 +16,8 @@ router.get("/:id/inventory", requireLocationParamAccess("view"), controller.inve
 router.post("/", requireRole("owner", "admin"), requireFeature("multi_store"), validate(createLocationSchema), controller.createLocation);
 router.patch("/:id", requireRole("owner", "admin"), requireFeature("multi_store"), validate(updateLocationSchema), controller.updateLocation);
 router.post("/transfers/:id/compliance-review", requireRole("owner", "admin"), requireFeature("multi_store"), requireOwnerPin, validate(transferComplianceReviewSchema), controller.reviewTransferCompliance);
+router.post("/transfers/:id/receive", requireRole("owner", "admin"), requireFeature("multi_store"), requireOwnerPin, validate(receiveTransferSchema), controller.receiveTransfer);
+router.post("/transfers/:id/cancel", requireRole("owner", "admin"), requireFeature("multi_store"), requireOwnerPin, validate(cancelTransferSchema), controller.cancelTransfer);
 router.post("/transfers", requireRole("owner", "admin"), requireFeature("multi_store"), requireOwnerPin, validate(createTransferSchema), controller.createTransfer);
 
 export default router;

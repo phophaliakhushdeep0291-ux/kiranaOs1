@@ -24,6 +24,7 @@ import { apiRequest } from "@/lib/api/http";
 import { moneyExceeds, roundMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
+import { escapeHtml } from "@/lib/escape-html";
 
 interface PaymentFormState { amount: string; mode: "cash" | "upi" | "bank"; note: string }
 interface ReverseFormState { paymentId: string }
@@ -119,11 +120,12 @@ function printStatement(
   ledgerRows: Array<{ display_date: string; display_type: string; signed_amount: number; running_balance: number; note?: string | null }>,
   t: Translate,
 ) {
-  const rows = ledgerRows.map((row) => `<tr><td>${formatDateTime(row.display_date)}</td><td>${row.display_type}</td><td>${row.note ?? ""}</td><td style="text-align:right">${formatMoney(row.signed_amount)}</td><td style="text-align:right">${formatMoney(Math.max(0, row.running_balance))}${row.running_balance < 0 ? " *" : ""}</td></tr>`).join("");
+  const rows = ledgerRows.map((row) => `<tr><td>${escapeHtml(formatDateTime(row.display_date))}</td><td>${escapeHtml(row.display_type)}</td><td>${escapeHtml(row.note)}</td><td style="text-align:right">${escapeHtml(formatMoney(row.signed_amount))}</td><td style="text-align:right">${escapeHtml(formatMoney(Math.max(0, row.running_balance)))}${row.running_balance < 0 ? " *" : ""}</td></tr>`).join("");
   const win = window.open("", "_blank", "width=720,height=840");
   if (!win) return false;
-  const statementTitle = t("customers.statement.title");
-  win.document.write(`<!doctype html><html><head><title>${customerName} ${statementTitle}</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:8px;font-size:12px}h1{font-size:20px}</style></head><body><h1>${customerName} - ${statementTitle}</h1><table><thead><tr><th>${t("customers.ledger.date")}</th><th>${t("customers.ledger.type")}</th><th>${t("customers.statement.note")}</th><th>${t("customers.statement.amount")}</th><th>${t("customers.ledger.balance")}</th></tr></thead><tbody>${rows}</tbody></table><script>window.print()</script></body></html>`);
+  const safeCustomerName = escapeHtml(customerName);
+  const statementTitle = escapeHtml(t("customers.statement.title"));
+  win.document.write(`<!doctype html><html><head><title>${safeCustomerName} ${statementTitle}</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:8px;font-size:12px}h1{font-size:20px}</style></head><body><h1>${safeCustomerName} - ${statementTitle}</h1><table><thead><tr><th>${escapeHtml(t("customers.ledger.date"))}</th><th>${escapeHtml(t("customers.ledger.type"))}</th><th>${escapeHtml(t("customers.statement.note"))}</th><th>${escapeHtml(t("customers.statement.amount"))}</th><th>${escapeHtml(t("customers.ledger.balance"))}</th></tr></thead><tbody>${rows}</tbody></table><script>window.print()</script></body></html>`);
   win.document.close();
   return true;
 }

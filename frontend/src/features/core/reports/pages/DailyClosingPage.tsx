@@ -27,6 +27,7 @@ import { useAuth } from "@/features/core/auth/useAuth";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { cn } from "@/lib/utils";
 import { useReportView } from "@/lib/activity";
+import { escapeHtml } from "@/lib/escape-html";
 
 function fmt(value: number | undefined) {
   return "₹" + Math.round(value ?? 0).toLocaleString("en-IN");
@@ -37,7 +38,7 @@ function printClosing(report: DailyClosingReport) {
     <html><head><title>Daily Closing ${report.date}</title><style>
       body{font-family:Arial,sans-serif;padding:24px;color:#111} h1{font-size:22px;margin:0 0 8px}.muted{color:#666;font-size:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.box{border:1px solid #ddd;padding:10px;border-radius:8px}.label{font-size:12px;color:#666}.value{font-weight:700;font-size:18px}table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border-bottom:1px solid #eee;padding:7px;text-align:left}th{text-transform:uppercase;font-size:11px;color:#666}.right{text-align:right}
     </style></head><body>
-      <h1>Daily Closing Report</h1><div class="muted">${report.date} • ${report.isLocalEstimate ? "Local estimate" : "Local saved data"}</div>
+      <h1>Daily Closing Report</h1><div class="muted">${escapeHtml(report.date)} • ${report.isLocalEstimate ? "Local estimate" : "Local saved data"}</div>
       <div class="grid">
         <div class="box"><div class="label">Total sales</div><div class="value">${fmt(report.totalSales)}</div></div>
         <div class="box"><div class="label">Cash in (sales + old udhar)</div><div class="value">${fmt(report.cashReceived)}</div></div>
@@ -53,8 +54,8 @@ function printClosing(report: DailyClosingReport) {
         <div class="box"><div class="label">Expected UPI net</div><div class="value">${fmt(report.expectedUpiInBank)}</div></div>
         <div class="box"><div class="label">Expected bank net</div><div class="value">${fmt(report.expectedBankInBank)}</div></div>
       </div>
-      <h2>Top sold products</h2><table><tr><th>Product</th><th class="right">Qty</th><th class="right">Sales</th></tr>${report.topSoldProducts.map((p) => `<tr><td>${p.name}</td><td class="right">${p.quantitySold}</td><td class="right">${fmt(p.revenue)}</td></tr>`).join("") || "<tr><td colspan='3'>No product sales</td></tr>"}</table>
-      <h2>Low-stock items</h2><table><tr><th>Product</th><th class="right">Stock</th><th class="right">Alert</th></tr>${report.lowStockItems.map((p) => `<tr><td>${p.name}</td><td class="right">${p.stock} ${p.unit ?? ""}</td><td class="right">${p.threshold}</td></tr>`).join("") || "<tr><td colspan='3'>No low-stock items</td></tr>"}</table>
+      <h2>Top sold products</h2><table><tr><th>Product</th><th class="right">Qty</th><th class="right">Sales</th></tr>${report.topSoldProducts.map((p) => `<tr><td>${escapeHtml(p.name)}</td><td class="right">${escapeHtml(p.quantitySold)}</td><td class="right">${escapeHtml(fmt(p.revenue))}</td></tr>`).join("") || "<tr><td colspan='3'>No product sales</td></tr>"}</table>
+      <h2>Low-stock items</h2><table><tr><th>Product</th><th class="right">Stock</th><th class="right">Alert</th></tr>${report.lowStockItems.map((p) => `<tr><td>${escapeHtml(p.name)}</td><td class="right">${escapeHtml(p.stock)} ${escapeHtml(p.unit)}</td><td class="right">${escapeHtml(p.threshold)}</td></tr>`).join("") || "<tr><td colspan='3'>No low-stock items</td></tr>"}</table>
     </body></html>`;
   const win = window.open("", "_blank", "width=820,height=720");
   if (!win) return;

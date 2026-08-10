@@ -161,22 +161,34 @@ export async function updateLocation(shopId, locationId, data) {
 }
 
 async function inventorySnapshot(client, shopId, location) {
-  const [products, secondary] = await Promise.all([
+  const [products, secondary, openTransferItems] = await Promise.all([
     client.product.findMany({
       where: { shopId, deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, baseUnit: true, displayUnit: true, stockBaseQty: true, lowStockThreshold: true, hsn: true, gstRate: true },
+      select: { id: true, name: true, barcode: true, sku: true, baseUnit: true, displayUnit: true, stockBaseQty: true, lowStockThreshold: true, hsn: true, gstRate: true },
     }),
     client.locationStock.findMany({ where: { shopId }, select: { locationId: true, productId: true, stockBaseQty: true, lowStockThreshold: true } }),
+    client.stockTransferItem.findMany({
+      where: { transfer: { shopId, status: { in: ["in_transit", "partially_received"] } } },
+      select: { productId: true, quantityBaseQty: true, receivedBaseQty: true },
+    }),
   ]);
   const rowsByKey = new Map(secondary.map((row) => [`${row.locationId}:${row.productId}`, row]));
   const allocated = new Map();
   for (const row of secondary) allocated.set(row.productId, (allocated.get(row.productId) ?? 0) + Number(row.stockBaseQty));
+  // The primary location is the company total minus every explicit secondary
+  // allocation. Stock between locations has no allocation yet, so reserve its
+  // unreceived quantity as well or it would briefly appear sellable at primary.
+  const inTransit = new Map();
+  for (const row of openTransferItems) {
+    const remaining = Math.max(0, Number(row.quantityBaseQty) - Number(row.receivedBaseQty));
+    inTransit.set(row.productId, (inTransit.get(row.productId) ?? 0) + remaining);
+  }
 
   return products.map((product) => {
     const explicit = rowsByKey.get(`${location.id}:${product.id}`);
     const stockBaseQty = location.isPrimary
-      ? Number(product.stockBaseQty) - (allocated.get(product.id) ?? 0)
+      ? Number(product.stockBaseQty) - (allocated.get(product.id) ?? 0) - (inTransit.get(product.id) ?? 0)
       : Number(explicit?.stockBaseQty ?? 0);
     const threshold = explicit?.lowStockThreshold ?? product.lowStockThreshold;
     return {
@@ -269,7 +281,21 @@ function decorateTransfer(transfer) {
   const legalSubmissionStatus = transfer.eWayReviewStatus === "external_reference_recorded"
     ? "external_reference_recorded_not_verified"
     : "not_submitted";
-  return { ...transfer, legalSubmissionStatus, complianceNotice: transferComplianceNotice(transfer) };
+  const items = (transfer.items ?? []).map((item) => ({
+    ...item,
+    remainingBaseQty: round2(Math.max(0, Number(item.quantityBaseQty) - Number(item.receivedBaseQty))),
+  }));
+  return {
+    ...transfer,
+    items,
+    receiptSummary: {
+      lineCount: items.length,
+      completedLineCount: items.filter((item) => item.remainingBaseQty <= 0.0001).length,
+      openLineCount: items.filter((item) => item.remainingBaseQty > 0.0001).length,
+    },
+    legalSubmissionStatus,
+    complianceNotice: transferComplianceNotice(transfer),
+  };
 }
 
 export async function createTransfer(shopId, data, userId, userRole = "staff") {
@@ -277,6 +303,7 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
     throw new AppError("Source and destination locations must be different", 400, "SAME_TRANSFER_LOCATION");
   }
   const items = normalizeItems(data.items);
+  const fulfillmentMode = data.fulfillmentMode || "instant";
   try {
     const transfer = await db.$transaction(async (tx) => {
       await assertLocationCapability({ shopId, userId, role: userRole, locationId: data.fromLocationId, capability: "transfer", client: tx });
@@ -367,6 +394,8 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
       const taxTotal = sumMoney(transferItems.map((item) => item.taxTotal));
       const consignmentValue = sumMoney(transferItems.map((item) => item.totalValue));
       const eWayReviewRequired = classification.registered && consignmentValue > 50000;
+      const now = new Date();
+      const completesImmediately = fulfillmentMode === "instant";
 
       for (const item of items) {
         if (!from.isPrimary) {
@@ -376,7 +405,7 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
           });
           if (updated.count !== 1) throw new AppError("Location stock changed; retry the transfer", 409, "CONCURRENT_LOCATION_STOCK_CHANGE");
         }
-        if (!to.isPrimary) {
+        if (completesImmediately && !to.isPrimary) {
           await tx.locationStock.upsert({
             where: { locationId_productId: { locationId: to.id, productId: item.productId } },
             create: { shopId, locationId: to.id, productId: item.productId, stockBaseQty: item.quantityBaseQty },
@@ -391,7 +420,8 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
           referenceNo: transferRef(),
           fromLocationId: from.id,
           toLocationId: to.id,
-          status: "completed",
+          status: completesImmediately ? "completed" : "in_transit",
+          fulfillmentMode,
           movementReason: data.movementReason || "branch_transfer",
           documentType,
           documentNumber,
@@ -414,8 +444,16 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
           ...moneyShadows({ taxableValue, cgst, sgst, igst, taxTotal, consignmentValue }),
           note: data.note || null,
           createdByUserId: userId || null,
-          completedAt: new Date(),
-          items: { create: transferItems },
+          approvedByUserId: userId || null,
+          approvedAt: now,
+          dispatchedAt: now,
+          expectedArrivalDate: fulfillmentMode === "shipment" && data.expectedArrivalDate ? parseDocumentDate(data.expectedArrivalDate) : null,
+          carrierName: fulfillmentMode === "shipment" ? data.carrierName || null : null,
+          trackingNumber: fulfillmentMode === "shipment" ? data.trackingNumber || null : null,
+          receivedByUserId: completesImmediately ? userId || null : null,
+          lastReceivedAt: completesImmediately ? now : null,
+          completedAt: completesImmediately ? now : null,
+          items: { create: transferItems.map((item) => ({ ...item, receivedBaseQty: completesImmediately ? item.quantityBaseQty : 0 })) },
         },
         include: { fromLocation: true, toLocation: true, items: true },
       });
@@ -425,6 +463,164 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
     if (error?.code === "P2002") throw new AppError("That transfer document number already exists", 409, "TRANSFER_DOCUMENT_DUPLICATE");
     throw error;
   }
+}
+
+function normalizeReceiptItems(items) {
+  const totals = new Map();
+  for (const item of items) {
+    totals.set(
+      item.transferItemId,
+      round2((totals.get(item.transferItemId) ?? 0) + Number(item.quantityBaseQty)),
+    );
+  }
+  return [...totals].map(([transferItemId, quantityBaseQty]) => ({ transferItemId, quantityBaseQty }));
+}
+
+export async function receiveTransfer(shopId, transferId, data, userId, userRole = "staff", req = null) {
+  const receiptItems = normalizeReceiptItems(data.items);
+  return db.$transaction(async (tx) => {
+    const current = await tx.stockTransfer.findFirst({
+      where: { id: transferId, shopId },
+      include: { fromLocation: true, toLocation: true, items: true },
+    });
+    if (!current) throw new AppError("Stock transfer not found", 404, "STOCK_TRANSFER_NOT_FOUND");
+    await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.fromLocationId, capability: "transfer", client: tx });
+    await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.toLocationId, capability: "transfer", client: tx });
+    if (current.fulfillmentMode !== "shipment" || !["in_transit", "partially_received"].includes(current.status)) {
+      throw new AppError("Only an open shipment can receive stock", 409, "TRANSFER_NOT_RECEIVABLE");
+    }
+
+    const itemById = new Map(current.items.map((item) => [item.id, item]));
+    const receivedLines = [];
+    for (const input of receiptItems) {
+      const item = itemById.get(input.transferItemId);
+      if (!item) throw new AppError("A receipt line does not belong to this transfer", 404, "TRANSFER_ITEM_NOT_FOUND");
+      const receivedBefore = round2(Number(item.receivedBaseQty));
+      const remaining = round2(Number(item.quantityBaseQty) - receivedBefore);
+      if (input.quantityBaseQty > remaining + 0.0001) {
+        const error = new AppError(`${item.productName} has only ${remaining} ${item.baseUnit} left to receive`, 409, "TRANSFER_RECEIPT_EXCEEDS_REMAINING");
+        error.publicData = { transferItemId: item.id, remainingBaseQty: remaining };
+        throw error;
+      }
+      const claimed = await tx.stockTransferItem.updateMany({
+        where: { id: item.id, transferId: current.id, receivedBaseQty: receivedBefore },
+        data: { receivedBaseQty: { increment: input.quantityBaseQty } },
+      });
+      if (claimed.count !== 1) throw new AppError("Receipt quantities changed; refresh and retry", 409, "CONCURRENT_TRANSFER_RECEIPT");
+
+      if (!current.toLocation.isPrimary) {
+        await tx.locationStock.upsert({
+          where: { locationId_productId: { locationId: current.toLocationId, productId: item.productId } },
+          create: { shopId, locationId: current.toLocationId, productId: item.productId, stockBaseQty: input.quantityBaseQty },
+          update: { stockBaseQty: { increment: input.quantityBaseQty } },
+        });
+      }
+      receivedLines.push({
+        transferItemId: item.id,
+        productId: item.productId,
+        productName: item.productName,
+        quantityBaseQty: input.quantityBaseQty,
+        receivedBefore,
+        receivedAfter: round2(receivedBefore + input.quantityBaseQty),
+      });
+    }
+
+    const refreshedItems = await tx.stockTransferItem.findMany({ where: { transferId: current.id } });
+    const completed = refreshedItems.every((item) => Number(item.receivedBaseQty) + 0.0001 >= Number(item.quantityBaseQty));
+    const receivedAt = new Date();
+    const nextStatus = completed ? "completed" : "partially_received";
+    const updated = await tx.stockTransfer.updateMany({
+      where: { id: current.id, shopId, status: current.status },
+      data: {
+        status: nextStatus,
+        receivedByUserId: userId || null,
+        lastReceivedAt: receivedAt,
+        ...(completed ? { completedAt: receivedAt } : {}),
+      },
+    });
+    if (updated.count !== 1) throw new AppError("Transfer status changed; refresh and retry", 409, "CONCURRENT_TRANSFER_RECEIPT");
+
+    await createAuditLog({
+      shopId,
+      userId,
+      action: completed ? "STOCK_TRANSFER_RECEIVED" : "STOCK_TRANSFER_PARTIALLY_RECEIVED",
+      entityType: "StockTransfer",
+      entityId: current.id,
+      before: { status: current.status },
+      after: { status: nextStatus, completedAt: completed ? receivedAt : null },
+      metadata: { lines: receivedLines, note: data.note || null },
+      req,
+      client: tx,
+    });
+
+    const transfer = await tx.stockTransfer.findUnique({
+      where: { id: current.id },
+      include: { fromLocation: true, toLocation: true, items: true },
+    });
+    return decorateTransfer(transfer);
+  });
+}
+
+export async function cancelTransfer(shopId, transferId, data, userId, userRole = "staff", req = null) {
+  return db.$transaction(async (tx) => {
+    const current = await tx.stockTransfer.findFirst({
+      where: { id: transferId, shopId },
+      include: { fromLocation: true, toLocation: true, items: true },
+    });
+    if (!current) throw new AppError("Stock transfer not found", 404, "STOCK_TRANSFER_NOT_FOUND");
+    await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.fromLocationId, capability: "transfer", client: tx });
+    await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.toLocationId, capability: "transfer", client: tx });
+    if (current.fulfillmentMode !== "shipment" || !["in_transit", "partially_received"].includes(current.status)) {
+      throw new AppError("Only an open shipment can be cancelled", 409, "TRANSFER_NOT_CANCELLABLE");
+    }
+
+    const returnedLines = [];
+    for (const item of current.items) {
+      const remaining = round2(Math.max(0, Number(item.quantityBaseQty) - Number(item.receivedBaseQty)));
+      if (remaining <= 0) continue;
+      if (!current.fromLocation.isPrimary) {
+        await tx.locationStock.upsert({
+          where: { locationId_productId: { locationId: current.fromLocationId, productId: item.productId } },
+          create: { shopId, locationId: current.fromLocationId, productId: item.productId, stockBaseQty: remaining },
+          update: { stockBaseQty: { increment: remaining } },
+        });
+      }
+      returnedLines.push({ productId: item.productId, productName: item.productName, returnedBaseQty: remaining });
+    }
+
+    const cancelledAt = new Date();
+    const updated = await tx.stockTransfer.updateMany({
+      where: { id: current.id, shopId, status: current.status },
+      data: {
+        status: "cancelled",
+        cancelledAt,
+        cancelledByUserId: userId || null,
+        cancelReason: data.reason,
+        eWayReviewRequired: false,
+        ...(current.eWayReviewStatus === "pending" ? { eWayReviewStatus: "not_required" } : {}),
+      },
+    });
+    if (updated.count !== 1) throw new AppError("Transfer status changed; refresh and retry", 409, "CONCURRENT_TRANSFER_CANCELLATION");
+
+    await createAuditLog({
+      shopId,
+      userId,
+      action: "STOCK_TRANSFER_CANCELLED",
+      entityType: "StockTransfer",
+      entityId: current.id,
+      before: { status: current.status },
+      after: { status: "cancelled", cancelledAt, cancelReason: data.reason },
+      metadata: { returnedLines, receivedLinesRetained: current.items.filter((item) => Number(item.receivedBaseQty) > 0).length },
+      req,
+      client: tx,
+    });
+
+    const transfer = await tx.stockTransfer.findUnique({
+      where: { id: current.id },
+      include: { fromLocation: true, toLocation: true, items: true },
+    });
+    return decorateTransfer(transfer);
+  });
 }
 
 export async function reviewTransferCompliance(shopId, transferId, data, userId, userRole = "staff", req = null) {
@@ -437,7 +633,7 @@ export async function reviewTransferCompliance(shopId, transferId, data, userId,
       if (!current) throw new AppError("Stock transfer not found", 404, "STOCK_TRANSFER_NOT_FOUND");
       await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.fromLocationId, capability: "transfer", client: tx });
       await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.toLocationId, capability: "transfer", client: tx });
-      if (current.status !== "completed") throw new AppError("Only completed transfers can be reviewed", 409, "TRANSFER_NOT_REVIEWABLE");
+      if (current.status === "cancelled") throw new AppError("A cancelled transfer cannot be reviewed", 409, "TRANSFER_NOT_REVIEWABLE");
       if (!current.eWayReviewRequired || current.eWayReviewStatus !== "pending") {
         throw new AppError("This e-way applicability review is already resolved or was never required", 409, "TRANSFER_EWAY_REVIEW_NOT_PENDING");
       }

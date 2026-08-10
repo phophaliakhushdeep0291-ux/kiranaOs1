@@ -73,7 +73,7 @@ export async function createTransfer(req, res, next) {
     await createAuditLog({
       shopId: req.shopId,
       userId: req.user?.userId,
-      action: "STOCK_TRANSFER_COMPLETED",
+      action: data.status === "completed" ? "STOCK_TRANSFER_COMPLETED" : "STOCK_TRANSFER_DISPATCHED",
       entityType: "StockTransfer",
       entityId: data.id,
       metadata: {
@@ -89,12 +89,29 @@ export async function createTransfer(req, res, next) {
         consignmentValuePaise: data.consignmentValuePaise?.toString?.() ?? null,
         eWayReviewRequired: data.eWayReviewRequired,
         legalSubmissionStatus: data.legalSubmissionStatus,
+        fulfillmentMode: data.fulfillmentMode,
+        status: data.status,
+        trackingNumber: data.trackingNumber,
       },
       req,
     });
     res.status(201).json({ success: true, data });
   } catch (error) { next(error); }
 }
+export async function receiveTransfer(req, res, next) {
+  try {
+    const data = await service.receiveTransfer(req.shopId, req.params.id, req.body, req.user?.userId, req.user?.role, req);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
+export async function cancelTransfer(req, res, next) {
+  try {
+    const data = await service.cancelTransfer(req.shopId, req.params.id, req.body, req.user?.userId, req.user?.role, req);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
+
 export async function reviewTransferCompliance(req, res, next) {
   try {
     const data = await service.reviewTransferCompliance(req.shopId, req.params.id, req.body, req.user?.userId, req.user?.role, req);
