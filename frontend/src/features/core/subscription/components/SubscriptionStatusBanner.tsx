@@ -56,12 +56,12 @@ export function SubscriptionStatusBanner() {
       : snapshot.message;
   return (
     <div className={`border-b px-3 py-1.5 sm:px-4 ${isDanger ? "bg-amber-50 text-amber-950" : "bg-amber-50 text-amber-800"}`}>
-      <div className="flex min-h-9 items-center gap-2 text-xs sm:text-sm">
+      <div className="flex min-h-11 items-center gap-2 text-xs sm:text-sm">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {snapshot.graceActive ? <AlertTriangle size={16} /> : <Icon size={16} />}
           <span className="truncate sm:whitespace-normal">{plainMessage}</span>
         </div>
-        <Link href="/subscription" className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-2 font-black text-current hover:bg-black/5">
+        <Link href="/subscription" className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 font-black text-current hover:bg-black/5">
           Owner details <ChevronRight size={14} aria-hidden="true" />
         </Link>
       </div>

@@ -122,10 +122,24 @@ export const verifyPinSchema = z.object({
 
 export const inviteStaffSchema = z.object({
   name:     z.string().min(2),
-  mobile:   indianMobile,
+  mobile:   optionalIndianMobile,
+  email:    optionalEmail,
   password: z.string().min(6),
   // Owners cannot be invited through staff management; owner transfer needs a separate audited flow.
   role:     z.enum(["staff", "admin"]).default("staff"),
+}).refine((value) => value.mobile || value.email, {
+  message: "Mobile number or email is required",
+  path: ["mobile"],
+});
+
+export const updateStaffSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  mobile: optionalIndianMobile,
+  email: optionalEmail,
+  password: z.string().min(6).optional(),
+  role: z.enum(["staff", "admin"]).optional(),
+}).refine((value) => Object.values(value).some((item) => item !== undefined), {
+  message: "At least one staff field must be changed",
 });
 
 const staffLocationAssignmentSchema = z.object({

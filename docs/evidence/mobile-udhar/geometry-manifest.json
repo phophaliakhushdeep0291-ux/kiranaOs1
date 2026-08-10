@@ -1,0 +1,55 @@
+{
+  "date": "2026-08-10",
+  "route": "/bills/cmsm86c7n002rte5d3dj7okd9",
+  "billNumber": "KOS-2026-000003",
+  "checks": [
+    {
+      "viewport": "375x667",
+      "documentWidth": 375,
+      "documentScrollWidth": 375,
+      "itemPresentation": "card",
+      "itemWidth": 331,
+      "itemContainerWidth": 331,
+      "undersizedActiveControls": 0,
+      "bottomNavigationClearancePx": 217
+    },
+    {
+      "viewport": "390x844",
+      "documentWidth": 390,
+      "documentScrollWidth": 390,
+      "itemPresentation": "card",
+      "itemWidth": 346,
+      "itemContainerWidth": 346,
+      "undersizedActiveControls": 0
+    },
+    {
+      "viewport": "430x932",
+      "documentWidth": 430,
+      "documentScrollWidth": 430,
+      "itemPresentation": "card",
+      "itemWidth": 386,
+      "itemContainerWidth": 386,
+      "undersizedActiveControls": 0
+    },
+    {
+      "viewport": "768x1024",
+      "documentWidth": 768,
+      "documentScrollWidth": 768,
+      "itemPresentation": "table",
+      "itemWidth": 660,
+      "itemContainerWidth": 660,
+      "undersizedActiveControls": 0
+    }
+  ],
+  "contentInvariants": {
+    "customerName": "Udhar Mobile QA",
+    "customerMobile": "9876500088",
+    "totalPaise": 67500,
+    "paidPaise": 0,
+    "creditPaise": 67500,
+    "portion": "Large",
+    "addOn": "Smoked mozzarella",
+    "ledgerImpactPaise": 67500
+  },
+  "scope": "Bill-detail responsive proof. The backend-unavailable checkout and recovery sequence was executed at 390x844 only."
+}

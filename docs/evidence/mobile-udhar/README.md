@@ -20,12 +20,17 @@ QA flow: MQA-BILL-01 / MQA-SYNC-01
 - Server database after the repeated sync: exactly 1 bill for the client identity, exactly 1 linked Udhar debit, 0 payment rows, and customer outstanding `67500` paise.
 - Server money: `grandTotalPaise=67500`, `paidAmountPaise=0`, `creditAmountPaise=67500`; the ledger debit is `67500` paise.
 - 390px detail geometry: document width 390/390 and 0 active controls below 44px after the shared skip-link correction.
-- 390px Sync Status geometry: document width 390/390. The live audit found the diagnostics refresh action at 36px; it is now 44px in source with a regression test, and its post-fix live recapture is intentionally still pending.
+- Final-detail width matrix: 375x667 uses a 331/331 item card, 390x844 uses 346/346, 430x932 uses 386/386, and 768x1024 uses a 660/660 table wrapper. Every document matches its viewport, every active control is at least 44px, and all four retain the exact customer, ₹675/₹0-paid/₹675-Udhar split, Large portion, ₹85 add-on and ₹675 ledger impact. At the smallest height, the final audit card clears the fixed bottom navigation by 217px when scrolled to the end.
+- 390px Sync Status geometry after the fix: document width 390/390, zero horizontal overflow, diagnostics refresh 44x44 and persistent Owner details 118x44. The same live sweep reports zero remaining active controls below 44px.
 
 ## Retained artifact
 
 - `mqa-bill-synced-detail-390x844.png` — synced final detail showing the exact customer, money split, sold-line options and one ledger impact.
+- `udhar-bill-detail-375x667.png`, `udhar-bill-detail-430x932.png`, and `udhar-bill-detail-768x1024.png` — the remaining responsive final-detail captures.
+- `geometry-manifest.json` — measured viewport, content width, item container, touch-target and bottom-navigation-clearance evidence.
+- `sync-status-touch-targets-390x844.png` — top-level Cloud Backup state with the corrected 44px Owner details action.
+- `sync-status-refresh-44px-390x844.png` — Sync diagnostics card with the corrected 44x44 refresh action and clean status.
 
 ## Scope limits
 
-This proves the backend-unavailable/local-save/retry path on one 390px device. It does not claim an operating-system airplane-mode toggle, a second-device checkout, external payment/provider delivery, or the full four-viewport matrix for the Udhar variant.
+This proves the backend-unavailable/local-save/retry path on one 390px device and the resulting bill detail at all four target widths. It does not claim the checkout itself was repeated at every width, an operating-system airplane-mode toggle, a second-device checkout, or external payment/provider delivery.

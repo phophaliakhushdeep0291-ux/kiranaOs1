@@ -43,6 +43,26 @@ describe("multi-GSTIN transfer and reporting UI", () => {
     ]) expect(transfers).toContain(contract);
     expect(transfers).toContain("does not verify the e-way bill portal");
   });
+
+  it("supports auditable multi-line shipment dispatch, partial receipt, and cancellation", () => {
+    for (const contract of [
+      'setFulfillmentMode("shipment")',
+      "draftLines.map",
+      "Dispatch and receive",
+      "Build one auditable shipment with multiple product lines",
+      "expectedArrivalDate",
+      "carrierName",
+      "trackingNumber",
+      "/receive",
+      "Receive only what physically arrived",
+      "remainingBaseQty",
+      "Cannot receive more than the remaining quantity",
+      "/cancel",
+      "only unreceived quantities return to source availability",
+      "Owner PIN approval",
+    ]) expect(transfers).toContain(contract);
+  });
+
   it("keeps GST working papers scoped to one explicit seller registration", () => {
     expect(taxes).toContain("selectedSellerGstin");
     expect(taxes).toContain("requireSellerRegistration");

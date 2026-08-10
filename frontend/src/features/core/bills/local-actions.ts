@@ -1,10 +1,10 @@
 import { offlineDB } from "@/lib/offline/db";
 import { emitLocalDataChanged, readInstantCache, upsertCachedListItem, writeInstantCache } from "@/lib/offline/instant-cache";
-import { buildOutboxOperation, enqueueOutboxOperation } from "@/features/core/sync/outbox";
+import { buildOutboxOperation } from "@/features/core/sync/outbox";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
 import type { Bill, Customer, Product } from "@/types/api";
-import { buildAuditLogOutboxInput, buildAuditLogRow, writeAuditLog } from "@/features/core/audit-logs/local-actions";
+import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
 
 const BILL_CACHE_KEY = "bills";
 const CUSTOMER_CACHE_KEY = "customers";
@@ -55,9 +55,9 @@ async function findBill(id: string): Promise<(Bill & Record<string, unknown>) | 
   return readInstantCache<Array<Bill & Record<string, unknown>>>(BILL_CACHE_KEY, []).find((bill) => bill.id === id || bill.billNo === id || bill.billNumber === id);
 }
 
-async function writeAudit(action: string, bill: Bill & Record<string, unknown>, ownerPin: string, reason?: string, oldValue?: unknown) {
+function buildBillAudit(action: string, bill: Bill & Record<string, unknown>, ownerPin: string, reason?: string, oldValue?: unknown) {
   const normalizedAction = action === "cancel_bill" ? "bill_cancelled" : action === "soft_delete_bill" ? "bill_soft_deleted" : action === "restore_bill" ? "bill_restored" : action;
-  await writeAuditLog({
+  return buildAuditLogRow({
     action: normalizedAction,
     entityType: "bill",
     entityId: bill.id,
@@ -345,15 +345,22 @@ export async function softDeleteBillWithOwnerPinLocalFirst(id: string, ownerPin:
     isSynced: false,
     is_synced: false,
   } as Bill & Record<string, unknown>;
-  await offlineDB.put("bills", updated);
-  await writeAudit("soft_delete_bill", updated, ownerPin, reason, existing);
-  updateBillCache(updated);
-  await enqueueOutboxOperation({
+  const auditRow = buildBillAudit("soft_delete_bill", updated, ownerPin, reason, existing);
+  const auditOutbox = buildOutboxOperation(buildAuditLogOutboxInput(auditRow));
+  const deleteOutbox = buildOutboxOperation({
     entity_type: "bill",
     entity_id: updated.id,
     operation_type: "SOFT_DELETE_BILL_PENDING",
+    idempotency_key: `soft-delete-bill:${updated.local_id ?? updated.id}:${now}`,
     payload: { billId: updated.id, localBillId: updated.local_id ?? updated.id, serverBillId: updated.server_id ?? null, reason: reason ?? null, ownerPin, ownerPinProvided: true },
   });
+  await offlineDB.transaction(["bills", "local_audit_logs", "sync_outbox"], async (tx) => {
+    await tx.put("bills", updated);
+    await tx.put("local_audit_logs", auditRow);
+    await tx.enqueueOutboxOperation(auditOutbox);
+    await tx.enqueueOutboxOperation(deleteOutbox);
+  });
+  updateBillCache(updated);
   emitLocalDataChanged({ type: "bill", id: updated.id, action: "soft_deleted" });
   return updated;
 }
@@ -374,15 +381,22 @@ export async function restoreBillWithOwnerPinLocalFirst(id: string, ownerPin: st
     isSynced: false,
     is_synced: false,
   } as Bill & Record<string, unknown>;
-  await offlineDB.put("bills", updated);
-  await writeAudit("restore_bill", updated, ownerPin, reason, existing);
-  updateBillCache(updated);
-  await enqueueOutboxOperation({
+  const auditRow = buildBillAudit("restore_bill", updated, ownerPin, reason, existing);
+  const auditOutbox = buildOutboxOperation(buildAuditLogOutboxInput(auditRow));
+  const restoreOutbox = buildOutboxOperation({
     entity_type: "bill",
     entity_id: updated.id,
     operation_type: "RESTORE_BILL_PENDING",
+    idempotency_key: `restore-bill:${updated.local_id ?? updated.id}:${now}`,
     payload: { billId: updated.id, localBillId: updated.local_id ?? updated.id, serverBillId: updated.server_id ?? null, reason: reason ?? null, ownerPin, ownerPinProvided: true },
   });
+  await offlineDB.transaction(["bills", "local_audit_logs", "sync_outbox"], async (tx) => {
+    await tx.put("bills", updated);
+    await tx.put("local_audit_logs", auditRow);
+    await tx.enqueueOutboxOperation(auditOutbox);
+    await tx.enqueueOutboxOperation(restoreOutbox);
+  });
+  updateBillCache(updated);
   emitLocalDataChanged({ type: "bill", id: updated.id, action: "restored" });
   return updated;
 }

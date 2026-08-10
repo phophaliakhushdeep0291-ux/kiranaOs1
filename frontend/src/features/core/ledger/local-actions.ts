@@ -2,10 +2,12 @@ import { offlineDB } from "@/lib/offline/db";
 import { addMoney, formatMoney, toPaise } from "@/lib/money";
 import { createLocalId, emitLocalDataChanged, upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
-import { enqueueOutboxOperation } from "@/features/core/sync/outbox";
+import { buildOutboxOperation } from "@/features/core/sync/outbox";
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
 import type { Customer } from "@/types/api";
 import { calculateLedgerBalance, dedupeLedgerEntries, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
+import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
+import { withCustomerFinancialLock } from "@/features/core/ledger/customer-financial-lock";
 
 const CUSTOMER_CACHE_KEY = "customers";
 const LEDGER_CACHE_KEY = "customer_ledger";
@@ -119,7 +121,7 @@ export async function appendCustomerLedgerEntry(entry: Omit<CustomerLedgerEntry,
   return row;
 }
 
-export async function createLedgerAdjustmentLocalFirst(input: {
+export interface CreateLedgerAdjustmentInput {
   customerId: string;
   amount: number;
   note?: string;
@@ -133,7 +135,11 @@ export async function createLedgerAdjustmentLocalFirst(input: {
    * backend's own negative-balance check be the final authority on sync.
    */
   expectedOutstanding?: number;
-}): Promise<CustomerLedgerEntry> {
+}
+
+async function createLedgerAdjustmentLocalFirstUnlocked(
+  input: CreateLedgerAdjustmentInput,
+): Promise<CustomerLedgerEntry> {
   parseOrThrow(ownerPinRequiredActionSchema, {
     action: "ledger_adjustment",
     ownerPin: input.ownerPin,
@@ -142,27 +148,111 @@ export async function createLedgerAdjustmentLocalFirst(input: {
   });
   const amount = roundMoney(readNumber(input.amount, 0));
   if (amount === 0) throw new Error("Adjustment amount cannot be zero");
-  const ledgerBalance = roundMoney(Math.max(0, calculateLedgerBalance(await readCustomerLedgerEntries(input.customerId))));
+  const [existingLedgerEntries, customers, mappings] = await Promise.all([
+    readCustomerLedgerEntries(input.customerId),
+    offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
+  ]);
+  const customer = customers.find((row) =>
+    expandIdsWithMappings(customerIdentitySet(row), mappings).has(input.customerId),
+  );
+  if (!customer) throw new Error("Customer not found in local records");
+
+  const ledgerBalance = roundMoney(Math.max(0, calculateLedgerBalance(existingLedgerEntries)));
   const currentBalance = roundMoney(Math.max(ledgerBalance, Math.max(0, readNumber(input.expectedOutstanding, 0))));
   if (toPaise(addMoney(currentBalance, amount)) < 0) {
     const error = new Error(`Adjustment would make udhar negative. Maximum reduction is ${formatMoney(currentBalance)}`);
     (error as Error & { code?: string }).code = "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";
     throw error;
   }
-  const entry = await appendCustomerLedgerEntry({
+  const now = new Date().toISOString();
+  const entryId = createLocalId("ledger");
+  const sourceId = createLocalId("manual_adjustment");
+  const idempotencyKey = `ledger-adjustment:${input.customerId}:${entryId}`;
+  const nextBalance = roundMoney(Math.max(0, addMoney(currentBalance, amount)));
+  const note = input.note?.trim() || "Manual ledger adjustment";
+  const entry = makeLocalEntity({
+    id: entryId,
     customerId: input.customerId,
     customer_id: input.customerId,
     type: "ADJUSTMENT",
     source_type: "manual_adjustment",
-    source_id: createLocalId("manual_adjustment"),
+    source_id: sourceId,
     amount,
-    note: input.note?.trim() || "Manual ledger adjustment",
+    balance_after: nextBalance,
+    note,
+    idempotencyKey,
+    idempotency_key: idempotencyKey,
+    localLedgerEntryId: entryId,
+    local_ledger_entry_id: entryId,
+    clientLedgerId: entryId,
+    client_ledger_id: entryId,
+    entry_at: now,
+    createdAt: now,
+    created_at: now,
+  }, "ledger_entry", "pending_sync") as unknown as CustomerLedgerEntry;
+  const updatedCustomer = {
+    ...customer,
+    type: nextBalance > 0 ? "udhar" : customer.type ?? "regular",
+    udharAmount: nextBalance,
+    totalUdhar: nextBalance,
+    updatedAt: now,
+    updated_at: now,
+    sync_status: String(customer.sync_status ?? "synced"),
+    balance_derived_from_local_ledger: true,
+  } as Customer & Record<string, unknown>;
+  const auditLog = buildAuditLogRow({
+    action: "ledger_adjusted",
+    entityType: "ledger_entry",
+    entityId: entryId,
+    entityLabel: customer.name,
+    newValue: entry,
+    reason: note,
+    ownerPinProvided: true,
+    summary: `Udhar adjusted by ${formatMoney(amount)} for ${customer.name}`,
   });
-  await enqueueOutboxOperation({
+  const auditOutbox = buildOutboxOperation(buildAuditLogOutboxInput(auditLog));
+  const adjustmentOutbox = buildOutboxOperation({
     entity_type: "ledger_entry",
-    entity_id: entry.id,
+    entity_id: entryId,
     operation_type: "CREATE_LEDGER_ADJUSTMENT",
-    payload: { ledgerEntryId: entry.id, customerId: input.customerId, amount, note: input.note ?? null, ownerPin: input.ownerPin, ownerPinProvided: true },
+    idempotency_key: idempotencyKey,
+    payload: {
+      ledgerEntryId: entryId,
+      localLedgerEntryId: entryId,
+      local_ledger_entry_id: entryId,
+      clientLedgerId: entryId,
+      client_ledger_id: entryId,
+      idempotencyKey,
+      idempotency_key: idempotencyKey,
+      customerId: input.customerId,
+      amount,
+      note,
+      ownerPin: input.ownerPin,
+      ownerPinProvided: true,
+    },
   });
+
+  await offlineDB.transaction(
+    ["customer_ledger", "customers", "local_audit_logs", "sync_outbox"],
+    async (tx) => {
+      await tx.put("customer_ledger", entry);
+      await tx.put("customers", updatedCustomer);
+      await tx.put("local_audit_logs", auditLog);
+      await tx.enqueueOutboxOperation(auditOutbox);
+      await tx.enqueueOutboxOperation(adjustmentOutbox);
+    },
+  );
+
+  upsertCachedListItem<CustomerLedgerEntry>(LEDGER_CACHE_KEY, entry, 1500);
+  upsertCachedListItem<Customer & Record<string, unknown>>(CUSTOMER_CACHE_KEY, updatedCustomer, 1000);
+  emitLocalDataChanged({ type: "ledger", id: entry.id, customerId: input.customerId, action: "appended" });
   return entry;
+}
+
+export function createLedgerAdjustmentLocalFirst(
+  input: CreateLedgerAdjustmentInput,
+): Promise<CustomerLedgerEntry> {
+  return withCustomerFinancialLock(input.customerId, () =>
+    createLedgerAdjustmentLocalFirstUnlocked(input));
 }

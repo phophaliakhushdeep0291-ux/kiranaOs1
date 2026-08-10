@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,18 +19,17 @@ import {
   POS_PERMISSIONS,
   ROLE_LABELS,
   ROLE_PERMISSIONS,
-  STAFF_ROLES,
-  permissionsForRole,
   usePermission,
-  type PermissionName,
   type StaffRole,
 } from "@/features/core/staff/permissions";
-import { createStaffLocalFirst, deactivateStaffLocalFirst, listStaffLocalFirst, updateStaffLocalFirst, type StaffMember } from "@/features/core/staff/local-actions";
+import { createStaffLocalFirst, deactivateStaffLocalFirst, listStaffSnapshot, updateStaffLocalFirst, type StaffMember } from "@/features/core/staff/local-actions";
 import { getStaffLocationAssignments, updateStaffLocationAssignments, type StaffLocationAccessRow } from "@/features/core/staff/api";
-import { Edit, MapPin, ShieldAlert, UserPlus, UserRoundX, UsersRound } from "lucide-react";
+import { Edit, MapPin, ShieldAlert, UserPlus, UserRoundX, UsersRound, WifiOff } from "lucide-react";
 import { DataTableCard, EmptyState, PageHeader, PageShell, PermissionDenied, SyncBadge } from "@/components/shared";
 
 const STAFF_QUERY_KEY = ["staff-users-local"];
+const MANAGEABLE_STAFF_ROLES: StaffRole[] = ["manager", "cashier"];
+const DISPLAYED_STAFF_ROLES: StaffRole[] = ["owner", ...MANAGEABLE_STAFF_ROLES];
 
 interface StaffFormState {
   id?: string;
@@ -38,7 +38,6 @@ interface StaffFormState {
   email: string;
   password: string;
   role: StaffRole;
-  permissions: PermissionName[];
 }
 
 const emptyForm: StaffFormState = {
@@ -47,7 +46,6 @@ const emptyForm: StaffFormState = {
   email: "",
   password: "",
   role: "cashier",
-  permissions: ROLE_PERMISSIONS.cashier,
 };
 
 function roleBadgeVariant(role: StaffRole) {
@@ -64,7 +62,6 @@ function memberToForm(member: StaffMember): StaffFormState {
     email: member.email ?? "",
     password: "",
     role: member.role,
-    permissions: member.permissions?.length ? member.permissions : permissionsForRole(member.role),
   };
 }
 
@@ -87,7 +84,9 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
   const [locationTarget, setLocationTarget] = useState<StaffMember | null>(null);
   const [locationDraft, setLocationDraft] = useState<StaffLocationAccessRow[]>([]);
 
-  const staff = useQuery({ queryKey: STAFF_QUERY_KEY, queryFn: listStaffLocalFirst, staleTime: 2_000 });
+  const staffQuery = useQuery({ queryKey: STAFF_QUERY_KEY, queryFn: listStaffSnapshot, staleTime: 2_000 });
+  const staff = staffQuery.data?.members ?? [];
+  const showingCachedStaff = staffQuery.data?.source === "cache";
   const locationTargetId = locationTarget?.server_id ?? (locationTarget?.sync_status === "synced" ? locationTarget.id : undefined);
   const locationAccess = useQuery({
     queryKey: ["staff-location-access", locationTargetId],
@@ -99,8 +98,8 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
     if (locationAccess.data) setLocationDraft(locationAccess.data.locations);
   }, [locationAccess.data]);
 
-  const activeCount = useMemo(() => (staff.data ?? []).filter(isActive).length, [staff.data]);
-  const inactiveCount = useMemo(() => (staff.data ?? []).filter((member) => !isActive(member)).length, [staff.data]);
+  const activeCount = useMemo(() => staff.filter(isActive).length, [staff]);
+  const inactiveCount = useMemo(() => staff.filter((member) => !isActive(member)).length, [staff]);
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: STAFF_QUERY_KEY });
@@ -109,6 +108,10 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
   function openCreate() {
     if (!manageStaff.allowed) {
       toast({ title: "Permission denied", description: manageStaff.reason, variant: "destructive" });
+      return;
+    }
+    if (showingCachedStaff) {
+      toast({ title: "Internet required", description: "Reconnect and refresh before creating a login. Offline mode never enables unverified staff access.", variant: "destructive" });
       return;
     }
     setForm(emptyForm);
@@ -120,19 +123,16 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
       toast({ title: "Permission denied", description: manageStaff.reason, variant: "destructive" });
       return;
     }
+    if (showingCachedStaff) {
+      toast({ title: "Internet required", description: "Reconnect and refresh before changing staff access.", variant: "destructive" });
+      return;
+    }
     setForm(memberToForm(member));
     setFormOpen(true);
   }
 
-  function togglePermission(permission: PermissionName, checked: boolean) {
-    setForm((current) => ({
-      ...current,
-      permissions: checked ? Array.from(new Set([...current.permissions, permission])) : current.permissions.filter((item) => item !== permission),
-    }));
-  }
-
   function changeRole(role: StaffRole) {
-    setForm((current) => ({ ...current, role, permissions: permissionsForRole(role) }));
+    setForm((current) => ({ ...current, role }));
   }
 
   function requestSave() {
@@ -160,6 +160,10 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
   function requestDeactivate(member: StaffMember) {
     if (!manageStaff.allowed) {
       toast({ title: "Permission denied", description: manageStaff.reason, variant: "destructive" });
+      return;
+    }
+    if (showingCachedStaff) {
+      toast({ title: "Internet required", description: "Reconnect and refresh before deactivating a login.", variant: "destructive" });
       return;
     }
     setDeactivateTarget(member);
@@ -196,16 +200,16 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
       if (pendingAction === "save") {
         if (form.id) {
           await updateStaffLocalFirst({ ...form, id: form.id, ownerPin, ownerPinReason: reason || "Staff permission change" });
-          toast({ title: "Staff permissions updated", description: "Saved locally and queued for cloud sync." });
+          toast({ title: "Staff account updated", description: "Confirmed by the server and saved for offline viewing." });
         } else {
           await createStaffLocalFirst({ ...form, ownerPin, ownerPinReason: reason || "Staff permission change" });
-          toast({ title: "Staff member added", description: "Saved locally and queued for cloud sync." });
+          toast({ title: "Staff member added", description: "The login is active on the server and saved for offline viewing." });
         }
         setFormOpen(false);
       }
       if (pendingAction === "deactivate" && deactivateTarget) {
         await deactivateStaffLocalFirst(deactivateTarget.id, ownerPin, reason || "Deactivated by owner");
-        toast({ title: "Staff deactivated", description: "This is a soft deactivate and will sync later." });
+        toast({ title: "Staff deactivated", description: "Server sessions were revoked before the local list changed." });
       }
       if (pendingAction === "locations" && locationTargetId) {
         const locations = locationDraft.filter((row) => row.assigned).map((row) => ({
@@ -240,12 +244,20 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
             <>
               <Badge variant="outline">{activeCount} active</Badge>
               <Badge variant="outline">{inactiveCount} inactive</Badge>
-              <Button onClick={openCreate}><UserPlus size={15} className="mr-1.5" />Add staff</Button>
+              <Button onClick={openCreate} disabled={showingCachedStaff}><UserPlus size={15} className="mr-1.5" />Add staff</Button>
             </>
           )}
         />
 
         {!manageStaff.allowed ? <PermissionDenied message={manageStaff.reason} /> : null}
+
+        {showingCachedStaff ? (
+          <Alert className="border-amber-200 bg-amber-50 text-amber-950">
+            <WifiOff className="h-4 w-4" />
+            <AlertTitle>Staff list is read-only offline</AlertTitle>
+            <AlertDescription>{staffQuery.data?.warning}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <Tabs defaultValue="staff" className="space-y-4">
           <TabsList>
@@ -254,24 +266,24 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
           </TabsList>
 
           <TabsContent value="staff" className="space-y-3">
-            <DataTableCard title="Activated staff" loading={staff.isLoading} empty={!staff.isLoading && (staff.data ?? []).length === 0} emptyState={<EmptyState title="No staff added yet" description="Owner account can still use the app." />}>
+            <DataTableCard title="Activated staff" loading={staffQuery.isLoading} empty={!staffQuery.isLoading && staff.length === 0} emptyState={<EmptyState title="No staff added yet" description="Owner account can still use the app." />}>
               <div className="space-y-3">
-                {(staff.data ?? []).map((member) => (
+                {staff.map((member) => (
                   <div key={member.id} className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-center md:justify-between">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold">{member.name}</p>
                         <Badge variant={roleBadgeVariant(member.role)}>{ROLE_LABELS[member.role]}</Badge>
                         <Badge variant={isActive(member) ? "secondary" : "outline"}>{isActive(member) ? "Active" : "Deactivated"}</Badge>
-                        <SyncBadge status={member.sync_status === "synced" ? "synced" : member.sync_status === "failed" ? "failed" : "local"} label={member.sync_status ?? "local"} />
+                        <SyncBadge status="synced" label={showingCachedStaff ? "last saved" : "server confirmed"} />
                       </div>
                       <p className="text-xs text-muted-foreground">{member.mobile || member.email || "No contact"} {member.lastActiveAt ? `• Last active ${new Date(member.lastActiveAt).toLocaleString("en-IN")}` : ""}</p>
                       <p className="text-xs text-muted-foreground">{member.permissions.map((permission) => PERMISSION_LABELS[permission]).join(", ")}</p>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => openEdit(member)} disabled={!manageStaff.allowed || member.role === "owner"}><Edit size={14} className="mr-1" />Edit</Button>
+                      <Button size="sm" variant="outline" onClick={() => openEdit(member)} disabled={!manageStaff.allowed || member.role === "owner" || showingCachedStaff}><Edit size={14} className="mr-1" />Edit</Button>
                       {member.role !== "owner" ? <Button size="sm" variant="outline" onClick={() => openLocations(member)} disabled={!manageStaff.allowed}><MapPin size={14} className="mr-1" />Stores</Button> : null}
-                      {member.role !== "owner" && isActive(member) ? <Button size="sm" variant="outline" onClick={() => requestDeactivate(member)} disabled={!manageStaff.allowed}><UserRoundX size={14} className="mr-1" />Deactivate</Button> : null}
+                      {member.role !== "owner" && isActive(member) ? <Button size="sm" variant="outline" onClick={() => requestDeactivate(member)} disabled={!manageStaff.allowed || showingCachedStaff}><UserRoundX size={14} className="mr-1" />Deactivate</Button> : null}
                     </div>
                   </div>
                 ))}
@@ -285,13 +297,13 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
               <CardContent className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-sm">
                   <thead className="bg-muted/50">
-                    <tr><th className="px-3 py-2 text-left">Permission</th>{STAFF_ROLES.map((role) => <th key={role} className="px-3 py-2 text-center">{ROLE_LABELS[role]}</th>)}</tr>
+                    <tr><th className="px-3 py-2 text-left">Permission</th>{DISPLAYED_STAFF_ROLES.map((role) => <th key={role} className="px-3 py-2 text-center">{ROLE_LABELS[role]}</th>)}</tr>
                   </thead>
                   <tbody>
                     {POS_PERMISSIONS.map((permission) => (
                       <tr key={permission} className="border-t">
                         <td className="px-3 py-2 font-medium">{PERMISSION_LABELS[permission]}</td>
-                        {STAFF_ROLES.map((role) => <td key={role} className="px-3 py-2 text-center">{ROLE_PERMISSIONS[role].includes(permission) ? "✅" : "—"}</td>)}
+                        {DISPLAYED_STAFF_ROLES.map((role) => <td key={role} className="px-3 py-2 text-center">{ROLE_PERMISSIONS[role].includes(permission) ? "✅" : "—"}</td>)}
                       </tr>
                     ))}
                   </tbody>
@@ -311,19 +323,14 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
                 <div><Label>Email</Label><Input className="mt-1" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} /></div>
                 <div><Label>{form.id ? "New password optional" : "Password *"}</Label><Input type="password" className="mt-1" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /></div>
               </div>
-              <div><Label>Role</Label><Select value={form.role} onValueChange={(value) => changeRole(value as StaffRole)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{STAFF_ROLES.filter((role) => role !== "owner").map((role) => <SelectItem key={role} value={role}>{ROLE_LABELS[role]}</SelectItem>)}</SelectContent></Select></div>
+              <div><Label>Role</Label><Select value={form.role} onValueChange={(value) => changeRole(value as StaffRole)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{MANAGEABLE_STAFF_ROLES.map((role) => <SelectItem key={role} value={role}>{ROLE_LABELS[role]}</SelectItem>)}</SelectContent></Select></div>
               <div className="rounded-xl border p-3">
-                <div className="mb-2 flex items-center gap-2 font-medium"><ShieldAlert size={16} />Permissions</div>
-                <div className="grid sm:grid-cols-2 gap-2">
-                  {POS_PERMISSIONS.filter((permission) => permission !== "manage_staff").map((permission) => (
-                    <label key={permission} className="flex items-center gap-2 rounded-lg border p-2 text-sm">
-                      <Checkbox checked={form.permissions.includes(permission)} onCheckedChange={(checked) => togglePermission(permission, checked === true)} />
-                      <span>{PERMISSION_LABELS[permission]}</span>
-                    </label>
-                  ))}
-                </div>
+                <div className="mb-2 flex items-center gap-2 font-medium"><ShieldAlert size={16} />Role access enforced by the server</div>
+                <p className="text-sm text-muted-foreground">
+                  {ROLE_PERMISSIONS[form.role].map((permission) => PERMISSION_LABELS[permission]).join(", ")}
+                </p>
               </div>
-              <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">Changing staff permissions requires owner PIN and is written to the audit log.</div>
+              <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">Staff changes require internet and Owner PIN. The server writes the audit record before this device shows the change.</div>
               <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button><Button onClick={requestSave}>Continue with PIN</Button></div>
             </div>
           </DialogContent>

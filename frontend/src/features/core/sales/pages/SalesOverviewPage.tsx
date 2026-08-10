@@ -254,6 +254,7 @@ export default function SalesOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [dateOpen, setDateOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const dataRef = useRef<SalesData | null>(null);
   const refreshTimer = useRef<number | null>(null);
   const range = useMemo(() => safeDateRange(from, to), [from, to]);
@@ -403,6 +404,7 @@ export default function SalesOverviewPage() {
     { label: "Profit Margin", value: `${profitMargin.toFixed(2)}%`, current: profitMargin, previous: previousProfitMargin, icon: <Percent size={16} />, iconClass: "bg-[#ffedf5] text-[#ff3b8d]", color: PINK, spark: snapshot?.dailyTrend.map((point) => point.sales ? (point.profit / point.sales) * 100 : 0) ?? [] },
     { label: "Refunds", value: money(refundTotal), current: refundTotal, previous: previousRefundTotal, icon: <RefreshCw size={16} />, iconClass: "bg-[var(--brand-soft)] text-[var(--brand)]", color: BLUE, spark: snapshot?.dailyTrend.map((point) => returnsByDate.get(point.date) ?? 0) ?? [], positiveIsBad: true },
   ];
+  const primaryKpis = kpis.filter((kpi) => ["Total Sales", "Total Orders", "Gross Profit", "Refunds"].includes(kpi.label));
 
   const exportSales = () => {
     if (!snapshot) return;
@@ -454,11 +456,17 @@ export default function SalesOverviewPage() {
         </div>
       </section>
 
-      <section className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        {kpis.map((kpi) => <MetricCard key={kpi.label} {...kpi} loading={loading} />)}
+      <section aria-label="Sales at a glance" className="grid min-w-0 grid-cols-2 gap-3 xl:grid-cols-4">
+        {primaryKpis.map((kpi) => <MetricCard key={kpi.label} {...kpi} loading={loading} />)}
       </section>
 
-      <section className="grid items-stretch gap-3 xl:grid-cols-[1.22fr_0.92fr_0.92fr]">
+      <section aria-label="Supporting sales metrics" className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-[9px] border border-[#e1e8f3] bg-[#f8fbff] px-4 py-3 text-xs">
+        <div><span className="font-semibold text-[#6f7f9b]">Average order</span><strong className="ml-2 text-[var(--brand-ink)]">{loading ? "—" : money(avgOrderValue)}</strong></div>
+        <div><span className="font-semibold text-[#6f7f9b]">Profit margin</span><strong className="ml-2 text-[var(--brand-ink)]">{loading ? "—" : `${profitMargin.toFixed(2)}%`}</strong></div>
+        <span className="ml-auto hidden font-semibold text-[#7b879b] sm:inline">{rangeLabel(range)}</span>
+      </section>
+
+      <section className="grid items-stretch gap-3 xl:grid-cols-[1.35fr_0.9fr]">
         <Panel title="Sales Trend" action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <ChartFrame loading={loading} empty={!snapshot?.dailyTrend.length}>
             <ResponsiveContainer width="100%" height="100%">
@@ -474,11 +482,10 @@ export default function SalesOverviewPage() {
           </ChartFrame>
         </Panel>
 
-        <DonutPanel title="Sales by Category" total={selected?.sales ?? 0} rows={categoryRows} centerLabel="Total Sales" />
         <DonutPanel title="Sales by Payment Method" total={selected?.sales ?? 0} rows={paymentRows} centerLabel="Total Sales" />
       </section>
 
-      <section className="grid items-stretch gap-3 xl:grid-cols-3">
+      <section className="grid items-stretch gap-3 xl:grid-cols-2">
         <SmallTable title="Top Selling Products" actionHref="/products" action="View all" headers={["Product", "Category", "Qty Sold", "Sales (\u20b9)"]} loading={loading} empty={!snapshot?.topProducts.length}>
           {snapshot?.topProducts.slice(0, 5).map((row, index) => (
             <tr key={row.productId} className="text-[#24385f]">
@@ -489,20 +496,6 @@ export default function SalesOverviewPage() {
             </tr>
           ))}
         </SmallTable>
-
-        <Panel title="Sales by Store" action={<Link href="/settings/store-profile" className="text-[10px] font-bold text-[var(--brand)]">View all</Link>}>
-          <div className="space-y-3 px-4 pb-4 pt-1">
-            {loading ? <Skeleton className="h-36" /> : storeRows.length === 0 ? <EmptyState label="No store sales in this period" /> : storeRows.map((row) => {
-              const max = Math.max(...storeRows.map((item) => item.sales), 1);
-              return <div key={row.name} className="grid grid-cols-[1fr_86px_44px] items-center gap-3 text-[10px]">
-                <span className="truncate font-semibold text-[#34486e]">{row.name}</span>
-                <div><p className="mb-1 text-right font-black text-[var(--brand-ink)]">{money(row.sales)}</p><div className="h-1.5 rounded-full bg-[#edf2f8]"><div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${Math.max(7, (row.sales / max) * 100)}%` }} /></div></div>
-                <span className="text-right font-semibold text-[#52617c]">{row.orders}</span>
-              </div>;
-            })}
-          </div>
-        </Panel>
-
         <SmallTable title="Recent Sales" actionHref="/bills" action="View all" headers={["Invoice", "Customer", "Amount", "Payment", "Time"]} loading={loading} empty={recentSales.length === 0}>
           {recentSales.map((bill) => {
             const mode = modeMeta(paymentMode(bill));
@@ -518,6 +511,28 @@ export default function SalesOverviewPage() {
         </SmallTable>
       </section>
 
+      <button type="button" onClick={() => setDetailsOpen((value) => !value)} aria-expanded={detailsOpen} className="flex min-h-11 w-full items-center rounded-[9px] border border-[#dfe7f2] bg-[#f8fbff] px-4 text-left text-xs font-black text-[#34486e] hover:bg-[#f2f6fc]">
+        Detailed analysis
+        <span className="ml-2 font-semibold text-[#7b879b]">Category, store and hourly comparisons</span>
+        <ChevronDown size={15} className={cn("ml-auto transition-transform", detailsOpen && "rotate-180")} />
+      </button>
+
+      {detailsOpen ? <>
+      <section className="grid items-stretch gap-3 xl:grid-cols-2">
+        <DonutPanel title="Sales by Category" total={selected?.sales ?? 0} rows={categoryRows} centerLabel="Total Sales" />
+        <Panel title="Sales by Store" action={<Link href="/settings/store-profile" className="text-[10px] font-bold text-[var(--brand)]">View all</Link>}>
+          <div className="space-y-3 px-4 pb-4 pt-1">
+            {loading ? <Skeleton className="h-36" /> : storeRows.length === 0 ? <EmptyState label="No store sales in this period" /> : storeRows.map((row) => {
+              const max = Math.max(...storeRows.map((item) => item.sales), 1);
+              return <div key={row.name} className="grid grid-cols-[1fr_86px_44px] items-center gap-3 text-[10px]">
+                <span className="truncate font-semibold text-[#34486e]">{row.name}</span>
+                <div><p className="mb-1 text-right font-black text-[var(--brand-ink)]">{money(row.sales)}</p><div className="h-1.5 rounded-full bg-[#edf2f8]"><div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${Math.max(7, (row.sales / max) * 100)}%` }} /></div></div>
+                <span className="text-right font-semibold text-[#52617c]">{row.orders}</span>
+              </div>;
+            })}
+          </div>
+        </Panel>
+      </section>
       <section className="grid items-stretch gap-3 xl:grid-cols-[1fr_320px]">
         <Panel title="Hourly Sales Today">
           <div className="h-[220px] px-3 pb-3">
@@ -547,6 +562,7 @@ export default function SalesOverviewPage() {
           </div>
         </Panel>
       </section>
+      </> : null}
     </PageShell>
   );
 }

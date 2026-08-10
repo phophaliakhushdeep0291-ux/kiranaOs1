@@ -4,11 +4,18 @@ import type { StaffRole } from "@/features/core/staff/permissions";
 
 export interface StaffInviteRequest {
   name: string;
-  mobile: string;
+  mobile?: string;
+  email?: string;
   password: string;
   role?: StaffRole | string;
-  ownerPin?: string;
-  permissions?: string[];
+}
+
+export interface StaffUpdateRequest {
+  name?: string;
+  mobile?: string;
+  email?: string;
+  password?: string;
+  role?: "staff" | "admin";
 }
 
 export interface StaffLocationAccessRow {
@@ -39,15 +46,27 @@ export function listStaff() {
   return apiRequest<User[]>("/auth/staff");
 }
 
-export function inviteStaff(data: StaffInviteRequest) {
+export function inviteStaff(data: StaffInviteRequest, ownerPin: string) {
   return apiRequest<User>("/auth/staff", {
     method: "POST",
     body: JSON.stringify(data),
+    ownerPin,
   });
 }
 
-export function removeStaff(id: string) {
-  return apiRequest<{ success?: boolean; message?: string }>(`/auth/staff/${id}`, { method: "DELETE" });
+export function updateStaff(id: string, data: StaffUpdateRequest, ownerPin: string) {
+  return apiRequest<User>(`/auth/staff/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+    ownerPin,
+  });
+}
+
+export function removeStaff(id: string, ownerPin: string) {
+  return apiRequest<{ success?: boolean; message?: string; disabledAt?: string }>(`/auth/staff/${id}`, {
+    method: "DELETE",
+    ownerPin,
+  });
 }
 
 export function getStaffLocationAssignments(id: string) {

@@ -7,6 +7,7 @@ const dbState = vi.hoisted(() => ({
   committed: {} as Record<string, Array<Record<string, unknown>>>,
   instant: {} as Record<string, unknown[]>,
   idCounter: 0,
+  failTransactionBeforeCommit: false,
 }));
 
 function clone<T>(value: T): T {
@@ -56,6 +57,7 @@ vi.mock("@/lib/offline/db", () => ({
       };
 
       await callback(tx);
+      if (dbState.failTransactionBeforeCommit) throw new Error("simulated transaction commit failure");
       dbState.committed = staged;
     }),
   },
@@ -87,6 +89,7 @@ import { markPurchasePaidLocal, recordPurchasePaymentLocal, reverseSupplierPayme
 import { calculateLedgerBalance } from "@/features/core/ledger/accounting";
 
 function seedFrontOffice() {
+  dbState.failTransactionBeforeCommit = false;
   const product: Product & Record<string, unknown> = {
     id: "product_sugar",
     name: "Sugar",
@@ -540,6 +543,23 @@ describe("front office local-first cashier flow", () => {
     expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200, totalUdhar: 200 }));
     expect(rows("customer_ledger").some((entry) => entry.type === "bill_restore_correction")).toBe(false);
     expect(rows("sync_outbox").at(-1)).toEqual(expect.objectContaining({ operation_type: "RESTORE_BILL_PENDING" }));
+  });
+
+  it("rolls back bill hiding, audit, and sync intent together", async () => {
+    const bill = await createBillLocalFirst(billInput());
+    const beforeAuditCount = rows("local_audit_logs").length;
+    const beforeOutboxCount = rows("sync_outbox").length;
+    dbState.failTransactionBeforeCommit = true;
+
+    await expect(
+      softDeleteBillWithOwnerPinLocalFirst(bill.id, "1234", "wrong duplicate"),
+    ).rejects.toThrow("simulated transaction commit failure");
+
+    expect(rows("bills").find((row) => row.id === bill.id)).not.toEqual(
+      expect.objectContaining({ deletedAt: expect.any(String) }),
+    );
+    expect(rows("local_audit_logs")).toHaveLength(beforeAuditCount);
+    expect(rows("sync_outbox")).toHaveLength(beforeOutboxCount);
   });
 
   it("keeps bill credit, same-amount udhar payments, reversal, purchase, and outbox output consistent", async () => {

@@ -8,7 +8,7 @@ import {
   verifyPinSchema, inviteStaffSchema, changePasswordSchema,
   refreshSchema, logoutSchema, forgotPasswordSchema, resetPasswordSchema,
   verifyEmailSchema, resendVerificationSchema, googleLoginSchema, deviceReplacementSchema,
-  staffLocationAssignmentsSchema
+  staffLocationAssignmentsSchema, updateStaffSchema
 } from "./auth.schema.js";
 import * as ctrl from "./auth.controller.js";
 import { z } from "zod";
@@ -38,6 +38,8 @@ router.get("/pin/check",   requireAuth, ctrl.checkPin);
 // Staff management is Growth+ only and owner-only.
 router.get("/staff",          requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), ctrl.listStaff);
 router.post("/staff",         requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin, validate(inviteStaffSchema), ctrl.inviteStaff);
+router.patch("/staff/:id", requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin,
+  validate(updateStaffSchema), ctrl.updateStaff);
 router.patch("/staff/:id/role", requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin,
   validate(z.object({ role: z.enum(["staff","admin"]) })), ctrl.updateStaffRole);
 router.delete("/staff/:id",   requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin, ctrl.removeStaff);

@@ -111,8 +111,15 @@ export async function listStaff(req, res, next) {
 
 export async function inviteStaff(req, res, next) {
   try {
-    const data = await authService.inviteStaff(req.user.shopId, req.body);
+    const data = await authService.inviteStaff(req.user.shopId, req.body, req.user.userId, { req });
     res.status(201).json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function updateStaff(req, res, next) {
+  try {
+    const data = await authService.updateStaff(req.user.shopId, req.params.id, req.body, req.user.userId, { req });
+    res.json({ success: true, data });
   } catch (err) { next(err); }
 }
 

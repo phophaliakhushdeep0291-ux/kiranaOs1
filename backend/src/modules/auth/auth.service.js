@@ -506,7 +506,7 @@ export async function setStaffLocationAssignments(shopId, staffId, locations, re
   return { ...result, assignments: await getStaffLocationAssignments(shopId, staffId) };
 }
 
-export async function inviteStaff(shopId, { name, mobile, password, role = "staff" }) {
+export async function inviteStaff(shopId, { name, mobile, email, password, role = "staff" }, requestingUserId, reqMeta = {}) {
   await requireFeatureAccess(shopId, "staff_login");
   if (role === "owner") {
     const err = new AppError("Owner role cannot be invited through staff management", 400);
@@ -522,14 +522,71 @@ export async function inviteStaff(shopId, { name, mobile, password, role = "staf
     throw err;
   }
 
-  const existing = await db.user.findFirst({ where: { shopId, mobile, disabledAt: null } });
-  if (existing) throw new AppError("A user with this mobile already exists in your shop", 409);
+  const normalizedEmail = normalizeEmail(email);
+  const existing = await db.user.findFirst({
+    where: {
+      shopId,
+      disabledAt: null,
+      OR: [mobile ? { mobile } : null, normalizedEmail ? { email: normalizedEmail } : null].filter(Boolean),
+    },
+  });
+  if (existing) throw new AppError("A user with this mobile or email already exists in your shop", 409, "STAFF_IDENTITY_EXISTS");
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await db.user.create({
-    data: { shopId, name, mobile, passwordHash, role },
+    data: { shopId, name, mobile, email: normalizedEmail, passwordHash, role },
+  });
+  await createAuditLog({
+    shopId,
+    userId: requestingUserId,
+    action: "STAFF_CREATED",
+    entityType: "User",
+    entityId: user.id,
+    metadata: { name: user.name, mobile: user.mobile, email: user.email, role: user.role },
+    req: reqMeta.req,
   });
   return sanitizeUser(user);
+}
+
+export async function updateStaff(shopId, staffId, input, requestingUserId, reqMeta = {}) {
+  await requireFeatureAccess(shopId, "staff_login");
+  const current = await db.user.findFirst({ where: { id: staffId, shopId, disabledAt: null } });
+  if (!current) throw new AppError("Staff member not found", 404, "STAFF_NOT_FOUND");
+  if (current.role === "owner") throw new AppError("Owner account cannot be edited from staff management", 403, "OWNER_NOT_EDITABLE");
+
+  const normalizedEmail = input.email === undefined ? undefined : normalizeEmail(input.email);
+  const identityConditions = [
+    input.mobile ? { mobile: input.mobile } : null,
+    normalizedEmail ? { email: normalizedEmail } : null,
+  ].filter(Boolean);
+  if (identityConditions.length > 0) {
+    const duplicate = await db.user.findFirst({
+      where: { shopId, id: { not: staffId }, disabledAt: null, OR: identityConditions },
+      select: { id: true },
+    });
+    if (duplicate) throw new AppError("A user with this mobile or email already exists in your shop", 409, "STAFF_IDENTITY_EXISTS");
+  }
+
+  const data = {
+    ...(input.name !== undefined ? { name: input.name } : {}),
+    ...(input.mobile !== undefined ? { mobile: input.mobile } : {}),
+    ...(input.email !== undefined ? { email: normalizedEmail } : {}),
+    ...(input.role !== undefined ? { role: input.role } : {}),
+    ...(input.password !== undefined ? { passwordHash: await bcrypt.hash(input.password, 10) } : {}),
+  };
+  const updated = await db.user.update({ where: { id: staffId }, data });
+  await createAuditLog({
+    shopId,
+    userId: requestingUserId,
+    action: "STAFF_UPDATED",
+    entityType: "User",
+    entityId: staffId,
+    before: { name: current.name, mobile: current.mobile, email: current.email, role: current.role },
+    after: { name: updated.name, mobile: updated.mobile, email: updated.email, role: updated.role },
+    metadata: { passwordChanged: input.password !== undefined },
+    req: reqMeta.req,
+  });
+  return sanitizeUser(updated);
 }
 
 export async function updateStaffRole(shopId, staffId, role) {
