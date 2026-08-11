@@ -129,6 +129,9 @@ export default function PurchaseBillsPage() {
   const [editLine, setEditLine] = useState<{ unit: string; qty: number } | null>(null);
   const [payingRow, setPayingRow] = useState<SupplierDueRow | null>(null);
   const [deletingRow, setDeletingRow] = useState<SupplierDueRow | null>(null);
+  const [editOwnerPin, setEditOwnerPin] = useState("");
+  const [deleteOwnerPin, setDeleteOwnerPin] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
   const [purchaseForm, setPurchaseForm] = useState<PurchaseFormState>({
     supplierName: "",
     invoiceNumber: "",
@@ -412,6 +415,7 @@ export default function PurchaseBillsPage() {
     const line = rowPurchaseLine(row);
     setEditLine(line);
     setPurchaseForm({ ...purchaseFormFromRow(row), quantity: line ? String(line.qty) : "" });
+    setEditOwnerPin("");
   }
 
   function openPay(row: SupplierDueRow) {
@@ -435,6 +439,10 @@ export default function PurchaseBillsPage() {
       toast({ title: "Invalid paid amount", description: "Paid amount cannot be more than purchase amount.", variant: "destructive" });
       return;
     }
+    if (editOwnerPin.trim().length !== 4) {
+      toast({ title: "Owner PIN required", description: "Purchase edits change stock or supplier balances and require owner approval.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const newQty = editLine ? money(purchaseForm.quantity) : 0;
@@ -448,9 +456,12 @@ export default function PurchaseBillsPage() {
         status: amount - paid <= 0 ? "paid" : paid > 0 ? "partial" : "due",
         quantity: editLine && newQty > 0 && newQty !== editLine.qty ? newQty : undefined,
         enteredUnit: editLine?.unit,
+        ownerPin: editOwnerPin.trim(),
+        reason: "Owner-approved purchase edit",
       });
       await reloadSnapshot();
       setEditingRow(null);
+      setEditOwnerPin("");
       toast({ title: "Purchase updated", description: "Supplier ledger totals were refreshed." });
     } catch (error) {
       toast({ title: "Could not update purchase", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
@@ -515,11 +526,17 @@ export default function PurchaseBillsPage() {
 
   async function confirmDelete() {
     if (!deletingRow || saving) return;
+    if (deleteOwnerPin.trim().length !== 4 || deleteReason.trim().length < 3) {
+      toast({ title: "Reason and owner PIN required", description: "Deleting a purchase changes supplier finance totals and remains audited.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
-      await deletePurchaseLocal(deletingRow);
+      await deletePurchaseLocal(deletingRow, { ownerPin: deleteOwnerPin.trim(), reason: deleteReason.trim() });
       await reloadSnapshot();
       setDeletingRow(null);
+      setDeleteOwnerPin("");
+      setDeleteReason("");
       toast({ title: "Purchase removed", description: "The purchase ledger row was removed from local finance views." });
     } catch (error) {
       toast({ title: "Could not remove purchase", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
@@ -891,10 +908,15 @@ export default function PurchaseBillsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Owner PIN</Label>
+              <Input className="mt-1" type="password" inputMode="numeric" maxLength={4} value={editOwnerPin} onChange={(event) => setEditOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4 digits" />
+              <p className="mt-1 text-[11px] text-[#94a3b8]">Required because purchase edits change stock or supplier balances.</p>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditingRow(null); setEditLine(null); }} disabled={saving}>Cancel</Button>
-            <Button onClick={() => void saveEdit()} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+            <Button variant="outline" onClick={() => { setEditingRow(null); setEditLine(null); setEditOwnerPin(""); }} disabled={saving}>Cancel</Button>
+            <Button onClick={() => void saveEdit()} disabled={saving || editOwnerPin.length !== 4}>{saving ? "Saving..." : "Save"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -975,9 +997,13 @@ export default function PurchaseBillsPage() {
             <DialogTitle>Delete purchase</DialogTitle>
             <DialogDescription>This removes the purchase from local finance views while preserving stock history.</DialogDescription>
           </DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Reason</Label><Input className="mt-1" value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} placeholder="Why is this purchase being removed?" /></div>
+            <div><Label>Owner PIN</Label><Input className="mt-1" type="password" inputMode="numeric" maxLength={4} value={deleteOwnerPin} onChange={(event) => setDeleteOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4 digits" /></div>
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingRow(null)} disabled={saving}>Cancel</Button>
-            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={saving}>{saving ? "Deleting..." : "Delete"}</Button>
+            <Button variant="outline" onClick={() => { setDeletingRow(null); setDeleteOwnerPin(""); setDeleteReason(""); }} disabled={saving}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={saving || deleteOwnerPin.length !== 4 || deleteReason.trim().length < 3}>{saving ? "Deleting..." : "Delete"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

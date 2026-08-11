@@ -1,0 +1,50 @@
+{
+  "capturedAt": "2026-08-11T10:46:51+05:30",
+  "baseRevision": "7897f3d3c598eae0b328fbbd14f22aff7143ede2",
+  "workingTree": "dirty QA implementation and control-document update",
+  "scope": {
+    "stateTransition": "Expired Starter to signed active Growth and Staff unlock was exercised live at 390x844; temporary entitlement was then deleted and Starter gating reconfirmed.",
+    "retainedLayouts": "The same signed-Growth Staff list and Add Staff task were captured at the three previously missing widths.",
+    "limitation": "The complete subscription state transition was not repeated at 375, 430, or 768 pixels. These artifacts certify settled responsive layout and touch geometry at those widths."
+  },
+  "checks": {
+    "horizontalOverflow": 0,
+    "undersizedActiveControls": 0,
+    "minimumTargetCssPixels": 44,
+    "focusedTests": "15/15 passed",
+    "fullTests": "1374 passed, 1 intentional skip",
+    "translations": "1091 placeholders, 0 problems",
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "bundleBudgets": "passed",
+    "productionAppCheck": "passed"
+  },
+  "viewports": [
+    {
+      "width": 375,
+      "height": 667,
+      "staff": { "documentWidth": 375, "scrollWidth": 375, "interactiveControls": 12, "undersizedControls": 0 },
+      "addStaff": { "documentWidth": 375, "scrollWidth": 375, "interactiveControls": 20, "undersizedControls": 0 }
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "staff": { "documentWidth": 430, "scrollWidth": 430, "interactiveControls": 12, "undersizedControls": 0 },
+      "addStaff": { "documentWidth": 430, "scrollWidth": 430, "interactiveControls": 20, "undersizedControls": 0 }
+    },
+    {
+      "width": 768,
+      "height": 1024,
+      "staff": { "documentWidth": 768, "scrollWidth": 768, "interactiveControls": 12, "undersizedControls": 0 },
+      "addStaff": { "documentWidth": 768, "scrollWidth": 768, "interactiveControls": 20, "undersizedControls": 0 }
+    }
+  ],
+  "artifacts": [
+    { "file": "add-staff-375x667.png", "bytes": 21345, "sha256": "5f47eca1d9ef4b0b9a8a855fe390617b517c2bad559252611aa26f3cb7957dbb" },
+    { "file": "add-staff-430x932.png", "bytes": 32311, "sha256": "9ee46a3f10d031968de45ef6a5c9e060a7f5a13e794428af1bee1cfb984c17a9" },
+    { "file": "add-staff-768x1024.png", "bytes": 43098, "sha256": "8919f2a87b7391d5be9367cf6a0e05eb2741d0c535d8af44237638b55af15d24" },
+    { "file": "staff-375x667.png", "bytes": 32468, "sha256": "4b82422ae854bb538c705eaa5193589d2f7241d619fe31d037a2a688083feaf6" },
+    { "file": "staff-430x932.png", "bytes": 32748, "sha256": "de8aeba62f2f77d3819b5ab77982837b8798b146b699395778adba3b28eb0e62" },
+    { "file": "staff-768x1024.png", "bytes": 34030, "sha256": "6e61532fe40881d90b39c51a45abcf7d4c67f90a3fa929efef7cec8a5ab09cbd" }
+  ]
+}

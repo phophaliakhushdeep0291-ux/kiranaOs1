@@ -38,7 +38,9 @@ import { toBaseQty } from "../../utils/units.js";
 import { calculateCustomerUdharBalance, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 import {
   decrementLocationInventory,
+  getLocationQuantity,
   resolveOperationalLocation,
+  setLocationInventory,
 } from "../stores/location-context.service.js";
 
 const protectedProductFields = [
@@ -703,6 +705,9 @@ const purchaseBillLifecyclePayloadSchema = z.object({
   purchaseDueAmount: moneyAmount().optional(),
   purchasePaymentStatus: z.string().optional(),
   purchasePaymentMode: z.string().optional().nullable(),
+  quantity: quantityAmount({ positive: true }).optional(),
+  enteredUnit: z.string().trim().min(1).optional(),
+  locationId: z.string().trim().min(1).optional().nullable(),
   match: z.record(z.any()).optional(),
 }).passthrough();
 
@@ -1495,9 +1500,11 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.STOCK_SALE:
       return applyStockSale(shopId, event, context);
     case SYNC_EVENT_TYPES.UPDATE_PURCHASE_BILL:
-      return applyUpdatePurchaseBill(shopId, event, context);
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyUpdatePurchaseBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_PURCHASE_BILL:
-      return applyDeletePurchaseBill(shopId, event, context);
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyDeletePurchaseBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RECORD_SUPPLIER_PAYMENT:
       return applyRecordSupplierPayment(shopId, event, user, context);
     case SYNC_EVENT_TYPES.REVERSE_SUPPLIER_PAYMENT:
@@ -2847,7 +2854,26 @@ function stockLedgerPurchaseUpdateData(fields) {
   };
 }
 
-async function applyPurchaseBillLifecycle(shopId, event, context, { deleted = false } = {}) {
+function purchaseLifecycleDataMatches(row, data) {
+  if (!row) return true;
+  return Object.entries(data).every(([key, expected]) => {
+    const actual = row[key];
+    if (expected instanceof Date || actual instanceof Date) {
+      const expectedTime = expected instanceof Date ? expected.getTime() : new Date(expected).getTime();
+      const actualTime = actual instanceof Date ? actual.getTime() : new Date(actual).getTime();
+      return expectedTime === actualTime;
+    }
+    if (typeof expected === "number" || typeof actual === "number") {
+      return moneyClose(actual, expected);
+    }
+    if (typeof expected === "bigint" || typeof actual === "bigint") {
+      return String(actual ?? "") === String(expected ?? "");
+    }
+    return actual === expected;
+  });
+}
+
+async function applyPurchaseBillLifecycle(shopId, event, user, context, { deleted = false } = {}) {
   const payload = purchaseBillLifecyclePayloadSchema.parse(getEventPayload(event));
   const [purchaseHistory, stockLedger] = await Promise.all([
     findPurchaseHistoryTarget(shopId, payload, context),
@@ -2865,35 +2891,124 @@ async function applyPurchaseBillLifecycle(shopId, event, context, { deleted = fa
     ? Number(payload.quantity)
     : null;
   return db.$transaction(async (tx) => {
-    const updatedPurchaseHistory = purchaseHistory
-      ? await tx.purchaseHistory.update({
-          where: { id: purchaseHistory.id },
-          data: purchaseHistoryUpdateData(fields),
-        })
-      : null;
+    // Re-read inside the transaction. Target resolution happens before the transaction,
+    // but comparison and mutation must use one consistent snapshot so simultaneous
+    // owner corrections cannot overwrite each other based on stale values.
+    const [currentPurchaseHistory, currentStockLedger] = await Promise.all([
+      purchaseHistory ? tx.purchaseHistory.findUnique({ where: { id: purchaseHistory.id } }) : null,
+      stockLedger ? tx.stockLedger.findUnique({ where: { id: stockLedger.id } }) : null,
+    ]);
+    if (!currentPurchaseHistory && !currentStockLedger) {
+      throw new AppError("Purchase bill no longer exists", 409, "PURCHASE_BILL_CHANGED_RETRY");
+    }
+
+    const purchaseHistoryData = purchaseHistoryUpdateData(fields);
 
     let stockLedgerData = stockLedgerPurchaseUpdateData(fields);
-    if (newQuantity != null && stockLedger?.productId) {
-      const product = await tx.product.findFirst({ where: { id: stockLedger.productId, shopId, deletedAt: null } });
+    if (newQuantity != null && currentStockLedger?.productId) {
+      const product = await tx.product.findFirst({ where: { id: currentStockLedger.productId, shopId, deletedAt: null } });
       if (product) {
         const enteredUnit = pickString(payload.enteredUnit, payload.unit) ?? product.baseUnit;
         const newBase = round2(toBaseQty(newQuantity, enteredUnit, product.baseUnit));
-        const oldBase = round2(Number(stockLedger.changeBaseQty ?? 0));
+        const oldBase = round2(Number(currentStockLedger.changeBaseQty ?? 0));
         const delta = round2(newBase - oldBase);
         if (delta !== 0) {
-          const newProductStock = round2(Number(product.stockBaseQty ?? 0) + delta);
-          await tx.product.update({ where: { id: product.id }, data: { stockBaseQty: newProductStock } });
-          stockLedgerData = { ...stockLedgerData, changeBaseQty: newBase, newStockBaseQty: newProductStock };
+          const location = await resolveOperationalLocation(
+            shopId,
+            currentStockLedger.locationId ?? payload.locationId ?? null,
+            tx,
+            { allowInactive: true },
+          );
+          const currentLocationStock = await getLocationQuantity(tx, shopId, location, product);
+          await setLocationInventory(tx, {
+            shopId,
+            location,
+            product,
+            newStockBaseQty: round2(currentLocationStock + delta),
+          });
+          // A ledger row describes stock immediately before and after this historical
+          // purchase. Later sales must not change that history, so preserve
+          // old + corrected movement = new instead of writing today's on-hand value.
+          stockLedgerData = {
+            ...stockLedgerData,
+            changeBaseQty: newBase,
+            newStockBaseQty: round2(Number(currentStockLedger.oldStockBaseQty ?? 0) + newBase),
+          };
         }
       }
     }
 
-    const updatedStockLedger = stockLedger
+    const historyChanged = currentPurchaseHistory
+      ? !purchaseLifecycleDataMatches(currentPurchaseHistory, purchaseHistoryData)
+      : false;
+    const stockLedgerChanged = currentStockLedger
+      ? !purchaseLifecycleDataMatches(currentStockLedger, stockLedgerData)
+      : false;
+    if (!historyChanged && !stockLedgerChanged) {
+      return {
+        type: event.type,
+        purchaseHistoryId: currentPurchaseHistory?.id ?? null,
+        stockLedgerId: currentStockLedger?.id ?? null,
+        localPurchaseHistoryId: payload.localPurchaseHistoryId ?? null,
+        localMovementId: payload.localMovementId ?? null,
+        entity: toSyncJsonSafe(currentPurchaseHistory),
+        purchaseHistory: toSyncJsonSafe(currentPurchaseHistory),
+        stockLedger: toSyncJsonSafe(currentStockLedger),
+        deleted,
+        idempotentReplay: true,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const updatedPurchaseHistory = historyChanged
+      ? await tx.purchaseHistory.update({ where: { id: currentPurchaseHistory.id }, data: purchaseHistoryData })
+      : currentPurchaseHistory;
+    const updatedStockLedger = stockLedgerChanged
       ? await tx.stockLedger.update({
-          where: { id: stockLedger.id },
+          where: { id: currentStockLedger.id },
           data: stockLedgerData,
         })
-      : null;
+      : currentStockLedger;
+
+    const audit = await createAuditLog({
+      shopId,
+      userId: user?.userId ?? user?.id ?? null,
+      deviceId: user?.deviceId ?? null,
+      action: deleted ? "PURCHASE_BILL_DELETED" : "PURCHASE_BILL_UPDATED",
+      entityType: "PurchaseHistory",
+      entityId: updatedPurchaseHistory?.id ?? updatedStockLedger?.id ?? null,
+      before: {
+        purchaseHistory: currentPurchaseHistory ? {
+          id: currentPurchaseHistory.id,
+          invoiceNumber: currentPurchaseHistory.invoiceNumber,
+          supplierName: currentPurchaseHistory.supplierName,
+          billAmount: currentPurchaseHistory.billAmount,
+          purchasePaidAmount: currentPurchaseHistory.purchasePaidAmount,
+          purchaseDueAmount: currentPurchaseHistory.purchaseDueAmount,
+          purchasePaymentStatus: currentPurchaseHistory.purchasePaymentStatus,
+        } : null,
+        stockLedger: currentStockLedger ? {
+          id: currentStockLedger.id,
+          changeBaseQty: currentStockLedger.changeBaseQty,
+          purchaseBillAmount: currentStockLedger.purchaseBillAmount,
+          purchasePaidAmount: currentStockLedger.purchasePaidAmount,
+          purchaseDueAmount: currentStockLedger.purchaseDueAmount,
+        } : null,
+      },
+      after: {
+        purchaseHistory: toSyncJsonSafe(updatedPurchaseHistory),
+        stockLedger: toSyncJsonSafe(updatedStockLedger),
+      },
+      metadata: { deleted, reason: payload.reason ?? null, offlineSyncEventId: getClientEventId(event) },
+      client: tx,
+    });
+    if (!audit) {
+      throw new AppError(
+        "Purchase bill action was not saved because its audit record could not be stored",
+        503,
+        "PURCHASE_BILL_AUDIT_WRITE_FAILED",
+      );
+    }
 
     return {
       type: event.type,
@@ -2910,12 +3025,12 @@ async function applyPurchaseBillLifecycle(shopId, event, context, { deleted = fa
   });
 }
 
-function applyUpdatePurchaseBill(shopId, event, context) {
-  return applyPurchaseBillLifecycle(shopId, event, context, { deleted: false });
+function applyUpdatePurchaseBill(shopId, event, user, context) {
+  return applyPurchaseBillLifecycle(shopId, event, user, context, { deleted: false });
 }
 
-function applyDeletePurchaseBill(shopId, event, context) {
-  return applyPurchaseBillLifecycle(shopId, event, context, { deleted: true });
+function applyDeletePurchaseBill(shopId, event, user, context) {
+  return applyPurchaseBillLifecycle(shopId, event, user, context, { deleted: true });
 }
 
 async function applyRecordSupplierPayment(shopId, event, user, context) {

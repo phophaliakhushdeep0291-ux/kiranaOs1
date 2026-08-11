@@ -7,6 +7,7 @@ const postgresMigration = fs.readFileSync('prisma-postgres/migrations/000001_ini
 const auditService = fs.readFileSync('src/modules/audit/audit.service.js', 'utf8');
 const billsService = fs.readFileSync('src/modules/bills/bills.service.js', 'utf8');
 const productsService = fs.readFileSync('src/modules/products/products.service.js', 'utf8');
+const suppliersService = fs.readFileSync('src/modules/suppliers/suppliers.service.js', 'utf8');
 const reportsController = fs.readFileSync('src/modules/reports/reports.controller.js', 'utf8');
 const regressionTest = fs.readFileSync('tests/backend-regression.examples.js', 'utf8');
 
@@ -61,8 +62,9 @@ assert.match(shopsService, /action: "SETTINGS_CHANGED"/, 'settings changes must 
 const customersService = fs.readFileSync('src/modules/customers/customers.service.js', 'utf8');
 assert.match(customersService, /action: "CUSTOMER_CREATED"/, 'customer creation must be audited');
 assert.match(customersService, /action: "UDHAR_PAYMENT_RECEIVED"/, 'payments received must be audited');
-const suppliersController = fs.readFileSync('src/modules/suppliers/suppliers.controller.js', 'utf8');
-assert.match(suppliersController, /action: "SUPPLIER_CREATED"/, 'supplier creation must be audited');
+assert.match(suppliersService, /action: "SUPPLIER_CREATED"/, 'supplier creation must be audited');
+assert.match(suppliersService, /writeRequiredSupplierAudit/, 'supplier service must use required audit writes');
+assert.match(suppliersService, /SUPPLIER_CREATED[\s\S]*?\}, tx\);/, 'supplier creation audit must commit in the supplier transaction');
 assert.match(auditService, /client = db/, 'audit service must default to the app Prisma client');
 assert.match(auditService, /client\.auditLog\.create/, 'audit service must write to AuditLog through the active client/transaction');
 assert.match(auditService, /JSON\.stringify/, 'audit service must serialize audit payloads');

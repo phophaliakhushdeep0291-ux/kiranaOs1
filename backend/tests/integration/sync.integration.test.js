@@ -196,6 +196,256 @@ if (ctx.skip) {
       assert.equal(audits.filter((audit) => audit.action === "PRODUCT_RESTORED").length, 1);
     });
 
+    test("offline customer lifecycle preserves mobile identity and rolls back required audit failures", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const postEvent = (event) => ctx.post(
+        "/api/sync/push",
+        { events: [event] },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      );
+      const mobile = "6999912345";
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_customer_create_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'CUSTOMER_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced customer create audit failure');
+        END
+      `);
+      let failedCreate;
+      try {
+        failedCreate = assertSuccess(await postEvent({
+          eventId: "customer-create-audit-failure",
+          type: "CREATE_CUSTOMER",
+          payload: { localCustomerId: "customer-audit-local", customer: { name: "Customer Audit", mobile, type: "regular" } },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_customer_create_audit_failure");
+      }
+      assert.equal(failedCreate.summary.failed, 1);
+      assert.equal(await ctx.db.customer.count({ where: { shopId: tenant.shop.id, mobile } }), 0);
+
+      const created = assertSuccess(await postEvent({
+        eventId: "customer-audit-create-success",
+        type: "CREATE_CUSTOMER",
+        payload: { localCustomerId: "customer-audit-local", customer: { name: "Customer Audit", mobile, type: "regular" } },
+      }));
+      assert.equal(created.summary.synced, 1);
+      const customer = await ctx.db.customer.findFirstOrThrow({ where: { shopId: tenant.shop.id, mobile } });
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_customer_update_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'CUSTOMER_UPDATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced customer update audit failure');
+        END
+      `);
+      let failedUpdate;
+      try {
+        failedUpdate = assertSuccess(await postEvent({
+          eventId: "customer-update-audit-failure",
+          type: "UPDATE_CUSTOMER",
+          payload: { customerId: customer.id, changes: { name: "Must Not Persist" } },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_customer_update_audit_failure");
+      }
+      assert.equal(failedUpdate.summary.failed, 1);
+      assert.equal((await ctx.db.customer.findUniqueOrThrow({ where: { id: customer.id } })).name, "Customer Audit");
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_customer_delete_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'CUSTOMER_DELETED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced customer delete audit failure');
+        END
+      `);
+      let failedDelete;
+      try {
+        failedDelete = assertSuccess(await postEvent({
+          eventId: "customer-delete-audit-failure",
+          type: "DELETE_CUSTOMER",
+          ownerPin: "1234",
+          payload: { customerId: customer.id, ownerPin: "1234" },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_customer_delete_audit_failure");
+      }
+      assert.equal(failedDelete.summary.failed, 1);
+      let stored = await ctx.db.customer.findUniqueOrThrow({ where: { id: customer.id } });
+      assert.equal(stored.deletedAt, null);
+      assert.equal(stored.mobile, mobile, "failed delete cannot clear the customer's mobile");
+
+      assert.equal(assertSuccess(await postEvent({
+        eventId: "customer-delete-before-restore-audit-failure",
+        type: "DELETE_CUSTOMER",
+        ownerPin: "1234",
+        payload: { customerId: customer.id, ownerPin: "1234" },
+      })).summary.synced, 1);
+      stored = await ctx.db.customer.findUniqueOrThrow({ where: { id: customer.id } });
+      assert.ok(stored.deletedAt);
+      assert.equal(stored.mobile, null);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_customer_restore_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'CUSTOMER_RESTORED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced customer restore audit failure');
+        END
+      `);
+      let failedRestore;
+      try {
+        failedRestore = assertSuccess(await postEvent({
+          eventId: "customer-restore-audit-failure",
+          type: "RESTORE_CUSTOMER",
+          ownerPin: "1234",
+          payload: { customerId: customer.id, ownerPin: "1234" },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_customer_restore_audit_failure");
+      }
+      assert.equal(failedRestore.summary.failed, 1);
+      stored = await ctx.db.customer.findUniqueOrThrow({ where: { id: customer.id } });
+      assert.ok(stored.deletedAt);
+      assert.equal(stored.mobile, null);
+
+      assert.equal(assertSuccess(await postEvent({
+        eventId: "customer-restore-audit-success",
+        type: "RESTORE_CUSTOMER",
+        ownerPin: "1234",
+        payload: { customerId: customer.id, ownerPin: "1234" },
+      })).summary.synced, 1);
+      stored = await ctx.db.customer.findUniqueOrThrow({ where: { id: customer.id } });
+      assert.equal(stored.deletedAt, null);
+      assert.equal(stored.mobile, mobile, "restore recovers the mobile preserved in the trusted deletion audit");
+      const audits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, entityId: customer.id, action: { in: ["CUSTOMER_CREATED", "CUSTOMER_DELETED", "CUSTOMER_RESTORED"] } },
+      });
+      assert.equal(audits.length, 3);
+      assert.equal(audits.every((audit) => audit.userId === tenant.owner.id && audit.deviceId === deviceHeaders["x-device-id"]), true);
+    });
+
+    test("offline supplier lifecycle is attributed and rolls back required audit failures", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const postEvent = (event) => ctx.post(
+        "/api/sync/push",
+        { events: [event] },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      );
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_supplier_create_lifecycle_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'SUPPLIER_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced supplier create audit failure');
+        END
+      `);
+      let failedCreate;
+      try {
+        failedCreate = assertSuccess(await postEvent({
+          eventId: "supplier-create-lifecycle-audit-failure",
+          type: "CREATE_SUPPLIER",
+          payload: { localSupplierId: "supplier-audit-local", supplier: { name: "Supplier Audit", mobile: "6888812345" } },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_supplier_create_lifecycle_audit_failure");
+      }
+      assert.equal(failedCreate.summary.failed, 1);
+      assert.equal(await ctx.db.supplier.count({ where: { shopId: tenant.shop.id } }), 0);
+
+      assert.equal(assertSuccess(await postEvent({
+        eventId: "supplier-create-lifecycle-success",
+        type: "CREATE_SUPPLIER",
+        payload: { localSupplierId: "supplier-audit-local", supplier: { name: "Supplier Audit", mobile: "6888812345" } },
+      })).summary.synced, 1);
+      const supplier = await ctx.db.supplier.findFirstOrThrow({ where: { shopId: tenant.shop.id, name: "Supplier Audit" } });
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_supplier_update_lifecycle_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'SUPPLIER_UPDATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced supplier update audit failure');
+        END
+      `);
+      let failedUpdate;
+      try {
+        failedUpdate = assertSuccess(await postEvent({
+          eventId: "supplier-update-lifecycle-audit-failure",
+          type: "UPDATE_SUPPLIER",
+          payload: { supplierId: supplier.id, changes: { name: "Must Not Persist" } },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_supplier_update_lifecycle_audit_failure");
+      }
+      assert.equal(failedUpdate.summary.failed, 1);
+      assert.equal((await ctx.db.supplier.findUniqueOrThrow({ where: { id: supplier.id } })).name, "Supplier Audit");
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_supplier_delete_lifecycle_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'SUPPLIER_DELETED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced supplier delete audit failure');
+        END
+      `);
+      let failedDelete;
+      try {
+        failedDelete = assertSuccess(await postEvent({
+          eventId: "supplier-delete-lifecycle-audit-failure",
+          type: "DELETE_SUPPLIER",
+          ownerPin: "1234",
+          payload: { supplierId: supplier.id, ownerPin: "1234" },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_supplier_delete_lifecycle_audit_failure");
+      }
+      assert.equal(failedDelete.summary.failed, 1);
+      assert.equal((await ctx.db.supplier.findUniqueOrThrow({ where: { id: supplier.id } })).deletedAt, null);
+
+      assert.equal(assertSuccess(await postEvent({
+        eventId: "supplier-delete-lifecycle-success",
+        type: "DELETE_SUPPLIER",
+        ownerPin: "1234",
+        payload: { supplierId: supplier.id, ownerPin: "1234" },
+      })).summary.synced, 1);
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_supplier_restore_lifecycle_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'SUPPLIER_RESTORED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced supplier restore audit failure');
+        END
+      `);
+      let failedRestore;
+      try {
+        failedRestore = assertSuccess(await postEvent({
+          eventId: "supplier-restore-lifecycle-audit-failure",
+          type: "RESTORE_SUPPLIER",
+          ownerPin: "1234",
+          payload: { supplierId: supplier.id, ownerPin: "1234" },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_supplier_restore_lifecycle_audit_failure");
+      }
+      assert.equal(failedRestore.summary.failed, 1);
+      assert.ok((await ctx.db.supplier.findUniqueOrThrow({ where: { id: supplier.id } })).deletedAt);
+      assert.equal(assertSuccess(await postEvent({
+        eventId: "supplier-restore-lifecycle-success",
+        type: "RESTORE_SUPPLIER",
+        ownerPin: "1234",
+        payload: { supplierId: supplier.id, ownerPin: "1234" },
+      })).summary.synced, 1);
+      const audits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, entityId: supplier.id, action: { in: ["SUPPLIER_CREATED", "SUPPLIER_DELETED", "SUPPLIER_RESTORED"] } },
+      });
+      assert.equal(audits.length, 3);
+      assert.equal(audits.every((audit) => audit.userId === tenant.owner.id && audit.deviceId === deviceHeaders["x-device-id"]), true);
+    });
+
     test("concurrent offline customer updates preserve the first write and create a durable conflict", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Shared customer" });
