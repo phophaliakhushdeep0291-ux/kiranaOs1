@@ -140,13 +140,18 @@ export async function readScaleViaHardwareBridge(bridgeUrl: string) {
   return { ...reading, weight: Number(reading.weight) };
 }
 
+/** QR versions 1..40 carry 21..177 modules per side, in steps of four. */
+function isQrModuleCount(value: number) {
+  return Number.isInteger(value) && value >= 21 && value <= 177 && (value - 21) % 4 === 0;
+}
+
 /**
  * Print a provider-issued payment QR. Only the module grid and an integer
  * amount cross the wire — the bridge builds every printable byte itself, so a
  * counter printer can never be steered from the page.
  */
 export async function printQrSlipViaHardwareBridge(bridgeUrl: string, input: { moduleCount: number; modules: string; amountPaise: number; paperSize: string; reference?: string | null }) {
-  if (!Number.isInteger(input.moduleCount) || input.moduleCount < 21 || input.moduleCount > 177) throw new Error("Payment QR size is invalid.");
+  if (!isQrModuleCount(input.moduleCount)) throw new Error("Payment QR size is invalid.");
   if (!Number.isSafeInteger(input.amountPaise) || input.amountPaise <= 0) throw new Error("Payment QR amount is invalid.");
   return bridgeRequest<{ ok: boolean }>(bridgeUrl, "/v1/print-qr", {
     method: "POST",
