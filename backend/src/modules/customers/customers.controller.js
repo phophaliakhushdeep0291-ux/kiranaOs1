@@ -32,7 +32,11 @@ export async function create(req, res, next) {
 
 export async function update(req, res, next) {
   try {
-    const data = await svc.updateCustomer(req.shopId, req.params.id, req.body);
+    const data = await svc.updateCustomer(req.shopId, req.params.id, req.body, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
+      req,
+    });
     await publishIntegrationEvent(req.shopId, "customer.updated", { id: data.id, name: data.name, mobile: data.mobile, type: data.type, customerGroup: data.customerGroup, udharAmount: data.udharAmount, operation: "updated", updatedAt: data.updatedAt }).catch(() => []);
     res.json({ success: true, data });
   } catch (err) { next(err); }
@@ -42,6 +46,7 @@ export async function remove(req, res, next) {
   try {
     await svc.softDeleteCustomer(req.shopId, req.params.id, {
       actorUserId: req.user?.userId ?? null,
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       req,
     });
     res.json({ success: true, message: "Customer deleted" });

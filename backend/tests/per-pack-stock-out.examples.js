@@ -109,6 +109,7 @@ async function main() {
   } finally {
     for (const remove of [
       () => db.stockLedger.deleteMany({ where: { shopId: shop.id } }),
+      () => db.auditLog.deleteMany({ where: { shopId: shop.id } }),
       () => db.locationStock.deleteMany({ where: { shopId: shop.id } }),
       () => db.productSellingUnit.deleteMany({ where: { shopId: shop.id } }),
       () => db.product.deleteMany({ where: { shopId: shop.id } }),

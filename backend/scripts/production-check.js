@@ -560,13 +560,23 @@ const requiredAuditActions = [
   "OWNER_PIN_VERIFIED",
 ];
 const auditSourceFiles = [
-  "src/modules/products/products.controller.js",
-  "src/modules/inventory/inventory.controller.js",
+  "src/modules/products/products.service.js",
+  "src/modules/inventory/inventory.service.js",
   "src/middleware/permissions.js",
 ].filter(exists);
 const auditSource = auditSourceFiles.map(read).join("\n");
 for (const action of requiredAuditActions) {
   if (!auditSource.includes(action)) errors.push(`Missing required audit action in source: ${action}`);
+}
+for (const servicePath of [
+  "src/modules/products/products.service.js",
+  "src/modules/inventory/inventory.service.js",
+]) {
+  if (!exists(servicePath)) continue;
+  const source = read(servicePath);
+  if (!source.includes("writeRequired") || !source.includes("}, tx);")) {
+    errors.push(`${servicePath} must write required audit rows through the active transaction`);
+  }
 }
 
 if (exists("README.md")) {

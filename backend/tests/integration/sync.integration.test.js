@@ -92,6 +92,110 @@ if (ctx.skip) {
       assert.equal(count, 1, "exactly one active customer should exist for the mobile");
     });
 
+    test("offline product delete and restore are exact-once, audited, and roll back on audit failure", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const postEvent = (event) => ctx.post(
+        "/api/sync/push",
+        { events: [event] },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      );
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "Offline lifecycle product" });
+      const deletePayload = { productId: product.id, ownerPin: "1234" };
+      assert.equal(assertSuccess(await postEvent({
+        eventId: "product-delete-exact-once-1",
+        type: "DELETE_PRODUCT",
+        ownerPin: "1234",
+        payload: deletePayload,
+      })).summary.synced, 1);
+      assert.equal(assertSuccess(await postEvent({
+        eventId: "product-delete-exact-once-2",
+        type: "DELETE_PRODUCT",
+        ownerPin: "1234",
+        payload: deletePayload,
+      })).summary.synced, 1);
+      assert.ok((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).deletedAt);
+      let audits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, entityId: product.id, action: "PRODUCT_DELETED" },
+      });
+      assert.equal(audits.length, 1);
+      assert.equal(audits[0].userId, tenant.owner.id);
+      assert.equal(audits[0].deviceId, deviceHeaders["x-device-id"]);
+
+      const restorePayload = { productId: product.id, ownerPin: "1234" };
+      assert.equal(assertSuccess(await postEvent({
+        eventId: "product-restore-exact-once-1",
+        type: "RESTORE_PRODUCT",
+        ownerPin: "1234",
+        payload: restorePayload,
+      })).summary.synced, 1);
+      assert.equal(assertSuccess(await postEvent({
+        eventId: "product-restore-exact-once-2",
+        type: "RESTORE_PRODUCT",
+        ownerPin: "1234",
+        payload: restorePayload,
+      })).summary.synced, 1);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).deletedAt, null);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, entityId: product.id, action: "PRODUCT_RESTORED" },
+      }), 1);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_product_delete_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'PRODUCT_DELETED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced product delete audit failure');
+        END
+      `);
+      let failedDelete;
+      try {
+        failedDelete = assertSuccess(await postEvent({
+          eventId: "product-delete-audit-failure",
+          type: "DELETE_PRODUCT",
+          ownerPin: "1234",
+          payload: deletePayload,
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_product_delete_audit_failure");
+      }
+      assert.equal(failedDelete.summary.failed, 1);
+      assert.equal(failedDelete.results[0].result.retryable, true);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).deletedAt, null);
+
+      assert.equal(assertSuccess(await postEvent({
+        eventId: "product-delete-before-restore-audit-failure",
+        type: "DELETE_PRODUCT",
+        ownerPin: "1234",
+        payload: deletePayload,
+      })).summary.synced, 1);
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_product_restore_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'PRODUCT_RESTORED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced product restore audit failure');
+        END
+      `);
+      let failedRestore;
+      try {
+        failedRestore = assertSuccess(await postEvent({
+          eventId: "product-restore-audit-failure",
+          type: "RESTORE_PRODUCT",
+          ownerPin: "1234",
+          payload: restorePayload,
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_product_restore_audit_failure");
+      }
+      assert.equal(failedRestore.summary.failed, 1);
+      assert.ok((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).deletedAt);
+      audits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, entityId: product.id, action: { in: ["PRODUCT_DELETED", "PRODUCT_RESTORED"] } },
+      });
+      assert.equal(audits.filter((audit) => audit.action === "PRODUCT_DELETED").length, 2);
+      assert.equal(audits.filter((audit) => audit.action === "PRODUCT_RESTORED").length, 1);
+    });
+
     test("concurrent offline customer updates preserve the first write and create a durable conflict", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Shared customer" });
@@ -233,6 +337,12 @@ if (ctx.skip) {
         where: { shopId: tenant.shop.id, productId: product.id, action: "damage" },
       });
       assert.equal(damageRows.length, 1, "exactly one damage ledger row despite the retry");
+      const damageAudits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, action: "STOCK_DAMAGED", entityId: product.id },
+      });
+      assert.equal(damageAudits.length, 1, "the trusted damage audit is exact-once too");
+      assert.equal(damageAudits[0].userId, tenant.owner.id);
+      assert.equal(damageAudits[0].deviceId, deviceHeaders["x-device-id"]);
     });
 
     test("ADJUST_STOCK correction replayed under a new event id applies once", async () => {
@@ -262,6 +372,9 @@ if (ctx.skip) {
       });
       assert.equal(correctionRows.length, 1, "exactly one correction ledger row must survive a replay");
       assert.equal(correctionRows[0].idempotencyKey, payload.idempotencyKey);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "STOCK_CORRECTED", entityId: product.id },
+      }), 1);
     });
     test("STOCK_PURCHASE replayed under a new event id applies stock + cost + history once", async () => {
       // A purchase that committed but lost its ack gets re-pushed under a new event id. A double
@@ -294,6 +407,12 @@ if (ctx.skip) {
       assert.equal(purchaseRows.length, 1, "exactly one purchase ledger row despite the retry");
       const history = await ctx.db.purchaseHistory.findMany({ where: { shopId: tenant.shop.id, productId: product.id } });
       assert.equal(history.length, 1, "exactly one PurchaseHistory row (supplier due not doubled)");
+      const purchaseAudits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, action: "STOCK_PURCHASE_RECORDED", entityId: history[0].id },
+      });
+      assert.equal(purchaseAudits.length, 1, "purchase and trusted audit are both exact-once");
+      assert.equal(purchaseAudits[0].userId, tenant.owner.id);
+      assert.equal(purchaseAudits[0].deviceId, deviceHeaders["x-device-id"]);
     });
 
     test("STOCK_PURCHASE_BATCH commits every invoice line atomically and replays exact-once", async () => {
@@ -315,6 +434,7 @@ if (ctx.skip) {
       assert.equal((await ctx.db.product.findUnique({ where: { id: secondProduct.id } })).stockBaseQty, 8);
       assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, action: "purchase", idempotencyKey: { in: ["batch-line-1", "batch-line-2"] } } }), 2);
       assert.equal(await ctx.db.purchaseHistory.count({ where: { shopId: tenant.shop.id, invoiceNumber: "BATCH-1" } }), 2);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "STOCK_PURCHASE_RECORDED" } }), 2);
 
       const rejected = assertSuccess(await ctx.post("/api/sync/push", { events: [{
         type: "STOCK_PURCHASE_BATCH",
@@ -356,6 +476,137 @@ if (ctx.skip) {
       assert.equal(history.purchasePaidAmount, 0);
       assert.equal(history.purchaseDueAmount, 200);
       assert.equal(history.purchaseDueDate.toISOString().slice(0, 10), "2026-06-18");
+    });
+
+    test("offline damage, correction, purchase, and purchase batch roll back when required inventory audits fail", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const postEvent = (event) => ctx.post(
+        "/api/sync/push",
+        { events: [event] },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      );
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, costPerRateUnit: 10 });
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_stock_damage_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_DAMAGED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced stock damage audit failure');
+        END
+      `);
+      let failedDamage;
+      try {
+        failedDamage = assertSuccess(await postEvent({
+          eventId: "stock-damage-audit-failure",
+          type: "ADJUST_STOCK",
+          ownerPin: "1234",
+          payload: {
+            productId: product.id,
+            adjustmentType: "damage",
+            quantity: 2,
+            enteredUnit: product.baseUnit,
+            ownerPin: "1234",
+          },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_stock_damage_audit_failure");
+      }
+      assert.equal(failedDamage.summary.failed, 1);
+      assert.equal(failedDamage.results[0].result.retryable, true);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, action: "damage" } }), 0);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_stock_correction_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_CORRECTED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced stock correction audit failure');
+        END
+      `);
+      let failedCorrection;
+      try {
+        failedCorrection = assertSuccess(await postEvent({
+          eventId: "stock-correction-audit-failure",
+          type: "ADJUST_STOCK",
+          ownerPin: "1234",
+          payload: {
+            productId: product.id,
+            adjustmentType: "correction",
+            newStockBaseQty: 3,
+            ownerPin: "1234",
+          },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_stock_correction_audit_failure");
+      }
+      assert.equal(failedCorrection.summary.failed, 1);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, action: "correction" } }), 0);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_stock_purchase_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_PURCHASE_RECORDED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced stock purchase audit failure');
+        END
+      `);
+      let failedPurchase;
+      try {
+        failedPurchase = assertSuccess(await postEvent({
+          eventId: "stock-purchase-audit-failure",
+          type: "STOCK_PURCHASE",
+          payload: {
+            productId: product.id,
+            quantity: 5,
+            enteredUnit: product.baseUnit,
+            billAmount: 100,
+            supplierName: "Rollback Supplier",
+          },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_stock_purchase_audit_failure");
+      }
+      assert.equal(failedPurchase.summary.failed, 1);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
+      assert.equal(await ctx.db.purchaseHistory.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, action: "purchase" } }), 0);
+
+      const secondProduct = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 4, costPerRateUnit: 20 });
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_stock_purchase_batch_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_PURCHASE_RECORDED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced stock purchase batch audit failure');
+        END
+      `);
+      let failedBatch;
+      try {
+        failedBatch = assertSuccess(await postEvent({
+          eventId: "stock-purchase-batch-audit-failure",
+          type: "STOCK_PURCHASE_BATCH",
+          payload: {
+            batchId: "stock-purchase-batch-audit-failure",
+            lines: [
+              { productId: product.id, quantity: 2, enteredUnit: product.baseUnit, billAmount: 30, supplierName: "Rollback Supplier", idempotencyKey: "audit-batch-line-1" },
+              { productId: secondProduct.id, quantity: 3, enteredUnit: secondProduct.baseUnit, billAmount: 75, supplierName: "Rollback Supplier", idempotencyKey: "audit-batch-line-2" },
+            ],
+          },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_stock_purchase_batch_audit_failure");
+      }
+      assert.equal(failedBatch.summary.failed, 1);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: secondProduct.id } })).stockBaseQty, 4);
+      assert.equal(await ctx.db.purchaseHistory.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, action: "purchase" } }), 0);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: { in: ["STOCK_DAMAGED", "STOCK_CORRECTED", "STOCK_PURCHASE_RECORDED"] } },
+      }), 0);
     });
 
     test("CREATE_LEDGER_ADJUSTMENT rejects missing and wrong owner PIN without changing udhar", async () => {

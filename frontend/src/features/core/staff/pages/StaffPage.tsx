@@ -5,7 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -352,7 +352,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
                 </p>
               </div>
               <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">Staff changes require internet and Owner PIN. The server writes the audit record before this device shows the change.</div>
-              <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button><Button onClick={requestSave}>Continue with PIN</Button></div>
+              <DialogFooter><Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button><Button onClick={requestSave}>Continue with PIN</Button></DialogFooter>
             </div>
           </DialogContent>
         </Dialog>

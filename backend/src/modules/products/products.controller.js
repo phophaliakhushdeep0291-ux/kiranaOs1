@@ -88,15 +88,9 @@ export async function bindBarcode(req, res, next) {
 
 export async function remove(req, res, next) {
   try {
-    const product = await svc.softDeleteProduct(req.shopId, req.params.id);
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "PRODUCT_DELETED",
-      entityType: "Product",
-      entityId: product.id,
-      after: { id: product.id, name: product.name, deletedAt: product.deletedAt },
-      metadata: { softDelete: true },
+    const product = await svc.softDeleteProduct(req.shopId, req.params.id, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       req,
     });
     res.json({
@@ -116,16 +110,9 @@ export async function listDeleted(req, res, next) {
 
 export async function restore(req, res, next) {
   try {
-    const product = await svc.restoreDeletedProduct(req.shopId, req.params.id);
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "PRODUCT_RESTORED",
-      entityType: "Product",
-      entityId: product.id,
-      before: { id: product.id, deletedAt: product.deletedAt ?? "previously deleted" },
-      after: { id: product.id, name: product.name, deletedAt: null },
-      metadata: { name: product.name, category: product.category },
+    const product = await svc.restoreDeletedProduct(req.shopId, req.params.id, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       req,
     });
     res.json({
@@ -138,15 +125,9 @@ export async function restore(req, res, next) {
 
 export async function permanentRemove(req, res, next) {
   try {
-    const product = await svc.permanentlyDeleteProduct(req.shopId, req.params.id);
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "PRODUCT_PERMANENTLY_DELETED",
-      entityType: "Product",
-      entityId: product.id,
-      before: { id: product.id, name: product.name, category: product.category, deletedAt: product.deletedAt },
-      metadata: { name: product.name, category: product.category, hardDelete: true },
+    const product = await svc.permanentlyDeleteProduct(req.shopId, req.params.id, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       req,
     });
     res.json({
@@ -159,18 +140,9 @@ export async function permanentRemove(req, res, next) {
 
 export async function emptyRecycleBin(req, res, next) {
   try {
-    const result = await svc.emptyProductRecycleBin(req.shopId);
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "PRODUCT_RECYCLE_BIN_EMPTIED",
-      entityType: "Product",
-      metadata: {
-        deletedCount: result.deletedCount,
-        blockedCount: result.blockedCount,
-        deleted: result.deleted,
-        blocked: result.blocked,
-      },
+    const result = await svc.emptyProductRecycleBin(req.shopId, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       req,
     });
     res.json({

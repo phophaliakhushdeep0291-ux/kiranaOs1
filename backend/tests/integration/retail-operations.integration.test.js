@@ -839,6 +839,72 @@ if (ctx.skip) {
       }), 0);
     });
 
+    test("product permanent delete and recycle-bin empty roll back when their required audits cannot be stored", async () => {
+      const { tenant, auth } = await ownerContext();
+      const permanent = await createProduct(ctx.db, tenant.shop.id, { name: "Permanent audit product" });
+      assertSuccess(await ctx.delete(
+        `/api/products/${permanent.id}`,
+        { token: auth.accessToken, ownerPin: tenant.ownerPin },
+      ));
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_product_permanent_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'PRODUCT_PERMANENTLY_DELETED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced permanent product audit failure');
+        END
+      `);
+      let failedPermanent;
+      try {
+        failedPermanent = await ctx.delete(
+          `/api/products/${permanent.id}/permanent`,
+          { token: auth.accessToken, ownerPin: tenant.ownerPin },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_product_permanent_audit_failure");
+      }
+      assertFailure(failedPermanent, 503);
+      assert.ok(await ctx.db.product.findUnique({ where: { id: permanent.id } }), "failed audit must preserve the product");
+
+      assertSuccess(await ctx.delete(
+        `/api/products/${permanent.id}/permanent`,
+        { token: auth.accessToken, ownerPin: tenant.ownerPin },
+      ));
+      assert.equal(await ctx.db.product.findUnique({ where: { id: permanent.id } }), null);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "PRODUCT_PERMANENTLY_DELETED", entityId: permanent.id },
+      }), 1);
+
+      const first = await createProduct(ctx.db, tenant.shop.id, { name: "Recycle audit product A" });
+      const second = await createProduct(ctx.db, tenant.shop.id, { name: "Recycle audit product B" });
+      assertSuccess(await ctx.delete(`/api/products/${first.id}`, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assertSuccess(await ctx.delete(`/api/products/${second.id}`, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_product_empty_recycle_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'PRODUCT_RECYCLE_BIN_EMPTIED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced empty product recycle audit failure');
+        END
+      `);
+      let failedEmpty;
+      try {
+        failedEmpty = await ctx.delete(
+          "/api/products/recycle-bin/empty",
+          { token: auth.accessToken, ownerPin: tenant.ownerPin },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_product_empty_recycle_audit_failure");
+      }
+      assertFailure(failedEmpty, 503);
+      assert.ok(await ctx.db.product.findUnique({ where: { id: first.id } }));
+      assert.ok(await ctx.db.product.findUnique({ where: { id: second.id } }));
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "PRODUCT_RECYCLE_BIN_EMPTIED" },
+      }), 0);
+    });
+
     test("runs a blind stock count through review and guarded variance posting", async () => {
       const { tenant, auth } = await ownerContext();
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Counted Rice", stockBaseQty: 10, baseUnit: "kg", rateUnit: "kg" });

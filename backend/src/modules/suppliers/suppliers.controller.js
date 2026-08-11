@@ -1,5 +1,12 @@
 import * as svc from "./suppliers.service.js";
-import { createAuditLog } from "../audit/audit.service.js";
+
+function actor(req) {
+  return {
+    userId: req.user?.userId ?? null,
+    deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
+    req,
+  };
+}
 
 export async function list(req, res, next) {
   try { res.json({ success: true, data: await svc.listSuppliers(req.shopId) }); }
@@ -9,7 +16,7 @@ export async function list(req, res, next) {
 export async function create(req, res, next) {
   try {
     const startedAt = Date.now();
-    const supplier = await svc.createSupplier(req.shopId, req.body);
+    const supplier = await svc.createSupplier(req.shopId, req.body, actor(req));
     // §2 audit "Supplier creation" — matches the delete/restore entries below.
     await createAuditLog({
       shopId: req.shopId,
@@ -27,13 +34,13 @@ export async function create(req, res, next) {
 }
 
 export async function update(req, res, next) {
-  try { res.json({ success: true, data: await svc.updateSupplier(req.shopId, req.params.id, req.body) }); }
+  try { res.json({ success: true, data: await svc.updateSupplier(req.shopId, req.params.id, req.body, actor(req)) }); }
   catch (err) { next(err); }
 }
 
 export async function remove(req, res, next) {
   try {
-    const supplier = await svc.softDeleteSupplier(req.shopId, req.params.id);
+    const supplier = await svc.softDeleteSupplier(req.shopId, req.params.id, actor(req));
     await createAuditLog({
       shopId: req.shopId,
       userId: req.user?.userId,
@@ -50,7 +57,7 @@ export async function remove(req, res, next) {
 
 export async function restore(req, res, next) {
   try {
-    const supplier = await svc.restoreSupplier(req.shopId, req.params.id);
+    const supplier = await svc.restoreSupplier(req.shopId, req.params.id, actor(req));
     await createAuditLog({
       shopId: req.shopId,
       userId: req.user?.userId,

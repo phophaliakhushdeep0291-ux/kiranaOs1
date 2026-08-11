@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const dialogSource = readFileSync(new URL("../components/ui/dialog.tsx", import.meta.url), "utf8");
+const tabsSource = readFileSync(new URL("../components/ui/tabs.tsx", import.meta.url), "utf8");
 const cssSource = readFileSync(new URL("../index.css", import.meta.url), "utf8");
 const purchaseSource = readFileSync(new URL("../features/core/purchases/components/PurchaseOrdersPanel.tsx", import.meta.url), "utf8");
 const inventorySource = readFileSync(new URL("../features/core/inventory/pages/InventoryPage.tsx", import.meta.url), "utf8");
+const staffSource = readFileSync(new URL("../features/core/staff/pages/StaffPage.tsx", import.meta.url), "utf8");
 
 describe("phone-first operational dialogs", () => {
   it("promotes only explicitly long workflows to full-screen phone tasks", () => {
@@ -30,5 +32,12 @@ describe("phone-first operational dialogs", () => {
     expect(cssSource).toContain('env(safe-area-inset-bottom)');
     expect(cssSource).toContain("min-height: 44px");
     expect(cssSource).toContain("min-width: 44px");
+  });
+
+  it("keeps segmented tabs and staff task actions touch-safe", () => {
+    expect(tabsSource).toContain('"inline-flex min-h-11 items-center justify-center rounded-lg');
+    expect(tabsSource).toContain('"inline-flex min-h-11 items-center justify-center whitespace-nowrap');
+    expect(staffSource).toContain("<DialogFooter><Button");
+    expect(staffSource).toContain("Continue with PIN</Button></DialogFooter>");
   });
 });

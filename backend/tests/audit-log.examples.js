@@ -5,8 +5,8 @@ const sqliteSchema = fs.readFileSync('prisma/schema.prisma', 'utf8');
 const postgresSchema = fs.readFileSync('prisma-postgres/schema.prisma', 'utf8');
 const postgresMigration = fs.readFileSync('prisma-postgres/migrations/000001_init/migration.sql', 'utf8');
 const auditService = fs.readFileSync('src/modules/audit/audit.service.js', 'utf8');
-const billsController = fs.readFileSync('src/modules/bills/bills.controller.js', 'utf8');
-const productsController = fs.readFileSync('src/modules/products/products.controller.js', 'utf8');
+const billsService = fs.readFileSync('src/modules/bills/bills.service.js', 'utf8');
+const productsService = fs.readFileSync('src/modules/products/products.service.js', 'utf8');
 const reportsController = fs.readFileSync('src/modules/reports/reports.controller.js', 'utf8');
 const regressionTest = fs.readFileSync('tests/backend-regression.examples.js', 'utf8');
 
@@ -67,9 +67,9 @@ assert.match(auditService, /client = db/, 'audit service must default to the app
 assert.match(auditService, /client\.auditLog\.create/, 'audit service must write to AuditLog through the active client/transaction');
 assert.match(auditService, /JSON\.stringify/, 'audit service must serialize audit payloads');
 
-assert.match(billsController, /createAuditLog/, 'bill controller must use audit service');
-assert.match(billsController, /BILL_CANCELLED/, 'bill cancel must log BILL_CANCELLED');
-assert.match(productsController, /PRODUCT_DELETED/, 'product delete must log PRODUCT_DELETED');
+assert.match(billsService, /writeRequiredBillAudit/, 'bill service must use required audit writes');
+assert.match(billsService, /BILL_CANCELLED[\s\S]*?\}, tx\);/, 'bill cancellation audit must commit in the bill transaction');
+assert.match(productsService, /PRODUCT_DELETED[\s\S]*?\}, tx\);/, 'product deletion audit must commit in the product transaction');
 assert.match(reportsController, /DATA_EXPORTED/, 'report exports must log DATA_EXPORTED');
 assert.match(reportsController, /exportType/, 'report export audit log must include export type metadata');
 assert.match(regressionTest, /tx\.auditLog\.deleteMany/, 'regression cleanup must delete audit logs before shops/users');

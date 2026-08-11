@@ -1,5 +1,4 @@
 import * as svc from "./inventory.service.js";
-import { createAuditLog } from "../audit/audit.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
 import { ENTITY_TYPES } from "../assurance/assurance.constants.js";
@@ -11,6 +10,8 @@ function movementIdentity(req) {
     clientMovementId: req.body.clientMovementId ?? req.body.idempotencyKey,
     sourceDeviceId: Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader ?? null,
     locationId: requestLocationId(req),
+    userId: req.user?.userId ?? null,
+    req,
   };
 }
 
@@ -50,27 +51,6 @@ export async function damage(req, res, next) {
       { ...req.body, locationId: requestLocationId(req) },
       movementIdentity(req),
     );
-    if (!data.idempotentReplay) await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "STOCK_DAMAGED",
-      entityType: "Product",
-      entityId: data.productId,
-      before: { stockBaseQty: data.oldStockBaseQty },
-      after: { stockBaseQty: data.newStockBaseQty },
-      metadata: {
-        productName: data.productName,
-        quantity: data.quantity,
-        enteredUnit: data.enteredUnit,
-        qtyRemoved: data.qtyRemoved,
-        changeBaseQty: data.changeBaseQty,
-        damageLossValue: data.damageLossValue,
-        note: data.note,
-        oldStockBaseQty: data.oldStockBaseQty,
-        newStockBaseQty: data.newStockBaseQty,
-      },
-      req,
-    });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -82,23 +62,6 @@ export async function correction(req, res, next) {
       { ...req.body, locationId: requestLocationId(req) },
       movementIdentity(req),
     );
-    if (!data.idempotentReplay) await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "STOCK_CORRECTED",
-      entityType: "Product",
-      entityId: data.productId,
-      before: { stockBaseQty: data.oldStockBaseQty },
-      after: { stockBaseQty: data.newStockBaseQty },
-      metadata: {
-        productName: data.productName,
-        changeBaseQty: data.changeBaseQty,
-        note: data.note,
-        oldStockBaseQty: data.oldStockBaseQty,
-        newStockBaseQty: data.newStockBaseQty,
-      },
-      req,
-    });
     res.json({ success: true, data });
     scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.PRODUCT, data.productId, { userId: req.user?.userId });
   } catch (err) { next(err); }
