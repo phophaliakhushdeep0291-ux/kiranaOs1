@@ -79,6 +79,17 @@ const envSchema = z.object({
   RETAIL_PAYMENT_PROVIDER: z.enum(["manual", "razorpay"]).default("manual"),
   RETAIL_PAYMENT_CONFIRMATION_REQUIRED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   RETAIL_PAYMENT_INTENT_TTL_MINUTES: z.coerce.number().int().min(3).max(60).default(15),
+  // Card/EDC terminal at the counter. "simulated" confirms charges with no bank
+  // behind them and exists only for development and automated tests; the
+  // production guard below refuses to boot with it enabled.
+  CARD_TERMINAL_PROVIDER: z.enum(["none", "simulated", "pine_labs", "ezetap"]).default("none"),
+  CARD_TERMINAL_BASE_URL: z.string().url().optional(),
+  CARD_TERMINAL_API_KEY: z.string().optional(),
+  CARD_TERMINAL_MERCHANT_ID: z.string().optional(),
+  CARD_TERMINAL_ID: z.string().optional(),
+  // How long a cashier may leave a charge sitting on the terminal before the
+  // intent expires and the card must be presented again.
+  CARD_TERMINAL_CHARGE_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(600).default(180),
   // JSON object keyed by coupon code. Example:
   // {"LAUNCH25":{"percentOff":25,"plans":["growth","pro"],"billingCycles":["yearly"],"expiresAt":"2026-12-31T23:59:59.999Z"}}
   SUBSCRIPTION_COUPONS_JSON: z.string().default("{}"),
@@ -343,6 +354,21 @@ if (parsed.data.RETAIL_PAYMENT_PROVIDER === "razorpay" && !parsed.data.RAZORPAY_
 if (parsed.data.RAZORPAY_DYNAMIC_QR_ENABLED && (!parsed.data.RAZORPAY_ENABLED || parsed.data.RETAIL_PAYMENT_PROVIDER !== "razorpay")) {
   console.error("RAZORPAY_ENABLED=true and RETAIL_PAYMENT_PROVIDER=razorpay are required when RAZORPAY_DYNAMIC_QR_ENABLED=true");
   process.exit(1);
+}
+
+// A simulated terminal marks bills paid without a bank ever moving money.
+// Treat it as a build-time impossibility in production, not a runtime warning.
+if (parsed.data.NODE_ENV === "production" && parsed.data.CARD_TERMINAL_PROVIDER === "simulated") {
+  console.error("❌ CARD_TERMINAL_PROVIDER=simulated cannot run in production: it confirms card payments that no bank authorised");
+  process.exit(1);
+}
+
+if (["pine_labs", "ezetap"].includes(parsed.data.CARD_TERMINAL_PROVIDER)) {
+  const missing = ["CARD_TERMINAL_BASE_URL", "CARD_TERMINAL_API_KEY", "CARD_TERMINAL_MERCHANT_ID", "CARD_TERMINAL_ID"].filter((key) => !parsed.data[key]);
+  if (missing.length) {
+    console.error(`❌ ${missing.join(", ")} required when CARD_TERMINAL_PROVIDER=${parsed.data.CARD_TERMINAL_PROVIDER}`);
+    process.exit(1);
+  }
 }
 
 if (parsed.data.NODE_ENV === "production" && (!parsed.data.INTEGRATION_SIGNING_SECRET || parsed.data.INTEGRATION_SIGNING_SECRET.length < 32)) {

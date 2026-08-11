@@ -16,6 +16,11 @@ export const retailIntentSchema = z.object({
   mode: z.enum(["checkout", "dynamic_qr"]).default("checkout"),
 });
 
+export const cardTerminalChargeSchema = z.object({
+  amountPaise: paiseAmount({ positive: true }),
+  locationId: z.string().min(1).optional(),
+});
+
 export const verifyRetailIntentSchema = z.object({
   razorpay_order_id: z.string().min(1),
   razorpay_payment_id: z.string().min(1),

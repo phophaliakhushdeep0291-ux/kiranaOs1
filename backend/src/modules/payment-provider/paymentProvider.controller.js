@@ -2,6 +2,7 @@ import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import * as service from "./paymentProvider.service.js";
 import * as retailService from "./retailPayment.service.js";
+import * as terminalService from "./cardTerminal.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 
 export async function manualActivate(req, res, next) {
@@ -57,6 +58,26 @@ export async function createRetailIntent(req, res, next) {
 
 export async function retailIntentStatus(req, res, next) {
   try { res.json({ success: true, data: await retailService.getRetailPaymentIntentStatus({ shopId: req.shopId, intentId: req.params.id }) }); } catch (err) { next(err); }
+}
+
+export async function cardTerminalReadiness(req, res, next) {
+  try { res.json({ success: true, data: terminalService.retailCardTerminalReadiness() }); } catch (err) { next(err); }
+}
+
+export async function startCardTerminalCharge(req, res, next) {
+  try {
+    res.json({ success: true, data: await terminalService.startCardTerminalCharge({ shopId: req.shopId, requestedLocationId: req.body.locationId, userId: req.user?.userId, amountPaise: req.body.amountPaise }) });
+  } catch (err) { next(err); }
+}
+
+export async function cardTerminalChargeStatus(req, res, next) {
+  try { res.json({ success: true, data: await terminalService.getCardTerminalChargeStatus({ shopId: req.shopId, intentId: req.params.id }) }); } catch (err) { next(err); }
+}
+
+export async function cancelCardTerminalCharge(req, res, next) {
+  try {
+    res.json({ success: true, data: await terminalService.cancelCardTerminalCharge({ shopId: req.shopId, intentId: req.params.id, userId: req.user?.userId, userRole: req.user?.role }) });
+  } catch (err) { next(err); }
 }
 
 export async function retailIntentQrBitmap(req, res, next) {
