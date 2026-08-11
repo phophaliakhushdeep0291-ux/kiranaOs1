@@ -102,6 +102,7 @@ export async function answerSupportQuestion({ shopId, deviceId = null, question,
     // the user can escalate it (§6). When confident we keep the response light.
     incidentReport: confident ? null : report,
     aiProvider: report.aiProvider,
+    aiGrounding: report.aiGrounding,
     generatedAt: report.generatedAt,
   };
 }

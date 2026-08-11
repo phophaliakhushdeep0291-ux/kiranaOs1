@@ -35,6 +35,42 @@ if (ctx.skip) {
       const stockLedger = await ctx.db.stockLedger.findMany({ where: { billId: bill.id, action: "sale" } });
       assert.equal(refreshedProduct.stockBaseQty, 8);
       assert.equal(stockLedger.length, 1);
+      const audit = await ctx.db.auditLog.findFirst({
+        where: { shopId: tenant.shop.id, entityId: bill.id, action: "BILL_CREATED" },
+      });
+      assert.ok(audit);
+      assert.equal(audit.userId, tenant.owner.id);
+      assert.equal(JSON.parse(audit.afterJson).grandTotal, 100);
+    });
+
+    test("bill creation rolls back bill, stock, and accounting when its required audit cannot be stored", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50, costPerRateUnit: 30 });
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_bill_create_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'BILL_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced bill creation audit failure');
+        END
+      `);
+      let response;
+      try {
+        response = await ctx.post(
+          "/api/bills/confirm",
+          billPayload(product, { quantity: 2, ratePerRateUnit: 50 }),
+          { token: ownerAuth.accessToken },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_bill_create_audit_failure");
+      }
+      assertFailure(response, 503);
+      assert.equal(response.body.code, "BILL_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.bill.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, action: "sale" } }), 0);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "BILL_CREATED" } }), 0);
     });
 
     test("emails a tenant-scoped receipt through the configured provider and audits only the recipient domain", async () => {
@@ -513,6 +549,156 @@ if (ctx.skip) {
       assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, action: "cancel_reversal" } }), 0);
       assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, sourceType: "bill_cancel" } }), 0);
       assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, entityId: bill.id, action: "BILL_CANCELLED" } }), 0);
+    });
+
+    test("cancelled bill restore rolls all reapplied effects back when its required audit cannot be stored", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });
+      const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 2,
+        ratePerRateUnit: 50,
+        payments: [{ mode: "cash", amount: 100 }],
+      }), { token: ownerAuth.accessToken }), 201);
+      assertSuccess(await ctx.post(
+        `/api/bills/${bill.id}/cancel`,
+        { reason: "prepare restore rollback" },
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      ));
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_bill_restore_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'BILL_RESTORED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced bill restore audit failure');
+        END
+      `);
+      try {
+        await assert.rejects(
+          restoreCancelledBill(
+            tenant.shop.id,
+            bill.id,
+            { reason: "must roll back" },
+            { userId: tenant.owner.id },
+          ),
+          (error) => error?.code === "BILL_AUDIT_WRITE_FAILED",
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_bill_restore_audit_failure");
+      }
+      assert.equal((await ctx.db.bill.findUniqueOrThrow({ where: { id: bill.id } })).status, "cancelled");
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, action: "restore_reversal" } }), 0);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, sourceType: "bill_restore" } }), 0);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, entityId: bill.id, action: "BILL_RESTORED" } }), 0);
+    });
+
+    test("bill recycle delete and restore each roll back when their required audit cannot be stored", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });
+      const bill = await createPaidBillViaApi(ctx, ownerAuth.accessToken, product, { quantity: 1, ratePerRateUnit: 50 });
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_bill_recycle_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'BILL_MOVED_TO_RECYCLE_BIN'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced bill recycle audit failure');
+        END
+      `);
+      let failedDelete;
+      try {
+        failedDelete = await ctx.post(
+          `/api/bills/${bill.id}/delete`,
+          { reason: "must roll back" },
+          { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_bill_recycle_audit_failure");
+      }
+      assertFailure(failedDelete, 503);
+      assert.equal((await ctx.db.bill.findUniqueOrThrow({ where: { id: bill.id } })).deletedAt, null);
+
+      assertSuccess(await ctx.post(
+        `/api/bills/${bill.id}/delete`,
+        { reason: "duplicate bill display" },
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      ));
+      assert.ok((await ctx.db.bill.findUniqueOrThrow({ where: { id: bill.id } })).deletedAt);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_bill_recycle_restore_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'BILL_RESTORED_FROM_RECYCLE_BIN'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced bill recycle restore audit failure');
+        END
+      `);
+      let failedRestore;
+      try {
+        failedRestore = await ctx.post(
+          `/api/bills/${bill.id}/restore`,
+          { reason: "must roll back" },
+          { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_bill_recycle_restore_audit_failure");
+      }
+      assertFailure(failedRestore, 503);
+      assert.ok((await ctx.db.bill.findUniqueOrThrow({ where: { id: bill.id } })).deletedAt);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, entityId: bill.id, action: "BILL_RESTORED_FROM_RECYCLE_BIN" },
+      }), 0);
+    });
+
+    test("sale return rolls back refund, stock, and accounting when its required audit cannot be stored", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });
+      const sale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 2,
+        ratePerRateUnit: 50,
+        payments: [{ mode: "cash", amount: 100 }],
+      }), { token: ownerAuth.accessToken }), 201);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 8);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_sale_return_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'SALE_RETURN_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced sale return audit failure');
+        END
+      `);
+      let response;
+      try {
+        response = await ctx.post("/api/bills/returns", {
+          refundMode: "cash",
+          returnOfBillId: sale.id,
+          reason: "must roll back",
+          idempotencyKey: "sale-return-audit-rollback",
+          clientBillId: "sale-return-audit-rollback",
+          items: [{
+            originalBillItemId: sale.items[0].id,
+            productId: product.id,
+            name: product.name,
+            quantity: 1,
+            enteredUnit: "piece",
+            ratePerRateUnit: 50,
+            gstRate: 0,
+            damaged: false,
+          }],
+        }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_sale_return_audit_failure");
+      }
+      assertFailure(response, 503);
+      assert.equal(response.body.code, "BILL_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.bill.count({ where: { shopId: tenant.shop.id, billType: "sales_return" } }), 0);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 8);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, action: "return" } }), 0);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "sale_return" } }), 0);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "SALE_RETURN_CREATED" } }), 0);
     });
 
     test("concurrent cancels restore stock only once", async () => {

@@ -300,6 +300,11 @@ runStep({
   },
 });
 runStep({ id: "backend-production-check", label: "Backend production readiness checks", args: ["run", "prod:check"] });
+runStep({
+  id: "ai-safety",
+  label: "AI command and diagnostic hallucination safety gates",
+  args: ["run", "test:ai-safety"],
+});
 runStep({ id: "api-contract", label: "Static API contract proof", args: ["run", "contract:check"] });
 runStep({ id: "razorpay-fixtures", label: "Razorpay signature fixture proof", args: ["run", "razorpay:fixtures"] });
 runStep({

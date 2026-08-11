@@ -2183,6 +2183,9 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   const diagnosticAi = exists("src/modules/diagnostics/incident-report.service.js")
     ? read("src/modules/diagnostics/incident-report.service.js")
     : "";
+  const diagnosticAssistant = exists("src/modules/diagnostics/assistant.service.js")
+    ? read("src/modules/diagnostics/assistant.service.js")
+    : "";
   const metrics = exists("src/lib/metrics.js") ? read("src/lib/metrics.js") : "";
   const aiDocs = exists("docs/AI_SAFETY.md") ? read("docs/AI_SAFETY.md") : "";
   const aiTest = exists("tests/ai-hallucination-guard.examples.js") ? read("tests/ai-hallucination-guard.examples.js") : "";
@@ -2248,6 +2251,9 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
     "Confidence:",
   ]) {
     if (!diagnosticAi.includes(snippet)) errors.push("Diagnostic AI grounding path missing " + snippet);
+  }
+  if (!diagnosticAssistant.includes("aiGrounding: report.aiGrounding")) {
+    errors.push("Diagnostic assistant must expose server-verified AI grounding provenance");
   }
   for (const snippet of [
     "unsafeNarrativesAccepted",

@@ -74,6 +74,18 @@ export interface AssistantAnswer {
   escalate: boolean;
   incidentReport: unknown | null;
   aiProvider: string | null;
+  aiGrounding?: {
+    status:
+      | "verified"
+      | "not_requested"
+      | "provider_unavailable"
+      | "provider_error"
+      | "rejected"
+      | "insufficient_evidence"
+      | "pending";
+    evidenceIds: string[];
+    rejectedReason: string | null;
+  };
   generatedAt: string;
 }
 
