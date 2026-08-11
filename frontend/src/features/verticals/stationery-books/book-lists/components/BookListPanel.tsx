@@ -161,7 +161,7 @@ export function BookListPanel({ open, editing, saving, options, onClose, onSubmi
           </h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">Type the school's list once — it answers every parent who asks for it</p>
         </div>
-        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+        <button onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
       </div>
 
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
@@ -171,7 +171,7 @@ export function BookListPanel({ open, editing, saving, options, onClose, onSubmi
             <Fld label="School *">
               <input
                 list="book-list-schools"
-                className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                className="h-11 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)] lg:mouse:h-10"
                 placeholder="Delhi Public School"
                 value={schoolName}
                 onChange={(e) => setSchoolName(e.target.value)}
@@ -182,7 +182,7 @@ export function BookListPanel({ open, editing, saving, options, onClose, onSubmi
               <Fld label="Class *">
                 <input
                   list="book-list-classes"
-                  className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                  className="h-11 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)] lg:mouse:h-10"
                   placeholder="Class 6"
                   value={className}
                   onChange={(e) => setClassName(e.target.value)}
@@ -192,7 +192,7 @@ export function BookListPanel({ open, editing, saving, options, onClose, onSubmi
               <Fld label="Academic year *" hint="Written as 2026-27">
                 <input
                   list="book-list-years"
-                  className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                  className="h-11 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)] lg:mouse:h-10"
                   placeholder="2026-27"
                   value={academicYear}
                   onChange={(e) => setAcademicYear(e.target.value)}
@@ -210,7 +210,7 @@ export function BookListPanel({ open, editing, saving, options, onClose, onSubmi
 
             <div className="relative">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-              <Input className="h-10 pl-8" placeholder="Search your stock to add a line…" value={pick} onChange={(e) => setPick(e.target.value)} />
+              <Input className="h-11 pl-8 lg:mouse:h-10" placeholder="Search your stock to add a line…" value={pick} onChange={(e) => setPick(e.target.value)} />
               {pick.trim() && (
                 <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 max-h-[220px] overflow-y-auto rounded-[10px] border border-[#e2e8f0] bg-white shadow-[0_12px_30px_rgba(15,35,80,0.10)]">
                   {matches.length === 0 ? (
@@ -240,9 +240,13 @@ export function BookListPanel({ open, editing, saving, options, onClose, onSubmi
             <div className="space-y-2">
               {lines.map((line, index) => (
                 <div key={index} className="flex flex-wrap items-center gap-2 rounded-[12px] border border-[#e7edf7] p-2.5">
-                  <div className="flex shrink-0 flex-col">
-                    <button type="button" className="grid h-4 w-5 place-items-center text-[#a3b0c6] hover:text-[#536583] disabled:opacity-30" onClick={() => move(index, -1)} disabled={index === 0} aria-label={`Move line ${index + 1} up`}>▲</button>
-                    <button type="button" className="grid h-4 w-5 place-items-center text-[#a3b0c6] hover:text-[#536583] disabled:opacity-30" onClick={() => move(index, 1)} disabled={index === lines.length - 1} aria-label={`Move line ${index + 1} down`}>▼</button>
+                  {/* Two 20x16 arrows stacked with no gap: the smallest targets
+                      in the app, and adjacent, so a mis-tap moved the line the
+                      wrong way. A thumb gets them side by side at full size; a
+                      mouse keeps the compact vertical pair. */}
+                  <div className="flex shrink-0 flex-row gap-1 lg:mouse:flex-col lg:mouse:gap-0">
+                    <button type="button" className="grid h-11 w-11 place-items-center rounded-[8px] text-[#a3b0c6] hover:bg-[#f1f4f8] hover:text-[#536583] disabled:opacity-30 lg:mouse:h-4 lg:mouse:w-5 lg:mouse:rounded-none lg:mouse:hover:bg-transparent" onClick={() => move(index, -1)} disabled={index === 0} aria-label={`Move line ${index + 1} up`}>▲</button>
+                    <button type="button" className="grid h-11 w-11 place-items-center rounded-[8px] text-[#a3b0c6] hover:bg-[#f1f4f8] hover:text-[#536583] disabled:opacity-30 lg:mouse:h-4 lg:mouse:w-5 lg:mouse:rounded-none lg:mouse:hover:bg-transparent" onClick={() => move(index, 1)} disabled={index === lines.length - 1} aria-label={`Move line ${index + 1} down`}>▼</button>
                   </div>
                   <Input
                     className="h-9 min-w-[140px] flex-1"
@@ -261,7 +265,7 @@ export function BookListPanel({ open, editing, saving, options, onClose, onSubmi
                     />
                     optional
                   </label>
-                  <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" onClick={() => removeLine(index)} aria-label={`Remove line ${index + 1}`}><X size={14} /></button>
+                  <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50 lg:mouse:h-9 lg:mouse:w-9" onClick={() => removeLine(index)} aria-label={`Remove line ${index + 1}`}><X size={14} /></button>
                   {line.productId === null && line.name.trim() && (
                     <p className="w-full text-[10.5px] text-amber-700">Not linked to your stock — it will show as an item to order.</p>
                   )}

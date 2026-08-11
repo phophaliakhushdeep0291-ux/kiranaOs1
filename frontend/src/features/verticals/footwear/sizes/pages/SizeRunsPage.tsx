@@ -91,7 +91,7 @@ export default function SizeRunsPage() {
           onSubmit={(e) => { e.preventDefault(); if (askSize.trim()) lookupMut.mutate(); }}
         >
           <div className="mb-2.5 flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><Ruler size={16} /></span>
+            <span className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><Ruler size={16} /></span>
             <div>
               <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">"Have you got this in an 8?"</h3>
               <p className="text-[11.5px] text-[#64748b]">Ask in whatever number the customer knows — the racks are searched in their own.</p>
@@ -100,7 +100,7 @@ export default function SizeRunsPage() {
 
           <div className="flex flex-wrap gap-2">
             <select
-              className="h-10 rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] font-semibold text-[#344668] outline-none focus:border-[var(--brand)]"
+              className="h-11 lg:mouse:h-10 rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] font-semibold text-[#344668] outline-none focus:border-[var(--brand)]"
               value={askSystem}
               onChange={(e) => setAskSystem(e.target.value as ShoeSizeSystem)}
               aria-label="Size system"
@@ -108,7 +108,7 @@ export default function SizeRunsPage() {
               {SYSTEMS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
             <select
-              className="h-10 rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] font-semibold text-[#344668] outline-none focus:border-[var(--brand)]"
+              className="h-11 lg:mouse:h-10 rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] font-semibold text-[#344668] outline-none focus:border-[var(--brand)]"
               value={askGender}
               onChange={(e) => setAskGender(e.target.value as ShoeSizeGender)}
               aria-label="Who it is for"
@@ -116,7 +116,7 @@ export default function SizeRunsPage() {
               {GENDERS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
             </select>
             <Input
-              className="h-10 w-[110px]"
+              className="h-11 lg:mouse:h-10 w-[110px]"
               placeholder="Size"
               value={askSize}
               onChange={(e) => setAskSize(e.target.value)}
@@ -126,12 +126,12 @@ export default function SizeRunsPage() {
               type="submit"
               disabled={!askSize.trim() || lookupMut.isPending}
               style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
-              className="h-10 gap-2 rounded-[10px] px-5 font-black text-white hover:opacity-95"
+              className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] px-5 font-black text-white hover:opacity-95"
             >
               {lookupMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Find
             </Button>
             {lookup && (
-              <Button type="button" variant="outline" className="h-10 rounded-[10px] font-bold" onClick={() => { setLookup(null); setAskSize(""); }}>Clear</Button>
+              <Button type="button" variant="outline" className="h-11 lg:mouse:h-10 rounded-[10px] font-bold" onClick={() => { setLookup(null); setAskSize(""); }}>Clear</Button>
             )}
           </div>
 
@@ -171,7 +171,7 @@ export default function SizeRunsPage() {
               <button
                 onClick={() => setOnlyBroken((value) => !value)}
                 className={cn(
-                  "rounded-[8px] px-2.5 py-1.5 text-[11.5px] font-bold transition-colors",
+                  "inline-flex h-11 items-center rounded-[8px] px-3 text-[11.5px] font-bold transition-colors lg:mouse:h-auto lg:mouse:px-2.5 lg:mouse:py-1.5",
                   onlyBroken ? "bg-[var(--brand)] text-white" : "bg-[#f1f5fa] text-[#52627e] hover:bg-[#e6ecf4]",
                 )}
               >
@@ -179,7 +179,7 @@ export default function SizeRunsPage() {
               </button>
               <div className="relative min-w-[180px]">
                 <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-                <Input className="h-9 pl-8" placeholder="Style or brand" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <Input className="h-11 lg:mouse:h-9 pl-8" placeholder="Style or brand" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
             </div>
           </div>
@@ -223,7 +223,7 @@ function LookupResult({ lookup }: { lookup: SizeLookup }) {
   return (
     <div className="mt-3 rounded-[12px] border border-[#e7edf7] bg-[#f7f9fd] px-4 py-3.5">
       {equivalents ? (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2 lg:mouse:gap-1.5">
           <span className="text-[11.5px] font-semibold text-[#64748b]">Same shoe:</span>
           {SYSTEMS.map((system) => (
             <span
@@ -306,7 +306,7 @@ function RunRow({ run, onProfile }: { run: SizeRun; onProfile: () => void }) {
             <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", CHIP_TONES.green)}>Full run</span>
           )}
           <span className="text-[12px] font-semibold text-[#52627e]">{run.totalPairs} pairs</span>
-          <button onClick={onProfile} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Set size system for ${run.productName}`}>
+          <button onClick={onProfile} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Set size system for ${run.productName}`}>
             <Settings2 size={14} />
           </button>
         </div>
@@ -314,7 +314,7 @@ function RunRow({ run, onProfile }: { run: SizeRun; onProfile: () => void }) {
 
       <div className="mt-2.5 space-y-1.5">
         {byColour.map(([colour, cells]) => (
-          <div key={colour || "default"} className="flex flex-wrap items-center gap-1.5">
+          <div key={colour || "default"} className="flex flex-wrap items-center gap-2 lg:mouse:gap-1.5">
             {colour && <span className="w-[70px] shrink-0 truncate text-[11px] font-semibold text-[#64748b]">{colour}</span>}
             <div className="flex flex-wrap gap-1">
               {cells.map((cell) => (
@@ -374,7 +374,7 @@ function ProfileDialog({ run, saving, onClose, onSubmit }: {
               <div>
                 <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Size system</Label>
                 <select
-                  className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                  className="h-11 lg:mouse:h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
                   value={sizeSystem}
                   onChange={(e) => setSizeSystem(e.target.value as ShoeSizeSystem)}
                 >
@@ -384,7 +384,7 @@ function ProfileDialog({ run, saving, onClose, onSubmit }: {
               <div>
                 <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Worn by</Label>
                 <select
-                  className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                  className="h-11 lg:mouse:h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
                   value={gender}
                   onChange={(e) => setGender(e.target.value as ShoeSizeGender)}
                 >

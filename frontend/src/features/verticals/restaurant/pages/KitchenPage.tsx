@@ -113,7 +113,7 @@ export default function KitchenPage() {
           </p>
           <p className="mt-0.5 text-[12px] text-[#8494ad]">Showing tickets raised on this device.</p>
         </div>
-        <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/tables")}>
+        <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/tables")}>
           <LayoutGrid size={15} /> Tables
         </Button>
       </header>

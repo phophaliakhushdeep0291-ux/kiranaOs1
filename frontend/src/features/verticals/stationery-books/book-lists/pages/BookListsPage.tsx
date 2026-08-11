@@ -157,7 +157,7 @@ export default function BookListsPage() {
             <Button
               onClick={() => { setEditing(null); setPanelOpen(true); }}
               style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
-              className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95"
+              className="h-11 lg:mouse:h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95"
             >
               <Plus size={15} /> New List
             </Button>
@@ -165,7 +165,7 @@ export default function BookListsPage() {
 
           <div className="flex flex-wrap items-center gap-2 border-b border-[#eef2f8] px-5 py-3">
             <select
-              className="h-9 rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[12px] font-semibold text-[#344668] outline-none focus:border-[var(--brand)]"
+              className="h-11 lg:mouse:h-9 rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[12px] font-semibold text-[#344668] outline-none focus:border-[var(--brand)]"
               value={year}
               onChange={(e) => setYear(e.target.value)}
               aria-label="Academic year"
@@ -175,7 +175,7 @@ export default function BookListsPage() {
             </select>
             <div className="relative ml-auto min-w-[200px] flex-1 sm:max-w-[300px]">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-              <Input className="h-9 pl-8" placeholder="School, class, or a book on the list" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="h-11 lg:mouse:h-9 pl-8" placeholder="School, class, or a book on the list" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
 
@@ -286,7 +286,10 @@ function ListRow({ list, billing, onBill, onEdit, onCopy, onDelete }: {
   return (
     <div className="px-5 py-3.5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <button className="min-w-0 flex-1 text-left" onClick={() => setOpen((value) => !value)}>
+        {/* `flex-1` alone let the action row win the width fight and squeeze the
+            school name down to a 20px column. A basis wide enough to be worth
+            reading makes the actions wrap underneath instead. */}
+        <button className="min-w-0 flex-1 basis-[min(100%,220px)] text-left" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
           <p className="font-bold text-[var(--brand-ink)]">{list.label}</p>
           <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-[#8492ac]">
             <span className="rounded-[6px] bg-[#f1f5fa] px-1.5 py-0.5 font-bold text-[#52627e]">{list.academicYear}</span>
@@ -296,7 +299,7 @@ function ListRow({ list, billing, onBill, onEdit, onCopy, onDelete }: {
           </p>
         </button>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2 lg:mouse:gap-1.5">
           {list.isComplete ? (
             <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", CHIP_TONES.green)}>All in stock</span>
           ) : (
@@ -306,15 +309,15 @@ function ListRow({ list, billing, onBill, onEdit, onCopy, onDelete }: {
           )}
           <Button
             variant="outline"
-            className="h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold"
+            className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold"
             disabled={billing || list.itemCount === 0}
             onClick={onBill}
           >
             <Receipt size={13} /> Put on a bill
           </Button>
-          <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Edit ${list.label}`}><BookOpen size={14} /></button>
-          <button onClick={onCopy} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Copy ${list.label} to another year`}><Copy size={14} /></button>
-          <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Delete ${list.label}`}><Trash2 size={14} /></button>
+          <button onClick={onEdit} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Edit ${list.label}`}><BookOpen size={14} /></button>
+          <button onClick={onCopy} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Copy ${list.label} to another year`}><Copy size={14} /></button>
+          <button onClick={onDelete} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Delete ${list.label}`}><Trash2 size={14} /></button>
         </div>
       </div>
 

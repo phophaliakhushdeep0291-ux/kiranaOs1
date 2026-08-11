@@ -511,18 +511,18 @@ export function BillingSearch({
                     title={t("billing.search.scanBarcode")}
                     aria-label={t("billing.search.scanBarcode")}
                     onClick={openBarcodeScanner}
-                    className="tap-target grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] active:scale-95"
+                    className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] active:scale-95 lg:mouse:h-9 lg:mouse:w-9"
                   >
-                    <ScanLine size={16} aria-hidden="true" />
+                    <ScanLine size={17} aria-hidden="true" />
                   </button>
                   <button
                     type="button"
                     title={t("billing.search.voiceBilling")}
                     aria-label={t("billing.search.openVoiceBilling")}
                     onClick={onToggleVoice}
-                    className={`tap-target grid h-9 w-9 place-items-center rounded-full border transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] active:scale-95 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
+                    className={`grid h-11 w-11 place-items-center rounded-full border transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] active:scale-95 lg:mouse:h-9 lg:mouse:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
                   >
-                    <Mic size={16} aria-hidden="true" />
+                    <Mic size={17} aria-hidden="true" />
                   </button>
                 </span>
               </div>
@@ -650,7 +650,7 @@ export function BillingSearch({
                 <button
                   type="button"
                   onClick={() => setScannerOpen(false)}
-                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd] sm:h-9 sm:w-9"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd] sm:mouse:h-9 sm:mouse:w-9"
                   aria-label={t("billing.search.closeScanner")}
                 >
                   <X size={16} />
@@ -671,7 +671,7 @@ export function BillingSearch({
                     setScannerOpen(false);
                     searchInputRef.current?.focus();
                   }}
-                  className="h-11 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[var(--brand)] hover:bg-[#f5f9ff] sm:h-9"
+                  className="h-11 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[var(--brand)] hover:bg-[#f5f9ff] sm:mouse:h-9"
                 >
                   {t("billing.search.typeInstead")}
                 </button>
@@ -714,7 +714,7 @@ export function BillingSearch({
                   type="button"
                   onClick={dismissBindSheet}
                   aria-label={t("billing.search.bindDismiss")}
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd] sm:h-9 sm:w-9"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd] sm:mouse:h-9 sm:mouse:w-9"
                 >
                   <X size={16} />
                 </button>
@@ -793,7 +793,7 @@ export function BillingSearch({
                     onSearchChange("");
                     onCreateProductWithBarcode(code);
                   }}
-                  className="h-11 flex-1 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[var(--brand)] hover:bg-[#f5f9ff] sm:h-10"
+                  className="h-11 flex-1 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[var(--brand)] hover:bg-[#f5f9ff] sm:mouse:h-10"
                 >
                   {t("billing.search.bindCreateNew")}
                 </button>
@@ -807,7 +807,7 @@ export function BillingSearch({
                     setBindError(null);
                     bindSearchRef.current?.focus();
                   }}
-                  className="h-11 rounded-[8px] border border-[#e6ecf4] px-4 text-[12px] font-extrabold text-[#45577a] hover:bg-[#f7f9fd] sm:h-10"
+                  className="h-11 rounded-[8px] border border-[#e6ecf4] px-4 text-[12px] font-extrabold text-[#45577a] hover:bg-[#f7f9fd] sm:mouse:h-10"
                 >
                   {t("billing.search.bindSkip")}
                 </button>

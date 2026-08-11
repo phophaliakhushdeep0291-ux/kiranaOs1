@@ -202,7 +202,7 @@ export default function FurnitureOrdersPage() {
             <Button
               onClick={() => { setEditing(null); setPanelOpen(true); }}
               style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
-              className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95"
+              className="h-11 lg:mouse:h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95"
             >
               <Plus size={15} /> New Order
             </Button>
@@ -215,7 +215,7 @@ export default function FurnitureOrdersPage() {
                   key={f.key}
                   onClick={() => setFilter(f.key)}
                   className={cn(
-                    "rounded-[8px] px-2.5 py-1.5 text-[11.5px] font-bold transition-colors",
+                    "inline-flex h-11 items-center rounded-[8px] px-3 text-[11.5px] font-bold transition-colors lg:mouse:h-auto lg:mouse:px-2.5 lg:mouse:py-1.5",
                     filter === f.key ? "bg-[var(--brand)] text-white" : "bg-[#f1f5fa] text-[#52627e] hover:bg-[#e6ecf4]",
                   )}
                 >
@@ -225,7 +225,7 @@ export default function FurnitureOrdersPage() {
               <button
                 onClick={() => setOverdueOnly((value) => !value)}
                 className={cn(
-                  "rounded-[8px] px-2.5 py-1.5 text-[11.5px] font-bold transition-colors",
+                  "inline-flex h-11 items-center rounded-[8px] px-3 text-[11.5px] font-bold transition-colors lg:mouse:h-auto lg:mouse:px-2.5 lg:mouse:py-1.5",
                   overdueOnly ? "bg-rose-600 text-white" : "bg-[#f1f5fa] text-[#52627e] hover:bg-[#e6ecf4]",
                 )}
               >
@@ -234,7 +234,7 @@ export default function FurnitureOrdersPage() {
             </div>
             <div className="relative ml-auto min-w-[200px] flex-1 sm:max-w-[280px]">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-              <Input className="h-9 pl-8" placeholder="Customer, order no., item" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="h-11 lg:mouse:h-9 pl-8" placeholder="Customer, order no., item" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
 
@@ -361,12 +361,12 @@ function OrderRow({ order, busy, onAdvance, onPay, onEdit, onCancel, onDelete }:
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <div className="mt-2 flex flex-wrap items-center gap-2 lg:mouse:gap-1.5">
         {forward.map((status) => (
           <Button
             key={status}
             variant="outline"
-            className="h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold"
+            className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold"
             disabled={busy}
             onClick={() => onAdvance(status)}
           >
@@ -377,19 +377,19 @@ function OrderRow({ order, busy, onAdvance, onPay, onEdit, onCancel, onDelete }:
         {order.status !== "cancelled" && (
           <Button
             variant="outline"
-            className="h-8 gap-1.5 rounded-[8px] border-emerald-200 px-2.5 text-[11.5px] font-bold text-emerald-700 hover:bg-emerald-50"
+            className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-emerald-200 px-2.5 text-[11.5px] font-bold text-emerald-700 hover:bg-emerald-50"
             onClick={onPay}
           >
             <Wallet size={13} /> Take payment
           </Button>
         )}
         {order.isOpen && (
-          <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Edit ${order.orderNumber}`}><NotebookPen size={14} /></button>
+          <button onClick={onEdit} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Edit ${order.orderNumber}`}><NotebookPen size={14} /></button>
         )}
         {order.canCancel && (
-          <button onClick={onCancel} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Cancel ${order.orderNumber}`}><Ban size={14} /></button>
+          <button onClick={onCancel} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Cancel ${order.orderNumber}`}><Ban size={14} /></button>
         )}
-        <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Delete ${order.orderNumber}`}><Trash2 size={14} /></button>
+        <button onClick={onDelete} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Delete ${order.orderNumber}`}><Trash2 size={14} /></button>
       </div>
 
       {open && (
@@ -473,7 +473,7 @@ function PaymentDialog({ order, saving, onClose, onConfirm }: {
               <div>
                 <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Mode</Label>
                 <select
-                  className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                  className="h-11 lg:mouse:h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
                   value={mode}
                   onChange={(e) => setMode(e.target.value)}
                 >

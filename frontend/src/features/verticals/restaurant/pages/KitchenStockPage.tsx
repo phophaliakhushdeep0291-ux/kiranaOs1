@@ -99,10 +99,10 @@ export default function KitchenStockPage() {
         description="What the kitchen has left, and which dishes it can still put out. Selling a dish takes its ingredients out of stock automatically."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => void refresh()}>
+            <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => void refresh()}>
               <RefreshCw size={15} /> Refresh
             </Button>
-            <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/menu")}>
+            <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/menu")}>
               <Utensils size={15} /> Menu
             </Button>
           </div>
@@ -363,7 +363,7 @@ function RecipeEditor({
                       type="button"
                       aria-label={`Remove ${row.ingredientName}`}
                       onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}
-                      className="grid h-8 w-8 place-items-center rounded-lg text-[#94a3b8] hover:bg-[#f1f5fb]"
+                      className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-lg text-[#94a3b8] hover:bg-[#f1f5fb]"
                     >
                       <Trash2 size={14} />
                     </button>

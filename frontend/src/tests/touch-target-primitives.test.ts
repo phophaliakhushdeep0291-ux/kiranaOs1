@@ -51,6 +51,11 @@ describe("shared touch-target primitives", () => {
     // A counter POS is a 1024x768 or 1366x768 touchscreen, so every bare `lg:`
     // size reduction lands on a device driven by a finger. Pair the shrink with
     // `mouse:` (pointer: fine) so the dense layout stays a mouse-only optimisation.
+    //
+    // `sm:` is guarded for the same reason and bites sooner: it starts at 640px,
+    // so every tablet in portrait — and the 768px POS — took the dense sizing.
+    // The mobile QA matrix caught "Refresh reports" at 36px on a 768px screen
+    // through exactly this route.
     const offenders: string[] = [];
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -59,7 +64,7 @@ describe("shared touch-target primitives", () => {
         if (!entry.name.endsWith(".tsx")) continue;
         for (const [index, line] of readFileSync(full, "utf8").split("\n").entries()) {
           // h-11 is 44px — shrinking to anything below it is what we are guarding.
-          const match = line.match(/(?<!mouse:)\blg:(?:min-)?h-(?:[1-9]|10)\b/);
+          const match = line.match(/(?<!mouse:)\b(?:lg|sm):(?:min-)?[hw]-(?:[1-9]|10)\b/);
           if (match) offenders.push(`${full}:${index + 1} ${match[0]}`);
         }
       }

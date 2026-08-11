@@ -233,7 +233,7 @@ export default function ProductUnitsPage() {
               <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">IMEI &amp; serial register</h3>
               <p className="mt-0.5 text-[11.5px] text-[#64748b]">Every unit you have handled, and where each one went.</p>
             </div>
-            <Button onClick={() => setPanelOpen(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
+            <Button onClick={() => setPanelOpen(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 lg:mouse:h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
               <Plus size={15} /> Add Units
             </Button>
           </div>
@@ -245,7 +245,7 @@ export default function ProductUnitsPage() {
                   key={f.key}
                   onClick={() => setFilter(f.key)}
                   className={cn(
-                    "rounded-[8px] px-2.5 py-1.5 text-[11.5px] font-bold transition-colors",
+                    "inline-flex h-11 items-center rounded-[8px] px-3 text-[11.5px] font-bold transition-colors lg:mouse:h-auto lg:mouse:px-2.5 lg:mouse:py-1.5",
                     filter === f.key ? "bg-[var(--brand)] text-white" : "bg-[#f1f5fa] text-[#52627e] hover:bg-[#e6ecf4]",
                   )}
                 >
@@ -255,7 +255,7 @@ export default function ProductUnitsPage() {
             </div>
             <div className="relative ml-auto min-w-[200px] flex-1 sm:max-w-[280px]">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-              <Input className="h-9 pl-8" placeholder="IMEI, model, buyer, bill no." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="h-11 lg:mouse:h-9 pl-8" placeholder="IMEI, model, buyer, bill no." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
 
@@ -316,28 +316,28 @@ export default function ProductUnitsPage() {
                         </td>
                         <td className="px-5 py-3 align-top"><WarrantyCell unit={unit} /></td>
                         <td className="px-5 py-3 align-top">
-                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          <div className="flex flex-wrap items-center justify-end gap-2 lg:mouse:gap-1.5">
                             {unit.canSell && (
-                              <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" onClick={() => setSelling(unit)}>
+                              <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" onClick={() => setSelling(unit)}>
                                 <CheckCircle2 size={13} /> Sell
                               </Button>
                             )}
                             {unit.status === "sold" && (
-                              <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] border-violet-200 px-2.5 text-[11.5px] font-bold text-violet-700 hover:bg-violet-50" disabled={returnMut.isPending} onClick={() => returnMut.mutate(unit.id)}>
+                              <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-violet-200 px-2.5 text-[11.5px] font-bold text-violet-700 hover:bg-violet-50" disabled={returnMut.isPending} onClick={() => returnMut.mutate(unit.id)}>
                                 <Undo2 size={13} /> Take back
                               </Button>
                             )}
                             {unit.status === "rma" ? (
-                              <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" disabled={serviceBackMut.isPending} onClick={() => serviceBackMut.mutate(unit.id)}>
+                              <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" disabled={serviceBackMut.isPending} onClick={() => serviceBackMut.mutate(unit.id)}>
                                 <BadgeCheck size={13} /> Back
                               </Button>
                             ) : unit.isHeld && (
-                              <button onClick={() => serviceMut.mutate(unit.id)} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Send ${unit.productName} to service`}><Wrench size={14} /></button>
+                              <button onClick={() => serviceMut.mutate(unit.id)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Send ${unit.productName} to service`}><Wrench size={14} /></button>
                             )}
                             {unit.isHeld && (
-                              <button onClick={() => writeOffMut.mutate(unit.id)} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Mark ${unit.productName} lost`}><X size={15} /></button>
+                              <button onClick={() => writeOffMut.mutate(unit.id)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Mark ${unit.productName} lost`}><X size={15} /></button>
                             )}
-                            <button onClick={() => setDeleting(unit)} className="grid h-8 w-8 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Delete ${unit.productName}`}><Trash2 size={14} /></button>
+                            <button onClick={() => setDeleting(unit)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Delete ${unit.productName}`}><Trash2 size={14} /></button>
                           </div>
                         </td>
                       </tr>

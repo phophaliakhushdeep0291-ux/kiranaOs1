@@ -97,7 +97,7 @@ export default function FitmentPage() {
           onSubmit={(e) => { e.preventDefault(); if (make) searchMut.mutate(); }}
         >
           <div className="mb-2.5 flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><Car size={16} /></span>
+            <span className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><Car size={16} /></span>
             <div>
               <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">What fits this vehicle?</h3>
               <p className="text-[11.5px] text-[#64748b]">Pick the make, then narrow as far as the customer can tell you.</p>
@@ -108,7 +108,7 @@ export default function FitmentPage() {
             <Fld label="Make *">
               <input
                 list="fitment-makes"
-                className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                className="h-11 lg:mouse:h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
                 placeholder="Maruti Suzuki"
                 value={make}
                 onChange={(e) => { setMake(e.target.value); setModel(""); setVariant(""); }}
@@ -118,7 +118,7 @@ export default function FitmentPage() {
             <Fld label="Model">
               <input
                 list="fitment-models"
-                className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                className="h-11 lg:mouse:h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
                 placeholder="Swift"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
@@ -129,7 +129,7 @@ export default function FitmentPage() {
             <Fld label="Variant">
               <input
                 list="fitment-variants"
-                className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                className="h-11 lg:mouse:h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
                 placeholder="Diesel"
                 value={variant}
                 onChange={(e) => setVariant(e.target.value)}
@@ -145,18 +145,18 @@ export default function FitmentPage() {
           <div className="mt-2.5 flex flex-wrap gap-2">
             <div className="relative min-w-[180px] flex-1">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-              <Input className="h-10 pl-8" placeholder="Narrow by part — e.g. filter, brake" value={partSearch} onChange={(e) => setPartSearch(e.target.value)} />
+              <Input className="h-11 lg:mouse:h-10 pl-8" placeholder="Narrow by part — e.g. filter, brake" value={partSearch} onChange={(e) => setPartSearch(e.target.value)} />
             </div>
             <Button
               type="submit"
               disabled={!make || searchMut.isPending}
               style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
-              className="h-10 gap-2 rounded-[10px] px-5 font-black text-white hover:opacity-95"
+              className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] px-5 font-black text-white hover:opacity-95"
             >
               {searchMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Find Parts
             </Button>
             {results && (
-              <Button type="button" variant="outline" className="h-10 rounded-[10px] font-bold" onClick={() => { setResults(null); setSearched(null); }}>Clear</Button>
+              <Button type="button" variant="outline" className="h-11 lg:mouse:h-10 rounded-[10px] font-bold" onClick={() => { setResults(null); setSearched(null); }}>Clear</Button>
             )}
           </div>
         </form>
@@ -185,7 +185,7 @@ export default function FitmentPage() {
                   : "Every part you have told the app about, and the vehicles it fits."}
               </p>
             </div>
-            <Button onClick={() => setAdding(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
+            <Button onClick={() => setAdding(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 lg:mouse:h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
               <Plus size={15} /> Record Fitment
             </Button>
           </div>
@@ -225,7 +225,7 @@ export default function FitmentPage() {
                         <span className="rounded-[7px] bg-[#f1f5fa] px-2 py-[3px] text-[11px] font-bold text-[#52627e]">{fitment.yearLabel}</span>
                       </td>
                       <td className="px-5 py-3 text-right align-top">
-                        <button onClick={() => setRemoving(fitment)} className="grid h-8 w-8 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Remove ${fitment.productName} from ${fitment.make} ${fitment.model}`}><Trash2 size={14} /></button>
+                        <button onClick={() => setRemoving(fitment)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Remove ${fitment.productName} from ${fitment.make} ${fitment.model}`}><Trash2 size={14} /></button>
                       </td>
                     </tr>
                   ))}
@@ -395,7 +395,7 @@ function AddFitmentDialog({ open, saving, knownMakes, onClose, onSubmit }: {
             <div className="relative">
               <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Which part *</Label>
               <Search size={14} className="pointer-events-none absolute left-3 top-[34px] text-[#94a3b8]" />
-              <Input className="h-10 pl-8" placeholder="Search by name or part number" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
+              <Input className="h-11 lg:mouse:h-10 pl-8" placeholder="Search by name or part number" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
               {productSearch.trim() && (
                 <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 max-h-[200px] overflow-y-auto rounded-[10px] border border-[#e2e8f0] bg-white shadow-[0_12px_30px_rgba(15,35,80,0.10)]">
                   {matches.length === 0 ? (
@@ -424,7 +424,7 @@ function AddFitmentDialog({ open, saving, knownMakes, onClose, onSubmit }: {
             <Fld label="Make *">
               <input
                 list="add-fitment-makes"
-                className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                className="h-11 lg:mouse:h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
                 placeholder="Maruti Suzuki"
                 value={make}
                 onChange={(e) => setMake(e.target.value)}

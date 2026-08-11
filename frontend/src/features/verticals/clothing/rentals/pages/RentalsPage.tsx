@@ -190,7 +190,7 @@ export default function RentalsPage() {
                 A booked outfit is hidden from customers for its dates and comes back the day it is returned.
               </p>
             </div>
-            <Button onClick={openCreate} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
+            <Button onClick={openCreate} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 lg:mouse:h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
               <Plus size={15} /> New Booking
             </Button>
           </div>
@@ -202,7 +202,7 @@ export default function RentalsPage() {
                   key={f.key}
                   onClick={() => setFilter(f.key)}
                   className={cn(
-                    "rounded-[8px] px-2.5 py-1.5 text-[11.5px] font-bold transition-colors",
+                    "inline-flex h-11 items-center rounded-[8px] px-3 text-[11.5px] font-bold transition-colors lg:mouse:h-auto lg:mouse:px-2.5 lg:mouse:py-1.5",
                     filter === f.key ? "bg-[var(--brand)] text-white" : "bg-[#f1f5fa] text-[#52627e] hover:bg-[#e6ecf4]",
                   )}
                 >
@@ -213,7 +213,7 @@ export default function RentalsPage() {
             <div className="relative ml-auto min-w-[200px] flex-1 sm:max-w-[280px]">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
               <Input
-                className="h-9 pl-8"
+                className="h-11 lg:mouse:h-9 pl-8"
                 placeholder="Name, mobile, booking no."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -295,24 +295,24 @@ export default function RentalsPage() {
                           {booking.depositAmount > 0 && <p className="mt-0.5 text-[11px] text-[#8492ac]">{inr(booking.depositAmount)} deposit</p>}
                         </td>
                         <td className="px-5 py-3 align-top">
-                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          <div className="flex flex-wrap items-center justify-end gap-2 lg:mouse:gap-1.5">
                             {booking.status === "booked" && (
-                              <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" disabled={pickupMut.isPending} onClick={() => pickupMut.mutate(booking.id)}>
+                              <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" disabled={pickupMut.isPending} onClick={() => pickupMut.mutate(booking.id)}>
                                 <Check size={13} /> Picked up
                               </Button>
                             )}
                             {open && (
-                              <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] border-emerald-200 px-2.5 text-[11.5px] font-bold text-emerald-700 hover:bg-emerald-50" onClick={() => setReturning(booking)}>
+                              <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] border-emerald-200 px-2.5 text-[11.5px] font-bold text-emerald-700 hover:bg-emerald-50" onClick={() => setReturning(booking)}>
                                 <Undo2 size={13} /> Return
                               </Button>
                             )}
                             {open && (
-                              <button onClick={() => openEdit(booking)} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label="Edit booking"><Pencil size={14} /></button>
+                              <button onClick={() => openEdit(booking)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label="Edit booking"><Pencil size={14} /></button>
                             )}
                             {open && (
-                              <button onClick={() => cancelMut.mutate(booking.id)} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label="Cancel booking"><X size={15} /></button>
+                              <button onClick={() => cancelMut.mutate(booking.id)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label="Cancel booking"><X size={15} /></button>
                             )}
-                            <button onClick={() => setDeleting(booking)} className="grid h-8 w-8 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label="Delete booking"><Trash2 size={14} /></button>
+                            <button onClick={() => setDeleting(booking)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label="Delete booking"><Trash2 size={14} /></button>
                           </div>
                         </td>
                       </tr>
@@ -451,7 +451,7 @@ function Kpi({ icon, label, value, tone }: {
     <div className="rounded-[14px] border border-[#e6ecf4] bg-white px-5 py-4 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-semibold text-[#64748b]">{label}</p>
-        <span className={`grid h-8 w-8 place-items-center rounded-[9px] ${ring}`}>{icon}</span>
+        <span className={`grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[9px] ${ring}`}>{icon}</span>
       </div>
       <p className="mt-1.5 truncate font-display text-[24px] font-black leading-none text-[var(--brand-ink)]">{value}</p>
     </div>
