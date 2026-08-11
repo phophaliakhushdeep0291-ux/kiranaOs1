@@ -18,4 +18,14 @@ assert.match(routes, /retail\/intents\/:id\/cancel/, "cashier must be able to cl
 assert.match(schema, /checkoutMode\s+String\s+@default\("checkout"\)/, "intent must distinguish checkout and dynamic QR modes");
 assert.match(schema, /providerQrCodeId\s+String\?\s+@unique/, "provider QR id must be unique");
 
+// Printing the QR must never widen what the QR itself guarantees.
+assert.match(routes, /retail\/intents\/:id\/qr-bitmap/, "a counter printer must be able to fetch the QR grid");
+assert.match(service, /RETAIL_QR_NOT_COLLECTABLE/, "a settled, cancelled or expired QR must not be printable");
+assert.match(service, /safeRazorpayQrImageUrl\(intent\.providerQrImageUrl\)/, "only the provider's trusted image host may be fetched");
+assert.match(service, /redirect: "error"/, "the provider image fetch must not follow redirects off the trusted host");
+assert.ok(
+  /getRetailPaymentQrBitmap[\s\S]*?extractQrModules/.test(service),
+  "the printed QR must be decoded from the provider image, never generated locally",
+);
+
 console.log("Dynamic UPI QR source contracts passed");

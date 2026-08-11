@@ -23,6 +23,23 @@ describe("customer-facing display checkout contract", () => {
     expect(billing).toContain("customer display is informative, never a reason to block billing");
   });
 
+  it("invites the customer to scan for the UPI leg, not the bill total", () => {
+    const billing = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/billing/pages/BillingPage.tsx"), "utf8");
+    // A split tender collects only part of the bill over UPI; showing grandTotal
+    // would ask the customer to approve money the QR does not actually charge.
+    expect(billing).toContain("{ state: \"awaiting_payment\", totalPaise: retailQrCheckout.amountPaise }");
+    expect(billing).toContain("[\"creating\", \"pending\"].includes(retailQrCheckout.status)");
+    expect(billing).toContain("setCustomerDisplayFlash({ state: \"paid\", totalPaise: checkout.amountPaise })");
+  });
+
+  it("stops inviting a scan once the QR is no longer payable", () => {
+    const dialog = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/billing/pages/components/RetailDynamicQrDialog.tsx"), "utf8");
+    const billing = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/billing/pages/BillingPage.tsx"), "utf8");
+    // The dialog stays open on expiry to explain itself; the pole display must not.
+    expect(dialog).toContain("statusChangeRef.current?.(status)");
+    expect(billing).toContain("onStatusChange={(status) =>");
+  });
+
   it("exposes an explicit capability-gated test in hardware settings", () => {
     const settings = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/settings/pages/PrinterSettingsPage.tsx"), "utf8");
     expect(settings).toContain("Test display");

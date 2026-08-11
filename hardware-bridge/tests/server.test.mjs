@@ -72,4 +72,25 @@ test("bridge binds locally and enforces origin plus pairing token", async (conte
     body: JSON.stringify({ revision: 19, state: "idle", itemCount: 0, totalPaise: 0 }),
   });
   assert.deepEqual(await staleDisplay.json(), { ok: true, stale: true, revision: 20 });
+
+  // A payment QR is validated before any transport is touched, so a malformed
+  // matrix is refused outright rather than surfacing as a printer failure.
+  const badQr = await fetch(`${base}/v1/print-qr`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ moduleCount: 24, modules: "AAAA", amountPaise: 12_345 }),
+  });
+  assert.equal(badQr.status, 400);
+
+  const bytesPerRow = Math.ceil(21 / 8);
+  const validModules = Buffer.alloc(bytesPerRow * 21).toString("base64");
+  const noPrinter = await fetch(`${base}/v1/print-qr`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ moduleCount: 21, modules: validModules, amountPaise: 12_345, paperSize: "80mm" }),
+  });
+  assert.equal(noPrinter.status, 503, "a well-formed slip still needs a configured printer");
+
+  const capabilities = (await (await fetch(`${base}/v1/health`, { headers })).json()).capabilities;
+  assert.equal(capabilities.qrPrint, false, "QR printing must advertise itself only with a printer transport");
 });

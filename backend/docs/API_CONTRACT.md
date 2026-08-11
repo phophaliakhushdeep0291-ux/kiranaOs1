@@ -284,6 +284,7 @@ Cashier retail-payment operations require `Authorization` and `x-device-id`:
 GET  /api/payment-provider/retail/readiness
 POST /api/payment-provider/retail/intents
 GET  /api/payment-provider/retail/intents/:id/status
+GET  /api/payment-provider/retail/intents/:id/qr-bitmap
 POST /api/payment-provider/retail/intents/:id/cancel
 POST /api/payment-provider/retail/intents/:id/verify
 ```

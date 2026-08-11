@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
+import { printQrSlipViaHardwareBridge } from "@/features/core/hardware/local-hardware-bridge";
 
 describe("provider-confirmed dynamic UPI QR checkout", () => {
   const api = fs.readFileSync("src/features/core/billing/retail-payment.ts", "utf8");
@@ -26,5 +27,26 @@ describe("provider-confirmed dynamic UPI QR checkout", () => {
     expect(dialog).toContain("onConfirmed");
     expect(dialog).toContain('t("billing.pay.dynamicQr.waitingHelp")');
     expect(page).toContain("setVerifiedRetailPayment({ intentId: checkout.intentId");
+  });
+
+  it("prints the provider's own QR through the paired bridge, never a locally built one", () => {
+    // A QR we generated ourselves would collect into a VPA with no intent
+    // binding, so the printable grid must come from the provider image.
+    expect(dialog).toContain("getRetailPaymentQrBitmap(checkout.intentId)");
+    expect(dialog).toContain("printQrSlipViaHardwareBridge");
+    expect(api).toContain("/qr-bitmap");
+    // Only a paired local bridge can reach the counter printer.
+    expect(dialog).toContain('getPrinterConfigSync().connection === "bridge"');
+    expect(dialog).toContain("canPrintSlip ?");
+  });
+
+  it("refuses a malformed payment QR before it can reach the printer", async () => {
+    const modules = Buffer.alloc(3 * 21).toString("base64");
+    await expect(printQrSlipViaHardwareBridge("http://127.0.0.1:17873", { moduleCount: 24, modules, amountPaise: 100, paperSize: "80mm" }))
+      .rejects.toThrow(/size/i);
+    await expect(printQrSlipViaHardwareBridge("http://127.0.0.1:17873", { moduleCount: 21, modules, amountPaise: 0, paperSize: "80mm" }))
+      .rejects.toThrow(/amount/i);
+    await expect(printQrSlipViaHardwareBridge("http://127.0.0.1:17873", { moduleCount: 21, modules, amountPaise: 12.5, paperSize: "80mm" }))
+      .rejects.toThrow(/amount/i);
   });
 });

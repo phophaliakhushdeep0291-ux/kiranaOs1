@@ -1,4 +1,6 @@
-const DISPLAY_STATES = new Set(["idle", "sale", "paid", "cancelled"]);
+import { formatInrFromPaise } from "./money.mjs";
+
+const DISPLAY_STATES = new Set(["idle", "sale", "awaiting_payment", "paid", "cancelled"]);
 const DEFAULT_WIDTH = 20;
 const MIN_WIDTH = 12;
 const MAX_WIDTH = 80;
@@ -15,15 +17,24 @@ function fitLine(value, width) {
   return line;
 }
 
-function formatAmount(totalPaise) {
-  const rupees = Math.floor(totalPaise / 100);
-  const paise = String(totalPaise % 100).padStart(2, "0");
-  return `INR ${rupees}.${paise}`;
-}
-
 export function normalizeDisplayWidth(value) {
   const width = Math.floor(Number(value) || DEFAULT_WIDTH);
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width));
+}
+
+/**
+ * "SCAN TO PAY" is deliberately the shortest prompt that still reads as an
+ * instruction: a customer display can be as narrow as 12 characters, and a
+ * prompt that does not fit is thrown out rather than silently truncated.
+ */
+function displayLines(state, itemCount, amount) {
+  switch (state) {
+    case "idle": return ["WELCOME", "READY"];
+    case "awaiting_payment": return ["SCAN TO PAY", amount];
+    case "paid": return ["PAYMENT RECEIVED", amount];
+    case "cancelled": return ["SALE CANCELLED", "READY"];
+    default: return [`${itemCount} ${itemCount === 1 ? "ITEM" : "ITEMS"}`, `TOTAL ${amount}`];
+  }
 }
 
 /**
@@ -43,14 +54,7 @@ export function buildCustomerDisplayFrame(input, { width = DEFAULT_WIDTH } = {})
   if (!Number.isInteger(itemCount) || itemCount < 0 || itemCount > 9_999) throw hardwareInputError("Customer display item count is invalid");
   if (!Number.isSafeInteger(totalPaise) || totalPaise < 0 || totalPaise > MAX_TOTAL_PAISE) throw hardwareInputError("Customer display total is invalid");
 
-  const amount = formatAmount(totalPaise);
-  const lines = state === "idle"
-    ? ["WELCOME", "READY"]
-    : state === "paid"
-      ? ["PAYMENT RECEIVED", amount]
-      : state === "cancelled"
-        ? ["SALE CANCELLED", "READY"]
-        : [`${itemCount} ${itemCount === 1 ? "ITEM" : "ITEMS"}`, `TOTAL ${amount}`];
+  const lines = displayLines(state, itemCount, formatInrFromPaise(totalPaise));
 
   return {
     revision,
