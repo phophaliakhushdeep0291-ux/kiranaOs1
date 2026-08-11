@@ -190,4 +190,9 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.import.importedCounts": "{created} नए बने, {updated} बदले गए। {backup}",
   "products.import.update": "अपडेट",
   "products.import.notSet": "सेट नहीं है",
+  "products.variantSplit.title": "ये कहाँ रखे हैं",
+  "products.variantSplit.size": "साइज़",
+  "products.variantSplit.main": "(मुख्य)",
+  "products.variantSplit.total": "कुल",
+  "products.variantSplit.hint": "गिनती साइज़ के हिसाब से है, बेस यूनिट में नहीं। एक दुकान से दूसरी में माल ट्रांसफर से भेजें ताकि दोनों तरफ का हिसाब मिलता रहे।",
 };

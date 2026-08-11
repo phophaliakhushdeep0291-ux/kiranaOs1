@@ -44,6 +44,9 @@ router.get("/knowledge/:barcode", requireLocationAccess("view"), ctrl.lookupKnow
 router.delete("/recycle-bin/empty", requireRole("owner", "admin"), requireOwnerPin, ctrl.emptyRecycleBin);
 router.post("/:id/restore", requireRole("owner", "admin"), requireOwnerPin, ctrl.restore);
 router.delete("/:id/permanent", requireRole("owner", "admin"), requireOwnerPin, ctrl.permanentRemove);
+// Read-only, and deliberately NOT gated on multi_store: a single-shop shop still
+// gets a straight answer (everything sits at the one location) instead of an error.
+router.get("/:id/variant-stock", requireLocationAccess("view"), ctrl.variantStockByLocation);
 router.get("/:id", requireLocationAccess("view"), ctrl.get);
 // Sensitive pricing/cost/stock fields on create require owner PIN (same fields as PATCH).
 // A product name + display unit only (zero cost, zero price) does NOT trigger the PIN gate.

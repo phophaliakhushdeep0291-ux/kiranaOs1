@@ -1,5 +1,5 @@
 import { apiRequest, buildQuery } from "@/lib/api/http";
-import type { Product, ProductInput, QueryParams } from "@/types/api";
+import type { Product, ProductInput, QueryParams, VariantStockByLocation } from "@/types/api";
 
 export function normaliseProductInput(data: ProductInput): ProductInput {
   const unit = data.unit || data.displayUnit || data.rateUnit || "piece";
@@ -44,6 +44,11 @@ export function normaliseProductInput(data: ProductInput): ProductInput {
     isActive: data.isActive ?? data.status !== "inactive",
     status: data.status ?? ((data.isActive ?? true) ? "active" : "inactive"),
   };
+}
+
+/** Where each size physically is. Read-only; empty `locations` means "not a variant product". */
+export function getVariantStockByLocation(id: string) {
+  return apiRequest<VariantStockByLocation>(`/products/${id}/variant-stock`);
 }
 
 export function listProducts(params?: QueryParams) {

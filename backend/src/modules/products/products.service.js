@@ -158,6 +158,72 @@ export async function listProducts(shopId, { category, search, lowStock, locatio
   return parsed;
 }
 
+/**
+ * Where each size physically is: one row per branch, one column per variant.
+ *
+ * The batched form of getVariantLocationQuantity, and it must stay batched — a
+ * 6 × 6 grid across four branches is 144 answers, and asking one at a time would
+ * make opening a product a hundred-query page load.
+ *
+ * The primary location keeps no stored row, exactly as base units work, so its
+ * share is the unit's global onHandQty minus everything the branches hold. That
+ * keeps one number authoritative instead of two that can disagree.
+ */
+export async function getVariantStockByLocation(shopId, productId) {
+  const product = await db.product.findFirst({
+    where: { id: productId, shopId, deletedAt: null },
+    include: { sellingUnits: { where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
+  });
+  if (!product) throw new AppError("Product not found", 404);
+
+  // Only rows that sit on an axis. A packaging row ("8-pack") is not a variant and
+  // has no place in a size grid.
+  const variantUnits = product.sellingUnits.filter((unit) => unit.variantValue1 || unit.variantValue2);
+  if (variantUnits.length === 0) return { productId, axes: [], locations: [] };
+
+  const [locations, rows] = await Promise.all([
+    db.storeLocation.findMany({
+      where: { shopId, active: true },
+      orderBy: [{ isPrimary: "desc" }, { name: "asc" }],
+      select: { id: true, name: true, isPrimary: true },
+    }),
+    db.locationStock.findMany({
+      where: { shopId, productId, sellingUnitId: { not: null } },
+      select: { locationId: true, sellingUnitId: true, stockBaseQty: true },
+    }),
+  ]);
+
+  const heldAt = new Map();
+  const heldTotal = new Map();
+  for (const row of rows) {
+    const qty = Number(row.stockBaseQty || 0);
+    heldAt.set(`${row.locationId}:${row.sellingUnitId}`, qty);
+    heldTotal.set(row.sellingUnitId, (heldTotal.get(row.sellingUnitId) ?? 0) + qty);
+  }
+
+  return {
+    productId,
+    axes: parseVariantAxes(product.variantAxesJson),
+    locations: locations.map((location) => ({
+      id: location.id,
+      name: location.name,
+      isPrimary: location.isPrimary,
+      units: variantUnits.map((unit) => ({
+        sellingUnitId: unit.id,
+        unitCode: unit.unitCode,
+        name: unit.name,
+        variantValue1: unit.variantValue1 ?? null,
+        variantValue2: unit.variantValue2 ?? null,
+        // In this unit's own counts (4 pairs), never base units — the same basis
+        // as onHandQty, which is what it is derived from.
+        qty: location.isPrimary
+          ? round2(Number(unit.onHandQty ?? 0) - (heldTotal.get(unit.id) ?? 0))
+          : round2(heldAt.get(`${location.id}:${unit.id}`) ?? 0),
+      })),
+    })),
+  };
+}
+
 export async function getProduct(shopId, id, { locationId } = {}) {
   const product = await db.product.findFirst({
     where: { id, shopId, deletedAt: null },

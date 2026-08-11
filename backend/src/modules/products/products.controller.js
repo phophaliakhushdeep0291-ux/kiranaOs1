@@ -25,6 +25,13 @@ export async function get(req, res, next) {
   } catch (err) { next(err); }
 }
 
+export async function variantStockByLocation(req, res, next) {
+  try {
+    const data = await svc.getVariantStockByLocation(req.shopId, req.params.id);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 export async function lookupKnowledge(req, res, next) {
   try {
     const result = await lookupProductKnowledge(req.params.barcode);
