@@ -59,6 +59,13 @@ export const createTransferSchema = z.object({
   ownerPin: z.string().regex(/^\d{4}$/).optional(),
   items: z.array(z.object({
     productId: z.string().min(1),
+    // Which size is moving, for a product that holds stock per row. Omitted by
+    // pooled products, which move as one base-unit pool. A per_pack product that
+    // omits it is refused in the service rather than silently drifting.
+    sellingUnitId: z.string().min(1).optional().nullable(),
+    // How many in that row's own counts (4 pairs). quantityBaseQty stays the
+    // base-unit amount, which is what drives tax and value.
+    sellingUnitQty: z.coerce.number().positive().finite().optional().nullable(),
     quantityBaseQty: z.coerce.number().positive().finite(),
     declaredTaxableValue: moneyAmount({ positive: true }).optional(),
   })).min(1).max(100),

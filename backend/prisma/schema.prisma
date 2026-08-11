@@ -255,6 +255,7 @@ model ProductSellingUnit {
   pricingRules   PricingRule[]
   billItems      BillItem[]
   locationStocks LocationStock[]
+  transferItems  StockTransferItem[]
 
   @@unique([shopId, productId, unitCode])
   @@index([shopId, productId, isActive])
@@ -1075,6 +1076,16 @@ model StockTransferItem {
   transferId        String
   productId         String
   productName       String
+  // Which size is being moved, so a branch can be sent six L and no XS rather
+  // than an untyped lump of base units. Mirrors StockLedger's pairing: the id
+  // says which row, sellingUnitQty says how many in that row's OWN counts.
+  //
+  // NULL is a product-level line, which is what every pooled product uses and
+  // every existing row already is. NULLs are DISTINCT in a unique index, so the
+  // @@unique below does not stop two product-level lines for one product — the
+  // migration adds a partial unique index over the NULL case to close that.
+  sellingUnitId     String?
+  sellingUnitQty    Float?
   quantityBaseQty   Float
   receivedBaseQty   Float   @default(0)
   baseUnit          String
@@ -1093,10 +1104,11 @@ model StockTransferItem {
   totalValue        Float   @default(0)
   totalValuePaise   BigInt?
 
-  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
-  product  Product       @relation(fields: [productId], references: [id])
+  transfer    StockTransfer       @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product     Product             @relation(fields: [productId], references: [id])
+  sellingUnit ProductSellingUnit? @relation(fields: [sellingUnitId], references: [id], onDelete: SetNull)
 
-  @@unique([transferId, productId])
+  @@unique([transferId, productId, sellingUnitId])
   @@index([productId])
 }
 

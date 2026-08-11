@@ -27,6 +27,41 @@ export async function resolveOperationalLocation(shopId, requestedLocationId = n
   return ensurePrimaryLocation(shopId, client);
 }
 
+/**
+ * Read one LocationStock row.
+ *
+ * Not findUnique on locationId_productId_sellingUnitId, because Prisma refuses a
+ * null inside a compound unique key — "Argument `sellingUnitId` must not be null"
+ * — and the product-level row IS the null case, which is nearly every row there
+ * is. findFirst has no such restriction, and the unique indexes still guarantee
+ * there is at most one match.
+ */
+export async function findLocationStockRow(client, { shopId, locationId, productId, sellingUnitId = null }) {
+  return client.locationStock.findFirst({
+    where: { shopId, locationId, productId, sellingUnitId },
+    select: { id: true, stockBaseQty: true },
+  });
+}
+
+/**
+ * Add to (or set) one LocationStock row, creating it if it does not exist yet.
+ *
+ * The manual update-then-create stands in for upsert for the same reason as
+ * above. Two racing creates lose to the unique index rather than duplicating the
+ * row, which is the same outcome upsert gave.
+ */
+export async function writeLocationStockRow(client, { shopId, locationId, productId, sellingUnitId = null, delta = null, absolute = null }) {
+  const data = absolute !== null ? { stockBaseQty: absolute } : { stockBaseQty: { increment: delta } };
+  const changed = await client.locationStock.updateMany({
+    where: { shopId, locationId, productId, sellingUnitId },
+    data,
+  });
+  if (changed.count > 0) return;
+  await client.locationStock.create({
+    data: { shopId, locationId, productId, sellingUnitId, stockBaseQty: absolute !== null ? absolute : delta },
+  });
+}
+
 async function allocatedSecondaryQty(client, shopId, productId) {
   const rows = await client.locationStock.findMany({
     // Product-level rows only. Variant rows live in the same table but count in
@@ -47,10 +82,7 @@ async function allocatedSecondaryQty(client, shopId, productId) {
  */
 export async function getVariantLocationQuantity(client, shopId, location, product, sellingUnitId) {
   if (!location.isPrimary) {
-    const row = await client.locationStock.findUnique({
-      where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId } },
-      select: { stockBaseQty: true },
-    });
+    const row = await findLocationStockRow(client, { shopId, locationId: location.id, productId: product.id, sellingUnitId });
     return round2(row?.stockBaseQty ?? 0);
   }
   const [unit, branchRows] = await Promise.all([
@@ -63,10 +95,7 @@ export async function getVariantLocationQuantity(client, shopId, location, produ
 
 export async function getLocationQuantity(client, shopId, location, product) {
   if (!location.isPrimary) {
-    const row = await client.locationStock.findUnique({
-      where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: null } },
-      select: { stockBaseQty: true },
-    });
+    const row = await findLocationStockRow(client, { shopId, locationId: location.id, productId: product.id });
     return round2(row?.stockBaseQty ?? 0);
   }
   const allocated = await allocatedSecondaryQty(client, shopId, product.id);
@@ -143,18 +172,9 @@ async function movePackagingStock(client, { shopId, location = null, product, pa
     // in the unit's own counts precisely so "down to 4 of the 500 g packs" needs
     // no conversion. Never sum the two kinds of row together.
     if (location && !location.isPrimary) {
-      await client.locationStock.upsert({
-        where: {
-          locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: sellingUnit.id },
-        },
-        create: {
-          shopId,
-          locationId: location.id,
-          productId: product.id,
-          sellingUnitId: sellingUnit.id,
-          stockBaseQty: direction === "out" ? -amount : amount,
-        },
-        update: { stockBaseQty: delta },
+      await writeLocationStockRow(client, {
+        shopId, locationId: location.id, productId: product.id, sellingUnitId: sellingUnit.id,
+        delta: direction === "out" ? -amount : amount,
       });
     }
   }
@@ -167,14 +187,14 @@ export async function decrementLocationInventory(client, { shopId, location, pro
 
   if (!location.isPrimary) {
     if (allowShortfall) {
-      await client.locationStock.upsert({
-        where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: null } },
-        create: { shopId, locationId: location.id, productId: product.id, stockBaseQty: -quantity },
-        update: { stockBaseQty: { decrement: quantity } },
-      });
+      await writeLocationStockRow(client, { shopId, locationId: location.id, productId: product.id, delta: -quantity });
     } else {
       const changed = await client.locationStock.updateMany({
-        where: { shopId, locationId: location.id, productId: product.id, stockBaseQty: { gte: quantity } },
+        // sellingUnitId: null is load-bearing, not decoration. This table now holds
+        // a variant row per size beside the product-level row, so without it a
+        // two-size product matches three rows: all three get decremented and then
+        // the count !== 1 check below rejects the sale it has already applied.
+        where: { shopId, locationId: location.id, productId: product.id, sellingUnitId: null, stockBaseQty: { gte: quantity } },
         data: { stockBaseQty: { decrement: quantity } },
       });
       if (changed.count !== 1) throw insufficientLocationStock(location, product, oldLocationStock, quantity);
@@ -202,10 +222,7 @@ export async function decrementLocationInventory(client, { shopId, location, pro
   const freshProduct = await client.product.findFirst({ where: { id: product.id, shopId }, select: { stockBaseQty: true } });
   const newLocationStock = location.isPrimary
     ? await getLocationQuantity(client, shopId, location, { ...product, stockBaseQty: freshProduct?.stockBaseQty ?? product.stockBaseQty - quantity })
-    : Number((await client.locationStock.findUnique({
-      where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: null } },
-      select: { stockBaseQty: true },
-    }))?.stockBaseQty ?? 0);
+    : Number((await findLocationStockRow(client, { shopId, locationId: location.id, productId: product.id }))?.stockBaseQty ?? 0);
   // The pre-update read may be stale when concurrent sales overlap. Reconstruct
   // the movement's own starting value from its committed result so ledger rows
   // always satisfy old + change = new without absorbing another sale's change.
@@ -234,11 +251,7 @@ export async function incrementLocationInventory(client, { shopId, location, pro
   // reversal until they are worthless.
   await movePackagingStock(client, { shopId, location, product, packs, direction: "in" });
   if (!location.isPrimary) {
-    await client.locationStock.upsert({
-      where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: null } },
-      create: { shopId, locationId: location.id, productId: product.id, stockBaseQty: quantity },
-      update: { stockBaseQty: { increment: quantity } },
-    });
+    await writeLocationStockRow(client, { shopId, locationId: location.id, productId: product.id, delta: quantity });
   }
   return { oldStock: oldLocationStock, newStock: round2(oldLocationStock + quantity) };
 }
@@ -265,11 +278,7 @@ export async function setLocationInventory(client, { shopId, location, product, 
   });
   if (changed.count !== 1) throw new AppError("Stock changed while applying correction. Please retry.", 409, "CONCURRENT_STOCK_MODIFICATION_RETRY");
   if (!location.isPrimary) {
-    await client.locationStock.upsert({
-      where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: null } },
-      create: { shopId, locationId: location.id, productId: product.id, stockBaseQty: requested },
-      update: { stockBaseQty: requested },
-    });
+    await writeLocationStockRow(client, { shopId, locationId: location.id, productId: product.id, absolute: requested });
   }
   return { oldStock: oldLocationStock, newStock: requested, difference };
 }

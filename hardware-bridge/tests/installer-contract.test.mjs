@@ -27,6 +27,23 @@ test("Windows installer registers an automatic hidden service and launches setup
   assert.doesNotMatch(setup, /Console\.(Write|Read)/);
 });
 
+test("installer grants the frontend browser permission to reach the counter", async () => {
+  const installer = await readFile(new URL("../windows/installer.iss", import.meta.url), "utf8");
+  const build = await readFile(new URL("../windows/build-installer.ps1", import.meta.url), "utf8");
+  // Recent Chrome and Edge gate a public page's request to 127.0.0.1 behind
+  // local network access. Without this policy the bridge answers nothing and
+  // the counter sees only a timeout.
+  assert.match(installer, /SOFTWARE\\Policies\\Google\\Chrome\\LocalNetworkAccessAllowedForUrls/);
+  assert.match(installer, /SOFTWARE\\Policies\\Microsoft\\Edge\\LocalNetworkAccessAllowedForUrls/);
+  assert.match(installer, /Name: "browserpolicy"/);
+  assert.match(installer, /WizardIsTaskSelected\('browserpolicy'\)/);
+  // A machine-wide browser policy must never silently overwrite one the shop's
+  // administrator set, and must be withdrawn when the bridge is removed.
+  assert.match(installer, /PolicyKeyHasForeignValues/);
+  assert.match(installer, /CurUninstallStepChanged/);
+  assert.match(build, /\/DFrontendOrigins=/);
+});
+
 test("release build refuses to create an unsigned retail installer", async () => {
   const build = await readFile(new URL("../windows/build-installer.ps1", import.meta.url), "utf8");
   assert.match(build, /Unsigned retail installers are intentionally not produced/);
