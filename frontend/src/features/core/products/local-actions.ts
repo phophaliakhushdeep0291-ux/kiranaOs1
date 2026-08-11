@@ -13,6 +13,7 @@ import { makeLocalEntity, parseOrThrow, touchLocalEntity } from "@/lib/offline/a
 import type { Product, ProductInput } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/features/core/audit-logs/local-actions";
 import { uniqueProductAliases } from "@/features/core/products/product-reliability";
+import { getActiveLocationId } from "@/features/core/stores/location-context";
 
 const CACHE_KEY = "products";
 const INVENTORY_CACHE_KEY = "inventory";
@@ -122,6 +123,7 @@ function toProduct(data: ProductInput, id = createLocalId("product"), existing?:
     ...existing,
     id,
     name: normalized.name,
+    packagingMode: normalized.packagingMode ?? existing?.packagingMode ?? "pooled",
     category: normalized.category ?? existing?.category ?? "general",
     unit: normalized.unit ?? normalized.displayUnit ?? existing?.unit ?? existing?.displayUnit ?? "piece",
     aliases: uniqueProductAliases(normalized.aliases ?? existing?.aliases ?? []),
@@ -151,6 +153,7 @@ function toProduct(data: ProductInput, id = createLocalId("product"), existing?:
     quantitySlabPricing: [],
     customerSpecificPricing: [],
     sellingUnits: normalized.sellingUnits ?? existing?.sellingUnits ?? [],
+    variantAxes: normalized.variantAxes ?? existing?.variantAxes ?? [],
     gstRate: normalized.gstRate,
     hsn: normalized.hsn ?? existing?.hsn ?? null,
     brand: normalized.brand ?? existing?.brand ?? null,
@@ -160,6 +163,10 @@ function toProduct(data: ProductInput, id = createLocalId("product"), existing?:
     imageUrl: normalized.imageUrl ?? existing?.imageUrl ?? null,
     isLooseItem: normalized.isLooseItem ?? existing?.isLooseItem ?? false,
     lowStockThreshold: normalized.lowStockThreshold,
+    batchTrackingEnabled: normalized.batchTrackingEnabled ?? existing?.batchTrackingEnabled ?? false,
+    drugSchedule: Object.prototype.hasOwnProperty.call(normalized, "drugSchedule")
+      ? normalized.drugSchedule ?? null
+      : existing?.drugSchedule ?? null,
     lowStockAlert: normalized.lowStockAlert ?? normalized.lowStockThreshold,
     isActive: normalized.isActive,
     status: normalized.status,
@@ -376,7 +383,7 @@ export async function createProductLocalFirst(data: ProductInput): Promise<Produ
       entity_type: "product",
       entity_id: product.id,
       operation_type: "CREATE_PRODUCT",
-      payload: { localProductId: product.id, product: data, ownerPin: validated.ownerPin, reason: validated.ownerPinReason, ownerPinProvided: Boolean(validated.ownerPin) },
+      payload: { localProductId: product.id, product: data, locationId: getActiveLocationId(), ownerPin: validated.ownerPin, reason: validated.ownerPinReason, ownerPinProvided: Boolean(validated.ownerPin) },
     },
   });
   upsertCachedListItem<Product>(CACHE_KEY, product, 1000);
@@ -413,7 +420,7 @@ export async function updateProductLocalFirst(id: string, data: ProductInput): P
       entity_type: "product",
       entity_id: id,
       operation_type: "UPDATE_PRODUCT",
-      payload: { productId: id, product: data, ownerPin: validated.ownerPin, reason: validated.ownerPinReason, ownerPinProvided: Boolean(validated.ownerPin) },
+      payload: { productId: id, product: data, locationId: getActiveLocationId(), ownerPin: validated.ownerPin, reason: validated.ownerPinReason, ownerPinProvided: Boolean(validated.ownerPin) },
     },
   });
   upsertCachedListItem<Product>(CACHE_KEY, product, 1000);
@@ -430,6 +437,7 @@ export async function updateProductLocalFirst(id: string, data: ProductInput): P
 export async function importProductsLocalFirst(
   operations: ProductImportOperation[],
   metadata: ProductImportMetadata,
+  approval?: { ownerPin: string; reason?: string },
 ): Promise<ProductImportSession> {
   const startedAt = new Date().toISOString();
   const existingProducts = await offlineDB.getAll<Product>("products");
@@ -440,7 +448,10 @@ export async function importProductsLocalFirst(
   const productOutboxInputs: EnqueueOutboxOperationInput[] = [];
 
   for (const operation of operations) {
-    const validated = parseOrThrow(productCreationSchema, operation.input) as unknown as ProductInput;
+    const validated = parseOrThrow(productCreationSchema, {
+      ...operation.input,
+      ...(approval?.ownerPin ? { ownerPin: approval.ownerPin, ownerPinReason: approval.reason } : {}),
+    }) as unknown as ProductInput;
     const existing = operation.action === "update" && operation.existingProductId
       ? existingById.get(operation.existingProductId)
       : undefined;
@@ -484,6 +495,7 @@ export async function importProductsLocalFirst(
           payload: {
             localProductId: product.id,
             product: validated,
+            locationId: getActiveLocationId(),
             importFingerprint: metadata.fingerprint,
             importRowNumber: operation.rowNumber,
             ownerPin: validated.ownerPin,
@@ -498,6 +510,7 @@ export async function importProductsLocalFirst(
           payload: {
             productId: product.id,
             product: validated,
+            locationId: getActiveLocationId(),
             importFingerprint: metadata.fingerprint,
             importRowNumber: operation.rowNumber,
             ownerPin: validated.ownerPin,
@@ -666,7 +679,7 @@ export async function patchProductLocalFirst(id: string, data: Partial<ProductIn
       entity_type: "product",
       entity_id: id,
       operation_type: "UPDATE_PRODUCT",
-      payload: { productId: id, product: data, ownerPin, reason, ownerPinProvided: Boolean(ownerPin) },
+      payload: { productId: id, product: data, locationId: getActiveLocationId(), ownerPin, reason, ownerPinProvided: Boolean(ownerPin) },
     },
   });
   upsertCachedListItem<Product>(CACHE_KEY, product, 1000);

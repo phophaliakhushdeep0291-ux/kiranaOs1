@@ -63,10 +63,35 @@
     }
   ],
   "backupProof": {
-    "primaryRuntimeResult": {
+    "initialUnconfiguredResult": {
       "status": "configuration_blocked",
       "error": "BACKUP_ENCRYPTION_KEY must be a base64-encoded 32-byte key",
       "uiSurfacedError": true
+    },
+    "primaryRuntimeResult": {
+      "status": "completed_previewed_and_downloaded",
+      "runtime": "normal backend on http://127.0.0.1:3000 using ignored backend/.env",
+      "artifactId": "cmso929bb0007zjjp8xd040d9",
+      "format": "kiranaos_aes256gcm_gzip_v1",
+      "schemaVersion": "2026-08-08-complete-v3",
+      "recordCount": 193,
+      "sizeBytes": 19142,
+      "checksumSha256": "3f0f72d1e497bf3996d13a730bc99e3549f25dcce1b04577004d57ba7e5236fe",
+      "restorePreviewRestorable": true,
+      "credentialsPreserved": true,
+      "protectedDownload": "completed through the owner-PIN UI",
+      "auditActions": [
+        "SHOP_BACKUP_REQUESTED",
+        "SHOP_BACKUP_COMPLETED",
+        "SHOP_BACKUP_RESTORE_PREVIEWED",
+        "SHOP_BACKUP_DOWNLOADED"
+      ],
+      "mobileGeometry": {
+        "viewport": "390x844",
+        "documentWidth": 390,
+        "horizontalOverflow": false,
+        "activeControlsBelow44px": 0
+      }
     },
     "isolatedKeyedRuntimeResult": {
       "status": "completed_and_previewed",
@@ -80,14 +105,21 @@
       "credentialsPreserved": true,
       "protectedDownloadStatus": 200
     },
-    "cleanup": {
+    "isolatedRuntimeCleanup": {
       "artifactRowDeleted": true,
       "objectDeleted": true,
       "qaSessionsRevoked": 7,
       "qaDeviceStatus": "revoked",
       "isolatedRuntimeStopped": true
     },
-    "releaseLimitation": "The primary runtime still needs BACKUP_ENCRYPTION_KEY before exact-runtime UI creation and restore rehearsal can be certified."
+    "primaryRuntimeCleanup": {
+      "artifactRowDeleted": true,
+      "objectDeleted": true,
+      "downloadedCopyDeleted": true,
+      "auditRowsRetained": true,
+      "destructiveRestoreExecuted": false
+    },
+    "releaseLimitation": "Local exact-runtime UI creation, restore preview and protected download are certified. Deployed production still requires a production-held encryption key, non-local object storage and an isolated managed-PostgreSQL restore rehearsal before SYNC-005 can close."
   },
   "frontendProductionGate": {
     "command": "cd frontend && npm run prod:check",
@@ -101,6 +133,12 @@
     "build": "passed",
     "bundleBudget": "passed",
     "productionAppCheck": "passed"
+  },
+  "backendVerification": {
+    "productionCheck": "passed",
+    "migrationSafety": { "status": "passed", "warnings": 0 },
+    "releaseGate": { "status": "passed", "warnings": 1, "warning": "Human RELEASE_APPROVED record is still absent." },
+    "encryptedBackupIntegration": { "passed": 8, "failed": 0, "skipped": 0 }
   },
   "artifacts": {
     "landing-375x667.png": "9f79ca656f05aa56b9db8d5a4db880ac7e57aec9a4446d31b868b93b77aaa616",
@@ -134,6 +172,9 @@
     "security-change-pin-390x844.png": "b9ead508092feb1560ca3339389c3205b51118a07d8641649e9c63b2c17e1657",
     "backup-create-task-390x844.png": "c15e9502a64bded51df297f23dc950bb6d7b13e9d3f4c8886da95f2b7c2ff25c",
     "backup-missing-key-390x844.png": "d5eff5de0e07546e6ede86a11714634f5b77f334cf1ec4c092c39f8c6687f83f",
-    "backup-history-390x844.png": "e48b50daccb28f11b5d1a8bf20e39d6bc58374774f255a0aca4c4b32854cbf97"
+    "backup-history-390x844.png": "e48b50daccb28f11b5d1a8bf20e39d6bc58374774f255a0aca4c4b32854cbf97",
+    "backup-primary-created-390x844.png": "8069c384ecd26361d2c881497d3a8630350307a6f992c504184c390c2b83eb56",
+    "backup-primary-validated-390x844.png": "1c7e0f85ef08ffbbfca5aee9c08231af3de4dfcc93d0567fd17235c59eba1fa7",
+    "backup-primary-downloaded-390x844.png": "15faa87aad177c53f924778c89c143a30a0e7e8646b305b5336ff57035873a91"
   }
 }

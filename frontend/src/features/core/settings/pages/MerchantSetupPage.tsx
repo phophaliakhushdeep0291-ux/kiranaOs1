@@ -25,6 +25,7 @@ import { useSettingsPrefs } from "../use-settings-prefs";
 import { SHOP_BOOTSTRAP_QUERY_KEY } from "../business-profile-bootstrap";
 import { updateShopSetupStatus } from "../api";
 import { useQueryClient } from "@tanstack/react-query";
+import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import {
   MERCHANT_SETUP_KEY,
   buildMerchantSetupProgress,
@@ -112,6 +113,7 @@ export default function MerchantSetupPage() {
   const [state, setState] = useState<MerchantSetupState>(() => normaliseMerchantSetupState(null));
   const [loading, setLoading] = useState(true);
   const [starterCatalogRun, setStarterCatalogRun] = useState<StarterCatalogRun | null>(null);
+  const [starterCatalogPinOpen, setStarterCatalogPinOpen] = useState(false);
   const starterCatalogAbort = useRef<AbortController | null>(null);
   const { toast } = useToast();
 
@@ -187,8 +189,9 @@ export default function MerchantSetupPage() {
     starterCatalogAbort.current?.abort();
   }, []);
 
-  const runStarterCatalog = useCallback(async () => {
+  const runStarterCatalog = useCallback(async (ownerPin: string, reason: string) => {
     if (starterCatalogRun) return;
+    setStarterCatalogPinOpen(false);
     const controller = new AbortController();
     starterCatalogAbort.current = controller;
     setStarterCatalogRun({ created: 0, total: 0 });
@@ -197,6 +200,8 @@ export default function MerchantSetupPage() {
       const { loadKiranaStarterCatalog } = await import("@/features/core/products/starter-catalog/load-starter-catalog");
       const result = await loadKiranaStarterCatalog({
         signal: controller.signal,
+        ownerPin,
+        ownerPinReason: reason || "Approved built-in starter catalog",
         onProgress: ({ created, total }) => setStarterCatalogRun({ created, total }),
       });
       await refresh();
@@ -325,7 +330,7 @@ export default function MerchantSetupPage() {
                               <Button
                                 className="mt-2 rounded-[8px] bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]"
                                 data-testid="starter-catalog-start"
-                                onClick={() => void runStarterCatalog()}
+                                onClick={() => setStarterCatalogPinOpen(true)}
                               >
                                 <PackagePlus size={14} className="mr-1" /> {step.quickAction.label}
                               </Button>
@@ -392,6 +397,15 @@ export default function MerchantSetupPage() {
           </Card>
         </div>
       </div>
+      <OwnerPinModal
+        open={starterCatalogPinOpen}
+        title="Approve starter catalog"
+        description="This creates the selected catalog products and queues them for verified cloud sync."
+        confirmLabel="Approve and load"
+        loading={Boolean(starterCatalogRun)}
+        onCancel={() => { if (!starterCatalogRun) setStarterCatalogPinOpen(false); }}
+        onConfirm={({ ownerPin, reason }) => void runStarterCatalog(ownerPin, reason)}
+      />
     </SettingsShell>
   );
 }

@@ -25,6 +25,7 @@ export interface PrinterConfig {
   shopCopy: boolean;
   autoCut: boolean;
   cashDrawer: boolean;
+  customerDisplay: boolean;
   printLogo: boolean;
   printQr: boolean;
   // Receipt content
@@ -55,6 +56,7 @@ export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
   shopCopy: false,
   autoCut: true,
   cashDrawer: false,
+  customerDisplay: false,
   printLogo: true,
   printQr: true,
   showGst: true,

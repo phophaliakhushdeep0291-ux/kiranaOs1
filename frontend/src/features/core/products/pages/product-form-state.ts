@@ -348,6 +348,85 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
   };
 }
 
+const OWNER_APPROVAL_PRODUCT_FIELDS = [
+  "stockBaseQty",
+  "costPerRateUnit",
+  "minPricePerRateUnit",
+  "defaultPricePerRateUnit",
+  "gstRate",
+  "hsn",
+  "mrp",
+  "barcode",
+  "sku",
+  "sellingUnits",
+  "variantAxes",
+  "packagingMode",
+  "batchTrackingEnabled",
+  "drugSchedule",
+  "isActive",
+] as const;
+
+function approvalNumber(value: unknown): number {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? roundMoney(number) : 0;
+}
+
+function normalizedApprovalValue(field: typeof OWNER_APPROVAL_PRODUCT_FIELDS[number], value: unknown): unknown {
+  if (["stockBaseQty", "costPerRateUnit", "minPricePerRateUnit", "defaultPricePerRateUnit", "gstRate", "mrp"].includes(field)) {
+    return approvalNumber(value);
+  }
+  if (["hsn", "barcode", "sku", "drugSchedule"].includes(field)) {
+    return String(value ?? "").trim().toLowerCase() || null;
+  }
+  if (["batchTrackingEnabled", "isActive"].includes(field)) return Boolean(value);
+  if (field === "packagingMode") return String(value ?? "pooled").trim().toLowerCase();
+  if (field === "variantAxes") {
+    return (Array.isArray(value) ? value : []).map((axis) => {
+      const row = axis as { name?: unknown; values?: unknown };
+      return {
+        name: String(row.name ?? "").trim().toLowerCase(),
+        values: (Array.isArray(row.values) ? row.values : []).map((item) => String(item).trim().toLowerCase()),
+      };
+    });
+  }
+  if (field === "sellingUnits") {
+    return (Array.isArray(value) ? value : []).map((raw) => {
+      const unit = raw as Partial<ProductSellingUnit>;
+      return {
+        unitCode: String(unit.unitCode ?? "").trim().toLowerCase(),
+        unitType: String(unit.unitType ?? "").trim().toLowerCase(),
+        name: String(unit.name ?? "").trim().toLowerCase(),
+        barcode: String(unit.barcode ?? "").trim() || null,
+        conversionToBase: approvalNumber(unit.conversionToBase),
+        defaultPrice: approvalNumber(unit.defaultPrice),
+        minimumPrice: unit.minimumPrice == null ? null : approvalNumber(unit.minimumPrice),
+        maximumPrice: unit.maximumPrice == null ? null : approvalNumber(unit.maximumPrice),
+        costPrice: unit.costPrice == null ? null : approvalNumber(unit.costPrice),
+        onHandQty: unit.onHandQty == null ? null : approvalNumber(unit.onHandQty),
+        lowStockThreshold: unit.lowStockThreshold == null ? null : approvalNumber(unit.lowStockThreshold),
+        reorderLevel: unit.reorderLevel == null ? null : approvalNumber(unit.reorderLevel),
+        variantValue1: String(unit.variantValue1 ?? "").trim().toLowerCase() || null,
+        variantValue2: String(unit.variantValue2 ?? "").trim().toLowerCase() || null,
+        isDefault: Boolean(unit.isDefault),
+        isActive: unit.isActive !== false,
+      };
+    }).sort((a, b) => a.unitCode.localeCompare(b.unitCode));
+  }
+  return value;
+}
+
+/**
+ * Full product records are queued for offline sync, so field presence cannot decide
+ * whether an edit is sensitive. Compare the actual protected values and ask for the
+ * owner PIN only when stock, pricing, tax, identity, packaging or compliance changed.
+ */
+export function productUpdateNeedsOwnerApproval(existing: Product, next: ProductInput): boolean {
+  return OWNER_APPROVAL_PRODUCT_FIELDS.some((field) => (
+    JSON.stringify(normalizedApprovalValue(field, existing[field]))
+      !== JSON.stringify(normalizedApprovalValue(field, next[field]))
+  ));
+}
+
 export function findDraftProduct(draft: ProductDraftPayload, products: Product[]): Product | undefined {
   const lookupName = String(draft.productName ?? draft.name ?? "").trim().toLowerCase();
   if (draft.mode !== "edit" || !lookupName) return undefined;

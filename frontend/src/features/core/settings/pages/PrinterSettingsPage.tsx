@@ -5,14 +5,14 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useGetShop } from "@/lib/api/client";
-import { Bluetooth, CheckCircle2, Cable, Download, FileText, Printer, RefreshCcw, Scale, Search, ShieldCheck, Usb, XCircle } from "lucide-react";
+import { Bluetooth, CheckCircle2, Cable, Download, FileText, Monitor, Printer, RefreshCcw, Scale, Search, ShieldCheck, Usb, XCircle } from "lucide-react";
 import { SettingsShell } from "@/features/core/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge, RowToggle } from "@/features/core/settings/ui";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { DEFAULT_PRINTER_CONFIG, PRINTER_CONNECTION_LABELS, type PrinterConfig, type PrinterConnection } from "@/features/core/settings/printer-config";
 import { buildReceiptHtml, openConfiguredReceiptWindow, type ReceiptPaperSize } from "@/features/core/receipts/receipt-print";
 import { sampleReceiptSnapshot } from "@/features/core/settings/receipt-preview-sample";
-import { checkHardwareBridge, getHardwareBridgeToken, openCashDrawerViaHardwareBridge, pairHardwareBridge, readScaleViaHardwareBridge, type HardwareBridgeHealth } from "@/features/core/hardware/local-hardware-bridge";
+import { checkHardwareBridge, getHardwareBridgeToken, openCashDrawerViaHardwareBridge, pairHardwareBridge, readScaleViaHardwareBridge, showCustomerDisplayViaHardwareBridge, type HardwareBridgeHealth } from "@/features/core/hardware/local-hardware-bridge";
 
 const sampleSnapshot = sampleReceiptSnapshot;
 
@@ -56,7 +56,8 @@ export default function PrinterSettingsPage() {
       { label: "Bluetooth browser API", detail: "Detected only; printing still uses the paired system queue", ready: Boolean(browserNavigator.bluetooth) && window.isSecureContext, icon: Bluetooth },
       { label: "USB browser API", detail: "Detected only; direct ESC/POS uses the local bridge", ready: Boolean(browserNavigator.usb) && window.isSecureContext, icon: Usb },
       { label: "Serial weighing scale", detail: "Web Serial capable browser; device protocol still required", ready: Boolean(browserNavigator.serial) && window.isSecureContext, icon: Scale },
-      { label: "Local hardware bridge", detail: bridgeHealth?.deviceName || "Direct printer, cutter, drawer and scale adapter", ready: Boolean(bridgeHealth?.ok), icon: Cable },
+      { label: "Customer display", detail: bridgeHealth?.capabilities?.customerDisplay ? "Paired structured-total adapter" : "Configure a signed vendor adapter in Hardware Bridge Setup", ready: Boolean(bridgeHealth?.capabilities?.customerDisplay), icon: Monitor },
+      { label: "Local hardware bridge", detail: bridgeHealth?.deviceName || "Direct printer, cutter, drawer, scale and display adapters", ready: Boolean(bridgeHealth?.ok), icon: Cable },
     ];
   }, [bridgeHealth]);
 
@@ -161,6 +162,18 @@ export default function PrinterSettingsPage() {
     } catch (error) { toast({ title: "Scale test failed", description: error instanceof Error ? error.message : "Check the bridge and scale protocol.", variant: "destructive" }); }
   }
 
+  async function testCustomerDisplay() {
+    try {
+      await showCustomerDisplayViaHardwareBridge(cfg.bridgeUrl, {
+        revision: Date.now(),
+        state: "sale",
+        itemCount: 2,
+        totalPaise: 12_345,
+      });
+      toast({ title: "Customer display updated", description: "The bridge confirmed the ₹123.45 test total." });
+    } catch (error) { toast({ title: "Display test failed", description: error instanceof Error ? error.message : "Check the bridge and display adapter.", variant: "destructive" }); }
+  }
+
   function downloadReceiptHtml() {
     const html = buildReceiptHtml(sampleSnapshot(shop.data, cfg), { paperSize: cfg.paperSize, copies: cfg.copies });
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -214,7 +227,7 @@ export default function PrinterSettingsPage() {
                   </Select>
                 </Fld>
               </div>
-              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-11 sm:h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="6-character pairing code" hint="Open Hardware Bridge Setup and type the code shown there. The private device token is exchanged automatically and never synced."><Input className="h-11 font-mono uppercase tracking-[0.3em] sm:h-10" value={pairingCode} maxLength={6} autoComplete="one-time-code" onChange={(event) => setPairingCode(event.target.value.replace(/[^2-9A-HJ-NP-Z]/gi, "").toUpperCase())} placeholder={bridgePaired ? "PAIRED" : "ABC234"} /></Fld>{bridgeHealth?.update?.available ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">Hardware Bridge v{bridgeHealth.update.latestVersion} is available. Open Hardware Bridge Setup to update.</div> : null}{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Badge tone="green">Paired · v{bridgeHealth.version}</Badge><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>Test drawer</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>Read scale</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
+              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-11 sm:h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="6-character pairing code" hint="Open Hardware Bridge Setup and type the code shown there. The private device token is exchanged automatically and never synced."><Input className="h-11 font-mono uppercase tracking-[0.3em] sm:h-10" value={pairingCode} maxLength={6} autoComplete="one-time-code" onChange={(event) => setPairingCode(event.target.value.replace(/[^2-9A-HJ-NP-Z]/gi, "").toUpperCase())} placeholder={bridgePaired ? "PAIRED" : "ABC234"} /></Fld>{bridgeHealth?.update?.available ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">Hardware Bridge v{bridgeHealth.update.latestVersion} is available. Open Hardware Bridge Setup to update.</div> : null}{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Badge tone="green">Paired · v{bridgeHealth.version}</Badge><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>Test drawer</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>Read scale</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void testCustomerDisplay()} disabled={!bridgeHealth.capabilities?.customerDisplay}>Test display</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
               <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
                 <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:h-9" onClick={() => void scanPrinters()}><Search size={14} /> Scan</Button>
                 <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:h-9" onClick={() => void connectPrinter()} disabled={connecting}><Cable size={14} /> {connecting ? "Saving..." : "Connect"}</Button>
@@ -235,6 +248,7 @@ export default function PrinterSettingsPage() {
               <RowToggle label="Print shop copy" pill={<Switch checked={cfg.shopCopy} onCheckedChange={(v) => setP("shopCopy", v)} />} />
               <RowToggle label="Auto cut paper" desc="Supported thermal printers" pill={<Switch checked={cfg.autoCut} onCheckedChange={(v) => setP("autoCut", v)} />} />
               <RowToggle label="Cash drawer pulse" desc="Open the connected drawer after a direct bridge print" pill={cfg.connection === "bridge" ? <Switch checked={cfg.cashDrawer} onCheckedChange={(v) => setP("cashDrawer", v)} /> : <Badge tone="amber">Bridge required</Badge>} />
+              <RowToggle label="Customer display updates" desc="Show the live item count and payable total through the paired bridge" pill={cfg.connection === "bridge" ? <Switch checked={cfg.customerDisplay} onCheckedChange={(v) => setP("customerDisplay", v)} disabled={!bridgeHealth?.capabilities?.customerDisplay} /> : <Badge tone="amber">Bridge required</Badge>} />
               <RowToggle label="Print logo" pill={<Switch checked={cfg.printLogo} onCheckedChange={(v) => setP("printLogo", v)} />} />
               <RowToggle label="Show dynamic UPI QR at checkout" desc="Uses the verified UPI ID saved in Store Profile" pill={<Switch checked={cfg.printQr} onCheckedChange={(v) => setP("printQr", v)} />} last />
             </div>
@@ -301,7 +315,7 @@ export default function PrinterSettingsPage() {
 
       <Card>
         <CardHead icon={<ShieldCheck size={15} />} title="Hardware compatibility check" sub="Capabilities detected on this device—not marketing claims" />
-        <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-6">
           {hardwareCapabilities.map((capability) => {
             const Icon = capability.icon;
             return <div key={capability.label} className="rounded-xl border border-[#e5eaf2] bg-[#f8fafc] p-3"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[var(--brand)] shadow-sm"><Icon size={16} /></span><Badge tone={capability.ready ? "green" : "amber"}>{capability.ready ? "Available" : "Unavailable"}</Badge></div><p className="mt-3 text-[12px] font-black text-[var(--brand-ink)]">{capability.label}</p><p className="mt-1 text-[10.5px] leading-4 text-[#64748b]">{capability.detail}</p></div>;

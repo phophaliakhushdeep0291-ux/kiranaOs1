@@ -1,6 +1,6 @@
 param(
   [string]$Configuration = "Release",
-  [string]$Version = "1.1.0"
+  [string]$Version = "1.2.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,7 +38,7 @@ foreach ($origin in $allowedOrigins) {
   if (($uri.Scheme -ne "https") -and -not ($uri.Scheme -eq "http" -and $loopback)) { throw "Every frontend origin must be HTTPS or a loopback development origin: $origin" }
   if ($uri.AbsolutePath -ne "/" -or $uri.Query -or $uri.Fragment -or $uri.UserInfo) { throw "Frontend origins cannot contain paths, credentials, queries, or fragments: $origin" }
 }
-$defaults = @{ version = 1; token = ""; allowedOrigins = $allowedOrigins; printer = @{ transport = "windows"; name = ""; host = ""; port = 9100 }; pairing = $null; updateManifestUrl = "https://updates.kiranaos.in/hardware-bridge/stable.json" } | ConvertTo-Json -Depth 4
+$defaults = @{ version = 1; token = ""; allowedOrigins = $allowedOrigins; printer = @{ transport = "windows"; name = ""; host = ""; port = 9100 }; scale = @{ executable = ""; args = @() }; customerDisplay = @{ executable = ""; args = @(); width = 20 }; pairing = $null; updateManifestUrl = "https://updates.kiranaos.in/hardware-bridge/stable.json" } | ConvertTo-Json -Depth 4
 [IO.File]::WriteAllText((Join-Path $stage "bridge-defaults.json"), $defaults, [Text.UTF8Encoding]::new($false))
 Copy-Item -LiteralPath $node -Destination (Join-Path $stage "runtime\node.exe")
 Copy-Item -LiteralPath (Join-Path $bridgeRoot "src") -Destination (Join-Path $stage "app\src") -Recurse

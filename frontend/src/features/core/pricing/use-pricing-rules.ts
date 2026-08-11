@@ -5,7 +5,7 @@ import { refreshPricingRulesCache } from "./pricing-rules-cache";
 const KEY = ["pricing-rules"] as const;
 
 /** All non-archived rules (owner editor). Billing uses the cached ACTIVE subset. */
-export function usePricingRules() {
+export function usePricingRules(ownerPin: string) {
   const qc = useQueryClient();
   const query = useQuery({
     queryKey: KEY,
@@ -20,9 +20,9 @@ export function usePricingRules() {
     await refreshPricingRulesCache().catch(() => undefined);
   };
 
-  const create = useMutation({ mutationFn: createPricingRule, onSuccess: afterWrite });
-  const update = useMutation({ mutationFn: (v: { id: string; body: Partial<ApiPricingRule> }) => updatePricingRule(v.id, v.body), onSuccess: afterWrite });
-  const remove = useMutation({ mutationFn: deletePricingRule, onSuccess: afterWrite });
+  const create = useMutation({ mutationFn: (body: Partial<ApiPricingRule> & { name: string; ruleType: string }) => createPricingRule(body, ownerPin), onSuccess: afterWrite });
+  const update = useMutation({ mutationFn: (v: { id: string; body: Partial<ApiPricingRule> }) => updatePricingRule(v.id, v.body, ownerPin), onSuccess: afterWrite });
+  const remove = useMutation({ mutationFn: (id: string) => deletePricingRule(id, ownerPin), onSuccess: afterWrite });
 
   return { query, create, update, remove };
 }

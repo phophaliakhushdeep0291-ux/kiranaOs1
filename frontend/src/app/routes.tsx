@@ -379,7 +379,7 @@ export function AppRoutes() {
         <ProtectedRoute component={SalesOverviewPage} />
       </Route>
       <Route path="/products/:productId/pricing">
-        <ProtectedRoute component={ProductPricing} featureName="dynamic_customer_pricing" />
+        <ProtectedRoute component={ProductPricing} />
       </Route>
       <Route path="/products">
         <ProtectedRoute component={Products} />

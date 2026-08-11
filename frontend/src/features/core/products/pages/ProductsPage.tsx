@@ -61,6 +61,7 @@ import {
   formToInput,
   mergeDraftIntoProductForm,
   productFormSchema,
+  productUpdateNeedsOwnerApproval,
   productToForm,
   readProductDraftEventDetail,
   type ProductFormData,
@@ -400,8 +401,16 @@ export default function ProductsPage() {
     }
   };
 
-  function submitValues(values: ProductFormData, ownerPin?: string, reason?: string) {
+  function inputForValues(values: ProductFormData, ownerPin?: string, reason?: string) {
     const input = formToInput(values, ownerPin, reason);
+    // The editor exposes a barcode, not a separate internal SKU. Preserve a custom SKU
+    // instead of silently replacing it with the barcode every time an unrelated field is edited.
+    if (editing?.sku && editing.sku !== editing.barcode) input.sku = editing.sku;
+    return input;
+  }
+
+  function submitValues(values: ProductFormData, ownerPin?: string, reason?: string) {
+    const input = inputForValues(values, ownerPin, reason);
     if (editing) {
       // optimistic-concurrency base = the server version this edit started from
       input.baseUpdatedAt = editing.updatedAt;
@@ -417,7 +426,10 @@ export default function ProductsPage() {
       toast({ title: t("products.toast.permissionDenied"), description: belowMinPermission.reason, variant: "destructive" });
       return;
     }
-    if (!editing || belowMin) {
+    const protectedEdit = editing
+      ? productUpdateNeedsOwnerApproval(editing, inputForValues(values))
+      : true;
+    if (!editing || belowMin || protectedEdit) {
       setPendingValues(values);
       setPinOpen(true);
       return;
@@ -819,7 +831,7 @@ export default function ProductsPage() {
         open={pinOpen}
         onCancel={() => setPinOpen(false)}
         title={editing ? t("products.toast.ownerApprovalRequired") : t("products.toast.ownerPasswordRequired")}
-        description={editing ? t("products.toast.priceNeedsApproval") : "Creating a new product changes the shop catalogue, so owner password/PIN is required."}
+        description={editing ? "Stock, pricing, tax, barcode, packaging and compliance changes need owner approval." : "Creating a new product changes the shop catalogue, so owner password/PIN is required."}
         confirmLabel={editing ? t("products.toast.approveUpdate") : t("products.action.createProduct")}
         loading={isPending}
         onConfirm={({ ownerPin, reason }) => {

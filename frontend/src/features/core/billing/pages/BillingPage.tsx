@@ -46,7 +46,7 @@ import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/core/loyalty/api";
 import { lookupGiftCard } from "@/features/core/gift-cards/api";
 import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/core/voice/backend-transcription";
-import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity } from "@/features/core/hardware/local-hardware-bridge";
+import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity, showCustomerDisplayViaHardwareBridge } from "@/features/core/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import {
   ACTIVITY_EVENTS,
@@ -202,6 +202,7 @@ export default function Billing() {
   const [summaryWidth, setSummaryWidth] = useState(() => readBillSummaryWidth());
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
+  const [hardwareConfigVersion, setHardwareConfigVersion] = useState(0);
   const [sensitivePinOpen, setSensitivePinOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [printConfirmOpen, setPrintConfirmOpen] = useState(false);
@@ -233,6 +234,7 @@ export default function Billing() {
   const voiceRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const voiceBackendRecordingRef = useRef<BackendTranscriptionSession | null>(null);
   const preferBackendVoiceRef = useRef(false);
+  const customerDisplayRevisionRef = useRef(Date.now());
 
   useEffect(() => () => {
     voiceRecognitionRef.current?.abort?.();
@@ -657,10 +659,30 @@ export default function Billing() {
   // Hydrate the printer + tax config caches so receipts honour the saved paper
   // size/copies/footer and totals honour the saved GST mode from Settings.
   useEffect(() => {
-    void loadPrinterConfig();
+    void loadPrinterConfig().finally(() => setHardwareConfigVersion((current) => current + 1));
     void loadTaxConfig();
     void loadSecurityPolicy(); // which counter actions still ask for the owner PIN
   }, []);
+
+  useEffect(() => {
+    if (hardwareConfigVersion === 0) return;
+    const printer = getPrinterConfigSync();
+    if (printer.connection !== "bridge" || !printer.customerDisplay) return;
+    const revision = Math.max(Date.now(), customerDisplayRevisionRef.current + 1);
+    customerDisplayRevisionRef.current = revision;
+    const timeout = window.setTimeout(() => {
+      void showCustomerDisplayViaHardwareBridge(printer.bridgeUrl, {
+        revision,
+        state: cart.length > 0 ? "sale" : "idle",
+        itemCount: cart.length,
+        totalPaise: Math.round(grandTotal * 100),
+      }).catch(() => {
+        // A customer display is informative, never a reason to block billing or
+        // repeatedly interrupt a cashier. Settings exposes an explicit test.
+      });
+    }, 160);
+    return () => window.clearTimeout(timeout);
+  }, [cart.length, grandTotal, hardwareConfigVersion]);
 
   useEffect(() => {
     setSensitiveApproval(null);

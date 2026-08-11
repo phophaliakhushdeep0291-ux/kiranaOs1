@@ -26,6 +26,72 @@ async function writeRequiredProductAudit(entry, client) {
   return audit;
 }
 
+export const SENSITIVE_PRODUCT_FIELDS = Object.freeze([
+  "stockBaseQty",
+  "costPerRateUnit",
+  "minPricePerRateUnit",
+  "defaultPricePerRateUnit",
+  "gstRate",
+  "hsn",
+  "mrp",
+  "barcode",
+  "sku",
+  "sellingUnits",
+  "variantAxes",
+  "packagingMode",
+  "batchTrackingEnabled",
+  "drugSchedule",
+  "isActive",
+  "status",
+]);
+
+function productAuditSnapshot(product) {
+  if (!product) return null;
+  return {
+    id: product.id,
+    name: product.name,
+    category: product.category,
+    stockBaseQty: Number(product.stockBaseQty ?? 0),
+    costPerRateUnit: Number(product.costPerRateUnit ?? 0),
+    minPricePerRateUnit: Number(product.minPricePerRateUnit ?? 0),
+    defaultPricePerRateUnit: Number(product.defaultPricePerRateUnit ?? 0),
+    gstRate: Number(product.gstRate ?? 0),
+    hsn: product.hsn ?? null,
+    mrp: Number(product.mrp ?? 0),
+    barcode: product.barcode ?? null,
+    sku: product.sku ?? null,
+    packagingMode: product.packagingMode ?? "pooled",
+    batchTrackingEnabled: Boolean(product.batchTrackingEnabled),
+    drugSchedule: product.drugSchedule ?? null,
+    isActive: product.isActive !== false,
+    variantAxes: parseVariantAxes(product.variantAxesJson),
+    sellingUnits: Array.isArray(product.sellingUnits)
+      ? product.sellingUnits.map((unit) => ({
+          id: unit.id,
+          unitCode: unit.unitCode,
+          barcode: unit.barcode ?? null,
+          conversionToBase: Number(unit.conversionToBase ?? 0),
+          defaultPrice: Number(unit.defaultPrice ?? 0),
+          minimumPrice: unit.minimumPrice == null ? null : Number(unit.minimumPrice),
+          maximumPrice: unit.maximumPrice == null ? null : Number(unit.maximumPrice),
+          costPrice: unit.costPrice == null ? null : Number(unit.costPrice),
+          onHandQty: unit.onHandQty == null ? null : Number(unit.onHandQty),
+          isDefault: Boolean(unit.isDefault),
+          isActive: unit.isActive !== false,
+        }))
+      : [],
+  };
+}
+
+function changedFieldsFromInput(data) {
+  return Object.keys(data ?? {}).filter((field) => ![
+    "baseUpdatedAt",
+    "locationId",
+    "ownerPin",
+    "ownerPinReason",
+  ].includes(field));
+}
+
 async function applyLocationInventory(shopId, products, locationId) {
   if (!locationId || products.length === 0) return products;
   const location = await resolveOperationalLocation(shopId, locationId);
@@ -110,7 +176,7 @@ export async function getProduct(shopId, id, { locationId } = {}) {
 // with PACKAGING_STOCK_PATH_UNSUPPORTED at the movement choke point in
 // location-context.service.js, so an unwired path fails loudly instead of drifting.
 
-export async function createProduct(shopId, data, { identity = null } = {}) {
+export async function createProduct(shopId, data, { identity = null, actor = {}, locationId = null } = {}) {
   if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const productIdentity = normalizeProductIdentity(shopId, identity);
 
@@ -151,10 +217,60 @@ export async function createProduct(shopId, data, { identity = null } = {}) {
         },
       });
       await writeSellingUnits(tx, shopId, created.id, normalizedUnits);
-      return tx.product.findUnique({
+
+      const openingQty = round2(Number(created.stockBaseQty ?? 0));
+      let openingLocation = null;
+      if (openingQty !== 0) {
+        openingLocation = await resolveOperationalLocation(shopId, locationId, tx);
+        if (!openingLocation.isPrimary) {
+          await tx.locationStock.upsert({
+            where: { locationId_productId: { locationId: openingLocation.id, productId: created.id } },
+            create: { shopId, locationId: openingLocation.id, productId: created.id, stockBaseQty: openingQty },
+            update: { stockBaseQty: openingQty },
+          });
+        }
+        await tx.stockLedger.create({
+          data: {
+            shopId,
+            locationId: openingLocation.id,
+            productId: created.id,
+            productName: created.name,
+            action: "opening_stock",
+            changeBaseQty: openingQty,
+            oldStockBaseQty: 0,
+            newStockBaseQty: openingQty,
+            idempotencyKey: `product-opening:${created.id}`,
+            sourceDeviceId: actor.deviceId ?? productIdentity.sourceDeviceId ?? null,
+            sourceType: "product_create",
+            sourceId: created.id,
+            note: "Opening stock recorded with product creation",
+          },
+        });
+      }
+
+      const hydrated = await tx.product.findUnique({
         where: { id: created.id },
         include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
       });
+      const sensitiveFields = changedFieldsFromInput(data).filter((field) => SENSITIVE_PRODUCT_FIELDS.includes(field));
+      await writeRequiredProductAudit({
+        shopId,
+        userId: actor.userId ?? null,
+        deviceId: actor.deviceId ?? productIdentity.sourceDeviceId ?? undefined,
+        action: sensitiveFields.length ? "PRODUCT_CREATED_WITH_SENSITIVE_FIELDS" : "PRODUCT_CREATED",
+        entityType: "Product",
+        entityId: created.id,
+        before: null,
+        after: productAuditSnapshot(hydrated),
+        metadata: {
+          sensitiveFields,
+          openingStockLocationId: openingLocation?.id ?? null,
+          offlineSyncEventId: actor.syncEventId ?? null,
+          reason: actor.reason ?? null,
+        },
+        req: actor.req ?? null,
+      }, tx);
+      return hydrated;
     });
     return deserializeProduct(product);
   } catch (error) {
@@ -259,7 +375,7 @@ async function applyStockCorrectionInTransaction(tx, shopId, productId, newStock
   });
 }
 
-export async function updateProduct(shopId, id, data) {
+export async function updateProduct(shopId, id, data, { actor = {}, locationId = null } = {}) {
   if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const existing = await getProduct(shopId, id); // ensures it exists and belongs to shop
   if (data.name) await assertNoActiveProductNameConflict(shopId, data.name, id);
@@ -307,19 +423,51 @@ export async function updateProduct(shopId, id, data) {
   }
 
   const updated = await db.$transaction(async (tx) => {
-    await tx.product.update({
-      where: { id },
+    const current = await tx.product.findFirst({
+      where: { id, shopId, deletedAt: null },
+      include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
+    });
+    if (!current) throw new AppError("Product not found", 404);
+    const changed = await tx.product.updateMany({
+      where: { id, shopId, deletedAt: null, updatedAt: existing.updatedAt },
       data: updateData,
     });
+    if (changed.count !== 1) {
+      throw new AppError(
+        `"${existing.name}" changed while this edit was being saved. Reload and try again.`,
+        409,
+        "PRODUCT_STALE_WRITE",
+      );
+    }
     if (requestedStockBaseQty !== undefined) {
-      await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, data.locationId ?? null);
+      await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, locationId);
     }
     if (normalizedUnits) await writeSellingUnits(tx, shopId, id, normalizedUnits);
     else await syncDefaultSellingUnitPricing(tx, shopId, id, { ...existing, ...rest });
-    return tx.product.findUnique({
+    const hydrated = await tx.product.findUnique({
       where: { id },
       include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
     });
+    const changedFields = changedFieldsFromInput(data);
+    await writeRequiredProductAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      action: "PRODUCT_UPDATED",
+      entityType: "Product",
+      entityId: id,
+      before: productAuditSnapshot(current),
+      after: productAuditSnapshot(hydrated),
+      metadata: {
+        changedFields,
+        sensitiveFields: changedFields.filter((field) => SENSITIVE_PRODUCT_FIELDS.includes(field)),
+        locationId,
+        offlineSyncEventId: actor.syncEventId ?? null,
+        reason: actor.reason ?? null,
+      },
+      req: actor.req ?? null,
+    }, tx);
+    return hydrated;
   });
   return deserializeProduct(updated);
 }
@@ -570,7 +718,15 @@ async function assertBarcodeAvailable(shopId, code, excludeProductId = null, cli
  * `client` exists so a transaction (or a test) can supply its own Prisma client, the same
  * way createAuditLog does. It defaults to the shared one.
  */
-export async function bindProductBarcode(shopId, productId, barcode, { identity = null, req = null, userId = null, client = db } = {}) {
+export async function bindProductBarcode(shopId, productId, barcode, options = {}) {
+  const client = options.client ?? db;
+  if (client === db) {
+    return db.$transaction((tx) => bindProductBarcodeWithClient(shopId, productId, barcode, { ...options, client: tx }));
+  }
+  return bindProductBarcodeWithClient(shopId, productId, barcode, { ...options, client });
+}
+
+async function bindProductBarcodeWithClient(shopId, productId, barcode, { identity = null, req = null, userId = null, client }) {
   const code = compactText(barcode);
   if (!code) {
     const err = new AppError("A barcode is required", 400);
@@ -615,11 +771,10 @@ export async function bindProductBarcode(shopId, productId, barcode, { identity 
     throw error;
   }
 
-  await createAuditLog({
+  await writeRequiredProductAudit({
     shopId,
     userId,
     req,
-    client,
     // A bind that arrived over sync has no request to read the device from, so the
     // originating till is carried in the event itself. `undefined` (not null) keeps the
     // online path falling back to the request header.
@@ -634,8 +789,9 @@ export async function bindProductBarcode(shopId, productId, barcode, { identity 
       barcode: code,
       source: identity?.sourceDeviceId ? "sync" : "online",
       clientProductId: identity?.clientProductId ?? null,
+      offlineSyncEventId: identity?.syncEventId ?? null,
     },
-  });
+  }, client);
 
   return deserializeProduct(updated);
 }

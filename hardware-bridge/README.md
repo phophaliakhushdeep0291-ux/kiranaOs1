@@ -23,7 +23,12 @@ Supported adapters:
 - raw ESC/POS over a network printer (`network`, normally TCP 9100);
 - raw ESC/POS through a named Windows print queue (`windows`);
 - cash-drawer pulses through either printer adapter;
-- an optional scale adapter executable that returns `{"weight": 1.25, "unit": "kg"}`.
+- an optional scale adapter executable that returns `{"weight": 1.25, "unit": "kg"}`;
+- an optional customer-display adapter executable that receives a validated two-line frame as JSON on standard input.
+
+The setup application can select installed signed scale and customer-display adapter executables without exposing commands or credentials to the browser. A scale adapter writes one JSON reading to standard output. A customer-display adapter receives a frame such as `{"revision":20,"state":"sale","itemCount":2,"totalPaise":12345,"width":20,"lines":["2 ITEMS","TOTAL INR 123.45"]}` on standard input and exits only after the device accepted it. The bridge owns line formatting, permits printable ASCII only, keeps totals in integer paise, serializes display writes, and drops stale revisions so a slow earlier update cannot overwrite a newer cart total.
+
+Scale, drawer and customer-display support remains **software-ready, not physically certified** until a named device model passes retained connect, disconnect, timeout, malformed-reading and recovery runs. The Settings page reports the bridge's real capabilities and includes explicit test actions; billing never stops when an informative customer display is unavailable.
 
 Developer-only environment setup remains available for source debugging:
 

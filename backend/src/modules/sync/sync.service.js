@@ -10,12 +10,11 @@ import { createCustomer, getCustomer, recordUdharPayment, restoreCustomer, rever
 import { damageSchema, correctionSchema, purchaseSchema } from "../inventory/inventory.schema.js";
 import { correctStock, recordDamage, recordPurchase } from "../inventory/inventory.service.js";
 import { createProductSchema, updateProductSchema } from "../products/products.schema.js";
-import { bindProductBarcode, createProduct, restoreDeletedProduct, softDeleteProduct, updateProduct } from "../products/products.service.js";
+import { bindProductBarcode, createProduct, getProduct, restoreDeletedProduct, softDeleteProduct, updateProduct } from "../products/products.service.js";
 import { createSupplierSchema, updateSupplierSchema } from "../suppliers/suppliers.schema.js";
 import { createSupplier, restoreSupplier, softDeleteSupplier, updateSupplier } from "../suppliers/suppliers.service.js";
 import { createExpenseSchema, updateExpenseSchema } from "../expenses/expenses.schema.js";
 import { createExpense, softDeleteExpense, updateExpense } from "../expenses/expenses.service.js";
-import { doesBodyTouchProtectedFields } from "../../utils/permissionRules.js";
 import { AUDIT_MODULES, AUDIT_RESULTS, createAuditLog } from "../audit/audit.service.js";
 import { recordBillLoyalty, reverseBillLoyalty } from "../loyalty/loyalty.service.js";
 import {
@@ -44,12 +43,76 @@ import {
 } from "../stores/location-context.service.js";
 
 const protectedProductFields = [
+  "stockBaseQty",
   "defaultPricePerRateUnit",
   "costPerRateUnit",
   "minPricePerRateUnit",
   "gstRate",
   "hsn",
+  "mrp",
+  "barcode",
+  "sku",
+  "sellingUnits",
+  "variantAxes",
+  "packagingMode",
+  "batchTrackingEnabled",
+  "drugSchedule",
+  "isActive",
+  "status",
 ];
+
+const numericProtectedProductFields = new Set([
+  "stockBaseQty",
+  "defaultPricePerRateUnit",
+  "costPerRateUnit",
+  "minPricePerRateUnit",
+  "gstRate",
+  "mrp",
+]);
+
+function normalizedProductApprovalValue(field, value) {
+  if (numericProtectedProductFields.has(field)) return round2(Number(value ?? 0));
+  if (["hsn", "barcode", "sku", "drugSchedule"].includes(field)) {
+    const text = value == null ? "" : String(value).trim().toLowerCase();
+    return text || null;
+  }
+  if (["batchTrackingEnabled", "isActive"].includes(field)) return Boolean(value);
+  if (field === "status") return String(value ?? "active").trim().toLowerCase();
+  if (field === "packagingMode") return String(value ?? "pooled").trim().toLowerCase();
+  if (field === "variantAxes") {
+    return (Array.isArray(value) ? value : []).map((axis) => ({
+      name: String(axis?.name ?? "").trim().toLowerCase(),
+      values: (Array.isArray(axis?.values) ? axis.values : []).map((item) => String(item).trim().toLowerCase()),
+    }));
+  }
+  if (field === "sellingUnits") {
+    return (Array.isArray(value) ? value : []).map((unit) => ({
+      unitCode: String(unit?.unitCode ?? "").trim().toLowerCase(),
+      barcode: String(unit?.barcode ?? "").trim() || null,
+      conversionToBase: round2(Number(unit?.conversionToBase ?? 0)),
+      defaultPrice: round2(Number(unit?.defaultPrice ?? 0)),
+      minimumPrice: unit?.minimumPrice == null ? null : round2(Number(unit.minimumPrice)),
+      maximumPrice: unit?.maximumPrice == null ? null : round2(Number(unit.maximumPrice)),
+      costPrice: unit?.costPrice == null ? null : round2(Number(unit.costPrice)),
+      onHandQty: unit?.onHandQty == null ? null : round2(Number(unit.onHandQty)),
+      lowStockThreshold: unit?.lowStockThreshold == null ? null : round2(Number(unit.lowStockThreshold)),
+      reorderLevel: unit?.reorderLevel == null ? null : round2(Number(unit.reorderLevel)),
+      variantValue1: String(unit?.variantValue1 ?? "").trim().toLowerCase() || null,
+      variantValue2: String(unit?.variantValue2 ?? "").trim().toLowerCase() || null,
+      isDefault: Boolean(unit?.isDefault),
+      isActive: unit?.isActive !== false,
+    })).sort((a, b) => a.unitCode.localeCompare(b.unitCode));
+  }
+  return value;
+}
+
+function protectedProductChanges(existing, changes) {
+  return protectedProductFields.filter((field) => {
+    if (!Object.prototype.hasOwnProperty.call(changes ?? {}, field)) return false;
+    return JSON.stringify(normalizedProductApprovalValue(field, existing?.[field]))
+      !== JSON.stringify(normalizedProductApprovalValue(field, changes[field]));
+  });
+}
 
 const SYNC_CONFLICT_RETENTION_DAYS = 90;
 const SYNC_CONFLICT_SNAPSHOT_MAX_CHARS = 64 * 1024;
@@ -1458,8 +1521,11 @@ async function applySyncEvent(shopId, event, user, context) {
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyCreateSaleReturn(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_PRODUCT:
+      assertProductManagementPermission(user);
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyCreateProduct(shopId, event, user);
     case SYNC_EVENT_TYPES.UPDATE_PRODUCT:
+      assertProductManagementPermission(user);
       return applyUpdateProduct(shopId, event, user, context);
     // No owner-PIN gate, matching the HTTP route: the point of capture-on-first-scan is
     // that a cashier can teach the catalog a code without fetching the owner. The service
@@ -1467,9 +1533,11 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.BIND_PRODUCT_BARCODE:
       return applyBindProductBarcode(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_PRODUCT:
+      assertProductManagementPermission(user);
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyDeleteProduct(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_PRODUCT:
+      assertProductManagementPermission(user);
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyRestoreProduct(shopId, event, user, context);
     case SYNC_EVENT_TYPES.ADJUST_STOCK:
@@ -1902,7 +1970,16 @@ async function applyCreateProduct(shopId, event, user = null) {
   const parsed = createProductSchema.parse(productBody);
   const identity = getCreateProductIdentity(event, payload, productBody, user);
   // Durable identity makes the create idempotent across retries and cross-device replays.
-  const product = await createProduct(shopId, parsed, { identity });
+  const product = await createProduct(shopId, parsed, {
+    identity,
+    actor: {
+      userId: user?.userId ?? user?.id ?? null,
+      deviceId: identity.sourceDeviceId ?? user?.deviceId ?? null,
+      syncEventId: getClientEventId(event),
+      reason: payload.reason ?? null,
+    },
+    locationId: pickString(payload.locationId, payload.location_id, event?.locationId, event?.location_id),
+  });
   return {
     type: event.type,
     productId: product.id,
@@ -1955,13 +2032,20 @@ async function applyUpdateProduct(shopId, event, user, context) {
   // CREATE_PRODUCT). Without reading it here the update parsed to {} and silently persisted
   // nothing — stock/price/barcode edits never reached the server.
   const changes = updateProductSchema.parse(payload.changes ?? payload.product ?? stripKnownSyncPayloadKeys(payload));
-
-  // NOTE: no blanket owner-PIN gate here. The client sends the full product on every edit
-  // (price/cost/gst always present), so a presence-based protected-field check would force a
-  // PIN on routine stock/price edits. CREATE_PRODUCT has no such gate either, so this keeps
-  // create/update consistent. Product editing is already gated by the `manage_products`
-  // permission, and below-minimum pricing is owner-PIN-gated client-side.
-  const product = await updateProduct(shopId, productId, changes);
+  const existing = await getProduct(shopId, productId);
+  const protectedChanges = protectedProductChanges(existing, changes);
+  if (protectedChanges.length) {
+    await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+  }
+  const product = await updateProduct(shopId, productId, changes, {
+    actor: {
+      userId: user?.userId ?? user?.id ?? null,
+      deviceId: pickString(payload.sourceDeviceId, payload.source_device_id, event?.deviceId, event?.device_id, user?.deviceId),
+      syncEventId: getClientEventId(event),
+      reason: payload.reason ?? null,
+    },
+    locationId: pickString(payload.locationId, payload.location_id, event?.locationId, event?.location_id),
+  });
   return {
     type: event.type,
     productId: product.id,
@@ -2001,6 +2085,7 @@ async function applyBindProductBarcode(shopId, event, user, context) {
     identity: {
       sourceDeviceId,
       clientProductId: pickString(payload.localProductId, payload.local_product_id, event?.entity_id),
+      syncEventId: getClientEventId(event),
     },
     userId: user?.userId ?? null,
   });
@@ -3912,6 +3997,11 @@ async function assertOwnerPermission(shopId, user, ownerPin) {
 
   const ok = await bcrypt.compare(ownerPin, owner.pinHash);
   if (!ok) throw new AppError("Wrong owner PIN", 403);
+}
+
+function assertProductManagementPermission(user) {
+  if (["owner", "admin"].includes(user?.role)) return;
+  throw new AppError("Product management requires an owner or manager account", 403, "PRODUCT_MANAGEMENT_PERMISSION_DENIED");
 }
 
 function stripKnownSyncPayloadKeys(payload) {

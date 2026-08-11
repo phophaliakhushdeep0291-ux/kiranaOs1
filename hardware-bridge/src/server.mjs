@@ -1,7 +1,8 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import { buildDrawerPulse, buildEscPosJob } from "./escpos.mjs";
-import { readScaleCommand, sendNetworkRaw, sendWindowsRaw } from "./adapters.mjs";
+import { readScaleCommand, sendNetworkRaw, sendWindowsRaw, writeCustomerDisplayCommand } from "./adapters.mjs";
+import { buildCustomerDisplayFrame } from "./customer-display.mjs";
 import { PrintJobJournal } from "./job-journal.mjs";
 import { defaultConfigPath, loadBridgeConfig, saveBridgeConfig } from "./config.mjs";
 import { consumePairingCode } from "./pairing.mjs";
@@ -11,7 +12,7 @@ import { fingerprintPrintPayload, PrintJobExecutor } from "./print-executor.mjs"
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.KIRANA_BRIDGE_PORT || 17873);
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 const CONFIG_PATH = defaultConfigPath();
 let bridgeConfig = await loadBridgeConfig(CONFIG_PATH);
 const TOKEN = String(bridgeConfig.token || "");
@@ -21,6 +22,8 @@ const MAX_BODY_BYTES = 1024 * 1024;
 const printJournal = new PrintJobJournal();
 const updateChecker = new UpdateChecker({ currentVersion: VERSION, manifestUrl: bridgeConfig.updateManifestUrl });
 let pairingExchange = Promise.resolve();
+let customerDisplayExchange = Promise.resolve();
+let lastCustomerDisplayRevision = -1;
 
 if (TOKEN.length < 32) {
   console.error("KIRANA_BRIDGE_TOKEN must be a random value of at least 32 characters.");
@@ -90,6 +93,24 @@ async function exchangePairingCode(code) {
   return operation;
 }
 
+async function updateCustomerDisplay(body) {
+  const frame = buildCustomerDisplayFrame(body, { width: bridgeConfig.customerDisplay?.width });
+  const operation = customerDisplayExchange.then(async () => {
+    if (frame.revision <= lastCustomerDisplayRevision) {
+      return { stale: true, revision: lastCustomerDisplayRevision };
+    }
+    await writeCustomerDisplayCommand({
+      executable: bridgeConfig.customerDisplay?.executable,
+      args: bridgeConfig.customerDisplay?.args || [],
+      frame,
+    });
+    lastCustomerDisplayRevision = frame.revision;
+    return { stale: false, revision: frame.revision };
+  });
+  customerDisplayExchange = operation.catch(() => undefined);
+  return operation;
+}
+
 const server = http.createServer(async (req, res) => {
   const origin = String(req.headers.origin || "");
   if (origin && !ALLOWED_ORIGINS.has(origin)) return json(res, 403, { message: "Origin is not paired with this bridge" });
@@ -123,7 +144,8 @@ const server = http.createServer(async (req, res) => {
           print: ["network", "windows"].includes(TRANSPORT),
           cutter: ["network", "windows"].includes(TRANSPORT),
           cashDrawer: ["network", "windows"].includes(TRANSPORT),
-          scale: Boolean(process.env.KIRANA_BRIDGE_SCALE_EXECUTABLE),
+          scale: Boolean(bridgeConfig.scale?.executable),
+          customerDisplay: Boolean(bridgeConfig.customerDisplay?.executable),
         },
       }, origin);
     }
@@ -157,11 +179,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/v1/scale/read") {
       await readJson(req);
-      let args = [];
-      try { args = JSON.parse(process.env.KIRANA_BRIDGE_SCALE_ARGS_JSON || "[]"); } catch { throw Object.assign(new Error("Scale arguments are invalid"), { status: 503 }); }
-      if (!Array.isArray(args) || args.some((value) => typeof value !== "string")) throw Object.assign(new Error("Scale arguments must be a JSON string array"), { status: 503 });
-      const reading = await readScaleCommand({ executable: process.env.KIRANA_BRIDGE_SCALE_EXECUTABLE, args });
+      const reading = await readScaleCommand({ executable: bridgeConfig.scale?.executable, args: bridgeConfig.scale?.args || [] });
       return json(res, 200, { ok: true, ...reading }, origin);
+    }
+    if (req.method === "POST" && url.pathname === "/v1/customer-display/show") {
+      const body = await readJson(req);
+      const outcome = await updateCustomerDisplay(body);
+      return json(res, 200, { ok: true, ...outcome }, origin);
     }
     return json(res, 404, { message: "Hardware bridge endpoint not found" }, origin);
   } catch (error) {

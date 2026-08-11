@@ -5,7 +5,7 @@ export interface HardwareBridgeHealth {
   ok: boolean;
   version?: string;
   deviceName?: string;
-  capabilities?: { print?: boolean; cutter?: boolean; cashDrawer?: boolean; scale?: boolean };
+  capabilities?: { print?: boolean; cutter?: boolean; cashDrawer?: boolean; scale?: boolean; customerDisplay?: boolean };
   update?: { available?: boolean; currentVersion?: string; latestVersion?: string; downloadUrl?: string };
 }
 
@@ -14,6 +14,13 @@ export interface HardwareScaleReading {
   weight: number;
   unit: "g" | "kg";
   stable?: boolean;
+}
+
+export interface HardwareCustomerDisplayState {
+  revision: number;
+  state: "idle" | "sale" | "paid" | "cancelled";
+  itemCount: number;
+  totalPaise: number;
 }
 
 const KILOGRAM_UNITS = new Set(["kg", "kilogram", "kilograms", "kilo", "kilos"]);
@@ -131,4 +138,14 @@ export async function readScaleViaHardwareBridge(bridgeUrl: string) {
     throw new Error("Hardware bridge returned an invalid scale reading.");
   }
   return { ...reading, weight: Number(reading.weight) };
+}
+
+export async function showCustomerDisplayViaHardwareBridge(bridgeUrl: string, input: HardwareCustomerDisplayState) {
+  if (!Number.isSafeInteger(input.revision) || input.revision < 0) throw new Error("Customer display revision is invalid.");
+  if (!Number.isInteger(input.itemCount) || input.itemCount < 0 || input.itemCount > 9_999) throw new Error("Customer display item count is invalid.");
+  if (!Number.isSafeInteger(input.totalPaise) || input.totalPaise < 0) throw new Error("Customer display total is invalid.");
+  return bridgeRequest<{ ok: boolean; stale?: boolean; revision?: number }>(bridgeUrl, "/v1/customer-display/show", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
