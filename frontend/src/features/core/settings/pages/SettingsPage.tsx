@@ -111,7 +111,8 @@ export default function SettingsPage() {
         <div className="overflow-hidden rounded-[18px] border border-[#e2eaf6] bg-white shadow-[0_12px_30px_rgba(15,35,80,0.06)]">
           {[
             { href: "/settings/store-profile", label: "Store profile", desc: "Business identity and GSTIN", icon: Store, tone: "bg-blue-50 text-blue-600" },
-            { href: "/settings/billing", label: "Billing & receipts", desc: "Invoice, payment and bill defaults", icon: Receipt, tone: "bg-violet-50 text-violet-600" },
+            { href: "/settings/billing", label: "Billing & receipts", desc: "Invoice, payment and bill defaults", icon: CreditCard, tone: "bg-violet-50 text-violet-600" },
+            { href: "/settings/taxes", label: "Taxes & GST", desc: "Rates, invoice mode and compliance", icon: Receipt, tone: "bg-lime-50 text-lime-700" },
             { href: "/settings/printer", label: "Printer & hardware", desc: "Thermal printer and receipt setup", icon: Printer, tone: "bg-amber-50 text-amber-600" },
             { href: "/settings/staff", label: "Staff & permissions", desc: "Roles and counter access", icon: UsersRound, tone: "bg-cyan-50 text-cyan-600" },
             { href: "/settings/security", label: "Security & owner PIN", desc: "Approvals, sessions and protection", icon: Shield, tone: "bg-rose-50 text-rose-600" },

@@ -8,11 +8,11 @@ function read(relativePath: string) {
 
 describe("workflow simplification", () => {
   it("keeps purchase planning secondary to the core receiving workflow", () => {
-    const source = read("src/features/core/purchases/pages/PurchaseBillsPage.tsx");
+    const source = read("src/features/core/purchases/components/PurchaseWorkflow.tsx");
 
     expect(source).toContain('aria-label="Purchase workflow"');
     expect(source).toContain('"1. Order", "2. Receive stock", "3. Record bill", "4. Settle due"');
-    expect(source).toContain("{showPlanning && <>");
+    expect(source).toContain("{showPlanning &&");
   });
 
   it("uses a compact four-metric customer summary", () => {

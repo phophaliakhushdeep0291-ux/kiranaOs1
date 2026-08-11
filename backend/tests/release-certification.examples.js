@@ -20,6 +20,7 @@ assert.ok(
 for (const evidence of [
   "frontend-production-check",
   "backend-integration-sqlite",
+  "ai-safety",
   "postgres-production-proof",
   "redis-worker-runtime",
   "cloud-storage-proof",

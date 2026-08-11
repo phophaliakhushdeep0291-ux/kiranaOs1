@@ -11,7 +11,7 @@ import { withPurchaseFinancialLock } from "@/features/core/purchases/purchase-fi
 type MutableRow = Record<string, unknown>;
 type PurchaseTableName = "purchase_bills" | "inventory_movements";
 
-export interface PurchaseEditInput {
+interface PurchasePatchInput {
   supplierName: string;
   invoiceNumber: string;
   amount: number;
@@ -22,6 +22,11 @@ export interface PurchaseEditInput {
   // Optional quantity correction (single-product purchases). In the unit the user entered.
   quantity?: number;
   enteredUnit?: string;
+  reason?: string;
+}
+
+export interface PurchaseEditInput extends PurchasePatchInput {
+  ownerPin: string;
 }
 
 function isRecord(value: unknown): value is MutableRow {
@@ -180,7 +185,7 @@ async function findMatchingPurchaseRows(displayRow: SupplierDueRow) {
 
 function buildPurchaseSyncPayload(
   displayRow: SupplierDueRow,
-  input: PurchaseEditInput,
+  input: PurchasePatchInput & { ownerPin?: string },
   matches: Awaited<ReturnType<typeof findMatchingPurchaseRows>>,
 ) {
   const purchaseBill = matches.find((match) => match.tableName === "purchase_bills")?.row;
@@ -200,6 +205,8 @@ function buildPurchaseSyncPayload(
     purchaseDueAmount: Math.max(0, input.amount - input.paid),
     purchasePaymentStatus: input.status,
     purchasePaymentMode: input.paid > 0 ? input.paymentMode : null,
+    ...(input.ownerPin ? { ownerPin: input.ownerPin } : {}),
+    reason: input.reason ?? "Owner-approved purchase correction",
     // Quantity correction: backend reconciles stock idempotently (SET ledger qty, move product
     // stock by the difference from the ledger's current value).
     ...(input.quantity != null && Number.isFinite(input.quantity)
@@ -226,7 +233,7 @@ function buildPurchaseSyncPayload(
   };
 }
 
-function withPurchasePatch(row: MutableRow, input: PurchaseEditInput): MutableRow {
+function withPurchasePatch(row: MutableRow, input: PurchasePatchInput): MutableRow {
   const now = new Date().toISOString();
   const amount = roundMoney(Math.max(0, input.amount));
   const paid = roundMoney(Math.max(0, Math.min(input.paid, amount)));
@@ -262,6 +269,7 @@ function withPurchasePatch(row: MutableRow, input: PurchaseEditInput): MutableRo
 }
 
 async function updatePurchaseLocalUnlocked(displayRow: SupplierDueRow, input: PurchaseEditInput) {
+  if (!/^\d{4}$/.test(input.ownerPin.trim())) throw new Error("Enter the 4-digit owner PIN");
   const matches = await findMatchingPurchaseRows(displayRow);
   if (matches.length === 0) throw new Error("Purchase row not found in local records");
 
@@ -279,6 +287,10 @@ async function updatePurchaseLocalUnlocked(displayRow: SupplierDueRow, input: Pu
       const product = products.find((p) =>
         readString(p, ["id"]) === productId || readString(p, ["server_id", "serverId"]) === productId);
       if (product) {
+        const packagingMode = readString(product, ["packagingMode", "packaging_mode"], "pooled");
+        if (packagingMode === "per_pack") {
+          throw new Error("Quantity edits for per-pack stock are not supported. Correct each pack size from Inventory instead.");
+        }
         const baseUnit = readString(product, ["baseUnit", "base_unit"]) || undefined;
         const enteredUnit = input.enteredUnit || readString(movementMatch.row, ["unit"]) || baseUnit || "piece";
         const newBase = toInventoryBaseQty(input.quantity, enteredUnit, baseUnit);
@@ -324,7 +336,7 @@ export function updatePurchaseLocal(displayRow: SupplierDueRow, input: PurchaseE
   return withPurchaseFinancialLock(displayRow.id, () => updatePurchaseLocalUnlocked(displayRow, input));
 }
 
-export async function markPurchasePaidLocal(displayRow: SupplierDueRow, paymentMode: string) {
+export async function markPurchasePaidLocal(displayRow: SupplierDueRow, paymentMode: string, ownerPin: string) {
   return updatePurchaseLocal(displayRow, {
     supplierName: displayRow.supplierName,
     invoiceNumber: displayRow.invoiceNumber === "-" ? "" : displayRow.invoiceNumber,
@@ -333,6 +345,7 @@ export async function markPurchasePaidLocal(displayRow: SupplierDueRow, paymentM
     due: 0,
     paymentMode,
     status: "paid",
+    ownerPin,
   });
 }
 
@@ -358,7 +371,7 @@ async function recordPurchasePaymentLocalUnlocked(
   const currentDisplay: SupplierDueRow = { ...displayRow, amount: currentAmount, paid: currentPaid, due: currentDue };
   const paid = roundMoney(Math.min(currentAmount, roundMoney(currentPaid + amount)));
   const remaining = roundMoney(Math.max(0, currentAmount - paid));
-  const patch: PurchaseEditInput = {
+  const patch: PurchasePatchInput = {
     supplierName: currentDisplay.supplierName,
     invoiceNumber: currentDisplay.invoiceNumber === "-" ? "" : currentDisplay.invoiceNumber,
     amount: currentAmount,
@@ -451,7 +464,7 @@ async function reverseSupplierPaymentLocalUnlocked(
   const currentPaid = purchasePaid(currentRow);
   const paid = roundMoney(Math.max(0, currentPaid - amount));
   const due = roundMoney(Math.max(0, currentAmount - paid));
-  const patch: PurchaseEditInput = { supplierName: displayRow.supplierName, invoiceNumber: displayRow.invoiceNumber === "-" ? "" : displayRow.invoiceNumber, amount: currentAmount, paid, due, paymentMode: displayRow.paymentMode, status: paid > 0 ? "partial" : "due" };
+  const patch: PurchasePatchInput = { supplierName: displayRow.supplierName, invoiceNumber: displayRow.invoiceNumber === "-" ? "" : displayRow.invoiceNumber, amount: currentAmount, paid, due, paymentMode: displayRow.paymentMode, status: paid > 0 ? "partial" : "due" };
   // The supplier-payment ledger is keyed by the immutable client payment id. Sync's generic
   // `server_id` may point at the reconciled purchase history, so it is not a payment locator.
   const outbox = buildOutboxOperation({ entity_type: "payment", entity_id: paymentId, operation_type: "REVERSE_SUPPLIER_PAYMENT", payload: { paymentId, reason, ownerPin: input.ownerPin } });
@@ -472,7 +485,7 @@ export function reverseSupplierPaymentLocal(
   return withPurchaseFinancialLock(displayRow.id, () => reverseSupplierPaymentLocalUnlocked(displayRow, paymentRow, input));
 }
 
-async function deletePurchaseLocalUnlocked(displayRow: SupplierDueRow) {
+async function deletePurchaseLocalUnlocked(displayRow: SupplierDueRow, input: { ownerPin: string; reason: string }) {
   const matches = await findMatchingPurchaseRows(displayRow);
   if (matches.length === 0) throw new Error("Purchase row not found in local records");
   const now = new Date().toISOString();
@@ -488,6 +501,8 @@ async function deletePurchaseLocalUnlocked(displayRow: SupplierDueRow) {
       due: displayRow.due,
       paymentMode: displayRow.paymentMode,
       status: "deleted",
+      ownerPin: input.ownerPin,
+      reason: input.reason,
     }, matches),
   });
   await offlineDB.transaction(["purchase_bills", "inventory_movements", "sync_outbox"], async (tx) => {
@@ -508,6 +523,6 @@ async function deletePurchaseLocalUnlocked(displayRow: SupplierDueRow) {
   return { deleted: matches.length };
 }
 
-export function deletePurchaseLocal(displayRow: SupplierDueRow) {
-  return withPurchaseFinancialLock(displayRow.id, () => deletePurchaseLocalUnlocked(displayRow));
+export function deletePurchaseLocal(displayRow: SupplierDueRow, input: { ownerPin: string; reason: string }) {
+  return withPurchaseFinancialLock(displayRow.id, () => deletePurchaseLocalUnlocked(displayRow, input));
 }

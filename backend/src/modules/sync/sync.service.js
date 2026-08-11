@@ -6,7 +6,7 @@ import { AppError } from "../../middleware/error.js";
 import { confirmBillSchema } from "../bills/bills.schema.js";
 import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
 import { createCustomerSchema, updateCustomerSchema, udharPaymentSchema } from "../customers/customers.schema.js";
-import { createCustomer, getCustomer, recordUdharPayment, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
+import { createCustomer, getCustomer, recordUdharPayment, restoreCustomer, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
 import { damageSchema, correctionSchema, purchaseSchema } from "../inventory/inventory.schema.js";
 import { correctStock, recordDamage, recordPurchase } from "../inventory/inventory.service.js";
 import { createProductSchema, updateProductSchema } from "../products/products.schema.js";
@@ -38,7 +38,9 @@ import { toBaseQty } from "../../utils/units.js";
 import { calculateCustomerUdharBalance, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 import {
   decrementLocationInventory,
+  getLocationQuantity,
   resolveOperationalLocation,
+  setLocationInventory,
 } from "../stores/location-context.service.js";
 
 const protectedProductFields = [
@@ -703,6 +705,9 @@ const purchaseBillLifecyclePayloadSchema = z.object({
   purchaseDueAmount: moneyAmount().optional(),
   purchasePaymentStatus: z.string().optional(),
   purchasePaymentMode: z.string().optional().nullable(),
+  quantity: quantityAmount({ positive: true }).optional(),
+  enteredUnit: z.string().trim().min(1).optional(),
+  locationId: z.string().trim().min(1).optional().nullable(),
   match: z.record(z.any()).optional(),
 }).passthrough();
 
@@ -1439,16 +1444,16 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyCreateBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CANCEL_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyCancelBill(shopId, event, context);
+      return applyCancelBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyRestoreBill(shopId, event, context);
+      return applyRestoreBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyDeleteBill(shopId, event, context);
+      return applyDeleteBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_DELETED_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyRestoreDeletedBill(shopId, event, context);
+      return applyRestoreDeletedBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.SALE_RETURN:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyCreateSaleReturn(shopId, event, user, context);
@@ -1463,17 +1468,17 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyBindProductBarcode(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_PRODUCT:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyDeleteProduct(shopId, event, context);
+      return applyDeleteProduct(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_PRODUCT:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyRestoreProduct(shopId, event, context);
+      return applyRestoreProduct(shopId, event, user, context);
     case SYNC_EVENT_TYPES.ADJUST_STOCK:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyAdjustStock(shopId, event, context);
+      return applyAdjustStock(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_CUSTOMER:
       return applyCreateCustomer(shopId, event, user);
     case SYNC_EVENT_TYPES.UPDATE_CUSTOMER:
-      return applyUpdateCustomer(shopId, event, context);
+      return applyUpdateCustomer(shopId, event, user, context);
     case SYNC_EVENT_TYPES.UDHAR_PAYMENT:
       return applyUdharPayment(shopId, event, context);
     case SYNC_EVENT_TYPES.REVERSE_UDHAR_PAYMENT:
@@ -1481,45 +1486,47 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyReverseUdharPayment(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_LEDGER_ADJUSTMENT:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyLedgerAdjustment(shopId, event, context);
+      return applyLedgerAdjustment(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_CUSTOMER:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyDeleteCustomer(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_CUSTOMER:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyRestoreCustomer(shopId, event, context);
+      return applyRestoreCustomer(shopId, event, user, context);
     case SYNC_EVENT_TYPES.STOCK_PURCHASE:
-      return applyStockPurchase(shopId, event, context);
+      return applyStockPurchase(shopId, event, user, context);
     case SYNC_EVENT_TYPES.STOCK_PURCHASE_BATCH:
-      return applyStockPurchaseBatch(shopId, event, context);
+      return applyStockPurchaseBatch(shopId, event, user, context);
     case SYNC_EVENT_TYPES.STOCK_SALE:
-      return applyStockSale(shopId, event, context);
+      return applyStockSale(shopId, event, user, context);
     case SYNC_EVENT_TYPES.UPDATE_PURCHASE_BILL:
-      return applyUpdatePurchaseBill(shopId, event, context);
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyUpdatePurchaseBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_PURCHASE_BILL:
-      return applyDeletePurchaseBill(shopId, event, context);
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyDeletePurchaseBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RECORD_SUPPLIER_PAYMENT:
       return applyRecordSupplierPayment(shopId, event, user, context);
     case SYNC_EVENT_TYPES.REVERSE_SUPPLIER_PAYMENT:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyReverseSupplierPayment(shopId, event, user);
     case SYNC_EVENT_TYPES.CREATE_SUPPLIER:
-      return applyCreateSupplier(shopId, event);
+      return applyCreateSupplier(shopId, event, user);
     case SYNC_EVENT_TYPES.UPDATE_SUPPLIER:
-      return applyUpdateSupplier(shopId, event, context);
+      return applyUpdateSupplier(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_SUPPLIER:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyDeleteSupplier(shopId, event, context);
+      return applyDeleteSupplier(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_SUPPLIER:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyRestoreSupplier(shopId, event, context);
+      return applyRestoreSupplier(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_EXPENSE:
       return applyCreateExpense(shopId, event, user, context);
     case SYNC_EVENT_TYPES.UPDATE_EXPENSE:
-      return applyUpdateExpense(shopId, event, context);
+      return applyUpdateExpense(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_EXPENSE:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyDeleteExpense(shopId, event, context);
+      return applyDeleteExpense(shopId, event, user, context);
     default:
       throw new AppError(`Unsupported sync event type: ${event.type}`, 400);
   }
@@ -1552,6 +1559,7 @@ async function applyCreateBill(shopId, event, user, context) {
     // Preserve the optimistic ledger row identity so push and pull echoes replace
     // that row instead of posting the same udhar effect a second time locally.
     creditLedgerClientId,
+    syncEventId: getClientEventId(event),
   });
   await recordBillLoyalty(shopId, bill).catch(() => null);
   return buildCreateBillSyncPayload(shopId, bill, payload, billBody);
@@ -1700,12 +1708,17 @@ async function buildCreateBillSyncPayload(shopId, bill, payload, billBody) {
   };
 }
 
-async function applyCancelBill(shopId, event, context) {
+async function applyCancelBill(shopId, event, user, context) {
   const payload = cancelPayloadSchema.parse(getEventPayload(event));
   const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
   if (!billId) throw new AppError("billId required for CANCEL_BILL sync event", 400);
 
-  const bill = await cancelBill(shopId, billId, { reason: payload.reason, idempotentRaceOk: true });
+  const bill = await cancelBill(
+    shopId,
+    billId,
+    { reason: payload.reason, idempotentRaceOk: true },
+    { userId: user?.userId ?? user?.id ?? null, deviceId: user?.deviceId ?? null, syncEventId: getClientEventId(event) },
+  );
   await reverseBillLoyalty(shopId, bill.id).catch(() => null);
   return {
     type: event.type,
@@ -1730,8 +1743,9 @@ async function applyCreateExpense(shopId, event, user, context) {
   const expense = await createExpense(shopId, parsed, {
     idempotencyKey,
     clientExpenseId: localExpenseId,
-    sourceDeviceId: context?.deviceId ?? null,
+    sourceDeviceId: user?.deviceId ?? null,
     userId: user?.userId ?? user?.id ?? null,
+    syncEventId: getClientEventId(event),
   });
   return {
     expenseId: expense.id,
@@ -1742,7 +1756,7 @@ async function applyCreateExpense(shopId, event, user, context) {
   };
 }
 
-async function applyUpdateExpense(shopId, event, context) {
+async function applyUpdateExpense(shopId, event, user, context) {
   const payload = getEventPayload(event);
   const expenseId = await resolveEntityReference(
     shopId,
@@ -1752,11 +1766,16 @@ async function applyUpdateExpense(shopId, event, context) {
   );
   if (!expenseId) throw new AppError("expenseId required for UPDATE_EXPENSE sync event", 400);
   const changes = updateExpenseSchema.parse(payload.changes ?? payload.expense ?? {});
-  const expense = await updateExpense(shopId, expenseId, changes, { idempotencyKey: event.eventId });
+  const expense = await updateExpense(shopId, expenseId, changes, {
+    idempotencyKey: event.eventId,
+    sourceDeviceId: user?.deviceId ?? null,
+    userId: user?.userId ?? user?.id ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return { expenseId: expense.id, localExpenseId: payload.localExpenseId ?? null, expense: toSyncJsonSafe(expense) };
 }
 
-async function applyDeleteExpense(shopId, event, context) {
+async function applyDeleteExpense(shopId, event, user, context) {
   const payload = getEventPayload(event);
   const expenseId = await resolveEntityReference(
     shopId,
@@ -1765,15 +1784,24 @@ async function applyDeleteExpense(shopId, event, context) {
     context,
   );
   if (!expenseId) throw new AppError("expenseId required for DELETE_EXPENSE sync event", 400);
-  const expense = await softDeleteExpense(shopId, expenseId, { idempotencyKey: event.eventId });
+  const expense = await softDeleteExpense(shopId, expenseId, {
+    idempotencyKey: event.eventId,
+    sourceDeviceId: user?.deviceId ?? null,
+    userId: user?.userId ?? user?.id ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return { expenseId: expense.id, localExpenseId: payload.localExpenseId ?? null, deletedAt: expense.deletedAt };
 }
 
-async function applyDeleteBill(shopId, event, context) {
+async function applyDeleteBill(shopId, event, user, context) {
   const payload = cancelPayloadSchema.parse(getEventPayload(event));
   const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
   if (!billId) throw new AppError("billId required for DELETE_BILL sync event", 400);
-  const bill = await softDeleteBill(shopId, billId, { reason: payload.reason });
+  const bill = await softDeleteBill(shopId, billId, { reason: payload.reason }, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     billId: bill.id,
@@ -1800,6 +1828,7 @@ async function applyCreateSaleReturn(shopId, event, user, context) {
   }, {
     userId: user?.userId ?? null,
     deviceId: pickString(payload.sourceDeviceId, payload.source_device_id, user?.deviceId) || null,
+    syncEventId: getClientEventId(event),
   });
 
   return buildSaleReturnSyncPayload(bill, payload);
@@ -1830,12 +1859,16 @@ function buildSaleReturnSyncPayload(bill, payload) {
   };
 }
 
-async function applyRestoreBill(shopId, event, context) {
+async function applyRestoreBill(shopId, event, user, context) {
   const payload = restoreBillPayloadSchema.parse(getEventPayload(event));
   const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
   if (!billId) throw new AppError("billId required for RESTORE_BILL sync event", 400);
 
-  const bill = await restoreCancelledBill(shopId, billId, { reason: payload.reason });
+  const bill = await restoreCancelledBill(shopId, billId, { reason: payload.reason }, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     billId: bill.id,
@@ -1844,11 +1877,16 @@ async function applyRestoreBill(shopId, event, context) {
   };
 }
 
-async function applyRestoreDeletedBill(shopId, event, context) {
+async function applyRestoreDeletedBill(shopId, event, user, context) {
   const payload = restoreBillPayloadSchema.parse(getEventPayload(event));
   const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
   if (!billId) throw new AppError("billId required for RESTORE_DELETED_BILL sync event", 400);
-  const bill = await restoreDeletedBill(shopId, billId);
+  const bill = await restoreDeletedBill(shopId, billId, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    reason: payload.reason,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     billId: bill.id,
@@ -1976,12 +2014,16 @@ async function applyBindProductBarcode(shopId, event, user, context) {
 }
 
 
-async function applyDeleteProduct(shopId, event, context) {
+async function applyDeleteProduct(shopId, event, user, context) {
   const payload = productIdPayloadSchema.parse(getEventPayload(event));
   const productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId ?? payload.id, context);
   if (!productId) throw new AppError("productId required for DELETE_PRODUCT sync event", 400);
 
-  const product = await softDeleteProduct(shopId, productId);
+  const product = await softDeleteProduct(shopId, productId, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     productId: product.id,
@@ -1989,12 +2031,16 @@ async function applyDeleteProduct(shopId, event, context) {
   };
 }
 
-async function applyRestoreProduct(shopId, event, context) {
+async function applyRestoreProduct(shopId, event, user, context) {
   const payload = productIdPayloadSchema.parse(getEventPayload(event));
   const productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId ?? payload.id, context);
   if (!productId) throw new AppError("productId required for RESTORE_PRODUCT sync event", 400);
 
-  const product = await restoreDeletedProduct(shopId, productId);
+  const product = await restoreDeletedProduct(shopId, productId, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     productId: product.id,
@@ -2113,10 +2159,13 @@ function getPurchaseIdentity(event, payload) {
   return { idempotencyKey, clientMovementId, sourceDeviceId };
 }
 
-async function applyAdjustStock(shopId, event, context) {
+async function applyAdjustStock(shopId, event, user, context) {
   const payload = adjustStockPayloadSchema.parse(getEventPayload(event));
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   const identity = getAdjustStockIdentity(event, payload);
+  identity.userId = user?.userId ?? user?.id ?? null;
+  identity.sourceDeviceId = identity.sourceDeviceId ?? user?.deviceId ?? null;
+  identity.syncEventId = getClientEventId(event);
 
   if (payload.adjustmentType === "damage") {
     if (!payload.quantity || !payload.enteredUnit) {
@@ -2169,6 +2218,7 @@ async function applyCreateCustomer(shopId, event, user = null) {
       userId: user?.userId ?? user?.id ?? null,
       deviceId: user?.deviceId ?? null,
       source: "sync",
+      syncEventId: getClientEventId(event),
     },
   });
   return {
@@ -2179,7 +2229,7 @@ async function applyCreateCustomer(shopId, event, user = null) {
 }
 
 
-async function applyUpdateCustomer(shopId, event, context) {
+async function applyUpdateCustomer(shopId, event, user, context) {
   const payload = updateCustomerPayloadSchema.parse(getEventPayload(event));
   const customerId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.CUSTOMER, payload.serverCustomerId ?? payload.customerId ?? payload.localCustomerId ?? payload.id, context);
   if (!customerId) throw new AppError("customerId required for UPDATE_CUSTOMER sync event", 400);
@@ -2219,7 +2269,11 @@ async function applyUpdateCustomer(shopId, event, context) {
     if (duplicate) throw new AppError("Customer with this mobile already exists", 409);
   }
 
-  const customer = await updateCustomer(shopId, customerId, changes);
+  const customer = await updateCustomer(shopId, customerId, changes, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     customerId: customer.id,
@@ -2306,7 +2360,7 @@ async function applyReverseUdharPayment(shopId, event, user, context) {
     payload.customerId,
     ledgerEntryId,
     { reason: payload.reason },
-    { actorUserId: user?.userId ?? null }
+    { actorUserId: user?.userId ?? null, deviceId: user?.deviceId ?? null }
   );
   return { type: event.type, ...data };
 }
@@ -2345,7 +2399,7 @@ function getLedgerAdjustmentIdentity(event, payload) {
   return { idempotencyKey, clientLedgerId, sourceDeviceId };
 }
 
-async function applyLedgerAdjustment(shopId, event, context) {
+async function applyLedgerAdjustment(shopId, event, user, context) {
   const rawPayload = getEventPayload(event);
   const payload = ledgerAdjustmentPayloadSchema.parse(rawPayload);
   payload.customerId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.CUSTOMER, payload.serverCustomerId ?? payload.customerId ?? payload.localCustomerId, context);
@@ -2411,6 +2465,34 @@ async function applyLedgerAdjustment(shopId, event, context) {
         repairNote: `System repair after ledger adjustment ${ledger.id}: udhar balance went negative`,
       });
 
+      // The client-side audit row is only a local operator timeline. The server must
+      // create its own trusted audit row in the same transaction as the money change;
+      // otherwise an audit failure could leave an authoritative adjustment with no
+      // durable actor/device trail.
+      const audit = await createAuditLog({
+        shopId,
+        userId: user?.userId ?? user?.id ?? null,
+        deviceId: user?.deviceId ?? null,
+        action: "UDHAR_LEDGER_ADJUSTED",
+        entityType: "UdharLedger",
+        entityId: ledger.id,
+        before: { balance: currentBalance.balance },
+        after: { balance: refreshed.balance, adjustmentAmount: amount },
+        metadata: {
+          reason: payload.note ?? "Offline ledger adjustment",
+          syncEventId: getClientEventId(event),
+          idempotencyKey,
+        },
+        client: tx,
+      });
+      if (!audit) {
+        throw new AppError(
+          "Ledger adjustment was not saved because its audit record could not be stored",
+          503,
+          "UDHAR_ADJUSTMENT_AUDIT_WRITE_FAILED",
+        );
+      }
+
       return {
         type: event.type,
         ledgerEntryId: ledger.id,
@@ -2433,7 +2515,11 @@ async function applyDeleteCustomer(shopId, event, user, context) {
   const payload = customerLifecyclePayloadSchema.parse(getEventPayload(event));
   const customerId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.CUSTOMER, payload.serverCustomerId ?? payload.customerId ?? payload.localCustomerId ?? payload.id, context);
   if (!customerId) throw new AppError("customerId required for DELETE_CUSTOMER sync event", 400);
-  const customer = await softDeleteCustomer(shopId, customerId, { actorUserId: user?.userId ?? null });
+  const customer = await softDeleteCustomer(shopId, customerId, {
+    actorUserId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     customerId: customer.id,
@@ -2441,13 +2527,15 @@ async function applyDeleteCustomer(shopId, event, user, context) {
   };
 }
 
-async function applyRestoreCustomer(shopId, event, context) {
+async function applyRestoreCustomer(shopId, event, user, context) {
   const payload = customerLifecyclePayloadSchema.parse(getEventPayload(event));
   const customerId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.CUSTOMER, payload.serverCustomerId ?? payload.customerId ?? payload.localCustomerId ?? payload.id, context);
   if (!customerId) throw new AppError("customerId required for RESTORE_CUSTOMER sync event", 400);
-  const customer = await db.customer.findFirst({ where: { id: customerId, shopId } });
-  if (!customer) throw new AppError("Customer not found", 404);
-  const restored = await db.customer.update({ where: { id: customer.id }, data: { deletedAt: null } });
+  const restored = await restoreCustomer(shopId, customerId, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     customerId: restored.id,
@@ -2455,7 +2543,7 @@ async function applyRestoreCustomer(shopId, event, context) {
   };
 }
 
-async function applyStockPurchase(shopId, event, context) {
+async function applyStockPurchase(shopId, event, user, context) {
   const rawPayload = normalizeStockPurchaseSyncPayload(getEventPayload(event));
   // Derive identity from the raw payload (purchaseSchema may strip unknown keys) so a replayed
   // purchase is recognised and never doubles stock, cost, or the supplier due.
@@ -2464,6 +2552,9 @@ async function applyStockPurchase(shopId, event, context) {
   // first rejected every offline purchase with a permanent CONFLICT — local stock rose while the
   // server never moved, and the supplier's due went unrecorded.
   const identity = getPurchaseIdentity(event, rawPayload);
+  identity.userId = user?.userId ?? user?.id ?? null;
+  identity.sourceDeviceId = identity.sourceDeviceId ?? user?.deviceId ?? null;
+  identity.syncEventId = getClientEventId(event);
   const payload = stockPurchasePayloadSchema.parse({ ...rawPayload, idempotencyKey: identity.idempotencyKey ?? rawPayload.idempotencyKey });
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   if (!payload.productId) throw new AppError("productId required for STOCK_PURCHASE sync event", 400);
@@ -2479,7 +2570,7 @@ async function applyStockPurchase(shopId, event, context) {
   };
 }
 
-async function applyStockPurchaseBatch(shopId, event, context) {
+async function applyStockPurchaseBatch(shopId, event, user, context) {
   const payload = getEventPayload(event);
   const lines = Array.isArray(payload.lines) ? payload.lines : [];
   if (lines.length === 0 || lines.length > 100) {
@@ -2490,6 +2581,9 @@ async function applyStockPurchaseBatch(shopId, event, context) {
   for (const line of lines) {
     const rawPayload = normalizeStockPurchaseSyncPayload(line);
     const identity = getPurchaseIdentity(event, rawPayload);
+    identity.userId = user?.userId ?? user?.id ?? null;
+    identity.sourceDeviceId = identity.sourceDeviceId ?? user?.deviceId ?? null;
+    identity.syncEventId = getClientEventId(event);
     const parsed = stockPurchasePayloadSchema.parse({
       ...rawPayload,
       idempotencyKey: identity.idempotencyKey ?? rawPayload.idempotencyKey,
@@ -2760,7 +2854,26 @@ function stockLedgerPurchaseUpdateData(fields) {
   };
 }
 
-async function applyPurchaseBillLifecycle(shopId, event, context, { deleted = false } = {}) {
+function purchaseLifecycleDataMatches(row, data) {
+  if (!row) return true;
+  return Object.entries(data).every(([key, expected]) => {
+    const actual = row[key];
+    if (expected instanceof Date || actual instanceof Date) {
+      const expectedTime = expected instanceof Date ? expected.getTime() : new Date(expected).getTime();
+      const actualTime = actual instanceof Date ? actual.getTime() : new Date(actual).getTime();
+      return expectedTime === actualTime;
+    }
+    if (typeof expected === "number" || typeof actual === "number") {
+      return moneyClose(actual, expected);
+    }
+    if (typeof expected === "bigint" || typeof actual === "bigint") {
+      return String(actual ?? "") === String(expected ?? "");
+    }
+    return actual === expected;
+  });
+}
+
+async function applyPurchaseBillLifecycle(shopId, event, user, context, { deleted = false } = {}) {
   const payload = purchaseBillLifecyclePayloadSchema.parse(getEventPayload(event));
   const [purchaseHistory, stockLedger] = await Promise.all([
     findPurchaseHistoryTarget(shopId, payload, context),
@@ -2778,35 +2891,124 @@ async function applyPurchaseBillLifecycle(shopId, event, context, { deleted = fa
     ? Number(payload.quantity)
     : null;
   return db.$transaction(async (tx) => {
-    const updatedPurchaseHistory = purchaseHistory
-      ? await tx.purchaseHistory.update({
-          where: { id: purchaseHistory.id },
-          data: purchaseHistoryUpdateData(fields),
-        })
-      : null;
+    // Re-read inside the transaction. Target resolution happens before the transaction,
+    // but comparison and mutation must use one consistent snapshot so simultaneous
+    // owner corrections cannot overwrite each other based on stale values.
+    const [currentPurchaseHistory, currentStockLedger] = await Promise.all([
+      purchaseHistory ? tx.purchaseHistory.findUnique({ where: { id: purchaseHistory.id } }) : null,
+      stockLedger ? tx.stockLedger.findUnique({ where: { id: stockLedger.id } }) : null,
+    ]);
+    if (!currentPurchaseHistory && !currentStockLedger) {
+      throw new AppError("Purchase bill no longer exists", 409, "PURCHASE_BILL_CHANGED_RETRY");
+    }
+
+    const purchaseHistoryData = purchaseHistoryUpdateData(fields);
 
     let stockLedgerData = stockLedgerPurchaseUpdateData(fields);
-    if (newQuantity != null && stockLedger?.productId) {
-      const product = await tx.product.findFirst({ where: { id: stockLedger.productId, shopId, deletedAt: null } });
+    if (newQuantity != null && currentStockLedger?.productId) {
+      const product = await tx.product.findFirst({ where: { id: currentStockLedger.productId, shopId, deletedAt: null } });
       if (product) {
         const enteredUnit = pickString(payload.enteredUnit, payload.unit) ?? product.baseUnit;
         const newBase = round2(toBaseQty(newQuantity, enteredUnit, product.baseUnit));
-        const oldBase = round2(Number(stockLedger.changeBaseQty ?? 0));
+        const oldBase = round2(Number(currentStockLedger.changeBaseQty ?? 0));
         const delta = round2(newBase - oldBase);
         if (delta !== 0) {
-          const newProductStock = round2(Number(product.stockBaseQty ?? 0) + delta);
-          await tx.product.update({ where: { id: product.id }, data: { stockBaseQty: newProductStock } });
-          stockLedgerData = { ...stockLedgerData, changeBaseQty: newBase, newStockBaseQty: newProductStock };
+          const location = await resolveOperationalLocation(
+            shopId,
+            currentStockLedger.locationId ?? payload.locationId ?? null,
+            tx,
+            { allowInactive: true },
+          );
+          const currentLocationStock = await getLocationQuantity(tx, shopId, location, product);
+          await setLocationInventory(tx, {
+            shopId,
+            location,
+            product,
+            newStockBaseQty: round2(currentLocationStock + delta),
+          });
+          // A ledger row describes stock immediately before and after this historical
+          // purchase. Later sales must not change that history, so preserve
+          // old + corrected movement = new instead of writing today's on-hand value.
+          stockLedgerData = {
+            ...stockLedgerData,
+            changeBaseQty: newBase,
+            newStockBaseQty: round2(Number(currentStockLedger.oldStockBaseQty ?? 0) + newBase),
+          };
         }
       }
     }
 
-    const updatedStockLedger = stockLedger
+    const historyChanged = currentPurchaseHistory
+      ? !purchaseLifecycleDataMatches(currentPurchaseHistory, purchaseHistoryData)
+      : false;
+    const stockLedgerChanged = currentStockLedger
+      ? !purchaseLifecycleDataMatches(currentStockLedger, stockLedgerData)
+      : false;
+    if (!historyChanged && !stockLedgerChanged) {
+      return {
+        type: event.type,
+        purchaseHistoryId: currentPurchaseHistory?.id ?? null,
+        stockLedgerId: currentStockLedger?.id ?? null,
+        localPurchaseHistoryId: payload.localPurchaseHistoryId ?? null,
+        localMovementId: payload.localMovementId ?? null,
+        entity: toSyncJsonSafe(currentPurchaseHistory),
+        purchaseHistory: toSyncJsonSafe(currentPurchaseHistory),
+        stockLedger: toSyncJsonSafe(currentStockLedger),
+        deleted,
+        idempotentReplay: true,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const updatedPurchaseHistory = historyChanged
+      ? await tx.purchaseHistory.update({ where: { id: currentPurchaseHistory.id }, data: purchaseHistoryData })
+      : currentPurchaseHistory;
+    const updatedStockLedger = stockLedgerChanged
       ? await tx.stockLedger.update({
-          where: { id: stockLedger.id },
+          where: { id: currentStockLedger.id },
           data: stockLedgerData,
         })
-      : null;
+      : currentStockLedger;
+
+    const audit = await createAuditLog({
+      shopId,
+      userId: user?.userId ?? user?.id ?? null,
+      deviceId: user?.deviceId ?? null,
+      action: deleted ? "PURCHASE_BILL_DELETED" : "PURCHASE_BILL_UPDATED",
+      entityType: "PurchaseHistory",
+      entityId: updatedPurchaseHistory?.id ?? updatedStockLedger?.id ?? null,
+      before: {
+        purchaseHistory: currentPurchaseHistory ? {
+          id: currentPurchaseHistory.id,
+          invoiceNumber: currentPurchaseHistory.invoiceNumber,
+          supplierName: currentPurchaseHistory.supplierName,
+          billAmount: currentPurchaseHistory.billAmount,
+          purchasePaidAmount: currentPurchaseHistory.purchasePaidAmount,
+          purchaseDueAmount: currentPurchaseHistory.purchaseDueAmount,
+          purchasePaymentStatus: currentPurchaseHistory.purchasePaymentStatus,
+        } : null,
+        stockLedger: currentStockLedger ? {
+          id: currentStockLedger.id,
+          changeBaseQty: currentStockLedger.changeBaseQty,
+          purchaseBillAmount: currentStockLedger.purchaseBillAmount,
+          purchasePaidAmount: currentStockLedger.purchasePaidAmount,
+          purchaseDueAmount: currentStockLedger.purchaseDueAmount,
+        } : null,
+      },
+      after: {
+        purchaseHistory: toSyncJsonSafe(updatedPurchaseHistory),
+        stockLedger: toSyncJsonSafe(updatedStockLedger),
+      },
+      metadata: { deleted, reason: payload.reason ?? null, offlineSyncEventId: getClientEventId(event) },
+      client: tx,
+    });
+    if (!audit) {
+      throw new AppError(
+        "Purchase bill action was not saved because its audit record could not be stored",
+        503,
+        "PURCHASE_BILL_AUDIT_WRITE_FAILED",
+      );
+    }
 
     return {
       type: event.type,
@@ -2823,12 +3025,12 @@ async function applyPurchaseBillLifecycle(shopId, event, context, { deleted = fa
   });
 }
 
-function applyUpdatePurchaseBill(shopId, event, context) {
-  return applyPurchaseBillLifecycle(shopId, event, context, { deleted: false });
+function applyUpdatePurchaseBill(shopId, event, user, context) {
+  return applyPurchaseBillLifecycle(shopId, event, user, context, { deleted: false });
 }
 
-function applyDeletePurchaseBill(shopId, event, context) {
-  return applyPurchaseBillLifecycle(shopId, event, context, { deleted: true });
+function applyDeletePurchaseBill(shopId, event, user, context) {
+  return applyPurchaseBillLifecycle(shopId, event, user, context, { deleted: true });
 }
 
 async function applyRecordSupplierPayment(shopId, event, user, context) {
@@ -2877,9 +3079,10 @@ async function applyRecordSupplierPayment(shopId, event, user, context) {
         purchasePaymentMode: mode,
       },
     });
-    await createAuditLog({
+    const audit = await createAuditLog({
       shopId,
-      userId: user?.userId,
+      userId: user?.userId ?? user?.id ?? null,
+      deviceId: user?.deviceId ?? null,
       action: "SUPPLIER_PAYMENT_RECORDED",
       entityType: "FinancialLedger",
       entityId: ledger.id,
@@ -2888,6 +3091,13 @@ async function applyRecordSupplierPayment(shopId, event, user, context) {
       metadata: { paymentId: payload.paymentId, purchaseHistoryId: purchase.id, amount, mode, reference: payload.reference ?? null },
       client: tx,
     });
+    if (!audit) {
+      throw new AppError(
+        "Supplier payment was not saved because its audit record could not be stored",
+        503,
+        "SUPPLIER_PAYMENT_AUDIT_WRITE_FAILED",
+      );
+    }
     return { type: event.type, paymentId: payload.paymentId, ledgerEntryId: ledger.id, purchaseHistoryId: purchase.id, amountPaid: amount, purchaseHistory: toSyncJsonSafe(updated) };
   });
 }
@@ -2937,9 +3147,10 @@ async function applyReverseSupplierPayment(shopId, event, user) {
         purchasePaymentStatus: paid > 0 ? "partial" : "due",
       },
     });
-    await createAuditLog({
+    const audit = await createAuditLog({
       shopId,
-      userId: user?.userId,
+      userId: user?.userId ?? user?.id ?? null,
+      deviceId: user?.deviceId ?? null,
       action: "SUPPLIER_PAYMENT_REVERSED",
       entityType: "FinancialLedger",
       entityId: reversal.id,
@@ -2948,6 +3159,13 @@ async function applyReverseSupplierPayment(shopId, event, user) {
       metadata: { paymentId: original.sourceId, originalLedgerEntryId: original.id, amount, reason: payload.reason },
       client: tx,
     });
+    if (!audit) {
+      throw new AppError(
+        "Supplier payment reversal was not saved because its audit record could not be stored",
+        503,
+        "SUPPLIER_PAYMENT_REVERSAL_AUDIT_WRITE_FAILED",
+      );
+    }
     return { type: event.type, paymentId: original.sourceId, reversalLedgerEntryId: reversal.id, purchaseHistoryId: purchase.id, amountPaid: -amount, purchaseHistory: toSyncJsonSafe(updated) };
   });
 }
@@ -2983,12 +3201,13 @@ function getStockSaleIdentity(event, payload) {
   return { idempotencyKey, clientMovementId, sourceDeviceId };
 }
 
-async function applyStockSale(shopId, event, context) {
+async function applyStockSale(shopId, event, user, context) {
   const rawPayload = getEventPayload(event);
   const payload = stockSalePayloadSchema.parse(rawPayload);
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   if (!payload.productId) throw new AppError("productId required for STOCK_SALE sync event", 400);
-  const { idempotencyKey, clientMovementId, sourceDeviceId } = getStockSaleIdentity(event, rawPayload);
+  const { idempotencyKey, clientMovementId, sourceDeviceId: payloadDeviceId } = getStockSaleIdentity(event, rawPayload);
+  const sourceDeviceId = payloadDeviceId ?? user?.deviceId ?? null;
 
   const buildReplay = (existing) => ({
     type: event.type,
@@ -3053,6 +3272,35 @@ async function applyStockSale(shopId, event, context) {
             : payload.note ?? "Offline manual stock sale",
         },
       });
+      const audit = await createAuditLog({
+        shopId,
+        userId: user?.userId ?? user?.id ?? null,
+        deviceId: sourceDeviceId,
+        action: "STOCK_SALE_RECORDED",
+        entityType: "Product",
+        entityId: product.id,
+        before: { stockBaseQty: stock.oldStock },
+        after: { stockBaseQty: stock.newStock },
+        metadata: {
+          stockLedgerId: ledger.id,
+          locationId: location.id,
+          productName: product.name,
+          quantity: payload.quantity,
+          enteredUnit: payload.enteredUnit,
+          qtyRemoved: qtyInBase,
+          shortfallBaseQty: stock.shortfallBaseQty,
+          idempotencyKey,
+          offlineSyncEventId: getClientEventId(event),
+        },
+        client: tx,
+      });
+      if (!audit) {
+        throw new AppError(
+          "Stock sale was not saved because its audit record could not be stored",
+          503,
+          "STOCK_SALE_AUDIT_WRITE_FAILED",
+        );
+      }
       return {
         type: event.type,
         movementId: ledger.id,
@@ -3073,11 +3321,15 @@ async function applyStockSale(shopId, event, context) {
   }
 }
 
-async function applyCreateSupplier(shopId, event) {
+async function applyCreateSupplier(shopId, event, user) {
   const payload = createSupplierPayloadSchema.parse(getEventPayload(event));
   const supplierBody = payload.supplier ?? stripKnownSyncPayloadKeys(payload);
   const parsed = createSupplierSchema.parse(supplierBody);
-  const supplier = await createSupplier(shopId, parsed);
+  const supplier = await createSupplier(shopId, parsed, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     supplierId: supplier.id,
@@ -3086,14 +3338,18 @@ async function applyCreateSupplier(shopId, event) {
   };
 }
 
-async function applyUpdateSupplier(shopId, event, context) {
+async function applyUpdateSupplier(shopId, event, user, context) {
   const payload = updateSupplierPayloadSchema.parse(getEventPayload(event));
   const supplierId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.SUPPLIER, payload.serverSupplierId ?? payload.supplierId ?? payload.localSupplierId ?? payload.id, context);
   if (!supplierId) throw new AppError("supplierId required for UPDATE_SUPPLIER sync event", 400);
   // Client nests edited fields under `payload.supplier` (see CREATE_SUPPLIER). Reading only
   // `payload.changes`/stripped top-level meant edits parsed to {} and never persisted.
   const changes = updateSupplierSchema.parse(payload.changes ?? payload.supplier ?? stripKnownSyncPayloadKeys(payload));
-  const supplier = await updateSupplier(shopId, supplierId, changes);
+  const supplier = await updateSupplier(shopId, supplierId, changes, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     supplierId: supplier.id,
@@ -3101,11 +3357,15 @@ async function applyUpdateSupplier(shopId, event, context) {
   };
 }
 
-async function applyDeleteSupplier(shopId, event, context) {
+async function applyDeleteSupplier(shopId, event, user, context) {
   const payload = supplierLifecyclePayloadSchema.parse(getEventPayload(event));
   const supplierId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.SUPPLIER, payload.serverSupplierId ?? payload.supplierId ?? payload.localSupplierId ?? payload.id, context);
   if (!supplierId) throw new AppError("supplierId required for DELETE_SUPPLIER sync event", 400);
-  const supplier = await softDeleteSupplier(shopId, supplierId);
+  const supplier = await softDeleteSupplier(shopId, supplierId, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     supplierId: supplier.id,
@@ -3113,11 +3373,15 @@ async function applyDeleteSupplier(shopId, event, context) {
   };
 }
 
-async function applyRestoreSupplier(shopId, event, context) {
+async function applyRestoreSupplier(shopId, event, user, context) {
   const payload = supplierLifecyclePayloadSchema.parse(getEventPayload(event));
   const supplierId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.SUPPLIER, payload.serverSupplierId ?? payload.supplierId ?? payload.localSupplierId ?? payload.id, context);
   if (!supplierId) throw new AppError("supplierId required for RESTORE_SUPPLIER sync event", 400);
-  const supplier = await restoreSupplier(shopId, supplierId);
+  const supplier = await restoreSupplier(shopId, supplierId, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     supplierId: supplier.id,

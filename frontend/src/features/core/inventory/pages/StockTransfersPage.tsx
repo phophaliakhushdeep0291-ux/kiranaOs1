@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/shared";
 
 interface TaxRegistration {
   status: "format_valid" | "invalid" | "unregistered";
@@ -453,13 +454,17 @@ export default function StockTransfersPage() {
               </div>
             );
           })}
-          {!locationsQ.isLoading && locations.length === 0 && <p className="text-sm text-slate-500">No store location is available.</p>}
+          {locationsQ.isLoading && <LoadingSkeleton variant="cards" rows={2} className="lg:col-span-2" />}
+          {locationsQ.isError && <ErrorState compact className="lg:col-span-2" title="Store locations could not be loaded" onRetry={() => void locationsQ.refetch()} />}
+          {!locationsQ.isLoading && !locationsQ.isError && locations.length === 0 && <EmptyState className="lg:col-span-2" title="No store locations yet" description="Add a second location to start moving stock between branches." action={<Button onClick={() => setLocationOpen(true)}><Plus size={14} /> Add location</Button>} />}
         </div>
       </section>
 
       <section className={`${card} overflow-hidden`}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="text-base font-black text-slate-900">Transfer ledger</h2><p className="text-xs text-slate-500">Document, value, tax treatment, and source-to-destination history</p></div><Package className="text-blue-600" size={20} /></div>
         <div className="divide-y divide-slate-100">
+          {transfersQ.isLoading && <LoadingSkeleton rows={4} className="p-5" />}
+          {transfersQ.isError && <ErrorState compact className="m-4 w-auto" title="Transfer history could not be loaded" onRetry={() => void transfersQ.refetch()} />}
           {(transfersQ.data ?? []).map((transfer) => (
             <div key={transfer.id} className="px-5 py-4 transition-colors hover:bg-slate-50/70">
               <div className="grid gap-3 lg:grid-cols-[210px_1fr_220px] lg:items-center">
@@ -514,7 +519,7 @@ export default function StockTransfersPage() {
               )}
             </div>
           ))}
-          {!transfersQ.isLoading && !(transfersQ.data?.length) && <div className="p-10 text-center"><ArrowRightLeft className="mx-auto text-slate-300" size={30} /><p className="mt-3 text-sm font-bold text-slate-700">No transfers yet</p><p className="mt-1 text-xs text-slate-500">Create the first movement after adding a second location.</p></div>}
+          {!transfersQ.isLoading && !transfersQ.isError && !(transfersQ.data?.length) && <EmptyState className="border-0 py-10" title="No transfers yet" description="Create the first movement after adding a second location." icon={<ArrowRightLeft size={28} className="text-slate-400" />} action={locations.length >= 2 ? <Button onClick={() => setTransferOpen(true)}><Plus size={14} /> New transfer</Button> : undefined} />}
         </div>
       </section>
       <Dialog open={transferOpen} onOpenChange={(open) => { setTransferOpen(open); if (!open && !transferMutation.isPending) resetTransfer(); }}>

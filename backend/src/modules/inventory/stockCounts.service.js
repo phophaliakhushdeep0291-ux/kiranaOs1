@@ -2,8 +2,29 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { getLocationQuantity, resolveOperationalLocation, setLocationInventory } from "../stores/location-context.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
 
 const includeDetail = { location: true, lines: { orderBy: { productName: "asc" } } };
+
+async function writeRequiredStockCountAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Stock count action was not saved because its audit record could not be stored",
+      503,
+      "STOCK_COUNT_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
+function auditActor(actor) {
+  return {
+    userId: actor.userId ?? null,
+    deviceId: actor.deviceId ?? undefined,
+    req: actor.req ?? null,
+  };
+}
 
 function shape(session) {
   const lines = session.lines ?? [];
@@ -57,7 +78,7 @@ export async function createStockCount(shopId, locationId, data, actor = {}) {
         baseUnit: product.baseUnit,
         expectedBaseQty: await getLocationQuantity(tx, shopId, location, product),
       })));
-      return tx.stockCountSession.create({
+      const created = await tx.stockCountSession.create({
         data: {
           shopId,
           locationId: location.id,
@@ -69,6 +90,16 @@ export async function createStockCount(shopId, locationId, data, actor = {}) {
         },
         include: includeDetail,
       });
+      await writeRequiredStockCountAudit({
+        shopId,
+        ...auditActor(actor),
+        action: "STOCK_COUNT_STARTED",
+        entityType: "StockCountSession",
+        entityId: created.id,
+        after: { status: created.status, name: created.name, blindCount: created.blindCount },
+        metadata: { locationId: location.id, totalLines: created.lines.length },
+      }, tx);
+      return created;
     }));
   } catch (error) {
     if (error?.code === "P2002") throw new AppError("Finish or cancel the active stock count for this branch first", 409, "STOCK_COUNT_ALREADY_ACTIVE");
@@ -99,11 +130,20 @@ export async function updateStockCountLines(shopId, locationId, sessionId, data,
         },
       });
     }
-    return tx.stockCountSession.findUnique({ where: { id: sessionId }, include: includeDetail });
+    const updated = await tx.stockCountSession.findUnique({ where: { id: sessionId }, include: includeDetail });
+    await writeRequiredStockCountAudit({
+      shopId,
+      ...auditActor(actor),
+      action: "STOCK_COUNT_LINES_UPDATED",
+      entityType: "StockCountSession",
+      entityId: sessionId,
+      metadata: { locationId: location.id, productIds: [...uniqueLines.keys()], updatedLines: uniqueLines.size },
+    }, tx);
+    return updated;
   }));
 }
 
-export async function submitStockCount(shopId, locationId, sessionId) {
+export async function submitStockCount(shopId, locationId, sessionId, actor = {}) {
   const location = await resolveOperationalLocation(shopId, locationId);
   return shape(await db.$transaction(async (tx) => {
     const session = await tx.stockCountSession.findFirst({ where: { id: sessionId, shopId, locationId: location.id }, include: { lines: true } });
@@ -112,7 +152,19 @@ export async function submitStockCount(shopId, locationId, sessionId) {
     const remaining = session.lines.filter((line) => line.countedBaseQty === null).length;
     if (remaining) throw new AppError(`${remaining} products still need a count`, 422, "STOCK_COUNT_INCOMPLETE");
     await tx.stockCountSession.update({ where: { id: sessionId }, data: { status: "review", submittedAt: new Date() } });
-    return tx.stockCountSession.findUnique({ where: { id: sessionId }, include: includeDetail });
+    const updated = await tx.stockCountSession.findUnique({ where: { id: sessionId }, include: includeDetail });
+    const summary = shape(updated).summary;
+    await writeRequiredStockCountAudit({
+      shopId,
+      ...auditActor(actor),
+      action: "STOCK_COUNT_SUBMITTED",
+      entityType: "StockCountSession",
+      entityId: sessionId,
+      before: { status: "counting" },
+      after: { status: "review" },
+      metadata: { ...summary, locationId: location.id },
+    }, tx);
+    return updated;
   }));
 }
 
@@ -133,34 +185,70 @@ export async function applyStockCount(shopId, locationId, sessionId, actor = {})
     // hundreds of lines, and this runs inside the transaction.
     const products = await tx.product.findMany({ where: { shopId, id: { in: productIds }, deletedAt: null } });
     const productById = new Map(products.map((product) => [product.id, product]));
+    let movementCount = 0;
     for (const line of session.lines) {
       const product = productById.get(line.productId);
       if (!product) throw new AppError(`Product ${line.productName} is no longer available`, 409, "STOCK_COUNT_PRODUCT_UNAVAILABLE");
       const result = await setLocationInventory(tx, { shopId, location, product, newStockBaseQty: line.countedBaseQty });
-      if (result.difference !== 0) await tx.stockLedger.create({ data: {
-        shopId,
-        locationId: location.id,
-        productId: product.id,
-        productName: product.name,
-        action: "stock_count",
-        changeBaseQty: result.difference,
-        oldStockBaseQty: result.oldStock,
-        newStockBaseQty: result.newStock,
-        sourceType: "stock_count",
-        sourceId: session.id,
-        note: line.reason || actor.note || `Applied stock count ${session.name}`,
-      } });
+      if (result.difference !== 0) {
+        await tx.stockLedger.create({ data: {
+          shopId,
+          locationId: location.id,
+          productId: product.id,
+          productName: product.name,
+          action: "stock_count",
+          changeBaseQty: result.difference,
+          oldStockBaseQty: result.oldStock,
+          newStockBaseQty: result.newStock,
+          sourceType: "stock_count",
+          sourceId: session.id,
+          note: line.reason || actor.note || `Applied stock count ${session.name}`,
+        } });
+        movementCount += 1;
+      }
     }
-    return tx.stockCountSession.findUnique({ where: { id: sessionId }, include: includeDetail });
+    const updated = await tx.stockCountSession.findUnique({ where: { id: sessionId }, include: includeDetail });
+    const summary = shape(updated).summary;
+    await writeRequiredStockCountAudit({
+      shopId,
+      ...auditActor(actor),
+      action: "STOCK_COUNT_APPLIED",
+      entityType: "StockCountSession",
+      entityId: sessionId,
+      before: { status: "review" },
+      after: { status: "applied" },
+      metadata: { ...summary, locationId: location.id, movementCount, note: actor.note ?? null },
+    }, tx);
+    return updated;
   }));
 }
 
 export async function cancelStockCount(shopId, locationId, sessionId, actor = {}) {
   const location = await resolveOperationalLocation(shopId, locationId);
-  const changed = await db.stockCountSession.updateMany({
-    where: { id: sessionId, shopId, locationId: location.id, status: { in: ["counting", "review"] } },
-    data: { status: "cancelled", activeKey: null, cancelledAt: new Date() },
-  });
-  if (changed.count !== 1) throw new AppError("Stock count is already processed or unavailable", 409, "STOCK_COUNT_ALREADY_PROCESSED");
-  return getStockCount(shopId, location.id, sessionId);
+  return shape(await db.$transaction(async (tx) => {
+    const session = await tx.stockCountSession.findFirst({
+      where: { id: sessionId, shopId, locationId: location.id },
+      include: includeDetail,
+    });
+    if (!session || !["counting", "review"].includes(session.status)) {
+      throw new AppError("Stock count is already processed or unavailable", 409, "STOCK_COUNT_ALREADY_PROCESSED");
+    }
+    const changed = await tx.stockCountSession.updateMany({
+      where: { id: sessionId, shopId, locationId: location.id, status: session.status },
+      data: { status: "cancelled", activeKey: null, cancelledAt: new Date() },
+    });
+    if (changed.count !== 1) throw new AppError("Stock count is already processed or unavailable", 409, "STOCK_COUNT_ALREADY_PROCESSED");
+    const updated = await tx.stockCountSession.findUnique({ where: { id: sessionId }, include: includeDetail });
+    await writeRequiredStockCountAudit({
+      shopId,
+      ...auditActor(actor),
+      action: "STOCK_COUNT_CANCELLED",
+      entityType: "StockCountSession",
+      entityId: sessionId,
+      before: { status: session.status },
+      after: { status: "cancelled" },
+      metadata: { note: actor.note ?? null, locationId: location.id },
+    }, tx);
+    return updated;
+  }));
 }

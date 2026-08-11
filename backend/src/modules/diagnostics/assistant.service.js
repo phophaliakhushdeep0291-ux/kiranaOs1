@@ -7,8 +7,8 @@ import { classifyInsightQuestion, narrateInsight, runInsight } from "../activity
 // ("why is my stock negative?", "my bills aren't syncing") by READING the shop's
 // real diagnostics (errors, sync, device health, audit) rather than giving generic
 // tips. High confidence => explain + fix; low confidence => escalate with a full
-// incident report. An LLM narrative is used when configured; otherwise the answer
-// is composed deterministically from the diagnostics + a grounded knowledge base.
+// incident report. When configured, AI may rank server-issued evidence IDs; the
+// final answer remains server-composed and confidence remains deterministic.
 
 const KNOWLEDGE_BASE = {
   printer: {
@@ -102,6 +102,7 @@ export async function answerSupportQuestion({ shopId, deviceId = null, question,
     // the user can escalate it (§6). When confident we keep the response light.
     incidentReport: confident ? null : report,
     aiProvider: report.aiProvider,
+    aiGrounding: report.aiGrounding,
     generatedAt: report.generatedAt,
   };
 }

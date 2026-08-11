@@ -25,6 +25,20 @@ describe("shared touch-target primitives", () => {
     expect(css).toMatch(/\.mobile-brand-mark\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*flex:\s*0 0 44px;/s);
   });
 
+  it("keeps switches touch-safe without enlarging the visual track", () => {
+    const source = readFileSync("src/components/ui/switch.tsx", "utf8");
+    expect(source).toContain("inline-flex h-11 w-11");
+    expect(source).toContain("before:h-5 before:w-9");
+    expect(source).toContain("data-[state=checked]:before:bg-primary");
+  });
+
+  it("keeps toast actions and dismiss controls visible and touch-safe", () => {
+    const source = readFileSync("src/components/ui/toast.tsx", "utf8");
+    expect(source).toContain("inline-flex min-h-11 shrink-0");
+    expect(source).toContain("grid h-11 w-11 place-items-center");
+    expect(source).toContain("opacity-60");
+  });
+
   it("keeps the sync diagnostics refresh action at 44px", () => {
     const source = readFileSync("src/features/core/sync/pages/SyncDiagnosticsSection.tsx", "utf8");
     expect(source).toContain('aria-label="Refresh sync diagnostics"');

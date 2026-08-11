@@ -11,6 +11,18 @@ import {
 import { postUdharPaymentLedger } from "../finance/financial-ledger.service.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 
+async function writeRequiredCustomerAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Customer action was not saved because its audit record could not be stored",
+      503,
+      "CUSTOMER_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
 const OFFLINE_LEDGER_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_LEDGER_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 
@@ -91,15 +103,17 @@ export async function createCustomer(shopId, data, { reuseExistingMobile = false
       throw new AppError("Customer with this mobile already exists", 409);
     }
 
-    await db.customer.updateMany({
-      where: { shopId, mobile: data.mobile, deletedAt: { not: null } },
-      data: { mobile: null },
-    });
   }
 
   const openingUdharAmount = round2(data.udharAmount ?? 0);
   const startedAt = Date.now();
   const created = await db.$transaction(async (tx) => {
+    if (data.mobile) {
+      await tx.customer.updateMany({
+        where: { shopId, mobile: data.mobile, deletedAt: { not: null } },
+        data: { mobile: null },
+      });
+    }
     const customer = await tx.customer.create({
       data: {
         ...data,
@@ -127,57 +141,69 @@ export async function createCustomer(shopId, data, { reuseExistingMobile = false
     }
 
     const [withBalance] = await attachDerivedUdharBalances(shopId, [customer], tx);
+    await writeRequiredCustomerAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? null,
+      module: AUDIT_MODULES.CUSTOMERS,
+      action: "CUSTOMER_CREATED",
+      entityType: "Customer",
+      entityId: customer.id,
+      before: null,
+      after: { name: withBalance.name, mobile: withBalance.mobile, type: withBalance.type },
+      metadata: { openingUdharAmount, source: actor.source ?? "api", offlineSyncEventId: actor.syncEventId ?? null },
+      durationMs: Date.now() - startedAt,
+      req: actor.req ?? null,
+    }, tx);
     return withBalance;
   });
 
   // §2 audit "Customer creation". `before` is null because the record did not
   // exist — that asymmetry is what marks a create on the timeline.
-  await createAuditLog({
-    shopId,
-    userId: actor.userId ?? null,
-    deviceId: actor.deviceId ?? null,
-    module: AUDIT_MODULES.CUSTOMERS,
-    action: "CUSTOMER_CREATED",
-    entityType: "customer",
-    entityId: created.id,
-    before: null,
-    after: { name: created.name, mobile: created.mobile, type: created.type },
-    metadata: { openingUdharAmount, source: actor.source ?? "api" },
-    durationMs: Date.now() - startedAt,
-    req: actor.req ?? null,
-  });
-
   return created;
 }
 
-export async function updateCustomer(shopId, id, data) {
-  await getCustomer(shopId, id);
-
+export async function updateCustomer(shopId, id, data, actor = {}) {
   if (Object.prototype.hasOwnProperty.call(data, "udharAmount")) {
     const err = new AppError("Udhar balance cannot be edited directly. Use bill credit, record payment, or ledger adjustment.", 400);
     err.code = "UDHAR_DIRECT_EDIT_BLOCKED";
     throw err;
   }
 
-  if (data.mobile) {
-    const duplicate = await db.customer.findFirst({
-      where: {
-        shopId,
-        mobile: data.mobile,
-        deletedAt: null,
-        NOT: { id },
-      },
-      select: { id: true },
-    });
-    if (duplicate) throw new AppError("Customer with this mobile already exists", 409);
-  }
-
-  const updated = await db.customer.update({ where: { id }, data });
-  return (await attachDerivedUdharBalances(shopId, [updated]))[0];
+  return db.$transaction(async (tx) => {
+    const existing = await tx.customer.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw new AppError("Customer not found", 404);
+    if (data.mobile) {
+      const duplicate = await tx.customer.findFirst({
+        where: { shopId, mobile: data.mobile, deletedAt: null, NOT: { id } },
+        select: { id: true },
+      });
+      if (duplicate) throw new AppError("Customer with this mobile already exists", 409);
+    }
+    const updated = await tx.customer.update({ where: { id }, data });
+    const [withBalance] = await attachDerivedUdharBalances(shopId, [updated], tx);
+    await writeRequiredCustomerAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? null,
+      module: AUDIT_MODULES.CUSTOMERS,
+      action: "CUSTOMER_UPDATED",
+      entityType: "Customer",
+      entityId: id,
+      before: { name: existing.name, mobile: existing.mobile, type: existing.type, customerGroup: existing.customerGroup },
+      after: { name: updated.name, mobile: updated.mobile, type: updated.type, customerGroup: updated.customerGroup },
+      metadata: { offlineSyncEventId: actor.syncEventId ?? null },
+      req: actor.req ?? null,
+    }, tx);
+    return withBalance;
+  });
 }
 
-export async function softDeleteCustomer(shopId, id, { actorUserId = null, req = null } = {}) {
-  const customer = await getCustomer(shopId, id);
+export async function softDeleteCustomer(shopId, id, { actorUserId = null, deviceId = null, req = null, syncEventId = null } = {}) {
+  const stored = await db.customer.findFirst({ where: { id, shopId } });
+  if (!stored) throw new AppError("Customer not found", 404);
+  if (stored.deletedAt) return stored;
+  const [customer] = await attachDerivedUdharBalances(shopId, [stored]);
 
   // Block delete when customer has any outstanding udhar balance.
   // The owner must clear or write off the balance before removing the customer.
@@ -193,6 +219,7 @@ export async function softDeleteCustomer(shopId, id, { actorUserId = null, req =
     await createAuditLog({
       shopId,
       userId: actorUserId,
+      deviceId,
       action: "CUSTOMER_DELETE_BLOCKED",
       entityType: "Customer",
       entityId: id,
@@ -203,30 +230,66 @@ export async function softDeleteCustomer(shopId, id, { actorUserId = null, req =
     throw err;
   }
 
-  const deletedAt = new Date();
-  const deleted = await db.customer.update({
-    where: { id },
-    data: {
-      deletedAt,
-      // Free the per-shop unique mobile slot for future active customers while
-      // keeping the original mobile preserved in the audit log below.
-      ...(customer.mobile && { mobile: null }),
-    },
+  return db.$transaction(async (tx) => {
+    const current = await tx.customer.findFirst({ where: { id, shopId } });
+    if (!current) throw new AppError("Customer not found", 404);
+    if (current.deletedAt) return current;
+    const [currentWithBalance] = await attachDerivedUdharBalances(shopId, [current], tx);
+    if (currentWithBalance.udharAmount > 0) {
+      throw new AppError("Customer has outstanding udhar and cannot be deleted", 409, "CUSTOMER_HAS_OUTSTANDING_UDHAR");
+    }
+    const deleted = await tx.customer.update({
+      where: { id },
+      data: { deletedAt: new Date(), ...(current.mobile && { mobile: null }) },
+    });
+    await writeRequiredCustomerAudit({
+      shopId,
+      userId: actorUserId,
+      deviceId,
+      action: "CUSTOMER_DELETED",
+      entityType: "Customer",
+      entityId: id,
+      before: { id: current.id, name: current.name, mobile: current.mobile, udharAmount: currentWithBalance.udharAmount },
+      after: { deletedAt: deleted.deletedAt },
+      metadata: { softDelete: true, customerName: current.name, offlineSyncEventId: syncEventId },
+      req,
+    }, tx);
+    return deleted;
   });
+}
 
-  await createAuditLog({
-    shopId,
-    userId: actorUserId,
-    action: "CUSTOMER_DELETED",
-    entityType: "Customer",
-    entityId: id,
-    before: { id: customer.id, name: customer.name, mobile: customer.mobile, udharAmount: customer.udharAmount },
-    after: { deletedAt: deleted.deletedAt },
-    metadata: { softDelete: true, customerName: customer.name },
-    req,
+export async function restoreCustomer(shopId, id, actor = {}) {
+  return db.$transaction(async (tx) => {
+    const customer = await tx.customer.findFirst({ where: { id, shopId } });
+    if (!customer) throw new AppError("Customer not found", 404);
+    if (!customer.deletedAt) return customer;
+    const deletionAudit = await tx.auditLog.findFirst({
+      where: { shopId, entityId: id, action: "CUSTOMER_DELETED" },
+      orderBy: { createdAt: "desc" },
+    });
+    let previousMobile = null;
+    try { previousMobile = JSON.parse(deletionAudit?.beforeJson ?? "null")?.mobile ?? null; } catch { previousMobile = null; }
+    const mobileConflict = previousMobile
+      ? await tx.customer.findFirst({ where: { shopId, mobile: previousMobile, deletedAt: null, NOT: { id } }, select: { id: true } })
+      : null;
+    const restored = await tx.customer.update({
+      where: { id },
+      data: { deletedAt: null, ...(previousMobile && !mobileConflict ? { mobile: previousMobile } : {}) },
+    });
+    await writeRequiredCustomerAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? null,
+      action: "CUSTOMER_RESTORED",
+      entityType: "Customer",
+      entityId: id,
+      before: { deletedAt: customer.deletedAt, mobile: customer.mobile },
+      after: { deletedAt: restored.deletedAt, mobile: restored.mobile },
+      metadata: { restoredMobile: Boolean(previousMobile && !mobileConflict), mobileConflictCustomerId: mobileConflict?.id ?? null, offlineSyncEventId: actor.syncEventId ?? null },
+      req: actor.req ?? null,
+    }, tx);
+    return restored;
   });
-
-  return deleted;
 }
 
 /**
@@ -378,7 +441,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
  * This preserves financial history by creating an opposite debit ledger entry
  * and marking the original payment as reversed instead of deleting it.
  */
-export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { reason }, { actorUserId = null, req = null } = {}) {
+export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { reason }, { actorUserId = null, deviceId = null, req = null } = {}) {
   const customer = await getCustomer(shopId, customerId);
 
   return db.$transaction(async (tx) => {
@@ -450,9 +513,11 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
       repairNote: `System repair after reversing payment ${payment.id}: udhar balance went negative`,
     });
 
-    await createAuditLog({
+    const audit = await createAuditLog({
       shopId,
       userId: actorUserId,
+      deviceId,
+      deviceId,
       action: "UDHAR_PAYMENT_REVERSED",
       entityType: "UdharLedger",
       entityId: payment.id,
@@ -462,6 +527,13 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
       req,
       client: tx,
     });
+    if (!audit) {
+      throw new AppError(
+        "Udhar payment reversal was not saved because its audit record could not be stored",
+        503,
+        "UDHAR_REVERSAL_AUDIT_WRITE_FAILED",
+      );
+    }
 
     return {
       customerId,

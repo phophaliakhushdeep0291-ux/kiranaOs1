@@ -6,6 +6,19 @@ import { dateRangeForDateOnly, formatDateInTimeZone } from "../../utils/dates.js
 import { env } from "../../config/env.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { postExpenseEffectLedger } from "../finance/financial-ledger.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
+
+async function writeRequiredExpenseAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Expense action was not saved because its audit record could not be stored",
+      503,
+      "EXPENSE_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
 
 function normalize(data) {
   const out = { ...data };
@@ -110,6 +123,17 @@ export async function createExpense(shopId, data, identity = {}) {
         keyBase: `expense:${expense.id}:create`,
         businessDate: expense.spentAt,
       });
+      await writeRequiredExpenseAudit({
+        shopId,
+        userId: identity.userId ?? null,
+        deviceId: identity.sourceDeviceId ?? identity.deviceId ?? null,
+        action: "EXPENSE_CREATED",
+        entityType: "Expense",
+        entityId: expense.id,
+        after: { id: expense.id, title: expense.title, amount: expense.amount, category: expense.category },
+        metadata: { idempotencyKey, syncEventId: identity.syncEventId ?? null },
+        req: identity.req ?? null,
+      }, tx);
       return { ...expense, idempotentReplay: false };
     });
   } catch (error) {
@@ -155,6 +179,18 @@ export async function updateExpense(shopId, id, data, identity = {}) {
       keyBase: `expense:${existing.id}:update:${operationId}:new`,
       businessDate: operationAt,
     });
+    await writeRequiredExpenseAudit({
+      shopId,
+      userId: identity.userId ?? null,
+      deviceId: identity.sourceDeviceId ?? identity.deviceId ?? null,
+      action: "EXPENSE_UPDATED",
+      entityType: "Expense",
+      entityId: existing.id,
+      before: { title: existing.title, amount: existing.amount, category: existing.category, status: existing.status },
+      after: { title: updated.title, amount: updated.amount, category: updated.category, status: updated.status },
+      metadata: { idempotencyKey: operationId, syncEventId: identity.syncEventId ?? null },
+      req: identity.req ?? null,
+    }, tx);
     return updated;
   });
 }
@@ -178,11 +214,24 @@ export async function softDeleteExpense(shopId, id, identity = {}) {
       keyBase: `expense:${expense.id}:delete:${operationId}`,
       businessDate: operationAt,
     });
-    return tx.expense.update({ where: { id: expense.id }, data: { deletedAt: operationAt } });
+    const deleted = await tx.expense.update({ where: { id: expense.id }, data: { deletedAt: operationAt } });
+    await writeRequiredExpenseAudit({
+      shopId,
+      userId: identity.userId ?? null,
+      deviceId: identity.sourceDeviceId ?? identity.deviceId ?? null,
+      action: "EXPENSE_DELETED",
+      entityType: "Expense",
+      entityId: expense.id,
+      before: { id: expense.id, title: expense.title, deletedAt: expense.deletedAt },
+      after: { id: deleted.id, title: deleted.title, deletedAt: deleted.deletedAt },
+      metadata: { softDelete: true, idempotencyKey: operationId, syncEventId: identity.syncEventId ?? null },
+      req: identity.req ?? null,
+    }, tx);
+    return deleted;
   });
 }
 
-export async function restoreExpense(shopId, id) {
+export async function restoreExpense(shopId, id, identity = {}) {
   return db.$transaction(async (tx) => {
     const expense = await tx.expense.findFirst({ where: { id, shopId, deletedAt: { not: null } } });
     if (!expense) throw new AppError("Deleted expense not found in recycle bin", 404);
@@ -197,6 +246,18 @@ export async function restoreExpense(shopId, id) {
       keyBase: `expense:${expense.id}:restore:${operationId}`,
       businessDate: operationAt,
     });
+    await writeRequiredExpenseAudit({
+      shopId,
+      userId: identity.userId ?? null,
+      deviceId: identity.sourceDeviceId ?? identity.deviceId ?? null,
+      action: "EXPENSE_RESTORED",
+      entityType: "Expense",
+      entityId: expense.id,
+      before: { id: expense.id, title: expense.title, deletedAt: expense.deletedAt },
+      after: { id: restored.id, title: restored.title, deletedAt: restored.deletedAt },
+      metadata: { softDelete: false },
+      req: identity.req ?? null,
+    }, tx);
     return restored;
   });
 }

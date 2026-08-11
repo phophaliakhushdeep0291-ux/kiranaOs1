@@ -30,7 +30,8 @@ describe("udhar route and phone-first shell", () => {
   const page = readFileSync("src/features/core/udhar/pages/UdharPage.tsx", "utf8");
   const routes = readFileSync("src/app/routes.tsx", "utf8");
   it("makes /udhar a dedicated first-class route", () => {
-    expect(routes).toContain('import { loadBillingRoute, loadCustomersRoute, loadUdharRoute } from "./route-preload"');
+    expect(routes).toContain('from "./route-preload"');
+    expect(routes).toContain("loadUdharRoute");
     expect(routes).toContain("const Udhar = lazy(loadUdharRoute)");
     expect(routes).toContain("<ProtectedRoute component={Udhar} />");
   });

@@ -14,6 +14,18 @@ import {
   setLocationInventory,
 } from "../stores/location-context.service.js";
 
+async function writeRequiredProductAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Product action was not saved because its audit record could not be stored",
+      503,
+      "PRODUCT_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
 async function applyLocationInventory(shopId, products, locationId) {
   if (!locationId || products.length === 0) return products;
   const location = await resolveOperationalLocation(shopId, locationId);
@@ -312,15 +324,29 @@ export async function updateProduct(shopId, id, data) {
   return deserializeProduct(updated);
 }
 
-export async function softDeleteProduct(shopId, id) {
-  await getProduct(shopId, id);
-
-  const deleted = await db.product.update({
-    where: { id },
-    data: { deletedAt: new Date() },
+export async function softDeleteProduct(shopId, id, actor = {}) {
+  return db.$transaction(async (tx) => {
+    const product = await tx.product.findFirst({ where: { id, shopId } });
+    if (!product) throw new AppError("Product not found", 404);
+    if (product.deletedAt) return deserializeProduct(product);
+    const deleted = await tx.product.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+    await writeRequiredProductAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? null,
+      action: "PRODUCT_DELETED",
+      entityType: "Product",
+      entityId: product.id,
+      before: { id: product.id, name: product.name, deletedAt: product.deletedAt },
+      after: { id: deleted.id, name: deleted.name, deletedAt: deleted.deletedAt },
+      metadata: { softDelete: true, offlineSyncEventId: actor.syncEventId ?? null },
+      req: actor.req ?? null,
+    }, tx);
+    return deserializeProduct(deleted);
   });
-
-  return deserializeProduct(deleted);
 }
 
 export async function listDeletedProducts(shopId, { search } = {}) {
@@ -341,41 +367,52 @@ export async function listDeletedProducts(shopId, { search } = {}) {
   return products.map(deserializeProduct);
 }
 
-export async function restoreDeletedProduct(shopId, id) {
-  const deletedProduct = await getDeletedProduct(shopId, id);
-
-  const activeProducts = await db.product.findMany({
-    where: { shopId, deletedAt: null },
-    select: { id: true, name: true, category: true, deletedAt: true },
+export async function restoreDeletedProduct(shopId, id, actor = {}) {
+  return db.$transaction(async (tx) => {
+    const deletedProduct = await tx.product.findFirst({ where: { id, shopId } });
+    if (!deletedProduct) throw new AppError("Product not found", 404);
+    if (!deletedProduct.deletedAt) return deserializeProduct(deletedProduct);
+    const activeProducts = await tx.product.findMany({
+      where: { shopId, deletedAt: null },
+      select: { id: true, name: true, category: true, deletedAt: true },
+    });
+    if (hasActiveDuplicateProductName(deletedProduct, activeProducts)) {
+      throw new AppError(
+        `Cannot restore product because an active product named "${deletedProduct.name}" already exists`,
+        409
+      );
+    }
+    const restored = await tx.product.update({
+      where: { id },
+      data: { deletedAt: null },
+    });
+    await writeRequiredProductAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? null,
+      action: "PRODUCT_RESTORED",
+      entityType: "Product",
+      entityId: deletedProduct.id,
+      before: { id: deletedProduct.id, name: deletedProduct.name, deletedAt: deletedProduct.deletedAt },
+      after: { id: restored.id, name: restored.name, deletedAt: restored.deletedAt },
+      metadata: { name: restored.name, category: restored.category, offlineSyncEventId: actor.syncEventId ?? null },
+      req: actor.req ?? null,
+    }, tx);
+    return deserializeProduct(restored);
   });
-
-  if (hasActiveDuplicateProductName(deletedProduct, activeProducts)) {
-    throw new AppError(
-      `Cannot restore product because an active product named "${deletedProduct.name}" already exists`,
-      409
-    );
-  }
-
-  const restored = await db.product.update({
-    where: { id },
-    data: { deletedAt: null },
-  });
-
-  return deserializeProduct(restored);
 }
 
-export async function permanentlyDeleteProduct(shopId, id) {
-  const deletedProduct = await getDeletedProduct(shopId, id);
-  const blockReason = await getPermanentDeleteBlockReason(id);
-
-  if (blockReason) {
-    throw new AppError(
-      `${blockReason}. Keep this product in recycle bin to preserve audit/history records.`,
-      409
-    );
-  }
-
+export async function permanentlyDeleteProduct(shopId, id, actor = {}) {
+  let deletedProduct;
   await db.$transaction(async (tx) => {
+    deletedProduct = await getDeletedProduct(shopId, id, tx);
+    const blockReason = await getPermanentDeleteBlockReason(id, tx);
+    if (blockReason) {
+      throw new AppError(
+        `${blockReason}. Keep this product in recycle bin to preserve audit/history records.`,
+        409
+      );
+    }
     // Bill items keep their own name/rate/cost snapshots, so the product link can
     // safely be removed before hard-deleting the product master record.
     await tx.billItem.updateMany({
@@ -386,6 +423,17 @@ export async function permanentlyDeleteProduct(shopId, id) {
     await tx.product.delete({
       where: { id: deletedProduct.id },
     });
+    await writeRequiredProductAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? null,
+      action: "PRODUCT_PERMANENTLY_DELETED",
+      entityType: "Product",
+      entityId: deletedProduct.id,
+      before: { id: deletedProduct.id, name: deletedProduct.name, category: deletedProduct.category, deletedAt: deletedProduct.deletedAt },
+      metadata: { name: deletedProduct.name, category: deletedProduct.category, hardDelete: true },
+      req: actor.req ?? null,
+    }, tx);
   });
 
   return {
@@ -396,7 +444,7 @@ export async function permanentlyDeleteProduct(shopId, id) {
   };
 }
 
-export async function emptyProductRecycleBin(shopId) {
+export async function emptyProductRecycleBin(shopId, actor = {}) {
   const deletedProducts = await db.product.findMany({
     where: { shopId, deletedAt: { not: null } },
     select: { id: true, name: true, category: true, deletedAt: true },
@@ -423,6 +471,20 @@ export async function emptyProductRecycleBin(shopId) {
       await tx.product.delete({ where: { id: product.id } });
       deleted.push({ id: product.id, name: product.name, category: product.category, deletedAt: product.deletedAt });
     }
+    await writeRequiredProductAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? null,
+      action: "PRODUCT_RECYCLE_BIN_EMPTIED",
+      entityType: "Product",
+      metadata: {
+        deletedCount: deleted.length,
+        blockedCount: blocked.length,
+        deleted,
+        blocked,
+      },
+      req: actor.req ?? null,
+    }, tx);
   });
 
   return {
@@ -578,8 +640,8 @@ export async function bindProductBarcode(shopId, productId, barcode, { identity 
   return deserializeProduct(updated);
 }
 
-async function getDeletedProduct(shopId, id) {
-  const product = await db.product.findFirst({
+async function getDeletedProduct(shopId, id, client = db) {
+  const product = await client.product.findFirst({
     where: { id, shopId, deletedAt: { not: null } },
   });
 

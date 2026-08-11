@@ -3,7 +3,6 @@ import fs from "node:fs";
 
 const supplierRoutes = fs.readFileSync("src/modules/suppliers/suppliers.routes.js", "utf8");
 const supplierService = fs.readFileSync("src/modules/suppliers/suppliers.service.js", "utf8");
-const supplierController = fs.readFileSync("src/modules/suppliers/suppliers.controller.js", "utf8");
 const sqliteSchema = fs.readFileSync("prisma/schema.prisma", "utf8");
 const postgresSchema = fs.readFileSync("prisma-postgres/schema.prisma", "utf8");
 const syncRules = fs.readFileSync("src/utils/syncRules.js", "utf8");
@@ -19,8 +18,8 @@ assert.match(supplierService, /where:\s*\{ shopId, deletedAt: null \}/, "supplie
 assert.match(supplierService, /export async function softDeleteSupplier/, "supplier service must expose soft delete");
 assert.match(supplierService, /deletedAt:\s*new Date\(\)/, "supplier soft delete must set deletedAt");
 assert.match(supplierService, /export async function restoreSupplier/, "supplier service must expose restore");
-assert.match(supplierController, /SUPPLIER_DELETED/, "supplier delete must create an audit log");
-assert.match(supplierController, /SUPPLIER_RESTORED/, "supplier restore must create an audit log");
+assert.match(supplierService, /SUPPLIER_DELETED[\s\S]*?\}, tx\);/, "supplier delete audit must commit in the supplier transaction");
+assert.match(supplierService, /SUPPLIER_RESTORED[\s\S]*?\}, tx\);/, "supplier restore audit must commit in the supplier transaction");
 
 for (const schema of [sqliteSchema, postgresSchema]) {
   assert.match(schema, /model Supplier[\s\S]*deletedAt\s+DateTime\?/, "Supplier must have deletedAt in both Prisma schemas");

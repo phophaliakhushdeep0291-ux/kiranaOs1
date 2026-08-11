@@ -74,6 +74,37 @@ function confidenceTone(confidence: number) {
   return "text-muted-foreground";
 }
 
+function GroundingBadge({ answer }: { answer: AssistantAnswer }) {
+  const grounding = answer.aiGrounding;
+  if (!grounding || grounding.status === "pending" || grounding.status === "not_requested") return null;
+
+  if (grounding.status === "verified") {
+    const count = grounding.evidenceIds.length;
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
+        title="The explanation was composed by KiranaOS from verified diagnostic evidence."
+      >
+        <ShieldCheck size={12} aria-hidden="true" />
+        Evidence verified · {count} signal{count === 1 ? "" : "s"}
+      </span>
+    );
+  }
+
+  const providerRejected = grounding.status === "rejected" || grounding.status === "provider_error";
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground"
+      title={providerRejected
+        ? "Unsupported AI output was rejected. This answer uses KiranaOS diagnostics only."
+        : "This answer was composed directly from KiranaOS diagnostics without AI-generated facts."}
+    >
+      <ShieldCheck size={12} aria-hidden="true" />
+      {providerRejected ? "AI output rejected · deterministic fallback" : "Deterministic diagnosis"}
+    </span>
+  );
+}
+
 export default function AskArthaPage() {
   const { user } = useAuth();
   const [question, setQuestion] = useState("");
@@ -207,6 +238,7 @@ export default function AskArthaPage() {
                     <span className={`text-xs font-semibold ${confidenceTone(turn.answer.confidence)}`}>
                       {turn.answer.confidenceLabel} confidence
                     </span>
+                    <GroundingBadge answer={turn.answer} />
                   </div>
 
                   <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">

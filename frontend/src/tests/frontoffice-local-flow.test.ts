@@ -690,6 +690,7 @@ describe("front office local-first cashier flow", () => {
       due: 250,
       paymentMode: "cash",
       status: "partial",
+      ownerPin: "1234",
     });
     expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
       purchase_paid_amount: 250,
@@ -697,7 +698,7 @@ describe("front office local-first cashier flow", () => {
       purchase_payment_status: "partial",
     }));
 
-    await markPurchasePaidLocal(purchaseDisplayRow({ id: purchaseRowId, paid: 250, due: 250 }), "upi");
+    await markPurchasePaidLocal(purchaseDisplayRow({ id: purchaseRowId, paid: 250, due: 250 }), "upi", "1234");
     expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
       purchase_paid_amount: 500,
       purchase_due_amount: 0,

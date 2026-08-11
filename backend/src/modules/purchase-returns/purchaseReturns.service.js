@@ -5,9 +5,27 @@ import { moneyShadows, multiplyMoney, round2 } from "../../utils/money.js";
 import { rateUnitToBase } from "../../utils/units.js";
 import { decrementLocationInventory, incrementLocationInventory } from "../stores/location-context.service.js";
 import { postPurchaseReturnCancelledLedger, postPurchaseReturnCreatedLedger } from "../finance/financial-ledger.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
 
 const include = { location: true, supplier: true, purchaseReceipt: true, items: { include: { product: true, purchaseReceiptItem: true } } };
 const ref = () => `PR-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+
+async function writeRequiredPurchaseReturnAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Purchase return was not saved because its audit record could not be stored",
+      503,
+      "PURCHASE_RETURN_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
+function normalizeActor(actor) {
+  if (typeof actor === "string") return { userId: actor, deviceId: undefined, req: null };
+  return { userId: actor?.userId ?? null, deviceId: actor?.deviceId ?? undefined, req: actor?.req ?? null };
+}
 
 export async function listPurchaseReturns(shopId, { locationId, limit = 100 } = {}) {
   return db.purchaseReturn.findMany({ where: { shopId, ...(locationId && { locationId }) }, include, orderBy: { createdAt: "desc" }, take: Math.min(Number(limit) || 100, 200) });
@@ -32,7 +50,8 @@ async function removeReturnedLots(tx, { shopId, locationId, product, receiptItem
   return allocations;
 }
 
-export async function createPurchaseReturn(shopId, data, userId, requestedLocationId) {
+export async function createPurchaseReturn(shopId, data, actor = {}, requestedLocationId) {
+  const auditActor = normalizeActor(actor);
   const replay = async () => data.idempotencyKey
     ? db.purchaseReturn.findFirst({ where: { shopId, idempotencyKey: data.idempotencyKey }, include })
     : null;
@@ -58,7 +77,7 @@ export async function createPurchaseReturn(shopId, data, userId, requestedLocati
     const supplierCreditAmount = round2(Math.min(Number(receipt.dueAmount || 0), totalAmount));
     const refundAmount = round2(totalAmount - supplierCreditAmount);
     const purchaseReturn = await tx.purchaseReturn.create({
-      data: { shopId, locationId: receipt.locationId, supplierId: receipt.supplierId, purchaseReceiptId: receipt.id, returnNumber: ref(), refundMode: data.refundMode, totalAmount, supplierCreditAmount, refundAmount, ...moneyShadows({ totalAmount, supplierCreditAmount, refundAmount }), reason: data.reason, supplierReference: data.supplierReference || null, idempotencyKey: data.idempotencyKey || null, createdByUserId: userId || null },
+      data: { shopId, locationId: receipt.locationId, supplierId: receipt.supplierId, purchaseReceiptId: receipt.id, returnNumber: ref(), refundMode: data.refundMode, totalAmount, supplierCreditAmount, refundAmount, ...moneyShadows({ totalAmount, supplierCreditAmount, refundAmount }), reason: data.reason, supplierReference: data.supplierReference || null, idempotencyKey: data.idempotencyKey || null, createdByUserId: auditActor.userId },
     });
     for (const line of lines) {
       const quantity = round2(line.input.quantityBaseQty);
@@ -70,7 +89,29 @@ export async function createPurchaseReturn(shopId, data, userId, requestedLocati
     const dueAmount = round2(Math.max(0, Number(receipt.dueAmount || 0) - supplierCreditAmount));
     await tx.purchaseReceipt.update({ where: { id: receipt.id }, data: { dueAmount, ...moneyShadows({ dueAmount }) } });
     await postPurchaseReturnCreatedLedger(tx, { shopId, purchaseReturn, businessDate: purchaseReturn.createdAt });
-    return tx.purchaseReturn.findUnique({ where: { id: purchaseReturn.id }, include });
+    const result = await tx.purchaseReturn.findUnique({ where: { id: purchaseReturn.id }, include });
+    await writeRequiredPurchaseReturnAudit({
+      shopId,
+      ...auditActor,
+      action: "PURCHASE_RETURN_CREATED",
+      entityType: "PurchaseReturn",
+      entityId: purchaseReturn.id,
+      after: {
+        returnNumber: purchaseReturn.returnNumber,
+        totalAmount,
+        supplierCreditAmount,
+        refundAmount,
+        refundMode: purchaseReturn.refundMode,
+      },
+      metadata: {
+        purchaseReceiptId: receipt.id,
+        locationId: receipt.locationId,
+        itemCount: lines.length,
+        reason: data.reason,
+        idempotencyKey: data.idempotencyKey ?? null,
+      },
+    }, tx);
+    return result;
     });
     return { ...created, idempotentReplay: false };
   } catch (error) {
@@ -82,7 +123,8 @@ export async function createPurchaseReturn(shopId, data, userId, requestedLocati
   }
 }
 
-export async function cancelPurchaseReturn(shopId, id, reason, userId, requestedLocationId) {
+export async function cancelPurchaseReturn(shopId, id, reason, actor = {}, requestedLocationId) {
+  const auditActor = normalizeActor(actor);
   return db.$transaction(async (tx) => {
     const purchaseReturn = await tx.purchaseReturn.findFirst({
       where: { id, shopId },
@@ -132,7 +174,23 @@ export async function cancelPurchaseReturn(shopId, id, reason, userId, requested
     await tx.purchaseReceipt.update({ where: { id: purchaseReturn.purchaseReceiptId }, data: { dueAmount: restoredDue, ...moneyShadows({ dueAmount: restoredDue }) } });
     const cancelledAt = new Date();
     await postPurchaseReturnCancelledLedger(tx, { shopId, purchaseReturn, businessDate: cancelledAt });
-    const cancelled = await tx.purchaseReturn.update({ where: { id: purchaseReturn.id }, data: { status: "cancelled", cancelledAt, cancelledByUserId: userId || null, cancellationReason: reason } });
+    const cancelled = await tx.purchaseReturn.update({ where: { id: purchaseReturn.id }, data: { status: "cancelled", cancelledAt, cancelledByUserId: auditActor.userId, cancellationReason: reason } });
+    await writeRequiredPurchaseReturnAudit({
+      shopId,
+      ...auditActor,
+      action: "PURCHASE_RETURN_CANCELLED",
+      entityType: "PurchaseReturn",
+      entityId: purchaseReturn.id,
+      before: { status: purchaseReturn.status },
+      after: { status: "cancelled", reason },
+      metadata: {
+        purchaseReceiptId: purchaseReturn.purchaseReceiptId,
+        locationId: purchaseReturn.locationId,
+        totalAmount: purchaseReturn.totalAmount,
+        supplierCreditAmount: purchaseReturn.supplierCreditAmount,
+        refundAmount: purchaseReturn.refundAmount,
+      },
+    }, tx);
     return { ...cancelled, location: purchaseReturn.location, supplier: purchaseReturn.supplier, purchaseReceipt: purchaseReturn.purchaseReceipt, items: purchaseReturn.items, idempotentReplay: false };
   });
 }

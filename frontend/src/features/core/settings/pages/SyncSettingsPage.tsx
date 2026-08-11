@@ -132,8 +132,8 @@ export default function SyncSettingsPage() {
         <CardHead icon={isOnline ? <Cloud size={15} /> : <CloudOff size={15} />} title="Sync Health Overview" sub="Live status across your devices"
           action={
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[12px] font-bold" onClick={handleSync} disabled={isSyncing}><RefreshCcw size={13} className={isSyncing ? "animate-spin" : ""} /> {isSyncing ? "Syncing…" : "Sync Now"}</Button>
-              <Link href="/sync-status" className="inline-flex h-8 items-center rounded-[8px] border border-[#e2e8f0] px-3 text-[12px] font-bold text-[#344668] hover:bg-[#f1f4f8]">View logs</Link>
+              <Button size="sm" variant="outline" className="gap-1.5 rounded-[8px] text-[12px] font-bold" onClick={handleSync} disabled={isSyncing}><RefreshCcw size={13} className={isSyncing ? "animate-spin" : ""} /> {isSyncing ? "Syncing…" : "Sync Now"}</Button>
+              <Link href="/sync-status" className="inline-flex min-h-11 items-center rounded-[8px] border border-[#e2e8f0] px-3 text-[12px] font-bold text-[#344668] hover:bg-[#f1f4f8]">View logs</Link>
             </div>
           } />
         <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-5">

@@ -10,6 +10,19 @@ import {
   resolveOperationalLocation,
   setLocationInventory,
 } from "../stores/location-context.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
+
+async function writeRequiredInventoryAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Inventory action was not saved because its audit record could not be stored",
+      503,
+      "INVENTORY_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
 
 // Operation-level idempotency for replayed offline stock adjustments. The StockLedger row
 // carries a durable idempotencyKey (unique per shop), so a retried/replayed ADJUST_STOCK
@@ -361,6 +374,32 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
       },
     });
 
+    await writeRequiredInventoryAudit({
+      shopId,
+      userId: identity.userId ?? null,
+      deviceId: sourceDeviceId,
+      action: "STOCK_PURCHASE_RECORDED",
+      entityType: "PurchaseHistory",
+      entityId: purchaseHistory.id,
+      before: { stockBaseQty: stockResult.oldStock, costPerRateUnit: product.costPerRateUnit },
+      after: { stockBaseQty: stockResult.newStock, costPerRateUnit: newCost },
+      metadata: {
+        productId,
+        productName: product.name,
+        quantity,
+        enteredUnit,
+        qtyAdded: qtyInBase,
+        billAmount,
+        supplierId: supplierId ?? null,
+        supplierName: supplierName ?? null,
+        purchasePaidAmount: purchasePayment.purchasePaidAmount,
+        purchaseDueAmount: purchasePayment.purchaseDueAmount,
+        idempotencyKey,
+        offlineSyncEventId: identity.syncEventId ?? null,
+      },
+      req: identity.req ?? null,
+    }, tx);
+
     return {
       productId,
       qtyAdded: qtyInBase,
@@ -450,7 +489,7 @@ export async function recordDamage(shopId, data, identity = {}) {
           : null,
       });
 
-      await tx.stockLedger.create({
+      const stockLedger = await tx.stockLedger.create({
         data: {
           shopId, locationId: location.id, productId,
           productName: product.name,
@@ -470,6 +509,30 @@ export async function recordDamage(shopId, data, identity = {}) {
           sourceId: idempotencyKey ? productId : null,
         },
       });
+
+      await writeRequiredInventoryAudit({
+        shopId,
+        userId: identity.userId ?? null,
+        deviceId: sourceDeviceId,
+        action: "STOCK_DAMAGED",
+        entityType: "Product",
+        entityId: productId,
+        before: { stockBaseQty: stockResult.oldStock },
+        after: { stockBaseQty: stockResult.newStock },
+        metadata: {
+          productName: product.name,
+          quantity,
+          enteredUnit,
+          qtyRemoved: qtyInBase,
+          changeBaseQty: -qtyInBase,
+          damageLossValue,
+          note: note ?? "Damage/loss",
+          stockLedgerId: stockLedger.id,
+          idempotencyKey,
+          offlineSyncEventId: identity.syncEventId ?? null,
+        },
+        req: identity.req ?? null,
+      }, tx);
 
       return {
         productId,
@@ -531,7 +594,7 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
       const stockResult = await setLocationInventory(tx, { shopId, location, product, newStockBaseQty });
       const diff = stockResult.difference;
 
-      await tx.stockLedger.create({
+      const stockLedger = await tx.stockLedger.create({
         data: {
           shopId, locationId: location.id, productId,
           productName: product.name,
@@ -547,6 +610,26 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
           sourceId: idempotencyKey ? productId : null,
         },
       });
+
+      await writeRequiredInventoryAudit({
+        shopId,
+        userId: identity.userId ?? null,
+        deviceId: sourceDeviceId,
+        action: "STOCK_CORRECTED",
+        entityType: "Product",
+        entityId: productId,
+        before: { stockBaseQty: stockResult.oldStock },
+        after: { stockBaseQty: stockResult.newStock },
+        metadata: {
+          productName: product.name,
+          changeBaseQty: diff,
+          note: note ?? "Manual stock correction",
+          stockLedgerId: stockLedger.id,
+          idempotencyKey,
+          offlineSyncEventId: identity.syncEventId ?? null,
+        },
+        req: identity.req ?? null,
+      }, tx);
 
       return {
         productId,

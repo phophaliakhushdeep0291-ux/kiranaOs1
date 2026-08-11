@@ -76,6 +76,52 @@ if (ctx.skip) {
       assert.equal(Number(ofType("udhar_credit")[0].amountPaise), 4000, "udhar_credit = ₹40");
     });
 
+    test("udhar payment reversal rolls back when its required audit cannot be stored", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { udharAmount: 100, type: "udhar" });
+      assertSuccess(await ctx.post(`/api/customers/${customer.id}/udhar-payment`, {
+        amount: 40,
+        mode: "cash",
+        note: "partial paid",
+      }, { token: ownerAuth.accessToken }));
+      const payment = await ctx.db.udharLedger.findFirst({
+        where: { shopId: tenant.shop.id, customerId: customer.id, type: "payment", mode: "cash" },
+      });
+      assert.ok(payment);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_udhar_reversal_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'UDHAR_PAYMENT_REVERSED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced udhar reversal audit failure');
+        END
+      `);
+      let response;
+      try {
+        response = await ctx.post(
+          `/api/customers/${customer.id}/udhar-payment/${payment.id}/reverse`,
+          { reason: "must roll back" },
+          { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_udhar_reversal_audit_failure");
+      }
+
+      assertFailure(response, 503);
+      assert.equal(response.body.code, "UDHAR_REVERSAL_AUDIT_WRITE_FAILED");
+      const unchangedPayment = await ctx.db.udharLedger.findUnique({ where: { id: payment.id } });
+      assert.equal(unchangedPayment.reversedAt, null);
+      assert.equal(await ctx.db.udharLedger.count({
+        where: { shopId: tenant.shop.id, customerId: customer.id, mode: "reversal" },
+      }), 0);
+      assert.equal((await ctx.db.customer.findUnique({ where: { id: customer.id } })).udharAmount, 60);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, customerId: customer.id } }), 2);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, entityId: payment.id, action: "UDHAR_PAYMENT_REVERSED" },
+      }), 0);
+    });
+
     test("customer with udhar cannot be deleted", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { udharAmount: 1, type: "udhar" });

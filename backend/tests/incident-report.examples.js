@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import db from "../src/db.js";
-import { analyzeIncident, detectFocus, generateIncidentReport } from "../src/modules/diagnostics/incident-report.service.js";
+import {
+  analyzeIncident,
+  detectFocus,
+  generateIncidentReport,
+} from "../src/modules/diagnostics/incident-report.service.js";
 
 // Diagnostics §6: deterministic incident analysis + full report composition
 // (always works without an AI key; the LLM only adds a narrative).
@@ -51,6 +55,11 @@ async function main() {
     assert.ok(report.recentErrors.some((x) => x.title === "TypeError x"), "recent errors included");
     assert.ok(report.recentSyncEvents.counts.failed >= 1, "recent sync events included");
     assert.equal(report.aiNarrative, null, "no AI narrative without a configured key");
+    assert.deepEqual(
+      report.aiGrounding,
+      { status: "not_requested", evidenceIds: [], rejectedReason: null },
+      "disabled AI is explicit instead of being indistinguishable from a provider failure",
+    );
   } finally {
     await db.errorEvent.deleteMany({ where: { shopId: shop.id } });
     await db.errorGroup.deleteMany({ where: { shopId: shop.id } });

@@ -56,6 +56,7 @@ const requiredFiles = [
   "tests/phase17-whatsapp-reminders.examples.js",
   "tests/offer-bill-atomicity.examples.js",
   "tests/ai-hallucination-guard.examples.js",
+  "tests/diagnostic-ai-grounding.examples.js",
   "docs/AI_SAFETY.md",
   "src/modules/ai/ai.command-schema.js",
   "src/modules/ai/ai.grounding.js",
@@ -559,13 +560,23 @@ const requiredAuditActions = [
   "OWNER_PIN_VERIFIED",
 ];
 const auditSourceFiles = [
-  "src/modules/products/products.controller.js",
-  "src/modules/inventory/inventory.controller.js",
+  "src/modules/products/products.service.js",
+  "src/modules/inventory/inventory.service.js",
   "src/middleware/permissions.js",
 ].filter(exists);
 const auditSource = auditSourceFiles.map(read).join("\n");
 for (const action of requiredAuditActions) {
   if (!auditSource.includes(action)) errors.push(`Missing required audit action in source: ${action}`);
+}
+for (const servicePath of [
+  "src/modules/products/products.service.js",
+  "src/modules/inventory/inventory.service.js",
+]) {
+  if (!exists(servicePath)) continue;
+  const source = read(servicePath);
+  if (!source.includes("writeRequired") || !source.includes("}, tx);")) {
+    errors.push(`${servicePath} must write required audit rows through the active transaction`);
+  }
 }
 
 if (exists("README.md")) {
@@ -2179,9 +2190,18 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   const commandSchema = exists("src/modules/ai/ai.command-schema.js") ? read("src/modules/ai/ai.command-schema.js") : "";
   const grounding = exists("src/modules/ai/ai.grounding.js") ? read("src/modules/ai/ai.grounding.js") : "";
   const aiService = exists("src/modules/ai/ai.service.js") ? read("src/modules/ai/ai.service.js") : "";
+  const diagnosticAi = exists("src/modules/diagnostics/incident-report.service.js")
+    ? read("src/modules/diagnostics/incident-report.service.js")
+    : "";
+  const diagnosticAssistant = exists("src/modules/diagnostics/assistant.service.js")
+    ? read("src/modules/diagnostics/assistant.service.js")
+    : "";
   const metrics = exists("src/lib/metrics.js") ? read("src/lib/metrics.js") : "";
   const aiDocs = exists("docs/AI_SAFETY.md") ? read("docs/AI_SAFETY.md") : "";
   const aiTest = exists("tests/ai-hallucination-guard.examples.js") ? read("tests/ai-hallucination-guard.examples.js") : "";
+  const diagnosticAiTest = exists("tests/diagnostic-ai-grounding.examples.js")
+    ? read("tests/diagnostic-ai-grounding.examples.js")
+    : "";
   // Moved under features/core when the tree split into core/ and verticals/. Reading the old
   // path yielded "" and reported all three fail-closed guards as missing while they were in
   // place — a guard that cannot find its subject must say so, not fail as if it had checked.
@@ -2191,6 +2211,9 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
 
   if (!packageJson.scripts?.["test:ai-safety"]?.includes("ai-hallucination-guard.examples.js")) {
     errors.push("package.json must expose the AI hallucination safety suite");
+  }
+  if (!packageJson.scripts?.["test:ai-safety"]?.includes("diagnostic-ai-grounding.examples.js")) {
+    errors.push("package.json must expose the diagnostic AI grounding suite");
   }
   if (!packageJson.scripts?.test?.includes("test:ai-safety")) {
     errors.push("npm test must run the AI hallucination safety suite");
@@ -2228,6 +2251,27 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   }
   for (const snippet of ["unsafeAccepted", "unsafeAcceptanceRate", "malformed provider output", "catalog verification is unavailable"]) {
     if (!aiTest.includes(snippet)) errors.push("AI adversarial suite missing " + snippet);
+  }
+  for (const snippet of [
+    "buildIncidentEvidenceCatalog",
+    "generateGroundedNarrative",
+    "UNVERIFIED_EVIDENCE_REFERENCE",
+    "UNSUPPORTED_PROVIDER_FIELDS",
+    "provider_unavailable",
+    "Confidence:",
+  ]) {
+    if (!diagnosticAi.includes(snippet)) errors.push("Diagnostic AI grounding path missing " + snippet);
+  }
+  if (!diagnosticAssistant.includes("aiGrounding: report.aiGrounding")) {
+    errors.push("Diagnostic assistant must expose server-verified AI grounding provenance");
+  }
+  for (const snippet of [
+    "unsafeNarrativesAccepted",
+    "unsafeAcceptanceRate",
+    "invented_router_compromise",
+    "strict output permits only evidence IDs",
+  ]) {
+    if (!diagnosticAiTest.includes(snippet)) errors.push("Diagnostic AI adversarial suite missing " + snippet);
   }
   for (const snippet of ["permissionAllowed === false", "requiresManualFallback === true", "confidence < 0.65"]) {
     if (!frontendAdapter.includes(snippet)) errors.push("Frontend AI fail-closed adapter missing " + snippet);

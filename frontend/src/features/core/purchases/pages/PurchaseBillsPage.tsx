@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import {
-  AlertTriangle, Barcode, Box, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardList, Columns3, Crown, FileText, Filter,
+  AlertTriangle, Barcode, Box, CalendarDays, Check, CheckCircle2, ClipboardList, Columns3, Crown, FileText, Filter,
   Loader2, MoreVertical, Package, Pencil, Plus, RotateCcw, Search, ShoppingBag, Trash2, Truck, Upload, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { fromBaseQty, productDisplayUnit } from "@/features/core/products/pages/product-pricing";
 import type { Product, Supplier } from "@/types/api";
 import { PurchaseOrdersPanel } from "@/features/core/purchases/components/PurchaseOrdersPanel";
+import { PurchaseWorkflow } from "@/features/core/purchases/components/PurchaseWorkflow";
 import { resolvePurchaseBarcode } from "@/features/core/purchases/purchase-barcode";
 import { extractPurchaseInvoice, type PurchaseInvoiceDraft } from "@/features/core/purchases/invoice-ocr-api";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
@@ -114,7 +115,6 @@ export default function PurchaseBillsPage() {
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [showPlanning, setShowPlanning] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -129,6 +129,9 @@ export default function PurchaseBillsPage() {
   const [editLine, setEditLine] = useState<{ unit: string; qty: number } | null>(null);
   const [payingRow, setPayingRow] = useState<SupplierDueRow | null>(null);
   const [deletingRow, setDeletingRow] = useState<SupplierDueRow | null>(null);
+  const [editOwnerPin, setEditOwnerPin] = useState("");
+  const [deleteOwnerPin, setDeleteOwnerPin] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
   const [purchaseForm, setPurchaseForm] = useState<PurchaseFormState>({
     supplierName: "",
     invoiceNumber: "",
@@ -412,6 +415,7 @@ export default function PurchaseBillsPage() {
     const line = rowPurchaseLine(row);
     setEditLine(line);
     setPurchaseForm({ ...purchaseFormFromRow(row), quantity: line ? String(line.qty) : "" });
+    setEditOwnerPin("");
   }
 
   function openPay(row: SupplierDueRow) {
@@ -435,6 +439,10 @@ export default function PurchaseBillsPage() {
       toast({ title: "Invalid paid amount", description: "Paid amount cannot be more than purchase amount.", variant: "destructive" });
       return;
     }
+    if (editOwnerPin.trim().length !== 4) {
+      toast({ title: "Owner PIN required", description: "Purchase edits change stock or supplier balances and require owner approval.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const newQty = editLine ? money(purchaseForm.quantity) : 0;
@@ -448,9 +456,12 @@ export default function PurchaseBillsPage() {
         status: amount - paid <= 0 ? "paid" : paid > 0 ? "partial" : "due",
         quantity: editLine && newQty > 0 && newQty !== editLine.qty ? newQty : undefined,
         enteredUnit: editLine?.unit,
+        ownerPin: editOwnerPin.trim(),
+        reason: "Owner-approved purchase edit",
       });
       await reloadSnapshot();
       setEditingRow(null);
+      setEditOwnerPin("");
       toast({ title: "Purchase updated", description: "Supplier ledger totals were refreshed." });
     } catch (error) {
       toast({ title: "Could not update purchase", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
@@ -515,11 +526,17 @@ export default function PurchaseBillsPage() {
 
   async function confirmDelete() {
     if (!deletingRow || saving) return;
+    if (deleteOwnerPin.trim().length !== 4 || deleteReason.trim().length < 3) {
+      toast({ title: "Reason and owner PIN required", description: "Deleting a purchase changes supplier finance totals and remains audited.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
-      await deletePurchaseLocal(deletingRow);
+      await deletePurchaseLocal(deletingRow, { ownerPin: deleteOwnerPin.trim(), reason: deleteReason.trim() });
       await reloadSnapshot();
       setDeletingRow(null);
+      setDeleteOwnerPin("");
+      setDeleteReason("");
       toast({ title: "Purchase removed", description: "The purchase ledger row was removed from local finance views." });
     } catch (error) {
       toast({ title: "Could not remove purchase", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
@@ -560,20 +577,7 @@ export default function PurchaseBillsPage() {
         </div>
 
         {/* Insight strip — one card, four cells */}
-        <section className="rounded-[14px] border border-[#e6ecf4] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,35,80,0.04)]" aria-label="Purchase workflow">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
-              {["1. Order", "2. Receive stock", "3. Record bill", "4. Settle due"].map((step) => (
-                <div key={step} className="rounded-[10px] bg-[#f7f9fc] px-3 py-2 text-[11px] font-bold text-[#344563]">{step}</div>
-              ))}
-            </div>
-            <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => setShowPlanning((open) => !open)} aria-expanded={showPlanning}>
-              Planning & insights <ChevronDown size={14} className={cn("transition-transform", showPlanning && "rotate-180")} />
-            </Button>
-          </div>
-        </section>
-
-        {showPlanning && <>
+        <PurchaseWorkflow>
         <div className="grid grid-cols-2 divide-y divide-[#eef2f8] rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)] xl:grid-cols-4 xl:divide-y-0 xl:divide-x">
           <Insight icon={<Crown size={15} />} iconBg="bg-[#e8f0fe] text-[var(--brand)]" label="Top Supplier"
             value={topSuppliers[0]?.name ?? "—"} sub={topSuppliers[0] ? `${fmt(topSuppliers[0].amount)} (${topSuppliers[0].share}%)` : "No purchases yet"} />
@@ -588,7 +592,7 @@ export default function PurchaseBillsPage() {
         </div>
 
         <PurchaseOrdersPanel />
-        </>}
+        </PurchaseWorkflow>
 
         {/* Purchase Bills table */}
         <div id="purchase-table" className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
@@ -904,10 +908,15 @@ export default function PurchaseBillsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Owner PIN</Label>
+              <Input className="mt-1" type="password" inputMode="numeric" maxLength={4} value={editOwnerPin} onChange={(event) => setEditOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4 digits" />
+              <p className="mt-1 text-[11px] text-[#94a3b8]">Required because purchase edits change stock or supplier balances.</p>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditingRow(null); setEditLine(null); }} disabled={saving}>Cancel</Button>
-            <Button onClick={() => void saveEdit()} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+            <Button variant="outline" onClick={() => { setEditingRow(null); setEditLine(null); setEditOwnerPin(""); }} disabled={saving}>Cancel</Button>
+            <Button onClick={() => void saveEdit()} disabled={saving || editOwnerPin.length !== 4}>{saving ? "Saving..." : "Save"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -988,9 +997,13 @@ export default function PurchaseBillsPage() {
             <DialogTitle>Delete purchase</DialogTitle>
             <DialogDescription>This removes the purchase from local finance views while preserving stock history.</DialogDescription>
           </DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Reason</Label><Input className="mt-1" value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} placeholder="Why is this purchase being removed?" /></div>
+            <div><Label>Owner PIN</Label><Input className="mt-1" type="password" inputMode="numeric" maxLength={4} value={deleteOwnerPin} onChange={(event) => setDeleteOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4 digits" /></div>
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingRow(null)} disabled={saving}>Cancel</Button>
-            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={saving}>{saving ? "Deleting..." : "Delete"}</Button>
+            <Button variant="outline" onClick={() => { setDeletingRow(null); setDeleteOwnerPin(""); setDeleteReason(""); }} disabled={saving}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={saving || deleteOwnerPin.length !== 4 || deleteReason.trim().length < 3}>{saving ? "Deleting..." : "Delete"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

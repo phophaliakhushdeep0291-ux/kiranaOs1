@@ -95,8 +95,11 @@ async function main() {
   } finally {
     await db.stockLedger.deleteMany({ where: { shopId: shop.id } });
     await db.purchaseHistory.deleteMany({ where: { shopId: shop.id } });
+    await db.auditLog.deleteMany({ where: { shopId: shop.id } });
+    await db.locationStock.deleteMany({ where: { shopId: shop.id } });
     await db.productSellingUnit.deleteMany({ where: { shopId: shop.id } });
     await db.product.deleteMany({ where: { shopId: shop.id } });
+    await db.storeLocation.deleteMany({ where: { shopId: shop.id } });
     await db.shop.delete({ where: { id: shop.id } });
   }
 }
