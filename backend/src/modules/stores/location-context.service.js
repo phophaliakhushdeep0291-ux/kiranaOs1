@@ -29,16 +29,42 @@ export async function resolveOperationalLocation(shopId, requestedLocationId = n
 
 async function allocatedSecondaryQty(client, shopId, productId) {
   const rows = await client.locationStock.findMany({
-    where: { shopId, productId },
+    // Product-level rows only. Variant rows live in the same table but count in
+    // their own unit (packets, pairs), not base units — summing them into a
+    // base-unit total would be adding metres to kilograms, and would silently
+    // shrink the primary location's stock by whatever the branches hold per size.
+    where: { shopId, productId, sellingUnitId: null },
     select: { stockBaseQty: true },
   });
   return round2(rows.reduce((sum, row) => sum + Number(row.stockBaseQty || 0), 0));
 }
 
+/**
+ * What one variant holds at one location, in that unit's own counts.
+ *
+ * Mirrors getLocationQuantity exactly: the primary location keeps no row, so its
+ * share is the unit's global onHandQty minus everything the branches hold.
+ */
+export async function getVariantLocationQuantity(client, shopId, location, product, sellingUnitId) {
+  if (!location.isPrimary) {
+    const row = await client.locationStock.findUnique({
+      where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId } },
+      select: { stockBaseQty: true },
+    });
+    return round2(row?.stockBaseQty ?? 0);
+  }
+  const [unit, branchRows] = await Promise.all([
+    client.productSellingUnit.findFirst({ where: { id: sellingUnitId, shopId, productId: product.id }, select: { onHandQty: true } }),
+    client.locationStock.findMany({ where: { shopId, productId: product.id, sellingUnitId }, select: { stockBaseQty: true } }),
+  ]);
+  const atBranches = branchRows.reduce((sum, row) => sum + Number(row.stockBaseQty || 0), 0);
+  return round2(Number(unit?.onHandQty ?? 0) - atBranches);
+}
+
 export async function getLocationQuantity(client, shopId, location, product) {
   if (!location.isPrimary) {
     const row = await client.locationStock.findUnique({
-      where: { locationId_productId: { locationId: location.id, productId: product.id } },
+      where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: null } },
       select: { stockBaseQty: true },
     });
     return round2(row?.stockBaseQty ?? 0);
@@ -75,7 +101,7 @@ function insufficientLocationStock(location, product, available, requested) {
  * `packs` is a Map of sellingUnitId -> { sellingUnit, qty }; pooled products pass
  * nothing and are untouched.
  */
-async function movePackagingStock(client, { shopId, product, packs, direction, operation = "This operation" }) {
+async function movePackagingStock(client, { shopId, location = null, product, packs, direction, operation = "This operation" }) {
   if (product?.packagingMode !== "per_pack") return;
 
   // Fail loudly rather than drift. Several stock paths (purchase-order receipt,
@@ -96,10 +122,41 @@ async function movePackagingStock(client, { shopId, product, packs, direction, o
   for (const { sellingUnit, qty } of packs.values()) {
     const amount = round2(qty);
     if (!(amount > 0)) continue;
+    const delta = direction === "out" ? { decrement: amount } : { increment: amount };
+
+    // The global count for this size, which every existing report reads.
     await client.productSellingUnit.updateMany({
       where: { id: sellingUnit.id, shopId, productId: product.id },
-      data: { onHandQty: direction === "out" ? { decrement: amount } : { increment: amount } },
+      data: { onHandQty: delta },
     });
+
+    // ...and where those units physically are, so a two-branch shop can answer
+    // "which counter has the L-Blue left?" rather than only "we own four".
+    //
+    // The primary location deliberately keeps no row, exactly as base units work:
+    // its share is the global onHandQty minus everything the branches hold. That
+    // way one number stays authoritative and the two can never disagree.
+    //
+    // NOTE the column: LocationStock.stockBaseQty holds BASE units on a
+    // product-level row but this unit's OWN counts on a variant row — 4 pairs, not
+    // 4000 g. It has to, because it is subtracted from onHandQty, which is itself
+    // in the unit's own counts precisely so "down to 4 of the 500 g packs" needs
+    // no conversion. Never sum the two kinds of row together.
+    if (location && !location.isPrimary) {
+      await client.locationStock.upsert({
+        where: {
+          locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: sellingUnit.id },
+        },
+        create: {
+          shopId,
+          locationId: location.id,
+          productId: product.id,
+          sellingUnitId: sellingUnit.id,
+          stockBaseQty: direction === "out" ? -amount : amount,
+        },
+        update: { stockBaseQty: delta },
+      });
+    }
   }
 }
 
@@ -111,7 +168,7 @@ export async function decrementLocationInventory(client, { shopId, location, pro
   if (!location.isPrimary) {
     if (allowShortfall) {
       await client.locationStock.upsert({
-        where: { locationId_productId: { locationId: location.id, productId: product.id } },
+        where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: null } },
         create: { shopId, locationId: location.id, productId: product.id, stockBaseQty: -quantity },
         update: { stockBaseQty: { decrement: quantity } },
       });
@@ -140,13 +197,13 @@ export async function decrementLocationInventory(client, { shopId, location, pro
 
   // Only once the base-unit movement is committed, so a rejected sale never moves
   // pack counts.
-  await movePackagingStock(client, { shopId, product, packs, direction: "out" });
+  await movePackagingStock(client, { shopId, location, product, packs, direction: "out" });
 
   const freshProduct = await client.product.findFirst({ where: { id: product.id, shopId }, select: { stockBaseQty: true } });
   const newLocationStock = location.isPrimary
     ? await getLocationQuantity(client, shopId, location, { ...product, stockBaseQty: freshProduct?.stockBaseQty ?? product.stockBaseQty - quantity })
     : Number((await client.locationStock.findUnique({
-      where: { locationId_productId: { locationId: location.id, productId: product.id } },
+      where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: null } },
       select: { stockBaseQty: true },
     }))?.stockBaseQty ?? 0);
   // The pre-update read may be stale when concurrent sales overlap. Reconstruct
@@ -175,10 +232,10 @@ export async function incrementLocationInventory(client, { shopId, location, pro
   // Mirror of the decrement path: a cancelled or returned sale must put back the
   // same packs it took, or the counts drift a little further from reality on every
   // reversal until they are worthless.
-  await movePackagingStock(client, { shopId, product, packs, direction: "in" });
+  await movePackagingStock(client, { shopId, location, product, packs, direction: "in" });
   if (!location.isPrimary) {
     await client.locationStock.upsert({
-      where: { locationId_productId: { locationId: location.id, productId: product.id } },
+      where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: null } },
       create: { shopId, locationId: location.id, productId: product.id, stockBaseQty: quantity },
       update: { stockBaseQty: { increment: quantity } },
     });
@@ -209,7 +266,7 @@ export async function setLocationInventory(client, { shopId, location, product, 
   if (changed.count !== 1) throw new AppError("Stock changed while applying correction. Please retry.", 409, "CONCURRENT_STOCK_MODIFICATION_RETRY");
   if (!location.isPrimary) {
     await client.locationStock.upsert({
-      where: { locationId_productId: { locationId: location.id, productId: product.id } },
+      where: { locationId_productId_sellingUnitId: { locationId: location.id, productId: product.id, sellingUnitId: null } },
       create: { shopId, locationId: location.id, productId: product.id, stockBaseQty: requested },
       update: { stockBaseQty: requested },
     });

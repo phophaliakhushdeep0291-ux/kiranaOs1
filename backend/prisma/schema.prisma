@@ -250,10 +250,11 @@ model ProductSellingUnit {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  shop         Shop          @relation(fields: [shopId], references: [id])
-  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
-  pricingRules PricingRule[]
-  billItems    BillItem[]
+  shop           Shop            @relation(fields: [shopId], references: [id])
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  pricingRules   PricingRule[]
+  billItems      BillItem[]
+  locationStocks LocationStock[]
 
   @@unique([shopId, productId, unitCode])
   @@index([shopId, productId, isActive])
@@ -880,16 +881,31 @@ model LocationStock {
   shopId            String
   locationId        String
   productId         String
+  // Which variant this row allocates — the L-Blue shirts held at this branch.
+  //
+  // NULL is the product-level row, which is what every existing row is and what
+  // every pooled product keeps using, so nothing that works today changes shape.
+  //
+  // The primary location deliberately holds NO row here, for variants exactly as
+  // for base units: its quantity is the product total minus what the branches
+  // hold (see getLocationQuantity). A primary row would be double-counted.
+  //
+  // NULLs are DISTINCT in a unique index, so @@unique below does NOT stop two
+  // product-level rows for one location — the migration adds a partial unique
+  // index over the NULL case to close that. Do not rely on @@unique alone.
+  sellingUnitId     String?
   stockBaseQty      Float    @default(0)
   lowStockThreshold Float?
   updatedAt         DateTime @updatedAt
 
-  shop     Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  location StoreLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  product  Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shop        Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location    StoreLocation       @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sellingUnit ProductSellingUnit? @relation(fields: [sellingUnitId], references: [id], onDelete: Cascade)
 
-  @@unique([locationId, productId])
+  @@unique([locationId, productId, sellingUnitId])
   @@index([shopId, productId])
+  @@index([shopId, sellingUnitId])
 }
 
 model StockCountSession {

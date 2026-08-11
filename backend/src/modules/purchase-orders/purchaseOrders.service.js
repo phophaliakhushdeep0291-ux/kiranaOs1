@@ -116,7 +116,9 @@ export async function getReorderSuggestions(shopId, requestedLocationId = null) 
       take: Math.min(Math.max(productIds.length * 5, 1000), 5000),
     }),
     db.locationStock.findMany({
-      where: { shopId, productId: { in: productIds } },
+      // Product-level rows only — variant rows count in their own unit and would
+      // inflate the reorder maths if summed into a base-unit total.
+      where: { shopId, productId: { in: productIds }, sellingUnitId: null },
       select: { locationId: true, productId: true, stockBaseQty: true },
     }),
     db.billItem.groupBy({

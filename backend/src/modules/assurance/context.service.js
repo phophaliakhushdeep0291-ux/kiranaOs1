@@ -331,7 +331,9 @@ async function buildProductContext(shopId, productId, client) {
       where: { shopId, productId },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     }),
-    client.locationStock.findMany({ where: { shopId, productId } }),
+    // Product-level rows only: the audit rules reconcile base-unit stock against
+    // the ledger, and variant rows count in their own unit.
+    client.locationStock.findMany({ where: { shopId, productId, sellingUnitId: null } }),
     client.dailyClosingSnapshot.findMany({
       where: { shopId, lockedAt: { not: null } },
       select: { id: true, date: true, lockedAt: true },

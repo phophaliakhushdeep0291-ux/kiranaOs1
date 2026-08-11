@@ -67,7 +67,7 @@ if (ctx.skip) {
       const opening = await ctx.db.stockLedger.findFirst({ where: { shopId: tenant.shop.id, productId: created.id, action: "opening_stock" } });
       assert.equal(opening?.locationId, branch.id);
       assert.equal(opening?.changeBaseQty, 7);
-      assert.equal((await ctx.db.locationStock.findUnique({ where: { locationId_productId: { locationId: branch.id, productId: created.id } } }))?.stockBaseQty, 7);
+      assert.equal((await ctx.db.locationStock.findUnique({ where: { locationId_productId_sellingUnitId: { locationId: branch.id, productId: created.id, sellingUnitId: null } } }))?.stockBaseQty, 7);
       assert.ok(await ctx.db.auditLog.findFirst({ where: { shopId: tenant.shop.id, entityId: created.id, action: "PRODUCT_CREATED_WITH_SENSITIVE_FIELDS" } }));
 
       await ctx.db.$executeRawUnsafe(`
@@ -88,7 +88,7 @@ if (ctx.skip) {
         await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_product_update_audit_failure");
       }
       assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: created.id } })).defaultPricePerRateUnit, 20);
-      assert.equal((await ctx.db.locationStock.findUniqueOrThrow({ where: { locationId_productId: { locationId: branch.id, productId: created.id } } })).stockBaseQty, 7);
+      assert.equal((await ctx.db.locationStock.findUniqueOrThrow({ where: { locationId_productId_sellingUnitId: { locationId: branch.id, productId: created.id, sellingUnitId: null } } })).stockBaseQty, 7);
       assert.equal(await ctx.db.stockLedger.count({ where: { productId: created.id, action: "correction" } }), 0);
 
       const barcodeProduct = await createProduct(ctx.db, tenant.shop.id, { name: "Barcode Audit Rollback", stockBaseQty: 0 });

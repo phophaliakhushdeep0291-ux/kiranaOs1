@@ -259,7 +259,9 @@ async function inventorySnapshot(client, shopId, location) {
       orderBy: { name: "asc" },
       select: { id: true, name: true, barcode: true, sku: true, baseUnit: true, displayUnit: true, stockBaseQty: true, lowStockThreshold: true, reorderLevel: true, hsn: true, gstRate: true },
     }),
-    client.locationStock.findMany({ where: { shopId }, select: { locationId: true, productId: true, stockBaseQty: true, lowStockThreshold: true } }),
+    // Product-level rows only. This is keyed by `${locationId}:${productId}`, so
+    // variant rows would collide on that key and the last one read would win.
+    client.locationStock.findMany({ where: { shopId, sellingUnitId: null }, select: { locationId: true, productId: true, stockBaseQty: true, lowStockThreshold: true } }),
     client.stockTransferItem.findMany({
       where: { transfer: { shopId, status: { in: ["in_transit", "partially_received"] } } },
       select: { productId: true, quantityBaseQty: true, receivedBaseQty: true },
@@ -583,7 +585,7 @@ export async function createTransfer(shopId, data, userId, userRole = "staff", r
         }
         if (completesImmediately && !to.isPrimary) {
           await tx.locationStock.upsert({
-            where: { locationId_productId: { locationId: to.id, productId: item.productId } },
+            where: { locationId_productId_sellingUnitId: { locationId: to.id, productId: item.productId, sellingUnitId: null } },
             create: { shopId, locationId: to.id, productId: item.productId, stockBaseQty: item.quantityBaseQty },
             update: { stockBaseQty: { increment: item.quantityBaseQty } },
           });
@@ -696,7 +698,7 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
 
       if (!current.toLocation.isPrimary) {
         await tx.locationStock.upsert({
-          where: { locationId_productId: { locationId: current.toLocationId, productId: item.productId } },
+          where: { locationId_productId_sellingUnitId: { locationId: current.toLocationId, productId: item.productId, sellingUnitId: null } },
           create: { shopId, locationId: current.toLocationId, productId: item.productId, stockBaseQty: input.quantityBaseQty },
           update: { stockBaseQty: { increment: input.quantityBaseQty } },
         });
@@ -765,7 +767,7 @@ export async function cancelTransfer(shopId, transferId, data, userId, userRole 
       if (remaining <= 0) continue;
       if (!current.fromLocation.isPrimary) {
         await tx.locationStock.upsert({
-          where: { locationId_productId: { locationId: current.fromLocationId, productId: item.productId } },
+          where: { locationId_productId_sellingUnitId: { locationId: current.fromLocationId, productId: item.productId, sellingUnitId: null } },
           create: { shopId, locationId: current.fromLocationId, productId: item.productId, stockBaseQty: remaining },
           update: { stockBaseQty: { increment: remaining } },
         });

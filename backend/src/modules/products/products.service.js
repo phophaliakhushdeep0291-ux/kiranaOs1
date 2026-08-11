@@ -97,7 +97,9 @@ async function applyLocationInventory(shopId, products, locationId) {
   const location = await resolveOperationalLocation(shopId, locationId);
   const productIds = products.map((product) => product.id);
   const rows = await db.locationStock.findMany({
-    where: { shopId, productId: { in: productIds } },
+    // Product-level rows only: this builds a per-product stock figure, and the
+    // variant rows in the same table count in their own unit, not base units.
+    where: { shopId, productId: { in: productIds }, sellingUnitId: null },
     select: { locationId: true, productId: true, stockBaseQty: true, lowStockThreshold: true },
   });
   const selected = new Map(
@@ -242,7 +244,7 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
         openingLocation = await resolveOperationalLocation(shopId, locationId, tx);
         if (!openingLocation.isPrimary) {
           await tx.locationStock.upsert({
-            where: { locationId_productId: { locationId: openingLocation.id, productId: created.id } },
+            where: { locationId_productId_sellingUnitId: { locationId: openingLocation.id, productId: created.id, sellingUnitId: null } },
             create: { shopId, locationId: openingLocation.id, productId: created.id, stockBaseQty: openingQty },
             update: { stockBaseQty: openingQty },
           });
