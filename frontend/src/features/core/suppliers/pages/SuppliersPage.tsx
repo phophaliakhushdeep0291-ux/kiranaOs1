@@ -101,7 +101,7 @@ export default function Suppliers() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Suppliers</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{suppliers.data?.length ?? 0} suppliers</p>
+          <p className="text-muted-foreground text-sm mt-0.5">{suppliers.data?.length ?? 0} {suppliers.data?.length === 1 ? "supplier" : "suppliers"}</p>
         </div>
         <Button data-testid="button-add-supplier" onClick={openAdd}>
           <Plus size={16} className="mr-1.5" />Add Supplier

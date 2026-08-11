@@ -463,7 +463,7 @@ export function BillingSearch({
         <div className="shrink-0 rounded-[10px] border border-blue-200 bg-blue-50 px-4 py-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
             <span>{t(cartLength === 1 ? "billing.search.draftRestored" : "billing.search.draftRestoredPlural", { count: cartLength })}</span>
-            <button onClick={onHideDraftRestored} className="ml-auto text-blue-500 hover:underline">
+            <button type="button" onClick={onHideDraftRestored} className="tap-target ml-auto text-blue-500 hover:underline">
               {t("billing.search.dismiss")}
             </button>
           </div>
@@ -557,7 +557,7 @@ export function BillingSearch({
                     );
                   })}
                   {recentProducts.length > 3 && (
-                    <button onClick={() => setShowAll(true)} title={t("billing.search.showAllProducts")} className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e7edf5] bg-white shadow-[0_5px_12px_rgba(15,23,42,0.05)] transition-colors hover:bg-[#f7f9fd]">
+                    <button onClick={() => setShowAll(true)} title={t("billing.search.showAllProducts")} className="tap-target flex h-8 w-8 items-center justify-center rounded-full border border-[#e7edf5] bg-white shadow-[0_5px_12px_rgba(15,23,42,0.05)] transition-colors hover:bg-[#f7f9fd]">
                       <ChevronRight size={13} className="text-[#536383]" />
                     </button>
                   )}
@@ -630,7 +630,7 @@ export function BillingSearch({
               />
             ))}
             {hasMoreCategories && (
-              <button onClick={() => setShowAllCategories((value) => !value)} className="h-11 shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] lg:h-9">
+              <button onClick={() => setShowAllCategories((value) => !value)} className="h-11 shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] lg:mouse:h-9">
                 {showAllCategories ? t("billing.search.categoriesLess") : t("billing.search.categoriesMore")} ▾
               </button>
             )}
@@ -1022,7 +1022,7 @@ function CategoryChip({ label, active, onClick }: { label: string; active: boole
   return (
     <button
       onClick={onClick}
-      className={`h-11 shrink-0 rounded-[8px] border px-5 text-[12px] font-semibold capitalize transition-all lg:h-9 ${
+      className={`h-11 shrink-0 rounded-[8px] border px-5 text-[12px] font-semibold capitalize transition-all lg:mouse:h-9 ${
         active
           ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_8px_16px_rgba(0,87,255,0.2)]"
           : "border-[#e6ecf4] bg-white text-[#3a4a6b] hover:bg-[#f7f9fd]"

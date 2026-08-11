@@ -532,7 +532,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
           </Link>
           {!collapsed && (
             <button type="button" aria-label="Collapse sidebar" onClick={() => setCollapsed(true)}
-              className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/40 hover:bg-white/10 hover:text-white transition-colors">
+              className="tap-target ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/40 hover:bg-white/10 hover:text-white transition-colors">
               <ChevronRight size={14} className="rotate-180" aria-hidden="true" />
             </button>
           )}
@@ -572,7 +572,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
                   {attentionCount > 0 && <span className="ml-auto text-[11px] font-bold text-amber-300">{attentionCount}</span>}
                 </div>
                 <p className="mt-1 text-[11px] text-sidebar-foreground/50">{connectionDetail}</p>
-                <Link href="/sync-status" className="app-sidebar-sync-link">
+                <Link href="/sync-status" className="app-sidebar-sync-link tap-target">
                   <RefreshCw size={13} aria-hidden="true" /> Sync Now
                 </Link>
               </div>}
@@ -861,7 +861,7 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
               return (
                 <Link key={child.href} href={child.href}>
                   <div aria-current={active ? "page" : undefined}
-                    className={cn("flex min-h-8 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                    className={cn("flex min-h-11 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors lg:mouse:min-h-8",
                       active ? "bg-sidebar-primary text-white" : "text-sidebar-foreground/55 hover:bg-white/8 hover:text-white")}>
                     <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", active ? "bg-white" : "bg-sidebar-foreground/30")} />
                     {label}
@@ -894,7 +894,7 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
             return (
               <Link key={child.href} href={child.href}>
                 <div aria-current={active ? "page" : undefined}
-                  className={cn("flex min-h-8 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  className={cn("flex min-h-11 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors lg:mouse:min-h-8",
                     active ? "bg-sidebar-primary text-white" : "text-sidebar-foreground/55 hover:bg-white/8 hover:text-white")}>
                   <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", active ? "bg-white" : "bg-sidebar-foreground/30")} />
                   {label}

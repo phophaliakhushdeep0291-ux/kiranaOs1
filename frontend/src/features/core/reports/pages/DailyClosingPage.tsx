@@ -249,7 +249,7 @@ export default function DailyClosingPage() {
       <div className="flex items-end gap-4">
         <div className="w-full max-w-xs space-y-1.5">
           <Label className="app-muted-label">Closing date</Label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 rounded-xl" />
+          <Input type="date" aria-label="Closing date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 rounded-xl" />
         </div>
       </div>
 

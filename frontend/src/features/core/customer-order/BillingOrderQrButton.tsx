@@ -65,7 +65,7 @@ export function BillingOrderQrButton() {
         type="button"
         data-testid="button-order-qr"
         onClick={() => setOpen(true)}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-[8px] border border-[var(--brand-border)] bg-[#eaf2ff] px-4 text-[12.5px] font-bold text-[var(--brand)] transition-colors hover:bg-[#dfeaff] lg:h-9"
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-[8px] border border-[var(--brand-border)] bg-[#eaf2ff] px-4 text-[12.5px] font-bold text-[var(--brand)] transition-colors hover:bg-[#dfeaff] lg:mouse:h-9"
       >
         <QrCode size={14} aria-hidden="true" /> Order QR
       </button>

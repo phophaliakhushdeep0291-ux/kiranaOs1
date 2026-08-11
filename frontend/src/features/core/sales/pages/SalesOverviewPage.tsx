@@ -473,8 +473,8 @@ export default function SalesOverviewPage() {
               <AreaChart data={snapshot?.dailyTrend ?? []} margin={{ top: 16, right: 14, left: -8, bottom: 0 }}>
                 <defs><linearGradient id="sales-overview-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={BLUE} stopOpacity={0.22} /><stop offset="100%" stopColor={BLUE} stopOpacity={0.02} /></linearGradient></defs>
                 <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: AXIS_COLOR }} />
-                <YAxis tickFormatter={fmtAxis} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: AXIS_COLOR }} width={48} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: AXIS_COLOR }} />
+                <YAxis tickFormatter={fmtAxis} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: AXIS_COLOR }} width={52} />
                 <Tooltip content={<MoneyTooltip />} />
                 <Area type="monotone" dataKey="sales" name="Sales" stroke={BLUE} strokeWidth={2.4} fill="url(#sales-overview-area)" dot={{ r: 3, fill: "white", stroke: BLUE, strokeWidth: 1.8 }} activeDot={{ r: 4.4 }} />
               </AreaChart>
@@ -520,7 +520,7 @@ export default function SalesOverviewPage() {
       {detailsOpen ? <>
       <section className="grid items-stretch gap-3 xl:grid-cols-2">
         <DonutPanel title="Sales by Category" total={selected?.sales ?? 0} rows={categoryRows} centerLabel="Total Sales" />
-        <Panel title="Sales by Store" action={<Link href="/settings/store-profile" className="text-[10px] font-bold text-[var(--brand)]">View all</Link>}>
+        <Panel title="Sales by Store" action={<Link href="/settings/store-profile" className="tap-target text-[10px] font-bold text-[var(--brand)]">View all</Link>}>
           <div className="space-y-3 px-4 pb-4 pt-1">
             {loading ? <Skeleton className="h-36" /> : storeRows.length === 0 ? <EmptyState label="No store sales in this period" /> : storeRows.map((row) => {
               const max = Math.max(...storeRows.map((item) => item.sales), 1);
@@ -540,8 +540,8 @@ export default function SalesOverviewPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyRows} margin={{ top: 24, right: 12, left: -8, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: AXIS_COLOR }} />
-                  <YAxis tickFormatter={fmtAxis} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: AXIS_COLOR }} width={48} />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: AXIS_COLOR }} />
+                  <YAxis tickFormatter={fmtAxis} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: AXIS_COLOR }} width={52} />
                   <Tooltip content={<MoneyTooltip />} />
                   <Bar dataKey="value" name="Sales" fill={BLUE} radius={[4, 4, 0, 0]} maxBarSize={28} />
                 </BarChart>
@@ -630,7 +630,7 @@ function PeriodPill({ value, onChange }: { value: SalesPeriod; onChange: (period
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="inline-flex h-7 min-w-[82px] items-center justify-between gap-2 rounded-[6px] border border-[#dfe6f0] bg-[#fbfcfe] px-2.5 text-[10px] font-bold text-[#405273] hover:bg-white">
+        <button type="button" className="tap-target inline-flex h-7 min-w-[82px] items-center justify-between gap-2 rounded-[6px] border border-[#dfe6f0] bg-[#fbfcfe] px-2.5 text-[10px] font-bold text-[#405273] hover:bg-white">
           {PERIOD_LABELS[value]} <ChevronDown size={11} />
         </button>
       </PopoverTrigger>
@@ -675,7 +675,7 @@ function DonutPanel({ title, total, rows, centerLabel }: { title: string; total:
 function SmallTable({ title, action, actionHref, headers, loading, empty, children }: { title: string; action: string; actionHref: string; headers: string[]; loading: boolean; empty: boolean; children: ReactNode }) {
   return (
     <article className={cn(PANEL, "h-full")}>
-      <header className="flex h-11 items-center justify-between gap-3 px-4"><h2 className="truncate text-[13px] font-black text-[var(--brand-ink)]">{title}</h2><Link href={actionHref} className="shrink-0 text-[10px] font-bold text-[var(--brand)]">{action}</Link></header>
+      <header className="flex h-11 items-center justify-between gap-3 px-4"><h2 className="truncate text-[13px] font-black text-[var(--brand-ink)]">{title}</h2><Link href={actionHref} className="tap-target shrink-0 text-[10px] font-bold text-[var(--brand)]">{action}</Link></header>
       {loading ? <Skeleton className="m-3 h-36" /> : empty ? <EmptyState label="No records in this period" /> : (
         <div className="overflow-x-auto px-2 pb-3">
           <table className="w-full min-w-[520px] border-collapse text-[10px]">

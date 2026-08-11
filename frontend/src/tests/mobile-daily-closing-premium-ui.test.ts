@@ -7,7 +7,9 @@ describe("premium mobile daily closing UI", () => {
   it("uses a balanced four-action phone toolbar with accessible touch heights", () => {
     expect(source).toContain('className="grid grid-cols-4 gap-2 lg:flex lg:flex-wrap"');
     expect(source).toContain('asChild variant="outline" className="h-11');
-    expect(source).toContain('type="date" value={date}');
+    // The date picker is the only control on the toolbar with no visible
+    // caption, so its accessible name is part of what "phone-safe" means here.
+    expect(source).toContain('type="date" aria-label="Closing date" value={date}');
     expect(source).toContain('className="h-11 rounded-xl"');
   });
 

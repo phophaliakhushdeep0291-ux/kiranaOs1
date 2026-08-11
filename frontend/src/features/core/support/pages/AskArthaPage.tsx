@@ -197,7 +197,7 @@ export default function AskArthaPage() {
                       type="button"
                       onClick={() => ask(q)}
                       disabled={asking}
-                      className="rounded-md border border-transparent bg-muted/50 px-2.5 py-1.5 text-left text-[13px] leading-snug text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/[0.05] hover:text-foreground disabled:opacity-60"
+                      className="flex min-h-11 items-center rounded-md border border-transparent bg-muted/50 px-3 py-2 text-left text-[13px] leading-snug text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/[0.05] hover:text-foreground disabled:opacity-60 lg:mouse:min-h-0 lg:mouse:px-2.5 lg:mouse:py-1.5"
                     >
                       {q}
                     </button>

@@ -446,7 +446,7 @@ function Kpi({ icon, iconBg, label, value, sub, subTone, loading }: { icon: Reac
 function PageBtn({ children, active, disabled, ariaLabel, onClick }: { children: React.ReactNode; active?: boolean; disabled?: boolean; ariaLabel?: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled} aria-label={ariaLabel} aria-current={active ? "page" : undefined}
-      className={cn("tap-target grid h-7 min-w-7 place-items-center rounded-[7px] px-1.5 text-[12px] font-bold transition-colors",
+      className={cn("grid h-11 min-w-11 place-items-center rounded-[7px] px-1.5 text-[12px] font-bold transition-colors lg:mouse:h-7 lg:mouse:min-w-7",
         active ? "bg-[var(--brand)] text-white" : "text-[#52627e] hover:bg-[#eef2f8] disabled:opacity-40 disabled:hover:bg-transparent")}>
       {children}
     </button>

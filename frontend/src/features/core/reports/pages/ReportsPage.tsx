@@ -891,7 +891,7 @@ function PeriodPill({ value, onChange }: { value: ReportPeriod; onChange: (perio
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="inline-flex h-11 min-w-[108px] items-center justify-between gap-2 rounded-xl border border-[#dfe6f0] bg-[#fbfcfe] px-3 text-[10px] font-bold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white lg:h-7 lg:min-w-[92px] lg:rounded-[6px] lg:px-2.5 lg:text-[9.5px] lg:font-semibold">
+        <button type="button" className="inline-flex h-11 min-w-[108px] items-center justify-between gap-2 rounded-xl border border-[#dfe6f0] bg-[#fbfcfe] px-3 text-[10px] font-bold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white lg:mouse:h-7 lg:min-w-[92px] lg:rounded-[6px] lg:px-2.5 lg:text-[9.5px] lg:font-semibold">
           {REPORT_PERIOD_LABELS[value]} <ChevronDown size={11} aria-hidden="true" />
         </button>
       </PopoverTrigger>

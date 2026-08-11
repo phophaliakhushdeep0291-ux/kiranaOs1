@@ -699,7 +699,11 @@ export default function InventoryPage() {
                     <p className="mt-0.5 text-[11px] text-[#6d7c98]">Real-time stock from local data, ready to sync.</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-0 flex-1 sm:min-w-[240px] lg:w-[340px]">
+                    {/* Search takes the whole first line on a phone and shares it
+                        with Filters/Export only once there is room; squeezed into
+                        a three-control row at 375px its placeholder read
+                        "Search by". */}
+                    <div className="relative min-w-0 flex-1 basis-full sm:basis-0 sm:min-w-[240px] lg:w-[340px]">
                       <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7a89a3]" />
                       <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by product, SKU, barcode..." className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
                     </div>
@@ -1073,9 +1077,11 @@ function InventoryPagination({ page, pages, total, onChange }: { page: number; p
   return (
     <div className="flex flex-col items-center justify-between gap-3 border-t border-[#e8edf4] px-4 py-3 sm:flex-row">
       <p className="text-[10px] text-[#718096]">Showing {first} to {last} of {total.toLocaleString("en-IN")} products</p>
-      {/* `tap-target` keeps the 32px buttons looking the way this row was drawn
-          while giving each one a 44px hit area on phones — see index.css. */}
-      <div className="flex items-center gap-1"><button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => onChange(page - 1)} className="tap-target grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35"><ChevronLeft size={14} /></button>{visible.map((number) => <button type="button" key={number} aria-label={`Page ${number}`} aria-current={number === page ? "page" : undefined} onClick={() => onChange(number)} className={`tap-target grid h-8 min-w-8 place-items-center rounded-[7px] px-2 text-[11px] font-semibold ${number === page ? "bg-[var(--brand)] text-white" : "border border-[#dfe6ef] text-[#52627d]"}`}>{number}</button>)}<button type="button" aria-label="Next page" disabled={page === pages} onClick={() => onChange(page + 1)} className="tap-target grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35"><ChevronRight size={14} /></button></div>
+      {/* Real 44px boxes rather than `.tap-target` overlays: these buttons sit
+          4px apart, and at that spacing each overlay would reach across into its
+          neighbour's visible box and take the tap. Density comes back for a
+          mouse via `lg:mouse:`. */}
+      <div className="flex items-center gap-1.5 lg:mouse:gap-1"><button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => onChange(page - 1)} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35 lg:mouse:h-8 lg:mouse:w-8"><ChevronLeft size={14} /></button>{visible.map((number) => <button type="button" key={number} aria-label={`Page ${number}`} aria-current={number === page ? "page" : undefined} onClick={() => onChange(number)} className={`grid h-11 min-w-11 place-items-center rounded-[7px] px-2 text-[11px] font-semibold lg:mouse:h-8 lg:mouse:min-w-8 ${number === page ? "bg-[var(--brand)] text-white" : "border border-[#dfe6ef] text-[#52627d]"}`}>{number}</button>)}<button type="button" aria-label="Next page" disabled={page === pages} onClick={() => onChange(page + 1)} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35 lg:mouse:h-8 lg:mouse:w-8"><ChevronRight size={14} /></button></div>
       <p className="text-[10px] text-[#718096]">{STOCK_ROWS_PER_PAGE} rows per page</p>
     </div>
   );

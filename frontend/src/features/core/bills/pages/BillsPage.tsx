@@ -702,7 +702,7 @@ export default function BillsPage() {
           <div className="col-span-2 lg:contents">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="h-11 w-full justify-between rounded-[12px] border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f] lg:h-10 lg:w-auto lg:min-w-[218px] lg:rounded-[8px]">
+                <Button variant="outline" className="h-11 w-full justify-between rounded-[12px] border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f] lg:mouse:h-10 lg:w-auto lg:min-w-[218px] lg:rounded-[8px]">
                   <span className="inline-flex items-center gap-2"><CalendarDays size={15} className="text-[var(--brand)]" />{formatRange(fromDate, toDate)}</span>
                   <ChevronDown size={13} />
                 </Button>
@@ -723,10 +723,10 @@ export default function BillsPage() {
           <Button onClick={requestEstimateCleanup} disabled={counts.estimates === 0 || isSaving} variant="outline" className="hidden h-10 rounded-[8px] border-rose-100 bg-white px-4 text-[12px] font-bold text-rose-600 hover:border-rose-200 hover:bg-rose-50 lg:inline-flex">
             <Trash2 size={15} /> Clear Estimates
           </Button>
-          <Button asChild variant="outline" className="h-12 w-full rounded-[14px] border-[#dfe7f2] bg-white px-3 text-[11px] font-bold text-[var(--brand)] lg:h-10 lg:w-auto lg:rounded-[8px] lg:px-4 lg:text-[12px]">
+          <Button asChild variant="outline" className="h-12 w-full rounded-[14px] border-[#dfe7f2] bg-white px-3 text-[11px] font-bold text-[var(--brand)] lg:mouse:h-10 lg:w-auto lg:rounded-[8px] lg:px-4 lg:text-[12px]">
             <Link href="/billing?billType=estimate"><FileText size={15} />New estimate</Link>
           </Button>
-          <Button asChild className="h-12 w-full rounded-[14px] bg-[var(--brand)] px-3 text-[11px] font-bold text-white shadow-[0_9px_20px_var(--brand-shadow)] hover:bg-[var(--brand-strong)] lg:h-10 lg:w-auto lg:rounded-[8px] lg:px-5 lg:text-[12px]">
+          <Button asChild className="h-12 w-full rounded-[14px] bg-[var(--brand)] px-3 text-[11px] font-bold text-white shadow-[0_9px_20px_var(--brand-shadow)] hover:bg-[var(--brand-strong)] lg:mouse:h-10 lg:w-auto lg:rounded-[8px] lg:px-5 lg:text-[12px]">
             <Link href="/billing?billType=normal_sale"><Plus size={15} />New pakka bill</Link>
           </Button>
         </div>
@@ -757,7 +757,7 @@ export default function BillsPage() {
                   aria-selected={filter === tab.value}
                   onClick={() => setFilter(tab.value)}
                   className={cn(
-                    "h-11 whitespace-nowrap rounded-[9px] border px-4 text-[12px] font-bold transition-colors lg:h-9 lg:rounded-[7px]",
+                    "h-11 whitespace-nowrap rounded-[9px] border px-4 text-[12px] font-bold transition-colors lg:mouse:h-9 lg:rounded-[7px]",
                     filter === tab.value
                       ? "border-[#d8e6ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_5px_12px_rgba(7,95,255,0.08)]"
                       : "border-transparent bg-white text-[#24385f] hover:bg-[var(--brand-softer)]",
@@ -1070,7 +1070,7 @@ function SyncBadgeMini({ sync }: { sync: string }) {
 
 function ActionIcon({ title, children, onClick }: { title: string; children: ReactNode; onClick: () => void }) {
   return (
-    <button type="button" title={title} aria-label={title} onClick={onClick} className="tap-target grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[var(--brand)] transition-colors hover:border-[#c7d8ef] hover:bg-[var(--brand-soft)]">
+    <button type="button" title={title} aria-label={title} onClick={onClick} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[var(--brand)] transition-colors hover:border-[#c7d8ef] hover:bg-[var(--brand-soft)] lg:mouse:h-8 lg:mouse:w-8">
       {children}
     </button>
   );
@@ -1085,7 +1085,7 @@ function PageBtn({ children, active, disabled, ariaLabel, onClick }: { children:
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "tap-target grid h-8 min-w-8 place-items-center rounded-[7px] border px-2 text-[12px] font-black transition-colors",
+        "grid h-11 min-w-11 place-items-center rounded-[7px] border px-2 text-[12px] font-black transition-colors lg:mouse:h-8 lg:mouse:min-w-8",
         active ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#dfe7f2] bg-white text-[#405273] hover:bg-[var(--brand-softer)] disabled:opacity-40",
       )}
     >
