@@ -403,6 +403,52 @@ if (ctx.skip) {
       assert.equal(unchanged.udharAmount, 0);
     });
 
+    test("CREATE_LEDGER_ADJUSTMENT rolls back when its required server audit cannot be stored", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id);
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_udhar_adjustment_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'UDHAR_LEDGER_ADJUSTED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced udhar adjustment audit failure');
+        END
+      `);
+
+      let response;
+      try {
+        response = assertSuccess(await ctx.post("/api/sync/push", {
+          events: [{
+            type: "CREATE_LEDGER_ADJUSTMENT",
+            eventId: "ladj-audit-failure",
+            payload: {
+              customerId: customer.id,
+              amount: 200,
+              note: "must roll back",
+              ownerPin: "1234",
+              idempotencyKey: "ledger-adjust:audit-failure",
+              clientLedgerId: "ledger-adjust:audit-failure",
+            },
+          }],
+        }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_udhar_adjustment_audit_failure");
+      }
+
+      assert.equal(response.summary.failed, 1);
+      assert.equal(response.results[0].code, "SERVER_ERROR");
+      assert.equal(response.results[0].result.retryable, true);
+      assert.match(response.results[0].error, /audit record could not be stored/i);
+      assert.equal(await ctx.db.udharLedger.count({
+        where: { shopId: tenant.shop.id, customerId: customer.id, mode: "adjustment" },
+      }), 0);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "UDHAR_LEDGER_ADJUSTED" },
+      }), 0);
+      const unchanged = await ctx.db.customer.findUnique({ where: { id: customer.id } });
+      assert.equal(unchanged.udharAmount, 0);
+    });
+
     test("CREATE_LEDGER_ADJUSTMENT replayed under a new event id applies to udhar once", async () => {
       // A manual udhar adjustment that committed but lost its ack gets re-pushed under a new event
       // id. Event-level idempotency cannot catch this (different event ids), and a double apply
@@ -430,6 +476,12 @@ if (ctx.skip) {
       assert.equal(adjustments.length, 1, "exactly one adjustment ledger row despite the retry");
       const after = await ctx.db.customer.findUnique({ where: { id: customer.id } });
       assert.equal(after.udharAmount, 200, "adjustment applied exactly once (balance ₹200, not ₹400)");
+      const audits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, action: "UDHAR_LEDGER_ADJUSTED", entityId: adjustments[0].id },
+      });
+      assert.equal(audits.length, 1, "the server records one trusted audit across a lost-ack replay");
+      assert.equal(audits[0].userId, tenant.owner.id);
+      assert.equal(audits[0].deviceId, deviceHeaders["x-device-id"]);
     });
 
     test("CREATE_LEDGER_ADJUSTMENT accepts negative repair amounts without schema conflicts", async () => {
@@ -1186,6 +1238,96 @@ if (ctx.skip) {
       assert.equal(updated.purchaseDueAmount, 900);
       assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "supplier_payment_reversal" } }), 1, "reversal replay is exact-once");
       assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: { in: ["SUPPLIER_PAYMENT_RECORDED", "SUPPLIER_PAYMENT_REVERSED"] } } }), 2);
+    });
+
+    test("supplier payment and reversal each roll back when their required audit cannot be stored", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10 });
+      const purchase = await ctx.db.purchaseHistory.create({
+        data: {
+          shopId: tenant.shop.id,
+          productId: product.id,
+          supplierName: "Audit Supplier",
+          qtyBase: 2,
+          pricePerRateUnit: 500,
+          totalCost: 1000,
+          billAmount: 1000,
+          purchasePaidAmount: 100,
+          purchaseDueAmount: 900,
+          purchasePaymentStatus: "partial",
+        },
+      });
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_supplier_payment_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'SUPPLIER_PAYMENT_RECORDED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced supplier payment audit failure');
+        END
+      `);
+      let failedPayment;
+      try {
+        failedPayment = assertSuccess(await ctx.post("/api/sync/push", { events: [{
+          eventId: "supplier-payment-audit-failure",
+          type: "RECORD_SUPPLIER_PAYMENT",
+          payload: { purchaseHistoryId: purchase.id, paymentId: "supplier-payment-audit-failure", amount: 250, mode: "upi" },
+        }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_supplier_payment_audit_failure");
+      }
+      assert.equal(failedPayment.summary.failed, 1);
+      assert.equal(failedPayment.results[0].code, "SERVER_ERROR");
+      assert.equal(failedPayment.results[0].result.retryable, true);
+      let unchanged = await ctx.db.purchaseHistory.findUnique({ where: { id: purchase.id } });
+      assert.equal(unchanged.purchasePaidAmount, 100);
+      assert.equal(unchanged.purchaseDueAmount, 900);
+      assert.equal(await ctx.db.financialLedger.count({
+        where: { shopId: tenant.shop.id, sourceType: "supplier_payment", sourceId: "supplier-payment-audit-failure" },
+      }), 0);
+
+      const successfulPayment = assertSuccess(await ctx.post("/api/sync/push", { events: [{
+        eventId: "supplier-payment-before-reversal-audit-failure",
+        type: "RECORD_SUPPLIER_PAYMENT",
+        payload: { purchaseHistoryId: purchase.id, paymentId: "supplier-payment-before-reversal", amount: 250, mode: "upi" },
+      }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(successfulPayment.summary.synced, 1);
+      const original = await ctx.db.financialLedger.findFirst({
+        where: { shopId: tenant.shop.id, sourceType: "supplier_payment", sourceId: "supplier-payment-before-reversal" },
+      });
+      assert.ok(original);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_supplier_reversal_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'SUPPLIER_PAYMENT_REVERSED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced supplier reversal audit failure');
+        END
+      `);
+      let failedReversal;
+      try {
+        failedReversal = assertSuccess(await ctx.post("/api/sync/push", { events: [{
+          eventId: "supplier-reversal-audit-failure",
+          type: "REVERSE_SUPPLIER_PAYMENT",
+          ownerPin: "1234",
+          payload: { paymentId: original.sourceId, reason: "must roll back", ownerPin: "1234" },
+        }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_supplier_reversal_audit_failure");
+      }
+      assert.equal(failedReversal.summary.failed, 1);
+      assert.equal(failedReversal.results[0].code, "SERVER_ERROR");
+      assert.equal(failedReversal.results[0].result.retryable, true);
+      unchanged = await ctx.db.purchaseHistory.findUnique({ where: { id: purchase.id } });
+      assert.equal(unchanged.purchasePaidAmount, 350);
+      assert.equal(unchanged.purchaseDueAmount, 650);
+      assert.equal(await ctx.db.financialLedger.count({
+        where: { shopId: tenant.shop.id, sourceType: "supplier_payment_reversal", sourceId: original.id },
+      }), 0);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "SUPPLIER_PAYMENT_REVERSED" },
+      }), 0);
     });
 
     test("push conflicts are persisted once with redacted snapshots and survive event replay", async () => {

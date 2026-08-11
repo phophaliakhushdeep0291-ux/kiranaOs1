@@ -47,6 +47,22 @@ export interface ActiveDeviceDto {
   sessionCount?: number;
 }
 
+/**
+ * The license issuer keeps camelCase fields for its signed server payload while
+ * older clients persisted the normalized snake_case token. Keep the transport
+ * DTO honest and normalize it at the cache boundary before granting access.
+ */
+export type OfflineLicenseDto = Partial<OfflineLicenseToken> & {
+  shopId?: string;
+  deviceId?: string;
+  planCode?: string;
+  maxDevices?: number;
+  validUntil?: string;
+  offlineGraceUntil?: string;
+  issuedAt?: string;
+  signature?: string | null;
+};
+
 function platformName() {
   if (typeof navigator === "undefined") return "web";
   const userAgent = navigator.userAgent || "web";
@@ -126,7 +142,7 @@ export function getCurrentDevice() {
 }
 
 export function getOfflineLicense(deviceId = getOfflineScope().device_id) {
-  return apiRequest<{ license: OfflineLicenseToken }>(`/devices/license?deviceId=${encodeURIComponent(deviceId)}`);
+  return apiRequest<OfflineLicenseDto>(`/devices/license?deviceId=${encodeURIComponent(deviceId)}`);
 }
 
 export function heartbeatDevice(deviceId = getOfflineScope().device_id) {

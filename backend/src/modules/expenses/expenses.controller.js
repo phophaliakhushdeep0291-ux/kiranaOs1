@@ -1,6 +1,5 @@
 import db from "../../db.js";
 import * as svc from "./expenses.service.js";
-import { createAuditLog } from "../audit/audit.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
 import { ENTITY_TYPES } from "../assurance/assurance.constants.js";
@@ -32,14 +31,10 @@ export async function create(req, res, next) {
         idempotencyKey: req.body.idempotencyKey,
         clientExpenseId: req.body.clientExpenseId ?? req.body.idempotencyKey,
         sourceDeviceId: Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader ?? null,
+        userId: req.user?.userId ?? null,
+        req,
       },
     );
-    if (!expense.idempotentReplay) await createAuditLog({
-      shopId: req.shopId, userId: req.user?.userId, action: "EXPENSE_CREATED",
-      entityType: "Expense", entityId: expense.id,
-      after: { id: expense.id, title: expense.title, amount: expense.amount, category: expense.category },
-      req,
-    });
     res.status(expense.idempotentReplay ? 200 : 201).json({ success: true, data: expense });
     if (!expense.idempotentReplay) {
       scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.EXPENSE, expense.id, { userId: req.user?.userId });
@@ -49,7 +44,13 @@ export async function create(req, res, next) {
 
 export async function update(req, res, next) {
   try {
-    const expense = await svc.updateExpense(req.shopId, req.params.id, req.body);
+    const deviceHeader = req.headers?.["x-device-id"];
+    const expense = await svc.updateExpense(req.shopId, req.params.id, req.body, {
+      idempotencyKey: req.body.idempotencyKey,
+      sourceDeviceId: Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader ?? null,
+      userId: req.user?.userId ?? null,
+      req,
+    });
     res.json({ success: true, data: expense });
     scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.EXPENSE, req.params.id, { userId: req.user?.userId });
   } catch (err) { next(err); }
@@ -57,12 +58,12 @@ export async function update(req, res, next) {
 
 export async function remove(req, res, next) {
   try {
-    const expense = await svc.softDeleteExpense(req.shopId, req.params.id);
-    await createAuditLog({
-      shopId: req.shopId, userId: req.user?.userId, action: "EXPENSE_DELETED",
-      entityType: "Expense", entityId: expense.id,
-      after: { id: expense.id, title: expense.title, deletedAt: expense.deletedAt },
-      metadata: { softDelete: true }, req,
+    const deviceHeader = req.headers?.["x-device-id"];
+    const expense = await svc.softDeleteExpense(req.shopId, req.params.id, {
+      idempotencyKey: req.body?.idempotencyKey,
+      sourceDeviceId: Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader ?? null,
+      userId: req.user?.userId ?? null,
+      req,
     });
     res.json({ success: true, message: "Expense moved to recycle bin", data: expense });
   } catch (err) { next(err); }
@@ -70,11 +71,11 @@ export async function remove(req, res, next) {
 
 export async function restore(req, res, next) {
   try {
-    const expense = await svc.restoreExpense(req.shopId, req.params.id);
-    await createAuditLog({
-      shopId: req.shopId, userId: req.user?.userId, action: "EXPENSE_RESTORED",
-      entityType: "Expense", entityId: expense.id,
-      after: { id: expense.id, title: expense.title }, metadata: { softDelete: false }, req,
+    const deviceHeader = req.headers?.["x-device-id"];
+    const expense = await svc.restoreExpense(req.shopId, req.params.id, {
+      sourceDeviceId: Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader ?? null,
+      userId: req.user?.userId ?? null,
+      req,
     });
     res.json({ success: true, message: "Expense restored", data: expense });
   } catch (err) { next(err); }

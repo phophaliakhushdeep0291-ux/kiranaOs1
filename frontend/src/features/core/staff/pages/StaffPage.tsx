@@ -69,6 +69,13 @@ function isActive(member: StaffMember) {
   return member.isActive !== false && !member.deletedAt && !member.deactivatedAt;
 }
 
+function permissionSummary(member: StaffMember) {
+  if (member.role === "owner") return "Full owner access";
+  const visible = member.permissions.slice(0, 4).map((permission) => PERMISSION_LABELS[permission]);
+  const remaining = member.permissions.length - visible.length;
+  return `${visible.join(", ")}${remaining > 0 ? ` +${remaining} more` : ""}`;
+}
+
 export default function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -266,24 +273,38 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
           </TabsList>
 
           <TabsContent value="staff" className="space-y-3">
-            <DataTableCard title="Activated staff" loading={staffQuery.isLoading} empty={!staffQuery.isLoading && staff.length === 0} emptyState={<EmptyState title="No staff added yet" description="Owner account can still use the app." />}>
-              <div className="space-y-3">
+            <DataTableCard
+              title="Activated staff"
+              tableLabel="Staff accounts"
+              className="[&_.data-table-scroll]:overflow-x-hidden"
+              loading={staffQuery.isLoading}
+              empty={!staffQuery.isLoading && staff.length === 0}
+              emptyState={<EmptyState title="No staff added yet" description="Owner account can still use the app." />}
+            >
+              <div className="min-w-0 space-y-3">
                 {staff.map((member) => (
-                  <div key={member.id} className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-center md:justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold">{member.name}</p>
+                  <div key={member.id} className="flex min-w-0 flex-col gap-4 rounded-2xl border border-[#e1e8f2] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0 flex-1 space-y-2.5">
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words font-semibold leading-5 text-foreground">{member.name}</p>
+                          <p className="mt-1 break-all text-xs text-muted-foreground">
+                            {member.mobile || member.email || "No contact"}
+                            {member.lastActiveAt ? ` • Last active ${new Date(member.lastActiveAt).toLocaleString("en-IN")}` : ""}
+                          </p>
+                        </div>
+                        <SyncBadge className="max-w-[9rem] shrink-0" status="synced" label={showingCachedStaff ? "last saved" : "server confirmed"} />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <Badge variant={roleBadgeVariant(member.role)}>{ROLE_LABELS[member.role]}</Badge>
                         <Badge variant={isActive(member) ? "secondary" : "outline"}>{isActive(member) ? "Active" : "Deactivated"}</Badge>
-                        <SyncBadge status="synced" label={showingCachedStaff ? "last saved" : "server confirmed"} />
                       </div>
-                      <p className="text-xs text-muted-foreground">{member.mobile || member.email || "No contact"} {member.lastActiveAt ? `• Last active ${new Date(member.lastActiveAt).toLocaleString("en-IN")}` : ""}</p>
-                      <p className="text-xs text-muted-foreground">{member.permissions.map((permission) => PERMISSION_LABELS[permission]).join(", ")}</p>
+                      <p className="break-words text-xs leading-5 text-muted-foreground">{permissionSummary(member)}</p>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => openEdit(member)} disabled={!manageStaff.allowed || member.role === "owner" || showingCachedStaff}><Edit size={14} className="mr-1" />Edit</Button>
-                      {member.role !== "owner" ? <Button size="sm" variant="outline" onClick={() => openLocations(member)} disabled={!manageStaff.allowed}><MapPin size={14} className="mr-1" />Stores</Button> : null}
-                      {member.role !== "owner" && isActive(member) ? <Button size="sm" variant="outline" onClick={() => requestDeactivate(member)} disabled={!manageStaff.allowed || showingCachedStaff}><UserRoundX size={14} className="mr-1" />Deactivate</Button> : null}
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" className="h-11 flex-1 rounded-xl sm:flex-none" variant="outline" onClick={() => openEdit(member)} disabled={!manageStaff.allowed || member.role === "owner" || showingCachedStaff}><Edit size={14} className="mr-1" />Edit</Button>
+                      {member.role !== "owner" ? <Button size="sm" className="h-11 flex-1 rounded-xl sm:flex-none" variant="outline" onClick={() => openLocations(member)} disabled={!manageStaff.allowed}><MapPin size={14} className="mr-1" />Stores</Button> : null}
+                      {member.role !== "owner" && isActive(member) ? <Button size="sm" className="h-11 flex-1 rounded-xl sm:flex-none" variant="outline" onClick={() => requestDeactivate(member)} disabled={!manageStaff.allowed || showingCachedStaff}><UserRoundX size={14} className="mr-1" />Deactivate</Button> : null}
                     </div>
                   </div>
                 ))}

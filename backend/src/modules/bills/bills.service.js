@@ -21,10 +21,23 @@ import { evaluateSaleGuards } from "../../shared/sale-guards.js";
 import { allocateLotsForBill, batchMrpCeilings, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
 import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferRedemption, validateOfferForBill } from "../offers/offers.service.js";
 import { sendTransactionalEmail } from "../../lib/authEmail.js";
+import { createAuditLog } from "../audit/audit.service.js";
 
 const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const BILL_ITEMS_WITH_OPTIONS = { include: { addons: true } };
+
+async function writeRequiredBillAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Bill action was not saved because its audit record could not be stored",
+      503,
+      "BILL_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
 
 function resolveBillBusinessDate(actor = {}) {
   const receivedAt = new Date();
@@ -773,7 +786,7 @@ export async function confirmBill(shopId, body, actor = {}) {
 // ─────────────────────────────────────────────────────────────
 // CANCEL BILL — reverses everything
 // ─────────────────────────────────────────────────────────────
-export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = false }) {
+export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = false }, actor = {}) {
   const bill = await db.bill.findFirst({
     where: { id: billId, shopId },
     include: { items: true, payments: true },
@@ -902,7 +915,20 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
     await reverseGiftCardRedemptions(tx, shopId, bill.id, { note: `Bill cancelled: ${reason}` });
     await restoreBillLotAllocations(tx, bill.id);
 
-    return tx.bill.findFirst({ where: { id: billId, shopId } });
+    const cancelled = await tx.bill.findFirst({ where: { id: billId, shopId } });
+    await writeRequiredBillAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? null,
+      action: "BILL_CANCELLED",
+      entityType: "Bill",
+      entityId: bill.id,
+      before: { status: bill.status, cancelledAt: bill.cancelledAt, cancelledReason: bill.cancelledReason },
+      after: { status: cancelled.status, cancelledAt: cancelled.cancelledAt, cancelledReason: cancelled.cancelledReason },
+      metadata: { reason, billNo: bill.billNo, offlineSyncEventId: actor.syncEventId ?? null },
+      req: actor.req ?? null,
+    }, tx);
+    return cancelled;
   });
 }
 

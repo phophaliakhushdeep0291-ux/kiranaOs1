@@ -474,6 +474,45 @@ if (ctx.skip) {
       assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, action: "cancel_reversal" } }), 1);
       assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, sourceType: "bill_cancel" } }), 4);
       assert.equal(await ctx.db.udharLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, type: "payment" } }), 1);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, entityId: bill.id, action: "BILL_CANCELLED" } }), 1, "a lost-response retry cannot duplicate the trusted audit");
+    });
+
+    test("bill cancellation rolls every financial effect back when its required audit cannot be stored", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });
+      const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 2,
+        ratePerRateUnit: 50,
+        payments: [{ mode: "cash", amount: 100 }],
+      }), { token: ownerAuth.accessToken }), 201);
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 8);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_bill_cancel_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'BILL_CANCELLED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced bill cancellation audit failure');
+        END
+      `);
+      let response;
+      try {
+        response = await ctx.post(
+          `/api/bills/${bill.id}/cancel`,
+          { reason: "must roll back" },
+          { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_bill_cancel_audit_failure");
+      }
+
+      assertFailure(response, 503);
+      assert.equal(response.body.code, "BILL_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.bill.findUnique({ where: { id: bill.id } })).status, "active");
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 8);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, action: "cancel_reversal" } }), 0);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, sourceType: "bill_cancel" } }), 0);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, entityId: bill.id, action: "BILL_CANCELLED" } }), 0);
     });
 
     test("concurrent cancels restore stock only once", async () => {

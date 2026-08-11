@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url";
 const source = (relativePath: string) => readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), "utf8");
 
 describe("high-frequency route preloading", () => {
-  it("keeps Billing, Customers, and Udhar lazy while sharing their loaders with navigation warm-up", () => {
+  it("keeps high-frequency routes lazy while sharing their loaders with navigation warm-up", () => {
     const preload = source("../app/route-preload.ts");
     const routes = source("../app/routes.tsx");
 
-    for (const name of ["loadBillingRoute", "loadCustomersRoute", "loadUdharRoute"]) {
+    for (const name of ["loadBillingRoute", "loadCustomersRoute", "loadUdharRoute", "loadInventoryRoute", "loadPurchasesRoute", "loadSalesOverviewRoute"]) {
       expect(routes).toContain(`lazy(${name})`);
       expect(preload).toContain(`export const ${name}`);
     }

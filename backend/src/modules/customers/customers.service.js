@@ -378,7 +378,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
  * This preserves financial history by creating an opposite debit ledger entry
  * and marking the original payment as reversed instead of deleting it.
  */
-export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { reason }, { actorUserId = null, req = null } = {}) {
+export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { reason }, { actorUserId = null, deviceId = null, req = null } = {}) {
   const customer = await getCustomer(shopId, customerId);
 
   return db.$transaction(async (tx) => {
@@ -450,9 +450,10 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
       repairNote: `System repair after reversing payment ${payment.id}: udhar balance went negative`,
     });
 
-    await createAuditLog({
+    const audit = await createAuditLog({
       shopId,
       userId: actorUserId,
+      deviceId,
       action: "UDHAR_PAYMENT_REVERSED",
       entityType: "UdharLedger",
       entityId: payment.id,
@@ -462,6 +463,13 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
       req,
       client: tx,
     });
+    if (!audit) {
+      throw new AppError(
+        "Udhar payment reversal was not saved because its audit record could not be stored",
+        503,
+        "UDHAR_REVERSAL_AUDIT_WRITE_FAILED",
+      );
+    }
 
     return {
       customerId,

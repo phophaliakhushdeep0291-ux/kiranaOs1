@@ -1439,7 +1439,7 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyCreateBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CANCEL_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyCancelBill(shopId, event, context);
+      return applyCancelBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyRestoreBill(shopId, event, context);
@@ -1481,7 +1481,7 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyReverseUdharPayment(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_LEDGER_ADJUSTMENT:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyLedgerAdjustment(shopId, event, context);
+      return applyLedgerAdjustment(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_CUSTOMER:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyDeleteCustomer(shopId, event, user, context);
@@ -1516,10 +1516,10 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.CREATE_EXPENSE:
       return applyCreateExpense(shopId, event, user, context);
     case SYNC_EVENT_TYPES.UPDATE_EXPENSE:
-      return applyUpdateExpense(shopId, event, context);
+      return applyUpdateExpense(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_EXPENSE:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyDeleteExpense(shopId, event, context);
+      return applyDeleteExpense(shopId, event, user, context);
     default:
       throw new AppError(`Unsupported sync event type: ${event.type}`, 400);
   }
@@ -1700,12 +1700,17 @@ async function buildCreateBillSyncPayload(shopId, bill, payload, billBody) {
   };
 }
 
-async function applyCancelBill(shopId, event, context) {
+async function applyCancelBill(shopId, event, user, context) {
   const payload = cancelPayloadSchema.parse(getEventPayload(event));
   const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
   if (!billId) throw new AppError("billId required for CANCEL_BILL sync event", 400);
 
-  const bill = await cancelBill(shopId, billId, { reason: payload.reason, idempotentRaceOk: true });
+  const bill = await cancelBill(
+    shopId,
+    billId,
+    { reason: payload.reason, idempotentRaceOk: true },
+    { userId: user?.userId ?? user?.id ?? null, deviceId: user?.deviceId ?? null, syncEventId: getClientEventId(event) },
+  );
   await reverseBillLoyalty(shopId, bill.id).catch(() => null);
   return {
     type: event.type,
@@ -1732,6 +1737,7 @@ async function applyCreateExpense(shopId, event, user, context) {
     clientExpenseId: localExpenseId,
     sourceDeviceId: context?.deviceId ?? null,
     userId: user?.userId ?? user?.id ?? null,
+    syncEventId: getClientEventId(event),
   });
   return {
     expenseId: expense.id,
@@ -1742,7 +1748,7 @@ async function applyCreateExpense(shopId, event, user, context) {
   };
 }
 
-async function applyUpdateExpense(shopId, event, context) {
+async function applyUpdateExpense(shopId, event, user, context) {
   const payload = getEventPayload(event);
   const expenseId = await resolveEntityReference(
     shopId,
@@ -1752,11 +1758,16 @@ async function applyUpdateExpense(shopId, event, context) {
   );
   if (!expenseId) throw new AppError("expenseId required for UPDATE_EXPENSE sync event", 400);
   const changes = updateExpenseSchema.parse(payload.changes ?? payload.expense ?? {});
-  const expense = await updateExpense(shopId, expenseId, changes, { idempotencyKey: event.eventId });
+  const expense = await updateExpense(shopId, expenseId, changes, {
+    idempotencyKey: event.eventId,
+    sourceDeviceId: context?.deviceId ?? null,
+    userId: user?.userId ?? user?.id ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return { expenseId: expense.id, localExpenseId: payload.localExpenseId ?? null, expense: toSyncJsonSafe(expense) };
 }
 
-async function applyDeleteExpense(shopId, event, context) {
+async function applyDeleteExpense(shopId, event, user, context) {
   const payload = getEventPayload(event);
   const expenseId = await resolveEntityReference(
     shopId,
@@ -1765,7 +1776,12 @@ async function applyDeleteExpense(shopId, event, context) {
     context,
   );
   if (!expenseId) throw new AppError("expenseId required for DELETE_EXPENSE sync event", 400);
-  const expense = await softDeleteExpense(shopId, expenseId, { idempotencyKey: event.eventId });
+  const expense = await softDeleteExpense(shopId, expenseId, {
+    idempotencyKey: event.eventId,
+    sourceDeviceId: context?.deviceId ?? null,
+    userId: user?.userId ?? user?.id ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return { expenseId: expense.id, localExpenseId: payload.localExpenseId ?? null, deletedAt: expense.deletedAt };
 }
 
@@ -2306,7 +2322,7 @@ async function applyReverseUdharPayment(shopId, event, user, context) {
     payload.customerId,
     ledgerEntryId,
     { reason: payload.reason },
-    { actorUserId: user?.userId ?? null }
+    { actorUserId: user?.userId ?? null, deviceId: user?.deviceId ?? null }
   );
   return { type: event.type, ...data };
 }
@@ -2345,7 +2361,7 @@ function getLedgerAdjustmentIdentity(event, payload) {
   return { idempotencyKey, clientLedgerId, sourceDeviceId };
 }
 
-async function applyLedgerAdjustment(shopId, event, context) {
+async function applyLedgerAdjustment(shopId, event, user, context) {
   const rawPayload = getEventPayload(event);
   const payload = ledgerAdjustmentPayloadSchema.parse(rawPayload);
   payload.customerId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.CUSTOMER, payload.serverCustomerId ?? payload.customerId ?? payload.localCustomerId, context);
@@ -2410,6 +2426,34 @@ async function applyLedgerAdjustment(shopId, event, context) {
         repairNegative: true,
         repairNote: `System repair after ledger adjustment ${ledger.id}: udhar balance went negative`,
       });
+
+      // The client-side audit row is only a local operator timeline. The server must
+      // create its own trusted audit row in the same transaction as the money change;
+      // otherwise an audit failure could leave an authoritative adjustment with no
+      // durable actor/device trail.
+      const audit = await createAuditLog({
+        shopId,
+        userId: user?.userId ?? user?.id ?? null,
+        deviceId: user?.deviceId ?? null,
+        action: "UDHAR_LEDGER_ADJUSTED",
+        entityType: "UdharLedger",
+        entityId: ledger.id,
+        before: { balance: currentBalance.balance },
+        after: { balance: refreshed.balance, adjustmentAmount: amount },
+        metadata: {
+          reason: payload.note ?? "Offline ledger adjustment",
+          syncEventId: getClientEventId(event),
+          idempotencyKey,
+        },
+        client: tx,
+      });
+      if (!audit) {
+        throw new AppError(
+          "Ledger adjustment was not saved because its audit record could not be stored",
+          503,
+          "UDHAR_ADJUSTMENT_AUDIT_WRITE_FAILED",
+        );
+      }
 
       return {
         type: event.type,
@@ -2877,9 +2921,10 @@ async function applyRecordSupplierPayment(shopId, event, user, context) {
         purchasePaymentMode: mode,
       },
     });
-    await createAuditLog({
+    const audit = await createAuditLog({
       shopId,
-      userId: user?.userId,
+      userId: user?.userId ?? user?.id ?? null,
+      deviceId: user?.deviceId ?? null,
       action: "SUPPLIER_PAYMENT_RECORDED",
       entityType: "FinancialLedger",
       entityId: ledger.id,
@@ -2888,6 +2933,13 @@ async function applyRecordSupplierPayment(shopId, event, user, context) {
       metadata: { paymentId: payload.paymentId, purchaseHistoryId: purchase.id, amount, mode, reference: payload.reference ?? null },
       client: tx,
     });
+    if (!audit) {
+      throw new AppError(
+        "Supplier payment was not saved because its audit record could not be stored",
+        503,
+        "SUPPLIER_PAYMENT_AUDIT_WRITE_FAILED",
+      );
+    }
     return { type: event.type, paymentId: payload.paymentId, ledgerEntryId: ledger.id, purchaseHistoryId: purchase.id, amountPaid: amount, purchaseHistory: toSyncJsonSafe(updated) };
   });
 }
@@ -2937,9 +2989,10 @@ async function applyReverseSupplierPayment(shopId, event, user) {
         purchasePaymentStatus: paid > 0 ? "partial" : "due",
       },
     });
-    await createAuditLog({
+    const audit = await createAuditLog({
       shopId,
-      userId: user?.userId,
+      userId: user?.userId ?? user?.id ?? null,
+      deviceId: user?.deviceId ?? null,
       action: "SUPPLIER_PAYMENT_REVERSED",
       entityType: "FinancialLedger",
       entityId: reversal.id,
@@ -2948,6 +3001,13 @@ async function applyReverseSupplierPayment(shopId, event, user) {
       metadata: { paymentId: original.sourceId, originalLedgerEntryId: original.id, amount, reason: payload.reason },
       client: tx,
     });
+    if (!audit) {
+      throw new AppError(
+        "Supplier payment reversal was not saved because its audit record could not be stored",
+        503,
+        "SUPPLIER_PAYMENT_REVERSAL_AUDIT_WRITE_FAILED",
+      );
+    }
     return { type: event.type, paymentId: original.sourceId, reversalLedgerEntryId: reversal.id, purchaseHistoryId: purchase.id, amountPaid: -amount, purchaseHistory: toSyncJsonSafe(updated) };
   });
 }

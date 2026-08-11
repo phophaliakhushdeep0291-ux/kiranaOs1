@@ -147,15 +147,9 @@ export async function cancel(req, res, next) {
   try {
     const existing = await svc.getBill(req.shopId, req.params.id);
     await assertLocationCapability({ shopId: req.shopId, userId: req.user?.userId, role: req.user?.role, locationId: existing.locationId, capability: "sell" });
-    const data = await svc.cancelBill(req.shopId, req.params.id, req.body);
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "BILL_CANCELLED",
-      entityType: "Bill",
-      entityId: data.id,
-      after: { status: data.status, cancelledAt: data.cancelledAt, cancelledReason: data.cancelledReason },
-      metadata: { reason: req.body?.reason ?? null, billNo: data.billNo },
+    const data = await svc.cancelBill(req.shopId, req.params.id, req.body, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       req,
     });
     res.json({ success: true, data });

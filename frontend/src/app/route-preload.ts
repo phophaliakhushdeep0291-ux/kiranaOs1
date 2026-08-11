@@ -6,11 +6,17 @@ type RouteLoader = () => Promise<RouteModule>;
 export const loadBillingRoute: RouteLoader = () => import("@/features/core/billing/pages/BillingPage");
 export const loadCustomersRoute: RouteLoader = () => import("@/features/core/customers/pages/CustomersPage");
 export const loadUdharRoute: RouteLoader = () => import("@/features/core/udhar/pages/UdharPage");
+export const loadInventoryRoute: RouteLoader = () => import("@/features/core/inventory/pages/InventoryPage");
+export const loadPurchasesRoute: RouteLoader = () => import("@/features/core/purchases/pages/PurchaseBillsPage");
+export const loadSalesOverviewRoute: RouteLoader = () => import("@/features/core/sales/pages/SalesOverviewPage");
 
 const loaders: Record<string, RouteLoader> = {
   "/billing": loadBillingRoute,
   "/customers": loadCustomersRoute,
   "/udhar": loadUdharRoute,
+  "/inventory": loadInventoryRoute,
+  "/purchases": loadPurchasesRoute,
+  "/sales/overview": loadSalesOverviewRoute,
 };
 const pending = new Map<string, Promise<RouteModule>>();
 

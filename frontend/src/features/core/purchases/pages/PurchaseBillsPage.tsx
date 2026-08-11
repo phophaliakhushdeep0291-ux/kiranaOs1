@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import {
-  AlertTriangle, Barcode, Box, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardList, Columns3, Crown, FileText, Filter,
+  AlertTriangle, Barcode, Box, CalendarDays, Check, CheckCircle2, ClipboardList, Columns3, Crown, FileText, Filter,
   Loader2, MoreVertical, Package, Pencil, Plus, RotateCcw, Search, ShoppingBag, Trash2, Truck, Upload, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { fromBaseQty, productDisplayUnit } from "@/features/core/products/pages/product-pricing";
 import type { Product, Supplier } from "@/types/api";
 import { PurchaseOrdersPanel } from "@/features/core/purchases/components/PurchaseOrdersPanel";
+import { PurchaseWorkflow } from "@/features/core/purchases/components/PurchaseWorkflow";
 import { resolvePurchaseBarcode } from "@/features/core/purchases/purchase-barcode";
 import { extractPurchaseInvoice, type PurchaseInvoiceDraft } from "@/features/core/purchases/invoice-ocr-api";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
@@ -114,7 +115,6 @@ export default function PurchaseBillsPage() {
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [showPlanning, setShowPlanning] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -560,20 +560,7 @@ export default function PurchaseBillsPage() {
         </div>
 
         {/* Insight strip — one card, four cells */}
-        <section className="rounded-[14px] border border-[#e6ecf4] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,35,80,0.04)]" aria-label="Purchase workflow">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
-              {["1. Order", "2. Receive stock", "3. Record bill", "4. Settle due"].map((step) => (
-                <div key={step} className="rounded-[10px] bg-[#f7f9fc] px-3 py-2 text-[11px] font-bold text-[#344563]">{step}</div>
-              ))}
-            </div>
-            <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => setShowPlanning((open) => !open)} aria-expanded={showPlanning}>
-              Planning & insights <ChevronDown size={14} className={cn("transition-transform", showPlanning && "rotate-180")} />
-            </Button>
-          </div>
-        </section>
-
-        {showPlanning && <>
+        <PurchaseWorkflow>
         <div className="grid grid-cols-2 divide-y divide-[#eef2f8] rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)] xl:grid-cols-4 xl:divide-y-0 xl:divide-x">
           <Insight icon={<Crown size={15} />} iconBg="bg-[#e8f0fe] text-[var(--brand)]" label="Top Supplier"
             value={topSuppliers[0]?.name ?? "—"} sub={topSuppliers[0] ? `${fmt(topSuppliers[0].amount)} (${topSuppliers[0].share}%)` : "No purchases yet"} />
@@ -588,7 +575,7 @@ export default function PurchaseBillsPage() {
         </div>
 
         <PurchaseOrdersPanel />
-        </>}
+        </PurchaseWorkflow>
 
         {/* Purchase Bills table */}
         <div id="purchase-table" className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">

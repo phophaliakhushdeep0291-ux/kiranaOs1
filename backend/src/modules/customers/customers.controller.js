@@ -76,7 +76,11 @@ export async function reverseUdharPayment(req, res, next) {
       req.params.id,
       req.params.ledgerId,
       req.body,
-      { actorUserId: req.user?.userId ?? null, req }
+      {
+        actorUserId: req.user?.userId ?? null,
+        deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
+        req,
+      }
     );
     res.json({ success: true, data });
   } catch (err) { next(err); }

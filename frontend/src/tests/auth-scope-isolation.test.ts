@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   licenseMatchesScope,
+  parseOfflineLicenseToken,
   type OfflineLicenseToken,
 } from "@/features/core/devices/license";
 import {
@@ -103,5 +104,29 @@ describe("authentication scope isolation", () => {
         device_id: "device_1",
       }),
     ).toBe(false);
+  });
+
+  it("normalizes the signed camelCase payload returned by the server issuer", () => {
+    const token = parseOfflineLicenseToken({
+      shopId: "shop_a",
+      deviceId: "device_1",
+      planCode: "growth",
+      features: ["staff_login", "cloud_backup"],
+      maxDevices: 5,
+      validUntil: "2026-09-01T00:00:00.000Z",
+      offlineGraceUntil: "2026-09-08T00:00:00.000Z",
+      issuedAt: "2026-08-11T00:00:00.000Z",
+      signature: "signed-by-backend",
+    });
+
+    expect(token).toMatchObject({
+      plan: "growth",
+      features: ["staff_login", "cloud_backup"],
+      max_devices: 5,
+      valid_until: "2026-09-01T00:00:00.000Z",
+      offline_grace_until: "2026-09-08T00:00:00.000Z",
+      issued_at: "2026-08-11T00:00:00.000Z",
+      signature: "signed-by-backend",
+    });
   });
 });
