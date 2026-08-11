@@ -23,6 +23,7 @@ const customerService = fs.readFileSync("src/modules/customers/customers.service
 const customerCtrl    = fs.readFileSync("src/modules/customers/customers.controller.js", "utf8");
 const productRoutes   = fs.readFileSync("src/modules/products/products.routes.js", "utf8");
 const productCtrl     = fs.readFileSync("src/modules/products/products.controller.js", "utf8");
+const productService  = fs.readFileSync("src/modules/products/products.service.js", "utf8");
 const reportRoutes    = fs.readFileSync("src/modules/reports/reports.routes.js", "utf8");
 const billsService    = fs.readFileSync("src/modules/bills/bills.service.js", "utf8");
 const packageJson     = JSON.parse(fs.readFileSync("package.json", "utf8"));
@@ -118,15 +119,21 @@ assert.match(
 // ── B. Product create — audit log for sensitive fields ─────────────────────
 
 assert.match(
-  productCtrl,
+  productService,
   /PRODUCT_CREATED_WITH_SENSITIVE_FIELDS/,
-  "product create controller must emit PRODUCT_CREATED_WITH_SENSITIVE_FIELDS audit action"
+  "product create service must emit PRODUCT_CREATED_WITH_SENSITIVE_FIELDS in the transaction"
 );
 
 assert.match(
-  productCtrl,
+  productService,
   /sensitiveFields/,
   "product create audit must include which sensitive fields were present"
+);
+
+assert.match(
+  productService,
+  /writeRequiredProductAudit[\s\S]*?PRODUCT_AUDIT_WRITE_FAILED/,
+  "product mutations must fail closed when their audit row cannot be stored"
 );
 
 // Owner can still create a product without a PIN if no sensitive fields are sent

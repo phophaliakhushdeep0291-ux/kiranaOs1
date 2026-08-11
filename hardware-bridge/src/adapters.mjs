@@ -5,19 +5,30 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-function run(executable, args, { timeoutMs = 12_000 } = {}) {
+function run(executable, args, { timeoutMs = 12_000, stdin = "" } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { windowsHide: true, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(executable, args, { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "", stderr = "";
-    const timer = setTimeout(() => { child.kill(); reject(new Error("Hardware adapter timed out")); }, timeoutMs);
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      callback(value);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(reject, new Error("Hardware adapter timed out"));
+    }, timeoutMs);
     child.stdout.on("data", (chunk) => { stdout = (stdout + chunk).slice(-4096); });
     child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-4096); });
-    child.on("error", (error) => { clearTimeout(timer); reject(error); });
+    child.on("error", (error) => finish(reject, error));
     child.on("exit", (code) => {
-      clearTimeout(timer);
-      if (code === 0) resolve(stdout.trim());
-      else reject(new Error(stderr.trim() || `Hardware adapter exited with code ${code}`));
+      if (code === 0) finish(resolve, stdout.trim());
+      else finish(reject, new Error(stderr.trim() || `Hardware adapter exited with code ${code}`));
     });
+    child.stdin.on("error", (error) => finish(reject, error));
+    child.stdin.end(stdin);
   });
 }
 
@@ -52,4 +63,9 @@ export async function readScaleCommand({ executable, args = [] }) {
   const parsed = JSON.parse(output);
   if (!Number.isFinite(Number(parsed.weight)) || !["g", "kg"].includes(parsed.unit)) throw new Error("Scale adapter returned invalid JSON");
   return { weight: Number(parsed.weight), unit: parsed.unit, ...(typeof parsed.stable === "boolean" ? { stable: parsed.stable } : {}) };
+}
+
+export async function writeCustomerDisplayCommand({ executable, args = [], frame }) {
+  if (!executable) throw new Error("Customer display adapter is not configured");
+  await run(executable, args, { timeoutMs: 4_000, stdin: `${JSON.stringify(frame)}\n` });
 }

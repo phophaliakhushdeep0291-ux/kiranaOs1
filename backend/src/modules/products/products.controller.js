@@ -1,7 +1,15 @@
 import * as svc from "./products.service.js";
-import { createAuditLog } from "../audit/audit.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 import { lookupProductKnowledge } from "./product-knowledge.service.js";
+
+function actor(req) {
+  return {
+    userId: req.user?.userId ?? null,
+    deviceId: req.user?.deviceId ?? undefined,
+    reason: req.body?.ownerPinReason ?? req.body?.auditReason ?? null,
+    req,
+  };
+}
 
 export async function list(req, res, next) {
   try {
@@ -28,48 +36,22 @@ export async function lookupKnowledge(req, res, next) {
   }
 }
 
-const SENSITIVE_PRODUCT_FIELDS = [
-  "defaultPricePerRateUnit",
-  "costPerRateUnit",
-  "minPricePerRateUnit",
-  "gstRate",
-  "hsn",
-];
-
 export async function create(req, res, next) {
   try {
-    const product = await svc.createProduct(req.shopId, req.body);
-
-    // Audit log whenever a product is created with sensitive pricing/cost data.
-    const sensitiveFieldsPresent = SENSITIVE_PRODUCT_FIELDS.filter(
-      (f) => Object.prototype.hasOwnProperty.call(req.body, f)
-    );
-    if (sensitiveFieldsPresent.length > 0) {
-      await createAuditLog({
-        shopId: req.shopId,
-        userId: req.user?.userId,
-        action: "PRODUCT_CREATED_WITH_SENSITIVE_FIELDS",
-        entityType: "Product",
-        entityId: product.id,
-        after: {
-          id: product.id,
-          name: product.name,
-          defaultPricePerRateUnit: product.defaultPricePerRateUnit,
-          costPerRateUnit: product.costPerRateUnit,
-          gstRate: product.gstRate,
-        },
-        metadata: { sensitiveFields: sensitiveFieldsPresent },
-        req,
-      });
-    }
-
+    const product = await svc.createProduct(req.shopId, req.body, {
+      actor: actor(req),
+      locationId: requestLocationId(req),
+    });
     res.status(201).json({ success: true, data: product });
   } catch (err) { next(err); }
 }
 
 export async function update(req, res, next) {
   try {
-    const product = await svc.updateProduct(req.shopId, req.params.id, req.body);
+    const product = await svc.updateProduct(req.shopId, req.params.id, req.body, {
+      actor: actor(req),
+      locationId: requestLocationId(req),
+    });
     res.json({ success: true, data: product });
   } catch (err) { next(err); }
 }

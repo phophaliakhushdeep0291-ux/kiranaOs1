@@ -1,6 +1,27 @@
 import crypto from "node:crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
+import { createAuditLog } from "../audit/audit.service.js";
+
+async function writeRequiredChannelSettlementAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Channel settlement action was not saved because its audit record could not be stored",
+      503,
+      "CHANNEL_SETTLEMENT_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
+function normalizeActor(actor = {}) {
+  return {
+    userId: actor.userId ?? null,
+    deviceId: actor.deviceId ?? undefined,
+    req: actor.req ?? null,
+  };
+}
 
 export const CHANNEL_SETTLEMENT_VERSION = "channel-settlement-v1";
 export const CHANNEL_SETTLEMENT_LIMITATIONS = [
@@ -230,6 +251,7 @@ function shapeRow(row) {
 }
 
 export async function importChannelSettlement(shopId, input, actor = {}) {
+  actor = normalizeActor(actor);
   const provider = input.provider.trim();
   if (input.locationId) {
     const location = await db.storeLocation.findFirst({ where: { id: input.locationId, shopId, active: true }, select: { id: true } });
@@ -309,6 +331,24 @@ export async function importChannelSettlement(shopId, input, actor = {}) {
         },
       });
       await tx.channelSettlementRow.createMany({ data: preparedRows.map((row) => ({ ...row, importId: record.id })) });
+      await writeRequiredChannelSettlementAudit({
+        shopId,
+        userId: actor.userId,
+        deviceId: actor.deviceId,
+        req: actor.req,
+        action: "CHANNEL_SETTLEMENT_IMPORTED",
+        entityType: "channel_settlement_import",
+        entityId: record.id,
+        after: {
+          provider: record.provider,
+          locationId: record.locationId,
+          fileName: record.fileName,
+          rowCount: record.rowCount,
+          gross: money(record.grossPaise),
+          paidNet: money(record.paidNetPaise),
+          variance: money(record.variancePaise),
+        },
+      }, tx);
       return tx.channelSettlementImport.findUnique({ where: { id: record.id }, include: { location: true } });
     });
     return shapeImport(created, { idempotentReplay: false });
@@ -398,6 +438,7 @@ function resolutionSnapshot(row) {
 }
 
 export async function resolveChannelSettlementRow(shopId, rowId, input, actor = {}) {
+  actor = normalizeActor(actor);
   return db.$transaction(async (tx) => {
     const row = await tx.channelSettlementRow.findFirst({ where: { id: rowId, shopId } });
     if (!row) fail("Settlement row not found", 404, "CHANNEL_SETTLEMENT_ROW_NOT_FOUND");
@@ -439,6 +480,18 @@ export async function resolveChannelSettlementRow(shopId, rowId, input, actor = 
     await tx.channelSettlementEvent.create({
       data: { shopId, rowId: row.id, action: input.action, previousJson: JSON.stringify(previous), nextJson: JSON.stringify(next), reason: input.reason ?? null, actorUserId: actor.userId ?? null },
     });
+    await writeRequiredChannelSettlementAudit({
+      shopId,
+      userId: actor.userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: `CHANNEL_SETTLEMENT_${input.action.toUpperCase()}`,
+      entityType: "channel_settlement_row",
+      entityId: row.id,
+      before: previous,
+      after: next,
+      metadata: { reason: input.reason ?? null },
+    }, tx);
     const complete = await tx.channelSettlementRow.findUnique({ where: { id: row.id }, include: { import: { include: { location: true } }, events: { orderBy: { createdAt: "desc" }, take: 20 } } });
     return shapeRow(complete);
   });

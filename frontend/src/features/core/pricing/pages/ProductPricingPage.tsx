@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Box, Building2, Layers, MapPin, Package, Plus, Trash2, Users, UserSquare } from "lucide-react";
+import { ArrowLeft, Box, Building2, Layers, MapPin, Package, Plus, ShieldCheck, Trash2, Users, UserSquare } from "lucide-react";
 import { getListProductsQueryKey, useListCustomers, useListProducts, type Customer, type Product, type ProductSellingUnit } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { usePricingRules, partitionProductRules } from "@/features/core/pricing/use-pricing-rules";
@@ -20,6 +20,8 @@ export default function ProductPricingPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [ownerPin, setOwnerPin] = useState("");
+  const pricingApproved = /^\d{4}$/.test(ownerPin);
 
   const productsQuery = useListProducts({ limit: 1000 }, { query: { staleTime: 60_000 } });
   const product = useMemo(
@@ -34,20 +36,22 @@ export default function ProductPricingPage() {
     initialData: product?.sellingUnits,
   });
   const createUnit = useMutation({
-    mutationFn: (body: ProductSellingUnit) => createProductSellingUnit(productId, body),
+    mutationFn: (body: ProductSellingUnit) => createProductSellingUnit(productId, body, ownerPin),
     onSuccess: async () => {
+      setOwnerPin("");
       await queryClient.invalidateQueries({ queryKey: ["product-selling-units", productId] });
       await queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
     },
   });
   const removeUnit = useMutation({
-    mutationFn: (unitId: string) => deleteProductSellingUnit(productId, unitId),
+    mutationFn: (unitId: string) => deleteProductSellingUnit(productId, unitId, ownerPin),
     onSuccess: async () => {
+      setOwnerPin("");
       await queryClient.invalidateQueries({ queryKey: ["product-selling-units", productId] });
       await queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
     },
   });
-  const { query, create, remove } = usePricingRules();
+  const { query, create, remove } = usePricingRules(ownerPin);
   const rules = query.data ?? [];
   const activeLocationId = getActiveLocationId();
   const [pricingScope, setPricingScope] = useState<"store" | "all">(() => activeLocationId ? "store" : "all");
@@ -76,7 +80,7 @@ export default function ProductPricingPage() {
   const customerPrices = partitioned.customerPrices.filter(appliesToSelectedUnit);
 
   const unit = selectedUnit?.name ?? product?.rateUnit ?? product?.displayUnit ?? "unit";
-  const busy = create.isPending || remove.isPending || createUnit.isPending || removeUnit.isPending;
+  const busy = !pricingApproved || create.isPending || remove.isPending || createUnit.isPending || removeUnit.isPending;
 
   const add = async (body: Partial<ApiPricingRule> & { name: string; ruleType: string }) => {
     try {
@@ -87,29 +91,50 @@ export default function ProductPricingPage() {
         sellingUnitId: selectedUnit?.id,
         unitCode: selectedUnit?.unitCode,
       });
+      setOwnerPin("");
       toast({ title: "Pricing rule added" });
     } catch (e) {
       toast({ title: "Could not add rule", description: e instanceof Error ? e.message : "Try again", variant: "destructive" });
     }
   };
   const del = async (id: string) => {
-    try { await remove.mutateAsync(id); toast({ title: "Rule removed" }); }
+    try { await remove.mutateAsync(id); setOwnerPin(""); toast({ title: "Rule removed" }); }
     catch (e) { toast({ title: "Could not remove", description: e instanceof Error ? e.message : "Try again", variant: "destructive" }); }
   };
 
   if (productsQuery.isLoading) return <LoadingSkeleton variant="detail" rows={3} className="mx-auto max-w-6xl p-5" />;
   if (!product) return (
     <div className="p-6">
-      <button onClick={() => navigate("/products")} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273]"><ArrowLeft size={14} /> Products</button>
+      <button onClick={() => navigate("/products")} className="mb-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[12px] font-bold text-[#405273]"><ArrowLeft size={14} /> Products</button>
       <p className="text-sm text-[#8290a8]">Product not found.</p>
     </div>
   );
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-5">
-      <button onClick={() => navigate("/products")} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273] hover:text-[var(--brand)]"><ArrowLeft size={14} /> Products</button>
+      <button onClick={() => navigate("/products")} className="mb-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[12px] font-bold text-[#405273] hover:text-[var(--brand)]"><ArrowLeft size={14} /> Products</button>
       <h1 className="font-display text-xl font-black text-[var(--brand-ink)]">{product.name} — Pricing</h1>
       <p className="mt-0.5 text-[12px] text-[#6d7c98]">Set quantity slabs, group prices, and customer exceptions. The billing engine uses these automatically.</p>
+
+      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-2.5">
+          <ShieldCheck className="mt-0.5 shrink-0 text-amber-700" size={17} />
+          <div>
+            <p className="text-[12px] font-black text-amber-950">Owner approval for permanent pricing</p>
+            <p className="mt-0.5 text-[10.5px] leading-4 text-amber-800">Enter the 4-digit owner PIN before adding, changing, or disabling a price rule or selling unit.</p>
+          </div>
+        </div>
+        <input
+          className="h-11 w-full rounded-lg border border-amber-300 bg-white px-3 text-[13px] outline-none focus:border-amber-600 sm:w-36"
+          type="password"
+          inputMode="numeric"
+          maxLength={4}
+          value={ownerPin}
+          onChange={(event) => setOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+          placeholder="Owner PIN"
+          aria-label="Owner PIN for pricing changes"
+        />
+      </div>
 
       <div className="mt-4 rounded-2xl border border-[#dce7f7] bg-[#f8fbff] p-3">
         <p className="text-[10.5px] font-black uppercase tracking-wide text-[#6d7c98]">Price rule scope</p>
@@ -139,32 +164,36 @@ export default function ProductPricingPage() {
           {units.map((row) => {
             const active = selectedUnit && (row.id ?? row.unitCode) === (selectedUnit.id ?? selectedUnit.unitCode);
             return (
-              <button
+              <div
                 key={row.id ?? row.unitCode}
-                type="button"
-                onClick={() => setSelectedUnitKey(row.id ?? row.unitCode)}
-                className={`relative rounded-xl border p-3 text-left transition-colors ${active ? "border-[var(--brand)] bg-[#eef4ff]" : "border-[#e6ecf4] bg-white hover:border-[#b9cef7]"}`}
+                className={`rounded-xl border p-3 transition-colors ${active ? "border-[var(--brand)] bg-[#eef4ff]" : "border-[#e6ecf4] bg-white hover:border-[#b9cef7]"}`}
               >
-                <span className="flex items-start justify-between gap-2">
-                  <span>
-                    <span className="block text-[13px] font-black text-[var(--brand-ink)]">{row.name}</span>
-                    <span className="mt-0.5 block text-[10.5px] font-semibold text-[#6d7c98]">1 {row.unitType} removes {row.conversionToBase} {product.baseUnit ?? "base units"}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedUnitKey(row.id ?? row.unitCode)}
+                  className="block min-h-11 w-full text-left"
+                >
+                  <span className="flex items-start justify-between gap-2">
+                    <span>
+                      <span className="block text-[13px] font-black text-[var(--brand-ink)]">{row.name}</span>
+                      <span className="mt-0.5 block text-[10.5px] font-semibold text-[#6d7c98]">1 {row.unitType} removes {row.conversionToBase} {product.baseUnit ?? "base units"}</span>
+                    </span>
+                    {row.isDefault ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-700">Default</span> : null}
                   </span>
-                  {row.isDefault ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-700">Default</span> : null}
-                </span>
-                <span className="mt-2 flex items-center gap-3 text-[11px] font-bold text-[#405273]">
-                  <span>{rs(row.defaultPrice)}</span>
-                  {row.minimumPrice ? <span>Min {rs(row.minimumPrice)}</span> : null}
-                  {!row.isDefault && row.id ? (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(event) => { event.stopPropagation(); void removeUnit.mutateAsync(row.id!).catch((error) => toast({ title: "Could not disable unit", description: error instanceof Error ? error.message : "Try again", variant: "destructive" })); }}
-                      className="ml-auto text-rose-600"
-                    >Disable</span>
-                  ) : null}
-                </span>
-              </button>
+                  <span className="mt-2 flex items-center gap-3 text-[11px] font-bold text-[#405273]">
+                    <span>{rs(row.defaultPrice)}</span>
+                    {row.minimumPrice ? <span>Min {rs(row.minimumPrice)}</span> : null}
+                  </span>
+                </button>
+                {!row.isDefault && row.id ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void removeUnit.mutateAsync(row.id!).catch((error) => toast({ title: "Could not disable unit", description: error instanceof Error ? error.message : "Try again", variant: "destructive" }))}
+                    className="mt-1 inline-flex min-h-11 items-center rounded-lg px-2 text-[12px] font-bold text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >Disable unit</button>
+                ) : null}
+              </div>
             );
           })}
         </div>
@@ -245,14 +274,14 @@ function Row({ main, price, onDelete, busy }: { main: string; price: string; onD
       <span className="text-[12.5px] font-semibold text-[#334364]">{main}</span>
       <span className="flex items-center gap-3">
         <span className="text-[13px] font-black text-[var(--brand-ink)]">{price}</span>
-        <button type="button" disabled={busy} onClick={onDelete} aria-label="Remove" className="text-[#9aa7bd] hover:text-red-600 disabled:opacity-40"><Trash2 size={15} /></button>
+        <button type="button" disabled={busy} onClick={onDelete} aria-label="Remove" className="grid min-h-11 min-w-11 place-items-center rounded-lg text-[#9aa7bd] hover:bg-rose-50 hover:text-red-600 disabled:opacity-40"><Trash2 size={15} /></button>
       </span>
     </div>
   );
 }
 
-const inputCls = "h-9 rounded-lg border border-[#dce5f1] bg-white px-2 text-[13px] outline-none focus:border-[var(--brand)]";
-const addBtn = "inline-flex h-9 items-center gap-1 rounded-lg bg-[var(--brand)] px-3 text-[12px] font-bold text-white disabled:opacity-50";
+const inputCls = "h-11 rounded-lg border border-[#dce5f1] bg-white px-2 text-[13px] outline-none focus:border-[var(--brand)]";
+const addBtn = "inline-flex min-h-11 items-center gap-1 rounded-lg bg-[var(--brand)] px-3 text-[12px] font-bold text-white disabled:opacity-50";
 
 function SlabAdd({ unit, onAdd, disabled }: { unit: string; onAdd: (min: number, max: number | null, price: number) => void; disabled: boolean }) {
   const [min, setMin] = useState(""); const [max, setMax] = useState(""); const [price, setPrice] = useState("");
@@ -301,7 +330,7 @@ function SellingUnitAdd({ product, onAdd, disabled }: { product: Product; onAdd:
 
   if (!open) {
     return (
-      <button type="button" disabled={disabled} onClick={() => setOpen(true)} className="mt-1 inline-flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-[#9dbcf4] px-3 text-[12px] font-black text-[var(--brand)] hover:bg-[#f5f8ff] disabled:opacity-50">
+      <button type="button" disabled={disabled} onClick={() => setOpen(true)} className="mt-1 inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-dashed border-[#9dbcf4] px-3 text-[12px] font-black text-[var(--brand)] hover:bg-[#f5f8ff] disabled:opacity-50">
         <Plus size={14} /> Add another pack / unit
       </button>
     );
@@ -345,7 +374,7 @@ function SellingUnitAdd({ product, onAdd, disabled }: { product: Product; onAdd:
       </div>
       <p className="mt-2 text-[11px] font-semibold text-[#31527e]">{name}: quantity 4 means four {name}s and removes {Number(conversion || 0) * 4} {product.baseUnit ?? "base units"} from stock.</p>
       <div className="mt-3 flex justify-end gap-2">
-        <button type="button" onClick={() => setOpen(false)} className="h-9 rounded-lg border border-[#dce5f1] px-3 text-[12px] font-bold text-[#405273]">Cancel</button>
+        <button type="button" onClick={() => setOpen(false)} className="min-h-11 rounded-lg border border-[#dce5f1] px-3 text-[12px] font-bold text-[#405273]">Cancel</button>
         <button
           type="button"
           disabled={disabled || !valid}

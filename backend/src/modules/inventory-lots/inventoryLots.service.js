@@ -3,7 +3,24 @@ import { AppError } from "../../middleware/error.js";
 import { moneyShadows, round2 } from "../../utils/money.js";
 import { baseQtyToRateQty } from "../../utils/units.js";
 import { requireFeatureAccess } from "../feature-gates/featureGate.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
 import { NEAR_EXPIRY_CRITICAL_DAYS, NEAR_EXPIRY_WARNING_DAYS, summariseNearExpiry } from "./nearExpiryAlert.js";
+
+async function writeRequiredInventoryLotAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Batch-control action was not saved because its audit record could not be stored",
+      503,
+      "INVENTORY_LOT_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
+function normalizeActor(actor = {}) {
+  return { userId: actor.userId ?? null, deviceId: actor.deviceId ?? undefined, req: actor.req ?? null };
+}
 
 function parseDay(value, field) {
   if (!value) return null;
@@ -73,19 +90,61 @@ export async function nearExpiryAlerts(shopId, { locationId, criticalDays = NEAR
   return summariseNearExpiry(priced, { criticalDays: Number(criticalDays), warningDays: Number(warningDays) });
 }
 
-export async function setProductBatchTracking(shopId, productId, enabled) {
+export async function setProductBatchTracking(shopId, productId, enabled, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
   await requireFeatureAccess(shopId, "batch_expiry");
-  const changed = await db.product.updateMany({ where: { id: productId, shopId, deletedAt: null }, data: { batchTrackingEnabled: Boolean(enabled) } });
-  if (changed.count !== 1) throw new AppError("Product not found", 404, "PRODUCT_NOT_FOUND");
-  return db.product.findFirst({ where: { id: productId, shopId } });
+  return db.$transaction(async (tx) => {
+    const before = await tx.product.findFirst({ where: { id: productId, shopId, deletedAt: null } });
+    if (!before) throw new AppError("Product not found", 404, "PRODUCT_NOT_FOUND");
+    const changed = await tx.product.updateMany({
+      where: { id: productId, shopId, deletedAt: null, batchTrackingEnabled: before.batchTrackingEnabled },
+      data: { batchTrackingEnabled: Boolean(enabled) },
+    });
+    if (changed.count !== 1) throw new AppError("Product changed while saving; retry", 409, "PRODUCT_CONCURRENT_CHANGE");
+    const product = await tx.product.findFirstOrThrow({ where: { id: productId, shopId } });
+    await writeRequiredInventoryLotAudit({
+      shopId,
+      userId: actor.userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "PRODUCT_BATCH_TRACKING_CHANGED",
+      entityType: "Product",
+      entityId: product.id,
+      before: { batchTrackingEnabled: before.batchTrackingEnabled },
+      after: { batchTrackingEnabled: product.batchTrackingEnabled },
+    }, tx);
+    return product;
+  });
 }
 
-export async function changeLotStatus(shopId, lotId, status, note) {
-  const lot = await db.inventoryLot.findFirst({ where: { id: lotId, shopId } });
-  if (!lot) throw new AppError("Inventory batch not found", 404, "INVENTORY_LOT_NOT_FOUND");
-  if (!["active", "quarantined", "recalled"].includes(status)) throw new AppError("Invalid batch status", 422, "INVENTORY_LOT_STATUS_INVALID");
-  if (status === "active" && lot.expiresOn < new Date()) throw new AppError("An expired batch cannot be released for sale", 409, "BATCH_EXPIRED");
-  return db.inventoryLot.update({ where: { id: lot.id }, data: { status: status === "active" && lot.availableBaseQty <= 0 ? "depleted" : status, note: note || lot.note } });
+export async function changeLotStatus(shopId, lotId, status, note, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  return db.$transaction(async (tx) => {
+    const lot = await tx.inventoryLot.findFirst({ where: { id: lotId, shopId } });
+    if (!lot) throw new AppError("Inventory batch not found", 404, "INVENTORY_LOT_NOT_FOUND");
+    if (!["active", "quarantined", "recalled"].includes(status)) throw new AppError("Invalid batch status", 422, "INVENTORY_LOT_STATUS_INVALID");
+    if (status === "active" && lot.expiresOn < new Date()) throw new AppError("An expired batch cannot be released for sale", 409, "BATCH_EXPIRED");
+    const nextStatus = status === "active" && lot.availableBaseQty <= 0 ? "depleted" : status;
+    const changed = await tx.inventoryLot.updateMany({
+      where: { id: lot.id, shopId, status: lot.status, updatedAt: lot.updatedAt },
+      data: { status: nextStatus, note: note || lot.note },
+    });
+    if (changed.count !== 1) throw new AppError("Batch changed while saving; retry", 409, "INVENTORY_LOT_CONCURRENT_CHANGE");
+    const updated = await tx.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } });
+    await writeRequiredInventoryLotAudit({
+      shopId,
+      userId: actor.userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "INVENTORY_LOT_STATUS_CHANGED",
+      entityType: "InventoryLot",
+      entityId: updated.id,
+      before: { status: lot.status, note: lot.note },
+      after: { status: updated.status, note: updated.note },
+      metadata: { note: note ?? null },
+    }, tx);
+    return updated;
+  });
 }
 
 export async function recordReceiptLot(tx, { shopId, locationId, product, receiptItemId, quantityBaseQty, actualRate, batchNumber, manufacturedOn, expiresOn, mrp, note }) {

@@ -2,8 +2,21 @@ import crypto from "crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { fromPaise, toPaise } from "../../utils/money.js";
+import { createAuditLog } from "../audit/audit.service.js";
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+async function writeRequiredGiftCardAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Gift-card action was not saved because its audit record could not be stored",
+      503,
+      "GIFT_CARD_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
 
 function randomPart(length = 4) {
   const bytes = crypto.randomBytes(length);
@@ -76,7 +89,19 @@ export async function issueGiftCard(shopId, data, actor = {}) {
       createdByUserId: actor.userId ?? null,
     } });
     await tx.giftCardTransaction.create({ data: { shopId, giftCardId: created.id, type: "issue", amountPaise, balanceAfterPaise: amountPaise, note: data.note ?? "Gift card issued", createdByUserId: actor.userId ?? null } });
-    return tx.giftCard.findUnique({ where: { id: created.id }, include: { customer: { select: { id: true, name: true, mobile: true } }, transactions: true } });
+    const result = await tx.giftCard.findUnique({ where: { id: created.id }, include: { customer: { select: { id: true, name: true, mobile: true } }, transactions: true } });
+    await writeRequiredGiftCardAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      req: actor.req ?? null,
+      action: "GIFT_CARD_ISSUED",
+      entityType: "GiftCard",
+      entityId: created.id,
+      after: { initialBalancePaise: amountPaise, balancePaise: amountPaise, status: created.status },
+      metadata: { codeLast4: created.codeLast4, customerId: created.customerId, expiresAt: created.expiresAt, note: created.note },
+    }, tx);
+    return result;
   });
   return publicCard(card, { code });
 }
@@ -105,10 +130,33 @@ export async function lookupGiftCard(shopId, code) {
   return publicCard({ ...card, status: expired && card.status === "active" ? "expired" : card.status });
 }
 
-export async function disableGiftCard(shopId, id, reason) {
-  const changed = await db.giftCard.updateMany({ where: { id, shopId, status: { in: ["active", "depleted"] } }, data: { status: "disabled", disabledAt: new Date(), note: reason } });
-  if (changed.count !== 1) throw new AppError("Gift card is already disabled or unavailable", 409, "GIFT_CARD_NOT_DISABLEABLE");
-  const card = await db.giftCard.findUnique({ where: { id }, include: { customer: { select: { id: true, name: true, mobile: true } }, transactions: { orderBy: { createdAt: "desc" }, take: 10 } } });
+export async function disableGiftCard(shopId, id, reason, actor = {}) {
+  const card = await db.$transaction(async (tx) => {
+    const existing = await tx.giftCard.findFirst({ where: { id, shopId } });
+    if (!existing || !["active", "depleted"].includes(existing.status)) {
+      throw new AppError("Gift card is already disabled or unavailable", 409, "GIFT_CARD_NOT_DISABLEABLE");
+    }
+    const disabledAt = new Date();
+    const changed = await tx.giftCard.updateMany({
+      where: { id, shopId, status: existing.status },
+      data: { status: "disabled", disabledAt, note: reason },
+    });
+    if (changed.count !== 1) throw new AppError("Gift card changed while disabling; retry", 409, "GIFT_CARD_CONCURRENT_CHANGE");
+    const result = await tx.giftCard.findUnique({ where: { id }, include: { customer: { select: { id: true, name: true, mobile: true } }, transactions: { orderBy: { createdAt: "desc" }, take: 10 } } });
+    await writeRequiredGiftCardAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      req: actor.req ?? null,
+      action: "GIFT_CARD_DISABLED",
+      entityType: "GiftCard",
+      entityId: id,
+      before: { status: existing.status, balancePaise: existing.balancePaise },
+      after: { status: "disabled", balancePaise: result.balancePaise, disabledAt },
+      metadata: { reason, codeLast4: existing.codeLast4 },
+    }, tx);
+    return result;
+  });
   return publicCard(card);
 }
 

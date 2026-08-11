@@ -46,6 +46,41 @@ export async function fetchRazorpayOrder(orderId) {
   return razorpayRequest(`/orders/${encodeURIComponent(orderId)}`, { method: "GET" });
 }
 
+export async function createRazorpayQrCode({ amountPaise, name, description, closeBy, notes = {} }) {
+  assertRazorpayConfigured();
+  return razorpayRequest("/payments/qr_codes", {
+    method: "POST",
+    body: JSON.stringify({
+      type: "upi_qr",
+      name: String(name || "KiranaOS counter").slice(0, 64),
+      usage: "single_use",
+      fixed_amount: true,
+      payment_amount: amountPaise,
+      description: String(description || "KiranaOS retail payment").slice(0, 120),
+      close_by: closeBy,
+      notes: sanitizeNotes(notes),
+    }),
+  });
+}
+
+export async function fetchRazorpayQrCode(qrCodeId) {
+  assertRazorpayConfigured();
+  if (!qrCodeId) throw new AppError("Razorpay QR code id is required", 400);
+  return razorpayRequest(`/payments/qr_codes/${encodeURIComponent(qrCodeId)}`, { method: "GET" });
+}
+
+export async function fetchRazorpayQrCodePayments(qrCodeId) {
+  assertRazorpayConfigured();
+  if (!qrCodeId) throw new AppError("Razorpay QR code id is required", 400);
+  return razorpayRequest(`/payments/qr_codes/${encodeURIComponent(qrCodeId)}/payments?count=10`, { method: "GET" });
+}
+
+export async function closeRazorpayQrCode(qrCodeId) {
+  assertRazorpayConfigured();
+  if (!qrCodeId) throw new AppError("Razorpay QR code id is required", 400);
+  return razorpayRequest(`/payments/qr_codes/${encodeURIComponent(qrCodeId)}/close`, { method: "POST", body: "{}" });
+}
+
 export function verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature }) {
   if (!env.RAZORPAY_KEY_SECRET) {
     return { verified: false, reason: "RAZORPAY_KEY_SECRET not configured" };

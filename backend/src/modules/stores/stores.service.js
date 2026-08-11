@@ -7,6 +7,60 @@ import { getPlanLimits } from "../feature-gates/featureGate.service.js";
 import { accessibleLocationIds, assertLocationCapability } from "./location-access.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 
+async function writeRequiredStoreAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Store operation was not saved because its audit record could not be stored",
+      503,
+      "STORE_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
+function normalizeActor(actor = {}) {
+  return { userId: actor.userId ?? null, deviceId: actor.deviceId ?? undefined, req: actor.req ?? null };
+}
+
+function locationAuditSnapshot(location) {
+  if (!location) return null;
+  return {
+    code: location.code,
+    name: location.name,
+    address: location.address,
+    city: location.city,
+    gstNumber: location.gstNumber,
+    gstStateCode: location.gstStateCode,
+    gstLegalName: location.gstLegalName,
+    gstTradeName: location.gstTradeName,
+    gstRegistrationType: location.gstRegistrationType,
+    phone: location.phone,
+    active: location.active,
+    isPrimary: location.isPrimary,
+  };
+}
+
+function transferAuditMetadata(transfer) {
+  return {
+    referenceNo: transfer.referenceNo,
+    fromLocationId: transfer.fromLocationId,
+    toLocationId: transfer.toLocationId,
+    itemCount: transfer.items?.length ?? 0,
+    gstTreatment: transfer.gstTreatment,
+    documentType: transfer.documentType,
+    documentNumber: transfer.documentNumber,
+    taxableValuePaise: transfer.taxableValuePaise?.toString?.() ?? null,
+    taxTotalPaise: transfer.taxTotalPaise?.toString?.() ?? null,
+    consignmentValuePaise: transfer.consignmentValuePaise?.toString?.() ?? null,
+    eWayReviewRequired: transfer.eWayReviewRequired,
+    legalSubmissionStatus: transfer.eWayReviewStatus === "external_reference_recorded" ? "external_reference_recorded_not_verified" : "not_submitted",
+    fulfillmentMode: transfer.fulfillmentMode,
+    status: transfer.status,
+    trackingNumber: transfer.trackingNumber,
+  };
+}
+
 function transferRef() {
   const day = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   return `TRF-${day}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
@@ -120,21 +174,37 @@ export async function listLocations(shopId, user = null) {
   };
 }
 
-export async function createLocation(shopId, data) {
+export async function createLocation(shopId, data, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
   await ensurePrimaryLocation(shopId);
-  const [activeCount, limits, shop] = await Promise.all([
-    db.storeLocation.count({ where: { shopId, active: true } }),
-    getPlanLimits(shopId),
-    db.shop.findUnique({ where: { id: shopId } }),
-  ]);
-  if (activeCount >= limits.maxStores) {
-    const error = new AppError(`Your plan supports ${limits.maxStores} active store location${limits.maxStores === 1 ? "" : "s"}.`, 403, "STORE_LIMIT_REACHED");
-    error.publicData = { usage: { current: activeCount, maximum: limits.maxStores } };
-    throw error;
-  }
-  if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
-  const normalized = normalizeLocationRegistration(data, shop, { inheritWhenOmitted: true });
-  const location = await db.storeLocation.create({ data: { shopId, ...normalized, isPrimary: false } });
+  const limits = await getPlanLimits(shopId);
+  const location = await db.$transaction(async (tx) => {
+    const [activeCount, shop] = await Promise.all([
+      tx.storeLocation.count({ where: { shopId, active: true } }),
+      tx.shop.findUnique({ where: { id: shopId } }),
+    ]);
+    if (activeCount >= limits.maxStores) {
+      const error = new AppError(`Your plan supports ${limits.maxStores} active store location${limits.maxStores === 1 ? "" : "s"}.`, 403, "STORE_LIMIT_REACHED");
+      error.publicData = { usage: { current: activeCount, maximum: limits.maxStores } };
+      throw error;
+    }
+    if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
+    const normalized = normalizeLocationRegistration(data, shop, { inheritWhenOmitted: true });
+    const created = await tx.storeLocation.create({ data: { shopId, ...normalized, isPrimary: false } });
+    const registration = validateGstin(created.gstNumber);
+    await writeRequiredStoreAudit({
+      shopId,
+      userId: actor.userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "STORE_LOCATION_CREATED",
+      entityType: "StoreLocation",
+      entityId: created.id,
+      after: locationAuditSnapshot(created),
+      metadata: { registrationFormatValidated: registration.valid, portalVerified: false },
+    }, tx);
+    return created;
+  }, { isolationLevel: "Serializable" });
   return locationWithRegistrationStatus(location);
 }
 
@@ -145,18 +215,40 @@ export async function getLocationForAudit(shopId, locationId) {
   });
 }
 
-export async function updateLocation(shopId, locationId, data) {
-  const [location, shop] = await Promise.all([
-    db.storeLocation.findFirst({ where: { id: locationId, shopId } }),
-    db.shop.findUnique({ where: { id: shopId } }),
-  ]);
-  if (!location) throw new AppError("Store location not found", 404, "STORE_LOCATION_NOT_FOUND");
-  if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
-  if (location.isPrimary && data.active === false) {
-    throw new AppError("The primary location cannot be deactivated", 409, "PRIMARY_LOCATION_REQUIRED");
-  }
-  const normalized = normalizeLocationRegistration(data, shop, { existingLocation: location });
-  const updated = await db.storeLocation.update({ where: { id: location.id }, data: normalized });
+export async function updateLocation(shopId, locationId, data, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  const updated = await db.$transaction(async (tx) => {
+    const [location, shop] = await Promise.all([
+      tx.storeLocation.findFirst({ where: { id: locationId, shopId } }),
+      tx.shop.findUnique({ where: { id: shopId } }),
+    ]);
+    if (!location) throw new AppError("Store location not found", 404, "STORE_LOCATION_NOT_FOUND");
+    if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
+    if (location.isPrimary && data.active === false) {
+      throw new AppError("The primary location cannot be deactivated", 409, "PRIMARY_LOCATION_REQUIRED");
+    }
+    const normalized = normalizeLocationRegistration(data, shop, { existingLocation: location });
+    const changed = await tx.storeLocation.updateMany({
+      where: { id: location.id, shopId, updatedAt: location.updatedAt },
+      data: normalized,
+    });
+    if (changed.count !== 1) throw new AppError("Store location changed while saving; retry", 409, "STORE_LOCATION_CONCURRENT_CHANGE");
+    const result = await tx.storeLocation.findUniqueOrThrow({ where: { id: location.id } });
+    const registration = validateGstin(result.gstNumber);
+    await writeRequiredStoreAudit({
+      shopId,
+      userId: actor.userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "STORE_LOCATION_UPDATED",
+      entityType: "StoreLocation",
+      entityId: result.id,
+      before: locationAuditSnapshot(location),
+      after: locationAuditSnapshot(result),
+      metadata: { registrationFormatValidated: registration.valid, portalVerified: false },
+    }, tx);
+    return result;
+  });
   return locationWithRegistrationStatus(updated);
 }
 
@@ -382,7 +474,7 @@ function decorateTransfer(transfer) {
   };
 }
 
-export async function createTransfer(shopId, data, userId, userRole = "staff") {
+export async function createTransfer(shopId, data, userId, userRole = "staff", req = null) {
   if (data.fromLocationId === data.toLocationId) {
     throw new AppError("Source and destination locations must be different", 400, "SAME_TRANSFER_LOCATION");
   }
@@ -498,7 +590,7 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
         }
       }
 
-      return tx.stockTransfer.create({
+      const created = await tx.stockTransfer.create({
         data: {
           shopId,
           referenceNo: transferRef(),
@@ -541,6 +633,16 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
         },
         include: { fromLocation: true, toLocation: true, items: true },
       });
+      await writeRequiredStoreAudit({
+        shopId,
+        userId,
+        req,
+        action: created.status === "completed" ? "STOCK_TRANSFER_COMPLETED" : "STOCK_TRANSFER_DISPATCHED",
+        entityType: "StockTransfer",
+        entityId: created.id,
+        metadata: transferAuditMetadata(created),
+      }, tx);
+      return created;
     });
     return decorateTransfer(transfer);
   } catch (error) {
@@ -624,7 +726,7 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
     });
     if (updated.count !== 1) throw new AppError("Transfer status changed; refresh and retry", 409, "CONCURRENT_TRANSFER_RECEIPT");
 
-    await createAuditLog({
+    await writeRequiredStoreAudit({
       shopId,
       userId,
       action: completed ? "STOCK_TRANSFER_RECEIVED" : "STOCK_TRANSFER_PARTIALLY_RECEIVED",
@@ -634,8 +736,7 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
       after: { status: nextStatus, completedAt: completed ? receivedAt : null },
       metadata: { lines: receivedLines, note: data.note || null },
       req,
-      client: tx,
-    });
+    }, tx);
 
     const transfer = await tx.stockTransfer.findUnique({
       where: { id: current.id },
@@ -686,7 +787,7 @@ export async function cancelTransfer(shopId, transferId, data, userId, userRole 
     });
     if (updated.count !== 1) throw new AppError("Transfer status changed; refresh and retry", 409, "CONCURRENT_TRANSFER_CANCELLATION");
 
-    await createAuditLog({
+    await writeRequiredStoreAudit({
       shopId,
       userId,
       action: "STOCK_TRANSFER_CANCELLED",
@@ -696,8 +797,7 @@ export async function cancelTransfer(shopId, transferId, data, userId, userRole 
       after: { status: "cancelled", cancelledAt, cancelReason: data.reason },
       metadata: { returnedLines, receivedLinesRetained: current.items.filter((item) => Number(item.receivedBaseQty) > 0).length },
       req,
-      client: tx,
-    });
+    }, tx);
 
     const transfer = await tx.stockTransfer.findUnique({
       where: { id: current.id },
@@ -741,7 +841,7 @@ export async function reviewTransferCompliance(shopId, transferId, data, userId,
         where: { id: current.id },
         include: { fromLocation: true, toLocation: true, items: true },
       });
-      await createAuditLog({
+      await writeRequiredStoreAudit({
         shopId,
         userId,
         action: "STOCK_TRANSFER_COMPLIANCE_REVIEWED",
@@ -759,8 +859,7 @@ export async function reviewTransferCompliance(shopId, transferId, data, userId,
         },
         metadata: { portalVerified: false, submittedByKiranaOS: false },
         req,
-        client: tx,
-      });
+      }, tx);
       return decorateTransfer(reviewed);
     });
   } catch (error) {

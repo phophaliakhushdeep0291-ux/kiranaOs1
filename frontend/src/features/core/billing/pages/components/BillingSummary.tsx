@@ -90,6 +90,7 @@ interface BillingSummaryProps {
   effectivePaidAmount: number;
   advanceAmount: number;
   retailPaymentConfigured: boolean;
+  retailPaymentDynamicQr: boolean;
   retailPaymentRequired: boolean;
   retailPaymentVerified: boolean;
   retailPaymentLoading: boolean;
@@ -221,6 +222,7 @@ export function BillingSummary({
   effectivePaidAmount,
   advanceAmount,
   retailPaymentConfigured,
+  retailPaymentDynamicQr,
   retailPaymentRequired,
   retailPaymentVerified,
   retailPaymentLoading,
@@ -724,6 +726,7 @@ export function BillingSummary({
             creditAmount={creditAmount}
             advanceAmount={advanceAmount}
             retailPaymentConfigured={retailPaymentConfigured}
+            retailPaymentDynamicQr={retailPaymentDynamicQr}
             retailPaymentRequired={retailPaymentRequired}
             retailPaymentVerified={retailPaymentVerified}
             retailPaymentLoading={retailPaymentLoading}

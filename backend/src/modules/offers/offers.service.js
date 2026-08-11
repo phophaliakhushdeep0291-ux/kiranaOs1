@@ -1,9 +1,52 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
+import { createAuditLog } from "../audit/audit.service.js";
+
+async function writeRequiredOfferAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Offer action was not saved because its audit record could not be stored",
+      503,
+      "OFFER_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
+function normalizeActor(actor) {
+  return {
+    userId: actor?.userId ?? null,
+    deviceId: actor?.deviceId ?? undefined,
+    req: actor?.req ?? null,
+    reason: actor?.reason?.trim() || null,
+  };
+}
+
+function offerAuditValue(offer) {
+  return {
+    id: offer.id,
+    title: offer.title,
+    code: offer.code,
+    type: offer.type,
+    value: offer.value,
+    minBillAmount: offer.minBillAmount,
+    maxDiscount: offer.maxDiscount,
+    scope: offer.scope,
+    scopeValue: offer.scopeValue,
+    validFrom: offer.validFrom,
+    validTo: offer.validTo,
+    usageLimit: offer.usageLimit,
+    active: offer.active,
+    deletedAt: offer.deletedAt,
+  };
+}
 
 function normalize(data) {
   const out = { ...data };
+  delete out.auditReason;
+  delete out.ownerPin;
   if (out.code !== undefined) out.code = out.code ? String(out.code).trim().toUpperCase() : null;
   for (const k of ["value", "minBillAmount", "maxDiscount"]) {
     if (out[k] !== undefined) out[k] = round2(Number(out[k]) || 0);
@@ -19,30 +62,109 @@ export async function listOffers(shopId) {
   return db.offer.findMany({ where: { shopId, deletedAt: null }, orderBy: { createdAt: "desc" } });
 }
 
-export async function getOffer(shopId, id) {
-  const offer = await db.offer.findFirst({ where: { id, shopId, deletedAt: null } });
+export async function getOffer(shopId, id, client = db) {
+  const offer = await client.offer.findFirst({ where: { id, shopId, deletedAt: null } });
   if (!offer) throw new AppError("Offer not found", 404);
   return offer;
 }
 
-export async function createOffer(shopId, data) {
-  return db.offer.create({ data: { ...normalize(data), shopId } });
+export async function createOffer(shopId, data, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  return db.$transaction(async (tx) => {
+    const offer = await tx.offer.create({ data: { ...normalize(data), shopId } });
+    await writeRequiredOfferAudit({
+      shopId,
+      userId: actor.userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "OFFER_CREATED",
+      entityType: "Offer",
+      entityId: offer.id,
+      after: offerAuditValue(offer),
+      metadata: { reason: actor.reason },
+    }, tx);
+    return offer;
+  });
 }
 
-export async function updateOffer(shopId, id, data) {
-  await getOffer(shopId, id);
-  return db.offer.update({ where: { id }, data: normalize(data) });
+export async function updateOffer(shopId, id, data, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  return db.$transaction(async (tx) => {
+    const before = await getOffer(shopId, id, tx);
+    const changed = await tx.offer.updateMany({
+      where: { id, shopId, deletedAt: null },
+      data: normalize(data),
+    });
+    if (changed.count !== 1) throw new AppError("Offer changed while saving; retry", 409, "OFFER_CONCURRENT_CHANGE");
+    const offer = await tx.offer.findFirstOrThrow({ where: { id, shopId } });
+    await writeRequiredOfferAudit({
+      shopId,
+      userId: actor.userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "OFFER_UPDATED",
+      entityType: "Offer",
+      entityId: offer.id,
+      before: offerAuditValue(before),
+      after: offerAuditValue(offer),
+      metadata: { reason: actor.reason },
+    }, tx);
+    return offer;
+  });
 }
 
-export async function softDeleteOffer(shopId, id) {
-  const offer = await getOffer(shopId, id);
-  return db.offer.update({ where: { id: offer.id }, data: { deletedAt: new Date() } });
+export async function softDeleteOffer(shopId, id, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  return db.$transaction(async (tx) => {
+    const before = await getOffer(shopId, id, tx);
+    const deletedAt = new Date();
+    const changed = await tx.offer.updateMany({
+      where: { id, shopId, deletedAt: null },
+      data: { deletedAt },
+    });
+    if (changed.count !== 1) throw new AppError("Offer changed while deleting; retry", 409, "OFFER_CONCURRENT_CHANGE");
+    const offer = await tx.offer.findFirstOrThrow({ where: { id, shopId } });
+    await writeRequiredOfferAudit({
+      shopId,
+      userId: actor.userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "OFFER_DELETED",
+      entityType: "Offer",
+      entityId: offer.id,
+      before: offerAuditValue(before),
+      after: offerAuditValue(offer),
+      metadata: { softDelete: true, reason: actor.reason },
+    }, tx);
+    return offer;
+  });
 }
 
-export async function restoreOffer(shopId, id) {
-  const offer = await db.offer.findFirst({ where: { id, shopId, deletedAt: { not: null } } });
-  if (!offer) throw new AppError("Deleted offer not found in recycle bin", 404);
-  return db.offer.update({ where: { id: offer.id }, data: { deletedAt: null } });
+export async function restoreOffer(shopId, id, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  return db.$transaction(async (tx) => {
+    const before = await tx.offer.findFirst({ where: { id, shopId, deletedAt: { not: null } } });
+    if (!before) throw new AppError("Deleted offer not found in recycle bin", 404);
+    const changed = await tx.offer.updateMany({
+      where: { id, shopId, deletedAt: { not: null } },
+      data: { deletedAt: null },
+    });
+    if (changed.count !== 1) throw new AppError("Offer changed while restoring; retry", 409, "OFFER_CONCURRENT_CHANGE");
+    const offer = await tx.offer.findFirstOrThrow({ where: { id, shopId } });
+    await writeRequiredOfferAudit({
+      shopId,
+      userId: actor.userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "OFFER_RESTORED",
+      entityType: "Offer",
+      entityId: offer.id,
+      before: offerAuditValue(before),
+      after: offerAuditValue(offer),
+      metadata: { reason: actor.reason },
+    }, tx);
+    return offer;
+  });
 }
 
 function computeDiscount(offer, subtotal) {

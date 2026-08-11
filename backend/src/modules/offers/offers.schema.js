@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const auditReason = z.string().trim().min(3).max(500).optional();
+
 export const createOfferSchema = z.object({
   title: z.string().min(1).max(160),
   code: z.string().trim().max(40).optional(),
@@ -13,6 +15,7 @@ export const createOfferSchema = z.object({
   validTo: z.string().optional(),
   usageLimit: z.coerce.number().int().nonnegative().default(0),
   active: z.boolean().default(true),
+  auditReason,
 });
 
 export const updateOfferSchema = createOfferSchema.partial();
@@ -21,3 +24,5 @@ export const applyOfferSchema = z.object({
   subtotal: z.coerce.number().finite().nonnegative(),
   code: z.string().trim().optional(),
 });
+
+export const offerActionSchema = z.object({ auditReason }).default({});

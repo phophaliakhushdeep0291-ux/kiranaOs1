@@ -59,8 +59,8 @@ export function OwnerPinModal({
     const cleanPin = ownerPin.trim();
     const cleanReason = reason.trim();
 
-    if (cleanPin.length < 4) {
-      setLocalError("Owner PIN is required for this action.");
+    if (!/^\d{4}$/.test(cleanPin)) {
+      setLocalError("Enter the 4-digit owner PIN.");
       return;
     }
     if (reasonRequired && cleanReason.length < 3) {
@@ -100,8 +100,9 @@ export function OwnerPinModal({
               type="password"
               inputMode="numeric"
               autoComplete="off"
+              maxLength={4}
               value={ownerPin}
-              onChange={(event) => setOwnerPin(event.target.value)}
+              onChange={(event) => setOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
               placeholder="Enter owner PIN"
               disabled={loading}
             />

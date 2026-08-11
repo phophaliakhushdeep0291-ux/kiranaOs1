@@ -29,6 +29,7 @@ interface BillingPaymentPanelProps {
   creditAmount: number;
   advanceAmount: number;
   retailPaymentConfigured: boolean;
+  retailPaymentDynamicQr: boolean;
   retailPaymentRequired: boolean;
   retailPaymentVerified: boolean;
   retailPaymentLoading: boolean;
@@ -68,6 +69,7 @@ export function BillingPaymentPanel({
   creditAmount,
   advanceAmount,
   retailPaymentConfigured,
+  retailPaymentDynamicQr,
   retailPaymentRequired,
   retailPaymentVerified,
   retailPaymentLoading,
@@ -163,7 +165,7 @@ export function BillingPaymentPanel({
         </div>
       ) : null}
 
-      {showPaymentMode && showUpiQr ? (
+      {showPaymentMode && showUpiQr && !retailPaymentDynamicQr ? (
         <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-3">
           {upiUri ? <div className="flex flex-col items-center gap-3 sm:flex-row"><QrCodeView value={upiUri} size={128} className="shrink-0 rounded-lg border border-purple-100 bg-white p-1" title={t("billing.pay.upi.qrTitle", { amount: upiAmount.toFixed(2) })} /><div><p className="text-sm font-black text-purple-950">{t("billing.pay.upi.scanToPay", { amount: fmtRs(upiAmount) })}</p><p className="mt-1 break-all text-xs font-semibold text-purple-700">{paymentConfig.upiId}</p><p className="mt-2 text-[11px] leading-4 text-purple-700">{t("billing.pay.upi.qrHelp")}</p></div></div> : <div className="flex items-start gap-2 text-xs text-amber-800"><QrCode size={17} className="mt-0.5 shrink-0" /><p><strong>{t("billing.pay.upi.notConfigured")}</strong> {t("billing.pay.upi.notConfiguredHelp")}</p></div>}
         </div>
@@ -172,7 +174,7 @@ export function BillingPaymentPanel({
       {showPaymentMode && (paymentMode === BillPaymentMode.upi || (paymentMode === SPLIT_PAYMENT && splitUpi > 0)) ? (
         <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${retailPaymentVerified ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}>
           <div className="min-w-0">
-            <p className={`flex items-center gap-1.5 text-xs font-black ${retailPaymentVerified ? "text-emerald-800" : "text-slate-800"}`}><ShieldCheck size={15} />{retailPaymentVerified ? t("billing.pay.verify.verified") : retailPaymentConfigured ? t("billing.pay.verify.available") : t("billing.pay.verify.operator")}</p>
+            <p className={`flex items-center gap-1.5 text-xs font-black ${retailPaymentVerified ? "text-emerald-800" : "text-slate-800"}`}><ShieldCheck size={15} />{retailPaymentVerified ? t("billing.pay.verify.verified") : retailPaymentConfigured ? t("billing.pay.verify.available") : t("billing.pay.verify.operator")}{retailPaymentDynamicQr && !retailPaymentVerified ? <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] uppercase tracking-wide text-violet-700">{t("billing.pay.verify.dynamicQr")}</span> : null}</p>
             <p className="mt-0.5 text-[11px] text-slate-600">{retailPaymentVerified ? t("billing.pay.verify.verifiedHelp") : retailPaymentRequired ? t("billing.pay.verify.requiredHelp") : retailPaymentConfigured ? t("billing.pay.verify.optionalHelp") : t("billing.pay.verify.noProviderHelp")}</p>
           </div>
           {retailPaymentConfigured && !retailPaymentVerified ? <button type="button" onClick={onVerifyRetailPayment} disabled={retailPaymentLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0753df] disabled:opacity-60">{retailPaymentLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}{t("billing.pay.verify.action")}</button> : null}

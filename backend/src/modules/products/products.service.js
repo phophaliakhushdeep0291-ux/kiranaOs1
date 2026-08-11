@@ -26,6 +26,72 @@ async function writeRequiredProductAudit(entry, client) {
   return audit;
 }
 
+export const SENSITIVE_PRODUCT_FIELDS = Object.freeze([
+  "stockBaseQty",
+  "costPerRateUnit",
+  "minPricePerRateUnit",
+  "defaultPricePerRateUnit",
+  "gstRate",
+  "hsn",
+  "mrp",
+  "barcode",
+  "sku",
+  "sellingUnits",
+  "variantAxes",
+  "packagingMode",
+  "batchTrackingEnabled",
+  "drugSchedule",
+  "isActive",
+  "status",
+]);
+
+function productAuditSnapshot(product) {
+  if (!product) return null;
+  return {
+    id: product.id,
+    name: product.name,
+    category: product.category,
+    stockBaseQty: Number(product.stockBaseQty ?? 0),
+    costPerRateUnit: Number(product.costPerRateUnit ?? 0),
+    minPricePerRateUnit: Number(product.minPricePerRateUnit ?? 0),
+    defaultPricePerRateUnit: Number(product.defaultPricePerRateUnit ?? 0),
+    gstRate: Number(product.gstRate ?? 0),
+    hsn: product.hsn ?? null,
+    mrp: Number(product.mrp ?? 0),
+    barcode: product.barcode ?? null,
+    sku: product.sku ?? null,
+    packagingMode: product.packagingMode ?? "pooled",
+    batchTrackingEnabled: Boolean(product.batchTrackingEnabled),
+    drugSchedule: product.drugSchedule ?? null,
+    isActive: product.isActive !== false,
+    variantAxes: parseVariantAxes(product.variantAxesJson),
+    sellingUnits: Array.isArray(product.sellingUnits)
+      ? product.sellingUnits.map((unit) => ({
+          id: unit.id,
+          unitCode: unit.unitCode,
+          barcode: unit.barcode ?? null,
+          conversionToBase: Number(unit.conversionToBase ?? 0),
+          defaultPrice: Number(unit.defaultPrice ?? 0),
+          minimumPrice: unit.minimumPrice == null ? null : Number(unit.minimumPrice),
+          maximumPrice: unit.maximumPrice == null ? null : Number(unit.maximumPrice),
+          costPrice: unit.costPrice == null ? null : Number(unit.costPrice),
+          onHandQty: unit.onHandQty == null ? null : Number(unit.onHandQty),
+          isDefault: Boolean(unit.isDefault),
+          isActive: unit.isActive !== false,
+        }))
+      : [],
+  };
+}
+
+function changedFieldsFromInput(data) {
+  return Object.keys(data ?? {}).filter((field) => ![
+    "baseUpdatedAt",
+    "locationId",
+    "ownerPin",
+    "ownerPinReason",
+  ].includes(field));
+}
+
 async function applyLocationInventory(shopId, products, locationId) {
   if (!locationId || products.length === 0) return products;
   const location = await resolveOperationalLocation(shopId, locationId);
@@ -110,7 +176,7 @@ export async function getProduct(shopId, id, { locationId } = {}) {
 // with PACKAGING_STOCK_PATH_UNSUPPORTED at the movement choke point in
 // location-context.service.js, so an unwired path fails loudly instead of drifting.
 
-export async function createProduct(shopId, data, { identity = null } = {}) {
+export async function createProduct(shopId, data, { identity = null, actor = {}, locationId = null } = {}) {
   if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const productIdentity = normalizeProductIdentity(shopId, identity);
 
@@ -129,8 +195,21 @@ export async function createProduct(shopId, data, { identity = null } = {}) {
   const { aliases, variantAxes, sellingUnits, baseUpdatedAt: _baseUpdatedAt, ...rawRest } = data;
   const normalizedUnits = normalizeSellingUnits(rawRest, sellingUnits);
   const rest = applyDefaultSellingUnitToProduct(rawRest, normalizedUnits);
+  const resolvedPackagingMode = packagingModeForAxes(variantAxes, rest.packagingMode);
+  if (resolvedPackagingMode === "per_pack") {
+    const unitTotal = perPackStockTotal(normalizedUnits);
+    if (data.stockBaseQty !== undefined && round2(Number(data.stockBaseQty)) !== unitTotal) {
+      throw new AppError(
+        `Per-pack opening stock totals ${unitTotal} base units, but the product total says ${round2(Number(data.stockBaseQty))}.`,
+        409,
+        "PACKAGING_STOCK_TOTAL_MISMATCH",
+      );
+    }
+    rest.stockBaseQty = unitTotal;
+  }
   try {
     const product = await db.$transaction(async (tx) => {
+      await assertNoActiveProductNameConflict(shopId, data.name, null, tx);
       const created = await tx.product.create({
         data: {
           ...rest,
@@ -144,18 +223,96 @@ export async function createProduct(shopId, data, { identity = null } = {}) {
           variantAxesJson: JSON.stringify(variantAxes ?? []),
           // After ...rest on purpose: a variant grid overrides whatever packaging
           // mode was asked for, because pooled variants share one stock number.
-          packagingMode: packagingModeForAxes(variantAxes, rest.packagingMode),
+          packagingMode: resolvedPackagingMode,
           clientProductId: productIdentity.clientProductId,
           idempotencyKey: productIdentity.idempotencyKey,
           sourceDeviceId: productIdentity.sourceDeviceId,
         },
       });
       await writeSellingUnits(tx, shopId, created.id, normalizedUnits);
-      return tx.product.findUnique({
+
+      const hydrated = await tx.product.findUnique({
         where: { id: created.id },
         include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
       });
-    });
+
+      const openingQty = round2(Number(created.stockBaseQty ?? 0));
+      let openingLocation = null;
+      if (openingQty !== 0) {
+        openingLocation = await resolveOperationalLocation(shopId, locationId, tx);
+        if (!openingLocation.isPrimary) {
+          await tx.locationStock.upsert({
+            where: { locationId_productId: { locationId: openingLocation.id, productId: created.id } },
+            create: { shopId, locationId: openingLocation.id, productId: created.id, stockBaseQty: openingQty },
+            update: { stockBaseQty: openingQty },
+          });
+        }
+        const commonLedgerData = {
+          shopId,
+          locationId: openingLocation.id,
+          productId: created.id,
+          productName: created.name,
+          action: "opening_stock",
+          sourceDeviceId: actor.deviceId ?? productIdentity.sourceDeviceId ?? null,
+          sourceType: "product_create",
+          sourceId: created.id,
+        };
+        if (resolvedPackagingMode === "per_pack") {
+          let runningTotal = 0;
+          for (const unit of hydrated.sellingUnits.filter((row) => row.isActive !== false && Number(row.onHandQty ?? 0) > 0)) {
+            const unitQty = round2(Number(unit.onHandQty ?? 0));
+            const baseQty = round2(unitQty * Number(unit.conversionToBase ?? 0));
+            const nextTotal = round2(runningTotal + baseQty);
+            await tx.stockLedger.create({
+              data: {
+                ...commonLedgerData,
+                sellingUnitId: unit.id,
+                sellingUnitQty: unitQty,
+                changeBaseQty: baseQty,
+                oldStockBaseQty: runningTotal,
+                newStockBaseQty: nextTotal,
+                idempotencyKey: `product-opening:${created.id}:${unit.id}`,
+                note: `Opening pack count for ${unit.unitCode}`,
+              },
+            });
+            runningTotal = nextTotal;
+          }
+          if (runningTotal !== openingQty) {
+            throw new AppError("Per-pack opening movements did not reconcile to the product total", 409, "PACKAGING_STOCK_RECONCILIATION_FAILED");
+          }
+        } else {
+          await tx.stockLedger.create({
+            data: {
+              ...commonLedgerData,
+              changeBaseQty: openingQty,
+              oldStockBaseQty: 0,
+              newStockBaseQty: openingQty,
+              idempotencyKey: `product-opening:${created.id}`,
+              note: "Opening stock recorded with product creation",
+            },
+          });
+        }
+      }
+      const sensitiveFields = changedFieldsFromInput(data).filter((field) => SENSITIVE_PRODUCT_FIELDS.includes(field));
+      await writeRequiredProductAudit({
+        shopId,
+        userId: actor.userId ?? null,
+        deviceId: actor.deviceId ?? productIdentity.sourceDeviceId ?? undefined,
+        action: sensitiveFields.length ? "PRODUCT_CREATED_WITH_SENSITIVE_FIELDS" : "PRODUCT_CREATED",
+        entityType: "Product",
+        entityId: created.id,
+        before: null,
+        after: productAuditSnapshot(hydrated),
+        metadata: {
+          sensitiveFields,
+          openingStockLocationId: openingLocation?.id ?? null,
+          offlineSyncEventId: actor.syncEventId ?? null,
+          reason: actor.reason ?? null,
+        },
+        req: actor.req ?? null,
+      }, tx);
+      return hydrated;
+    }, { isolationLevel: "Serializable" });
     return deserializeProduct(product);
   } catch (error) {
     // Race backstop: two concurrent creates with the same client identity collide on the
@@ -259,7 +416,7 @@ async function applyStockCorrectionInTransaction(tx, shopId, productId, newStock
   });
 }
 
-export async function updateProduct(shopId, id, data) {
+export async function updateProduct(shopId, id, data, { actor = {}, locationId = null } = {}) {
   if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const existing = await getProduct(shopId, id); // ensures it exists and belongs to shop
   if (data.name) await assertNoActiveProductNameConflict(shopId, data.name, id);
@@ -307,20 +464,75 @@ export async function updateProduct(shopId, id, data) {
   }
 
   const updated = await db.$transaction(async (tx) => {
-    await tx.product.update({
-      where: { id },
+    const current = await tx.product.findFirst({
+      where: { id, shopId, deletedAt: null },
+      include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
+    });
+    if (!current) throw new AppError("Product not found", 404);
+    if (data.name) await assertNoActiveProductNameConflict(shopId, data.name, id, tx);
+    const targetPackagingMode = updateData.packagingMode ?? current.packagingMode ?? "pooled";
+    if (targetPackagingMode !== current.packagingMode && round2(Number(current.stockBaseQty ?? 0)) !== 0) {
+      throw new AppError(
+        "Count stock to zero before changing how this product tracks pack-level inventory.",
+        409,
+        "PACKAGING_MODE_STOCK_MIGRATION_REQUIRED",
+      );
+    }
+    const changed = await tx.product.updateMany({
+      where: { id, shopId, deletedAt: null, updatedAt: existing.updatedAt },
       data: updateData,
     });
-    if (requestedStockBaseQty !== undefined) {
-      await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, data.locationId ?? null);
+    if (changed.count !== 1) {
+      throw new AppError(
+        `"${existing.name}" changed while this edit was being saved. Reload and try again.`,
+        409,
+        "PRODUCT_STALE_WRITE",
+      );
     }
-    if (normalizedUnits) await writeSellingUnits(tx, shopId, id, normalizedUnits);
-    else await syncDefaultSellingUnitPricing(tx, shopId, id, { ...existing, ...rest });
-    return tx.product.findUnique({
+    if (normalizedUnits) {
+      await writeSellingUnits(tx, shopId, id, normalizedUnits);
+      if (targetPackagingMode === "per_pack") {
+        await applyPerPackStockEditInTransaction(tx, {
+          shopId,
+          product: current,
+          normalizedUnits,
+          requestedStockBaseQty,
+          locationId,
+        });
+      } else if (requestedStockBaseQty !== undefined) {
+        await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, locationId);
+      }
+    } else {
+      if (requestedStockBaseQty !== undefined) {
+        await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, locationId);
+      }
+      await syncDefaultSellingUnitPricing(tx, shopId, id, { ...existing, ...rest });
+    }
+    const hydrated = await tx.product.findUnique({
       where: { id },
       include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
     });
-  });
+    const changedFields = changedFieldsFromInput(data);
+    await writeRequiredProductAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      action: "PRODUCT_UPDATED",
+      entityType: "Product",
+      entityId: id,
+      before: productAuditSnapshot(current),
+      after: productAuditSnapshot(hydrated),
+      metadata: {
+        changedFields,
+        sensitiveFields: changedFields.filter((field) => SENSITIVE_PRODUCT_FIELDS.includes(field)),
+        locationId,
+        offlineSyncEventId: actor.syncEventId ?? null,
+        reason: actor.reason ?? null,
+      },
+      req: actor.req ?? null,
+    }, tx);
+    return hydrated;
+  }, { isolationLevel: "Serializable" });
   return deserializeProduct(updated);
 }
 
@@ -347,6 +559,114 @@ export async function softDeleteProduct(shopId, id, actor = {}) {
     }, tx);
     return deserializeProduct(deleted);
   });
+}
+
+function perPackStockTotal(units) {
+  return round2((units ?? []).reduce((total, unit) => {
+    if (unit?.isActive === false) return total;
+    return total + Number(unit?.onHandQty ?? 0) * Number(unit?.conversionToBase ?? 0);
+  }, 0));
+}
+
+async function applyPerPackStockEditInTransaction(tx, {
+  shopId,
+  product,
+  normalizedUnits,
+  requestedStockBaseQty,
+  locationId,
+}) {
+  const desiredTotal = perPackStockTotal(normalizedUnits);
+  if (requestedStockBaseQty !== undefined && round2(Number(requestedStockBaseQty)) !== desiredTotal) {
+    throw new AppError(
+      `Per-pack stock totals ${desiredTotal} base units, but the product total says ${round2(Number(requestedStockBaseQty))}. Recount the pack rows and try again.`,
+      409,
+      "PACKAGING_STOCK_TOTAL_MISMATCH",
+    );
+  }
+
+  const previousByCode = new Map((product.sellingUnits ?? []).map((unit) => [unit.unitCode, unit]));
+  const incomingByCode = new Map(normalizedUnits.map((unit) => [unit.unitCode, unit]));
+  for (const incoming of normalizedUnits) {
+    if (incoming.isActive === false && round2(Number(incoming.onHandQty ?? 0)) !== 0) {
+      throw new AppError(
+        `Count ${incoming.unitCode} to zero before disabling that pack.`,
+        409,
+        "PACKAGING_UNIT_HAS_STOCK",
+      );
+    }
+  }
+  for (const previous of product.sellingUnits ?? []) {
+    const incoming = incomingByCode.get(previous.unitCode);
+    if ((!incoming || incoming.isActive === false) && round2(Number(previous.onHandQty ?? 0)) !== 0) {
+      throw new AppError(
+        `Count ${previous.unitCode} to zero before removing or disabling that pack.`,
+        409,
+        "PACKAGING_UNIT_HAS_STOCK",
+      );
+    }
+  }
+  const unitChanges = normalizedUnits.flatMap((unit) => {
+    const previous = previousByCode.get(unit.unitCode);
+    const oldQty = round2(Number(previous?.onHandQty ?? 0));
+    const newQty = round2(Number(unit.onHandQty ?? 0));
+    const deltaQty = round2(newQty - oldQty);
+    return deltaQty === 0 ? [] : [{ unit, oldQty, newQty, deltaQty }];
+  });
+  const globalDifference = round2(desiredTotal - Number(product.stockBaseQty ?? 0));
+  if (!unitChanges.length && globalDifference === 0) return;
+
+  const location = await resolveOperationalLocation(shopId, locationId, tx);
+  const allocatedSecondary = await tx.locationStock.count({
+    where: { shopId, productId: product.id, stockBaseQty: { not: 0 } },
+  });
+  if (!location.isPrimary || allocatedSecondary > 0) {
+    throw new AppError(
+      "Per-pack stock must be counted per branch. This product already has branch allocation, so use the branch stock-count workflow instead of a global product edit.",
+      409,
+      "PACKAGING_STOCK_MULTI_LOCATION_UNSUPPORTED",
+    );
+  }
+
+  const changed = await tx.product.updateMany({
+    where: { id: product.id, shopId, deletedAt: null, stockBaseQty: product.stockBaseQty },
+    data: { stockBaseQty: desiredTotal },
+  });
+  if (changed.count !== 1) {
+    throw new AppError("Stock changed while saving the per-pack count. Reload and try again.", 409, "CONCURRENT_STOCK_MODIFICATION_RETRY");
+  }
+
+  const storedUnits = await tx.productSellingUnit.findMany({
+    where: { shopId, productId: product.id },
+    select: { id: true, unitCode: true },
+  });
+  const storedByCode = new Map(storedUnits.map((unit) => [unit.unitCode, unit]));
+  let runningTotal = round2(Number(product.stockBaseQty ?? 0));
+  for (const change of unitChanges) {
+    const stored = storedByCode.get(change.unit.unitCode);
+    const baseDelta = round2(change.deltaQty * Number(change.unit.conversionToBase ?? 0));
+    const nextTotal = round2(runningTotal + baseDelta);
+    await tx.stockLedger.create({
+      data: {
+        shopId,
+        locationId: location.id,
+        productId: product.id,
+        productName: product.name,
+        sellingUnitId: stored?.id ?? null,
+        sellingUnitQty: change.deltaQty,
+        action: "correction",
+        changeBaseQty: baseDelta,
+        oldStockBaseQty: runningTotal,
+        newStockBaseQty: nextTotal,
+        sourceType: "product_per_pack_edit",
+        sourceId: product.id,
+        note: `Pack count changed from ${change.oldQty} to ${change.newQty} for ${change.unit.unitCode}`,
+      },
+    });
+    runningTotal = nextTotal;
+  }
+  if (runningTotal !== desiredTotal) {
+    throw new AppError("Per-pack stock movements did not reconcile to the product total", 409, "PACKAGING_STOCK_RECONCILIATION_FAILED");
+  }
 }
 
 export async function listDeletedProducts(shopId, { search } = {}) {
@@ -495,11 +815,11 @@ export async function emptyProductRecycleBin(shopId, actor = {}) {
   };
 }
 
-async function assertNoActiveProductNameConflict(shopId, name, excludeId = null) {
+async function assertNoActiveProductNameConflict(shopId, name, excludeId = null, client = db) {
   const normalizedName = normalizeProductName(name);
   if (!normalizedName) return;
 
-  const activeProducts = await db.product.findMany({
+  const activeProducts = await client.product.findMany({
     where: { shopId, deletedAt: null, ...(excludeId && { NOT: { id: excludeId } }) },
     select: { id: true, name: true },
   });
@@ -570,7 +890,15 @@ async function assertBarcodeAvailable(shopId, code, excludeProductId = null, cli
  * `client` exists so a transaction (or a test) can supply its own Prisma client, the same
  * way createAuditLog does. It defaults to the shared one.
  */
-export async function bindProductBarcode(shopId, productId, barcode, { identity = null, req = null, userId = null, client = db } = {}) {
+export async function bindProductBarcode(shopId, productId, barcode, options = {}) {
+  const client = options.client ?? db;
+  if (client === db) {
+    return db.$transaction((tx) => bindProductBarcodeWithClient(shopId, productId, barcode, { ...options, client: tx }));
+  }
+  return bindProductBarcodeWithClient(shopId, productId, barcode, { ...options, client });
+}
+
+async function bindProductBarcodeWithClient(shopId, productId, barcode, { identity = null, req = null, userId = null, client }) {
   const code = compactText(barcode);
   if (!code) {
     const err = new AppError("A barcode is required", 400);
@@ -615,11 +943,10 @@ export async function bindProductBarcode(shopId, productId, barcode, { identity 
     throw error;
   }
 
-  await createAuditLog({
+  await writeRequiredProductAudit({
     shopId,
     userId,
     req,
-    client,
     // A bind that arrived over sync has no request to read the device from, so the
     // originating till is carried in the event itself. `undefined` (not null) keeps the
     // online path falling back to the request header.
@@ -634,8 +961,9 @@ export async function bindProductBarcode(shopId, productId, barcode, { identity 
       barcode: code,
       source: identity?.sourceDeviceId ? "sync" : "online",
       clientProductId: identity?.clientProductId ?? null,
+      offlineSyncEventId: identity?.syncEventId ?? null,
     },
-  });
+  }, client);
 
   return deserializeProduct(updated);
 }

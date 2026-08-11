@@ -21,7 +21,7 @@ import {
   getPlanByCode,
   getBillablePlan,
 } from "../subscription/subscription.service.js";
-import { confirmRetailIntentFromWebhook } from "./retailPayment.service.js";
+import { confirmRetailIntentFromWebhook, confirmRetailQrIntentFromWebhook } from "./retailPayment.service.js";
 
 const SENSITIVE_KEYS = new Set([
   "card",
@@ -516,6 +516,14 @@ export async function retryProviderEvent({ shopId, id, req = null }) {
 
 async function processVerifiedRazorpayWebhook(payload, event) {
   const eventType = payload?.event || "unknown";
+  if (eventType === "qr_code.credited") {
+    const result = await confirmRetailQrIntentFromWebhook({
+      qrCode: payload?.payload?.qr_code?.entity || payload?.qr_code || null,
+      payment: extractPaymentEntity(payload),
+    });
+    await db.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId: result?.shopId ?? event.shopId, processedAt: new Date() } });
+    return result || { action: "ignored", reason: "QR webhook is not bound to a KiranaOS retail intent" };
+  }
   if (["payment.captured", "payment.authorized", "order.paid"].includes(eventType)) {
     return processPaymentSuccessWebhook(payload, event);
   }
@@ -859,7 +867,8 @@ function extractOrderEntity(payload) {
 function extractWebhookShopId(payload) {
   const payment = extractPaymentEntity(payload);
   const order = extractOrderEntity(payload);
-  return payment?.notes?.shopId || order?.notes?.shopId || null;
+  const qrCode = payload?.payload?.qr_code?.entity || payload?.qr_code || null;
+  return payment?.notes?.shopId || order?.notes?.shopId || qrCode?.notes?.shopId || null;
 }
 
 function readJson(value) {

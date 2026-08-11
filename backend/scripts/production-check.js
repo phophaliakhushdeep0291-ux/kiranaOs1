@@ -539,8 +539,8 @@ if (exists("src/utils/money.js")) {
 
 if (exists("src/modules/products/products.routes.js")) {
   const productRoutes = read("src/modules/products/products.routes.js");
-  if (!productRoutes.includes('router.post("/:id/restore", requireOwnerPin, ctrl.restore);')) {
-    errors.push("Product restore route must require owner PIN");
+  if (!/router\.post\("\/:id\/restore",\s*requireRole\("owner",\s*"admin"\),\s*requireOwnerPin,\s*ctrl\.restore\);/.test(productRoutes)) {
+    errors.push("Product restore route must require owner/admin role and owner PIN");
   }
 }
 

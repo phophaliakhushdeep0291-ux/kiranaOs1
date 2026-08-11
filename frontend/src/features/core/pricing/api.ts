@@ -23,49 +23,52 @@ export function evaluatePricingRemote(body: EvaluateRequest) {
 
 export function listPricingRules(status = "ACTIVE") {
   const q = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiRequest<{ rules: ApiPricingRule[] }>(`/pricing/rules${q}`);
+  return apiRequest<{ rules: ApiPricingRule[] }>(`/pricing/rules${q}`, { cache: "no-store" });
 }
 
-export function createPricingRule(body: Partial<ApiPricingRule> & { name: string; ruleType: string }) {
-  return apiRequest<ApiPricingRule>("/pricing/rules", { method: "POST", body: JSON.stringify(body) });
+export function createPricingRule(body: Partial<ApiPricingRule> & { name: string; ruleType: string }, ownerPin: string) {
+  return apiRequest<ApiPricingRule>("/pricing/rules", { method: "POST", ownerPin, body: JSON.stringify(body) });
 }
 
-export function updatePricingRule(id: string, body: Partial<ApiPricingRule>) {
-  return apiRequest<ApiPricingRule>(`/pricing/rules/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+export function updatePricingRule(id: string, body: Partial<ApiPricingRule>, ownerPin: string) {
+  return apiRequest<ApiPricingRule>(`/pricing/rules/${encodeURIComponent(id)}`, { method: "PATCH", ownerPin, body: JSON.stringify(body) });
 }
 
-export function deletePricingRule(id: string) {
-  return apiRequest<{ id: string; status: string }>(`/pricing/rules/${encodeURIComponent(id)}`, { method: "DELETE" });
+export function deletePricingRule(id: string, ownerPin: string) {
+  return apiRequest<{ id: string; status: string }>(`/pricing/rules/${encodeURIComponent(id)}`, { method: "DELETE", ownerPin });
 }
 
 export function getPricingSettings() {
-  return apiRequest<PricingSettings>("/pricing/settings");
+  return apiRequest<PricingSettings>("/pricing/settings", { cache: "no-store" });
 }
 
-export function updatePricingSettings(body: Partial<PricingSettings>) {
-  return apiRequest<PricingSettings>("/pricing/settings", { method: "PATCH", body: JSON.stringify(body) });
+export function updatePricingSettings(body: Partial<PricingSettings>, ownerPin: string) {
+  return apiRequest<PricingSettings>("/pricing/settings", { method: "PATCH", ownerPin, body: JSON.stringify(body) });
 }
 
 export function listProductSellingUnits(productId: string) {
-  return apiRequest<ProductSellingUnit[]>(`/pricing/products/${encodeURIComponent(productId)}/units`);
+  return apiRequest<ProductSellingUnit[]>(`/pricing/products/${encodeURIComponent(productId)}/units`, { cache: "no-store" });
 }
 
-export function createProductSellingUnit(productId: string, body: ProductSellingUnit) {
+export function createProductSellingUnit(productId: string, body: ProductSellingUnit, ownerPin: string) {
   return apiRequest<ProductSellingUnit>(`/pricing/products/${encodeURIComponent(productId)}/units`, {
     method: "POST",
+    ownerPin,
     body: JSON.stringify(body),
   });
 }
 
-export function updateProductSellingUnit(productId: string, unitId: string, body: Partial<ProductSellingUnit>) {
+export function updateProductSellingUnit(productId: string, unitId: string, body: Partial<ProductSellingUnit>, ownerPin: string) {
   return apiRequest<ProductSellingUnit>(`/pricing/products/${encodeURIComponent(productId)}/units/${encodeURIComponent(unitId)}`, {
     method: "PATCH",
+    ownerPin,
     body: JSON.stringify(body),
   });
 }
 
-export function deleteProductSellingUnit(productId: string, unitId: string) {
+export function deleteProductSellingUnit(productId: string, unitId: string, ownerPin: string) {
   return apiRequest<{ id: string; isActive: boolean }>(`/pricing/products/${encodeURIComponent(productId)}/units/${encodeURIComponent(unitId)}`, {
     method: "DELETE",
+    ownerPin,
   });
 }

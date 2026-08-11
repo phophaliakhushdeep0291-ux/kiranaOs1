@@ -25,6 +25,17 @@ internal sealed class PrinterConfig
     [JsonPropertyName("port")] public int Port { get; set; } = 9100;
 }
 
+internal class ExecutableAdapterConfig
+{
+    [JsonPropertyName("executable")] public string Executable { get; set; } = "";
+    [JsonPropertyName("args")] public string[] Args { get; set; } = [];
+}
+
+internal sealed class CustomerDisplayConfig : ExecutableAdapterConfig
+{
+    [JsonPropertyName("width")] public int Width { get; set; } = 20;
+}
+
 internal sealed class BridgeConfig
 {
     [JsonPropertyName("version")] public int Version { get; set; } = 1;
@@ -32,6 +43,8 @@ internal sealed class BridgeConfig
     [JsonPropertyName("allowedOrigins")] public string[] AllowedOrigins { get; set; } =
         ["http://localhost:5173", "http://127.0.0.1:5173"];
     [JsonPropertyName("printer")] public PrinterConfig Printer { get; set; } = new();
+    [JsonPropertyName("scale")] public ExecutableAdapterConfig Scale { get; set; } = new();
+    [JsonPropertyName("customerDisplay")] public CustomerDisplayConfig CustomerDisplay { get; set; } = new();
     [JsonPropertyName("pairing")] public PairingState? Pairing { get; set; }
     [JsonPropertyName("updateManifestUrl")] public string UpdateManifestUrl { get; set; } =
         "https://updates.kiranaos.in/hardware-bridge/stable.json";
@@ -60,12 +73,16 @@ internal sealed class SetupWindow : Form
     private readonly Button saveButton = new() { Text = "Save printer and create pairing code", Width = 440, Height = 44 };
     private readonly Button testButton = new() { Text = "Test print", Width = 212, Height = 44, Enabled = false };
     private readonly Button refreshButton = new() { Text = "Refresh printers", Width = 212, Height = 44 };
+    private readonly TextBox scaleAdapter = new() { Width = 340, ReadOnly = true, PlaceholderText = "Not configured" };
+    private readonly TextBox displayAdapter = new() { Width = 340, ReadOnly = true, PlaceholderText = "Not configured" };
+    private readonly Button chooseScaleAdapter = new() { Text = "Choose...", Width = 88, Height = 30 };
+    private readonly Button chooseDisplayAdapter = new() { Text = "Choose...", Width = 88, Height = 30 };
     private BridgeConfig config = new();
 
     public SetupWindow()
     {
         Text = "KiranaOS Hardware Bridge Setup";
-        ClientSize = new Size(500, 490);
+        ClientSize = new Size(500, 640);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
@@ -74,18 +91,30 @@ internal sealed class SetupWindow : Form
         var heading = new Label { Text = "Connect your receipt printer", AutoSize = true, Font = new Font("Segoe UI", 16, FontStyle.Bold) };
         var explanation = new Label { Text = "Choose the printer used for bills. No terminal or private token is needed.", AutoSize = false, Width = 440, Height = 42 };
         var printerLabel = new Label { Text = "Installed printer", AutoSize = true };
+        var scaleLabel = new Label { Text = "Optional weighing-scale vendor adapter (.exe)", AutoSize = true };
+        var displayLabel = new Label { Text = "Optional customer-display vendor adapter (.exe)", AutoSize = true };
         var codeLabel = new Label { Text = "Type this code in KiranaOS → Printer Settings", AutoSize = true };
         version.Text = $"Hardware Bridge v{Application.ProductVersion}";
 
         var buttons = new FlowLayoutPanel { Width = 440, Height = 50, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
         buttons.Controls.Add(testButton);
         buttons.Controls.Add(refreshButton);
+        var scaleRow = new FlowLayoutPanel { Width = 440, Height = 36, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0) };
+        scaleRow.Controls.Add(scaleAdapter);
+        scaleRow.Controls.Add(chooseScaleAdapter);
+        var displayRow = new FlowLayoutPanel { Width = 440, Height = 36, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0) };
+        displayRow.Controls.Add(displayAdapter);
+        displayRow.Controls.Add(chooseDisplayAdapter);
         var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(28, 24, 28, 18), WrapContents = false };
         panel.Controls.Add(heading);
         panel.Controls.Add(explanation);
         panel.Controls.Add(printerLabel);
         panel.Controls.Add(printers);
         panel.SetFlowBreak(printers, true);
+        panel.Controls.Add(scaleLabel);
+        panel.Controls.Add(scaleRow);
+        panel.Controls.Add(displayLabel);
+        panel.Controls.Add(displayRow);
         panel.Controls.Add(saveButton);
         panel.Controls.Add(codeLabel);
         panel.Controls.Add(pairingCode);
@@ -97,6 +126,8 @@ internal sealed class SetupWindow : Form
         saveButton.Click += async (_, _) => await SaveAndPairAsync();
         testButton.Click += async (_, _) => await TestPrintAsync();
         refreshButton.Click += (_, _) => LoadPrinters();
+        chooseScaleAdapter.Click += (_, _) => ChooseAdapter(scaleAdapter, "Choose the weighing-scale vendor adapter");
+        chooseDisplayAdapter.Click += (_, _) => ChooseAdapter(displayAdapter, "Choose the customer-display vendor adapter");
         Shown += async (_, _) => { LoadConfig(); LoadPrinters(); await RefreshVersionNoticeAsync(); };
     }
 
@@ -110,8 +141,41 @@ internal sealed class SetupWindow : Form
                 var defaultsPath = Path.Combine(AppContext.BaseDirectory, "bridge-defaults.json");
                 if (File.Exists(defaultsPath)) config = JsonSerializer.Deserialize<BridgeConfig>(File.ReadAllText(defaultsPath)) ?? new();
             }
+            scaleAdapter.Text = config.Scale?.Executable ?? "";
+            displayAdapter.Text = config.CustomerDisplay?.Executable ?? "";
         }
         catch { status.Text = "Previous setup could not be read. Choose the printer again."; }
+    }
+
+    private void ChooseAdapter(TextBox target, string title)
+    {
+        using var picker = new OpenFileDialog
+        {
+            Title = title,
+            Filter = "Vendor adapter executable (*.exe)|*.exe",
+            CheckFileExists = true,
+            Multiselect = false,
+        };
+        if (picker.ShowDialog(this) == DialogResult.OK) target.Text = Path.GetFullPath(picker.FileName);
+    }
+
+    private static string InstallProtectedAdapter(string sourcePath, string adapterKind)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath)) return "";
+        var source = Path.GetFullPath(sourcePath);
+        var payload = File.ReadAllBytes(source);
+        var fingerprint = Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant()[..16];
+        var adapterDirectory = Path.Combine(ConfigDirectory, "adapters");
+        Directory.CreateDirectory(adapterDirectory);
+        var destination = Path.Combine(adapterDirectory, $"{adapterKind}-{fingerprint}.exe");
+        if (string.Equals(source, destination, StringComparison.OrdinalIgnoreCase)) return destination;
+        if (!File.Exists(destination))
+        {
+            var temporary = destination + ".tmp";
+            File.WriteAllBytes(temporary, payload);
+            File.Move(temporary, destination, true);
+        }
+        return destination;
     }
 
     private void LoadPrinters()
@@ -133,6 +197,14 @@ internal sealed class SetupWindow : Form
             status.Text = "Choose an installed printer first.";
             return;
         }
+        foreach (var adapterPath in new[] { scaleAdapter.Text.Trim(), displayAdapter.Text.Trim() }.Where(value => value.Length > 0))
+        {
+            if (!adapterPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(adapterPath))
+            {
+                status.Text = "Choose an installed .exe adapter, or clear the optional adapter field.";
+                return;
+            }
+        }
         saveButton.Enabled = false;
         try
         {
@@ -140,6 +212,13 @@ internal sealed class SetupWindow : Form
             // action. Any previously paired browser must use the new one-time code.
             config.Token = RandomToken();
             config.Printer = new PrinterConfig { Transport = "windows", Name = printerName };
+            config.Scale ??= new ExecutableAdapterConfig();
+            config.Scale.Executable = InstallProtectedAdapter(scaleAdapter.Text.Trim(), "scale");
+            config.Scale.Args = [];
+            config.CustomerDisplay ??= new CustomerDisplayConfig();
+            config.CustomerDisplay.Executable = InstallProtectedAdapter(displayAdapter.Text.Trim(), "customer-display");
+            config.CustomerDisplay.Args = [];
+            config.CustomerDisplay.Width = 20;
             var code = RandomCode();
             var salt = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
             config.Pairing = new PairingState

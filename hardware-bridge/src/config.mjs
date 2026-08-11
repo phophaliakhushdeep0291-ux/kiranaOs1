@@ -11,6 +11,12 @@ export function defaultConfigPath(env = process.env) {
 }
 
 function envConfig(env) {
+  let scaleArgs = [];
+  let customerDisplayArgs = [];
+  try { scaleArgs = JSON.parse(env.KIRANA_BRIDGE_SCALE_ARGS_JSON || "[]"); } catch { scaleArgs = []; }
+  try { customerDisplayArgs = JSON.parse(env.KIRANA_BRIDGE_DISPLAY_ARGS_JSON || "[]"); } catch { customerDisplayArgs = []; }
+  if (!Array.isArray(scaleArgs) || scaleArgs.some((value) => typeof value !== "string")) scaleArgs = [];
+  if (!Array.isArray(customerDisplayArgs) || customerDisplayArgs.some((value) => typeof value !== "string")) customerDisplayArgs = [];
   return {
     version: 1,
     token: String(env.KIRANA_BRIDGE_TOKEN || ""),
@@ -21,6 +27,15 @@ function envConfig(env) {
       name: String(env.KIRANA_BRIDGE_PRINTER_NAME || ""),
       host: String(env.KIRANA_BRIDGE_PRINTER_HOST || ""),
       port: Number(env.KIRANA_BRIDGE_PRINTER_PORT || 9100),
+    },
+    scale: {
+      executable: String(env.KIRANA_BRIDGE_SCALE_EXECUTABLE || ""),
+      args: scaleArgs,
+    },
+    customerDisplay: {
+      executable: String(env.KIRANA_BRIDGE_DISPLAY_EXECUTABLE || ""),
+      args: customerDisplayArgs,
+      width: Number(env.KIRANA_BRIDGE_DISPLAY_WIDTH || 20),
     },
     pairing: null,
     updateManifestUrl: String(env.KIRANA_BRIDGE_UPDATE_MANIFEST_URL || ""),
@@ -46,6 +61,19 @@ export async function loadBridgeConfig(filePath = defaultConfigPath(), env = pro
       name: String(disk?.printer?.name || fallback.printer.name),
       host: String(disk?.printer?.host || fallback.printer.host),
       port: Number(disk?.printer?.port || fallback.printer.port || 9100),
+    },
+    scale: {
+      executable: String(disk?.scale?.executable || fallback.scale.executable),
+      args: Array.isArray(disk?.scale?.args) && disk.scale.args.every((value) => typeof value === "string")
+        ? [...disk.scale.args]
+        : fallback.scale.args,
+    },
+    customerDisplay: {
+      executable: String(disk?.customerDisplay?.executable || fallback.customerDisplay.executable),
+      args: Array.isArray(disk?.customerDisplay?.args) && disk.customerDisplay.args.every((value) => typeof value === "string")
+        ? [...disk.customerDisplay.args]
+        : fallback.customerDisplay.args,
+      width: Number(disk?.customerDisplay?.width || fallback.customerDisplay.width || 20),
     },
     pairing: disk?.pairing && typeof disk.pairing === "object" ? { ...disk.pairing } : null,
     updateManifestUrl: String(disk?.updateManifestUrl || fallback.updateManifestUrl),

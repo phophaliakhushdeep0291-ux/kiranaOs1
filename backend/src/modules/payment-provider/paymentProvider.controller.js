@@ -50,8 +50,18 @@ export async function retailReadiness(req, res, next) {
 
 export async function createRetailIntent(req, res, next) {
   try {
-    const data = await retailService.createRetailPaymentIntent({ shopId: req.shopId, requestedLocationId: requestLocationId(req), userId: req.user?.userId, amountPaise: req.body.amountPaise });
+    const data = await retailService.createRetailPaymentIntent({ shopId: req.shopId, requestedLocationId: requestLocationId(req), userId: req.user?.userId, amountPaise: req.body.amountPaise, mode: req.body.mode });
     res.status(201).json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function retailIntentStatus(req, res, next) {
+  try { res.json({ success: true, data: await retailService.getRetailPaymentIntentStatus({ shopId: req.shopId, intentId: req.params.id }) }); } catch (err) { next(err); }
+}
+
+export async function cancelRetailIntent(req, res, next) {
+  try {
+    res.json({ success: true, data: await retailService.cancelRetailPaymentIntent({ shopId: req.shopId, intentId: req.params.id, userId: req.user?.userId, userRole: req.user?.role }) });
   } catch (err) { next(err); }
 }
 

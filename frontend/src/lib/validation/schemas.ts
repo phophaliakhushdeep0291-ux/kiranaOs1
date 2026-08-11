@@ -65,8 +65,18 @@ const productSellingUnitSchema = z.object({
   minimumPrice: money.optional().nullable(),
   maximumPrice: money.optional().nullable(),
   costPrice: money.optional().nullable(),
+  onHandQty: nonNegativeQuantity.optional().nullable(),
+  lowStockThreshold: nonNegativeQuantity.optional().nullable(),
+  reorderLevel: nonNegativeQuantity.optional().nullable(),
+  variantValue1: optionalText.nullable(),
+  variantValue2: optionalText.nullable(),
   isDefault: z.boolean(),
   isActive: z.boolean(),
+});
+
+const productVariantAxisSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  values: z.array(z.string().trim().min(1).max(60)).min(1).max(50),
 });
 
 export const productCreationSchema = z.object({
@@ -107,12 +117,16 @@ export const productCreationSchema = z.object({
   wholesaleFromQuantity: nonNegativeQuantity.optional(),
   quantitySlabPricing: z.array(quantitySlabPriceSchema).default([]),
   customerSpecificPricing: z.union([z.array(customerSpecificPriceSchema), z.record(z.coerce.number().finite().nonnegative())]).optional(),
-  sellingUnits: z.array(productSellingUnitSchema).max(30).optional(),
+  sellingUnits: z.array(productSellingUnitSchema).max(100).optional(),
+  variantAxes: z.array(productVariantAxisSchema).max(2).default([]),
+  packagingMode: z.enum(["pooled", "per_pack"]).default("pooled"),
   gstRate: percentage.default(0),
   lowStockThreshold: nonNegativeQuantity.optional(),
   lowStockAlert: nonNegativeQuantity.optional(),
   isActive: z.boolean().default(true),
   status: z.enum(["active", "inactive"]).default("active"),
+  batchTrackingEnabled: z.boolean().default(false),
+  drugSchedule: z.enum(["h", "h1", "x", "otc"]).nullish(),
   ownerPin: optionalText,
   ownerPinReason: optionalText,
 }).superRefine((product, ctx) => {

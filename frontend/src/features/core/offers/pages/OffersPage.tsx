@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useToast } from "@/hooks/use-toast";
 import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
@@ -47,13 +47,18 @@ const offerFormSchema = z.object({
 });
 type OfferFormData = z.infer<typeof offerFormSchema>;
 
+type PendingOfferAction =
+  | { type: "save"; id?: string; data: OfferInput; label: string }
+  | { type: "delete"; offer: Offer };
+
 export default function OffersPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isOnline } = useOfflineStatus();
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<Offer | null>(null);
-  const [deleting, setDeleting] = useState<Offer | null>(null);
+  const [pendingApproval, setPendingApproval] = useState<PendingOfferAction | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:offers-panel-width", { defaultWidth: 420 });
 
   const offersQ = useQuery({ queryKey: ["offers"], queryFn: listOffers });
@@ -68,22 +73,40 @@ export default function OffersPage() {
   });
 
   const saveMut = useMutation({
-    mutationFn: (vars: { id?: string; data: OfferInput }) => (vars.id ? updateOffer(vars.id, vars.data) : createOffer(vars.data)),
-    onSuccess: () => { invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Offer updated" : "Offer created" }); },
+    mutationFn: (vars: { id?: string; data: OfferInput; ownerPin: string; auditReason?: string }) => (
+      vars.id
+        ? updateOffer(vars.id, vars.data, { ownerPin: vars.ownerPin, auditReason: vars.auditReason })
+        : createOffer(vars.data, { ownerPin: vars.ownerPin, auditReason: vars.auditReason })
+    ),
+    onSuccess: (_data, vars) => {
+      invalidate();
+      setPendingApproval(null);
+      setApprovalError(null);
+      setPanelOpen(false);
+      setEditing(null);
+      toast({ title: vars.id ? "Offer updated" : "Offer created" });
+    },
     onError: (err: unknown) => {
       if (!isOnline) return offlineNotice();
-      toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+      const message = (err as { data?: { message?: string } })?.data?.message ?? "Try again";
+      setApprovalError(message);
+      toast({ title: "Could not save", description: message, variant: "destructive" });
     },
   });
   const deleteMut = useMutation({
-    mutationFn: (id: string) => deleteOffer(id),
-    onSuccess: () => { invalidate(); setDeleting(null); toast({ title: "Offer moved to recycle bin" }); },
+    mutationFn: (vars: { id: string; ownerPin: string; auditReason: string }) => deleteOffer(vars.id, { ownerPin: vars.ownerPin, auditReason: vars.auditReason }),
+    onSuccess: () => { invalidate(); setPendingApproval(null); setApprovalError(null); toast({ title: "Offer moved to recycle bin" }); },
     onError: (err: unknown) => {
       if (!isOnline) return offlineNotice();
-      toast({ title: "Could not delete", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+      const message = (err as { data?: { message?: string } })?.data?.message ?? "Try again";
+      setApprovalError(message);
+      toast({ title: "Could not delete", description: message, variant: "destructive" });
     },
   });
-  const toggleActive = (o: Offer) => saveMut.mutate({ id: o.id, data: { active: !o.active } as OfferInput });
+  const toggleActive = (o: Offer) => {
+    setApprovalError(null);
+    setPendingApproval({ type: "save", id: o.id, data: { active: !o.active } as OfferInput, label: o.active ? "Pause offer" : "Activate offer" });
+  };
 
   const rows = offersQ.data ?? [];
   const activeCount = rows.filter((o) => offerStatus(o).label === "Active").length;
@@ -184,7 +207,7 @@ export default function OffersPage() {
                             <div className="flex items-center justify-end gap-1.5">
                               <Switch checked={o.active} onCheckedChange={() => toggleActive(o)} />
                               <button onClick={() => openEdit(o)} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label="Edit"><Pencil size={14} /></button>
-                              <button onClick={() => setDeleting(o)} className="grid h-8 w-8 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label="Delete"><Trash2 size={14} /></button>
+                              <button onClick={() => { setApprovalError(null); setPendingApproval({ type: "delete", offer: o }); }} className="grid h-8 w-8 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label="Delete"><Trash2 size={14} /></button>
                             </div>
                           </td>
                         </tr>
@@ -207,21 +230,37 @@ export default function OffersPage() {
         width={panelWidth}
         onResizeStart={onResizeStart}
         onClose={() => { setPanelOpen(false); setEditing(null); }}
-        onSubmit={(data) => saveMut.mutate({ id: editing?.id, data })}
+        onSubmit={(data) => {
+          setApprovalError(null);
+          setPendingApproval({ type: "save", id: editing?.id, data, label: editing ? "Save offer changes" : "Create offer" });
+        }}
       />
 
-      <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
-        <DialogContent className="max-w-[380px]">
-          <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">Delete this offer?</DialogTitle></DialogHeader>
-          <p className="text-[12px] text-[#52627e]">"{deleting?.title}" will move to the recycle bin and stop applying at billing.</p>
-          <div className="flex gap-2.5 pt-2">
-            <Button variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button className="h-11 flex-1 gap-2 rounded-[10px] bg-rose-600 font-black text-white hover:bg-rose-700" disabled={deleteMut.isPending} onClick={() => deleting && deleteMut.mutate(deleting.id)}>
-              {deleteMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Delete
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <OwnerPinModal
+        open={pendingApproval !== null}
+        title={pendingApproval?.type === "delete" ? "Delete offer" : (pendingApproval?.label ?? "Approve offer change")}
+        description={pendingApproval?.type === "delete"
+          ? `“${pendingApproval.offer.title}” will move to the recycle bin and stop applying at billing.`
+          : "Owner approval is required because this change can alter customer discounts and bill totals."}
+        reasonRequired={pendingApproval?.type === "delete"}
+        confirmLabel={pendingApproval?.type === "delete" ? "Delete offer" : "Approve and save"}
+        loading={saveMut.isPending || deleteMut.isPending}
+        error={approvalError}
+        onCancel={() => { setPendingApproval(null); setApprovalError(null); }}
+        onConfirm={async ({ ownerPin, reason }) => {
+          if (!pendingApproval) return;
+          setApprovalError(null);
+          try {
+            if (pendingApproval.type === "delete") {
+              await deleteMut.mutateAsync({ id: pendingApproval.offer.id, ownerPin, auditReason: reason });
+            } else {
+              await saveMut.mutateAsync({ id: pendingApproval.id, data: pendingApproval.data, ownerPin, auditReason: reason || undefined });
+            }
+          } catch {
+            // Mutation callbacks keep the modal open and display the server error.
+          }
+        }}
+      />
     </div>
   );
 }

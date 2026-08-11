@@ -7,6 +7,7 @@ import process from "node:process";
 const backendDir = process.cwd();
 const repoRoot = path.resolve(backendDir, "..");
 const frontendDir = path.join(repoRoot, "frontend");
+const hardwareBridgeDir = path.join(repoRoot, "hardware-bridge");
 const artifactDir = path.join(backendDir, "release-artifacts");
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const modeArg = process.argv.find((arg) => arg.startsWith("--mode="));
@@ -307,6 +308,12 @@ runStep({
 });
 runStep({ id: "api-contract", label: "Static API contract proof", args: ["run", "contract:check"] });
 runStep({ id: "razorpay-fixtures", label: "Razorpay signature fixture proof", args: ["run", "razorpay:fixtures"] });
+runStep({
+  id: "hardware-bridge-contracts",
+  label: "Paired hardware bridge protocol, pairing, recovery, and installer contracts",
+  args: ["test"],
+  cwd: hardwareBridgeDir,
+});
 runStep({
   id: "frontend-production-check",
   label: "Frontend typecheck, tests, build, and security checks",

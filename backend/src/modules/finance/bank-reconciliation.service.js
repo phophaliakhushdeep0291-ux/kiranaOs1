@@ -1,6 +1,27 @@
 import crypto from "node:crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
+import { createAuditLog } from "../audit/audit.service.js";
+
+async function writeRequiredBankReconciliationAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Bank reconciliation action was not saved because its audit record could not be stored",
+      503,
+      "BANK_RECONCILIATION_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
+function normalizeActor(actor = {}) {
+  return {
+    userId: actor.userId ?? null,
+    deviceId: actor.deviceId ?? undefined,
+    req: actor.req ?? null,
+  };
+}
 
 export const BANK_RECONCILIATION_VERSION = "bank-reconciliation-v1";
 export const BANK_RECONCILIATION_LIMITATIONS = [
@@ -436,7 +457,9 @@ async function findFingerprints(shopId, fingerprints, client = db) {
   return found;
 }
 
-export async function importBankStatement(shopId, input, { userId = null } = {}) {
+export async function importBankStatement(shopId, input, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  const { userId } = actor;
   const account = {
     accountType: input.accountType,
     accountName: input.accountName.trim(),
@@ -512,6 +535,25 @@ export async function importBankStatement(shopId, input, { userId = null } = {})
           })),
         });
       }
+      await writeRequiredBankReconciliationAudit({
+        shopId,
+        userId,
+        deviceId: actor.deviceId,
+        req: actor.req,
+        action: "BANK_STATEMENT_IMPORTED",
+        entityType: "bank_statement_import",
+        entityId: record.id,
+        after: {
+          accountType: record.accountType,
+          accountName: record.accountName,
+          accountLast4: record.accountLast4,
+          fileName: record.fileName,
+          rowCount: record.rowCount,
+          importedCount: record.importedCount,
+          duplicateCount: record.duplicateCount,
+          note: input.note ?? null,
+        },
+      }, tx);
       return record;
     });
     return { ...publicImport(created), idempotentReplay: false };
@@ -749,7 +791,9 @@ function assertReconciliationState(transaction) {
   return allocated;
 }
 
-export async function matchBankTransaction(shopId, transactionId, input, { userId = null } = {}) {
+export async function matchBankTransaction(shopId, transactionId, input, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  const { userId } = actor;
   const transaction = await loadTransaction(shopId, transactionId);
   if (transaction.matchStatus === "ignored") {
     fail("Restore this ignored transaction before matching it", 409, "BANK_TRANSACTION_IGNORED");
@@ -870,6 +914,25 @@ export async function matchBankTransaction(shopId, transactionId, input, { userI
           createdAt: now,
         },
       });
+      await writeRequiredBankReconciliationAudit({
+        shopId,
+        userId,
+        deviceId: actor.deviceId,
+        req: actor.req,
+        action: "BANK_RECONCILIATION_MATCHED",
+        entityType: "bank_statement_transaction",
+        entityId: transaction.id,
+        after: {
+          transactionId: transaction.id,
+          matchStatus: nextStatus,
+          reconciledAmount: publicMoney(newReconciled),
+          remainingAmount: publicMoney(statementAmount - newReconciled),
+          allocatedLedgerRowIds: input.ledgerRowIds,
+          autoMatched: false,
+          calculationVersion: BANK_RECONCILIATION_VERSION,
+        },
+        metadata: { note: input.note ?? null },
+      }, tx);
     });
   } catch (error) {
     if (error?.code === "P2002") {
@@ -888,7 +951,9 @@ export async function matchBankTransaction(shopId, transactionId, input, { userI
   };
 }
 
-export async function unmatchBankTransaction(shopId, transactionId, input, { userId = null } = {}) {
+export async function unmatchBankTransaction(shopId, transactionId, input, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  const { userId } = actor;
   const transaction = await loadTransaction(shopId, transactionId);
   const allocated = assertReconciliationState(transaction);
   const selected = input.allocationIds
@@ -947,6 +1012,24 @@ export async function unmatchBankTransaction(shopId, transactionId, input, { use
         createdAt: now,
       },
     });
+    await writeRequiredBankReconciliationAudit({
+      shopId,
+      userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "BANK_RECONCILIATION_UNMATCHED",
+      entityType: "bank_statement_transaction",
+      entityId: transaction.id,
+      after: {
+        transactionId: transaction.id,
+        matchStatus: nextStatus,
+        reconciledAmount: publicMoney(newReconciled),
+        remainingAmount: publicMoney(asBigInt(transaction.amountPaise) - newReconciled),
+        reversedAllocationIds: selected.map((allocation) => allocation.id),
+        calculationVersion: BANK_RECONCILIATION_VERSION,
+      },
+      metadata: { reason: input.reason },
+    }, tx);
   });
   return {
     transactionId: transaction.id,
@@ -958,7 +1041,9 @@ export async function unmatchBankTransaction(shopId, transactionId, input, { use
   };
 }
 
-export async function ignoreBankTransaction(shopId, transactionId, input, { userId = null } = {}) {
+export async function ignoreBankTransaction(shopId, transactionId, input, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  const { userId } = actor;
   const transaction = await loadTransaction(shopId, transactionId);
   const allocated = assertReconciliationState(transaction);
   if (allocated !== 0n) {
@@ -991,11 +1076,24 @@ export async function ignoreBankTransaction(shopId, transactionId, input, { user
         createdAt: now,
       },
     });
+    await writeRequiredBankReconciliationAudit({
+      shopId,
+      userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "BANK_RECONCILIATION_IGNORED",
+      entityType: "bank_statement_transaction",
+      entityId: transaction.id,
+      after: { transactionId: transaction.id, matchStatus: "ignored", ignoredReason: input.reason },
+      metadata: { reason: input.reason },
+    }, tx);
   });
   return { transactionId: transaction.id, matchStatus: "ignored", ignoredReason: input.reason };
 }
 
-export async function restoreBankTransaction(shopId, transactionId, input, { userId = null } = {}) {
+export async function restoreBankTransaction(shopId, transactionId, input, rawActor = {}) {
+  const actor = normalizeActor(rawActor);
+  const { userId } = actor;
   const transaction = await loadTransaction(shopId, transactionId);
   if (transaction.matchStatus !== "ignored") {
     fail("Only an ignored transaction can be restored", 409, "BANK_TRANSACTION_NOT_IGNORED");
@@ -1024,6 +1122,17 @@ export async function restoreBankTransaction(shopId, transactionId, input, { use
         createdAt: now,
       },
     });
+    await writeRequiredBankReconciliationAudit({
+      shopId,
+      userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "BANK_RECONCILIATION_RESTORED",
+      entityType: "bank_statement_transaction",
+      entityId: transaction.id,
+      after: { transactionId: transaction.id, matchStatus: "unmatched", restoreReason: input.reason },
+      metadata: { reason: input.reason },
+    }, tx);
   });
   return { transactionId: transaction.id, matchStatus: "unmatched", restoreReason: input.reason };
 }

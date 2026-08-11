@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
+import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 
 interface Props {
   open: boolean;
@@ -94,6 +95,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
   const [progress, setProgress] = useState(0);
   const [previousSession, setPreviousSession] = useState<ProductImportSession | null>(null);
   const [completedSession, setCompletedSession] = useState<ProductImportSession | null>(null);
+  const [pinOpen, setPinOpen] = useState(false);
 
   const result = useMemo(
     () => rawText ? parseProductsCsv(rawText, mapping) : null,
@@ -113,6 +115,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
     setProgress(0);
     setPreviousSession(null);
     setCompletedSession(null);
+    setPinOpen(false);
   }
 
   async function onFile(file?: File) {
@@ -164,8 +167,9 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
     });
   }
 
-  async function confirmImport() {
+  async function confirmImport(ownerPin: string, reason: string) {
     if (!plan || !result || plan.importCount === 0) return;
+    setPinOpen(false);
     setImporting(true);
     setProgress(15);
     try {
@@ -187,7 +191,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
         totalRows: plan.rows.length,
         skippedRows: plan.skipCount,
         errorRows: plan.errorCount,
-      });
+      }, { ownerPin, reason: reason || `Approved product migration from ${fileName}` });
       setProgress(100);
       setCompletedSession(session);
       setPreviousSession(session);
@@ -239,6 +243,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
   const previewRows = plan?.rows.slice(0, 200) ?? [];
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(value) => { onOpenChange(value); if (!value) reset(); }}>
       <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto bg-[#f8fafc] p-0">
         <DialogHeader className="border-b border-[#e0e7f1] bg-white px-5 py-4">
@@ -416,7 +421,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
             ) : (
               <>
                 <Button variant="outline" onClick={() => onOpenChange(false)} disabled={importing}>Cancel</Button>
-                <Button onClick={() => void confirmImport()} disabled={importing || !plan || plan.importCount === 0 || Boolean(result?.headerError)}>
+                <Button onClick={() => setPinOpen(true)} disabled={importing || !plan || plan.importCount === 0 || Boolean(result?.headerError)}>
                   {importing ? t("products.import.saving") : `Import ${plan?.importCount ?? 0} accepted row${(plan?.importCount ?? 0) === 1 ? "" : "s"}`}
                 </Button>
               </>
@@ -425,5 +430,15 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
         </div>
       </DialogContent>
     </Dialog>
+    <OwnerPinModal
+      open={pinOpen}
+      title="Approve product migration"
+      description={`Import ${plan?.importCount ?? 0} accepted product rows and their opening stock. The PIN is kept only until the queued changes sync.`}
+      confirmLabel="Approve and import"
+      loading={importing}
+      onCancel={() => { if (!importing) setPinOpen(false); }}
+      onConfirm={({ ownerPin, reason }) => void confirmImport(ownerPin, reason)}
+    />
+    </>
   );
 }

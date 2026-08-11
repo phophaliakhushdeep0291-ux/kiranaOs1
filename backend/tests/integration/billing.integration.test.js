@@ -1,7 +1,7 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
-import { billPayload, createCustomer, createPaidBillViaApi, createProduct, createTenant, login } from "./factories.js";
+import { billPayload, createCustomer, createPaidBillViaApi, createProduct, createStaff, createTenant, login } from "./factories.js";
 import { restoreCancelledBill } from "../../src/modules/bills/bills.service.js";
 import { redeemPoints } from "../../src/modules/loyalty/loyalty.service.js";
 import { env } from "../../src/config/env.js";
@@ -171,6 +171,144 @@ if (ctx.skip) {
       const standalone = await ctx.post(`/api/offers/${offer.id}/redeem`, { discount: 80 }, { token: ownerAuth.accessToken });
       const standaloneBody = assertFailure(standalone, 409);
       assert.equal(standaloneBody.code, "OFFER_REDEMPTION_REQUIRES_BILL");
+    });
+
+    test("offer administration requires owner approval and rolls back every lifecycle action when audit storage fails", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const staff = await createStaff(ctx.db, tenant.shop.id);
+      const staffAuth = await login(ctx, staff.staffMobile, staff.staffPassword);
+      const createPayload = {
+        title: "Audited festival offer",
+        code: "FESTIVE10",
+        type: "percentage",
+        value: 10,
+        minBillAmount: 100,
+        maxDiscount: 50,
+        usageLimit: 25,
+        active: true,
+        auditReason: "Festival campaign",
+      };
+
+      assertFailure(await ctx.post("/api/offers", createPayload, { token: ownerAuth.accessToken }), 403);
+      assertFailure(await ctx.post("/api/offers", createPayload, {
+        token: staffAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+      }), 403);
+      assert.equal(await ctx.db.offer.count({ where: { shopId: tenant.shop.id } }), 0);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_offer_create_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'OFFER_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced offer create audit failure');
+        END
+      `);
+      let response;
+      try {
+        response = await ctx.post("/api/offers", createPayload, {
+          token: ownerAuth.accessToken,
+          ownerPin: tenant.ownerPin,
+        });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_offer_create_audit_failure");
+      }
+      assert.equal(assertFailure(response, 503).code, "OFFER_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.offer.count({ where: { shopId: tenant.shop.id } }), 0);
+
+      const offer = assertSuccess(await ctx.post("/api/offers", createPayload, {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+      }), 201);
+      const createdAudit = await ctx.db.auditLog.findFirstOrThrow({
+        where: { shopId: tenant.shop.id, entityId: offer.id, action: "OFFER_CREATED" },
+      });
+      assert.equal(createdAudit.userId, tenant.owner.id);
+      assert.ok(createdAudit.deviceId);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_offer_update_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'OFFER_UPDATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced offer update audit failure');
+        END
+      `);
+      try {
+        response = await ctx.patch(`/api/offers/${offer.id}`, {
+          title: "This title must roll back",
+          auditReason: "Audit failure proof",
+        }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_offer_update_audit_failure");
+      }
+      assert.equal(assertFailure(response, 503).code, "OFFER_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.offer.findUniqueOrThrow({ where: { id: offer.id } })).title, createPayload.title);
+
+      assertSuccess(await ctx.patch(`/api/offers/${offer.id}`, {
+        title: "Approved festival offer",
+        auditReason: "Correct campaign title",
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_offer_delete_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'OFFER_DELETED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced offer delete audit failure');
+        END
+      `);
+      try {
+        response = await ctx.request("DELETE", `/api/offers/${offer.id}`, {
+          token: ownerAuth.accessToken,
+          ownerPin: tenant.ownerPin,
+          body: { auditReason: "Audit failure proof" },
+        });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_offer_delete_audit_failure");
+      }
+      assert.equal(assertFailure(response, 503).code, "OFFER_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.offer.findUniqueOrThrow({ where: { id: offer.id } })).deletedAt, null);
+
+      assertSuccess(await ctx.request("DELETE", `/api/offers/${offer.id}`, {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+        body: { auditReason: "Campaign completed" },
+      }));
+      assert.ok((await ctx.db.offer.findUniqueOrThrow({ where: { id: offer.id } })).deletedAt);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_offer_restore_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'OFFER_RESTORED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced offer restore audit failure');
+        END
+      `);
+      try {
+        response = await ctx.post(`/api/offers/${offer.id}/restore`, { auditReason: "Audit failure proof" }, {
+          token: ownerAuth.accessToken,
+          ownerPin: tenant.ownerPin,
+        });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_offer_restore_audit_failure");
+      }
+      assert.equal(assertFailure(response, 503).code, "OFFER_AUDIT_WRITE_FAILED");
+      assert.ok((await ctx.db.offer.findUniqueOrThrow({ where: { id: offer.id } })).deletedAt);
+
+      assertSuccess(await ctx.post(`/api/offers/${offer.id}/restore`, { auditReason: "Campaign resumed" }, {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+      }));
+      assert.equal((await ctx.db.offer.findUniqueOrThrow({ where: { id: offer.id } })).deletedAt, null);
+      const lifecycleAudits = await ctx.db.auditLog.findMany({
+        where: {
+          shopId: tenant.shop.id,
+          entityId: offer.id,
+          action: { in: ["OFFER_CREATED", "OFFER_UPDATED", "OFFER_DELETED", "OFFER_RESTORED"] },
+        },
+      });
+      assert.equal(lifecycleAudits.length, 4);
     });
 
     test("loyalty cancel/restore cycles preserve balances and immutable lifetime totals", async () => {

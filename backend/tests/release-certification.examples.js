@@ -21,6 +21,7 @@ for (const evidence of [
   "frontend-production-check",
   "backend-integration-sqlite",
   "ai-safety",
+  "hardware-bridge-contracts",
   "postgres-production-proof",
   "redis-worker-runtime",
   "cloud-storage-proof",

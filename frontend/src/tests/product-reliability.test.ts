@@ -64,6 +64,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 import { offlineDB } from "@/lib/offline/db";
 import { emitLocalDataChanged, removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { createProductLocalFirst, deleteProductLocalFirst, updateProductLocalFirst } from "@/features/core/products/local-actions";
+import { productUpdateNeedsOwnerApproval } from "@/features/core/products/pages/product-form-state";
 import {
   findDuplicateProductWarnings,
   mergeProductAliasSuggestions,
@@ -173,6 +174,83 @@ describe("product reliability", () => {
       expect.objectContaining({ operation_type: "UPDATE_PRODUCT", entity_id: "product_sugar" }),
     ]));
     expect(mockedEmitLocalDataChanged).toHaveBeenCalledWith({ entityType: "product", action: "updated", entityId: "product_sugar" });
+  });
+
+  it("keeps a 36-cell variant grid, per-pack stock, and pharmacy controls in the local record", async () => {
+    const sellingUnits = Array.from({ length: 36 }, (_, index) => ({
+      name: `Size ${index + 1}`,
+      unitType: "piece",
+      unitCode: `piece-size-${index + 1}`,
+      conversionToBase: 1,
+      defaultPrice: 100,
+      onHandQty: 1,
+      variantValue1: `S${Math.floor(index / 6) + 1}`,
+      variantValue2: `C${(index % 6) + 1}`,
+      isDefault: index === 0,
+      isActive: true,
+    }));
+    const created = await createProductLocalFirst({
+      ...baseProductInput,
+      name: "Variant Medicine Grid",
+      barcode: undefined,
+      sku: undefined,
+      packagingMode: "per_pack",
+      stockBaseQty: 36,
+      defaultPricePerRateUnit: 100,
+      variantAxes: [
+        { name: "Size", values: ["S1", "S2", "S3", "S4", "S5", "S6"] },
+        { name: "Colour", values: ["C1", "C2", "C3", "C4", "C5", "C6"] },
+      ],
+      sellingUnits,
+      batchTrackingEnabled: true,
+      drugSchedule: "h",
+      ownerPin: "1234",
+    });
+
+    expect(created.packagingMode).toBe("per_pack");
+    expect(created.variantAxes).toHaveLength(2);
+    expect(created.sellingUnits).toHaveLength(36);
+    expect(created.sellingUnits?.[35]).toEqual(expect.objectContaining({ onHandQty: 1, variantValue1: "S6", variantValue2: "C6" }));
+    expect(created.batchTrackingEnabled).toBe(true);
+    expect(created.drugSchedule).toBe("h");
+  });
+
+  it("asks for owner approval by actual protected value changes, not full-payload field presence", () => {
+    const current = {
+      ...existingProduct,
+      stockBaseQty: 5000,
+      costPerRateUnit: 30,
+      minPricePerRateUnit: 40,
+      defaultPricePerRateUnit: 45,
+      gstRate: 5,
+      mrp: 50,
+      packagingMode: "pooled" as const,
+      batchTrackingEnabled: false,
+      drugSchedule: null,
+      isActive: true,
+      sellingUnits: [],
+      variantAxes: [],
+    };
+    const unchangedProtected: ProductInput = {
+      ...baseProductInput,
+      name: "Renamed Sugar",
+      sku: "SUGAR-1KG",
+      stockBaseQty: 5000,
+      costPerRateUnit: 30,
+      minPricePerRateUnit: 40,
+      defaultPricePerRateUnit: 45,
+      gstRate: 5,
+      mrp: 50,
+      packagingMode: "pooled",
+      batchTrackingEnabled: false,
+      drugSchedule: null,
+      sellingUnits: [],
+      variantAxes: [],
+    };
+
+    expect(productUpdateNeedsOwnerApproval(current, unchangedProtected)).toBe(false);
+    expect(productUpdateNeedsOwnerApproval(current, { ...unchangedProtected, stockBaseQty: 5001 })).toBe(true);
+    expect(productUpdateNeedsOwnerApproval(current, { ...unchangedProtected, defaultPricePerRateUnit: 46 })).toBe(true);
   });
 
   it("product delete is soft delete", async () => {

@@ -1,0 +1,32 @@
+import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { showCustomerDisplayViaHardwareBridge } from "@/features/core/hardware/local-hardware-bridge";
+import { DEFAULT_PRINTER_CONFIG } from "@/features/core/settings/printer-config";
+
+describe("customer-facing display checkout contract", () => {
+  it("is opt-in and rejects non-integer financial state before transport", async () => {
+    expect(DEFAULT_PRINTER_CONFIG.customerDisplay).toBe(false);
+    await expect(showCustomerDisplayViaHardwareBridge("http://127.0.0.1:17873", {
+      revision: 1,
+      state: "sale",
+      itemCount: 1,
+      totalPaise: 10.5,
+    })).rejects.toThrow(/total/i);
+  });
+
+  it("debounces structured cart totals without blocking checkout on a peripheral failure", () => {
+    const billing = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/billing/pages/BillingPage.tsx"), "utf8");
+    expect(billing).toContain("showCustomerDisplayViaHardwareBridge");
+    expect(billing).toContain("totalPaise: Math.round(grandTotal * 100)");
+    expect(billing).toContain("state: cart.length > 0 ? \"sale\" : \"idle\"");
+    expect(billing).toContain("customer display is informative, never a reason to block billing");
+  });
+
+  it("exposes an explicit capability-gated test in hardware settings", () => {
+    const settings = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/settings/pages/PrinterSettingsPage.tsx"), "utf8");
+    expect(settings).toContain("Test display");
+    expect(settings).toContain("bridgeHealth?.capabilities?.customerDisplay");
+    expect(settings).toContain("Customer display updates");
+  });
+});

@@ -1,7 +1,7 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess, todayRangeQuery } from "./setup.js";
-import { createProduct, createStaff, createTenant, login, productPayload } from "./factories.js";
+import { activateDeviceViaApi, createProduct, createStaff, createTenant, login, productPayload } from "./factories.js";
 
 const ctx = await createIntegrationContext();
 
@@ -29,6 +29,125 @@ if (ctx.skip) {
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Old Name" });
       const updated = assertSuccess(await ctx.patch(`/api/products/${product.id}`, { name: "New Name" }, { token: ownerAuth.accessToken }));
       assert.equal(updated.name, "New Name");
+    });
+
+    test("product create, update, and barcode bind roll back when their required audit fails", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const branch = await ctx.db.storeLocation.create({
+        data: { shopId: tenant.shop.id, code: "BR-AUDIT", name: "Audit Branch", isPrimary: false },
+      });
+      const branchHeaders = { "x-location-id": branch.id };
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_product_create_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action IN ('PRODUCT_CREATED_WITH_SENSITIVE_FIELDS', 'PRODUCT_CREATED')
+        BEGIN
+          SELECT RAISE(ABORT, 'forced product create audit failure');
+        END;
+      `);
+      try {
+        assertFailure(await ctx.post("/api/products", productPayload({ name: "Create Audit Rollback", stockBaseQty: 7 }), {
+          token: ownerAuth.accessToken,
+          ownerPin: tenant.ownerPin,
+          headers: branchHeaders,
+        }), 503);
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_product_create_audit_failure");
+      }
+      assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id, name: "Create Audit Rollback" } }), 0);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, sourceType: "product_create" } }), 0);
+      assert.equal(await ctx.db.locationStock.count({ where: { shopId: tenant.shop.id, locationId: branch.id } }), 0);
+
+      const created = assertSuccess(await ctx.post("/api/products", productPayload({ name: "Audited Branch Product", stockBaseQty: 7 }), {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+        headers: branchHeaders,
+      }), 201);
+      const opening = await ctx.db.stockLedger.findFirst({ where: { shopId: tenant.shop.id, productId: created.id, action: "opening_stock" } });
+      assert.equal(opening?.locationId, branch.id);
+      assert.equal(opening?.changeBaseQty, 7);
+      assert.equal((await ctx.db.locationStock.findUnique({ where: { locationId_productId: { locationId: branch.id, productId: created.id } } }))?.stockBaseQty, 7);
+      assert.ok(await ctx.db.auditLog.findFirst({ where: { shopId: tenant.shop.id, entityId: created.id, action: "PRODUCT_CREATED_WITH_SENSITIVE_FIELDS" } }));
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_product_update_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'PRODUCT_UPDATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced product update audit failure');
+        END;
+      `);
+      try {
+        assertFailure(await ctx.patch(`/api/products/${created.id}`, { stockBaseQty: 11, defaultPricePerRateUnit: 35 }, {
+          token: ownerAuth.accessToken,
+          ownerPin: tenant.ownerPin,
+          headers: branchHeaders,
+        }), 503);
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_product_update_audit_failure");
+      }
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: created.id } })).defaultPricePerRateUnit, 20);
+      assert.equal((await ctx.db.locationStock.findUniqueOrThrow({ where: { locationId_productId: { locationId: branch.id, productId: created.id } } })).stockBaseQty, 7);
+      assert.equal(await ctx.db.stockLedger.count({ where: { productId: created.id, action: "correction" } }), 0);
+
+      const barcodeProduct = await createProduct(ctx.db, tenant.shop.id, { name: "Barcode Audit Rollback", stockBaseQty: 0 });
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_product_barcode_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'product_barcode_bound'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced product barcode audit failure');
+        END;
+      `);
+      try {
+        assertFailure(await ctx.post(`/api/products/${barcodeProduct.id}/barcode`, { barcode: "8901234567890" }, {
+          token: ownerAuth.accessToken,
+        }), 503);
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_product_barcode_audit_failure");
+      }
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: barcodeProduct.id } })).barcode, null);
+    });
+
+    test("server-side product management blocks cashier API bypass and protects sensitive offline updates", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const cashier = await createStaff(ctx.db, tenant.shop.id, { role: "staff" });
+      const cashierAuth = await login(ctx, cashier.staffMobile, cashier.staffPassword);
+      assertFailure(await ctx.post("/api/products", productPayload({ name: "Cashier Bypass" }), {
+        token: cashierAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+      }), 403);
+
+      const device = await activateDeviceViaApi(ctx, ownerAuth.accessToken, { deviceId: "product-sync-approval" });
+      const headers = { "x-device-id": device.deviceId };
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "Offline Protected Product", defaultPricePerRateUnit: 20 });
+
+      const harmless = assertSuccess(await ctx.post("/api/sync/push", { events: [{
+        eventId: "product-name-only-update",
+        type: "UPDATE_PRODUCT",
+        payload: { productId: product.id, changes: { name: "Offline Renamed Product" } },
+      }] }, { token: ownerAuth.accessToken, headers }));
+      assert.equal(harmless.summary.synced, 1, "a name-only edit must not ask for a PIN just because full product payloads normally contain prices");
+
+      const rejected = assertSuccess(await ctx.post("/api/sync/push", { events: [{
+        eventId: "product-sensitive-update-without-pin",
+        type: "UPDATE_PRODUCT",
+        payload: { productId: product.id, changes: { defaultPricePerRateUnit: 45 } },
+      }] }, { token: ownerAuth.accessToken, headers }));
+      assert.equal(rejected.summary.failed, 1);
+      assert.equal(rejected.results[0].code, "PERMISSION_DENIED");
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).defaultPricePerRateUnit, 20);
+
+      const approved = assertSuccess(await ctx.post("/api/sync/push", { events: [{
+        eventId: "product-sensitive-update-with-pin",
+        type: "UPDATE_PRODUCT",
+        payload: { productId: product.id, changes: { defaultPricePerRateUnit: 45 }, ownerPin: tenant.ownerPin, reason: "Approved price revision" },
+      }] }, { token: ownerAuth.accessToken, headers }));
+      assert.equal(approved.summary.synced, 1);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).defaultPricePerRateUnit, 45);
+      const audit = await ctx.db.auditLog.findFirst({ where: { shopId: tenant.shop.id, entityId: product.id, action: "PRODUCT_UPDATED" }, orderBy: { createdAt: "desc" } });
+      assert.match(audit?.metadataJson ?? "", /Approved price revision/);
     });
 
     test("product findMany, loose-item fields, and search work for billing", async () => {

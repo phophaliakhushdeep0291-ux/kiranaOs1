@@ -5,6 +5,7 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 
 const settings = read("../features/core/settings/pages/SettingsPage.tsx");
 const sync = read("../features/core/settings/pages/SyncSettingsPage.tsx");
+const printer = read("../features/core/settings/pages/PrinterSettingsPage.tsx");
 const security = read("../features/core/settings/pages/SecuritySettingsPage.tsx");
 const styles = read("../index.css");
 
@@ -21,6 +22,12 @@ describe("mobile settings accessibility contract", () => {
     expect(sync).not.toContain('className="inline-flex h-8 items-center');
     expect(styles).toContain(".backup-create { @apply min-h-11");
     expect(styles).toContain(".settings-text-action { @apply inline-flex min-h-11 items-center");
+  });
+
+  it("keeps printer preview and queue actions touch-safe through tablet widths", () => {
+    expect(printer).toContain('className="settings-text-action px-2 sm:px-0">Test print');
+    expect(printer).toContain('className="settings-text-action px-2 sm:px-0">Clear queue');
+    expect(printer).not.toContain("sm:min-h-0");
   });
 
   it("uses fitted protection cards through tablet widths instead of a scrolling table", () => {

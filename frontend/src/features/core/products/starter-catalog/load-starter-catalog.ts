@@ -42,6 +42,8 @@ export interface LoadStarterCatalogOptions {
   signal?: AbortSignal;
   onProgress?: (progress: StarterCatalogProgress) => void;
   batchSize?: number;
+  ownerPin?: string;
+  ownerPinReason?: string;
 }
 
 /**
@@ -55,7 +57,7 @@ export interface LoadStarterCatalogOptions {
  */
 export async function importStarterCatalogItems(
   items: readonly StarterCatalogItem[],
-  { signal, onProgress, batchSize = DEFAULT_BATCH_SIZE }: LoadStarterCatalogOptions = {},
+  { signal, onProgress, batchSize = DEFAULT_BATCH_SIZE, ownerPin, ownerPinReason }: LoadStarterCatalogOptions = {},
 ): Promise<StarterCatalogLoadResult> {
   const csv = starterCatalogToCsv(items);
   const parsed = parseProductsCsv(csv);
@@ -97,7 +99,7 @@ export async function importStarterCatalogItems(
       totalRows: batch.length,
       skippedRows: 0,
       errorRows: 0,
-    });
+    }, ownerPin ? { ownerPin, reason: ownerPinReason || "Approved built-in starter catalog" } : undefined);
     created += batch.length;
     onProgress?.({ created, total });
   }

@@ -798,7 +798,10 @@ model RetailPaymentIntent {
   shopId             String
   locationId         String
   provider           String    @default("razorpay")
+  checkoutMode       String    @default("checkout") // checkout | dynamic_qr
   providerOrderId    String?   @unique
+  providerQrCodeId   String?   @unique
+  providerQrImageUrl String?
   providerPaymentId  String?   @unique
   amountPaise        Int
   currency           String    @default("INR")

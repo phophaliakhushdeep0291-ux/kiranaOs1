@@ -1,0 +1,97 @@
+{
+  "capturedAt": "2026-08-11T06:18:00.000Z",
+  "sourceRevision": "a19a1b9b5ed1fbdfa906ab5acc95096177518c1a",
+  "workingTreeState": "dirty; evidence reflects the exact local verification tree and is not candidate CI",
+  "route": "/products/prod-003/pricing",
+  "product": {
+    "id": "prod-003",
+    "name": "Atta (Wheat Flour)"
+  },
+  "viewport": {
+    "width": 390,
+    "height": 844,
+    "documentClientWidth": 390,
+    "documentScrollWidth": 390,
+    "horizontalOverflow": false
+  },
+  "states": [
+    {
+      "name": "premium overview",
+      "activeControls": 24,
+      "undersizedControls": 0,
+      "artifact": "product-pricing-overview-390x844.png",
+      "bytes": 43580,
+      "sha256": "3ccebbe38b9913d785f2a8ce152bd8d33ec6b971c04fc3308dae3d9587f0a8f3"
+    },
+    {
+      "name": "temporary quantity slab visible immediately after create",
+      "activeControls": 25,
+      "undersizedControls": 0,
+      "artifact": "product-pricing-rule-created-390x844.png",
+      "bytes": 33124,
+      "sha256": "33c15869910045cdc9f9e6f168b4c3f3bee635140ba4d8145fe366426fee8002"
+    }
+  ],
+  "statefulProof": {
+    "ownerPinRequired": true,
+    "ownerPinClearedAfterCreate": true,
+    "ownerPinClearedAfterArchive": true,
+    "createdRuleRenderedWithoutReloadAfterFix": true,
+    "archivedRuleDisappearedWithoutReloadAfterFix": true,
+    "cacheFix": "pricing rules, settings and product selling-unit GETs use cache=no-store",
+    "routeGateRestoredAfterQa": true
+  },
+  "qaIsolation": {
+    "frontendGateTemporarilyBypassedForLayoutQa": true,
+    "reason": "the local signed Starter licence correctly kept the premium route gated even after a temporary server-side Growth row",
+    "backendFeatureGateRemainedActiveForMutations": true,
+    "temporarySubscription": {
+      "provider": "qa-temporary",
+      "planCode": "growth",
+      "deletedRows": 1
+    },
+    "temporaryRules": {
+      "names": [
+        "Atta (Wheat Flour) 9999+",
+        "Atta (Wheat Flour) 9998+"
+      ],
+      "archivedThroughUi": 2,
+      "deletedAfterEvidence": 2
+    }
+  },
+  "auditProof": {
+    "retainedActions": {
+      "PRICING_RULE_CREATED": 2,
+      "PRICING_RULE_DELETED": 2
+    },
+    "approvingUser": "demo-user-001",
+    "liveFinding": "pre-fix legacy-session audits retained the owner but had null deviceId",
+    "fix": "pricingActor prefers req.device.deviceId resolved by requireDeviceActivated",
+    "postFixEvidence": "atomic pricing integration plus direct legacy-session actor regression"
+  },
+  "verification": {
+    "frontendFocused": "11 passed, 0 failed across 2 files",
+    "frontendTypecheck": "passed",
+    "backendPricingIntegration": "1 passed, 0 failed",
+    "frontendProductionCheck": {
+      "status": "passed",
+      "translationKeys": 1107,
+      "testFilesPassed": 226,
+      "testFilesSkipped": 1,
+      "testsPassed": 1393,
+      "testsSkipped": 1,
+      "initialJsRawKb": 852.8,
+      "initialJsGzipKb": 254.9,
+      "totalJsRawKb": 4007.7,
+      "totalJsGzipKb": 1171.4
+    },
+    "backendProductionCheck": "passed",
+    "migrationSafety": "passed with 0 warnings",
+    "releaseGate": "passed with the expected missing human RELEASE_APPROVED warning"
+  },
+  "limitations": [
+    "This is local software QA, not exact-candidate CI evidence.",
+    "Only the 390x844 Product Pricing flow was exercised live in this artifact set.",
+    "Barcode scanning, physical hardware and managed production deployment remain separate gates."
+  ]
+}
