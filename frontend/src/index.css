@@ -1758,15 +1758,18 @@ html[data-density="compact"] {
     box-shadow: 0 9px 22px color-mix(in srgb, var(--brand) 24%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   }
 
+  /* Sized for a title that now owns its row rather than sharing it with a
+     clipped shop name. 17px is the first step at which a glanced page name is
+     unmistakable at arm's length without crowding the two actions beside it. */
   .mobile-app-page-title {
     min-width: 0;
     overflow: hidden;
     color: var(--mobile-ink);
     font-family: var(--app-font-display);
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 850;
-    line-height: 1.15;
-    letter-spacing: -0.015em;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
     text-overflow: ellipsis;
     white-space: nowrap;
   }

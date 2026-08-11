@@ -54,19 +54,38 @@ export function SubscriptionStatusBanner() {
     : snapshot.localOnlyAfterExpiry
       ? "Your saved records are available on this device. Renew to resume cloud backup."
       : snapshot.message;
+  /**
+   * The same standing not-quite-a-problem, told in a phone's worth of words.
+   *
+   * These sentences are written for a desktop strip that can hold one line of
+   * them. On a 375px screen the full text needs three, and a permanent
+   * three-line band above every screen costs more than it explains — so the
+   * phone gets the headline and "Owner details" carries the rest.
+   */
+  const shortMessage = snapshot.isPaymentFailed
+    ? "Payment failed — sales and exports still work"
+    : snapshot.isExpired
+      ? "Subscription expired — you can still bill and export"
+      : snapshot.graceActive
+        ? "Offline grace — billing works, sync is limited"
+        : snapshot.isTrial
+          ? "Trial active — your data is safe on this device"
+          : "Subscription active";
   return (
     <div className={`border-b px-3 py-1.5 sm:px-4 ${isDanger ? "bg-amber-50 text-amber-950" : "bg-amber-50 text-amber-800"}`}>
       <div className="flex min-h-11 items-center gap-2 text-xs sm:text-sm">
-        <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
-          <span className="mt-0.5 shrink-0 sm:mt-0">{snapshot.graceActive ? <AlertTriangle size={16} /> : <Icon size={16} />}</span>
-          {/* One `truncate` clipped this sentence to 210px of the 460px it needs,
-              so a phone read "Trial active. Your data is safe locall…" and learned
-              nothing. Two lines is the smallest budget that carries the meaning;
-              the desktop, which has the room, still gets it on one. */}
-          <span className="line-clamp-2 leading-snug sm:line-clamp-none sm:whitespace-normal">{plainMessage}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="shrink-0">{snapshot.graceActive ? <AlertTriangle size={16} /> : <Icon size={16} />}</span>
+          {/* A single `truncate` clipped the long form to 210px of the 460px it
+              needs, so a phone read "Trial active. Your data is safe locall…" and
+              learned nothing at all. Each width now gets a sentence it can finish. */}
+          <span className="min-w-0 flex-1 leading-snug sm:hidden">{shortMessage}</span>
+          <span className="hidden min-w-0 flex-1 sm:inline">{plainMessage}</span>
         </div>
         <Link href="/subscription" className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 font-black text-current hover:bg-black/5">
-          Owner details <ChevronRight size={14} aria-hidden="true" />
+          <span className="hidden sm:inline">Owner details</span>
+          <span className="sm:hidden">Details</span>
+          <ChevronRight size={14} aria-hidden="true" />
         </Link>
       </div>
     </div>

@@ -729,6 +729,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
           connectionTone={mobileConnectionTone}
           attentionCount={attentionCount}
           onOpenSearch={() => setPaletteOpen(true)}
+          showLocation={locations.length > 1}
         />
 
         <SubscriptionStatusBanner />
