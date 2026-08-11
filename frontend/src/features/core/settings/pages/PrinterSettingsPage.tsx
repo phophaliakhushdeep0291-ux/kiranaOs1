@@ -56,7 +56,7 @@ export default function PrinterSettingsPage() {
       { label: "Bluetooth browser API", detail: "Detected only; printing still uses the paired system queue", ready: Boolean(browserNavigator.bluetooth) && window.isSecureContext, icon: Bluetooth },
       { label: "USB browser API", detail: "Detected only; direct ESC/POS uses the local bridge", ready: Boolean(browserNavigator.usb) && window.isSecureContext, icon: Usb },
       { label: "Serial weighing scale", detail: "Web Serial capable browser; device protocol still required", ready: Boolean(browserNavigator.serial) && window.isSecureContext, icon: Scale },
-      { label: "Customer display", detail: bridgeHealth?.capabilities?.customerDisplay ? "Paired structured-total adapter" : "Configure a signed vendor adapter in Hardware Bridge Setup", ready: Boolean(bridgeHealth?.capabilities?.customerDisplay), icon: Monitor },
+      { label: "Customer display", detail: bridgeHealth?.capabilities?.customerDisplay ? "Paired structured-total adapter" : "Configure a vendor adapter in Hardware Bridge Setup", ready: Boolean(bridgeHealth?.capabilities?.customerDisplay), icon: Monitor },
       { label: "Local hardware bridge", detail: bridgeHealth?.deviceName || "Direct printer, cutter, drawer, scale and display adapters", ready: Boolean(bridgeHealth?.ok), icon: Cable },
     ];
   }, [bridgeHealth]);

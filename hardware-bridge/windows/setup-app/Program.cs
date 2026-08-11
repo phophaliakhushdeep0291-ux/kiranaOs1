@@ -91,8 +91,8 @@ internal sealed class SetupWindow : Form
         var heading = new Label { Text = "Connect your receipt printer", AutoSize = true, Font = new Font("Segoe UI", 16, FontStyle.Bold) };
         var explanation = new Label { Text = "Choose the printer used for bills. No terminal or private token is needed.", AutoSize = false, Width = 440, Height = 42 };
         var printerLabel = new Label { Text = "Installed printer", AutoSize = true };
-        var scaleLabel = new Label { Text = "Optional weighing-scale adapter (.exe)", AutoSize = true };
-        var displayLabel = new Label { Text = "Optional customer-display adapter (.exe)", AutoSize = true };
+        var scaleLabel = new Label { Text = "Optional weighing-scale vendor adapter (.exe)", AutoSize = true };
+        var displayLabel = new Label { Text = "Optional customer-display vendor adapter (.exe)", AutoSize = true };
         var codeLabel = new Label { Text = "Type this code in KiranaOS → Printer Settings", AutoSize = true };
         version.Text = $"Hardware Bridge v{Application.ProductVersion}";
 
@@ -126,8 +126,8 @@ internal sealed class SetupWindow : Form
         saveButton.Click += async (_, _) => await SaveAndPairAsync();
         testButton.Click += async (_, _) => await TestPrintAsync();
         refreshButton.Click += (_, _) => LoadPrinters();
-        chooseScaleAdapter.Click += (_, _) => ChooseAdapter(scaleAdapter, "Choose the signed weighing-scale adapter");
-        chooseDisplayAdapter.Click += (_, _) => ChooseAdapter(displayAdapter, "Choose the signed customer-display adapter");
+        chooseScaleAdapter.Click += (_, _) => ChooseAdapter(scaleAdapter, "Choose the weighing-scale vendor adapter");
+        chooseDisplayAdapter.Click += (_, _) => ChooseAdapter(displayAdapter, "Choose the customer-display vendor adapter");
         Shown += async (_, _) => { LoadConfig(); LoadPrinters(); await RefreshVersionNoticeAsync(); };
     }
 
@@ -152,11 +152,30 @@ internal sealed class SetupWindow : Form
         using var picker = new OpenFileDialog
         {
             Title = title,
-            Filter = "Signed adapter executable (*.exe)|*.exe",
+            Filter = "Vendor adapter executable (*.exe)|*.exe",
             CheckFileExists = true,
             Multiselect = false,
         };
         if (picker.ShowDialog(this) == DialogResult.OK) target.Text = Path.GetFullPath(picker.FileName);
+    }
+
+    private static string InstallProtectedAdapter(string sourcePath, string adapterKind)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath)) return "";
+        var source = Path.GetFullPath(sourcePath);
+        var payload = File.ReadAllBytes(source);
+        var fingerprint = Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant()[..16];
+        var adapterDirectory = Path.Combine(ConfigDirectory, "adapters");
+        Directory.CreateDirectory(adapterDirectory);
+        var destination = Path.Combine(adapterDirectory, $"{adapterKind}-{fingerprint}.exe");
+        if (string.Equals(source, destination, StringComparison.OrdinalIgnoreCase)) return destination;
+        if (!File.Exists(destination))
+        {
+            var temporary = destination + ".tmp";
+            File.WriteAllBytes(temporary, payload);
+            File.Move(temporary, destination, true);
+        }
+        return destination;
     }
 
     private void LoadPrinters()
@@ -194,10 +213,10 @@ internal sealed class SetupWindow : Form
             config.Token = RandomToken();
             config.Printer = new PrinterConfig { Transport = "windows", Name = printerName };
             config.Scale ??= new ExecutableAdapterConfig();
-            config.Scale.Executable = scaleAdapter.Text.Trim();
+            config.Scale.Executable = InstallProtectedAdapter(scaleAdapter.Text.Trim(), "scale");
             config.Scale.Args = [];
             config.CustomerDisplay ??= new CustomerDisplayConfig();
-            config.CustomerDisplay.Executable = displayAdapter.Text.Trim();
+            config.CustomerDisplay.Executable = InstallProtectedAdapter(displayAdapter.Text.Trim(), "customer-display");
             config.CustomerDisplay.Args = [];
             config.CustomerDisplay.Width = 20;
             var code = RandomCode();

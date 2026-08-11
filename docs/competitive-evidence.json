@@ -256,7 +256,7 @@
       "weight": 15,
       "status": "partial",
       "proofKind": "runtime_required",
-      "summary": "The paired local bridge now exposes capability-gated cash-drawer pulses, validated weighing-scale reads applied to weighed billing lines, and serialized customer-display updates built from integer-paise cart totals. Signed vendor adapters are selected in the Windows setup app, stale display revisions are dropped, and peripheral failure never blocks billing. Named physical device models remain uncertified until retained hardware runs pass.",
+      "summary": "The paired local bridge now exposes capability-gated cash-drawer pulses, validated weighing-scale reads applied to weighed billing lines, and serialized customer-display updates built from integer-paise cart totals. Administrator-selected vendor adapters are fingerprinted and copied into the protected bridge directory, stale display revisions are dropped, and peripheral failure never blocks billing. Named physical device models remain uncertified until retained hardware runs pass.",
       "competitorEvidence": [
         { "product": "Zoho POS", "url": "https://www.zoho.com/en-us/pos/features/store-hardware.html", "claim": "Scales, displays and cash drawers are benchmark store peripherals." }
       ],

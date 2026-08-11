@@ -20,7 +20,7 @@ describe("customer-facing display checkout contract", () => {
     expect(billing).toContain("showCustomerDisplayViaHardwareBridge");
     expect(billing).toContain("totalPaise: Math.round(grandTotal * 100)");
     expect(billing).toContain("state: cart.length > 0 ? \"sale\" : \"idle\"");
-    expect(billing).toContain("Customer display is informative, never a reason to block billing");
+    expect(billing).toContain("customer display is informative, never a reason to block billing");
   });
 
   it("exposes an explicit capability-gated test in hardware settings", () => {

@@ -24,7 +24,7 @@ if (ctx.skip) {
     test("sync push CREATE_PRODUCT works", async () => {
       const { ownerAuth, deviceHeaders } = await ownerCtx();
       const response = await ctx.post("/api/sync/push", {
-        events: [{ eventId: "create-product-1", type: "CREATE_PRODUCT", payload: { product: productPayload({ name: "Sync Product" }) } }],
+        events: [{ eventId: "create-product-1", type: "CREATE_PRODUCT", payload: { product: productPayload({ name: "Sync Product" }), ownerPin: "1234" } }],
       }, { token: ownerAuth.accessToken, headers: deviceHeaders });
       const data = assertSuccess(response);
       assert.equal(data.summary.synced, 1);
@@ -40,8 +40,8 @@ if (ctx.skip) {
       const product = productPayload({ name: "Parle-G Biscuit" });
       const response = await ctx.post("/api/sync/push", {
         events: [
-          { eventId: "create-product-conv-1", type: "CREATE_PRODUCT", payload: { localProductId: "local_prod_x", product } },
-          { eventId: "create-product-conv-2", type: "CREATE_PRODUCT", payload: { localProductId: "local_prod_x", product } },
+          { eventId: "create-product-conv-1", type: "CREATE_PRODUCT", payload: { localProductId: "local_prod_x", product, ownerPin: "1234" } },
+          { eventId: "create-product-conv-2", type: "CREATE_PRODUCT", payload: { localProductId: "local_prod_x", product, ownerPin: "1234" } },
         ],
       }, { token: ownerAuth.accessToken, headers: deviceHeaders });
 
@@ -1523,6 +1523,7 @@ if (ctx.skip) {
             payload: {
               localProductId: "local-prod-rice",
               product: productPayload({ localId: "local-prod-rice", name: "Offline Rice", stockBaseQty: 10, defaultPricePerRateUnit: 50 }),
+              ownerPin: "1234",
             },
           },
           {
@@ -1569,7 +1570,7 @@ if (ctx.skip) {
 
     test("duplicate event replay returns duplicate and does not duplicate DB row", async () => {
       const { ownerAuth, deviceHeaders } = await ownerCtx();
-      const event = { eventId: "duplicate-product-1", type: "CREATE_PRODUCT", payload: { product: productPayload({ name: "Only Once" }) } };
+      const event = { eventId: "duplicate-product-1", type: "CREATE_PRODUCT", payload: { product: productPayload({ name: "Only Once" }), ownerPin: "1234" } };
       assertSuccess(await ctx.post("/api/sync/push", { events: [event] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       const second = assertSuccess(await ctx.post("/api/sync/push", { events: [event] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       assert.equal(second.summary.duplicates, 1);

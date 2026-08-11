@@ -21,6 +21,9 @@ test("Windows installer registers an automatic hidden service and launches setup
   assert.match(setup, /PrinterSettings\.InstalledPrinters/);
   assert.match(setup, /Test print/);
   assert.match(setup, /config\.Token = RandomToken\(\)/);
+  assert.match(setup, /InstallProtectedAdapter/);
+  assert.match(setup, /SHA256\.HashData\(payload\)/);
+  assert.match(setup, /Path\.Combine\(ConfigDirectory, "adapters"\)/);
   assert.doesNotMatch(setup, /Console\.(Write|Read)/);
 });
 

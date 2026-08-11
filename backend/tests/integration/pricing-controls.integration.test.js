@@ -2,6 +2,7 @@ import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { createProduct, createTenant, login } from "./factories.js";
+import { pricingActor } from "../../src/modules/pricing/pricing.controller.js";
 
 const ctx = await createIntegrationContext();
 
@@ -50,6 +51,11 @@ if (ctx.skip) {
       };
 
       assertFailure(await ctx.post("/api/pricing/rules", rulePayload, { token: auth.accessToken }), 403);
+      assert.equal(pricingActor({
+        user: { userId: tenant.owner.id, role: "owner", deviceId: null },
+        device: { deviceId: "verified-request-device" },
+        headers: { "x-device-id": "verified-request-device" },
+      }).deviceId, "verified-request-device", "verified request device must survive a legacy unbound session");
       let failed = await forceAuditFailure("PRICING_RULE_CREATED", () => ctx.post("/api/pricing/rules", rulePayload, approved));
       assert.equal(assertFailure(failed, 503).code, "PRICING_AUDIT_WRITE_FAILED");
       assert.equal(await ctx.db.pricingRule.count({ where: { shopId: tenant.shop.id } }), 0);
