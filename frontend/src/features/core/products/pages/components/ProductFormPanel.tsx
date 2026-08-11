@@ -19,6 +19,7 @@ import { baseUnitFor, isScaleUnit, sellingUnitCode, sellingUnitConversion, selli
 import { roundMoney } from "@/lib/money";
 import { useShopCapability } from "@/features/core/settings/capabilities";
 import { VariantGridEditor } from "./VariantGridEditor";
+import { VariantLocationSplit } from "./VariantLocationSplit";
 import type { ProductFormData } from "../product-form-state";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { generateInternalEan13 } from "@/lib/barcode/ean13";
@@ -615,6 +616,13 @@ export function ProductFormPanel({
                   if (axes.length > 0) form.setValue("packagingMode", "per_pack", { shouldDirty: true });
                 }}
               />
+            )}
+
+            {/* Only for a product that exists and already has a grid: a product
+                being created has no stock anywhere yet, and the split is read from
+                the server rather than from the unsaved form. */}
+            {showVariantGrid && !isLoose && editing?.id && hasVariantGrid && (
+              <VariantLocationSplit productId={editing.id} />
             )}
 
             {/* Pack sizes and a variant grid both write sellingUnits, so only one

@@ -240,10 +240,12 @@ model ProductSellingUnit {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  shop         Shop          @relation(fields: [shopId], references: [id])
-  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
-  pricingRules PricingRule[]
-  billItems    BillItem[]
+  shop           Shop            @relation(fields: [shopId], references: [id])
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  pricingRules   PricingRule[]
+  billItems      BillItem[]
+  locationStocks LocationStock[]
+  transferItems  StockTransferItem[]
 
   @@unique([shopId, productId, unitCode])
   @@index([shopId, productId, isActive])
@@ -850,16 +852,26 @@ model LocationStock {
   shopId            String
   locationId        String
   productId         String
+  // Which variant this row allocates. NULL is the product-level row every pooled
+  // product uses and every existing row already is. The primary location holds no
+  // row at all — its quantity is the product total minus what branches hold.
+  //
+  // NULLs are DISTINCT in a unique index, so @@unique does not stop two
+  // product-level rows for one location; the migration adds a partial unique
+  // index over the NULL case. See the SQLite twin for the full rationale.
+  sellingUnitId     String?
   stockBaseQty      Float    @default(0)
   lowStockThreshold Float?
   updatedAt         DateTime @updatedAt
 
-  shop     Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  location StoreLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  product  Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shop        Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location    StoreLocation       @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sellingUnit ProductSellingUnit? @relation(fields: [sellingUnitId], references: [id], onDelete: Cascade)
 
-  @@unique([locationId, productId])
+  @@unique([locationId, productId, sellingUnitId])
   @@index([shopId, productId])
+  @@index([shopId, sellingUnitId])
 }
 
 model StockCountSession {
@@ -1029,6 +1041,12 @@ model StockTransferItem {
   transferId        String
   productId         String
   productName       String
+  // Which size is being moved. NULL is a product-level line, which is what every
+  // pooled product uses and every existing row already is. NULLs are DISTINCT in a
+  // unique index, so the migration adds a partial unique index over the NULL case.
+  // See the SQLite twin for the full rationale.
+  sellingUnitId     String?
+  sellingUnitQty    Float?
   quantityBaseQty   Float
   receivedBaseQty   Float   @default(0)
   baseUnit          String
@@ -1047,10 +1065,11 @@ model StockTransferItem {
   totalValue        Float   @default(0)
   totalValuePaise   BigInt?
 
-  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
-  product  Product       @relation(fields: [productId], references: [id])
+  transfer    StockTransfer       @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product     Product             @relation(fields: [productId], references: [id])
+  sellingUnit ProductSellingUnit? @relation(fields: [sellingUnitId], references: [id], onDelete: SetNull)
 
-  @@unique([transferId, productId])
+  @@unique([transferId, productId, sellingUnitId])
   @@index([productId])
 }
 

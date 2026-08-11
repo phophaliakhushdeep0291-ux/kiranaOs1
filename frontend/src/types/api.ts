@@ -94,6 +94,30 @@ export interface ProductVariantAxis {
   values: string[];
 }
 
+/** One size's holding at one branch, in that unit's own counts — 4 pairs, not 4000 g. */
+export interface VariantLocationUnit {
+  sellingUnitId: string;
+  unitCode: string;
+  name: string;
+  variantValue1: string | null;
+  variantValue2: string | null;
+  qty: number;
+}
+
+export interface VariantLocationRow {
+  id: string;
+  name: string;
+  isPrimary: boolean;
+  units: VariantLocationUnit[];
+}
+
+export interface VariantStockByLocation {
+  productId: string;
+  axes: ProductVariantAxis[];
+  /** Empty when the product has no variant rows; the caller renders nothing. */
+  locations: VariantLocationRow[];
+}
+
 export interface Product {
   id: string;
   shopId?: string;

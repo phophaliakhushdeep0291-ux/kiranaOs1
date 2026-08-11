@@ -200,4 +200,10 @@ export const productsEn = {
   "products.import.importedCounts": "{created} created, {updated} updated. {backup}",
   "products.import.update": "Update",
   "products.import.notSet": "Not set",
+  // "Where these are" — the per-branch split under the size grid.
+  "products.variantSplit.title": "Where these are",
+  "products.variantSplit.size": "Size",
+  "products.variantSplit.main": "(main)",
+  "products.variantSplit.total": "Total",
+  "products.variantSplit.hint": "Counted per size, not in base units. Move stock between branches with a transfer so both sides stay in step.",
 } as const;

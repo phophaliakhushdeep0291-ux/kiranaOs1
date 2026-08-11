@@ -5,6 +5,11 @@ import { addMoney, moneyShadows, multiplyMoney, round2, sumMoney } from "../../u
 import { validateGstin, validateHsn } from "../../utils/gst.js";
 import { getPlanLimits } from "../feature-gates/featureGate.service.js";
 import { accessibleLocationIds, assertLocationCapability } from "./location-access.service.js";
+// Cyclic with location-context (it imports ensurePrimaryLocation from here), which
+// ESM resolves because both sides are hoisted function declarations used only at
+// call time. Kept as an import rather than a local copy on purpose: the
+// primary-share rule must have exactly one implementation, or the two drift.
+import { getVariantLocationQuantity, writeLocationStockRow } from "./location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 
 async function writeRequiredStoreAudit(entry, client) {
@@ -259,7 +264,9 @@ async function inventorySnapshot(client, shopId, location) {
       orderBy: { name: "asc" },
       select: { id: true, name: true, barcode: true, sku: true, baseUnit: true, displayUnit: true, stockBaseQty: true, lowStockThreshold: true, reorderLevel: true, hsn: true, gstRate: true },
     }),
-    client.locationStock.findMany({ where: { shopId }, select: { locationId: true, productId: true, stockBaseQty: true, lowStockThreshold: true } }),
+    // Product-level rows only. This is keyed by `${locationId}:${productId}`, so
+    // variant rows would collide on that key and the last one read would win.
+    client.locationStock.findMany({ where: { shopId, sellingUnitId: null }, select: { locationId: true, productId: true, stockBaseQty: true, lowStockThreshold: true } }),
     client.stockTransferItem.findMany({
       where: { transfer: { shopId, status: { in: ["in_transit", "partially_received"] } } },
       select: { productId: true, quantityBaseQty: true, receivedBaseQty: true },
@@ -387,15 +394,59 @@ export async function getBranchReplenishmentSuggestions(shopId, user = null) {
 function normalizeItems(items) {
   const totals = new Map();
   for (const item of items) {
-    const current = totals.get(item.productId) ?? { productId: item.productId, quantityBaseQty: 0, declaredTaxableValue: 0, hasDeclaredValue: false };
+    const sellingUnitId = item.sellingUnitId || null;
+    // Keyed by size, not by product alone. Merging two sizes into one line would
+    // put the shirts on the van without recording which ones went, which is the
+    // whole thing a per-size transfer exists to say.
+    const key = `${item.productId}:${sellingUnitId ?? ""}`;
+    const current = totals.get(key) ?? {
+      productId: item.productId,
+      sellingUnitId,
+      sellingUnitQty: 0,
+      quantityBaseQty: 0,
+      declaredTaxableValue: 0,
+      hasDeclaredValue: false,
+    };
     current.quantityBaseQty += Number(item.quantityBaseQty);
+    if (item.sellingUnitQty != null) current.sellingUnitQty += Number(item.sellingUnitQty);
     if (item.declaredTaxableValue !== undefined) {
       current.declaredTaxableValue = addMoney(current.declaredTaxableValue, Number(item.declaredTaxableValue));
       current.hasDeclaredValue = true;
     }
-    totals.set(item.productId, current);
+    totals.set(key, current);
   }
-  return [...totals.values()];
+  // A pooled line carries no count of its own; null keeps it out of the per-size
+  // maths rather than reading as a real zero.
+  return [...totals.values()].map((row) => ({ ...row, sellingUnitQty: row.sellingUnitQty > 0 ? round2(row.sellingUnitQty) : null }));
+}
+
+/**
+ * Move one size's count at one location, alongside the base-unit row that every
+ * transfer already moves. `qty` is signed: negative leaves, positive arrives.
+ *
+ * The primary location keeps no row — its share is onHandQty minus what the
+ * branches hold — so it is skipped here exactly as the base-unit paths skip it.
+ * Writing a primary row would double-count the moment anything read it.
+ */
+async function moveVariantAtLocation(tx, { shopId, location, productId, sellingUnitId, qty }) {
+  if (!sellingUnitId || !location || location.isPrimary) return;
+  const amount = round2(qty);
+  if (!amount) return;
+  await writeLocationStockRow(tx, { shopId, locationId: location.id, productId, sellingUnitId, delta: amount });
+}
+
+/**
+ * The share of a line's size count that corresponds to part of its base quantity.
+ *
+ * A shipment can be received or cancelled in pieces, and the two numbers have to
+ * move together or the size counts drift away from the base units they describe.
+ * Whole-line moves — much the commonest — come out exact.
+ */
+function variantShareOf(item, baseQty) {
+  const lineBase = Number(item.quantityBaseQty || 0);
+  const lineUnits = Number(item.sellingUnitQty || 0);
+  if (!item.sellingUnitId || !(lineBase > 0) || !(lineUnits > 0)) return 0;
+  return round2(lineUnits * (Number(baseQty || 0) / lineBase));
 }
 
 function classifyTransfer(from, to) {
@@ -494,9 +545,42 @@ export async function createTransfer(shopId, data, userId, userRole = "staff", r
       const sourceSnapshot = await inventorySnapshot(tx, shopId, from);
       const sourceById = new Map(sourceSnapshot.map((row) => [row.id, row]));
 
+      // A product that holds stock per size cannot move as an untyped lump: the
+      // product-level allocation would shift while the per-size rows stood still,
+      // and the two views would disagree from then on. Refusing is recoverable;
+      // silent drift is not — the same rule the sale path applies.
+      const perPackIds = items.filter((item) => !item.sellingUnitId).map((item) => item.productId);
+      if (perPackIds.length > 0) {
+        const perPack = await tx.product.findMany({
+          where: { shopId, id: { in: perPackIds }, packagingMode: "per_pack" },
+          select: { id: true, name: true },
+        });
+        if (perPack.length > 0) {
+          const error = new AppError(
+            `"${perPack[0].name}" is counted per size, so a transfer must say which size is moving.`,
+            400,
+            "PACKAGING_STOCK_PATH_UNSUPPORTED",
+          );
+          error.publicData = { productIds: perPack.map((row) => row.id) };
+          throw error;
+        }
+      }
+
       for (const item of items) {
         const product = sourceById.get(item.productId);
         if (!product) throw new AppError("A transfer product was not found", 404, "PRODUCT_NOT_FOUND");
+        if (item.sellingUnitId) {
+          const available = await getVariantLocationQuantity(tx, shopId, from, product, item.sellingUnitId);
+          const moving = Number(item.sellingUnitQty ?? 0);
+          if (!(moving > 0)) {
+            throw new AppError(`Enter how many of each size of ${product.name} are moving`, 422, "TRANSFER_SIZE_QTY_REQUIRED");
+          }
+          if (available < moving) {
+            const error = new AppError(`${product.name} has only ${available} of that size at ${from.name}`, 409, "INSUFFICIENT_LOCATION_STOCK");
+            error.publicData = { productId: product.id, sellingUnitId: item.sellingUnitId, availableQty: available };
+            throw error;
+          }
+        }
         if (product.stockBaseQty < item.quantityBaseQty) {
           const error = new AppError(`${product.name} has only ${product.stockBaseQty} ${product.baseUnit} at ${from.name}`, 409, "INSUFFICIENT_LOCATION_STOCK");
           error.publicData = { productId: product.id, availableBaseQty: product.stockBaseQty };
@@ -550,6 +634,8 @@ export async function createTransfer(shopId, data, userId, userRole = "staff", r
         return {
           productId: item.productId,
           productName: product.name,
+          sellingUnitId: item.sellingUnitId,
+          sellingUnitQty: item.sellingUnitQty,
           quantityBaseQty: item.quantityBaseQty,
           baseUnit: product.baseUnit,
           hsn: product.hsn || null,
@@ -576,16 +662,28 @@ export async function createTransfer(shopId, data, userId, userRole = "staff", r
       for (const item of items) {
         if (!from.isPrimary) {
           const updated = await tx.locationStock.updateMany({
-            where: { locationId: from.id, productId: item.productId, shopId, stockBaseQty: { gte: item.quantityBaseQty } },
+            // sellingUnitId: null is load-bearing, not decoration. Without it this
+            // matches the product's variant rows too, so count comes back as 3 for a
+            // two-size product and the transfer dies with a bogus concurrency error —
+            // after having decremented all three.
+            where: { locationId: from.id, productId: item.productId, shopId, sellingUnitId: null, stockBaseQty: { gte: item.quantityBaseQty } },
             data: { stockBaseQty: { decrement: item.quantityBaseQty } },
           });
           if (updated.count !== 1) throw new AppError("Location stock changed; retry the transfer", 409, "CONCURRENT_LOCATION_STOCK_CHANGE");
         }
-        if (completesImmediately && !to.isPrimary) {
-          await tx.locationStock.upsert({
-            where: { locationId_productId: { locationId: to.id, productId: item.productId } },
-            create: { shopId, locationId: to.id, productId: item.productId, stockBaseQty: item.quantityBaseQty },
-            update: { stockBaseQty: { increment: item.quantityBaseQty } },
+        // The size leaves the source in the same transaction as the base units, so
+        // the per-size and base-unit views can never disagree about this movement.
+        await moveVariantAtLocation(tx, {
+          shopId, location: from, productId: item.productId,
+          sellingUnitId: item.sellingUnitId, qty: -Number(item.sellingUnitQty || 0),
+        });
+        if (completesImmediately) {
+          if (!to.isPrimary) {
+            await writeLocationStockRow(tx, { shopId, locationId: to.id, productId: item.productId, delta: item.quantityBaseQty });
+          }
+          await moveVariantAtLocation(tx, {
+            shopId, location: to, productId: item.productId,
+            sellingUnitId: item.sellingUnitId, qty: Number(item.sellingUnitQty || 0),
           });
         }
       }
@@ -695,12 +793,14 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
       if (claimed.count !== 1) throw new AppError("Receipt quantities changed; refresh and retry", 409, "CONCURRENT_TRANSFER_RECEIPT");
 
       if (!current.toLocation.isPrimary) {
-        await tx.locationStock.upsert({
-          where: { locationId_productId: { locationId: current.toLocationId, productId: item.productId } },
-          create: { shopId, locationId: current.toLocationId, productId: item.productId, stockBaseQty: input.quantityBaseQty },
-          update: { stockBaseQty: { increment: input.quantityBaseQty } },
-        });
+        await writeLocationStockRow(tx, { shopId, locationId: current.toLocationId, productId: item.productId, delta: input.quantityBaseQty });
       }
+      // A shipment can arrive in parts, so the size count arrives in the same
+      // proportion as the base units it describes.
+      await moveVariantAtLocation(tx, {
+        shopId, location: current.toLocation, productId: item.productId,
+        sellingUnitId: item.sellingUnitId, qty: variantShareOf(item, input.quantityBaseQty),
+      });
       receivedLines.push({
         transferItemId: item.id,
         productId: item.productId,
@@ -764,12 +864,13 @@ export async function cancelTransfer(shopId, transferId, data, userId, userRole 
       const remaining = round2(Math.max(0, Number(item.quantityBaseQty) - Number(item.receivedBaseQty)));
       if (remaining <= 0) continue;
       if (!current.fromLocation.isPrimary) {
-        await tx.locationStock.upsert({
-          where: { locationId_productId: { locationId: current.fromLocationId, productId: item.productId } },
-          create: { shopId, locationId: current.fromLocationId, productId: item.productId, stockBaseQty: remaining },
-          update: { stockBaseQty: { increment: remaining } },
-        });
+        await writeLocationStockRow(tx, { shopId, locationId: current.fromLocationId, productId: item.productId, delta: remaining });
       }
+      // Only the part still on the van comes back, in sizes as well as base units.
+      await moveVariantAtLocation(tx, {
+        shopId, location: current.fromLocation, productId: item.productId,
+        sellingUnitId: item.sellingUnitId, qty: variantShareOf(item, remaining),
+      });
       returnedLines.push({ productId: item.productId, productName: item.productName, returnedBaseQty: remaining });
     }
 

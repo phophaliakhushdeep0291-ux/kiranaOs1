@@ -707,7 +707,7 @@ if (ctx.skip) {
         where: { shopId: tenant.shop.id, idempotencyKey: "purchase-lifecycle-create" },
       });
       const locationStock = () => ctx.db.locationStock.findUniqueOrThrow({
-        where: { locationId_productId: { locationId: branch.id, productId: product.id } },
+        where: { locationId_productId_sellingUnitId: { locationId: branch.id, productId: product.id, sellingUnitId: null } },
       });
       const updatePayload = {
         purchaseHistoryId: purchaseHistory.id,
