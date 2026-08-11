@@ -25,6 +25,8 @@ import {
 const suffix = `stock-count-apply-${Date.now()}`;
 let shop;
 let location;
+let counterUser;
+let ownerUser;
 
 async function makeProduct(name, stockBaseQty) {
   return db.product.create({
@@ -58,15 +60,15 @@ async function countedSession(name, lines) {
     name,
     blindCount: false,
     productIds: lines.map((line) => line.product.id),
-  }, { userId: "user-counter" });
+  }, { userId: counterUser.id });
   await updateStockCountLines(shop.id, location.id, session.id, {
     lines: lines.map(({ product, counted, reason }) => ({
       productId: product.id,
       countedBaseQty: counted,
       ...(reason ? { reason } : {}),
     })),
-  }, { userId: "user-counter" });
-  return submitStockCount(shop.id, location.id, session.id);
+  }, { userId: counterUser.id });
+  return submitStockCount(shop.id, location.id, session.id, { userId: counterUser.id });
 }
 
 async function refuses(promise, code, statusCode, message) {
@@ -84,15 +86,23 @@ before(async () => {
   location = await db.storeLocation.create({
     data: { shopId: shop.id, code: "MAIN", name: "Main Counter", isPrimary: true },
   });
+  counterUser = await db.user.create({
+    data: { shopId: shop.id, name: "Counter", passwordHash: "test", role: "staff" },
+  });
+  ownerUser = await db.user.create({
+    data: { shopId: shop.id, name: "Owner", passwordHash: "test", role: "owner" },
+  });
 });
 
 after(async () => {
   try {
     // Sessions first: their lines hold a Restrict reference to Product.
+    await db.auditLog.deleteMany({ where: { shopId: shop.id } });
     await db.stockCountSession.deleteMany({ where: { shopId: shop.id } });
     await db.stockLedger.deleteMany({ where: { shopId: shop.id } });
     await db.product.deleteMany({ where: { shopId: shop.id } });
     await db.storeLocation.deleteMany({ where: { shopId: shop.id } });
+    await db.user.deleteMany({ where: { shopId: shop.id } });
     await db.shop.delete({ where: { id: shop.id } });
   } catch (cleanupError) {
     console.error("cleanup failed", cleanupError);
@@ -116,12 +126,12 @@ test("a multi-line count corrects each product to its own counted quantity", asy
   ]);
 
   const applied = await applyStockCount(shop.id, location.id, session.id, {
-    userId: "user-owner",
+    userId: ownerUser.id,
     note: "Month-end sign-off",
   });
 
   assert.equal(applied.status, "applied");
-  assert.equal(applied.approvedByUserId, "user-owner", "who accepted the correction is on the record");
+  assert.equal(applied.approvedByUserId, ownerUser.id, "who accepted the correction is on the record");
   assert.ok(applied.appliedAt, "and when");
   // activeKey is the unique lock that allows one open count per branch. Left set,
   // the branch could never be counted again.
@@ -166,13 +176,13 @@ test("a count still being counted cannot be applied", async () => {
     name: "Half-done count",
     blindCount: false,
     productIds: [rice.id],
-  }, { userId: "user-counter" });
+  }, { userId: counterUser.id });
 
   // Nothing has been counted yet, so every line's countedBaseQty is still null.
   // Applying that would set the shelf to nothing at all — the review step is what
   // stands between a half-finished count and the shop's stock.
   await refuses(
-    applyStockCount(shop.id, location.id, session.id, { userId: "user-owner" }),
+    applyStockCount(shop.id, location.id, session.id, { userId: ownerUser.id }),
     "STOCK_COUNT_NOT_REVIEWED",
     409,
     "an unsubmitted count",
@@ -180,7 +190,7 @@ test("a count still being counted cannot be applied", async () => {
   assert.equal(await stockOf(rice), 800, "stock is untouched by the refusal");
   assert.equal(await rowsFrom(session), 0);
 
-  await cancelStockCount(shop.id, location.id, session.id, { userId: "user-owner" });
+  await cancelStockCount(shop.id, location.id, session.id, { userId: ownerUser.id });
 });
 
 test("a count overtaken by real stock movement is refused, not applied", async () => {
@@ -209,7 +219,7 @@ test("a count overtaken by real stock movement is refused, not applied", async (
 
   // Applying now would set the shelf back to 2000 and quietly un-sell that packet.
   await refuses(
-    applyStockCount(shop.id, location.id, session.id, { userId: "user-owner" }),
+    applyStockCount(shop.id, location.id, session.id, { userId: ownerUser.id }),
     "STOCK_COUNT_STALE",
     409,
     "a count taken before a sale",
@@ -219,7 +229,7 @@ test("a count overtaken by real stock movement is refused, not applied", async (
 
   // Refused, not destroyed: the owner can still see it and clear it deliberately.
   assert.equal((await reload(session)).status, "review");
-  await cancelStockCount(shop.id, location.id, session.id, { userId: "user-owner" });
+  await cancelStockCount(shop.id, location.id, session.id, { userId: ownerUser.id });
   assert.equal((await reload(session)).activeKey, null, "cancelling frees the branch too");
 });
 
@@ -236,7 +246,7 @@ test("a product deleted mid-count rolls the whole apply back", async () => {
   await db.product.update({ where: { id: flour.id }, data: { deletedAt: new Date() } });
 
   await refuses(
-    applyStockCount(shop.id, location.id, session.id, { userId: "user-owner" }),
+    applyStockCount(shop.id, location.id, session.id, { userId: ownerUser.id }),
     "STOCK_COUNT_PRODUCT_UNAVAILABLE",
     409,
     "a count naming a deleted product",
@@ -249,7 +259,7 @@ test("a product deleted mid-count rolls the whole apply back", async () => {
   assert.equal(await rowsFrom(session), 0, "and so are its ledger rows");
   assert.equal((await reload(session)).status, "review", "the status claim rolls back too — it is not stuck as applied");
 
-  await cancelStockCount(shop.id, location.id, session.id, { userId: "user-owner" });
+  await cancelStockCount(shop.id, location.id, session.id, { userId: ownerUser.id });
 });
 
 test("a count applies exactly once, however many times it is tapped", async () => {
@@ -258,13 +268,13 @@ test("a count applies exactly once, however many times it is tapped", async () =
 
   // No approver note and no line reason: the ledger still has to say where the
   // correction came from, or it reads as an unexplained stock edit.
-  await applyStockCount(shop.id, location.id, session.id, { userId: "user-owner" });
+  await applyStockCount(shop.id, location.id, session.id, { userId: ownerUser.id });
   const [row] = await ledgerFor(poha);
   assert.equal(row.note, `Applied stock count ${session.name}`);
 
   // A double tap on a slow connection must not write the correction twice.
   await refuses(
-    applyStockCount(shop.id, location.id, session.id, { userId: "user-owner" }),
+    applyStockCount(shop.id, location.id, session.id, { userId: ownerUser.id }),
     "STOCK_COUNT_NOT_REVIEWED",
     409,
     "a second apply of the same count",
@@ -278,7 +288,7 @@ test("a count applies exactly once, however many times it is tapped", async () =
   // in the same instant — sequentially the status check above always fires first,
   // and SQLite pins the pool to one connection, so it cannot be raced here.)
   await refuses(
-    cancelStockCount(shop.id, location.id, session.id, { userId: "user-owner" }),
+    cancelStockCount(shop.id, location.id, session.id, { userId: ownerUser.id }),
     "STOCK_COUNT_ALREADY_PROCESSED",
     409,
     "cancelling an applied count",

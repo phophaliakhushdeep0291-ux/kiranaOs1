@@ -930,6 +930,37 @@ if (ctx.skip) {
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 8);
       const varianceLedger = await ctx.db.stockLedger.findFirst({ where: { sourceType: "stock_count", sourceId: count.id, productId: product.id } });
       assert.equal(varianceLedger.changeBaseQty, -2);
+      const lifecycleAudits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, entityId: count.id, action: { startsWith: "STOCK_COUNT_" } },
+      });
+      assert.deepEqual(
+        lifecycleAudits.map((row) => row.action).sort(),
+        ["STOCK_COUNT_APPLIED", "STOCK_COUNT_LINES_UPDATED", "STOCK_COUNT_STARTED", "STOCK_COUNT_SUBMITTED"].sort(),
+      );
+      assert.equal(lifecycleAudits.every((row) => row.userId === tenant.owner.id), true);
+
+      const rollback = assertSuccess(await ctx.post("/api/inventory/counts", { name: "Audit rollback count", blindCount: false, productIds: [product.id] }, { token: auth.accessToken, headers }), 201);
+      assertSuccess(await ctx.request("PATCH", `/api/inventory/counts/${rollback.id}/lines`, { token: auth.accessToken, headers, body: { lines: [{ productId: product.id, countedBaseQty: 6, reason: "Audit rollback proof" }] } }));
+      assertSuccess(await ctx.post(`/api/inventory/counts/${rollback.id}/submit`, {}, { token: auth.accessToken, headers }));
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_stock_count_apply_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_COUNT_APPLIED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced stock count apply audit failure');
+        END
+      `);
+      let failedApply;
+      try {
+        failedApply = await ctx.post(`/api/inventory/counts/${rollback.id}/apply`, { note: "Must roll back" }, { token: auth.accessToken, headers, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_stock_count_apply_audit_failure");
+      }
+      assertFailure(failedApply, 503);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 8);
+      assert.equal((await ctx.db.stockCountSession.findUniqueOrThrow({ where: { id: rollback.id } })).status, "review");
+      assert.equal(await ctx.db.stockLedger.count({ where: { sourceType: "stock_count", sourceId: rollback.id } }), 0);
+      assertSuccess(await ctx.post(`/api/inventory/counts/${rollback.id}/cancel`, { note: "Audit rollback proof complete" }, { token: auth.accessToken, headers, ownerPin: tenant.ownerPin }));
 
       const stale = assertSuccess(await ctx.post("/api/inventory/counts", { name: "Stale count proof", blindCount: false, productIds: [product.id] }, { token: auth.accessToken, headers }), 201);
       assertSuccess(await ctx.request("PATCH", `/api/inventory/counts/${stale.id}/lines`, { token: auth.accessToken, headers, body: { lines: [{ productId: product.id, countedBaseQty: 8 }] } }));

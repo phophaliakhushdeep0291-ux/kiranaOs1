@@ -242,7 +242,7 @@ export default function SecuritySettingsPage() {
           <div className="px-5 pb-4">
             <RowToggle label="Session timeout" desc={sec.autoLock ? "Lock the counter when idle this long" : "Sign out when idle this long"} pill={
               <Select value={sec.sessionTimeout} onValueChange={(v) => update({ sessionTimeout: v })}>
-                <SelectTrigger className="h-8 w-[120px] text-[12px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-11 w-[140px] text-[12px]"><SelectValue /></SelectTrigger>
                 <SelectContent>{SESSION_TIMEOUT_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>} />
             <RowToggle label="Auto-lock after inactivity" desc="Lock to a PIN screen instead of signing out" pill={<Switch checked={sec.autoLock} onCheckedChange={(v) => update({ autoLock: v })} />} />
@@ -268,7 +268,45 @@ export default function SecuritySettingsPage() {
       <Card>
         <CardHead icon={<ShieldCheck size={15} />} title="Sensitive Action Protection" sub="Which actions require approval & who can approve" action={<Badge tone={protectedCount ? "green" : "amber"}>{protectedCount} of {PROTECTED_ACTIONS.length} protected</Badge>} />
         <div className="px-5 pb-5">
-          <div className="app-table-scroll overflow-x-auto rounded-[10px] border border-[#eef2f8]">
+          <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
+            {PROTECTED_ACTIONS.map((action) => {
+              const rule = sec.actions[action.key] ?? DEFAULT_ACTION_RULE;
+              const locked = action.serverEnforced;
+              const on = locked || rule.on;
+              return (
+                <section key={action.key} className="min-w-0 space-y-3 rounded-xl border border-[#e7edf7] bg-[#fbfcff] p-3.5">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="break-words text-[13px] font-black leading-5 text-[var(--brand-ink)]">{action.label}</h4>
+                      {locked ? <div className="mt-1"><Badge tone="blue">Server enforced</Badge></div> : null}
+                    </div>
+                    <Switch
+                      aria-label={`Protect ${action.label}`}
+                      checked={on}
+                      disabled={locked}
+                      title={locked ? "The server rejects this action without an owner PIN, so the prompt cannot be turned off." : undefined}
+                      onCheckedChange={(value) => setAction(action.key, { ...rule, on: value })}
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">Who can approve</p>
+                    <Select value={rule.approver} onValueChange={(value) => setAction(action.key, { ...rule, approver: value as ActionRule["approver"] })}>
+                      <SelectTrigger className="min-h-11 w-full text-[12px]" disabled={!on} aria-label={`Approver for ${action.label}`}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="owner">Owner only</SelectItem>
+                        <SelectItem value="ownerManager">Owner or Manager</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 border-t border-[#e7edf7] pt-3">
+                    <span className="text-[11px] font-semibold text-[#64748b]">Audit trail</span>
+                    <Badge tone={on ? "green" : "gray"}>{on ? "Logged" : "Off"}</Badge>
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+          <div className="app-table-scroll hidden overflow-x-auto rounded-[10px] border border-[#eef2f8] lg:block">
             <table className="min-w-[720px] w-full text-[12px]">
               <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                 <tr>
@@ -302,7 +340,7 @@ export default function SecuritySettingsPage() {
                       </td>
                       <td className="px-3 py-2.5">
                         <Select value={rule.approver} onValueChange={(v) => setAction(a.key, { ...rule, approver: v as ActionRule["approver"] })}>
-                          <SelectTrigger className="h-8 w-[170px] text-[12px]" disabled={!on}><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="min-h-11 w-[170px] text-[12px]" disabled={!on}><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="owner">Owner only</SelectItem>
                             <SelectItem value="ownerManager">Owner or Manager</SelectItem>
@@ -327,7 +365,7 @@ export default function SecuritySettingsPage() {
             icon={<MonitorSmartphone size={15} />}
             title="Signed-in Devices"
             sub="Live from your device licence list"
-            action={<button type="button" onClick={() => void devicesQ.refetch()} className="inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><RefreshCcw size={12} className={devicesQ.isFetching ? "animate-spin" : ""} /> Refresh</button>}
+            action={<button type="button" onClick={() => void devicesQ.refetch()} className="settings-text-action gap-1"><RefreshCcw size={12} className={devicesQ.isFetching ? "animate-spin" : ""} /> Refresh</button>}
           />
           <div className="px-5 pb-4">
             {devicesQ.isLoading ? (
@@ -349,12 +387,12 @@ export default function SecuritySettingsPage() {
                   </div>
                   <Badge tone={blocked ? "red" : device.status === "active" ? "green" : "gray"}>{blocked ? "Blocked" : device.status === "active" ? "Active" : device.status || "Idle"}</Badge>
                   {!isCurrent && (
-                    <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => { setSignOutError(null); setSignOutTarget(device); }}>Sign out</Button>
+                    <Button size="sm" variant="outline" className="rounded-[8px] text-[12px] font-bold" onClick={() => { setSignOutError(null); setSignOutTarget(device); }}>Sign out</Button>
                   )}
                 </div>
               );
             })}
-            <Link href="/settings/devices" className="mt-2 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">Manage devices <ChevronRight size={13} /></Link>
+            <Link href="/settings/devices" className="mt-2 flex min-h-11 items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">Manage devices <ChevronRight size={13} /></Link>
           </div>
         </Card>
 
@@ -364,7 +402,7 @@ export default function SecuritySettingsPage() {
             icon={<AlertTriangle size={15} />}
             title="Security Logs"
             sub="Real approvals and sensitive actions on this device"
-            action={<button type="button" onClick={() => void eventsQ.refetch()} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Refresh</button>}
+            action={<button type="button" onClick={() => void eventsQ.refetch()} className="settings-text-action">Refresh</button>}
           />
           <div className="px-5 pb-4">
             {eventsQ.isLoading ? (
@@ -385,7 +423,7 @@ export default function SecuritySettingsPage() {
                 </div>
               );
             })}
-            <Link href="/audit-logs" className="mt-2 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">Open full audit log <ChevronRight size={13} /></Link>
+            <Link href="/audit-logs" className="mt-2 flex min-h-11 items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">Open full audit log <ChevronRight size={13} /></Link>
           </div>
         </Card>
       </div>
@@ -433,8 +471,8 @@ function ChangePinDialog({ open, onOpenChange, onChanged }: { open: boolean; onO
         <form onSubmit={form.handleSubmit((v) => changePassword.mutate({ data: { currentPassword: v.currentPassword, newPassword: v.newPassword } }))} className="space-y-3.5">
           <Fld label="Current PIN / password" err={form.formState.errors.currentPassword?.message}>
             <div className="relative">
-              <Input className="h-10 pr-9" type={show ? "text" : "password"} {...form.register("currentPassword")} />
-              <button type="button" onClick={() => setShow((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]">{show ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+              <Input className="pr-12" type={show ? "text" : "password"} {...form.register("currentPassword")} />
+              <button type="button" aria-label={show ? "Hide current PIN" : "Show current PIN"} onClick={() => setShow((s) => !s)} className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-xl text-[#6b7a9a] hover:bg-[#f1f5fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
             </div>
           </Fld>
           <Fld label="New PIN / password" err={form.formState.errors.newPassword?.message}><Input className="h-10" type="password" {...form.register("newPassword")} /></Fld>

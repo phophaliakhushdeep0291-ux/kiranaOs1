@@ -1498,7 +1498,7 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.STOCK_PURCHASE_BATCH:
       return applyStockPurchaseBatch(shopId, event, user, context);
     case SYNC_EVENT_TYPES.STOCK_SALE:
-      return applyStockSale(shopId, event, context);
+      return applyStockSale(shopId, event, user, context);
     case SYNC_EVENT_TYPES.UPDATE_PURCHASE_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyUpdatePurchaseBill(shopId, event, user, context);
@@ -3201,12 +3201,13 @@ function getStockSaleIdentity(event, payload) {
   return { idempotencyKey, clientMovementId, sourceDeviceId };
 }
 
-async function applyStockSale(shopId, event, context) {
+async function applyStockSale(shopId, event, user, context) {
   const rawPayload = getEventPayload(event);
   const payload = stockSalePayloadSchema.parse(rawPayload);
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   if (!payload.productId) throw new AppError("productId required for STOCK_SALE sync event", 400);
-  const { idempotencyKey, clientMovementId, sourceDeviceId } = getStockSaleIdentity(event, rawPayload);
+  const { idempotencyKey, clientMovementId, sourceDeviceId: payloadDeviceId } = getStockSaleIdentity(event, rawPayload);
+  const sourceDeviceId = payloadDeviceId ?? user?.deviceId ?? null;
 
   const buildReplay = (existing) => ({
     type: event.type,
@@ -3271,6 +3272,35 @@ async function applyStockSale(shopId, event, context) {
             : payload.note ?? "Offline manual stock sale",
         },
       });
+      const audit = await createAuditLog({
+        shopId,
+        userId: user?.userId ?? user?.id ?? null,
+        deviceId: sourceDeviceId,
+        action: "STOCK_SALE_RECORDED",
+        entityType: "Product",
+        entityId: product.id,
+        before: { stockBaseQty: stock.oldStock },
+        after: { stockBaseQty: stock.newStock },
+        metadata: {
+          stockLedgerId: ledger.id,
+          locationId: location.id,
+          productName: product.name,
+          quantity: payload.quantity,
+          enteredUnit: payload.enteredUnit,
+          qtyRemoved: qtyInBase,
+          shortfallBaseQty: stock.shortfallBaseQty,
+          idempotencyKey,
+          offlineSyncEventId: getClientEventId(event),
+        },
+        client: tx,
+      });
+      if (!audit) {
+        throw new AppError(
+          "Stock sale was not saved because its audit record could not be stored",
+          503,
+          "STOCK_SALE_AUDIT_WRITE_FAILED",
+        );
+      }
       return {
         type: event.type,
         movementId: ledger.id,
