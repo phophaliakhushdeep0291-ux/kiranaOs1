@@ -1656,6 +1656,126 @@ if (ctx.skip) {
       assert.equal(assertSuccess(await ctx.post("/api/sync/push", { events: [deleteEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders })).summary.duplicates, 1);
       assert.ok((await ctx.db.expense.findUnique({ where: { id: expense.id } })).deletedAt);
       assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "expense_delete", sourceId: `${expense.id}:expense-delete-offline-1` } }), 2);
+      const audits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, entityType: "Expense", entityId: expense.id },
+        orderBy: { createdAt: "asc" },
+      });
+      assert.deepEqual(audits.map((audit) => audit.action), ["EXPENSE_CREATED", "EXPENSE_UPDATED", "EXPENSE_DELETED"]);
+      assert.equal(audits.every((audit) => audit.userId === tenant.owner.id), true);
+      assert.equal(audits.every((audit) => audit.deviceId === deviceHeaders["x-device-id"]), true);
+    });
+
+    test("offline expense create, update, and delete roll back when their required audit cannot be stored", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const postEvent = (event) => ctx.post(
+        "/api/sync/push",
+        { events: [event] },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      );
+      const expenseBody = {
+        idempotencyKey: "expense-audit-rollback-create",
+        clientExpenseId: "expense-audit-rollback-local",
+        title: "Emergency repair",
+        amount: 1200,
+        category: "Maintenance",
+        paymentMode: "cash",
+        status: "paid",
+        spentAt: "2026-08-01T10:00:00.000Z",
+      };
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_expense_create_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'EXPENSE_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced expense create audit failure');
+        END
+      `);
+      let failedCreate;
+      try {
+        failedCreate = assertSuccess(await postEvent({
+          eventId: "expense-audit-rollback-create",
+          type: "CREATE_EXPENSE",
+          payload: { localExpenseId: "expense-audit-rollback-local", expense: expenseBody },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_expense_create_audit_failure");
+      }
+      assert.equal(failedCreate.summary.failed, 1);
+      assert.equal(failedCreate.results[0].code, "SERVER_ERROR");
+      assert.equal(failedCreate.results[0].result.retryable, true);
+      assert.equal(await ctx.db.expense.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "expense" } }), 0);
+
+      const created = assertSuccess(await postEvent({
+        eventId: "expense-audit-rollback-create-success",
+        type: "CREATE_EXPENSE",
+        payload: {
+          localExpenseId: "expense-audit-rollback-local-success",
+          expense: {
+            ...expenseBody,
+            idempotencyKey: "expense-audit-rollback-create-success",
+            clientExpenseId: "expense-audit-rollback-local-success",
+          },
+        },
+      }));
+      assert.equal(created.summary.synced, 1);
+      const expense = await ctx.db.expense.findFirstOrThrow({
+        where: { shopId: tenant.shop.id, idempotencyKey: "expense-audit-rollback-create-success" },
+      });
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_expense_update_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'EXPENSE_UPDATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced expense update audit failure');
+        END
+      `);
+      let failedUpdate;
+      try {
+        failedUpdate = assertSuccess(await postEvent({
+          eventId: "expense-audit-rollback-update",
+          type: "UPDATE_EXPENSE",
+          payload: { expenseId: expense.id, changes: { amount: 1450 } },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_expense_update_audit_failure");
+      }
+      assert.equal(failedUpdate.summary.failed, 1);
+      assert.equal(failedUpdate.results[0].code, "SERVER_ERROR");
+      assert.equal((await ctx.db.expense.findUniqueOrThrow({ where: { id: expense.id } })).amount, 1200);
+      assert.equal(await ctx.db.financialLedger.count({
+        where: { shopId: tenant.shop.id, sourceType: "expense_update", sourceId: `${expense.id}:expense-audit-rollback-update` },
+      }), 0);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_expense_delete_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'EXPENSE_DELETED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced expense delete audit failure');
+        END
+      `);
+      let failedDelete;
+      try {
+        failedDelete = assertSuccess(await postEvent({
+          eventId: "expense-audit-rollback-delete",
+          type: "DELETE_EXPENSE",
+          payload: { expenseId: expense.id, ownerPin: "1234" },
+        }));
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_expense_delete_audit_failure");
+      }
+      assert.equal(failedDelete.summary.failed, 1);
+      assert.equal(failedDelete.results[0].code, "SERVER_ERROR");
+      assert.equal((await ctx.db.expense.findUniqueOrThrow({ where: { id: expense.id } })).deletedAt, null);
+      assert.equal(await ctx.db.financialLedger.count({
+        where: { shopId: tenant.shop.id, sourceType: "expense_delete", sourceId: `${expense.id}:expense-audit-rollback-delete` },
+      }), 0);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: { in: ["EXPENSE_UPDATED", "EXPENSE_DELETED"] } },
+      }), 0);
     });
 
     test("device sequence acknowledgements are monotonic, bounded, role-scoped, and tenant-scoped", async () => {

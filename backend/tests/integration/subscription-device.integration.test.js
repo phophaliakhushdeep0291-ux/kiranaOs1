@@ -25,11 +25,20 @@ if (ctx.skip) {
     });
 
     test("current subscription returns fallback/trial for shop without subscription", async () => {
-      const { ownerAuth } = await ownerCtx({ planCode: null });
-      const current = assertSuccess(await ctx.get("/api/subscription/current", { token: ownerAuth.accessToken }));
-      assert.equal(current.planCode, "starter");
-      assert.equal(current.status, "trial");
-      assert.equal(current.source, "fallback/trial");
+      const { tenant, ownerAuth } = await ownerCtx({ planCode: null });
+      const trialStartedAt = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      await ctx.db.shop.update({ where: { id: tenant.shop.id }, data: { createdAt: trialStartedAt } });
+
+      const first = assertSuccess(await ctx.get("/api/subscription/current", { token: ownerAuth.accessToken }));
+      const second = assertSuccess(await ctx.get("/api/subscription/current", { token: ownerAuth.accessToken }));
+
+      assert.equal(first.planCode, "starter");
+      assert.equal(first.status, "trial");
+      assert.equal(first.source, "fallback/trial");
+      assert.equal(first.active, false);
+      assert.equal(new Date(first.currentPeriodStart).getTime(), trialStartedAt.getTime());
+      assert.equal(new Date(first.trialEndsAt).getTime(), trialStartedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      assert.equal(second.trialEndsAt, first.trialEndsAt, "refreshing must never restart the fallback trial clock");
     });
 
     test("manual activation creates active subscription and payment transaction", async () => {

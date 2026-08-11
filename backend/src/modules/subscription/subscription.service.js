@@ -79,8 +79,17 @@ export async function getCurrentSubscription(shopId, client = db) {
   await ensurePlansSeeded(client);
   const subscription = await client.subscription.findUnique({ where: { shopId } });
   if (!subscription) {
-    const businessType = await getShopBusinessType(shopId, client);
-    return fallbackSubscription(shopId, getPlanConfigForBusinessType("starter", businessType));
+    const shop = await client.shop.findUnique({
+      where: { id: shopId },
+      select: { createdAt: true, settingsJson: true },
+    });
+    if (!shop) throw new AppError("Shop not found", 404);
+    const businessType = businessTypeFromSettings(parseShopSettings(shop.settingsJson));
+    return fallbackSubscription(
+      shopId,
+      getPlanConfigForBusinessType("starter", businessType),
+      shop.createdAt,
+    );
   }
   const normalized = normalizeSubscriptionDates(subscription);
   const plan = await getPlanByCode(normalized.planCode, client);
@@ -387,7 +396,7 @@ export async function getBillablePlan(shopId, planCode, client = db) {
 
 export async function cancelSubscription(shopId) {
   const subscription = await db.subscription.findUnique({ where: { shopId } });
-  if (!subscription) return fallbackSubscription(shopId);
+  if (!subscription) return getCurrentSubscription(shopId);
   return db.subscription.update({
     where: { shopId },
     data: { status: "cancelled", cancelledAt: new Date() },
@@ -465,28 +474,30 @@ export async function getPlanByCode(planCode, client = db) {
   };
 }
 
-function fallbackSubscription(shopId, starterPlan = getPlanConfig("starter")) {
+function fallbackSubscription(shopId, starterPlan = getPlanConfig("starter"), trialStartedAt = new Date()) {
   const now = new Date();
-  const trialEndsAt = addDays(now, DEFAULT_TRIAL_DAYS);
-  return {
+  const parsedTrialStart = new Date(trialStartedAt);
+  const trialStart = Number.isNaN(parsedTrialStart.getTime()) ? now : parsedTrialStart;
+  const trialEndsAt = addDays(trialStart, DEFAULT_TRIAL_DAYS);
+  const fallback = {
     id: null,
     shopId,
     planCode: "starter",
     status: "trial",
     provider: "manual",
     providerSubscriptionId: null,
-    currentPeriodStart: now,
+    currentPeriodStart: trialStart,
     currentPeriodEnd: trialEndsAt,
     trialEndsAt,
     graceEndsAt: addDays(trialEndsAt, DEFAULT_GRACE_DAYS),
     cancelledAt: null,
-    createdAt: now,
-    updatedAt: now,
-    active: true,
+    createdAt: trialStart,
+    updatedAt: trialStart,
     source: "fallback/trial",
     plan: serializePlan(starterPlan),
-    warning: "No persisted subscription found; using starter trial fallback.",
+    warning: "No persisted subscription found; Starter trial is anchored to the shop creation date.",
   };
+  return { ...fallback, active: isSubscriptionActive(fallback) };
 }
 
 function serializePlan(plan) {

@@ -1442,13 +1442,13 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyCancelBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyRestoreBill(shopId, event, context);
+      return applyRestoreBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyDeleteBill(shopId, event, context);
+      return applyDeleteBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_DELETED_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyRestoreDeletedBill(shopId, event, context);
+      return applyRestoreDeletedBill(shopId, event, user, context);
     case SYNC_EVENT_TYPES.SALE_RETURN:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyCreateSaleReturn(shopId, event, user, context);
@@ -1552,6 +1552,7 @@ async function applyCreateBill(shopId, event, user, context) {
     // Preserve the optimistic ledger row identity so push and pull echoes replace
     // that row instead of posting the same udhar effect a second time locally.
     creditLedgerClientId,
+    syncEventId: getClientEventId(event),
   });
   await recordBillLoyalty(shopId, bill).catch(() => null);
   return buildCreateBillSyncPayload(shopId, bill, payload, billBody);
@@ -1735,7 +1736,7 @@ async function applyCreateExpense(shopId, event, user, context) {
   const expense = await createExpense(shopId, parsed, {
     idempotencyKey,
     clientExpenseId: localExpenseId,
-    sourceDeviceId: context?.deviceId ?? null,
+    sourceDeviceId: user?.deviceId ?? null,
     userId: user?.userId ?? user?.id ?? null,
     syncEventId: getClientEventId(event),
   });
@@ -1760,7 +1761,7 @@ async function applyUpdateExpense(shopId, event, user, context) {
   const changes = updateExpenseSchema.parse(payload.changes ?? payload.expense ?? {});
   const expense = await updateExpense(shopId, expenseId, changes, {
     idempotencyKey: event.eventId,
-    sourceDeviceId: context?.deviceId ?? null,
+    sourceDeviceId: user?.deviceId ?? null,
     userId: user?.userId ?? user?.id ?? null,
     syncEventId: getClientEventId(event),
   });
@@ -1778,18 +1779,22 @@ async function applyDeleteExpense(shopId, event, user, context) {
   if (!expenseId) throw new AppError("expenseId required for DELETE_EXPENSE sync event", 400);
   const expense = await softDeleteExpense(shopId, expenseId, {
     idempotencyKey: event.eventId,
-    sourceDeviceId: context?.deviceId ?? null,
+    sourceDeviceId: user?.deviceId ?? null,
     userId: user?.userId ?? user?.id ?? null,
     syncEventId: getClientEventId(event),
   });
   return { expenseId: expense.id, localExpenseId: payload.localExpenseId ?? null, deletedAt: expense.deletedAt };
 }
 
-async function applyDeleteBill(shopId, event, context) {
+async function applyDeleteBill(shopId, event, user, context) {
   const payload = cancelPayloadSchema.parse(getEventPayload(event));
   const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
   if (!billId) throw new AppError("billId required for DELETE_BILL sync event", 400);
-  const bill = await softDeleteBill(shopId, billId, { reason: payload.reason });
+  const bill = await softDeleteBill(shopId, billId, { reason: payload.reason }, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     billId: bill.id,
@@ -1816,6 +1821,7 @@ async function applyCreateSaleReturn(shopId, event, user, context) {
   }, {
     userId: user?.userId ?? null,
     deviceId: pickString(payload.sourceDeviceId, payload.source_device_id, user?.deviceId) || null,
+    syncEventId: getClientEventId(event),
   });
 
   return buildSaleReturnSyncPayload(bill, payload);
@@ -1846,12 +1852,16 @@ function buildSaleReturnSyncPayload(bill, payload) {
   };
 }
 
-async function applyRestoreBill(shopId, event, context) {
+async function applyRestoreBill(shopId, event, user, context) {
   const payload = restoreBillPayloadSchema.parse(getEventPayload(event));
   const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
   if (!billId) throw new AppError("billId required for RESTORE_BILL sync event", 400);
 
-  const bill = await restoreCancelledBill(shopId, billId, { reason: payload.reason });
+  const bill = await restoreCancelledBill(shopId, billId, { reason: payload.reason }, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     billId: bill.id,
@@ -1860,11 +1870,16 @@ async function applyRestoreBill(shopId, event, context) {
   };
 }
 
-async function applyRestoreDeletedBill(shopId, event, context) {
+async function applyRestoreDeletedBill(shopId, event, user, context) {
   const payload = restoreBillPayloadSchema.parse(getEventPayload(event));
   const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
   if (!billId) throw new AppError("billId required for RESTORE_DELETED_BILL sync event", 400);
-  const bill = await restoreDeletedBill(shopId, billId);
+  const bill = await restoreDeletedBill(shopId, billId, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    reason: payload.reason,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     billId: bill.id,

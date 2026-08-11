@@ -48,6 +48,7 @@ export async function confirm(req, res, next) {
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       locationId: requestLocationId(req),
       allowStockShortfall: true,
+      req,
     });
     await publishIntegrationEvent(req.shopId, "bill.created", {
       id: data.id,
@@ -113,20 +114,6 @@ export async function saleReturn(req, res, next) {
       userId: req.user?.userId ?? null,
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       locationId: requestLocationId(req),
-    });
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "SALE_RETURN_CREATED",
-      entityType: "Bill",
-      entityId: data.id,
-      after: { billNo: data.billNo, grandTotal: data.grandTotal, refundMode: data.refundMode },
-      metadata: {
-        returnOfBillId: data.returnOfBillId ?? null,
-        locationId: data.locationId,
-        giftCardIssued: Boolean(data.issuedGiftCard),
-        reason: req.body?.reason ?? null,
-      },
       req,
     });
     await publishIntegrationEvent(req.shopId, "sale.return_created", {
@@ -162,15 +149,9 @@ export async function cancel(req, res, next) {
 
 export async function remove(req, res, next) {
   try {
-    const data = await svc.softDeleteBill(req.shopId, req.params.id, req.body);
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "BILL_MOVED_TO_RECYCLE_BIN",
-      entityType: "Bill",
-      entityId: data.id,
-      after: { deletedAt: data.deletedAt, deletedReason: data.deletedReason },
-      metadata: { reason: req.body?.reason ?? null, billNo: data.billNo },
+    const data = await svc.softDeleteBill(req.shopId, req.params.id, req.body, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       req,
     });
     res.json({ success: true, data });
@@ -179,15 +160,10 @@ export async function remove(req, res, next) {
 
 export async function restore(req, res, next) {
   try {
-    const data = await svc.restoreDeletedBill(req.shopId, req.params.id);
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "BILL_RESTORED_FROM_RECYCLE_BIN",
-      entityType: "Bill",
-      entityId: data.id,
-      after: { deletedAt: data.deletedAt },
-      metadata: { reason: req.body?.reason ?? null, billNo: data.billNo },
+    const data = await svc.restoreDeletedBill(req.shopId, req.params.id, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
+      reason: req.body?.reason ?? null,
       req,
     });
     res.json({ success: true, data });

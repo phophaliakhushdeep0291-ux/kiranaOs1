@@ -34,9 +34,27 @@ response are all untrusted. The backend applies these gates in order:
 The API exposes bounded safety reason codes, never private chain-of-thought,
 hidden prompts, or raw provider reasoning.
 
+## Diagnostic assistant grounding
+
+The support assistant uses a separate, narrower trust boundary. Its root cause,
+recommended action, and confidence are computed deterministically from the
+authenticated shop's diagnostics. A configured language model cannot author or
+replace any of those fields. It may only return one to five identifiers from a
+strict, per-report enum of server-issued evidence IDs.
+
+The server validates the response again even when a provider supports native
+structured output. Free-form prose, unknown IDs, duplicate IDs, empty or oversized
+selections, and additional fields fail closed. The server always retains its own
+highest-ranked signal, composes the final narrative from the verified evidence
+catalog, and records `aiGrounding.status`, selected IDs, and any rejection reason.
+Provider output never raises or mutates deterministic confidence. If the provider
+is missing, fails, or returns unsupported output, the deterministic support answer
+remains available.
+
 ## Test gates
 
-The local release gate runs tests/ai-hallucination-guard.examples.js. It requires:
+The local release gate runs `tests/ai-hallucination-guard.examples.js` and
+`tests/diagnostic-ai-grounding.examples.js`. It requires:
 
 - 100% rejection of provider objects that violate the strict schema.
 - 0 unsafe acceptances in the committed adversarial cases.
@@ -45,6 +63,9 @@ The local release gate runs tests/ai-hallucination-guard.examples.js. It require
 - Strict structured-output configuration on the OpenAI path.
 - Sanitization of unrecognized client context before provider submission.
 - Audit status of parsed versus blocked for every returned provider result.
+- 0 accepted free-form or unverified diagnostic narratives.
+- A strict per-report evidence-ID enum and rejection of extra provider fields.
+- Server-owned diagnostic prose, next steps, and confidence.
 
 These deterministic fixtures prove the application's guardrails; they do not
 prove a live model's language accuracy. Before enabling a provider in

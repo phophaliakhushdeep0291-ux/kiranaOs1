@@ -782,6 +782,14 @@ if (ctx.skip) {
       assert.equal(rows.filter((row) => row.sourceType === "expense_update").length, 4);
       assert.equal(rows.filter((row) => row.sourceType === "expense_delete").every((row) => row.amountPaise < 0n), true);
       assert.equal(rows.filter((row) => row.sourceType === "expense_restore").every((row) => row.amountPaise > 0n), true);
+      const expenseAudits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, entityType: "Expense", entityId: { in: [paid.id, pending.id] } },
+      });
+      assert.equal(expenseAudits.filter((audit) => audit.action === "EXPENSE_CREATED").length, 2);
+      assert.equal(expenseAudits.filter((audit) => audit.action === "EXPENSE_UPDATED").length, 1);
+      assert.equal(expenseAudits.filter((audit) => audit.action === "EXPENSE_DELETED").length, 1);
+      assert.equal(expenseAudits.filter((audit) => audit.action === "EXPENSE_RESTORED").length, 1);
+      assert.equal(expenseAudits.every((audit) => audit.userId === tenant.owner.id), true);
 
       const expenseControl = assertSuccess(await ctx.get("/api/accounting/control?from=2020-01-01T00%3A00%3A00.000Z&to=2030-01-01T00%3A00%3A00.000Z", { token: auth.accessToken }));
       assert.equal(expenseControl.status, "balanced");
@@ -791,6 +799,44 @@ if (ctx.skip) {
       assert.equal(expenseControl.trialBalance.accounts.find((account) => account.code === "6000").debitBalance.paise, 17000);
       assert.equal(expenseControl.trialBalance.accounts.find((account) => account.code === "2300").creditBalance.paise, 5000);
       assert.equal(expenseControl.trialBalance.accounts.find((account) => account.code === "1020").creditBalance.paise, 12000);
+    });
+
+    test("keeps a deleted expense and its ledger reversed when the required restore audit cannot be stored", async () => {
+      const { tenant, auth } = await ownerContext();
+      const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
+      const headers = { "x-location-id": primary.id };
+      const expense = assertSuccess(await ctx.post("/api/expenses", {
+        idempotencyKey: "retail-expense-restore-audit-rollback",
+        title: "Audit rollback expense",
+        amount: 75,
+        category: "maintenance",
+        paymentMode: "cash",
+        status: "paid",
+      }, { token: auth.accessToken, headers }), 201);
+      assertSuccess(await ctx.delete(`/api/expenses/${expense.id}`, { token: auth.accessToken, headers }));
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_expense_restore_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'EXPENSE_RESTORED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced expense restore audit failure');
+        END
+      `);
+      let failedRestore;
+      try {
+        failedRestore = await ctx.post(`/api/expenses/${expense.id}/restore`, {}, { token: auth.accessToken, headers });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_expense_restore_audit_failure");
+      }
+      assertFailure(failedRestore, 503);
+      assert.ok((await ctx.db.expense.findUniqueOrThrow({ where: { id: expense.id } })).deletedAt);
+      assert.equal(await ctx.db.financialLedger.count({
+        where: { shopId: tenant.shop.id, sourceType: "expense_restore" },
+      }), 0);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "EXPENSE_RESTORED", entityId: expense.id },
+      }), 0);
     });
 
     test("runs a blind stock count through review and guarded variance posting", async () => {
