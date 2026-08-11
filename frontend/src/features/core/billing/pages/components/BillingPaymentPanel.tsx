@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount, computeChangeDue, suggestCashTenders } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
-import { ArrowLeftRight, Banknote, ChevronDown, Gift, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeftRight, Banknote, ChevronDown, CreditCard, Gift, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildUpiPaymentUri, getPaymentConfigSync } from "@/features/core/settings/payment-config";
 import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
@@ -34,6 +34,10 @@ interface BillingPaymentPanelProps {
   retailPaymentVerified: boolean;
   retailPaymentLoading: boolean;
   onVerifyRetailPayment: () => void;
+  cardTerminalConfigured: boolean;
+  cardTerminalApproved: boolean;
+  cardTerminalLoading: boolean;
+  onChargeCardTerminal: () => void;
   isOnline: boolean;
   giftCardCode: string;
   setGiftCardCode: (value: string) => void;
@@ -74,6 +78,10 @@ export function BillingPaymentPanel({
   retailPaymentVerified,
   retailPaymentLoading,
   onVerifyRetailPayment,
+  cardTerminalConfigured,
+  cardTerminalApproved,
+  cardTerminalLoading,
+  onChargeCardTerminal,
   isOnline,
   giftCardCode,
   setGiftCardCode,
@@ -178,6 +186,22 @@ export function BillingPaymentPanel({
             <p className="mt-0.5 text-[11px] text-slate-600">{retailPaymentVerified ? t("billing.pay.verify.verifiedHelp") : retailPaymentRequired ? t("billing.pay.verify.requiredHelp") : retailPaymentConfigured ? t("billing.pay.verify.optionalHelp") : t("billing.pay.verify.noProviderHelp")}</p>
           </div>
           {retailPaymentConfigured && !retailPaymentVerified ? <button type="button" onClick={onVerifyRetailPayment} disabled={retailPaymentLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0753df] disabled:opacity-60">{retailPaymentLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}{t("billing.pay.verify.action")}</button> : null}
+        </div>
+      ) : null}
+
+      {showPaymentMode && cardTerminalConfigured && paymentMode === BillPaymentMode.bank ? (
+        <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${cardTerminalApproved ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}>
+          <div className="min-w-0">
+            <p className={`flex items-center gap-1.5 text-xs font-black ${cardTerminalApproved ? "text-emerald-800" : "text-slate-800"}`}>
+              <CreditCard size={15} />{cardTerminalApproved ? t("billing.pay.cardTerminal.approvedShort") : t("billing.pay.cardTerminal.available")}
+            </p>
+            <p className="mt-0.5 text-[11px] text-slate-600">{cardTerminalApproved ? t("billing.pay.cardTerminal.approved") : t("billing.pay.cardTerminal.help")}</p>
+          </div>
+          {!cardTerminalApproved ? (
+            <button type="button" onClick={onChargeCardTerminal} disabled={cardTerminalLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0753df] disabled:opacity-60">
+              {cardTerminalLoading ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}{t("billing.pay.cardTerminal.action")}
+            </button>
+          ) : null}
         </div>
       ) : null}
 

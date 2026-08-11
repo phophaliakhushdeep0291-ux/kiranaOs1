@@ -810,7 +810,7 @@ export default function PurchaseBillsPage() {
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3">
               <h3 className="font-display text-[13.5px] font-black tracking-tight text-[var(--brand-ink)]">Recent Purchase Activity</h3>
-              <a href="#purchase-table" className="text-[11.5px] font-bold text-[var(--brand)] hover:underline">View all</a>
+              <a href="#purchase-table" className="tap-target text-[11.5px] font-bold text-[var(--brand)] hover:underline">View all</a>
             </div>
             <div className="px-5 py-2">
               {recentRows.length === 0 ? <EmptyHint text="No purchases recorded yet." /> : recentRows.map((row, i) => (
@@ -829,7 +829,7 @@ export default function PurchaseBillsPage() {
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3">
               <h3 className="font-display text-[13.5px] font-black tracking-tight text-[var(--brand-ink)]">Purchase Due Alerts</h3>
-              <button onClick={() => { setShowFilters(true); setStatusFilter("due"); }} className="text-[11.5px] font-bold text-[var(--brand)] hover:underline">View all</button>
+              <button onClick={() => { setShowFilters(true); setStatusFilter("due"); }} className="tap-target text-[11.5px] font-bold text-[var(--brand)] hover:underline">View all</button>
             </div>
             <div className="px-5 py-2">
               {dueAlerts.length === 0 ? <EmptyHint text="No supplier dues — all settled. 🎉" /> : (

@@ -1758,15 +1758,18 @@ html[data-density="compact"] {
     box-shadow: 0 9px 22px color-mix(in srgb, var(--brand) 24%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   }
 
+  /* Sized for a title that now owns its row rather than sharing it with a
+     clipped shop name. 17px is the first step at which a glanced page name is
+     unmistakable at arm's length without crowding the two actions beside it. */
   .mobile-app-page-title {
     min-width: 0;
     overflow: hidden;
     color: var(--mobile-ink);
     font-family: var(--app-font-display);
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 850;
-    line-height: 1.15;
-    letter-spacing: -0.015em;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1885,7 +1888,10 @@ html[data-density="compact"] {
     gap: 3px;
     border-radius: 16px;
     color: #65718a;
-    font-size: 10px;
+    /* Same 11px floor the rest of the phone UI now keeps. Five columns of a
+       375px screen leave 71px each, so the longest label still fits on one
+       line — the 359px breakpoint below drops it back down where it does not. */
+    font-size: 11px;
     font-weight: 750;
     letter-spacing: -0.01em;
     transition: color 150ms ease, background-color 150ms ease, transform 120ms ease;
@@ -2225,6 +2231,70 @@ html[data-density="compact"] {
   .table-card {
     border-color: var(--mobile-line) !important;
     box-shadow: var(--mobile-shadow-soft) !important;
+  }
+
+  /* Legibility floor ------------------------------------------------------
+     Around 500 call sites set type below 11px. That is under what a counter
+     phone held at arm's length in shop lighting resolves comfortably, and a
+     Reports screen alone carried 82 of them. Raising the smallest tiers once,
+     here, is what keeps the whole app consistent — the alternative is asking
+     500 sites to agree and to keep agreeing.
+
+     Only the phone breakpoint is touched, so the dense desktop tables that
+     these sizes were chosen for are unaffected. SVG is excluded because chart
+     labels sit in a fixed viewBox and cannot reflow around a bigger glyph. */
+  .text-\[8px\]:not(svg *),
+  .text-\[8\.5px\]:not(svg *),
+  .text-\[9px\]:not(svg *),
+  .text-\[9\.5px\]:not(svg *),
+  .text-\[10px\]:not(svg *) {
+    font-size: 11px !important;
+  }
+
+  .text-\[10\.5px\]:not(svg *) {
+    font-size: 11.5px !important;
+  }
+
+  /* Tap targets -----------------------------------------------------------
+     A control can stay visually small and still be easy to hit: this grows
+     the *hit area* around the box instead of the box itself, so dense rows
+     keep their proportions. Applied to the icon-only and inline-text controls
+     that measured under 44px — pagination arrows at 32px, row actions at
+     31px, "View all" links at 17px tall.
+
+     The overlay is centred and never smaller than the element, so putting it
+     on a control that is already big enough changes nothing. */
+  .tap-target {
+    position: relative;
+  }
+
+  .tap-target::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+
+  /* Horizontal rails ------------------------------------------------------
+     Filter chips and category strips scroll sideways, but a row that ends
+     flush at the screen edge reads as "that is all there is". Fading the last
+     few pixels is the standing cue that the rail continues. */
+  .scroll-rail {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 22px), transparent 100%);
+  }
+
+  .scroll-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* A rail scrolled to its end has nothing left to hint at. */
+  .scroll-rail[data-rail-end="true"] {
+    mask-image: none;
   }
 }
 

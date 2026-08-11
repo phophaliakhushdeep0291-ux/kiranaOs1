@@ -57,16 +57,18 @@ export function BillingOrderQrButton() {
 
   return (
     <>
-      <div className="mb-1.5 flex justify-end">
-        <button
-          type="button"
-          data-testid="button-order-qr"
-          onClick={() => setOpen(true)}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--brand-border)] bg-[#eaf2ff] px-3 py-2 text-[12px] font-bold text-[var(--brand)]"
-        >
-          <QrCode size={14} /> Order QR
-        </button>
-      </div>
+      {/* A poster-printing shortcut used once a season used to own a whole row of
+          the billing screen, with an empty half-screen beside it. It now rides at
+          the end of the category rail: still one tap away, and it costs the
+          product grid — the only thing that screen is actually for — nothing. */}
+      <button
+        type="button"
+        data-testid="button-order-qr"
+        onClick={() => setOpen(true)}
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-[8px] border border-[var(--brand-border)] bg-[#eaf2ff] px-4 text-[12.5px] font-bold text-[var(--brand)] transition-colors hover:bg-[#dfeaff] lg:h-9"
+      >
+        <QrCode size={14} aria-hidden="true" /> Order QR
+      </button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1424]/70 p-4 backdrop-blur-sm" onClick={() => setOpen(false)}>

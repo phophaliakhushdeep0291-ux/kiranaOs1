@@ -36,8 +36,20 @@ describe("provider-confirmed dynamic UPI QR checkout", () => {
     expect(dialog).toContain("printQrSlipViaHardwareBridge");
     expect(api).toContain("/qr-bitmap");
     // Only a paired local bridge can reach the counter printer.
-    expect(dialog).toContain('getPrinterConfigSync().connection === "bridge"');
-    expect(dialog).toContain("canPrintSlip ?");
+    expect(dialog).toContain('printer.connection !== "bridge"');
+    expect(dialog).toContain('printSupport === "ready" ?');
+  });
+
+  it("does not offer printing on a bridge that cannot do it", () => {
+    // A counter still on an older bridge has no /v1/print-qr; offering the
+    // button there fails with "endpoint not found" while a customer waits.
+    expect(dialog).toContain("checkHardwareBridge(printer.bridgeUrl)");
+    expect(dialog).toContain('health.capabilities?.qrPrint === true ? "ready" : "outdated"');
+    // A bridge that is simply down must not advertise the action either.
+    expect(dialog).toContain('.catch(() => { if (active) setPrintSupport("unavailable"); })');
+    // ...but an outdated counter is told what to do about it.
+    expect(dialog).toContain('printSupport === "outdated"');
+    expect(dialog).toContain('t("billing.pay.dynamicQr.printNeedsUpdate")');
   });
 
   it("refuses a malformed payment QR before it can reach the printer", async () => {

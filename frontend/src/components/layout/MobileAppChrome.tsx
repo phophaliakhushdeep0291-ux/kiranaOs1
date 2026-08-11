@@ -60,6 +60,12 @@ interface MobileTopBarProps {
   connectionTone: "good" | "busy" | "attention" | "offline";
   attentionCount: number;
   onOpenSearch: () => void;
+  /**
+   * Whether the shop actually has somewhere else to be. A single-location shop
+   * learns nothing from a line naming the one counter it owns, so the bar drops
+   * it and gives the row back to the page title.
+   */
+  showLocation?: boolean;
 }
 
 interface MobileBottomNavProps {
@@ -201,6 +207,7 @@ export function MobileTopBar({
   connectionTone,
   attentionCount,
   onOpenSearch,
+  showLocation = false,
 }: MobileTopBarProps) {
   return (
     <header data-app-mobile-topbar="true" className="mobile-app-topbar lg:hidden">
@@ -209,16 +216,25 @@ export function MobileTopBar({
           <BadgeIndianRupee size={22} strokeWidth={2.25} aria-hidden="true" />
         </Link>
         <div className="min-w-0 flex-1">
+          {/* The title used to share its row with a shop-name line that clipped at
+              both ends — "Mobile UX Audit … · MAIN · Jai…" told a shopkeeper
+              neither which shop nor which city. The name is now the drawer's job,
+              where it has room; here the page keeps the line it needs to be read
+              at a glance, and the location appears only when there is a choice
+              of them to be wrong about. */}
           <div className="flex min-w-0 items-center gap-2">
             <h1 className="mobile-app-page-title">{pageTitle}</h1>
             <span className={cn("mobile-connection-dot", toneClass(connectionTone))} aria-hidden="true" />
           </div>
-          <p className="mobile-app-store-line">
-            <span className="truncate">{storeName}</span>
-            <span aria-hidden="true">·</span>
-            <span className="truncate">{storeLocation}</span>
-            <span className="sr-only">{connectionLabel}</span>
-          </p>
+          {showLocation ? (
+            <p className="mobile-app-store-line">
+              <Store size={11} strokeWidth={2.4} aria-hidden="true" className="shrink-0" />
+              <span className="truncate">{storeLocation}</span>
+              <span className="sr-only">{connectionLabel}</span>
+            </p>
+          ) : (
+            <span className="sr-only">{storeName} · {connectionLabel}</span>
+          )}
         </div>
         <button type="button" onClick={onOpenSearch} className="mobile-topbar-action" aria-label="Search products, bills, and customers">
           <Search size={21} strokeWidth={2.1} aria-hidden="true" />

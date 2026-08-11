@@ -42,6 +42,8 @@ import { productConfiguratorFor, type ProductConfigurator } from "@/features/cor
 import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 import { createRetailPaymentQr, getRetailPaymentReadiness, verifyRetailPayment, type RetailQrCheckout } from "../retail-payment";
 import { RetailDynamicQrDialog } from "./components/RetailDynamicQrDialog";
+import { CardTerminalDialog } from "./components/CardTerminalDialog";
+import { getCardTerminalReadiness, startCardTerminalCharge, type CardTerminalCharge } from "@/features/core/billing/card-terminal";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/core/loyalty/api";
 import { lookupGiftCard } from "@/features/core/gift-cards/api";
@@ -224,6 +226,9 @@ export default function Billing() {
   const [verifiedRetailPayment, setVerifiedRetailPayment] = useState<{ intentId: string; amountPaise: number; locationId: string } | null>(null);
   const [retailQrCheckout, setRetailQrCheckout] = useState<RetailQrCheckout | null>(null);
   const [customerDisplayFlash, setCustomerDisplayFlash] = useState<{ state: "paid"; totalPaise: number } | null>(null);
+  const [cardTerminalCharge, setCardTerminalCharge] = useState<CardTerminalCharge | null>(null);
+  const [approvedCardPayment, setApprovedCardPayment] = useState<{ intentId: string; amountPaise: number; locationId: string } | null>(null);
+  const [cardTerminalLoading, setCardTerminalLoading] = useState(false);
   const [retailPaymentLoading, setRetailPaymentLoading] = useState(false);
   const [loyaltyPointsToRedeem, setLoyaltyPointsToRedeem] = useState(0);
   const [giftCardCode, setGiftCardCodeState] = useState("");
@@ -263,6 +268,7 @@ export default function Billing() {
   // Smart Adaptive Pricing — the shop's owner-defined rules (cached, offline-safe).
   const { rules: shopPricingRules } = useShopPricingRules();
   const retailPaymentReadiness = useQuery({ queryKey: ["retail-payment-readiness"], queryFn: getRetailPaymentReadiness, staleTime: 5 * 60_000, retry: false });
+  const cardTerminalReadiness = useQuery({ queryKey: ["card-terminal-readiness"], queryFn: getCardTerminalReadiness, staleTime: 5 * 60_000, retry: false });
 
   const typedCustomerName = customerName.trim();
   const typedCustomerMobile = customerMobile.replace(/\D/g, "").trim();
@@ -356,9 +362,39 @@ export default function Billing() {
     && verifiedRetailPayment.amountPaise === upiTenderPaise
     && verifiedRetailPayment.locationId === getActiveLocationId());
 
+  // A card terminal charge settles into the bank tender, which is where the
+  // acquirer actually credits the shop.
+  const cardTenderAmount = paymentMode === BillPaymentMode.bank ? Math.min(effectivePaidAmount, grandTotal) : 0;
+  const cardTenderPaise = Math.round(cardTenderAmount * 100);
+  const cardPaymentApproved = Boolean(approvedCardPayment
+    && approvedCardPayment.amountPaise === cardTenderPaise
+    && approvedCardPayment.locationId === getActiveLocationId());
+
   useEffect(() => {
     if (verifiedRetailPayment && !retailPaymentVerified) setVerifiedRetailPayment(null);
   }, [retailPaymentVerified, verifiedRetailPayment]);
+
+  // An approval is only good for the amount and branch it was taken against;
+  // edit the cart and the cashier must charge the card again.
+  useEffect(() => {
+    if (approvedCardPayment && !cardPaymentApproved) setApprovedCardPayment(null);
+  }, [cardPaymentApproved, approvedCardPayment]);
+
+  async function handleChargeCardTerminal() {
+    if (!isOnline) {
+      toast({ title: t("billing.page.internetRequired"), description: t("billing.page.providerOffline"), variant: "destructive" });
+      return;
+    }
+    if (cardTenderPaise <= 0) return;
+    setCardTerminalLoading(true);
+    try {
+      setCardTerminalCharge(await startCardTerminalCharge(cardTenderPaise));
+    } catch (error) {
+      toast({ title: t("billing.page.paymentNotVerified"), description: error instanceof Error ? error.message : t("billing.page.providerFailed"), variant: "destructive" });
+    } finally {
+      setCardTerminalLoading(false);
+    }
+  }
 
   async function handleVerifyRetailPayment() {
     if (!isOnline) {
@@ -1494,7 +1530,12 @@ export default function Billing() {
               ...(grandTotal - effectiveGiftCardAmount > 0 ? [{ mode: BillPaymentMode.cash, amount: roundMoney(grandTotal - effectiveGiftCardAmount) }] : []),
             ]
         : [
-            ...(paid > 0 ? [{ mode: paymentMode, amount: paid, ...(paymentMode === BillPaymentMode.upi && retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : {}) }] : []),
+            ...(paid > 0 ? [{
+              mode: paymentMode,
+              amount: paid,
+              ...(paymentMode === BillPaymentMode.upi && retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : {}),
+              ...(paymentMode === BillPaymentMode.bank && cardPaymentApproved ? { retailPaymentIntentId: approvedCardPayment?.intentId } : {}),
+            }] : []),
             ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
           ];
 
@@ -1842,8 +1883,8 @@ export default function Billing() {
             onNew={newBill}
           />
         )}
-        <BillingOrderQrButton />
         <BillingSearch
+          railAction={<BillingOrderQrButton />}
           isOnline={isOnline}
           draftRestored={draftRestored}
           cartLength={cart.length}
@@ -1990,6 +2031,10 @@ export default function Billing() {
         advanceAmount={advanceAmount}
         retailPaymentConfigured={retailPaymentReadiness.data?.configured ?? false}
         retailPaymentDynamicQr={retailPaymentReadiness.data?.dynamicQrEnabled ?? false}
+        cardTerminalConfigured={cardTerminalReadiness.data?.configured ?? false}
+        cardTerminalApproved={cardPaymentApproved}
+        cardTerminalLoading={cardTerminalLoading}
+        onChargeCardTerminal={handleChargeCardTerminal}
         retailPaymentRequired={retailPaymentReadiness.data?.confirmationRequired ?? false}
         retailPaymentVerified={retailPaymentVerified}
         retailPaymentLoading={retailPaymentLoading}
@@ -2107,6 +2152,18 @@ export default function Billing() {
           setCustomerDisplayFlash({ state: "paid", totalPaise: checkout.amountPaise });
           setRetailQrCheckout(null);
           toast({ title: t("billing.page.upiVerified"), description: t("billing.page.upiVerifiedDetail") });
+        }}
+      />
+
+      <CardTerminalDialog
+        charge={cardTerminalCharge}
+        simulated={cardTerminalReadiness.data?.simulated ?? false}
+        onClose={() => setCardTerminalCharge(null)}
+        onApproved={(charge) => {
+          setApprovedCardPayment({ intentId: charge.intentId, amountPaise: charge.amountPaise, locationId: charge.location.id });
+          setCustomerDisplayFlash({ state: "paid", totalPaise: charge.amountPaise });
+          setCardTerminalCharge(null);
+          toast({ title: t("billing.pay.cardTerminal.approvedShort"), description: t("billing.pay.cardTerminal.approved") });
         }}
       />
 

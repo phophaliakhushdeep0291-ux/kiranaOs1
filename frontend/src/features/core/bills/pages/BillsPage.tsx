@@ -744,14 +744,20 @@ export default function BillsPage() {
       <section id="billing-history-table" className={cn(CARD, "overflow-hidden")}>
         <div className="flex flex-col gap-3 border-b border-[#e8edf4] p-3">
           <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex min-w-0 gap-1 overflow-x-auto">
+            {/* A rail of filters that runs off the right edge. `scroll-rail`
+                fades the last few pixels on phones so it reads as "there is
+                more", and the taller chip is the thumb-sized version of the
+                36px one the desktop keeps. */}
+            <div className="scroll-rail -mx-1 flex min-w-0 gap-1 overflow-x-auto px-1" role="tablist" aria-label="Filter bills">
               {BILL_TABS.map((tab) => (
                 <button
                   key={tab.value}
                   type="button"
+                  role="tab"
+                  aria-selected={filter === tab.value}
                   onClick={() => setFilter(tab.value)}
                   className={cn(
-                    "h-9 whitespace-nowrap rounded-[7px] border px-4 text-[12px] font-bold transition-colors",
+                    "h-11 whitespace-nowrap rounded-[9px] border px-4 text-[12px] font-bold transition-colors lg:h-9 lg:rounded-[7px]",
                     filter === tab.value
                       ? "border-[#d8e6ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_5px_12px_rgba(7,95,255,0.08)]"
                       : "border-transparent bg-white text-[#24385f] hover:bg-[var(--brand-softer)]",
@@ -837,13 +843,15 @@ export default function BillsPage() {
                       <span className="rounded-[6px] bg-[var(--brand-soft)] px-2 py-1 text-[10px] font-black text-[var(--brand)]">{billTypeOf(bill)}</span>
                       <SyncBadgeMini sync={sync} />
                     </div>
+                    {/* This is the phone card's whole action set, so each button
+                        gets the full 44px rather than the desktop row's 36px. */}
                     <div className="mt-3 grid grid-cols-4 gap-2">
-                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)]" onClick={() => navigate(`/bills/${bill.id}`)} aria-label="View bill"><Eye size={15} className="mx-auto" /></button>
-                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)]" onClick={() => printBill(bill)} aria-label="Print bill"><Printer size={15} className="mx-auto" /></button>
-                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)]" onClick={() => void shareOnWhatsapp(bill)} aria-label="Share bill"><Share2 size={15} className="mx-auto" /></button>
+                      <button type="button" className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)] active:scale-95" onClick={() => navigate(`/bills/${bill.id}`)} aria-label="View bill"><Eye size={16} className="mx-auto" /></button>
+                      <button type="button" className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)] active:scale-95" onClick={() => printBill(bill)} aria-label="Print bill"><Printer size={16} className="mx-auto" /></button>
+                      <button type="button" className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)] active:scale-95" onClick={() => void shareOnWhatsapp(bill)} aria-label="Share bill"><Share2 size={16} className="mx-auto" /></button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#405273]" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={15} className="mx-auto" /></button>
+                          <button className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[#405273] active:scale-95" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={16} className="mx-auto" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> Open bill page</span></Link></DropdownMenuItem>
@@ -1062,7 +1070,7 @@ function SyncBadgeMini({ sync }: { sync: string }) {
 
 function ActionIcon({ title, children, onClick }: { title: string; children: ReactNode; onClick: () => void }) {
   return (
-    <button type="button" title={title} aria-label={title} onClick={onClick} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[var(--brand)] transition-colors hover:border-[#c7d8ef] hover:bg-[var(--brand-soft)]">
+    <button type="button" title={title} aria-label={title} onClick={onClick} className="tap-target grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[var(--brand)] transition-colors hover:border-[#c7d8ef] hover:bg-[var(--brand-soft)]">
       {children}
     </button>
   );
@@ -1077,7 +1085,7 @@ function PageBtn({ children, active, disabled, ariaLabel, onClick }: { children:
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "grid h-8 min-w-8 place-items-center rounded-[7px] border px-2 text-[12px] font-black transition-colors",
+        "tap-target grid h-8 min-w-8 place-items-center rounded-[7px] border px-2 text-[12px] font-black transition-colors",
         active ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#dfe7f2] bg-white text-[#405273] hover:bg-[var(--brand-softer)] disabled:opacity-40",
       )}
     >
@@ -1092,7 +1100,7 @@ function RecentActivityCard({ rows }: { rows: Array<{ id: string; title: string;
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
         <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Recent Billing Activity</h2>
-        <Link href="/bills" className="text-[11px] font-bold text-[var(--brand)]">View all</Link>
+        <Link href="/bills" className="tap-target text-[11px] font-bold text-[var(--brand)]">View all</Link>
       </header>
       <div className="divide-y divide-[#edf2f8]">
         {rows.length === 0 ? (
@@ -1158,7 +1166,7 @@ function TopCustomersCard({ rows }: { rows: Array<{ name: string; bills: number;
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
         <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Top Customers</h2>
-        <Link href="/customers" className="text-[11px] font-bold text-[var(--brand)]">View all</Link>
+        <Link href="/customers" className="tap-target text-[11px] font-bold text-[var(--brand)]">View all</Link>
       </header>
       {rows.length === 0 ? (
         <div className="grid h-44 place-items-center text-[12px] font-semibold text-[#8290a8]">No customer sales in this period</div>

@@ -285,6 +285,10 @@ GET  /api/payment-provider/retail/readiness
 POST /api/payment-provider/retail/intents
 GET  /api/payment-provider/retail/intents/:id/status
 GET  /api/payment-provider/retail/intents/:id/qr-bitmap
+GET  /api/payment-provider/terminal/readiness
+POST /api/payment-provider/terminal/charges
+GET  /api/payment-provider/terminal/charges/:id/status
+POST /api/payment-provider/terminal/charges/:id/cancel
 POST /api/payment-provider/retail/intents/:id/cancel
 POST /api/payment-provider/retail/intents/:id/verify
 ```

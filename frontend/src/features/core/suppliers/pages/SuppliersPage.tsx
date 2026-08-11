@@ -138,20 +138,29 @@ export default function Suppliers() {
                   )}
                 </div>
               </div>
-              <div className="ml-3 flex items-center gap-1">
+              {/* These were two 31px icon buttons a thumb's width apart, neither
+                  carrying a name — a screen reader heard "button, button", and a
+                  finger aiming at Edit could take Delete with it. Both are now
+                  full 44px targets, named, and separated by enough space that
+                  missing one does not mean hitting the other. */}
+              <div className="ml-2 flex shrink-0 items-center gap-2">
                 <button
+                  type="button"
                   data-testid={`button-edit-${s.id}`}
                   onClick={() => openEdit(s)}
-                  className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                  aria-label={`Edit ${s.name}`}
+                  className="grid h-11 w-11 place-items-center rounded-xl border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground active:scale-95"
                 >
-                  <Pencil size={15} />
+                  <Pencil size={17} aria-hidden="true" />
                 </button>
                 <button
+                  type="button"
                   data-testid={`button-delete-${s.id}`}
                   onClick={() => setDeleteTarget(s)}
-                  className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                  aria-label={`Delete ${s.name}`}
+                  className="grid h-11 w-11 place-items-center rounded-xl border border-transparent text-muted-foreground transition-colors hover:border-destructive/25 hover:bg-destructive/10 hover:text-destructive active:scale-95"
                 >
-                  <Trash2 size={15} />
+                  <Trash2 size={17} aria-hidden="true" />
                 </button>
               </div>
             </div>

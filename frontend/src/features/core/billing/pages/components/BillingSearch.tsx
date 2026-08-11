@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -126,6 +126,12 @@ interface BillingSearchProps {
   trendingProductIds?: ReadonlySet<string>;
   voiceVisible: boolean;
   onToggleVoice: () => void;
+  /**
+   * A secondary control parked at the end of the category rail. Screen-level
+   * shortcuts that would otherwise claim a row of their own go here — the rail
+   * already scrolls, so one more chip costs the product grid nothing.
+   */
+  railAction?: ReactNode;
   onHoldBill: () => void;
   cartItemCount: number;
   cartSubtotal: number;
@@ -162,6 +168,7 @@ export function BillingSearch({
   trendingProductIds,
   voiceVisible,
   onToggleVoice,
+  railAction,
   onHoldBill,
   cartItemCount,
   cartSubtotal,
@@ -493,27 +500,31 @@ export function BillingSearch({
                 <kbd className="ml-auto hidden shrink-0 items-center gap-1 rounded-[7px] border border-[#e1e8f2] bg-[#f4f7fb] px-2 py-1 text-[11px] font-bold text-[#45577a] sm:flex">
                   ⌘ K
                 </kbd>
-              </div>
-              {/* Scan + Voice — circular icon buttons */}
-              <div className="mt-2.5 flex items-center gap-2.5">
-                <button
-                  type="button"
-                  title={t("billing.search.scanBarcode")}
-                  aria-label={t("billing.search.scanBarcode")}
-                  onClick={openBarcodeScanner}
-                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] lg:h-9 lg:w-9"
-                >
-                  <ScanLine size={16} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  title={t("billing.search.voiceBilling")}
-                  aria-label={t("billing.search.openVoiceBilling")}
-                  onClick={onToggleVoice}
-                  className={`grid h-11 w-11 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] lg:h-9 lg:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
-                >
-                  <Mic size={16} aria-hidden="true" />
-                </button>
+                {/* Scan and voice are how a counter enters a line without typing,
+                    so they belong to the search field, not to a row of their own
+                    below it. That row was 54px of a 812px phone spent on two
+                    buttons with an empty half-screen beside them — on the one
+                    screen where the product grid is the whole job. */}
+                <span className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-2">
+                  <button
+                    type="button"
+                    title={t("billing.search.scanBarcode")}
+                    aria-label={t("billing.search.scanBarcode")}
+                    onClick={openBarcodeScanner}
+                    className="tap-target grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] active:scale-95"
+                  >
+                    <ScanLine size={16} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    title={t("billing.search.voiceBilling")}
+                    aria-label={t("billing.search.openVoiceBilling")}
+                    onClick={onToggleVoice}
+                    className={`tap-target grid h-9 w-9 place-items-center rounded-full border transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] active:scale-95 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
+                  >
+                    <Mic size={16} aria-hidden="true" />
+                  </button>
+                </span>
               </div>
             </div>
 
@@ -600,8 +611,11 @@ export function BillingSearch({
             </div>
           )}
 
-          {/* Category chips — rounded-[8px] matching spec */}
-          <div className="mt-[18px] flex items-center gap-2.5 overflow-x-auto pb-4 [-ms-overflow-style:none] [scrollbar-width:none]">
+          {/* Category chips — rounded-[8px] matching spec. `scroll-rail` fades the
+              right edge on phones so the categories past "Household" read as
+              scrollable rather than as the end of the list. The top margin is
+              tighter on a phone, where every row costs grid. */}
+          <div className="scroll-rail mt-3 flex items-center gap-2.5 overflow-x-auto pb-3 [-ms-overflow-style:none] [scrollbar-width:none] lg:mt-[18px] lg:pb-4">
             <CategoryChip
               label={t("billing.search.allCategories")}
               active={selectedCategory === "all"}
@@ -620,6 +634,7 @@ export function BillingSearch({
                 {showAllCategories ? t("billing.search.categoriesLess") : t("billing.search.categoriesMore")} ▾
               </button>
             )}
+            {railAction}
           </div>
         </div>
 
@@ -1079,8 +1094,14 @@ function RecentBillsPanel() {
             const pmtLabel = paymentLabel(bill);
 
             return (
+              // The key was `billNo + i`, and concatenating two variable-length
+              // numbers collides: bill #11 at index 5 and bill #1 at index 15
+              // both spell "#115", which is exactly what today's list produced.
+              // React then reused one row's DOM for the other. The bill's own id
+              // is unique by construction; the index is only a last resort for a
+              // record that somehow has neither id nor number.
               <div
-                key={billNo + i}
+                key={bill.id ?? `${fullBillNo}-${i}`}
                 className="flex h-[38px] items-center gap-2 text-[11px]"
               >
                 <span className="w-[70px] shrink-0 truncate font-extrabold text-[#13274d]">{billNo}</span>
