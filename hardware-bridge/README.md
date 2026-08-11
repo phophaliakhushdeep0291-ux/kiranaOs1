@@ -14,6 +14,14 @@ The retail installation path is the signed `KiranaOS-Hardware-Bridge-<version>-x
 
 Choose the receipt printer, select **Save printer and create pairing code**, then type the six-character code in KiranaOS → Settings → Printer. Codes expire after ten minutes, stop after five wrong attempts, and are single-use. KiranaOS exchanges the code locally for the long token and never syncs that token to the cloud. The setup window includes a real **Test print** action and reports only an actionable result—never a stack trace or adapter code.
 
+## Browser permission for the counter
+
+Recent Chrome and Edge gate a request from a public HTTPS page to a loopback address behind local network access. When it is not granted the request is neither answered nor refused — it is issued and then held, so the bridge logs nothing, the browser reports no CORS error and files no console warning, and the frontend's four-second abort surfaces the misleading "Hardware bridge did not respond in time." Measured on Chrome 151.0.7922.77 with a default profile; Chromium 148 still allowed the same request, so the change is recent and the exact first affected version is not established here. `Access-Control-Allow-Private-Network` does **not** address it: a `no-cors` request, which involves no preflight at all, is held in exactly the same way, so the gate sits above CORS.
+
+The installer therefore offers a task that writes the frontend origins into `LocalNetworkAccessAllowedForUrls` under `HKLM\SOFTWARE\Policies\Google\Chrome` and the matching Edge key. The list comes from the same `KIRANA_FRONTEND_ORIGINS` that becomes the bridge's own origin allowlist, so a counter can never be allowed in the browser but rejected by the bridge. If either key already holds an entry this installer did not write — a shop managed by group policy or MDM — Setup leaves it alone and tells the operator which policy to ask their administrator for. Uninstalling withdraws only an allowlist that still matches ours.
+
+This grants nothing beyond the shop's own KiranaOS origin, and only on the machine where the bridge is installed. Browsers other than Chrome and Edge have their own policy stores and are not covered.
+
 Creating another pairing code rotates the private device token, immediately invalidating every previously paired browser. Installer upgrades stop the existing service before replacing files, refresh the registered service definition, and restart it after the secured files are in place.
 
 The setup window and Printer Settings show the installed version. The service checks the configured HTTPS update manifest every six hours; Printer Settings displays an update notice and download version when a newer release exists.

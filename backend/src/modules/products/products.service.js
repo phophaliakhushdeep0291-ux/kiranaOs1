@@ -12,6 +12,7 @@ import {
   getLocationQuantity,
   resolveOperationalLocation,
   setLocationInventory,
+  writeLocationStockRow,
 } from "../stores/location-context.service.js";
 
 async function writeRequiredProductAudit(entry, client) {
@@ -309,10 +310,8 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
       if (openingQty !== 0) {
         openingLocation = await resolveOperationalLocation(shopId, locationId, tx);
         if (!openingLocation.isPrimary) {
-          await tx.locationStock.upsert({
-            where: { locationId_productId_sellingUnitId: { locationId: openingLocation.id, productId: created.id, sellingUnitId: null } },
-            create: { shopId, locationId: openingLocation.id, productId: created.id, stockBaseQty: openingQty },
-            update: { stockBaseQty: openingQty },
+          await writeLocationStockRow(tx, {
+            shopId, locationId: openingLocation.id, productId: created.id, absolute: openingQty,
           });
         }
         const commonLedgerData = {

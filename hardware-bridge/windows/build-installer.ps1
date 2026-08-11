@@ -60,7 +60,9 @@ $signArguments = @("sign", "/fd", "SHA256", "/td", "SHA256", "/tr", "http://time
 if ($LASTEXITCODE -ne 0) { throw "Service wrapper signing failed" }
 
 $signCommand = '"' + $signtool + '" sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f "' + $env:KIRANA_CODE_SIGN_PFX + '" /p "' + $env:KIRANA_CODE_SIGN_PASSWORD + '" $f'
-& $iscc "/DStageDir=$stage" "/DAppVersion=$Version" "/Srelease-sign=$signCommand" (Join-Path $PSScriptRoot "installer.iss")
+$policyOrigins = ($allowedOrigins -join ",")
+if ($policyOrigins.Contains('"')) { throw "Frontend origins cannot contain quotes." }
+& $iscc "/DStageDir=$stage" "/DAppVersion=$Version" "/DFrontendOrigins=$policyOrigins" "/Srelease-sign=$signCommand" (Join-Path $PSScriptRoot "installer.iss")
 if ($LASTEXITCODE -ne 0) { throw "Installer build failed" }
 
 $installer = Get-ChildItem -LiteralPath $dist -Filter "KiranaOS-Hardware-Bridge-$Version-x64.exe" | Select-Object -First 1
