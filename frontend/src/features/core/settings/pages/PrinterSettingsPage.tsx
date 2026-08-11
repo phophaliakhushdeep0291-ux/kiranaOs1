@@ -243,7 +243,7 @@ export default function PrinterSettingsPage() {
 
         {/* Bill template preview */}
         <Card className="flex flex-col">
-          <CardHead icon={<FileText size={15} />} title="Bill Template Preview" sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="min-h-11 px-2 text-[12px] font-bold text-[var(--brand)] hover:underline sm:min-h-0 sm:px-0">Test print</button>} />
+          <CardHead icon={<FileText size={15} />} title="Bill Template Preview" sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="settings-text-action px-2 sm:px-0">Test print</button>} />
           <div className="flex-1 px-5 pb-5">
             <div className="app-table-scroll overflow-auto rounded-[12px] border border-[#e3e9f3] bg-[#eef1f6]">
               <iframe title="Receipt preview" srcDoc={previewHtml} className="h-[560px] w-full border-0" />
@@ -275,7 +275,7 @@ export default function PrinterSettingsPage() {
 
         {/* Printer queue / test */}
         <Card>
-          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Print actions from this session" action={<button onClick={() => { setJobs([]); toast({ title: "Queue cleared" }); }} className="min-h-11 px-2 text-[12px] font-bold text-[var(--brand)] hover:underline sm:min-h-0 sm:px-0">Clear queue</button>} />
+          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Print actions from this session" action={<button onClick={() => { setJobs([]); toast({ title: "Queue cleared" }); }} className="settings-text-action px-2 sm:px-0">Clear queue</button>} />
           <div className="px-5 pb-4">
             {jobs.length === 0 ? (
               <div className="rounded-[12px] border border-dashed border-[#dbe4f0] p-6 text-center text-[12px] font-semibold text-[#64748b]">

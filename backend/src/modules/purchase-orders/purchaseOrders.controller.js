@@ -1,10 +1,11 @@
 import * as service from "./purchaseOrders.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
-import { createAuditLog } from "../audit/audit.service.js";
 import { publishIntegrationEvent } from "../integrations/integrations.service.js";
 import { assertLocationCapability } from "../stores/location-access.service.js";
 import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
 import { ENTITY_TYPES } from "../assurance/assurance.constants.js";
+
+const actor = (req) => ({ userId: req.user?.userId ?? null, deviceId: req.user?.deviceId ?? undefined, req });
 
 async function assertOrderAccess(req, capability) {
   const order = await service.getPurchaseOrder(req.shopId, req.params.id);
@@ -29,8 +30,7 @@ export async function suggestions(req, res, next) {
 }
 export async function create(req, res, next) {
   try {
-    const data = await service.createPurchaseOrder(req.shopId, { ...req.body, locationId: requestLocationId(req) }, req.user?.userId);
-    await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "PURCHASE_ORDER_CREATED", entityType: "PurchaseOrder", entityId: data.id, after: { orderNumber: data.orderNumber, supplierName: data.supplierName, expectedTotal: data.expectedTotal, locationId: data.locationId }, req });
+    const data = await service.createPurchaseOrder(req.shopId, { ...req.body, locationId: requestLocationId(req) }, actor(req));
     await publishIntegrationEvent(req.shopId, "purchase_order.created", { id: data.id, orderNumber: data.orderNumber, supplierName: data.supplierName, expectedTotal: data.expectedTotal, locationId: data.locationId, status: data.status }).catch(() => []);
     res.status(201).json({ success: true, data });
   } catch (error) { next(error); }
@@ -38,17 +38,15 @@ export async function create(req, res, next) {
 export async function send(req, res, next) {
   try {
     await assertOrderAccess(req, "purchase");
-    const data = await service.sendPurchaseOrder(req.shopId, req.params.id);
-    await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "PURCHASE_ORDER_SENT", entityType: "PurchaseOrder", entityId: data.id, after: { status: data.status, sentAt: data.sentAt }, req });
+    const data = await service.sendPurchaseOrder(req.shopId, req.params.id, actor(req));
     res.json({ success: true, data });
   } catch (error) { next(error); }
 }
 export async function receive(req, res, next) {
   try {
     await assertOrderAccess(req, "purchase");
-    const data = await service.receivePurchaseOrder(req.shopId, req.params.id, req.body, req.user?.userId);
+    const data = await service.receivePurchaseOrder(req.shopId, req.params.id, req.body, actor(req));
     if (!data.idempotentReplay) {
-      await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "PURCHASE_ORDER_RECEIVED", entityType: "PurchaseOrder", entityId: data.purchaseOrder.id, after: { status: data.purchaseOrder.status, receiptId: data.receipt.id, totalAmount: data.receipt.totalAmount }, req });
       await publishIntegrationEvent(req.shopId, "purchase_order.received", { id: data.purchaseOrder.id, orderNumber: data.purchaseOrder.orderNumber, receiptId: data.receipt.id, totalAmount: data.receipt.totalAmount, locationId: data.purchaseOrder.locationId, status: data.purchaseOrder.status }).catch(() => []);
     }
     res.status(data.idempotentReplay ? 200 : 201).json({ success: true, data });
@@ -60,23 +58,8 @@ export async function receive(req, res, next) {
 export async function reconcileReceipt(req, res, next) {
   try {
     await assertOrderAccess(req, "purchase");
-    const data = await service.reconcilePurchaseReceipt(req.shopId, req.params.id, req.params.receiptId, req.body, req.user?.userId);
+    const data = await service.reconcilePurchaseReceipt(req.shopId, req.params.id, req.params.receiptId, req.body, actor(req));
     const receipt = data.receipts.find((row) => row.id === req.params.receiptId);
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "PURCHASE_RECEIPT_RECONCILED",
-      entityType: "PurchaseReceipt",
-      entityId: req.params.receiptId,
-      after: receipt ? {
-        supplierInvoiceNumber: receipt.supplierInvoiceNumber,
-        supplierInvoiceAmount: receipt.supplierInvoiceAmount,
-        matchStatus: receipt.matchStatus,
-        priceVarianceAmount: receipt.priceVarianceAmount,
-        invoiceVarianceAmount: receipt.invoiceVarianceAmount,
-      } : null,
-      req,
-    });
     await publishIntegrationEvent(req.shopId, "purchase_receipt.reconciled", {
       purchaseOrderId: data.id,
       receiptId: req.params.receiptId,
@@ -90,8 +73,7 @@ export async function reconcileReceipt(req, res, next) {
 export async function cancel(req, res, next) {
   try {
     await assertOrderAccess(req, "purchase");
-    const data = await service.cancelPurchaseOrder(req.shopId, req.params.id, req.body.reason);
-    await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "PURCHASE_ORDER_CANCELLED", entityType: "PurchaseOrder", entityId: data.id, after: { status: data.status, cancelledAt: data.cancelledAt }, metadata: { reason: req.body.reason }, req });
+    const data = await service.cancelPurchaseOrder(req.shopId, req.params.id, req.body.reason, actor(req));
     res.json({ success: true, data });
   } catch (error) { next(error); }
 }

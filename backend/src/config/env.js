@@ -73,6 +73,9 @@ const envSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  // Razorpay QR Codes is an on-demand product. Keep it separately gated so
+  // ordinary Checkout credentials never imply that dynamic QR is available.
+  RAZORPAY_DYNAMIC_QR_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   RETAIL_PAYMENT_PROVIDER: z.enum(["manual", "razorpay"]).default("manual"),
   RETAIL_PAYMENT_CONFIRMATION_REQUIRED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   RETAIL_PAYMENT_INTENT_TTL_MINUTES: z.coerce.number().int().min(3).max(60).default(15),
@@ -334,6 +337,11 @@ if (parsed.data.RETAIL_PAYMENT_CONFIRMATION_REQUIRED && parsed.data.RETAIL_PAYME
 
 if (parsed.data.RETAIL_PAYMENT_PROVIDER === "razorpay" && !parsed.data.RAZORPAY_ENABLED) {
   console.error("âŒ RAZORPAY_ENABLED=true is required when RETAIL_PAYMENT_PROVIDER=razorpay");
+  process.exit(1);
+}
+
+if (parsed.data.RAZORPAY_DYNAMIC_QR_ENABLED && (!parsed.data.RAZORPAY_ENABLED || parsed.data.RETAIL_PAYMENT_PROVIDER !== "razorpay")) {
+  console.error("RAZORPAY_ENABLED=true and RETAIL_PAYMENT_PROVIDER=razorpay are required when RAZORPAY_DYNAMIC_QR_ENABLED=true");
   process.exit(1);
 }
 

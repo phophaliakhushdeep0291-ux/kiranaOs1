@@ -13,6 +13,7 @@ export const manualPaymentSchema = z.object({
 export const retailIntentSchema = z.object({
   amountPaise: paiseAmount({ positive: true }),
   locationId: z.string().min(1).optional(),
+  mode: z.enum(["checkout", "dynamic_qr"]).default("checkout"),
 });
 
 export const verifyRetailIntentSchema = z.object({

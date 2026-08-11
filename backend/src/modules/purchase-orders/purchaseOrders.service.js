@@ -6,6 +6,7 @@ import { rateUnitToBase } from "../../utils/units.js";
 import { getLocationQuantity, incrementLocationInventory, resolveOperationalLocation } from "../stores/location-context.service.js";
 import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
 import { postPurchaseReceiptLedger } from "../finance/financial-ledger.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
 import {
   calculateReorderRecommendation,
   REORDER_SALES_WINDOW_DAYS,
@@ -18,6 +19,23 @@ import {
 function reference(prefix) {
   const day = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   return `${prefix}-${day}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+}
+
+async function writeRequiredPurchaseOrderAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Purchase-order action was not saved because its audit record could not be stored",
+      503,
+      "PURCHASE_ORDER_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
+function normalizeActor(actor) {
+  if (typeof actor === "string") return { userId: actor, deviceId: undefined, req: null };
+  return { userId: actor?.userId ?? null, deviceId: actor?.deviceId ?? undefined, req: actor?.req ?? null };
 }
 
 function parseDate(value) {
@@ -178,7 +196,8 @@ export async function getReorderSuggestions(shopId, requestedLocationId = null) 
   return rows.filter(Boolean);
 }
 
-export async function createPurchaseOrder(shopId, data, userId) {
+export async function createPurchaseOrder(shopId, data, actor = {}) {
+  const auditActor = normalizeActor(actor);
   return db.$transaction(async (tx) => {
     const location = await resolveOperationalLocation(shopId, data.locationId, tx);
     const supplier = data.supplierId
@@ -220,26 +239,53 @@ export async function createPurchaseOrder(shopId, data, userId) {
         deliveryAddress: data.deliveryAddress || location.address || null,
         termsAndConditions: data.termsAndConditions || null,
         note: data.note || null,
-        createdByUserId: userId || null,
+        createdByUserId: auditActor.userId,
         items: { create: items },
       },
       include: detailInclude,
     });
+    await writeRequiredPurchaseOrderAudit({
+      shopId,
+      ...auditActor,
+      action: "PURCHASE_ORDER_CREATED",
+      entityType: "PurchaseOrder",
+      entityId: order.id,
+      after: {
+        orderNumber: order.orderNumber,
+        supplierName: order.supplierName,
+        expectedTotal: order.expectedTotal,
+        status: order.status,
+      },
+      metadata: { locationId: order.locationId, itemCount: order.items.length },
+    }, tx);
     return withReconciliation(order);
   });
 }
 
-export async function sendPurchaseOrder(shopId, id) {
-  const changed = await db.purchaseOrder.updateMany({
-    where: { id, shopId, status: "draft" },
-    data: { status: "sent", sentAt: new Date() },
-  });
-  if (changed.count !== 1) {
-    const order = await getPurchaseOrder(shopId, id);
+export async function sendPurchaseOrder(shopId, id, actor = {}) {
+  const auditActor = normalizeActor(actor);
+  return db.$transaction(async (tx) => {
+    const order = await getPurchaseOrder(shopId, id, tx);
     if (order.status === "sent") return order;
-    throw new AppError("Only a draft purchase order can be sent", 409, "PURCHASE_ORDER_NOT_DRAFT");
-  }
-  return getPurchaseOrder(shopId, id);
+    if (order.status !== "draft") throw new AppError("Only a draft purchase order can be sent", 409, "PURCHASE_ORDER_NOT_DRAFT");
+    const sentAt = new Date();
+    const changed = await tx.purchaseOrder.updateMany({
+      where: { id, shopId, status: "draft" },
+      data: { status: "sent", sentAt },
+    });
+    if (changed.count !== 1) throw new AppError("Purchase order changed while sending; retry", 409, "CONCURRENT_PURCHASE_ORDER_CHANGE");
+    const updated = await getPurchaseOrder(shopId, id, tx);
+    await writeRequiredPurchaseOrderAudit({
+      shopId,
+      ...auditActor,
+      action: "PURCHASE_ORDER_SENT",
+      entityType: "PurchaseOrder",
+      entityId: id,
+      before: { status: "draft" },
+      after: { status: "sent", sentAt },
+    }, tx);
+    return updated;
+  });
 }
 
 function paymentAllocation(total, paid, lines) {
@@ -253,7 +299,9 @@ function paymentAllocation(total, paid, lines) {
   });
 }
 
-export async function receivePurchaseOrder(shopId, id, data, userId) {
+export async function receivePurchaseOrder(shopId, id, data, actor = {}) {
+  const auditActor = normalizeActor(actor);
+  const userId = auditActor.userId;
   if (data.idempotencyKey) {
     const existing = await db.purchaseReceipt.findFirst({ where: { shopId, idempotencyKey: data.idempotencyKey }, include: receiptReplayInclude });
     if (existing) return assertCompatibleReplay(existing, id, data);
@@ -454,6 +502,22 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
         businessDate: fullReceipt.createdAt,
       });
       const purchaseOrder = await tx.purchaseOrder.findUnique({ where: { id: order.id }, include: detailInclude });
+      await writeRequiredPurchaseOrderAudit({
+        shopId,
+        ...auditActor,
+        action: "PURCHASE_ORDER_RECEIVED",
+        entityType: "PurchaseOrder",
+        entityId: order.id,
+        before: { status: order.status },
+        after: { status: purchaseOrder.status, receiptId: receipt.id, totalAmount: receipt.totalAmount },
+        metadata: {
+          receiptId: receipt.id,
+          receiptNumber: receipt.receiptNumber,
+          locationId: order.locationId,
+          itemCount: allocated.length,
+          idempotencyKey: data.idempotencyKey ?? null,
+        },
+      }, tx);
       return { receipt: fullReceipt, purchaseOrder: withReconciliation(purchaseOrder), idempotentReplay: false, remainingLineCount: remaining };
     });
   } catch (error) {
@@ -465,7 +529,9 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
   }
 }
 
-export async function reconcilePurchaseReceipt(shopId, purchaseOrderId, receiptId, data, userId) {
+export async function reconcilePurchaseReceipt(shopId, purchaseOrderId, receiptId, data, actor = {}) {
+  const auditActor = normalizeActor(actor);
+  const userId = auditActor.userId;
   await db.$transaction(async (tx) => {
     const receipt = await tx.purchaseReceipt.findFirst({
       where: { id: receiptId, shopId, purchaseOrderId },
@@ -498,7 +564,7 @@ export async function reconcilePurchaseReceipt(shopId, purchaseOrderId, receiptI
       };
       throw error;
     }
-    await tx.purchaseReceipt.update({
+    const updated = await tx.purchaseReceipt.update({
       where: { id: receipt.id },
       data: {
         supplierInvoiceNumber: data.supplierInvoiceNumber.trim(),
@@ -518,13 +584,53 @@ export async function reconcilePurchaseReceipt(shopId, purchaseOrderId, receiptI
         varianceApprovedAt: reconciliation.hasVariance ? new Date() : null,
       },
     });
+    await writeRequiredPurchaseOrderAudit({
+      shopId,
+      ...auditActor,
+      action: "PURCHASE_RECEIPT_RECONCILED",
+      entityType: "PurchaseReceipt",
+      entityId: receipt.id,
+      before: {
+        supplierInvoiceNumber: receipt.supplierInvoiceNumber,
+        supplierInvoiceAmount: receipt.supplierInvoiceAmount,
+        matchStatus: receipt.matchStatus,
+        priceVarianceAmount: receipt.priceVarianceAmount,
+        invoiceVarianceAmount: receipt.invoiceVarianceAmount,
+      },
+      after: {
+        supplierInvoiceNumber: updated.supplierInvoiceNumber,
+        supplierInvoiceAmount: updated.supplierInvoiceAmount,
+        matchStatus: updated.matchStatus,
+        priceVarianceAmount: updated.priceVarianceAmount,
+        invoiceVarianceAmount: updated.invoiceVarianceAmount,
+      },
+      metadata: { purchaseOrderId, locationId: receipt.locationId, varianceReason: updated.varianceReason },
+    }, tx);
   });
   return getPurchaseOrder(shopId, purchaseOrderId);
 }
 
-export async function cancelPurchaseOrder(shopId, id, reason) {
-  const order = await getPurchaseOrder(shopId, id);
-  if (["received", "cancelled"].includes(order.status)) throw new AppError("A completed or cancelled purchase order cannot be cancelled", 409, "PURCHASE_ORDER_NOT_CANCELLABLE");
-  await db.purchaseOrder.update({ where: { id: order.id }, data: { status: "cancelled", cancelledAt: new Date(), note: [order.note, `Cancelled: ${reason}`].filter(Boolean).join("\n") } });
-  return getPurchaseOrder(shopId, id);
+export async function cancelPurchaseOrder(shopId, id, reason, actor = {}) {
+  const auditActor = normalizeActor(actor);
+  return db.$transaction(async (tx) => {
+    const order = await getPurchaseOrder(shopId, id, tx);
+    if (["received", "cancelled"].includes(order.status)) throw new AppError("A completed or cancelled purchase order cannot be cancelled", 409, "PURCHASE_ORDER_NOT_CANCELLABLE");
+    const cancelledAt = new Date();
+    await tx.purchaseOrder.update({
+      where: { id: order.id },
+      data: { status: "cancelled", cancelledAt, note: [order.note, `Cancelled: ${reason}`].filter(Boolean).join("\n") },
+    });
+    const updated = await getPurchaseOrder(shopId, id, tx);
+    await writeRequiredPurchaseOrderAudit({
+      shopId,
+      ...auditActor,
+      action: "PURCHASE_ORDER_CANCELLED",
+      entityType: "PurchaseOrder",
+      entityId: order.id,
+      before: { status: order.status },
+      after: { status: "cancelled", cancelledAt },
+      metadata: { reason, locationId: order.locationId },
+    }, tx);
+    return updated;
+  });
 }

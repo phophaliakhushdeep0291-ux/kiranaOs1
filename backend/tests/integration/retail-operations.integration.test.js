@@ -548,6 +548,26 @@ if (ctx.skip) {
         // is what the FEFO allocation assertion below actually proves.
         items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 4, actualRate: 17, batchNumber: "OIL-EARLY", manufacturedOn: isoDaysFromNow(-90), expiresOn: isoDaysFromNow(30) }],
       };
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_purchase_order_receive_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'PURCHASE_ORDER_RECEIVED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced purchase order receive audit failure');
+        END
+      `);
+      let failedReceive;
+      try {
+        failedReceive = await ctx.post(`/api/purchase-orders/${order.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_purchase_order_receive_audit_failure");
+      }
+      assertFailure(failedReceive, 503);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 3);
+      assert.equal((await ctx.db.purchaseOrderItem.findUniqueOrThrow({ where: { id: orderItemId } })).receivedBaseQty, 0);
+      assert.equal(await ctx.db.purchaseReceipt.count({ where: { purchaseOrderId: order.id } }), 0);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "purchase_receipt" } }), 0);
+
       const partial = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
       assert.equal(partial.purchaseOrder.status, "partially_received");
       assert.equal(partial.purchaseOrder.items[0].receivedBaseQty, 4);
@@ -596,9 +616,27 @@ if (ctx.skip) {
         invoiceVarianceAmount: 0,
       });
 
-      const reconciledFirst = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receipts/${partial.receipt.id}/reconcile`, {
+      const firstReconcilePayload = {
         supplierInvoiceNumber: "SUP-1001", supplierInvoiceAmount: 68, varianceReason: "Supplier promotional price approved",
-      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      };
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_purchase_receipt_reconcile_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'PURCHASE_RECEIPT_RECONCILED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced purchase receipt reconcile audit failure');
+        END
+      `);
+      let failedReconcile;
+      try {
+        failedReconcile = await ctx.post(`/api/purchase-orders/${order.id}/receipts/${partial.receipt.id}/reconcile`, firstReconcilePayload, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_purchase_receipt_reconcile_audit_failure");
+      }
+      assertFailure(failedReconcile, 503);
+      assert.equal((await ctx.db.purchaseReceipt.findUniqueOrThrow({ where: { id: partial.receipt.id } })).matchStatus, "invoice_pending");
+
+      const reconciledFirst = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receipts/${partial.receipt.id}/reconcile`, firstReconcilePayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       const reconciledFirstReceipt = reconciledFirst.receipts.find((row) => row.id === partial.receipt.id);
       assert.equal(reconciledFirstReceipt.matchStatus, "approved_variance");
       assert.equal(reconciledFirstReceipt.varianceReason, "Supplier promotional price approved");
@@ -736,6 +774,65 @@ if (ctx.skip) {
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }));
       assert.equal(replayedVoid.idempotentReplay, true);
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 12, "void retry must not restore stock twice");
+      const supplierReturnAudits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, entityId: supplierReturn.id, action: { in: ["PURCHASE_RETURN_CREATED", "PURCHASE_RETURN_CANCELLED"] } },
+      });
+      assert.deepEqual(supplierReturnAudits.map((row) => row.action).sort(), ["PURCHASE_RETURN_CANCELLED", "PURCHASE_RETURN_CREATED"]);
+      assert.equal(supplierReturnAudits.every((row) => row.userId === tenant.owner.id), true);
+
+      const auditRollbackPayload = {
+        ...supplierReturnPayload,
+        idempotencyKey: "supplier-return-audit-rollback-001",
+        reason: "Audit transaction rollback proof",
+        items: [{ purchaseReceiptItemId: completed.receipt.items[0].id, quantityBaseQty: 1 }],
+      };
+      const returnCountBeforeFailure = await ctx.db.purchaseReturn.count({ where: { shopId: tenant.shop.id } });
+      const journalCountBeforeFailure = await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id } });
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_purchase_return_create_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'PURCHASE_RETURN_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced purchase return create audit failure');
+        END
+      `);
+      let failedReturnCreate;
+      try {
+        failedReturnCreate = await ctx.post("/api/purchase-returns", auditRollbackPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_purchase_return_create_audit_failure");
+      }
+      assertFailure(failedReturnCreate, 503);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 12);
+      assert.equal(await ctx.db.purchaseReturn.count({ where: { shopId: tenant.shop.id } }), returnCountBeforeFailure);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id } }), journalCountBeforeFailure);
+
+      const rollbackReturn = assertSuccess(await ctx.post("/api/purchase-returns", auditRollbackPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }), 201);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 11);
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_purchase_return_cancel_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'PURCHASE_RETURN_CANCELLED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced purchase return cancel audit failure');
+        END
+      `);
+      let failedReturnCancel;
+      try {
+        failedReturnCancel = await ctx.post(`/api/purchase-returns/${rollbackReturn.id}/cancel`, {
+          reason: "Cancellation audit rollback proof",
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_purchase_return_cancel_audit_failure");
+      }
+      assertFailure(failedReturnCancel, 503);
+      assert.equal((await ctx.db.purchaseReturn.findUniqueOrThrow({ where: { id: rollbackReturn.id } })).status, "active");
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 11);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "purchase_return_cancel", sourceId: rollbackReturn.id } }), 0);
+      assertSuccess(await ctx.post(`/api/purchase-returns/${rollbackReturn.id}/cancel`, {
+        reason: "Cancellation audit rollback proof complete",
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }));
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 12);
 
       const purchaseControl = assertSuccess(await ctx.get("/api/accounting/control?from=2020-01-01T00%3A00%3A00.000Z&to=2030-01-01T00%3A00%3A00.000Z", { token: auth.accessToken }));
       assert.equal(purchaseControl.status, "balanced");
