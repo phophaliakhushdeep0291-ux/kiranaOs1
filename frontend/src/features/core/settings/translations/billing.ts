@@ -99,6 +99,7 @@ export const billingEn = {
   "billing.pay.dynamicQr.print": "Print QR",
   "billing.pay.dynamicQr.printing": "Printing…",
   "billing.pay.dynamicQr.printFailed": "Could not print the payment QR.",
+  "billing.pay.dynamicQr.printNeedsUpdate": "Update the counter hardware bridge to print this QR for the customer.",
   "billing.pay.cardTerminal.title": "Charge the card machine",
   "billing.pay.cardTerminal.description": "The bill unlocks only after the acquirer confirms the card payment, not when the terminal screen says approved.",
   "billing.pay.cardTerminal.collect": "Collect",

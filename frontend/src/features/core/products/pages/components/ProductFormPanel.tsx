@@ -551,7 +551,7 @@ export function ProductFormPanel({
                 type="button"
                 onClick={() => void askAi()}
                 disabled={aiLoading}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#d8c9ff] bg-[#f3ecff] px-2.5 py-1 text-[11px] font-extrabold text-[#7c3aed] transition-opacity hover:opacity-90 disabled:opacity-60"
+                className="tap-target inline-flex items-center gap-1.5 rounded-full border border-[#d8c9ff] bg-[#f3ecff] px-2.5 py-1 text-[11px] font-extrabold text-[#7c3aed] transition-opacity hover:opacity-90 disabled:opacity-60"
               >
                 {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                 AI Suggest

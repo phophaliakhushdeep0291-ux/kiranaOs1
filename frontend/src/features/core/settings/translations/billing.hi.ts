@@ -94,6 +94,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.pay.dynamicQr.print": "QR प्रिंट करें",
   "billing.pay.dynamicQr.printing": "प्रिंट हो रहा है…",
   "billing.pay.dynamicQr.printFailed": "पेमेंट QR प्रिंट नहीं हो सका।",
+  "billing.pay.dynamicQr.printNeedsUpdate": "ग्राहक के लिए यह QR प्रिंट करने के लिए काउंटर का हार्डवेयर ब्रिज अपडेट करें।",
   "billing.pay.cardTerminal.title": "कार्ड मशीन पर पैसे लें",
   "billing.pay.cardTerminal.description": "बिल तभी खुलेगा जब बैंक कार्ड पेमेंट की पुष्टि करे, सिर्फ मशीन की स्क्रीन देखकर नहीं।",
   "billing.pay.cardTerminal.collect": "लेने की रकम",

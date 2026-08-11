@@ -1883,8 +1883,8 @@ export default function Billing() {
             onNew={newBill}
           />
         )}
-        <BillingOrderQrButton />
         <BillingSearch
+          railAction={<BillingOrderQrButton />}
           isOnline={isOnline}
           draftRestored={draftRestored}
           cartLength={cart.length}

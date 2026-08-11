@@ -685,8 +685,13 @@ export default function InventoryPage() {
           </div>
         ) : null}
         <TabsContent value="dashboard" className="mt-0 space-y-4">
+          {/* `min-w-0` on the grid child: a grid item defaults to `min-width:auto`,
+              so it refuses to shrink below its content's intrinsic width. The
+              240px search box below made that 384px, which pushed this card nine
+              pixels past a 375px screen and sliced the "Reorder" buttons off the
+              right edge of every low-stock row. */}
           <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2.15fr)_minmax(300px,0.95fr)]">
-            <section className="overflow-hidden rounded-[12px] border border-[#e2e8f1] bg-white shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
+            <section className="min-w-0 overflow-hidden rounded-[12px] border border-[#e2e8f1] bg-white shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
               <div className="border-b border-[#e8edf4] p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
@@ -694,7 +699,7 @@ export default function InventoryPage() {
                     <p className="mt-0.5 text-[11px] text-[#6d7c98]">Real-time stock from local data, ready to sync.</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-[240px] flex-1 lg:w-[340px]">
+                    <div className="relative min-w-0 flex-1 sm:min-w-[240px] lg:w-[340px]">
                       <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7a89a3]" />
                       <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by product, SKU, barcode..." className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
                     </div>
@@ -807,17 +812,21 @@ export default function InventoryPage() {
               <InventoryPagination page={safeStockPage} pages={stockTotalPages} total={inventoryRows.length} onChange={setStockPage} />
             </section>
 
-            <aside className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-              <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
+            {/* Both panels share one column on a phone, so this aside's own
+                min-content set the width of the card beside it. Left at `auto`
+                it demanded 384px on a 375px screen — which is what pushed the
+                "Reorder" buttons off the edge of the stock list. */}
+            <aside className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
+              <section className="min-w-0 rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
                 <h2 className="text-[14px] font-semibold text-[#13223f]">Stock Overview by Location</h2><p className="mt-0.5 text-[11px] text-[#718096]">Current stock distribution</p>
-                <div className="mt-2 grid grid-cols-[132px_1fr] items-center gap-3">
+                <div className="mt-2 grid grid-cols-[minmax(0,110px)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[132px_1fr]">
                   <div className="h-[128px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{ name: "Main Store", value: Math.max(stockStats.stockValue, 1) }]} dataKey="value" innerRadius={36} outerRadius={56} strokeWidth={0}><Cell fill="var(--brand)" /></Pie></PieChart></ResponsiveContainer></div>
                   <div><div className="flex items-center gap-2 text-[11px]"><span className="h-2 w-2 rounded-full bg-[var(--brand)]" /><span className="font-semibold text-[#243653]">Main Store</span></div><p className="ml-4 mt-1 text-[11px] text-[#718096]">100% of tracked stock</p></div>
                 </div>
                 <div className="flex items-center justify-between border-t border-[#edf1f6] pt-3 text-[11px]"><span className="text-[#718096]">Total Value</span><span className="font-bold text-[#13223f]">{fmtMoney(stockStats.stockValue)}</span></div>
               </section>
 
-              <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
+              <section className="min-w-0 rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
                 <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Low Stock Alerts</h2><p className="mt-0.5 text-[11px] text-[#718096]">Items needing immediate attention</p></div><button type="button" onClick={() => setStockFilter("low")} className="tap-target text-[11px] font-semibold text-[var(--brand)]">View all</button></div>
                 <div className="mt-2 divide-y divide-[#edf1f6]">
                   {lowStockRows.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">All tracked products have healthy stock.</p> : lowStockRows.slice(0, 3).map((item) => {
@@ -827,7 +836,7 @@ export default function InventoryPage() {
                 </div>
               </section>
 
-              <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)] md:col-span-2 xl:col-span-1">
+              <section className="min-w-0 rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)] md:col-span-2 xl:col-span-1">
                 <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Recent Stock Updates</h2><p className="mt-0.5 text-[11px] text-[#718096]">Latest inventory movements</p></div><button type="button" onClick={() => setActiveTab("movements")} className="tap-target text-[11px] font-semibold text-[var(--brand)]">View all</button></div>
                 <div className="mt-2 divide-y divide-[#edf1f6]">{recentMovements.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">No stock updates recorded yet.</p> : recentMovements.map((entry) => <RecentMovementRow key={entry.id} entry={entry} />)}</div>
               </section>

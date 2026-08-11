@@ -372,15 +372,15 @@ export default function ExpensesPage() {
               {/* Pagination */}
               <div className="flex flex-col items-center justify-between gap-2 border-t border-[#eef2f8] px-4 py-2.5 sm:flex-row">
                 <div className="flex items-center gap-1">
-                  <PageBtn disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>‹</PageBtn>
+                  <PageBtn ariaLabel="Previous page" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>‹</PageBtn>
                   {Array.from({ length: pageCount }, (_, i) => i + 1).filter((p) => p === 1 || p === pageCount || Math.abs(p - safePage) <= 1).reduce<(number | "…")[]>((acc, p, idx, arr) => {
                     if (idx > 0 && p - (arr[idx - 1]) > 1) acc.push("…");
                     acc.push(p);
                     return acc;
                   }, []).map((p, i) => p === "…"
                     ? <span key={`gap-${i}`} className="px-1 text-[12px] text-[#94a3b8]">…</span>
-                    : <PageBtn key={p} active={p === safePage} onClick={() => setPage(p)}>{p}</PageBtn>)}
-                  <PageBtn disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>›</PageBtn>
+                    : <PageBtn key={p} ariaLabel={`Page ${p}`} active={p === safePage} onClick={() => setPage(p)}>{p}</PageBtn>)}
+                  <PageBtn ariaLabel="Next page" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>›</PageBtn>
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-[#64748b]">
                   Rows per page
@@ -443,10 +443,10 @@ function Kpi({ icon, iconBg, label, value, sub, subTone, loading }: { icon: Reac
   );
 }
 
-function PageBtn({ children, active, disabled, onClick }: { children: React.ReactNode; active?: boolean; disabled?: boolean; onClick: () => void }) {
+function PageBtn({ children, active, disabled, ariaLabel, onClick }: { children: React.ReactNode; active?: boolean; disabled?: boolean; ariaLabel?: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} disabled={disabled}
-      className={cn("grid h-7 min-w-7 place-items-center rounded-[7px] px-1.5 text-[12px] font-bold transition-colors",
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={ariaLabel} aria-current={active ? "page" : undefined}
+      className={cn("tap-target grid h-7 min-w-7 place-items-center rounded-[7px] px-1.5 text-[12px] font-bold transition-colors",
         active ? "bg-[var(--brand)] text-white" : "text-[#52627e] hover:bg-[#eef2f8] disabled:opacity-40 disabled:hover:bg-transparent")}>
       {children}
     </button>
@@ -572,12 +572,20 @@ function ExpensePanel({ open, editing, saving, width, onResizeStart, onClose, on
   );
 }
 
+/**
+ * The caption sat *beside* its control rather than owning it, so "Amount" and
+ * "Payment Date" reached a screen reader as an unnamed number box and an unnamed
+ * date box — the fields carrying placeholders only sounded named by accident.
+ * A native <label> wrapping the control associates implicitly with whatever
+ * labelable element it contains (input, textarea, and the select trigger's
+ * button), which also makes the caption itself tappable.
+ */
 function Fld({ label, err, children }: { label: string; err?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</Label>
+    <label className="block">
+      <span className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</span>
       {children}
       {err && <p className="mt-1 text-[11px] text-rose-600">{err}</p>}
-    </div>
+    </label>
   );
 }
