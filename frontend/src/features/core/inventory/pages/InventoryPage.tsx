@@ -818,7 +818,7 @@ export default function InventoryPage() {
               </section>
 
               <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
-                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Low Stock Alerts</h2><p className="mt-0.5 text-[11px] text-[#718096]">Items needing immediate attention</p></div><button type="button" onClick={() => setStockFilter("low")} className="text-[11px] font-semibold text-[var(--brand)]">View all</button></div>
+                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Low Stock Alerts</h2><p className="mt-0.5 text-[11px] text-[#718096]">Items needing immediate attention</p></div><button type="button" onClick={() => setStockFilter("low")} className="tap-target text-[11px] font-semibold text-[var(--brand)]">View all</button></div>
                 <div className="mt-2 divide-y divide-[#edf1f6]">
                   {lowStockRows.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">All tracked products have healthy stock.</p> : lowStockRows.slice(0, 3).map((item) => {
                     const unit = inventoryUnitLabel(item);
@@ -828,7 +828,7 @@ export default function InventoryPage() {
               </section>
 
               <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)] md:col-span-2 xl:col-span-1">
-                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Recent Stock Updates</h2><p className="mt-0.5 text-[11px] text-[#718096]">Latest inventory movements</p></div><button type="button" onClick={() => setActiveTab("movements")} className="text-[11px] font-semibold text-[var(--brand)]">View all</button></div>
+                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Recent Stock Updates</h2><p className="mt-0.5 text-[11px] text-[#718096]">Latest inventory movements</p></div><button type="button" onClick={() => setActiveTab("movements")} className="tap-target text-[11px] font-semibold text-[var(--brand)]">View all</button></div>
                 <div className="mt-2 divide-y divide-[#edf1f6]">{recentMovements.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">No stock updates recorded yet.</p> : recentMovements.map((entry) => <RecentMovementRow key={entry.id} entry={entry} />)}</div>
               </section>
             </aside>

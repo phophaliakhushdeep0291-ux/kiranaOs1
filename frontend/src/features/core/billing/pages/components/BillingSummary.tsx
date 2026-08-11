@@ -95,6 +95,10 @@ interface BillingSummaryProps {
   retailPaymentVerified: boolean;
   retailPaymentLoading: boolean;
   onVerifyRetailPayment: () => void;
+  cardTerminalConfigured: boolean;
+  cardTerminalApproved: boolean;
+  cardTerminalLoading: boolean;
+  onChargeCardTerminal: () => void;
   giftCardCode: string;
   setGiftCardCode: (value: string) => void;
   giftCardBalance: number | null;
@@ -227,6 +231,10 @@ export function BillingSummary({
   retailPaymentVerified,
   retailPaymentLoading,
   onVerifyRetailPayment,
+  cardTerminalConfigured,
+  cardTerminalApproved,
+  cardTerminalLoading,
+  onChargeCardTerminal,
   giftCardCode,
   setGiftCardCode,
   giftCardBalance,
@@ -731,6 +739,10 @@ export function BillingSummary({
             retailPaymentVerified={retailPaymentVerified}
             retailPaymentLoading={retailPaymentLoading}
             onVerifyRetailPayment={onVerifyRetailPayment}
+            cardTerminalConfigured={cardTerminalConfigured}
+            cardTerminalApproved={cardTerminalApproved}
+            cardTerminalLoading={cardTerminalLoading}
+            onChargeCardTerminal={onChargeCardTerminal}
             isOnline={isOnline}
             giftCardCode={giftCardCode}
             setGiftCardCode={setGiftCardCode}

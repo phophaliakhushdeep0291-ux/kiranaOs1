@@ -542,8 +542,8 @@ export default function ReportsPage() {
               <AreaChart data={trend} margin={{ top: 14, right: 10, left: -12, bottom: 0 }}>
                 <defs><linearGradient id="salesArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--brand)" stopOpacity={0.2} /><stop offset="100%" stopColor="var(--brand)" stopOpacity={0.01} /></linearGradient></defs>
                 <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
-                <XAxis dataKey="label" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={18} />
-                <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={18} />
+                <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={50} />
                 <Tooltip content={<MoneyTooltip />} />
                 <Area type="monotone" dataKey="sales" name="Sales" stroke="var(--brand)" strokeWidth={2.2} fill="url(#salesArea)" dot={{ r: 2.7, fill: "white", stroke: "var(--brand)", strokeWidth: 1.7 }} activeDot={{ r: 4 }} />
               </AreaChart>
@@ -557,10 +557,10 @@ export default function ReportsPage() {
               <BarChart data={snapshot?.categoryPerformance ?? []} margin={{ top: 20, right: 8, left: -10, bottom: 2 }} barCategoryGap="28%">
                 <defs><linearGradient id="categoryBars" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--brand)" /><stop offset="100%" stopColor="#8bb5ff" /></linearGradient></defs>
                 <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
-                <XAxis dataKey="name" tickFormatter={(value) => shortText(String(value), 10)} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} interval={0} />
-                <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} />
+                <XAxis dataKey="name" tickFormatter={(value) => shortText(String(value), 10)} tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} interval={0} />
+                <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={50} />
                 <Tooltip content={<MoneyTooltip />} />
-                <Bar dataKey="revenue" name="Revenue" fill="url(#categoryBars)" radius={[3, 3, 0, 0]} maxBarSize={34}><LabelList dataKey="revenue" position="top" formatter={(value: unknown) => fmt(Number(value))} style={{ fontSize: 8, fontWeight: 700, fill: "#24385f" }} /></Bar>
+                <Bar dataKey="revenue" name="Revenue" fill="url(#categoryBars)" radius={[3, 3, 0, 0]} maxBarSize={34}><LabelList dataKey="revenue" position="top" formatter={(value: unknown) => fmt(Number(value))} style={{ fontSize: 10, fontWeight: 700, fill: "#24385f" }} /></Bar>
               </BarChart>
             </ResponsiveContainer>
           </ChartFrame>
@@ -675,8 +675,8 @@ export default function ReportsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyChart} margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
-                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={14} />
-                  <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={14} />
+                  <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={50} />
                   <Tooltip content={<MoneyTooltip />} />
                   <Bar dataKey="sales" name="Sales" radius={[3, 3, 0, 0]}>
                     {hourlyChart.map((row) => <Cell key={row.label} fill={peakHour && row.hour === peakHour.hour ? "var(--brand)" : "#b9d1fb"} />)}
@@ -715,7 +715,7 @@ export default function ReportsPage() {
         <Panel title="Stock Movement Trend" subtitle="(Value)" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <div className="flex gap-5 px-4 pt-1 text-[10px] font-semibold"><span className="text-[#15a94d]">→ Stock In</span><span className="text-[#ff3b45]">→ Stock Out</span></div>
           <div className="h-[138px] px-2 pb-2">
-            {loading ? <Skeleton className="h-full" /> : <ResponsiveContainer width="100%" height="100%"><LineChart data={trend} margin={{ top: 12, right: 8, left: -12, bottom: 0 }}><CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" /><XAxis dataKey="label" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={18} /><YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} /><Tooltip content={<MoneyTooltip />} /><Line type="monotone" dataKey="stockIn" name="Stock In" stroke="#15a94d" strokeWidth={2} dot={{ r: 2.4, fill: "white", strokeWidth: 1.5 }} /><Line type="monotone" dataKey="stockOut" name="Stock Out" stroke="#ff3b45" strokeWidth={2} dot={{ r: 2.4, fill: "white", strokeWidth: 1.5 }} /></LineChart></ResponsiveContainer>}
+            {loading ? <Skeleton className="h-full" /> : <ResponsiveContainer width="100%" height="100%"><LineChart data={trend} margin={{ top: 12, right: 8, left: -12, bottom: 0 }}><CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" /><XAxis dataKey="label" tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={18} /><YAxis tickFormatter={fmtAxis} tick={{ fontSize: 11, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={50} /><Tooltip content={<MoneyTooltip />} /><Line type="monotone" dataKey="stockIn" name="Stock In" stroke="#15a94d" strokeWidth={2} dot={{ r: 2.4, fill: "white", strokeWidth: 1.5 }} /><Line type="monotone" dataKey="stockOut" name="Stock Out" stroke="#ff3b45" strokeWidth={2} dot={{ r: 2.4, fill: "white", strokeWidth: 1.5 }} /></LineChart></ResponsiveContainer>}
           </div>
         </Panel>
 

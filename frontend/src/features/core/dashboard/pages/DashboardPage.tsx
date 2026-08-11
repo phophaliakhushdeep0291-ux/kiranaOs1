@@ -944,7 +944,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden lg:col-span-2 2xl:col-span-1 2xl:min-h-0")}>
           <div className="flex min-h-[46px] items-center justify-between gap-3 border-b border-[#e8edf4] px-4 py-3">
             <p className={DASH_TITLE}>Recent Bills</p>
-            <Link href="/bills" className="text-[11px] font-bold text-[var(--brand)] hover:underline">View all</Link>
+            <Link href="/bills" className="tap-target text-[11px] font-bold text-[var(--brand)] hover:underline">View all</Link>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="h-full w-full text-xs">
@@ -1216,8 +1216,12 @@ function MobileGeneralDashboard({
                 </linearGradient>
               </defs>
               <CartesianGrid vertical={false} strokeDasharray="4 6" stroke="#dbe6f4" />
-              <XAxis dataKey="date" tick={{ fontSize: 8, fill: "#64748b", fontWeight: 600 }} tickLine={false} axisLine={false} tickMargin={8} />
-              <YAxis tick={{ fontSize: 8, fill: "#64748b", fontWeight: 600 }} tickLine={false} axisLine={false} width={38} tickFormatter={(value) => value >= 1000 ? `₹${Math.round(value / 1000)}K` : `₹${value}`} />
+              {/* Recharts writes the tick size straight into the SVG, so the
+                  stylesheet's phone legibility floor cannot reach it — 8px axis
+                  labels have to be raised here. `minTickGap` drops dates rather
+                  than letting the bigger glyphs collide. */}
+              <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#64748b", fontWeight: 600 }} tickLine={false} axisLine={false} tickMargin={8} minTickGap={12} />
+              <YAxis tick={{ fontSize: 11, fill: "#64748b", fontWeight: 600 }} tickLine={false} axisLine={false} width={46} tickFormatter={(value) => value >= 1000 ? `₹${Math.round(value / 1000)}K` : `₹${value}`} />
               <Tooltip formatter={(value: number) => [fmtCompactRs(value), "Sales"]} />
               <Area type="monotone" dataKey="sales" stroke="var(--brand)" strokeWidth={2.5} fill="url(#mobileSalesFill)" dot={{ r: 3, fill: "white", stroke: "var(--brand)", strokeWidth: 2 }} />
             </AreaChart>
@@ -1364,8 +1368,9 @@ function DashboardPeriodSelect({ value, onChange, compact = false }: { value: Da
       <PopoverTrigger asChild>
         <button
           type="button"
+          aria-label={`Change period — currently ${DASHBOARD_PERIOD_LABELS[value]}`}
           className={cn(
-            "inline-flex shrink-0 items-center justify-between gap-2 rounded-[7px] border border-[#d5deeb] bg-white font-bold text-[#314766] transition-colors hover:border-[#bdcbe0] hover:bg-[#fbfcfe] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200",
+            "tap-target inline-flex shrink-0 items-center justify-between gap-2 rounded-[7px] border border-[#d5deeb] bg-white font-bold text-[#314766] transition-colors hover:border-[#bdcbe0] hover:bg-[#fbfcfe] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200",
             compact ? "h-7 min-w-[88px] px-2 text-[9px]" : "h-8 min-w-[104px] px-2.5 text-[10px]",
           )}
         >
@@ -1571,7 +1576,7 @@ function LowStockAlerts({ items, packs = [], productsById }: { items: LocalRepor
     <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden p-4 2xl:min-h-0 2xl:p-5")}>
       <div className="flex items-center justify-between gap-3">
         <p className={DASH_TITLE}>Low Stock Alerts</p>
-        <Link href="/inventory" className="text-[12px] font-black text-[var(--brand)] hover:underline">View all</Link>
+        <Link href="/inventory" className="tap-target text-[12px] font-black text-[var(--brand)] hover:underline">View all</Link>
       </div>
       <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 2xl:justify-evenly">
         {/* Pack sizes come first: they name the exact thing to reorder ("8-pack box
@@ -1680,7 +1685,7 @@ function RecentProductsRail({ products }: { products: Product[] }) {
     <section className={cn(DASH_CARD, "overflow-hidden")}>
       <div className="flex items-center justify-between gap-3 border-b border-[#edf2f8] px-5 py-3">
         <p className={DASH_TITLE}>Recently Added Products</p>
-        <Link href="/products" className="text-[12px] font-black text-[var(--brand)] hover:underline">View all</Link>
+        <Link href="/products" className="tap-target text-[12px] font-black text-[var(--brand)] hover:underline">View all</Link>
       </div>
       {products.length === 0 ? (
         <div className={cn("m-4 rounded-[10px] border border-dashed border-[#dce7f5] px-4 py-7 text-center text-sm font-semibold", DASH_MUTED)}>

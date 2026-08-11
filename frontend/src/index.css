@@ -1888,7 +1888,10 @@ html[data-density="compact"] {
     gap: 3px;
     border-radius: 16px;
     color: #65718a;
-    font-size: 10px;
+    /* Same 11px floor the rest of the phone UI now keeps. Five columns of a
+       375px screen leave 71px each, so the longest label still fits on one
+       line — the 359px breakpoint below drops it back down where it does not. */
+    font-size: 11px;
     font-weight: 750;
     letter-spacing: -0.01em;
     transition: color 150ms ease, background-color 150ms ease, transform 120ms ease;
