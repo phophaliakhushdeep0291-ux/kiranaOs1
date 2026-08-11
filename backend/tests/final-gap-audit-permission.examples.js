@@ -10,9 +10,10 @@ const productionCheck = fs.readFileSync("scripts/production-check.js", "utf8");
 const deployDoc = fs.readFileSync("DEPLOY.md", "utf8");
 const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
-assert.ok(
-  productRoutes.includes('router.post("/:id/restore", requireOwnerPin, ctrl.restore);'),
-  "product restore route must require owner role or owner PIN"
+assert.match(
+  productRoutes,
+  /router\.post\("\/:id\/restore",\s*requireRole\("owner",\s*"admin"\),\s*requireOwnerPin,\s*ctrl\.restore\);/,
+  "product restore route must require owner/admin role and owner PIN"
 );
 
 assert.match(
@@ -72,7 +73,7 @@ for (const action of [
 ]) {
   assert.ok(productionCheck.includes(action), `production-check must detect missing ${action}`);
 }
-assert.ok(productionCheck.includes("Product restore route must require owner PIN"), "production-check must detect unprotected product restore route");
+assert.ok(productionCheck.includes("Product restore route must require owner/admin role and owner PIN"), "production-check must detect unprotected product restore route");
 assert.ok(productionCheck.includes("RESTORE_PRODUCT sync must assert owner permission"), "production-check must detect unprotected RESTORE_PRODUCT sync");
 
 for (const phrase of [
