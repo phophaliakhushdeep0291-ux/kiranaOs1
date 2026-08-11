@@ -32,6 +32,10 @@ assert.ok(endpoints.includes("GET /api/reminders/webhooks/meta"));
 assert.ok(endpoints.includes("POST /api/reminders/webhooks/:provider"));
 assert.ok(endpoints.includes("GET /api/payment-provider/events"));
 assert.ok(endpoints.includes("POST /api/payment-provider/events/:id/retry"));
+assert.ok(endpoints.includes("GET /api/payment-provider/retail/readiness"));
+assert.ok(endpoints.includes("POST /api/payment-provider/retail/intents"));
+assert.ok(endpoints.includes("GET /api/payment-provider/retail/intents/:id/status"));
+assert.ok(endpoints.includes("POST /api/payment-provider/retail/intents/:id/cancel"));
 
 for (const prefix of [
   "/api/products",
@@ -59,6 +63,11 @@ for (const path of ["/api/reminders/webhooks/meta", "/api/reminders/webhooks/:pr
 const webhook = contract.endpoints.find((endpoint) => endpoint.path === "/api/payment-provider/razorpay/webhook");
 assert.equal(webhook.rawBodySignature, true, "Razorpay webhook must use raw-body signature semantics");
 assert.equal(webhook.authRequired, false, "Razorpay webhook cannot use JWT auth");
+
+const dynamicQrStatus = contract.endpoints.find((endpoint) => endpoint.path === "/api/payment-provider/retail/intents/:id/status");
+for (const guarantee of ["captured UPI", "tenant and branch", "multiple captured", "idempotent"]) {
+  assert.ok(dynamicQrStatus.integrityGuarantees.some((item) => item.includes(guarantee)), `dynamic QR status must guarantee ${guarantee}`);
+}
 
 const syncPull = contract.endpoints.find((endpoint) => endpoint.path === "/api/sync/pull");
 for (const field of ["sync.protocol", "sync.nextServerSeq", "sync.serverVersion", "sync.hasMore"]) {

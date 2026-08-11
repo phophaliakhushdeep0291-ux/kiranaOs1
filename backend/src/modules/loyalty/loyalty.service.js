@@ -1,5 +1,6 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
+import { createAuditLog } from "../audit/audit.service.js";
 
 const DEFAULT_TIERS = [
   { name: "Bronze", minLifetimePoints: 0 },
@@ -7,6 +8,18 @@ const DEFAULT_TIERS = [
   { name: "Gold", minLifetimePoints: 5000 },
 ];
 const DEFAULT_PROGRAM = { active: false, pointsPerRupee: 1, redemptionPaisePerPoint: 25, minimumRedeemPoints: 100, pointsExpireDays: 365, tierRulesJson: JSON.stringify(DEFAULT_TIERS) };
+
+async function writeRequiredLoyaltyAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Loyalty action was not saved because its audit record could not be stored",
+      503,
+      "LOYALTY_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
 
 export function tiersFrom(value) {
   try {
@@ -60,10 +73,27 @@ export async function getProgram(shopId) {
   return shapeProgram(program ?? { shopId, ...DEFAULT_PROGRAM, configured: false });
 }
 
-export async function updateProgram(shopId, data) {
+export async function updateProgram(shopId, data, actor = {}) {
   const { ownerPin: _ownerPin, tiers, ...settings } = data;
   const stored = { ...settings, ...(tiers ? { tierRulesJson: JSON.stringify(tiers) } : {}) };
-  return shapeProgram(await db.loyaltyProgram.upsert({ where: { shopId }, create: { shopId, ...stored }, update: stored }));
+  return db.$transaction(async (tx) => {
+    const before = await tx.loyaltyProgram.findUnique({ where: { shopId } });
+    const updated = await tx.loyaltyProgram.upsert({ where: { shopId }, create: { shopId, ...stored }, update: stored });
+    const shaped = shapeProgram(updated);
+    await writeRequiredLoyaltyAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      req: actor.req ?? null,
+      action: "LOYALTY_PROGRAM_UPDATED",
+      entityType: "LoyaltyProgram",
+      entityId: updated.id ?? shopId,
+      before: before ? shapeProgram(before) : null,
+      after: shaped,
+      metadata: { changedFields: Object.keys(stored) },
+    }, tx);
+    return shaped;
+  });
 }
 
 /**
@@ -351,7 +381,7 @@ export async function reapplyBillLoyaltyInTransaction(tx, shopId, billId) {
   return results;
 }
 
-export async function redeemPoints(shopId, customerId, data) {
+export async function redeemPoints(shopId, customerId, data, actor = {}) {
   const program = await db.loyaltyProgram.findUnique({ where: { shopId } });
   if (!program?.active) throw new AppError("Loyalty program is not active", 409, "LOYALTY_PROGRAM_INACTIVE");
   if (data.points < program.minimumRedeemPoints) throw new AppError(`Minimum redemption is ${program.minimumRedeemPoints} points`, 422, "LOYALTY_MINIMUM_NOT_MET");
@@ -362,6 +392,24 @@ export async function redeemPoints(shopId, customerId, data) {
     const updated = await tx.loyaltyAccount.updateMany({ where: { id: account.id, shopId, pointsBalance: { gte: data.points } }, data: { pointsBalance: { decrement: data.points }, lifetimeRedeemed: { increment: data.points } } });
     if (updated.count !== 1) throw new AppError("Not enough loyalty points", 409, "INSUFFICIENT_LOYALTY_POINTS");
     const transaction = await tx.loyaltyTransaction.create({ data: { shopId, accountId: account.id, locationId: data.locationId ?? null, type: "redeem", points: -data.points, source: "pos", note: data.note } });
+    await writeRequiredLoyaltyAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      req: actor.req ?? null,
+      action: "LOYALTY_POINTS_REDEEMED",
+      entityType: "LoyaltyAccount",
+      entityId: account.id,
+      before: { pointsBalance: account.pointsBalance, lifetimeRedeemed: account.lifetimeRedeemed },
+      after: { pointsBalance: account.pointsBalance - data.points, lifetimeRedeemed: account.lifetimeRedeemed + data.points },
+      metadata: {
+        customerId,
+        points: data.points,
+        discountValuePaise: data.points * program.redemptionPaisePerPoint,
+        locationId: data.locationId ?? null,
+        loyaltyTransactionId: transaction.id,
+      },
+    }, tx);
     return { transaction, discountValuePaise: data.points * program.redemptionPaisePerPoint };
   });
 }

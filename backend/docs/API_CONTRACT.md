@@ -278,6 +278,18 @@ POST /api/payment-provider/manual/activate
 
 Manual activation stays disabled by default and should not be exposed to normal tenants in production.
 
+Cashier retail-payment operations require `Authorization` and `x-device-id`:
+
+```text
+GET  /api/payment-provider/retail/readiness
+POST /api/payment-provider/retail/intents
+GET  /api/payment-provider/retail/intents/:id/status
+POST /api/payment-provider/retail/intents/:id/cancel
+POST /api/payment-provider/retail/intents/:id/verify
+```
+
+Dynamic QR is separately gated by `RAZORPAY_DYNAMIC_QR_ENABLED` because Razorpay enables QR Codes on demand. A dynamic intent creates a provider `single_use`, fixed-amount UPI QR bound to the authenticated tenant, active branch, integer-paise amount, and provider expiry. QR creation is not payment confirmation. The status route confirms only one captured UPI payment after revalidating QR identity, tenant, branch, amount, and currency; multiple captured rows fail closed. The signed `qr_code.credited` webhook applies the same deterministic validation. A confirmed intent can be consumed by one bill only and cannot be cancelled from checkout. Provider fixture tests are not live-account certification.
+
 ### Three-way purchase reconciliation
 
 Purchase receipts expose deterministic PO-rate, goods-received, and supplier-invoice totals. Goods may be received before the invoice arrives, but that GRN remains explicitly `invoice_pending`; the server never invents invoice evidence or labels an unmatched receipt as complete.

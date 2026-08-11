@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
-import { requireShop } from "../../middleware/permissions.js";
+import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { requireFeature } from "../feature-gates/featureGate.middleware.js";
 import { validate } from "../../middleware/validate.js";
@@ -19,12 +19,12 @@ router.get("/products/:productId", requireLocationAccess("view"), ctrl.productPr
 router.get("/products/:productId/units", ctrl.listSellingUnits);
 
 // Mutations — owner/admin only (managing permanent prices + smart-pricing config).
-router.post("/rules", requireRole("owner", "admin"), requireFeature("dynamic_customer_pricing"), validate(createRuleSchema), ctrl.createRule);
-router.patch("/rules/:id", requireRole("owner", "admin"), requireFeature("dynamic_customer_pricing"), validate(updateRuleSchema), ctrl.updateRule);
-router.delete("/rules/:id", requireRole("owner", "admin"), requireFeature("dynamic_customer_pricing"), ctrl.deleteRule);
-router.post("/products/:productId/units", requireRole("owner", "admin"), validate(sellingUnitSchema), ctrl.createSellingUnit);
-router.patch("/products/:productId/units/:unitId", requireRole("owner", "admin"), validate(updateSellingUnitSchema), ctrl.updateSellingUnit);
-router.delete("/products/:productId/units/:unitId", requireRole("owner", "admin"), ctrl.deleteSellingUnit);
-router.patch("/settings", requireRole("owner", "admin"), requireFeature("dynamic_customer_pricing"), validate(pricingSettingsSchema), ctrl.updateSettings);
+router.post("/rules", requireRole("owner", "admin"), requireFeature("dynamic_customer_pricing"), requireOwnerPin, validate(createRuleSchema), ctrl.createRule);
+router.patch("/rules/:id", requireRole("owner", "admin"), requireFeature("dynamic_customer_pricing"), requireOwnerPin, validate(updateRuleSchema), ctrl.updateRule);
+router.delete("/rules/:id", requireRole("owner", "admin"), requireFeature("dynamic_customer_pricing"), requireOwnerPin, ctrl.deleteRule);
+router.post("/products/:productId/units", requireRole("owner", "admin"), requireOwnerPin, validate(sellingUnitSchema), ctrl.createSellingUnit);
+router.patch("/products/:productId/units/:unitId", requireRole("owner", "admin"), requireOwnerPin, validate(updateSellingUnitSchema), ctrl.updateSellingUnit);
+router.delete("/products/:productId/units/:unitId", requireRole("owner", "admin"), requireOwnerPin, ctrl.deleteSellingUnit);
+router.patch("/settings", requireRole("owner", "admin"), requireFeature("dynamic_customer_pricing"), requireOwnerPin, validate(pricingSettingsSchema), ctrl.updateSettings);
 
 export default router;

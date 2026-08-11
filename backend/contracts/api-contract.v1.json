@@ -345,6 +345,50 @@
     },
     {
       "method": "GET",
+      "path": "/api/payment-provider/retail/readiness",
+      "authRequired": true,
+      "deviceRequired": true,
+      "responseMustInclude": ["data.configured", "data.confirmationRequired", "data.serverVerified", "data.dynamicQrEnabled"],
+      "integrityGuarantees": ["dynamicQrEnabled is true only when Razorpay credentials and the separately enabled on-demand QR capability are configured"],
+      "purpose": "report honest provider-confirmed retail payment readiness"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payment-provider/retail/intents",
+      "authRequired": true,
+      "deviceRequired": true,
+      "requestFields": ["amountPaise", "locationId", "mode"],
+      "responseMustInclude": ["data.intentId", "data.amountPaise", "data.expiresAt", "data.location"],
+      "integrityGuarantees": ["dynamic QR is single-use and fixed to exact integer paise", "intent notes bind provider QR to tenant and branch", "provider image URL is restricted to Razorpay HTTPS", "QR creation never marks payment confirmed"],
+      "purpose": "create a branch-bound Razorpay Checkout or dynamic UPI QR intent"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payment-provider/retail/intents/:id/status",
+      "authRequired": true,
+      "deviceRequired": true,
+      "responseMustInclude": ["data.intentId", "data.status", "data.confirmationSource"],
+      "integrityGuarantees": ["only captured UPI is accepted", "QR, amount, currency, tenant and branch bindings are revalidated", "multiple captured payments on a single-use QR fail closed", "provider polling is idempotent"],
+      "purpose": "poll provider API for dynamic QR payment confirmation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payment-provider/retail/intents/:id/cancel",
+      "authRequired": true,
+      "deviceRequired": true,
+      "integrityGuarantees": ["a confirmed intent cannot be cancelled", "non-admin cashiers can cancel only their own pending intent", "the provider QR is closed before local cancellation"],
+      "purpose": "close an unused dynamic payment QR"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payment-provider/retail/intents/:id/verify",
+      "authRequired": true,
+      "deviceRequired": true,
+      "integrityGuarantees": ["checkout signature and provider API evidence must match order, payment, amount, currency and UPI method"],
+      "purpose": "verify Razorpay Checkout callback against provider state"
+    },
+    {
+      "method": "GET",
       "path": "/api/payment-provider/events",
       "authRequired": true,
       "deviceRequired": true,

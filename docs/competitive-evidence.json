@@ -17,6 +17,7 @@
     "resources.ondc.org",
     "pos.toasttab.com",
     "www.lightspeedhq.com"
+    ,"razorpay.com"
   ],
   "domains": [
     { "id": "billing_inventory", "label": "Billing and inventory", "weight": 20 },
@@ -235,14 +236,19 @@
       "id": "integrated_terminals_dynamic_qr",
       "domain": "hardware_payments",
       "weight": 25,
-      "status": "absent",
+      "status": "partial",
       "proofKind": "external_runtime",
-      "summary": "Integrated card terminals and provider-confirmed dynamic UPI QR are not production integrations.",
+      "summary": "Provider-confirmed Razorpay dynamic UPI QR is implemented behind a separate on-demand account capability flag with single-use fixed-amount creation, exact tenant/branch binding, provider polling, signed qr_code.credited handling, mismatch rejection, cancellation and one-bill consumption. Integrated card terminals remain absent, and live QR traffic is not certified without an enabled Razorpay account.",
       "competitorEvidence": [
         { "product": "Zoho POS", "url": "https://www.zoho.com/pos/integrations.html", "claim": "Pine Labs, Paytm, PhonePe and terminal-linked payments are benchmark integrations." }
       ],
-      "kiranaEvidence": { "sourcePaths": [], "testCommands": [] },
-      "lastVerifiedAt": "2026-08-08"
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/src/modules/payment-provider/razorpay.provider.js", "backend/src/modules/payment-provider/retailPayment.service.js", "backend/src/modules/payment-provider/retailPayment.validation.js", "frontend/src/features/core/billing/pages/components/RetailDynamicQrDialog.tsx"],
+        "testCommands": ["cd backend && npm run test:retail-payment", "cd backend && npm run test:integration", "cd frontend && npm test"],
+        "externalProofRequirements": ["Razorpay account with QR Codes feature enabled", "Credentialed fixed-amount QR creation and captured payment trace", "Signed qr_code.credited delivery and retry trace", "Physical integrated terminal certification"],
+        "runtimeProof": { "status": "missing", "artifact": null }
+      },
+      "lastVerifiedAt": "2026-08-11"
     },
     {
       "id": "store_peripherals",

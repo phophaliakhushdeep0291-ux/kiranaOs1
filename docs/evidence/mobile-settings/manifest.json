@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "ADM-002 / MQA-SET-01 mobile settings certification",
+  "capturedAt": "2026-08-11",
+  "sourceRevision": "aa523ea1e6d400b39931a03e56cce296ead5956d",
+  "workingTreeState": "dirty; production gate is local working-tree evidence, not exact-candidate CI",
+  "settingsImplementationRevisions": ["30b8f4b3", "510f521b"],
+  "environment": {
+    "frontend": "local production-equivalent app",
+    "primaryBackend": "http://127.0.0.1:3000",
+    "browser": "Codex in-app Chromium",
+    "authenticatedRole": "owner",
+    "shop": "demo-shop-001"
+  },
+  "viewportMatrix": {
+    "viewports": [
+      { "width": 375, "height": 667 },
+      { "width": 390, "height": 844 },
+      { "width": 430, "height": 932 },
+      { "width": 768, "height": 1024 }
+    ],
+    "routes": [
+      { "name": "landing", "path": "/settings" },
+      { "name": "billing", "path": "/settings/billing" },
+      { "name": "taxes", "path": "/settings/taxes" },
+      { "name": "printer", "path": "/settings/printer" },
+      { "name": "sync-backup", "path": "/settings/sync" },
+      { "name": "security", "path": "/settings/security" }
+    ],
+    "captures": 24,
+    "result": {
+      "documentWidthMatchesViewport": true,
+      "horizontalOverflow": false,
+      "activeControlsBelow44px": 0,
+      "runtimeErrors": 0
+    }
+  },
+  "statefulChecks": [
+    {
+      "area": "billing",
+      "action": "Check payment status",
+      "result": "Server confirmed Starter status and the feedback toast retained a 44px dismiss target."
+    },
+    {
+      "area": "taxes",
+      "action": "Composition scheme toggle",
+      "result": "Owner-sensitive switch was exercised and restored to its original off state."
+    },
+    {
+      "area": "printer",
+      "action": "Set Default",
+      "result": "Save feedback was shown; the configured printer remained unchanged. Physical-printer output was not claimed."
+    },
+    {
+      "area": "sync",
+      "action": "Sync Now",
+      "result": "Completed with zero queued, failed or conflicting changes."
+    },
+    {
+      "area": "security",
+      "action": "Large Discount protection and Change PIN task",
+      "result": "Protection was toggled and restored to on; Change PIN was opened and cancelled without a credential mutation."
+    }
+  ],
+  "backupProof": {
+    "primaryRuntimeResult": {
+      "status": "configuration_blocked",
+      "error": "BACKUP_ENCRYPTION_KEY must be a base64-encoded 32-byte key",
+      "uiSurfacedError": true
+    },
+    "isolatedKeyedRuntimeResult": {
+      "status": "completed_and_previewed",
+      "artifactId": "cmso8i2tv000mvu7uoxv11w7o",
+      "format": "kiranaos_aes256gcm_gzip_v1",
+      "schemaVersion": "2026-08-08-complete-v3",
+      "recordCount": 175,
+      "sizeBytes": 18308,
+      "checksumSha256": "ae6735d44552744058ffcced1e70e60a7dfac14baa7fe7fd88ace329f0021476",
+      "restorePreviewRestorable": true,
+      "credentialsPreserved": true,
+      "protectedDownloadStatus": 200
+    },
+    "cleanup": {
+      "artifactRowDeleted": true,
+      "objectDeleted": true,
+      "qaSessionsRevoked": 7,
+      "qaDeviceStatus": "revoked",
+      "isolatedRuntimeStopped": true
+    },
+    "releaseLimitation": "The primary runtime still needs BACKUP_ENCRYPTION_KEY before exact-runtime UI creation and restore rehearsal can be certified."
+  },
+  "frontendProductionGate": {
+    "command": "cd frontend && npm run prod:check",
+    "status": "passed",
+    "typecheck": "passed",
+    "translationKeysCompared": 1107,
+    "testsPassed": 1384,
+    "testsSkipped": 1,
+    "testFilesPassed": 224,
+    "testFilesSkipped": 1,
+    "build": "passed",
+    "bundleBudget": "passed",
+    "productionAppCheck": "passed"
+  },
+  "artifacts": {
+    "landing-375x667.png": "9f79ca656f05aa56b9db8d5a4db880ac7e57aec9a4446d31b868b93b77aaa616",
+    "billing-375x667.png": "13157f2606ab9587331592cb591aca6eb73d30c60d802c734148f3e05b908797",
+    "taxes-375x667.png": "5ccc646355af98626aeb473e542743e7b80ef537e440e6aa6e780c8bf75fb015",
+    "printer-375x667.png": "361e998e68dc5f9e274aaaed222eda4789feb4f8ef60c532beac67ef0ca444da",
+    "sync-backup-375x667.png": "1d6879704d1326dc8ddd15f7782826a8a3c7ccac35c12e5cc2e0bbb344a30f16",
+    "security-375x667.png": "07272820cbf228ff2a91c8a7fd137a7954a72c38b6d8e512fbf67d5e3373f5e7",
+    "landing-390x844.png": "c91db0aa5bb73e25c0d86bd40fd7acd6fc44c18091a2f13e25fed2fa0f324819",
+    "billing-390x844.png": "28fa10185e9fe7cbcac4c0f89511a3f322e27b33f47e228dd6f2667774f15a04",
+    "taxes-390x844.png": "af11c0488da4e1e6f62e0302af0d48ed4d8873a3cf986bd06f4fa80d7596a6d6",
+    "printer-390x844.png": "f24afbf8569c8f21035bd327fb078bba99b91aa2295fc320326f639c4ed64ffe",
+    "sync-backup-390x844.png": "219b228fbe7531638e85c1a2281246873d816b3511659e3bf20e0103270314dd",
+    "security-390x844.png": "6d647eb5a910ca534cbb6b106cd39c85a52d9fd2d97cdb8d4dd8c28d0809be7a",
+    "landing-430x932.png": "951b1b586f6a2403d5a02cd968aa20a0c16db9080eff9da6337e731b1b19e63a",
+    "billing-430x932.png": "24d5d834d4036b85b7873e07605fe06326a544914106fc81a3d07cfe4e7688f0",
+    "taxes-430x932.png": "8461cbfebbb7fdb9750f435f2917a345af7d3b1b20f85f739bc5373c588da774",
+    "printer-430x932.png": "1ddf412e18a17d5ed59b1c3d86e5c8f7d5739d9bb448e9bb5c8f396b6e543403",
+    "sync-backup-430x932.png": "0d98d1e451ae4fbd9f8365aa2b535eaead4199f734aa5855de8bc19b78f62062",
+    "security-430x932.png": "34d8dc18e5dfaff3dce2501e39a67e657d64e764afda140d33a33de2f33718f2",
+    "landing-768x1024.png": "b3b19eb537a828fad22605893f98c4aee7241bfccec327bcd8113477156305da",
+    "billing-768x1024.png": "60e5ff09d91e4a48268ba882428c8e56deb5522772e9d6f87d0dcd96e54a073a",
+    "taxes-768x1024.png": "ca8a9325c819721ca132902f4d0debcfa069d66aeb26bf0021f6782ea43c7635",
+    "printer-768x1024.png": "5ef311d9b564a752ac74c90a8b9d4326b113f36d78835966e7bc85ac6e73f3eb",
+    "sync-backup-768x1024.png": "2f95a4d48996a10ed2a4df832ea2cdef0a1c809847078f78b94829e3a6e56a26",
+    "security-768x1024.png": "45470da00e1030c5d9fc635f2d4f11621197c53b83171e32c47be6c541589544",
+    "billing-refresh-390x844.png": "d8c6df8810291a0a1b67cf6a4f456457613253d24adbb99a1b085d1ff2b8033c",
+    "printer-save-feedback-390x844.png": "7206623a9a1f0c0c53357e16ee2814a1b204a92a6a0c95bdcd19eff393dda557",
+    "sync-now-feedback-390x844.png": "fbd9b0d61fee42ef1ba32948f65c76a84bb44026eb28ef706fec870334cc280c",
+    "security-protection-390x844.png": "ac2decd9c658243acb88002d24b5dca60ed92ff98e32fcf5ae2b339c70cd2360",
+    "security-change-pin-390x844.png": "b9ead508092feb1560ca3339389c3205b51118a07d8641649e9c63b2c17e1657",
+    "backup-create-task-390x844.png": "c15e9502a64bded51df297f23dc950bb6d7b13e9d3f4c8886da95f2b7c2ff25c",
+    "backup-missing-key-390x844.png": "d5eff5de0e07546e6ede86a11714634f5b77f334cf1ec4c092c39f8c6687f83f",
+    "backup-history-390x844.png": "e48b50daccb28f11b5d1a8bf20e39d6bc58374774f255a0aca4c4b32854cbf97"
+  }
+}

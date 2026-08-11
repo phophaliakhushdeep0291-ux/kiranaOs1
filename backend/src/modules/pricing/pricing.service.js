@@ -6,6 +6,70 @@ import { sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
 import { moneyShadows } from "../../utils/money.js";
 import { assertLocationCapability } from "../stores/location-access.service.js";
 
+async function writeRequiredPricingAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Pricing action was not saved because its audit record could not be stored",
+      503,
+      "PRICING_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
+function normalizeActor(actor = {}) {
+  return {
+    userId: actor.userId ?? null,
+    role: actor.role,
+    deviceId: actor.deviceId ?? undefined,
+    req: actor.req ?? null,
+  };
+}
+
+function ruleAuditSnapshot(rule) {
+  return {
+    id: rule.id,
+    name: rule.name,
+    ruleType: rule.ruleType,
+    status: rule.status,
+    priority: rule.priority,
+    productId: rule.productId,
+    locationId: rule.locationId,
+    sellingUnitId: rule.sellingUnitId,
+    unitCode: rule.unitCode,
+    customerId: rule.customerId,
+    customerGroup: rule.customerGroup,
+    minQuantity: rule.minQuantity,
+    maxQuantity: rule.maxQuantity,
+    fixedUnitPrice: rule.fixedUnitPrice,
+    adjustmentType: rule.adjustmentType,
+    adjustmentValue: rule.adjustmentValue,
+    paymentMethod: rule.paymentMethod,
+    validFrom: rule.validFrom,
+    validUntil: rule.validUntil,
+    requiresOwnerApproval: rule.requiresOwnerApproval,
+  };
+}
+
+function sellingUnitAuditSnapshot(unit) {
+  return {
+    id: unit.id,
+    productId: unit.productId,
+    name: unit.name,
+    unitType: unit.unitType,
+    unitCode: unit.unitCode,
+    conversionToBase: unit.conversionToBase,
+    barcode: unit.barcode,
+    defaultPrice: unit.defaultPrice,
+    minimumPrice: unit.minimumPrice,
+    maximumPrice: unit.maximumPrice,
+    costPrice: unit.costPrice,
+    isDefault: unit.isDefault,
+    isActive: unit.isActive,
+  };
+}
+
 const RULE_TYPES = [
   "CUSTOMER_FIXED_PRICE", "CUSTOMER_QUANTITY_PRICE", "CUSTOMER_GROUP_PRICE",
   "CUSTOMER_GROUP_QUANTITY_PRICE", "PRODUCT_QUANTITY_PRICE", "SELLING_UNIT_PRICE",
@@ -33,14 +97,34 @@ export async function getPricingSettings(shopId) {
 }
 
 export async function updatePricingSettings(shopId, patch, actor = {}) {
-  const shop = await db.shop.findUnique({ where: { id: shopId }, select: { settingsJson: true } });
-  let parsed = {};
-  try { parsed = JSON.parse(shop?.settingsJson ?? "{}") ?? {}; } catch { parsed = {}; }
-  const next = { ...DEFAULT_PRICING_SETTINGS, ...(parsed.pricing ?? {}), ...patch };
-  parsed.pricing = next;
-  await db.shop.update({ where: { id: shopId }, data: { settingsJson: JSON.stringify(parsed) } });
-  await createAuditLog({ shopId, userId: actor.userId, action: "SMART_PRICING_SETTINGS_UPDATED", entityType: "PricingSettings", entityId: shopId, metadata: { patch } });
-  return next;
+  actor = normalizeActor(actor);
+  return db.$transaction(async (tx) => {
+    const shop = await tx.shop.findUnique({ where: { id: shopId }, select: { settingsJson: true, updatedAt: true } });
+    if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
+    let parsed = {};
+    try { parsed = JSON.parse(shop.settingsJson ?? "{}") ?? {}; } catch { parsed = {}; }
+    const before = { ...DEFAULT_PRICING_SETTINGS, ...(parsed.pricing ?? {}) };
+    const next = { ...before, ...patch };
+    parsed.pricing = next;
+    const changed = await tx.shop.updateMany({
+      where: { id: shopId, updatedAt: shop.updatedAt },
+      data: { settingsJson: JSON.stringify(parsed) },
+    });
+    if (changed.count !== 1) throw new AppError("Pricing settings changed while saving; retry", 409, "PRICING_SETTINGS_CONCURRENT_CHANGE");
+    await writeRequiredPricingAudit({
+      shopId,
+      userId: actor.userId,
+      deviceId: actor.deviceId,
+      req: actor.req,
+      action: "SMART_PRICING_SETTINGS_UPDATED",
+      entityType: "PricingSettings",
+      entityId: shopId,
+      before,
+      after: next,
+      metadata: { changed: Object.keys(patch) },
+    }, tx);
+    return next;
+  });
 }
 
 function toEngineRule(row) {
@@ -200,21 +284,21 @@ function validateRuleInput(input) {
   }
 }
 
-async function assertRuleReferences(shopId, input, excludeRuleId = null) {
+async function assertRuleReferences(shopId, input, excludeRuleId = null, client = db) {
   if (input.locationId) {
-    const location = await db.storeLocation.findFirst({ where: { id: input.locationId, shopId, active: true }, select: { id: true } });
+    const location = await client.storeLocation.findFirst({ where: { id: input.locationId, shopId, active: true }, select: { id: true } });
     if (!location) throw new AppError("Store location not found for this shop", 400, "INVALID_STORE_LOCATION");
   }
   if (input.productId) {
-    const product = await db.product.findFirst({ where: { id: input.productId, shopId, deletedAt: null }, select: { id: true } });
+    const product = await client.product.findFirst({ where: { id: input.productId, shopId, deletedAt: null }, select: { id: true } });
     if (!product) throw new AppError("Product not found for this shop", 400);
   }
   if (input.customerId) {
-    const customer = await db.customer.findFirst({ where: { id: input.customerId, shopId, deletedAt: null }, select: { id: true } });
+    const customer = await client.customer.findFirst({ where: { id: input.customerId, shopId, deletedAt: null }, select: { id: true } });
     if (!customer) throw new AppError("Customer not found for this shop", 400);
   }
   if (input.sellingUnitId) {
-    const unit = await db.productSellingUnit.findFirst({ where: { id: input.sellingUnitId, shopId, isActive: true } });
+    const unit = await client.productSellingUnit.findFirst({ where: { id: input.sellingUnitId, shopId, isActive: true } });
     if (!unit || (input.productId && unit.productId !== input.productId)) {
       throw new AppError("Selling unit does not belong to the selected product", 400);
     }
@@ -224,7 +308,7 @@ async function assertRuleReferences(shopId, input, excludeRuleId = null) {
   if (!isQuantityRule || input.status === "ARCHIVED" || input.status === "PAUSED") return;
   const min = Number(input.minQuantity ?? 0);
   const max = input.maxQuantity == null ? Number.POSITIVE_INFINITY : Number(input.maxQuantity);
-  const peers = await db.pricingRule.findMany({
+  const peers = await client.pricingRule.findMany({
     where: {
       shopId,
       ruleType: input.ruleType,
@@ -257,68 +341,93 @@ export async function listRules(shopId, { status, productId, customerId, locatio
 }
 
 export async function createRule(shopId, input, actor = {}) {
+  actor = normalizeActor(actor);
   validateRuleInput(input);
-  if (input.locationId) await assertLocationCapability({ shopId, userId: actor.userId, role: actor.role, locationId: input.locationId, capability: "inventory" });
-  await assertRuleReferences(shopId, input);
   const priority = input.priority ?? RULE_TYPE_PRIORITY[input.ruleType] ?? 0;
-  const rule = await db.pricingRule.create({
-    data: {
-      shopId,
-      name: String(input.name).trim(),
-      description: input.description ?? null,
-      ruleType: input.ruleType,
-      status: RULE_STATUSES.includes(input.status) ? input.status : "ACTIVE",
-      priority,
-      productId: input.productId ?? null,
-      locationId: input.locationId ?? null,
-      sellingUnitId: input.sellingUnitId ?? null,
-      unitCode: input.unitCode ?? null,
-      customerId: input.customerId ?? null,
-      customerGroup: input.customerGroup ?? null,
-      minQuantity: input.minQuantity ?? null,
-      maxQuantity: input.maxQuantity ?? null,
-      fixedUnitPrice: input.fixedUnitPrice ?? null,
-      adjustmentType: input.adjustmentType ?? null,
-      adjustmentValue: input.adjustmentValue ?? null,
-      minimumMarginPercent: input.minimumMarginPercent ?? null,
-      paymentMethod: input.paymentMethod ?? null,
-      combinePolicy: input.combinePolicy ?? null,
-      validFrom: input.validFrom ? new Date(input.validFrom) : null,
-      validUntil: input.validUntil ? new Date(input.validUntil) : null,
-      requiresOwnerApproval: input.requiresOwnerApproval === true,
-      createdByUserId: actor.userId ?? null,
-    },
-  });
-  await createAuditLog({ shopId, userId: actor.userId, action: "PRICING_RULE_CREATED", entityType: "PricingRule", entityId: rule.id, metadata: { ruleType: rule.ruleType, name: rule.name } });
-  return rule;
+  return db.$transaction(async (tx) => {
+    if (input.locationId) await assertLocationCapability({ shopId, userId: actor.userId, role: actor.role, locationId: input.locationId, capability: "inventory", client: tx });
+    await assertRuleReferences(shopId, input, null, tx);
+    const rule = await tx.pricingRule.create({
+      data: {
+        shopId,
+        name: String(input.name).trim(),
+        description: input.description ?? null,
+        ruleType: input.ruleType,
+        status: RULE_STATUSES.includes(input.status) ? input.status : "ACTIVE",
+        priority,
+        productId: input.productId ?? null,
+        locationId: input.locationId ?? null,
+        sellingUnitId: input.sellingUnitId ?? null,
+        unitCode: input.unitCode ?? null,
+        customerId: input.customerId ?? null,
+        customerGroup: input.customerGroup ?? null,
+        minQuantity: input.minQuantity ?? null,
+        maxQuantity: input.maxQuantity ?? null,
+        fixedUnitPrice: input.fixedUnitPrice ?? null,
+        adjustmentType: input.adjustmentType ?? null,
+        adjustmentValue: input.adjustmentValue ?? null,
+        minimumMarginPercent: input.minimumMarginPercent ?? null,
+        paymentMethod: input.paymentMethod ?? null,
+        combinePolicy: input.combinePolicy ?? null,
+        validFrom: input.validFrom ? new Date(input.validFrom) : null,
+        validUntil: input.validUntil ? new Date(input.validUntil) : null,
+        requiresOwnerApproval: input.requiresOwnerApproval === true,
+        createdByUserId: actor.userId,
+      },
+    });
+    await writeRequiredPricingAudit({
+      shopId, userId: actor.userId, deviceId: actor.deviceId, req: actor.req,
+      action: "PRICING_RULE_CREATED", entityType: "PricingRule", entityId: rule.id,
+      after: ruleAuditSnapshot(rule), metadata: { ruleType: rule.ruleType, name: rule.name },
+    }, tx);
+    return rule;
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function updateRule(shopId, ruleId, input, actor = {}) {
-  const existing = await db.pricingRule.findFirst({ where: { id: ruleId, shopId } });
-  if (!existing) throw new AppError("Pricing rule not found", 404);
-  const merged = { ...existing, ...input, ruleType: input.ruleType ?? existing.ruleType };
-  validateRuleInput(merged);
-  if (merged.locationId) await assertLocationCapability({ shopId, userId: actor.userId, role: actor.role, locationId: merged.locationId, capability: "inventory" });
-  await assertRuleReferences(shopId, merged, ruleId);
-  const data = {};
-  for (const key of ["name", "description", "ruleType", "status", "priority", "productId", "locationId", "sellingUnitId", "unitCode", "customerId", "customerGroup", "minQuantity", "maxQuantity", "fixedUnitPrice", "adjustmentType", "adjustmentValue", "minimumMarginPercent", "paymentMethod", "combinePolicy", "requiresOwnerApproval"]) {
-    if (input[key] !== undefined) data[key] = input[key];
-  }
-  if (input.validFrom !== undefined) data.validFrom = input.validFrom ? new Date(input.validFrom) : null;
-  if (input.validUntil !== undefined) data.validUntil = input.validUntil ? new Date(input.validUntil) : null;
-  const rule = await db.pricingRule.update({ where: { id: ruleId }, data });
-  await createAuditLog({ shopId, userId: actor.userId, action: "PRICING_RULE_UPDATED", entityType: "PricingRule", entityId: rule.id, metadata: { changed: Object.keys(data) } });
-  return rule;
+  actor = normalizeActor(actor);
+  return db.$transaction(async (tx) => {
+    const existing = await tx.pricingRule.findFirst({ where: { id: ruleId, shopId } });
+    if (!existing) throw new AppError("Pricing rule not found", 404);
+    const merged = { ...existing, ...input, ruleType: input.ruleType ?? existing.ruleType };
+    validateRuleInput(merged);
+    if (merged.locationId) await assertLocationCapability({ shopId, userId: actor.userId, role: actor.role, locationId: merged.locationId, capability: "inventory", client: tx });
+    await assertRuleReferences(shopId, merged, ruleId, tx);
+    const data = {};
+    for (const key of ["name", "description", "ruleType", "status", "priority", "productId", "locationId", "sellingUnitId", "unitCode", "customerId", "customerGroup", "minQuantity", "maxQuantity", "fixedUnitPrice", "adjustmentType", "adjustmentValue", "minimumMarginPercent", "paymentMethod", "combinePolicy", "requiresOwnerApproval"]) {
+      if (input[key] !== undefined) data[key] = input[key];
+    }
+    if (input.validFrom !== undefined) data.validFrom = input.validFrom ? new Date(input.validFrom) : null;
+    if (input.validUntil !== undefined) data.validUntil = input.validUntil ? new Date(input.validUntil) : null;
+    const changed = await tx.pricingRule.updateMany({ where: { id: ruleId, shopId, updatedAt: existing.updatedAt }, data });
+    if (changed.count !== 1) throw new AppError("Pricing rule changed while saving; retry", 409, "PRICING_RULE_CONCURRENT_CHANGE");
+    const rule = await tx.pricingRule.findUniqueOrThrow({ where: { id: ruleId } });
+    await writeRequiredPricingAudit({
+      shopId, userId: actor.userId, deviceId: actor.deviceId, req: actor.req,
+      action: "PRICING_RULE_UPDATED", entityType: "PricingRule", entityId: rule.id,
+      before: ruleAuditSnapshot(existing), after: ruleAuditSnapshot(rule), metadata: { changed: Object.keys(data) },
+    }, tx);
+    return rule;
+  }, { isolationLevel: "Serializable" });
 }
 
 /** Soft delete — archive (never hard-delete; historical bills reference rule ids). */
 export async function archiveRule(shopId, ruleId, actor = {}) {
-  const existing = await db.pricingRule.findFirst({ where: { id: ruleId, shopId } });
-  if (!existing) throw new AppError("Pricing rule not found", 404);
-  if (existing.locationId) await assertLocationCapability({ shopId, userId: actor.userId, role: actor.role, locationId: existing.locationId, capability: "inventory" });
-  const rule = await db.pricingRule.update({ where: { id: ruleId }, data: { status: "ARCHIVED" } });
-  await createAuditLog({ shopId, userId: actor.userId, action: "PRICING_RULE_DELETED", entityType: "PricingRule", entityId: rule.id, metadata: { name: rule.name } });
-  return { id: rule.id, status: rule.status };
+  actor = normalizeActor(actor);
+  return db.$transaction(async (tx) => {
+    const existing = await tx.pricingRule.findFirst({ where: { id: ruleId, shopId } });
+    if (!existing) throw new AppError("Pricing rule not found", 404);
+    if (existing.locationId) await assertLocationCapability({ shopId, userId: actor.userId, role: actor.role, locationId: existing.locationId, capability: "inventory", client: tx });
+    const changed = await tx.pricingRule.updateMany({ where: { id: ruleId, shopId, status: existing.status, updatedAt: existing.updatedAt }, data: { status: "ARCHIVED" } });
+    if (changed.count !== 1) throw new AppError("Pricing rule changed while archiving; retry", 409, "PRICING_RULE_CONCURRENT_CHANGE");
+    const rule = await tx.pricingRule.findUniqueOrThrow({ where: { id: ruleId } });
+    await writeRequiredPricingAudit({
+      shopId, userId: actor.userId, deviceId: actor.deviceId, req: actor.req,
+      action: "PRICING_RULE_DELETED", entityType: "PricingRule", entityId: rule.id,
+      before: ruleAuditSnapshot(existing), after: ruleAuditSnapshot(rule), metadata: { name: rule.name },
+    }, tx);
+    return { id: rule.id, status: rule.status };
+  });
 }
 
 /** Product pricing configuration (default triple + the rules that touch it). */
@@ -420,6 +529,7 @@ export async function listSellingUnits(shopId, productId) {
 }
 
 export async function createSellingUnit(shopId, productId, input, actor = {}) {
+  actor = normalizeActor(actor);
   const product = await db.product.findFirst({ where: { id: productId, shopId, deletedAt: null }, select: { id: true } });
   if (!product) throw new AppError("Product not found", 404);
   const normalized = normalizeSellingUnitInput(input);
@@ -427,35 +537,59 @@ export async function createSellingUnit(shopId, productId, input, actor = {}) {
     if (normalized.isDefault) await tx.productSellingUnit.updateMany({ where: { shopId, productId }, data: { isDefault: false } });
     const created = await tx.productSellingUnit.create({ data: { shopId, productId, ...sellingUnitData(normalized) } });
     await touchProductFromDefaultUnit(tx, productId, created);
+    await writeRequiredPricingAudit({
+      shopId, userId: actor.userId, deviceId: actor.deviceId, req: actor.req,
+      action: "PRODUCT_SELLING_UNIT_CREATED", entityType: "ProductSellingUnit", entityId: created.id,
+      after: sellingUnitAuditSnapshot(created), metadata: { productId, unitCode: created.unitCode },
+    }, tx);
     return created;
   });
-  await createAuditLog({ shopId, userId: actor.userId, action: "PRODUCT_SELLING_UNIT_CREATED", entityType: "ProductSellingUnit", entityId: unit.id, metadata: { productId, unitCode: unit.unitCode } });
   return unit;
 }
 
 export async function updateSellingUnit(shopId, productId, unitId, input, actor = {}) {
-  const existing = await db.productSellingUnit.findFirst({ where: { id: unitId, shopId, productId } });
-  if (!existing) throw new AppError("Selling unit not found", 404);
-  const normalized = normalizeSellingUnitInput(input, existing);
+  actor = normalizeActor(actor);
   const unit = await db.$transaction(async (tx) => {
+    const existing = await tx.productSellingUnit.findFirst({ where: { id: unitId, shopId, productId } });
+    if (!existing) throw new AppError("Selling unit not found", 404);
+    const normalized = normalizeSellingUnitInput(input, existing);
     if (normalized.isDefault) await tx.productSellingUnit.updateMany({ where: { shopId, productId, NOT: { id: unitId } }, data: { isDefault: false } });
-    const updated = await tx.productSellingUnit.update({ where: { id: unitId }, data: sellingUnitData(normalized) });
+    const changed = await tx.productSellingUnit.updateMany({
+      where: { id: unitId, shopId, productId, updatedAt: existing.updatedAt },
+      data: sellingUnitData(normalized),
+    });
+    if (changed.count !== 1) throw new AppError("Selling unit changed while saving; retry", 409, "SELLING_UNIT_CONCURRENT_CHANGE");
+    const updated = await tx.productSellingUnit.findUniqueOrThrow({ where: { id: unitId } });
     await touchProductFromDefaultUnit(tx, productId, updated);
+    await writeRequiredPricingAudit({
+      shopId, userId: actor.userId, deviceId: actor.deviceId, req: actor.req,
+      action: "PRODUCT_SELLING_UNIT_UPDATED", entityType: "ProductSellingUnit", entityId: updated.id,
+      before: sellingUnitAuditSnapshot(existing), after: sellingUnitAuditSnapshot(updated), metadata: { productId, changed: Object.keys(input) },
+    }, tx);
     return updated;
   });
-  await createAuditLog({ shopId, userId: actor.userId, action: "PRODUCT_SELLING_UNIT_UPDATED", entityType: "ProductSellingUnit", entityId: unit.id, metadata: { productId, changed: Object.keys(input) } });
   return unit;
 }
 
 export async function archiveSellingUnit(shopId, productId, unitId, actor = {}) {
-  const existing = await db.productSellingUnit.findFirst({ where: { id: unitId, shopId, productId } });
-  if (!existing) throw new AppError("Selling unit not found", 404);
-  if (existing.isDefault) throw new AppError("Choose another default unit before disabling this one", 409);
+  actor = normalizeActor(actor);
   const unit = await db.$transaction(async (tx) => {
-    const updated = await tx.productSellingUnit.update({ where: { id: unitId }, data: { isActive: false } });
+    const existing = await tx.productSellingUnit.findFirst({ where: { id: unitId, shopId, productId } });
+    if (!existing) throw new AppError("Selling unit not found", 404);
+    if (existing.isDefault) throw new AppError("Choose another default unit before disabling this one", 409);
+    const changed = await tx.productSellingUnit.updateMany({
+      where: { id: unitId, shopId, productId, isActive: existing.isActive, updatedAt: existing.updatedAt },
+      data: { isActive: false },
+    });
+    if (changed.count !== 1) throw new AppError("Selling unit changed while archiving; retry", 409, "SELLING_UNIT_CONCURRENT_CHANGE");
+    const updated = await tx.productSellingUnit.findUniqueOrThrow({ where: { id: unitId } });
     await tx.product.update({ where: { id: productId }, data: { updatedAt: new Date() } });
+    await writeRequiredPricingAudit({
+      shopId, userId: actor.userId, deviceId: actor.deviceId, req: actor.req,
+      action: "PRODUCT_SELLING_UNIT_ARCHIVED", entityType: "ProductSellingUnit", entityId: updated.id,
+      before: sellingUnitAuditSnapshot(existing), after: sellingUnitAuditSnapshot(updated), metadata: { productId },
+    }, tx);
     return updated;
   });
-  await createAuditLog({ shopId, userId: actor.userId, action: "PRODUCT_SELLING_UNIT_ARCHIVED", entityType: "ProductSellingUnit", entityId: unit.id, metadata: { productId } });
   return { id: unit.id, isActive: unit.isActive };
 }

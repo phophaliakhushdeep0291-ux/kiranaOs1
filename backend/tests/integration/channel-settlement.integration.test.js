@@ -67,6 +67,27 @@ if (ctx.skip) {
       });
       const input = { provider: "Zomato report", locationId: location.id, fileName: "payout-2026-08.csv", csvText, mapping };
 
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_channel_import_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'CHANNEL_SETTLEMENT_IMPORTED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced channel import audit failure');
+        END
+      `);
+      let failedAction;
+      try {
+        failedAction = await ctx.post("/api/accounting/channel-settlements/import", input, {
+          token: auth.accessToken,
+          ownerPin: tenant.ownerPin,
+        });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_channel_import_audit_failure");
+      }
+      assert.equal(assertFailure(failedAction, 503).code, "CHANNEL_SETTLEMENT_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.channelSettlementImport.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.channelSettlementRow.count({ where: { shopId: tenant.shop.id } }), 0);
+
       const imported = assertSuccess(await ctx.post("/api/accounting/channel-settlements/import", input, {
         token: auth.accessToken, ownerPin: tenant.ownerPin,
       }), 201);
@@ -100,12 +121,50 @@ if (ctx.skip) {
       assert.equal(missing.matchStatus, "missing");
       assert.deepEqual(new Set(missing.mismatches), new Set(["missing_order", "net_mismatch"]));
 
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_channel_match_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'CHANNEL_SETTLEMENT_MATCH'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced channel match audit failure');
+        END
+      `);
+      try {
+        failedAction = await ctx.post(`/api/accounting/channel-settlement-rows/${suggested.id}/resolve`, {
+          action: "match", customerOrderId: order.id, billId: bill.id, reason: "Forced audit rollback proof",
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_channel_match_audit_failure");
+      }
+      assert.equal(assertFailure(failedAction, 503).code, "CHANNEL_SETTLEMENT_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.channelSettlementRow.findUniqueOrThrow({ where: { id: suggested.id } })).resolutionStatus, "open");
+      assert.equal(await ctx.db.channelSettlementEvent.count({ where: { rowId: suggested.id } }), 0);
+
       const matched = assertSuccess(await ctx.post(`/api/accounting/channel-settlement-rows/${suggested.id}/resolve`, {
         action: "match", customerOrderId: order.id, billId: bill.id, reason: "Confirmed against channel order ID",
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       assert.equal(matched.resolutionStatus, "matched");
       assert.equal(matched.matchedBillId, bill.id);
       assert.equal(matched.events[0].action, "match");
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_channel_ignore_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'CHANNEL_SETTLEMENT_IGNORE'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced channel ignore audit failure');
+        END
+      `);
+      try {
+        failedAction = await ctx.post(`/api/accounting/channel-settlement-rows/${missing.id}/resolve`, {
+          action: "ignore", reason: "Forced audit rollback proof",
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_channel_ignore_audit_failure");
+      }
+      assert.equal(assertFailure(failedAction, 503).code, "CHANNEL_SETTLEMENT_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.channelSettlementRow.findUniqueOrThrow({ where: { id: missing.id } })).resolutionStatus, "open");
+      assert.equal(await ctx.db.channelSettlementEvent.count({ where: { rowId: missing.id } }), 0);
 
       const ignored = assertSuccess(await ctx.post(`/api/accounting/channel-settlement-rows/${missing.id}/resolve`, {
         action: "ignore", reason: "Known test adjustment outside POS",
@@ -117,6 +176,25 @@ if (ctx.skip) {
         action: "reverse", reason: "Attempt from another tenant",
       }, { token: otherAuth.accessToken, ownerPin: other.ownerPin }), 404);
       assert.equal(isolated.code, "CHANNEL_SETTLEMENT_ROW_NOT_FOUND");
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_channel_reverse_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'CHANNEL_SETTLEMENT_REVERSE'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced channel reverse audit failure');
+        END
+      `);
+      try {
+        failedAction = await ctx.post(`/api/accounting/channel-settlement-rows/${suggested.id}/resolve`, {
+          action: "reverse", reason: "Forced audit rollback proof",
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_channel_reverse_audit_failure");
+      }
+      assert.equal(assertFailure(failedAction, 503).code, "CHANNEL_SETTLEMENT_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.channelSettlementRow.findUniqueOrThrow({ where: { id: suggested.id } })).resolutionStatus, "matched");
+      assert.equal(await ctx.db.channelSettlementEvent.count({ where: { rowId: suggested.id } }), 1);
 
       const reversed = assertSuccess(await ctx.post(`/api/accounting/channel-settlement-rows/${suggested.id}/resolve`, {
         action: "reverse", reason: "Re-opened after source evidence changed",

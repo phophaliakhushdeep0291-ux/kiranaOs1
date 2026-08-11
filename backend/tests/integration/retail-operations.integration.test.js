@@ -34,14 +34,50 @@ if (ctx.skip) {
       assert.equal(locations.locations.length, 1);
       assert.equal(locations.locations[0].isPrimary, true);
 
-      const branch = assertSuccess(await ctx.post("/api/stores", { name: "Market Branch", code: "MKT01", city: "Pune" }, { token: auth.accessToken }), 201);
-      const transfer = assertSuccess(await ctx.post("/api/stores/transfers", {
+      const branchPayload = { name: "Market Branch", code: "MKT01", city: "Pune" };
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_store_location_create_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STORE_LOCATION_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced store location create audit failure');
+        END
+      `);
+      let failedStoreAction;
+      try {
+        failedStoreAction = await ctx.post("/api/stores", branchPayload, { token: auth.accessToken });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_store_location_create_audit_failure");
+      }
+      assert.equal(assertFailure(failedStoreAction, 503).code, "STORE_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.storeLocation.count({ where: { shopId: tenant.shop.id } }), 1, "failed branch audit must roll back the new location");
+
+      const branch = assertSuccess(await ctx.post("/api/stores", branchPayload, { token: auth.accessToken }), 201);
+      const transferPayload = {
         fromLocationId: locations.locations[0].id,
         toLocationId: branch.id,
         items: [{ productId: product.id, quantityBaseQty: 7, declaredTaxableValue: 350 }],
         note: "Opening stock",
         ownerPin: tenant.ownerPin,
-      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      };
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_stock_transfer_create_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_TRANSFER_COMPLETED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced stock transfer create audit failure');
+        END
+      `);
+      try {
+        failedStoreAction = await ctx.post("/api/stores/transfers", transferPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_stock_transfer_create_audit_failure");
+      }
+      assert.equal(assertFailure(failedStoreAction, 503).code, "STORE_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.stockTransfer.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.locationStock.count({ where: { shopId: tenant.shop.id, locationId: branch.id } }), 0, "failed transfer audit must roll back destination stock");
+
+      const transfer = assertSuccess(await ctx.post("/api/stores/transfers", transferPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
       assert.equal(transfer.status, "completed");
 
       const mainInventory = assertSuccess(await ctx.get(`/api/stores/${locations.locations[0].id}/inventory`, { token: auth.accessToken }));
@@ -107,13 +143,35 @@ if (ctx.skip) {
 
       const riceLine = transfer.items.find((item) => item.productId === rice.id);
       const oilLine = transfer.items.find((item) => item.productId === oil.id);
-      const partial = assertSuccess(await ctx.post(`/api/stores/transfers/${transfer.id}/receive`, {
+      const partialReceiptPayload = {
         items: [
           { transferItemId: riceLine.id, quantityBaseQty: 3 },
           { transferItemId: oilLine.id, quantityBaseQty: 4 },
         ],
         note: "First van unload",
         ownerPin: tenant.ownerPin,
+      };
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_stock_transfer_receive_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_TRANSFER_PARTIALLY_RECEIVED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced stock transfer receive audit failure');
+        END
+      `);
+      let failedStoreAction;
+      try {
+        failedStoreAction = await ctx.post(`/api/stores/transfers/${transfer.id}/receive`, partialReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_stock_transfer_receive_audit_failure");
+      }
+      assert.equal(assertFailure(failedStoreAction, 503).code, "STORE_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.stockTransfer.findUniqueOrThrow({ where: { id: transfer.id } })).status, "in_transit");
+      assert.equal((await ctx.db.stockTransferItem.findUniqueOrThrow({ where: { id: riceLine.id } })).receivedBaseQty, 0);
+      assert.equal(await ctx.db.locationStock.count({ where: { shopId: tenant.shop.id, locationId: branch.id } }), 0);
+
+      const partial = assertSuccess(await ctx.post(`/api/stores/transfers/${transfer.id}/receive`, {
+        ...partialReceiptPayload,
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       assert.equal(partial.status, "partially_received");
       assert.equal(partial.receiptSummary.openLineCount, 1);
@@ -149,6 +207,27 @@ if (ctx.skip) {
         items: [{ productId: rice.id, quantityBaseQty: 2, declaredTaxableValue: 100 }],
         ownerPin: tenant.ownerPin,
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_stock_transfer_cancel_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_TRANSFER_CANCELLED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced stock transfer cancel audit failure');
+        END
+      `);
+      try {
+        failedStoreAction = await ctx.post(`/api/stores/transfers/${cancellable.id}/cancel`, {
+          reason: "Carrier could not collect the shipment",
+          ownerPin: tenant.ownerPin,
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_stock_transfer_cancel_audit_failure");
+      }
+      assert.equal(assertFailure(failedStoreAction, 503).code, "STORE_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.stockTransfer.findUniqueOrThrow({ where: { id: cancellable.id } })).status, "in_transit");
+      const afterFailedCancel = assertSuccess(await ctx.get(`/api/stores/${primary.id}/inventory`, { token: auth.accessToken }));
+      assert.equal(afterFailedCancel.products.find((row) => row.id === rice.id).stockBaseQty, 11, "failed cancellation audit must leave the reservation in transit");
+
       const cancelled = assertSuccess(await ctx.post(`/api/stores/transfers/${cancellable.id}/cancel`, {
         reason: "Carrier could not collect the shipment",
         ownerPin: tenant.ownerPin,
@@ -286,6 +365,31 @@ if (ctx.skip) {
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 400);
       assert.equal(invalidExternalEvidence.code, "VALIDATION_FAILED");
 
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_transfer_compliance_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_TRANSFER_COMPLIANCE_REVIEWED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced transfer compliance audit failure');
+        END
+      `);
+      let failedStoreAction;
+      try {
+        failedStoreAction = await ctx.post(`/api/stores/transfers/${externalReviewTransfer.id}/compliance-review`, {
+          decision: "external_reference_recorded",
+          reason: "Generated externally by the authorised operator",
+          eWayBillNumber: "181000609270",
+          eWayBillDate: "2026-07-28",
+          ownerPin: tenant.ownerPin,
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_transfer_compliance_audit_failure");
+      }
+      assert.equal(assertFailure(failedStoreAction, 503).code, "STORE_AUDIT_WRITE_FAILED");
+      const reviewAfterAuditFailure = await ctx.db.stockTransfer.findUniqueOrThrow({ where: { id: externalReviewTransfer.id } });
+      assert.equal(reviewAfterAuditFailure.eWayReviewStatus, "pending");
+      assert.equal(reviewAfterAuditFailure.eWayBillNumber, null);
+
       const externalEvidence = assertSuccess(await ctx.post(`/api/stores/transfers/${externalReviewTransfer.id}/compliance-review`, {
         decision: "external_reference_recorded",
         reason: "Generated externally by the authorised operator",
@@ -331,14 +435,34 @@ if (ctx.skip) {
       assert.equal(firstBill.sellerLegalName, "Karnataka Branch Private Limited");
       assert.equal(firstBill.sellerTradeName, "KiranaOS Karnataka");
 
+      const locationUpdateBody = {
+        gstNumber: "07AAPFU0939F1ZX",
+        gstLegalName: "Delhi Branch Private Limited",
+        gstTradeName: "KiranaOS Delhi",
+        city: "New Delhi",
+      };
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_store_location_update_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STORE_LOCATION_UPDATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced store location update audit failure');
+        END
+      `);
+      try {
+        failedStoreAction = await ctx.request("PATCH", `/api/stores/${branch.id}`, {
+          token: auth.accessToken,
+          body: locationUpdateBody,
+        });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_store_location_update_audit_failure");
+      }
+      assert.equal(assertFailure(failedStoreAction, 503).code, "STORE_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.storeLocation.findUniqueOrThrow({ where: { id: branch.id } })).gstNumber, "29AAPFU0939F1ZR");
+
       const movedRegistration = assertSuccess(await ctx.request("PATCH", `/api/stores/${branch.id}`, {
         token: auth.accessToken,
-        body: {
-          gstNumber: "07AAPFU0939F1ZX",
-          gstLegalName: "Delhi Branch Private Limited",
-          gstTradeName: "KiranaOS Delhi",
-          city: "New Delhi",
-        },
+        body: locationUpdateBody,
       }));
       assert.equal(movedRegistration.gstStateCode, "07");
       const storedFirstBill = await ctx.db.bill.findUnique({ where: { id: firstBill.id } });
@@ -531,6 +655,23 @@ if (ctx.skip) {
       const coveredSuggestions = assertSuccess(await ctx.get("/api/purchase-orders/suggestions", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
       assert.equal(coveredSuggestions.some((row) => row.productId === product.id), false, "an open supplier order must suppress duplicate replenishment");
 
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_batch_tracking_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'PRODUCT_BATCH_TRACKING_CHANGED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced batch tracking audit failure');
+        END
+      `);
+      let failedBatchAction;
+      try {
+        failedBatchAction = await ctx.patch(`/api/inventory-lots/products/${product.id}/tracking`, { enabled: true }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_batch_tracking_audit_failure");
+      }
+      assert.equal(assertFailure(failedBatchAction, 503).code, "INVENTORY_LOT_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).batchTrackingEnabled, false);
+
       const tracked = assertSuccess(await ctx.patch(`/api/inventory-lots/products/${product.id}/tracking`, { enabled: true }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       assert.equal(tracked.batchTrackingEnabled, true);
 
@@ -708,6 +849,36 @@ if (ctx.skip) {
 
       const lots = assertSuccess(await ctx.get("/api/inventory-lots?status=all", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
       assert.deepEqual(lots.map((lot) => lot.batchNumber), ["OIL-EARLY", "OIL-LATE"]);
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_inventory_lot_status_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'INVENTORY_LOT_STATUS_CHANGED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced inventory lot status audit failure');
+        END
+      `);
+      try {
+        failedBatchAction = await ctx.post(`/api/inventory-lots/${lots[0].id}/status`, {
+          status: "quarantined",
+          note: "Forced audit rollback proof",
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_inventory_lot_status_audit_failure");
+      }
+      assert.equal(assertFailure(failedBatchAction, 503).code, "INVENTORY_LOT_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.inventoryLot.findUniqueOrThrow({ where: { id: lots[0].id } })).status, "active");
+      assert.equal(await ctx.db.auditLog.count({ where: { entityId: lots[0].id, action: "INVENTORY_LOT_STATUS_CHANGED" } }), 0);
+
+      assert.equal(assertSuccess(await ctx.post(`/api/inventory-lots/${lots[0].id}/status`, {
+        status: "quarantined",
+        note: "Inspect packaging integrity",
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin })).status, "quarantined");
+      assert.equal(assertSuccess(await ctx.post(`/api/inventory-lots/${lots[0].id}/status`, {
+        status: "active",
+        note: "Inspection passed",
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin })).status, "active");
+      assert.equal(await ctx.db.auditLog.count({ where: { entityId: lots[0].id, action: "INVENTORY_LOT_STATUS_CHANGED" } }), 2);
+
       const lotSale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
         quantity: 5, ratePerRateUnit: 30, payments: [{ mode: "cash", amount: 150 }], actualAmount: 150, buyerPaidAmount: 150,
       }), { token: auth.accessToken, headers: { "x-location-id": primary.id } }), 201);
@@ -1071,7 +1242,24 @@ if (ctx.skip) {
       const { tenant, auth } = await ownerContext();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Loyal Buyer" });
       const product = await createProduct(ctx.db, tenant.shop.id, { defaultPricePerRateUnit: 20, stockBaseQty: 20 });
-      assertSuccess(await ctx.request("PUT", "/api/loyalty/program", { token: auth.accessToken, ownerPin: tenant.ownerPin, body: { active: true, pointsPerRupee: 2, redemptionPaisePerPoint: 25, minimumRedeemPoints: 10, ownerPin: tenant.ownerPin } }));
+      const loyaltyProgramPayload = { active: true, pointsPerRupee: 2, redemptionPaisePerPoint: 25, minimumRedeemPoints: 10, ownerPin: tenant.ownerPin };
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_loyalty_program_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'LOYALTY_PROGRAM_UPDATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced loyalty program audit failure');
+        END
+      `);
+      let failedProgramUpdate;
+      try {
+        failedProgramUpdate = await ctx.request("PUT", "/api/loyalty/program", { token: auth.accessToken, ownerPin: tenant.ownerPin, body: loyaltyProgramPayload });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_loyalty_program_audit_failure");
+      }
+      assertFailure(failedProgramUpdate, 503);
+      assert.equal(await ctx.db.loyaltyProgram.findUnique({ where: { shopId: tenant.shop.id } }), null);
+      assertSuccess(await ctx.request("PUT", "/api/loyalty/program", { token: auth.accessToken, ownerPin: tenant.ownerPin, body: loyaltyProgramPayload }));
 
       const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, { customerId: customer.id, customerName: customer.name, quantity: 2 }), { token: auth.accessToken }), 201);
       const account = assertSuccess(await ctx.get(`/api/loyalty/accounts/${customer.id}`, { token: auth.accessToken }));
@@ -1112,6 +1300,32 @@ if (ctx.skip) {
       assert.equal(reversed.account.pointsBalance, 0);
       assert.equal(reversed.account.transactions.some((row) => row.type === "earn_reversal" && row.points === -80), true);
       assert.equal(reversed.account.lifetimeEarned, 0, "cancelled bills must no longer count toward loyalty tier lifetime");
+
+      const manualCustomer = await createCustomer(ctx.db, tenant.shop.id, { name: "Manual Loyalty Redemption" });
+      const manualAccount = await ctx.db.loyaltyAccount.create({
+        data: { shopId: tenant.shop.id, customerId: manualCustomer.id, pointsBalance: 100, lifetimeEarned: 100 },
+      });
+      const manualRedemptionPayload = { points: 10, note: "Manual goodwill redemption", ownerPin: tenant.ownerPin };
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_loyalty_redeem_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'LOYALTY_POINTS_REDEEMED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced loyalty redeem audit failure');
+        END
+      `);
+      let failedRedemption;
+      try {
+        failedRedemption = await ctx.post(`/api/loyalty/accounts/${manualCustomer.id}/redeem`, manualRedemptionPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_loyalty_redeem_audit_failure");
+      }
+      assertFailure(failedRedemption, 503);
+      assert.equal((await ctx.db.loyaltyAccount.findUniqueOrThrow({ where: { id: manualAccount.id } })).pointsBalance, 100);
+      assert.equal(await ctx.db.loyaltyTransaction.count({ where: { accountId: manualAccount.id } }), 0);
+      assertSuccess(await ctx.post(`/api/loyalty/accounts/${manualCustomer.id}/redeem`, manualRedemptionPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal((await ctx.db.loyaltyAccount.findUniqueOrThrow({ where: { id: manualAccount.id } })).pointsBalance, 90);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "LOYALTY_POINTS_REDEEMED", entityId: manualAccount.id } }), 1);
     });
 
     test("reconciles signed reminder receipts in timestamp order without status regression", async () => {
@@ -1337,13 +1551,32 @@ if (ctx.skip) {
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Gift Customer" });
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Gift Purchase", stockBaseQty: 10, defaultPricePerRateUnit: 100 });
 
-      const issued = assertSuccess(await ctx.post("/api/gift-cards", {
+      const issuePayload = {
         amount: 250,
         customerId: customer.id,
         expiresOn: isoDaysFromNow(365),
         note: "Festival store credit",
         ownerPin: tenant.ownerPin,
-      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      };
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_gift_card_issue_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'GIFT_CARD_ISSUED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced gift card issue audit failure');
+        END
+      `);
+      let failedIssue;
+      try {
+        failedIssue = await ctx.post("/api/gift-cards", issuePayload, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_gift_card_issue_audit_failure");
+      }
+      assertFailure(failedIssue, 503);
+      assert.equal(await ctx.db.giftCard.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.giftCardTransaction.count({ where: { shopId: tenant.shop.id } }), 0);
+
+      const issued = assertSuccess(await ctx.post("/api/gift-cards", issuePayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
       assert.match(issued.code, /^KOS-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
       assert.equal(issued.balance, 250);
       assert.equal(issued.transactions[0].type, "issue");
@@ -1451,6 +1684,25 @@ if (ctx.skip) {
       assert.equal((await ctx.db.giftCard.findUnique({ where: { id: issued.id } })).balancePaise, 25000n);
       const ledger = await ctx.db.giftCardTransaction.findMany({ where: { giftCardId: issued.id, billId: bill.id } });
       assert.equal(ledger.reduce((sum, row) => sum + row.amountPaise, 0n), 0n);
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_gift_card_disable_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'GIFT_CARD_DISABLED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced gift card disable audit failure');
+        END
+      `);
+      let failedDisable;
+      try {
+        failedDisable = await ctx.post(`/api/gift-cards/${issued.id}/disable`, { reason: "Audit rollback proof", ownerPin: tenant.ownerPin }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_gift_card_disable_audit_failure");
+      }
+      assertFailure(failedDisable, 503);
+      assert.equal((await ctx.db.giftCard.findUniqueOrThrow({ where: { id: issued.id } })).status, "active");
+      assertSuccess(await ctx.post(`/api/gift-cards/${issued.id}/disable`, { reason: "Card retired after rollback proof", ownerPin: tenant.ownerPin }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal((await ctx.db.giftCard.findUniqueOrThrow({ where: { id: issued.id } })).status, "disabled");
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "GIFT_CARD_DISABLED", entityId: issued.id } }), 1);
     });
   });
 }

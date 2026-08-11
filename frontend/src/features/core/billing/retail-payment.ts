@@ -5,7 +5,27 @@ export interface RetailPaymentReadiness {
   configured: boolean;
   confirmationRequired: boolean;
   serverVerified: boolean;
+  dynamicQrEnabled: boolean;
 }
+
+export interface RetailQrCheckout {
+  intentId: string;
+  provider: "razorpay";
+  mode: "dynamic_qr";
+  status: "creating" | "pending" | "confirmed" | "failed" | "expired" | "cancelled";
+  amountPaise: number;
+  currency: "INR";
+  expiresAt: string;
+  imageUrl: string;
+  location: { id: string; name: string };
+  confirmedAt?: string | null;
+  confirmationSource?: string | null;
+}
+
+export type RetailQrStatus = Omit<RetailQrCheckout, "imageUrl" | "location"> & {
+  imageUrl?: string;
+  location: { id: string; name: string | null };
+};
 
 interface RetailCheckout {
   intentId: string;
@@ -100,6 +120,21 @@ function openCheckout(checkout: RetailCheckout) {
 
 export function getRetailPaymentReadiness() {
   return apiRequest<RetailPaymentReadiness>("/payment-provider/retail/readiness", { method: "GET", background: true });
+}
+
+export function createRetailPaymentQr(amountPaise: number) {
+  return apiRequest<RetailQrCheckout>("/payment-provider/retail/intents", {
+    method: "POST",
+    body: JSON.stringify({ amountPaise, mode: "dynamic_qr" }),
+  });
+}
+
+export function getRetailPaymentQrStatus(intentId: string) {
+  return apiRequest<RetailQrStatus>(`/payment-provider/retail/intents/${encodeURIComponent(intentId)}/status`, { method: "GET", background: true });
+}
+
+export function cancelRetailPaymentQr(intentId: string) {
+  return apiRequest<RetailQrStatus>(`/payment-provider/retail/intents/${encodeURIComponent(intentId)}/cancel`, { method: "POST", body: "{}" });
 }
 
 export async function verifyRetailPayment(amountPaise: number) {

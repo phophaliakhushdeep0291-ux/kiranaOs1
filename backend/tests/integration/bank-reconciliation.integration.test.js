@@ -86,6 +86,27 @@ if (ctx.skip) {
       );
       assert.match(missingPin.error, /PIN/i);
 
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_bank_import_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'BANK_STATEMENT_IMPORTED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced bank import audit failure');
+        END
+      `);
+      let failedAction;
+      try {
+        failedAction = await ctx.post("/api/accounting/bank-statements/import", importBody, {
+          token: auth.accessToken,
+          ownerPin: tenant.ownerPin,
+        });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_bank_import_audit_failure");
+      }
+      assert.equal(assertFailure(failedAction, 503).code, "BANK_RECONCILIATION_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.bankStatementImport.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.bankStatementTransaction.count({ where: { shopId: tenant.shop.id } }), 0);
+
       const imported = assertSuccess(
         await ctx.post("/api/accounting/bank-statements/import", importBody, {
           token: auth.accessToken,
@@ -140,6 +161,31 @@ if (ctx.skip) {
       ), 422);
       assert.equal(noteRequired.code, "BANK_RECONCILIATION_NOTE_REQUIRED");
 
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_bank_match_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'BANK_RECONCILIATION_MATCHED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced bank match audit failure');
+        END
+      `);
+      try {
+        failedAction = await ctx.post(
+          `/api/accounting/bank-transactions/${settlement.id}/match`,
+          {
+            ledgerRowIds: [rows.incoming60.id, rows.incoming40.id],
+            note: "Forced audit rollback proof",
+          },
+          { token: auth.accessToken, ownerPin: tenant.ownerPin },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_bank_match_audit_failure");
+      }
+      assert.equal(assertFailure(failedAction, 503).code, "BANK_RECONCILIATION_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.bankReconciliationAllocation.count({ where: { bankStatementTransactionId: settlement.id } }), 0);
+      assert.equal((await ctx.db.bankStatementTransaction.findUniqueOrThrow({ where: { id: settlement.id } })).matchStatus, "unmatched");
+      assert.equal(await ctx.db.bankReconciliationEvent.count({ where: { bankStatementTransactionId: settlement.id } }), 0);
+
       const matched = assertSuccess(await ctx.post(
         `/api/accounting/bank-transactions/${settlement.id}/match`,
         {
@@ -178,6 +224,27 @@ if (ctx.skip) {
       ), 409);
       assert.equal(reused.code, "BANK_LEDGER_ALREADY_MATCHED");
 
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_bank_ignore_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'BANK_RECONCILIATION_IGNORED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced bank ignore audit failure');
+        END
+      `);
+      try {
+        failedAction = await ctx.post(
+          `/api/accounting/bank-transactions/${fee.id}/ignore`,
+          { reason: "Forced audit rollback proof" },
+          { token: auth.accessToken, ownerPin: tenant.ownerPin },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_bank_ignore_audit_failure");
+      }
+      assert.equal(assertFailure(failedAction, 503).code, "BANK_RECONCILIATION_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.bankStatementTransaction.findUniqueOrThrow({ where: { id: fee.id } })).matchStatus, "unmatched");
+      assert.equal(await ctx.db.bankReconciliationEvent.count({ where: { bankStatementTransactionId: fee.id } }), 0);
+
       const ignored = assertSuccess(await ctx.post(
         `/api/accounting/bank-transactions/${fee.id}/ignore`,
         { reason: "Bank charge is not yet recorded as an operating expense" },
@@ -186,6 +253,27 @@ if (ctx.skip) {
       assert.equal(ignored.matchStatus, "ignored");      view = assertSuccess(await ctx.get("/api/accounting/bank-reconciliation", { token: auth.accessToken }));
       assert.equal(view.summary.ignored.paise, 1_000, "ignored value must remain explicit");
       assert.equal(view.summary.open.paise, 6_000, "ignored rows must not inflate the actionable open total");
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_bank_restore_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'BANK_RECONCILIATION_RESTORED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced bank restore audit failure');
+        END
+      `);
+      try {
+        failedAction = await ctx.post(
+          `/api/accounting/bank-transactions/${fee.id}/restore`,
+          { reason: "Forced audit rollback proof" },
+          { token: auth.accessToken, ownerPin: tenant.ownerPin },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_bank_restore_audit_failure");
+      }
+      assert.equal(assertFailure(failedAction, 503).code, "BANK_RECONCILIATION_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.bankStatementTransaction.findUniqueOrThrow({ where: { id: fee.id } })).matchStatus, "ignored");
+      assert.equal(await ctx.db.bankReconciliationEvent.count({ where: { bankStatementTransactionId: fee.id } }), 1);
+
       const restored = assertSuccess(await ctx.post(
         `/api/accounting/bank-transactions/${fee.id}/restore`,
         { reason: "Expense will now be recorded before matching" },
@@ -197,6 +285,28 @@ if (ctx.skip) {
         where: { bankStatementTransactionId: settlement.id, status: "active" },
         select: { id: true },
       })).map((row) => row.id);
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_bank_unmatch_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'BANK_RECONCILIATION_UNMATCHED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced bank unmatch audit failure');
+        END
+      `);
+      try {
+        failedAction = await ctx.post(
+          `/api/accounting/bank-transactions/${settlement.id}/unmatch`,
+          { allocationIds, reason: "Forced audit rollback proof" },
+          { token: auth.accessToken, ownerPin: tenant.ownerPin },
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_bank_unmatch_audit_failure");
+      }
+      assert.equal(assertFailure(failedAction, 503).code, "BANK_RECONCILIATION_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.bankStatementTransaction.findUniqueOrThrow({ where: { id: settlement.id } })).matchStatus, "matched");
+      assert.equal(await ctx.db.bankReconciliationAllocation.count({ where: { bankStatementTransactionId: settlement.id, status: "active" } }), 2);
+      assert.equal(await ctx.db.bankReconciliationEvent.count({ where: { bankStatementTransactionId: settlement.id } }), 1);
+
       const reversed = assertSuccess(await ctx.post(
         `/api/accounting/bank-transactions/${settlement.id}/unmatch`,
         { allocationIds, reason: "Owner reviewed the settlement evidence and is correcting the allocation" },

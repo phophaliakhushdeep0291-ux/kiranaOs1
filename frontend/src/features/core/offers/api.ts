@@ -19,16 +19,41 @@ export async function listOffers() {
   }
 }
 
-export function createOffer(data: OfferInput) {
-  return apiRequest<Offer>("/offers", { method: "POST", body: JSON.stringify(data) });
+export interface OfferApprovalInput {
+  ownerPin: string;
+  auditReason?: string;
 }
 
-export function updateOffer(id: string, data: Partial<OfferInput>) {
-  return apiRequest<Offer>(`/offers/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export function createOffer(data: OfferInput, approval: OfferApprovalInput) {
+  return apiRequest<Offer>("/offers", {
+    method: "POST",
+    ownerPin: approval.ownerPin,
+    body: JSON.stringify({ ...data, auditReason: approval.auditReason || undefined }),
+  });
 }
 
-export function deleteOffer(id: string) {
-  return apiRequest<Offer>(`/offers/${id}`, { method: "DELETE" });
+export function updateOffer(id: string, data: Partial<OfferInput>, approval: OfferApprovalInput) {
+  return apiRequest<Offer>(`/offers/${id}`, {
+    method: "PATCH",
+    ownerPin: approval.ownerPin,
+    body: JSON.stringify({ ...data, auditReason: approval.auditReason || undefined }),
+  });
+}
+
+export function deleteOffer(id: string, approval: OfferApprovalInput) {
+  return apiRequest<Offer>(`/offers/${id}`, {
+    method: "DELETE",
+    ownerPin: approval.ownerPin,
+    body: JSON.stringify({ auditReason: approval.auditReason || undefined }),
+  });
+}
+
+export function restoreOffer(id: string, approval: OfferApprovalInput) {
+  return apiRequest<Offer>(`/offers/${id}/restore`, {
+    method: "POST",
+    ownerPin: approval.ownerPin,
+    body: JSON.stringify({ auditReason: approval.auditReason || undefined }),
+  });
 }
 
 export function applyOffer(subtotal: number, code?: string) {

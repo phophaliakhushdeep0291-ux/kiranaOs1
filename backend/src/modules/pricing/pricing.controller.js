@@ -2,7 +2,12 @@ import * as svc from "./pricing.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 
 function actor(req) {
-  return { userId: req.user?.userId ?? req.user?.id ?? null, role: req.user?.role, deviceId: req.get("x-device-id") || null };
+  return {
+    userId: req.user?.userId ?? req.user?.id ?? null,
+    role: req.user?.role,
+    deviceId: req.user?.deviceId ?? undefined,
+    req,
+  };
 }
 
 export async function evaluate(req, res, next) {
