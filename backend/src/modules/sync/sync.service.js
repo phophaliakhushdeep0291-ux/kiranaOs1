@@ -1504,15 +1504,15 @@ async function applySyncEvent(shopId, event, user, context) {
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyReverseSupplierPayment(shopId, event, user);
     case SYNC_EVENT_TYPES.CREATE_SUPPLIER:
-      return applyCreateSupplier(shopId, event);
+      return applyCreateSupplier(shopId, event, user);
     case SYNC_EVENT_TYPES.UPDATE_SUPPLIER:
-      return applyUpdateSupplier(shopId, event, context);
+      return applyUpdateSupplier(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_SUPPLIER:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyDeleteSupplier(shopId, event, context);
+      return applyDeleteSupplier(shopId, event, user, context);
     case SYNC_EVENT_TYPES.RESTORE_SUPPLIER:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-      return applyRestoreSupplier(shopId, event, context);
+      return applyRestoreSupplier(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_EXPENSE:
       return applyCreateExpense(shopId, event, user, context);
     case SYNC_EVENT_TYPES.UPDATE_EXPENSE:
@@ -3176,11 +3176,15 @@ async function applyStockSale(shopId, event, context) {
   }
 }
 
-async function applyCreateSupplier(shopId, event) {
+async function applyCreateSupplier(shopId, event, user) {
   const payload = createSupplierPayloadSchema.parse(getEventPayload(event));
   const supplierBody = payload.supplier ?? stripKnownSyncPayloadKeys(payload);
   const parsed = createSupplierSchema.parse(supplierBody);
-  const supplier = await createSupplier(shopId, parsed);
+  const supplier = await createSupplier(shopId, parsed, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     supplierId: supplier.id,
@@ -3189,14 +3193,18 @@ async function applyCreateSupplier(shopId, event) {
   };
 }
 
-async function applyUpdateSupplier(shopId, event, context) {
+async function applyUpdateSupplier(shopId, event, user, context) {
   const payload = updateSupplierPayloadSchema.parse(getEventPayload(event));
   const supplierId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.SUPPLIER, payload.serverSupplierId ?? payload.supplierId ?? payload.localSupplierId ?? payload.id, context);
   if (!supplierId) throw new AppError("supplierId required for UPDATE_SUPPLIER sync event", 400);
   // Client nests edited fields under `payload.supplier` (see CREATE_SUPPLIER). Reading only
   // `payload.changes`/stripped top-level meant edits parsed to {} and never persisted.
   const changes = updateSupplierSchema.parse(payload.changes ?? payload.supplier ?? stripKnownSyncPayloadKeys(payload));
-  const supplier = await updateSupplier(shopId, supplierId, changes);
+  const supplier = await updateSupplier(shopId, supplierId, changes, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     supplierId: supplier.id,
@@ -3204,11 +3212,15 @@ async function applyUpdateSupplier(shopId, event, context) {
   };
 }
 
-async function applyDeleteSupplier(shopId, event, context) {
+async function applyDeleteSupplier(shopId, event, user, context) {
   const payload = supplierLifecyclePayloadSchema.parse(getEventPayload(event));
   const supplierId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.SUPPLIER, payload.serverSupplierId ?? payload.supplierId ?? payload.localSupplierId ?? payload.id, context);
   if (!supplierId) throw new AppError("supplierId required for DELETE_SUPPLIER sync event", 400);
-  const supplier = await softDeleteSupplier(shopId, supplierId);
+  const supplier = await softDeleteSupplier(shopId, supplierId, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     supplierId: supplier.id,
@@ -3216,11 +3228,15 @@ async function applyDeleteSupplier(shopId, event, context) {
   };
 }
 
-async function applyRestoreSupplier(shopId, event, context) {
+async function applyRestoreSupplier(shopId, event, user, context) {
   const payload = supplierLifecyclePayloadSchema.parse(getEventPayload(event));
   const supplierId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.SUPPLIER, payload.serverSupplierId ?? payload.supplierId ?? payload.localSupplierId ?? payload.id, context);
   if (!supplierId) throw new AppError("supplierId required for RESTORE_SUPPLIER sync event", 400);
-  const supplier = await restoreSupplier(shopId, supplierId);
+  const supplier = await restoreSupplier(shopId, supplierId, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    syncEventId: getClientEventId(event),
+  });
   return {
     type: event.type,
     supplierId: supplier.id,
