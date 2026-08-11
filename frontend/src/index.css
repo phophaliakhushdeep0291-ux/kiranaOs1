@@ -4,6 +4,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* A wide screen is not the same thing as a mouse. Counter POS terminals are
+   1024x768 or 1366x768 touchscreens, so every `lg:` size reduction reaches them
+   and shrinks controls a cashier taps with a finger. Pair `lg:` with `mouse:`
+   wherever a control gets smaller on desktop: the mouse keeps the dense layout,
+   the touchscreen keeps the 44px target. */
+@custom-variant mouse (@media (pointer: fine));
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -2276,6 +2283,27 @@ html[data-density="compact"] {
     width: max(100%, 44px);
     height: max(100%, 44px);
     transform: translate(-50%, -50%);
+  }
+
+  /* Grid children must be allowed to shrink --------------------------------
+     A grid item defaults to `min-width: auto`, so it refuses to go narrower
+     than its own content — one 240px search box or one long unbreakable label
+     then widens the whole track past the screen. The shell clips at
+     `.app-page-shell { overflow-x: clip }`, so the page never scrolls sideways
+     and the overflow is silent: it simply slices content off the right edge.
+     That is how the stock list lost the "Reorder" button on every row and how
+     the backup screen lost the right side of four cards.
+
+     Phone layouts stack to a single column, where nothing wants min-content
+     sizing, so the floor is dropped here for grid children generally. Anything
+     that genuinely needs to hold its width — a horizontal rail's chips, a
+     table that is meant to scroll — is opted back out below. */
+  :where(.app-page-shell, .kirana-mobile-page) :where([class*="grid-cols"], .grid) > * {
+    min-width: 0;
+  }
+
+  :where(.scroll-rail, .app-scrollbar, [data-keep-intrinsic-width]) > * {
+    min-width: auto;
   }
 
   /* Horizontal rails ------------------------------------------------------

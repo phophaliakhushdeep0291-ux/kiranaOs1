@@ -311,7 +311,7 @@ export default function AdvancedSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Data Management */}
         <Card>
-          <CardHead icon={<Database size={15} />} title="Data Management" sub="Retention & storage" action={<button onClick={() => void optimizeDatabase()} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Optimize</button>} />
+          <CardHead icon={<Database size={15} />} title="Data Management" sub="Retention & storage" action={<button type="button" onClick={() => void optimizeDatabase()} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">Optimize</button>} />
           <div className="px-5 pb-5">
             <RowToggle
               label="Auto cleanup temp files"
@@ -380,7 +380,7 @@ export default function AdvancedSettingsPage() {
               <div className="flex flex-wrap gap-2">
                 {(Object.entries(ACCENT_COLORS) as [AccentColor, { label: string; swatch: string }][]).map(([key, def]) => (
                   <button key={key} type="button" onClick={() => setAccent(key)} title={def.label}
-                    className={`h-8 w-8 rounded-full border-2 transition-transform ${accent === key ? "scale-110 border-[var(--brand-ink)]" : "border-transparent hover:scale-105"}`}
+                    className={`tap-target h-8 w-8 rounded-full border-2 transition-transform ${accent === key ? "scale-110 border-[var(--brand-ink)]" : "border-transparent hover:scale-105"}`}
                     style={{ background: def.swatch }} aria-label={def.label} />
                 ))}
               </div>
@@ -431,7 +431,7 @@ export default function AdvancedSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Diagnostics */}
         <Card>
-          <CardHead icon={<FlaskConical size={15} />} title="Developer / Diagnostics" sub="For support" action={<button onClick={copyDiagnostics} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Copy</button>} />
+          <CardHead icon={<FlaskConical size={15} />} title="Developer / Diagnostics" sub="For support" action={<button type="button" onClick={copyDiagnostics} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">Copy</button>} />
           <div className="grid grid-cols-1 gap-y-3 px-5 pb-5 sm:grid-cols-2">
             {[
               ["App version", appVersion()],

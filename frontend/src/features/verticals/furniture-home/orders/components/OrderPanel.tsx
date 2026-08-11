@@ -183,7 +183,7 @@ export function OrderPanel({ open, editing, saving, width, onResizeStart, onClos
           </h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">What was agreed, and when it was promised</p>
         </div>
-        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+        <button onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
       </div>
 
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
@@ -211,7 +211,7 @@ export function OrderPanel({ open, editing, saving, width, onResizeStart, onClos
 
             <div className="relative">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-              <Input className="h-10 pl-8" placeholder="Search the showroom floor…" value={pick} onChange={(e) => setPick(e.target.value)} />
+              <Input className="h-11 pl-8 lg:mouse:h-10" placeholder="Search the showroom floor…" value={pick} onChange={(e) => setPick(e.target.value)} />
               {pick.trim() && (
                 <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 max-h-[220px] overflow-y-auto rounded-[10px] border border-[#e2e8f0] bg-white shadow-[0_12px_30px_rgba(15,35,80,0.10)]">
                   {matches.length === 0 ? (
@@ -252,7 +252,7 @@ export function OrderPanel({ open, editing, saving, width, onResizeStart, onClos
                       onChange={(e) => patchLine(index, { name: e.target.value, productId: null, reserveStock: false })}
                       aria-label={`Item ${index + 1}`}
                     />
-                    <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" onClick={() => removeLine(index)} aria-label={`Remove item ${index + 1}`}><X size={14} /></button>
+                    <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50 lg:mouse:h-9 lg:mouse:w-9" onClick={() => removeLine(index)} aria-label={`Remove item ${index + 1}`}><X size={14} /></button>
                   </div>
                   <Input
                     className="h-9"
@@ -376,7 +376,7 @@ function Fld({ label, hint, children }: { label: string; hint?: string; children
 // quantity above zero, so a committed 0 could only ever block the save.
 function LineQuantity({ qty, onChange, label }: { qty: number; onChange: (next: number) => void; label: string }) {
   const props = useQuantityDraft(qty, onChange);
-  return <Input className="h-9 w-[70px]" type="number" inputMode="decimal" step="0.5" aria-label={label} {...props} />;
+  return <Input className="h-11 w-[70px] lg:mouse:h-9" type="number" inputMode="decimal" step="0.5" aria-label={label} {...props} />;
 }
 
 function LineRate({ rate, onChange, label }: { rate: number; onChange: (next: number) => void; label: string }) {

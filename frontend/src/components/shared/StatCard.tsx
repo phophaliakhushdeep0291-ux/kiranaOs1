@@ -47,7 +47,7 @@ export function StatCard({ label, value, description, icon, loading = false, ton
           {label}
         </span>
         {icon ? (
-          <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-[14px] ring-1 shadow-[0_8px_18px_rgba(37,99,235,0.08)] sm:h-10 sm:w-10 sm:rounded-xl sm:shadow-none", toneIconClasses[tone])}>
+          <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-[14px] ring-1 shadow-[0_8px_18px_rgba(37,99,235,0.08)] sm:mouse:h-10 sm:mouse:w-10 sm:rounded-xl sm:shadow-none", toneIconClasses[tone])}>
             {icon}
           </span>
         ) : null}

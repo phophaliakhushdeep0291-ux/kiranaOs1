@@ -352,7 +352,7 @@ export default function StoreProfilePage() {
 
         {/* Address & Location */}
         <Card>
-          <CardHead icon={<MapPin size={15} />} title="Address & Location" sub="Shop address & delivery area" action={<button onClick={openInMaps} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Open in Maps</button>} />
+          <CardHead icon={<MapPin size={15} />} title="Address & Location" sub="Shop address & delivery area" action={<button type="button" onClick={openInMaps} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">Open in Maps</button>} />
           <div className="space-y-3 px-5 pb-5">
             <Fld label="Shop Address"><Input className="h-10" value={addr.address} onChange={(e) => setAddr({ ...addr, address: e.target.value })} /></Fld>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -379,8 +379,8 @@ export default function StoreProfilePage() {
             <p className="text-[12.5px] leading-relaxed text-[#52627e]">
               Receipt branding — footer message, GSTIN/HSN visibility, GST breakup, paper size and number of copies — lives on the <strong>Printer &amp; Receipt</strong> tab, so there's one place that controls how every bill prints and is shared.
             </p>
-            <Link href="/settings/printer">
-              <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold"><Receipt size={15} /> Open Printer &amp; Receipt settings</Button>
+            <Link href="/settings/printer" className="inline-flex">
+              <Button variant="outline" className="h-11 gap-2 rounded-[10px] font-bold lg:mouse:h-10"><Receipt size={15} /> Open Printer &amp; Receipt settings</Button>
             </Link>
           </div>
         </Card>
@@ -393,13 +393,17 @@ export default function StoreProfilePage() {
               const h = hours[day] ?? DEFAULT_DAY;
               return (
                 <div key={day} className="flex flex-col gap-2 border-b border-[#eef2f8] py-2 last:border-0 sm:flex-row sm:items-center sm:gap-3">
+                  {/* Seven identical rows of a switch and two clocks. Without the
+                      day in each control's name they reach a screen reader as
+                      "switch, time, time" seven times over, with nothing to say
+                      which day is being closed. */}
                   <span className="w-[84px] shrink-0 text-[12px] font-bold text-[var(--brand-ink)]">{day}</span>
-                  <Switch checked={h.open} onCheckedChange={(v) => setDay(day, { ...h, open: v })} />
+                  <Switch aria-label={`${day} — open for business`} checked={h.open} onCheckedChange={(v) => setDay(day, { ...h, open: v })} />
                   {h.open ? (
                     <div className="flex flex-1 items-center gap-1.5 sm:justify-end">
-                      <Input className="h-8 w-[88px] text-[12px]" type="time" value={h.from} onChange={(e) => setDay(day, { ...h, from: e.target.value })} />
+                      <Input aria-label={`${day} opening time`} className="h-8 w-[88px] text-[12px]" type="time" value={h.from} onChange={(e) => setDay(day, { ...h, from: e.target.value })} />
                       <span className="text-[11px] text-[#94a3b8]">to</span>
-                      <Input className="h-8 w-[88px] text-[12px]" type="time" value={h.to} onChange={(e) => setDay(day, { ...h, to: e.target.value })} />
+                      <Input aria-label={`${day} closing time`} className="h-8 w-[88px] text-[12px]" type="time" value={h.to} onChange={(e) => setDay(day, { ...h, to: e.target.value })} />
                     </div>
                   ) : <span className="flex-1 text-[12px] font-semibold text-[#94a3b8] sm:text-right">Closed</span>}
                 </div>

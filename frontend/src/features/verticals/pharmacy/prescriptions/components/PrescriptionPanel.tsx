@@ -226,7 +226,7 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
               : "Who prescribed it, for whom, and what is being handed over"}
           </p>
         </div>
-        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+        <button onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
       </div>
 
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
@@ -262,7 +262,7 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
               </Fld>
               <Fld label="Gender">
                 <select
-                  className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                  className="h-11 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)] lg:mouse:h-10"
                   value={patientGender}
                   onChange={(e) => setPatientGender(e.target.value as PrescriptionGender | "")}
                 >
@@ -289,7 +289,7 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
             </div>
             <Fld label="Schedule">
               <select
-                className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                className="h-11 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)] lg:mouse:h-10"
                 value={scheduleType}
                 onChange={(e) => setScheduleType(e.target.value as PrescriptionScheduleType)}
               >
@@ -308,7 +308,7 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
             <div className="relative">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
               <Input
-                className="h-10 pl-8"
+                className="h-11 pl-8 lg:mouse:h-10"
                 placeholder="Search your medicines…"
                 value={medicineSearch}
                 onChange={(e) => setMedicineSearch(e.target.value)}
@@ -358,7 +358,7 @@ export function PrescriptionPanel({ open, editing, saving, width, onResizeStart,
                     />
                     <button
                       type="button"
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50"
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50 lg:mouse:h-9 lg:mouse:w-9"
                       onClick={() => removeItem(index)}
                       aria-label={`Remove medicine ${index + 1}`}
                     >

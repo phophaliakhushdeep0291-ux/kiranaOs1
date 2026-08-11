@@ -151,7 +151,7 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
           <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">Add units to stock</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">Scan each IMEI or serial as you open the box</p>
         </div>
-        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+        <button onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
       </div>
 
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
@@ -173,7 +173,7 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
             ) : (
               <div className="relative">
                 <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-                <Input className="h-10 pl-8" placeholder="Search your catalogue…" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
+                <Input className="h-11 pl-8 lg:mouse:h-10" placeholder="Search your catalogue…" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
                 {productSearch.trim() && (
                   <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 max-h-[220px] overflow-y-auto rounded-[10px] border border-[#e2e8f0] bg-white shadow-[0_12px_30px_rgba(15,35,80,0.10)]">
                     {productsQ.isLoading ? (
@@ -250,7 +250,7 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
                     />
                     <button
                       type="button"
-                      className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50"
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50 lg:mouse:h-9 lg:mouse:w-9"
                       onClick={() => removeUnit(index)}
                       aria-label={`Remove unit ${index + 1}`}
                     >
@@ -258,10 +258,10 @@ export function ReceiveUnitsPanel({ open, saving, width, onResizeStart, onClose,
                     </button>
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <Input className="h-9 font-mono text-[12px]" placeholder="IMEI 2 (dual SIM)" inputMode="numeric" value={unit.imei2} onChange={(e) => patchUnit(index, { imei2: e.target.value })} aria-label={`Second IMEI for unit ${index + 1}`} />
-                    <Input className="h-9 font-mono text-[12px]" placeholder="Serial number" value={unit.serialNumber} onChange={(e) => patchUnit(index, { serialNumber: e.target.value })} aria-label={`Serial number for unit ${index + 1}`} />
+                    <Input className="h-11 font-mono text-[12px] lg:mouse:h-9" placeholder="IMEI 2 (dual SIM)" inputMode="numeric" value={unit.imei2} onChange={(e) => patchUnit(index, { imei2: e.target.value })} aria-label={`Second IMEI for unit ${index + 1}`} />
+                    <Input className="h-11 font-mono text-[12px] lg:mouse:h-9" placeholder="Serial number" value={unit.serialNumber} onChange={(e) => patchUnit(index, { serialNumber: e.target.value })} aria-label={`Serial number for unit ${index + 1}`} />
                     <select
-                      className="h-9 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                      className="h-11 lg:mouse:h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
                       value={unit.condition}
                       onChange={(e) => patchUnit(index, { condition: e.target.value as ProductUnitCondition })}
                       aria-label={`Condition for unit ${index + 1}`}

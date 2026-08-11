@@ -209,17 +209,17 @@ export default function MenuPage() {
         description="How your dishes read to a guest: the course they sit in, the veg mark, how long the kitchen needs — and what you've run out of tonight."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => setBrandOpen(true)}>
+            <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => setBrandOpen(true)}>
               <Palette size={15} /> Menu look
             </Button>
-            <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => setAddonsOpen(true)}>
+            <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => setAddonsOpen(true)}>
               <Settings2 size={15} /> Add-ons
             </Button>
-            <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/kitchen-stock")}>
+            <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/kitchen-stock")}>
               <ChefHat size={15} /> Kitchen stock
             </Button>
             {menuUrl ? (
-              <Button asChild className="h-10 gap-2 rounded-[10px] font-black">
+              <Button asChild className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-black">
                 <a href={menuUrl} target="_blank" rel="noreferrer">
                   <ExternalLink size={15} /> Preview guest menu
                 </a>
@@ -240,13 +240,16 @@ export default function MenuPage() {
         <Stat icon={<ChefHat size={15} />} label="With recipes" value={String(stats.withRecipes)} />
       </div>
 
-      <div className="flex items-center gap-2 rounded-xl border bg-white px-3 py-2">
-        <Search size={15} className="text-[#94a3b8]" />
+      {/* The bare input was 20px tall — the border box around it is what looked
+          tappable, so the field itself carries the height rather than the wrapper. */}
+      <div className="flex items-center gap-2 rounded-xl border bg-white px-3">
+        <Search size={15} className="shrink-0 text-[#94a3b8]" />
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Find a dish"
-          className="w-full bg-transparent text-[13px] outline-none"
+          aria-label="Find a dish"
+          className="h-11 w-full bg-transparent text-[13px] outline-none lg:mouse:h-10"
           data-testid="menu-search"
         />
       </div>
@@ -364,7 +367,7 @@ function DishCard({
       className={cn("flex flex-col gap-2 rounded-2xl border bg-white p-3.5", !dish.menuAvailable && "bg-[#fafafa]")}
     >
       <div className="flex items-start justify-between gap-2">
-        <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left">
+        <button type="button" onClick={onEdit} aria-label={`Edit ${dish.name}`} className="min-h-11 min-w-0 flex-1 text-left">
           <div className="flex items-center gap-1.5">
             <FoodMark foodType={dish.foodType} />
             <span className={cn("truncate font-display text-[15px] font-black text-[var(--brand-ink)]", !dish.menuAvailable && "text-[#94a3b8] line-through")}>
@@ -813,7 +816,7 @@ function ComboEditor({
           value={picking}
           aria-label="Add a dish to this combo"
           onChange={(event) => add(event.target.value)}
-          className="h-9 w-full rounded-[8px] border border-[#dbe4f0] bg-white px-2 text-[12px] font-semibold text-[#31527e]"
+          className="h-11 lg:mouse:h-9 w-full rounded-[8px] border border-[#dbe4f0] bg-white px-2 text-[12px] font-semibold text-[#31527e]"
         >
           <option value="">+ Add a dish…</option>
           {choosable.map((row) => (
@@ -829,7 +832,7 @@ function ComboQuantity({ quantity, onChange }: { quantity: number; onChange: (ne
   // A draft, not raw onChange: committing Number("") as 0 on the keystroke that
   // clears the box would drop the dish out of the combo as the shopkeeper typed.
   const props = useQuantityDraft(quantity, onChange);
-  return <Input {...props} inputMode="decimal" className="h-8 w-16" aria-label="How many of this dish" />;
+  return <Input {...props} inputMode="decimal" className="h-11 lg:mouse:h-8 w-16" aria-label="How many of this dish" />;
 }
 
 function PortionRow({
@@ -863,13 +866,13 @@ function PortionRow({
       <Input
         value={row.name}
         placeholder="Half"
-        className="h-9 flex-1"
+        className="h-11 lg:mouse:h-9 flex-1"
         aria-label="Portion name"
         onChange={(event) => onChange({ name: event.target.value })}
       />
-      <Input {...priceProps} inputMode="decimal" className="h-9 w-20" aria-label="Portion price" />
+      <Input {...priceProps} inputMode="decimal" className="h-11 lg:mouse:h-9 w-20" aria-label="Portion price" />
       {showFactor ? (
-        <Input {...factorProps} inputMode="decimal" className="h-9 w-16" aria-label="Portion of one full recipe" />
+        <Input {...factorProps} inputMode="decimal" className="h-11 lg:mouse:h-9 w-16" aria-label="Portion of one full recipe" />
       ) : null}
       <button
         type="button"

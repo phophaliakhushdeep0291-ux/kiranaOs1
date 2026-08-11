@@ -41,7 +41,10 @@ export function OpenBillsBar({ bills, onSwitch, onNew }: {
               ? t("billing.openBills.switchToParked", { name: bill.name, age: bill.ageLabel })
               : t("billing.openBills.switchTo", { name: bill.name })}
           className={cn(
-            "flex shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 py-1 text-[12px] font-bold transition-colors",
+            // Switching between the customers standing at the counter is a
+            // thumb action, so the chip carries a phone-sized target and drops
+            // back to the compact desktop height where a mouse takes over.
+            "flex h-11 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[12px] font-bold transition-colors lg:mouse:h-auto lg:mouse:py-1",
             bill.active
               ? "border-[var(--brand)] bg-white text-[var(--brand)] shadow-[0_2px_8px_rgba(0,87,255,0.15)]"
               : bill.stale
@@ -58,7 +61,7 @@ export function OpenBillsBar({ bills, onSwitch, onNew }: {
         type="button"
         onClick={onNew}
         title={t("billing.openBills.startNew")}
-        className="ml-auto flex shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[var(--brand)] px-2.5 py-1 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)]"
+        className="ml-auto flex h-11 shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[var(--brand)] px-2.5 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] lg:mouse:h-auto lg:mouse:py-1"
       >
         <Plus size={14} /> {t("billing.openBills.new")}
       </button>

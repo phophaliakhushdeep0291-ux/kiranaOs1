@@ -216,7 +216,7 @@ export function RentalBookingPanel({ open, editing, saving, width, onResizeStart
           </h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">Who is taking it, where they live, and for which days</p>
         </div>
-        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+        <button onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8] lg:mouse:h-8 lg:mouse:w-8" aria-label="Close"><X size={18} /></button>
       </div>
 
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
@@ -236,7 +236,7 @@ export function RentalBookingPanel({ open, editing, saving, width, onResizeStart
             <div className="grid grid-cols-2 gap-3">
               <Fld label="ID proof (optional)">
                 <select
-                  className="h-10 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)]"
+                  className="h-11 w-full rounded-[8px] border border-[#e2e8f0] bg-white px-2.5 text-[13px] text-[#344668] outline-none focus:border-[var(--brand)] lg:mouse:h-10"
                   value={idProofType}
                   onChange={(e) => setIdProofType(e.target.value as RentalIdProofType | "")}
                 >
@@ -317,7 +317,7 @@ export function RentalBookingPanel({ open, editing, saving, width, onResizeStart
 
             <div className="relative">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-              <Input className="h-10 pl-8" placeholder="Search your catalogue…" value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} />
+              <Input className="h-11 pl-8 lg:mouse:h-10" placeholder="Search your catalogue…" value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} />
             </div>
 
             <div className="max-h-[290px] overflow-y-auto rounded-[12px] border border-[#e7edf7]">

@@ -1141,7 +1141,7 @@ function MobileGeneralDashboard({
               <span>{dashboard.billCount.toLocaleString("en-IN")} bills</span>
             </div>
           </div>
-          <Link href="/sync-status" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur">
+          <Link href="/sync-status" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur">
             <span className={cn("h-2 w-2 rounded-full", syncHealthy && isOnline ? "bg-emerald-400" : failedCount > 0 ? "bg-rose-400" : "bg-amber-400")} />
             {isSyncing ? "Syncing" : !isOnline ? "Offline safe" : syncHealthy ? "Synced" : failedCount > 0 ? "Review" : `${pendingCount} pending`}
           </Link>

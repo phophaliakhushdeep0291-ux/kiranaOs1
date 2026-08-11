@@ -241,8 +241,8 @@ export default function MoneyStatementPage() {
               ))}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
-              <input type="date" value={range.from} onChange={(event) => { setPreset("week"); setRange((old) => ({ ...old, from: event.target.value })); }} className="h-11 rounded-[12px] border border-[#dbe4f0] bg-white px-3 text-[12px] font-bold text-[var(--brand-ink)]" />
-              <input type="date" value={range.to} onChange={(event) => { setPreset("week"); setRange((old) => ({ ...old, to: event.target.value })); }} className="h-11 rounded-[12px] border border-[#dbe4f0] bg-white px-3 text-[12px] font-bold text-[var(--brand-ink)]" />
+              <input type="date" aria-label="From date" value={range.from} onChange={(event) => { setPreset("week"); setRange((old) => ({ ...old, from: event.target.value })); }} className="h-11 rounded-[12px] border border-[#dbe4f0] bg-white px-3 text-[12px] font-bold text-[var(--brand-ink)]" />
+              <input type="date" aria-label="To date" value={range.to} onChange={(event) => { setPreset("week"); setRange((old) => ({ ...old, to: event.target.value })); }} className="h-11 rounded-[12px] border border-[#dbe4f0] bg-white px-3 text-[12px] font-bold text-[var(--brand-ink)]" />
             </div>
             <button
               type="button"
@@ -256,13 +256,13 @@ export default function MoneyStatementPage() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex flex-wrap gap-2">
                 {(["all", "cash", "upi", "bank"] as Array<MoneyStatementMode | "all">).map((item) => (
-                  <button key={item} type="button" onClick={() => setMode(item)} className={cn("rounded-[10px] border px-3 py-2 text-[11px] font-black uppercase", mode === item ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item}</button>
+                  <button key={item} type="button" onClick={() => setMode(item)} className={cn("h-11 rounded-[10px] border px-3 text-[11px] font-black uppercase lg:mouse:h-auto lg:mouse:py-2", mode === item ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item}</button>
                 ))}
               </div>
               <span className="mx-1 hidden h-8 w-px rounded-full bg-[#d6e0ee] sm:block" aria-hidden="true" />
               <div className="flex flex-wrap gap-2 border-l border-[#d6e0ee] pl-3 sm:border-l-0 sm:pl-0">
                 {(["all", "in", "out"] as Array<MoneyStatementDirection | "all">).map((item) => (
-                  <button key={item} type="button" onClick={() => setDirection(item)} className={cn("rounded-[10px] border px-3 py-2 text-[11px] font-black uppercase", direction === item ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item === "in" ? "Received" : item === "out" ? "Paid" : "All flow"}</button>
+                  <button key={item} type="button" onClick={() => setDirection(item)} className={cn("h-11 rounded-[10px] border px-3 text-[11px] font-black uppercase lg:mouse:h-auto lg:mouse:py-2", direction === item ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item === "in" ? "Received" : item === "out" ? "Paid" : "All flow"}</button>
                 ))}
               </div>
             </div>
@@ -270,7 +270,7 @@ export default function MoneyStatementPage() {
               type="button"
               onClick={() => downloadCsv(statement.rows)}
               disabled={statement.rows.length === 0}
-              className="inline-flex h-10 items-center gap-2 rounded-[11px] bg-[var(--brand)] px-4 text-[12px] font-black text-white shadow-[0_12px_24px_rgba(7,95,255,0.22)] disabled:opacity-50"
+              className="inline-flex h-11 items-center gap-2 rounded-[11px] bg-[var(--brand)] px-4 text-[12px] font-black text-white shadow-[0_12px_24px_rgba(7,95,255,0.22)] disabled:opacity-50 lg:mouse:h-10"
             >
               <Download size={15} /> Export
             </button>

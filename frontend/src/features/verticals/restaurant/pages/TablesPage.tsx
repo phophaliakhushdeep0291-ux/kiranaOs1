@@ -263,16 +263,16 @@ export default function TablesPage() {
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            className="h-10 gap-2 rounded-[10px] font-bold"
+            className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold"
             data-testid="print-table-qr"
             onClick={() => setQrSheetOpen(true)}
           >
             <QrCode size={15} /> Table QR codes
           </Button>
-          <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/kitchen")}>
+          <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/kitchen")}>
             <ChefHat size={15} /> Kitchen
           </Button>
-          <Button className="h-10 gap-2 rounded-[10px] font-black" onClick={() => openForm(null)}>
+          <Button className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-black" onClick={() => openForm(null)}>
             <Plus size={15} /> Add table
           </Button>
         </div>
@@ -440,11 +440,11 @@ function TableCard({
       )}
 
       <div className="mt-auto flex flex-wrap gap-1.5">
-        <Button size="sm" className="h-8 flex-1 rounded-[8px] text-[12px] font-black" onClick={onSeat}>
+        <Button size="sm" className="h-11 lg:mouse:h-8 flex-1 rounded-[8px] text-[12px] font-black" onClick={onSeat}>
           {occupied ? "Open order" : "Seat"}
         </Button>
         {occupied && pending > 0 ? (
-          <Button size="sm" variant="outline" className="h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={onKot}>
+          <Button size="sm" variant="outline" className="h-11 lg:mouse:h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={onKot}>
             <ChefHat size={13} /> Fire {pending}
           </Button>
         ) : null}
@@ -456,7 +456,8 @@ function TableCard({
           <Button
             size="sm"
             variant="ghost"
-            className="h-8 w-8 rounded-[8px] p-0 text-[#64748b]"
+            className="h-11 w-11 rounded-[8px] p-0 text-[#64748b] lg:mouse:h-8 lg:mouse:w-8"
+            aria-label={`Show QR for ${row.table.name}`}
             title={`QR for ${row.table.name}`}
             data-testid={`table-qr-${row.table.id}`}
             onClick={onQr}
@@ -465,15 +466,15 @@ function TableCard({
           </Button>
         ) : null}
         {occupied ? (
-          <Button size="sm" variant="ghost" className="h-8 w-8 rounded-[8px] p-0 text-[#64748b]" title="Clear table" onClick={onRelease}>
+          <Button size="sm" variant="ghost" className="h-11 w-11 rounded-[8px] p-0 text-[#64748b] lg:mouse:h-8 lg:mouse:w-8" aria-label={`Clear ${row.table.name}`} title="Clear table" onClick={onRelease}>
             <X size={14} />
           </Button>
         ) : (
           <>
-            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-[8px] p-0 text-[#64748b]" title="Edit table" onClick={onEdit}>
+            <Button size="sm" variant="ghost" className="h-11 w-11 rounded-[8px] p-0 text-[#64748b] lg:mouse:h-8 lg:mouse:w-8" aria-label={`Edit ${row.table.name}`} title="Edit table" onClick={onEdit}>
               <Pencil size={13} />
             </Button>
-            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-[8px] p-0 text-[#64748b]" title="Remove table" onClick={onRemove}>
+            <Button size="sm" variant="ghost" className="h-11 w-11 rounded-[8px] p-0 text-[#64748b] lg:mouse:h-8 lg:mouse:w-8" aria-label={`Remove ${row.table.name}`} title="Remove table" onClick={onRemove}>
               <Trash2 size={13} />
             </Button>
           </>

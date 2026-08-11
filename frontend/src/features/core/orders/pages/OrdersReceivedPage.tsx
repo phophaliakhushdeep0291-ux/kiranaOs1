@@ -445,7 +445,7 @@ export default function OrdersReceivedPage() {
                 key={tab.value}
                 type="button"
                 onClick={() => setStatus(tab.value)}
-                className={`min-h-10 whitespace-nowrap rounded-xl px-3.5 text-[12px] font-bold transition ${
+                className={`min-h-11 whitespace-nowrap rounded-xl px-3.5 text-[12px] font-bold transition lg:mouse:min-h-10 ${
                   status === tab.value ? "bg-[var(--brand)] text-white shadow-[0_8px_20px_rgba(7,95,255,0.2)]" : "border border-[#dfe7f2] bg-white text-[#536383] hover:bg-[var(--brand-softer)]"
                 }`}
               >

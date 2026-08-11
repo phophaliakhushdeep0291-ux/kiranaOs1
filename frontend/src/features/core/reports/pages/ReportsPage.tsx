@@ -480,20 +480,20 @@ export default function ReportsPage() {
         <div className="mt-3 grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center lg:mt-0 lg:justify-end">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="col-span-3 h-11 min-w-0 justify-between rounded-xl border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f] sm:col-auto sm:h-9 sm:min-w-[220px] sm:rounded-[7px] sm:font-semibold">
+              <Button variant="outline" className="col-span-3 h-11 min-w-0 justify-between rounded-xl border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f] sm:col-auto sm:mouse:h-9 sm:min-w-[220px] sm:rounded-[7px] sm:font-semibold">
                 <span className="inline-flex items-center gap-2"><CalendarDays size={14} className="text-[var(--brand)]" />{rangeLabel(range.from, range.to)}</span>
                 <span className="text-[#7e8ba3]">⌄</span>
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-[calc(100vw-2rem)] rounded-xl border-[#dfe7f2] p-3 sm:w-[320px] sm:rounded-[8px]">
               <div className="grid grid-cols-2 gap-2">
-                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">From</Label><Input type="date" value={from} onChange={(event) => { setPeriod("custom"); setFrom(event.target.value); }} className="mt-1 h-11 rounded-lg sm:h-9 sm:rounded-[6px]" /></div>
-                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">To</Label><Input type="date" value={to} onChange={(event) => { setPeriod("custom"); setTo(event.target.value); }} className="mt-1 h-11 rounded-lg sm:h-9 sm:rounded-[6px]" /></div>
+                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">From</Label><Input type="date" value={from} onChange={(event) => { setPeriod("custom"); setFrom(event.target.value); }} className="mt-1 h-11 rounded-lg sm:mouse:h-9 sm:rounded-[6px]" /></div>
+                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">To</Label><Input type="date" value={to} onChange={(event) => { setPeriod("custom"); setTo(event.target.value); }} className="mt-1 h-11 rounded-lg sm:mouse:h-9 sm:rounded-[6px]" /></div>
               </div>
             </PopoverContent>
           </Popover>
           <Popover>
-            <PopoverTrigger asChild><Button variant="outline" className="h-11 w-full rounded-xl border-[#dfe7f2] px-4 text-[12px] font-bold sm:h-9 sm:w-auto sm:rounded-[7px] sm:font-semibold"><Filter size={14} className="mr-2" />Filters</Button></PopoverTrigger>
+            <PopoverTrigger asChild><Button variant="outline" className="h-11 w-full rounded-xl border-[#dfe7f2] px-4 text-[12px] font-bold sm:mouse:h-9 sm:w-auto sm:rounded-[7px] sm:font-semibold"><Filter size={14} className="mr-2" />Filters</Button></PopoverTrigger>
             <PopoverContent align="end" className="w-48 rounded-[8px] p-2">
               {(["today", "week", "month"] as const).map((item) => (
                 <button key={item} className={cn("min-h-11 w-full rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc] lg:min-h-0 lg:rounded-[6px]", period === item && "bg-[var(--brand-soft)] text-[var(--brand)]")} onClick={() => applyPeriod(item)}>{REPORT_PERIOD_LABELS[item]}</button>
@@ -501,8 +501,10 @@ export default function ReportsPage() {
               <Link href="/daily-closing" className="mt-1 flex min-h-11 items-center border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[var(--brand)] sm:min-h-0">Open daily closing</Link>
             </PopoverContent>
           </Popover>
-          <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-11 w-full rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold shadow-[0_8px_20px_rgba(7,95,255,0.22)] hover:bg-[var(--brand-strong)] sm:h-9 sm:w-auto sm:rounded-[7px]"><Download size={14} className="mr-2" />Export</Button>
-          <Button variant="outline" size="icon" title="Refresh reports" aria-label="Refresh reports" onClick={() => void loadReports({ showLoader: !snapshotRef.current })} disabled={loading && !snapshot} className="h-11 w-11 rounded-xl border-[#dfe7f2] sm:h-9 sm:w-9 sm:rounded-[7px]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></Button>
+          <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-11 w-full rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold shadow-[0_8px_20px_rgba(7,95,255,0.22)] hover:bg-[var(--brand-strong)] sm:mouse:h-9 sm:w-auto sm:rounded-[7px]"><Download size={14} className="mr-2" />Export</Button>
+          {/* Icon-only, so it keeps the 44px square `button.tsx` sets as the
+              standard for this variant rather than shrinking with the row. */}
+          <Button variant="outline" size="icon" title="Refresh reports" aria-label="Refresh reports" onClick={() => void loadReports({ showLoader: !snapshotRef.current })} disabled={loading && !snapshot} className="h-11 w-11 rounded-xl border-[#dfe7f2] sm:rounded-[7px]"><RefreshCw size={16} className={loading ? "animate-spin" : ""} /></Button>
         </div>
       </section>
 
@@ -723,7 +725,7 @@ export default function ReportsPage() {
           <div className="divide-y divide-[#e8edf5] px-3">
             {loading ? <Skeleton className="my-3 h-28" /> : insights.map((insight) => <InsightRow key={insight.title} {...insight} />)}
           </div>
-          <Link href="/daily-closing" className="mx-3 mb-3 flex h-11 items-center justify-center rounded-xl border border-[#dfe7f2] text-[11px] font-bold text-[var(--brand)] hover:bg-[#f6f9ff] sm:h-8 sm:rounded-[6px]">View Detailed Insights <span className="ml-2">→</span></Link>
+          <Link href="/daily-closing" className="mx-3 mb-3 flex h-11 items-center justify-center rounded-xl border border-[#dfe7f2] text-[11px] font-bold text-[var(--brand)] hover:bg-[#f6f9ff] sm:mouse:h-8 sm:rounded-[6px]">View Detailed Insights <span className="ml-2">→</span></Link>
         </Panel>
       </section>
 
@@ -891,7 +893,7 @@ function PeriodPill({ value, onChange }: { value: ReportPeriod; onChange: (perio
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="inline-flex h-11 min-w-[108px] items-center justify-between gap-2 rounded-xl border border-[#dfe6f0] bg-[#fbfcfe] px-3 text-[10px] font-bold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white lg:h-7 lg:min-w-[92px] lg:rounded-[6px] lg:px-2.5 lg:text-[9.5px] lg:font-semibold">
+        <button type="button" className="inline-flex h-11 min-w-[108px] items-center justify-between gap-2 rounded-xl border border-[#dfe6f0] bg-[#fbfcfe] px-3 text-[10px] font-bold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white lg:mouse:h-7 lg:min-w-[92px] lg:rounded-[6px] lg:px-2.5 lg:text-[9.5px] lg:font-semibold">
           {REPORT_PERIOD_LABELS[value]} <ChevronDown size={11} aria-hidden="true" />
         </button>
       </PopoverTrigger>

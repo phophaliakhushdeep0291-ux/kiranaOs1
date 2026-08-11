@@ -161,7 +161,7 @@ export default function TestersPage() {
             <Button
               onClick={() => setOpening(true)}
               style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
-              className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95"
+              className="h-11 lg:mouse:h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95"
             >
               <Plus size={15} /> Open a Tester
             </Button>
@@ -174,7 +174,7 @@ export default function TestersPage() {
                   key={f.key}
                   onClick={() => setFilter(f.key)}
                   className={cn(
-                    "rounded-[8px] px-2.5 py-1.5 text-[11.5px] font-bold transition-colors",
+                    "inline-flex h-11 items-center rounded-[8px] px-3 text-[11.5px] font-bold transition-colors lg:mouse:h-auto lg:mouse:px-2.5 lg:mouse:py-1.5",
                     filter === f.key ? "bg-[var(--brand)] text-white" : "bg-[#f1f5fa] text-[#52627e] hover:bg-[#e6ecf4]",
                   )}
                 >
@@ -184,7 +184,7 @@ export default function TestersPage() {
               <button
                 onClick={() => setDueOnly((value) => !value)}
                 className={cn(
-                  "rounded-[8px] px-2.5 py-1.5 text-[11.5px] font-bold transition-colors",
+                  "inline-flex h-11 items-center rounded-[8px] px-3 text-[11.5px] font-bold transition-colors lg:mouse:h-auto lg:mouse:px-2.5 lg:mouse:py-1.5",
                   dueOnly ? "bg-rose-600 text-white" : "bg-[#f1f5fa] text-[#52627e] hover:bg-[#e6ecf4]",
                 )}
               >
@@ -193,7 +193,7 @@ export default function TestersPage() {
             </div>
             <div className="relative ml-auto min-w-[180px] flex-1 sm:max-w-[260px]">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-              <Input className="h-9 pl-8" placeholder="Product or shade" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="h-11 lg:mouse:h-9 pl-8" placeholder="Product or shade" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
 
@@ -260,12 +260,12 @@ export default function TestersPage() {
                         <span className="text-[12.5px] font-semibold text-[var(--brand-ink)]">{inr(tester.costValue)}</span>
                       </td>
                       <td className="px-5 py-3 align-top">
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <div className="flex flex-wrap items-center justify-end gap-2 lg:mouse:gap-1.5">
                           {tester.isOpen && (
                             <>
                               <Button
                                 variant="outline"
-                                className="h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold"
+                                className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold"
                                 disabled={closeMut.isPending}
                                 onClick={() => closeMut.mutate({ id: tester.id, status: "replaced" })}
                               >
@@ -273,14 +273,14 @@ export default function TestersPage() {
                               </Button>
                               <button
                                 onClick={() => closeMut.mutate({ id: tester.id, status: "discarded" })}
-                                className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]"
+                                className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-[#536583] hover:bg-[#eef2f8]"
                                 aria-label={`Discard the ${tester.productName} tester`}
                               >
                                 <Trash size={14} />
                               </button>
                             </>
                           )}
-                          <button onClick={() => setDeleting(tester)} className="grid h-8 w-8 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Delete the ${tester.productName} tester record`}><Trash2 size={14} /></button>
+                          <button onClick={() => setDeleting(tester)} className="grid h-11 w-11 place-items-center lg:mouse:h-8 lg:mouse:w-8 rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label={`Delete the ${tester.productName} tester record`}><Trash2 size={14} /></button>
                         </div>
                       </td>
                     </tr>
@@ -414,7 +414,7 @@ function OpenTesterDialog({ open, saving, onClose, onSubmit }: {
             <div className="relative">
               <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Which product *</Label>
               <Search size={14} className="pointer-events-none absolute left-3 top-[34px] text-[#94a3b8]" />
-              <Input className="h-10 pl-8" placeholder="Search your stock…" value={pick} onChange={(e) => setPick(e.target.value)} />
+              <Input className="h-11 lg:mouse:h-10 pl-8" placeholder="Search your stock…" value={pick} onChange={(e) => setPick(e.target.value)} />
               {pick.trim() && (
                 <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 max-h-[200px] overflow-y-auto rounded-[10px] border border-[#e2e8f0] bg-white shadow-[0_12px_30px_rgba(15,35,80,0.10)]">
                   {matches.length === 0 ? (

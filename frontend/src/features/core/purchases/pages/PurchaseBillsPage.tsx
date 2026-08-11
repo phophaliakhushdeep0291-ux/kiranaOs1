@@ -802,7 +802,7 @@ export default function PurchaseBillsPage() {
                   <span className="shrink-0 text-[11.5px] font-bold text-[#344668]">{fmt(s.amount)} <span className="text-[10px] font-semibold text-[#94a3b8]">({s.share}%)</span></span>
                 </div>
               ))}
-              <Link href="/suppliers" className="block py-2.5 text-[12px] font-bold text-[var(--brand)] hover:underline">View all suppliers</Link>
+              <Link href="/suppliers" className="flex min-h-11 items-center text-[12px] font-bold text-[var(--brand)] hover:underline">View all suppliers</Link>
             </div>
           </div>
 
