@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Loader2, QrCode, ShieldCheck, TimerReset, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,6 +9,13 @@ interface RetailDynamicQrDialogProps {
   checkout: RetailQrCheckout | null;
   onConfirmed: (checkout: RetailQrCheckout) => void;
   onClose: () => void;
+  /**
+   * Fires on every polled status transition, not just the terminal ones the
+   * dialog acts on itself. A customer-facing display must stop inviting a scan
+   * the moment the QR expires or fails, even though this dialog stays open to
+   * explain what happened.
+   */
+  onStatusChange?: (status: RetailQrCheckout["status"]) => void;
 }
 
 function formatCountdown(milliseconds: number) {
@@ -16,7 +23,7 @@ function formatCountdown(milliseconds: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export function RetailDynamicQrDialog({ checkout, onConfirmed, onClose }: RetailDynamicQrDialogProps) {
+export function RetailDynamicQrDialog({ checkout, onConfirmed, onClose, onStatusChange }: RetailDynamicQrDialogProps) {
   const { t } = useAppLanguage();
   const [now, setNow] = useState(Date.now());
   const [status, setStatus] = useState(checkout?.status ?? "pending");
@@ -43,6 +50,12 @@ export function RetailDynamicQrDialog({ checkout, onConfirmed, onClose }: Retail
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [checkout]);
+
+  // Held in a ref so a caller's inline arrow does not re-notify on every render;
+  // subscribers should hear about real transitions only.
+  const statusChangeRef = useRef(onStatusChange);
+  statusChangeRef.current = onStatusChange;
+  useEffect(() => { statusChangeRef.current?.(status); }, [status]);
 
   useEffect(() => {
     if (!checkout || !["creating", "pending"].includes(status)) return;

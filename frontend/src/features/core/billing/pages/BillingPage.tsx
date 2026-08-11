@@ -46,7 +46,7 @@ import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/core/loyalty/api";
 import { lookupGiftCard } from "@/features/core/gift-cards/api";
 import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/core/voice/backend-transcription";
-import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity, showCustomerDisplayViaHardwareBridge } from "@/features/core/hardware/local-hardware-bridge";
+import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity, showCustomerDisplayViaHardwareBridge, type HardwareCustomerDisplayState } from "@/features/core/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import {
   ACTIVITY_EVENTS,
@@ -223,6 +223,7 @@ export default function Billing() {
   const [voiceVisible, setVoiceVisible] = useState(false);
   const [verifiedRetailPayment, setVerifiedRetailPayment] = useState<{ intentId: string; amountPaise: number; locationId: string } | null>(null);
   const [retailQrCheckout, setRetailQrCheckout] = useState<RetailQrCheckout | null>(null);
+  const [customerDisplayFlash, setCustomerDisplayFlash] = useState<{ state: "paid"; totalPaise: number } | null>(null);
   const [retailPaymentLoading, setRetailPaymentLoading] = useState(false);
   const [loyaltyPointsToRedeem, setLoyaltyPointsToRedeem] = useState(0);
   const [giftCardCode, setGiftCardCodeState] = useState("");
@@ -664,6 +665,24 @@ export default function Billing() {
     void loadSecurityPolicy(); // which counter actions still ask for the owner PIN
   }, []);
 
+  // A confirmed or abandoned payment is news, not a lasting state: the customer
+  // needs to see it, then the display returns to whatever the cart is doing.
+  useEffect(() => {
+    if (!customerDisplayFlash) return;
+    const timeout = window.setTimeout(() => setCustomerDisplayFlash(null), 4_000);
+    return () => window.clearTimeout(timeout);
+  }, [customerDisplayFlash]);
+
+  // While a dynamic QR is live the customer must see the amount they are about
+  // to approve, which for a split tender is the UPI leg — not the bill total.
+  const customerDisplayFrame = useMemo<Pick<HardwareCustomerDisplayState, "state" | "totalPaise">>(() => {
+    if (customerDisplayFlash) return customerDisplayFlash;
+    if (retailQrCheckout && ["creating", "pending"].includes(retailQrCheckout.status)) {
+      return { state: "awaiting_payment", totalPaise: retailQrCheckout.amountPaise };
+    }
+    return { state: cart.length > 0 ? "sale" : "idle", totalPaise: Math.round(grandTotal * 100) };
+  }, [customerDisplayFlash, retailQrCheckout, cart.length, grandTotal]);
+
   useEffect(() => {
     if (hardwareConfigVersion === 0) return;
     const printer = getPrinterConfigSync();
@@ -673,16 +692,16 @@ export default function Billing() {
     const timeout = window.setTimeout(() => {
       void showCustomerDisplayViaHardwareBridge(printer.bridgeUrl, {
         revision,
-        state: cart.length > 0 ? "sale" : "idle",
+        state: customerDisplayFrame.state,
         itemCount: cart.length,
-        totalPaise: Math.round(grandTotal * 100),
+        totalPaise: customerDisplayFrame.totalPaise,
       }).catch(() => {
         // A customer display is informative, never a reason to block billing or
         // repeatedly interrupt a cashier. Settings exposes an explicit test.
       });
     }, 160);
     return () => window.clearTimeout(timeout);
-  }, [cart.length, grandTotal, hardwareConfigVersion]);
+  }, [cart.length, customerDisplayFrame, hardwareConfigVersion]);
 
   useEffect(() => {
     setSensitiveApproval(null);
@@ -2082,8 +2101,10 @@ export default function Billing() {
       <RetailDynamicQrDialog
         checkout={retailQrCheckout}
         onClose={() => setRetailQrCheckout(null)}
+        onStatusChange={(status) => setRetailQrCheckout((current) => (current && current.status !== status ? { ...current, status } : current))}
         onConfirmed={(checkout) => {
           setVerifiedRetailPayment({ intentId: checkout.intentId, amountPaise: checkout.amountPaise, locationId: checkout.location.id });
+          setCustomerDisplayFlash({ state: "paid", totalPaise: checkout.amountPaise });
           setRetailQrCheckout(null);
           toast({ title: t("billing.page.upiVerified"), description: t("billing.page.upiVerifiedDetail") });
         }}

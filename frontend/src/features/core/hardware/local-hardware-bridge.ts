@@ -18,7 +18,7 @@ export interface HardwareScaleReading {
 
 export interface HardwareCustomerDisplayState {
   revision: number;
-  state: "idle" | "sale" | "paid" | "cancelled";
+  state: "idle" | "sale" | "awaiting_payment" | "paid" | "cancelled";
   itemCount: number;
   totalPaise: number;
 }
