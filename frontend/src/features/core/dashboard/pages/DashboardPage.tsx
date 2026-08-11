@@ -1243,7 +1243,7 @@ function MobileGeneralDashboard({
         <div className="overflow-hidden rounded-[20px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
           <div className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
             <h2 className="text-[14px] font-black text-[var(--brand-ink)]">Top products</h2>
-            <Link href="/products" className="inline-flex min-h-10 items-center px-2 text-[11px] font-black text-[var(--brand)]">View all</Link>
+            <Link href="/products" className="inline-flex min-h-11 items-center px-2 text-[11px] font-black text-[var(--brand)]">View all</Link>
           </div>
           <div className="divide-y divide-[#edf2f8] px-3.5">
             {(topRows.length > 0 ? topRows : recentProducts.slice(0, 5).map((product) => ({ productId: product.id, name: product.name, quantitySold: Number(product.stockQuantity ?? 0), revenue: productPrice(product), profitEstimate: 0 }))).map((row) => (
@@ -1263,7 +1263,7 @@ function MobileGeneralDashboard({
         <div className="overflow-hidden rounded-[20px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
           <div className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
             <h2 className="text-[14px] font-black text-[var(--brand-ink)]">Recent bills</h2>
-            <Link href="/bills" className="inline-flex min-h-10 items-center px-2 text-[11px] font-black text-[var(--brand)]">View all</Link>
+            <Link href="/bills" className="inline-flex min-h-11 items-center px-2 text-[11px] font-black text-[var(--brand)]">View all</Link>
           </div>
           <div className="divide-y divide-[#edf2f8] px-3.5">
             {recentBills.slice(0, 5).map((bill) => (
@@ -1474,7 +1474,7 @@ function ShopWorkflowPanel({ businessType, compact = false }: { businessType: Bu
           <h2 className="mt-1 font-display text-[18px] font-black text-[var(--brand-ink)]">{workflow.title}</h2>
           <p className="mt-1 max-w-3xl text-[11.5px] font-semibold leading-5 text-[#65748f]">{workflow.subtitle}</p>
         </div>
-        <Link href="/settings/store-profile" className="inline-flex min-h-10 shrink-0 items-center gap-1.5 self-start rounded-[10px] border border-[var(--brand-border)] bg-white px-3 text-[11px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]">
+        <Link href="/settings/store-profile" className="inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start rounded-[10px] border border-[var(--brand-border)] bg-white px-3 text-[11px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]">
           Change shop type <ChevronRight size={14} />
         </Link>
       </div>
