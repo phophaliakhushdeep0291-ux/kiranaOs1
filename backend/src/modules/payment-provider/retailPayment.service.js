@@ -14,6 +14,10 @@ import {
   verifyPaymentSignature,
 } from "./razorpay.provider.js";
 import { validateRetailQrPayment, validateRetailUpiPayment } from "./retailPayment.validation.js";
+import { extractQrModules, packQrModules } from "./qr-image.js";
+
+const QR_IMAGE_FETCH_TIMEOUT_MS = 6_000;
+const QR_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 
 export function retailPaymentReadiness() {
   const configured = env.RETAIL_PAYMENT_PROVIDER === "razorpay" && env.RAZORPAY_ENABLED
@@ -157,6 +161,61 @@ export async function getRetailPaymentIntentStatus({ shopId, intentId }) {
     intent = await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "expired", failureReason: qrCode.close_reason ? `QR closed: ${qrCode.close_reason}` : null } });
   }
   return retailIntentResponse(intent);
+}
+
+/**
+ * Fetch the provider's hosted QR image. The URL has already been narrowed to
+ * https://rzp.io by safeRazorpayQrImageUrl, so this cannot be pointed at an
+ * internal address; the size cap and timeout keep a slow or huge response from
+ * holding a counter hostage mid-sale.
+ */
+async function fetchProviderQrPng(imageUrl) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), QR_IMAGE_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(imageUrl, { signal: controller.signal, redirect: "error" });
+    if (!response.ok) throw new AppError("Provider QR image could not be fetched", 502, "RETAIL_QR_IMAGE_UNAVAILABLE");
+    if (Number(response.headers.get("content-length") || 0) > QR_IMAGE_MAX_BYTES) {
+      throw new AppError("Provider QR image is too large to print", 502, "RETAIL_QR_IMAGE_UNAVAILABLE");
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > QR_IMAGE_MAX_BYTES) throw new AppError("Provider QR image is too large to print", 502, "RETAIL_QR_IMAGE_UNAVAILABLE");
+    return buffer;
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError("Provider QR image could not be fetched", 502, "RETAIL_QR_IMAGE_UNAVAILABLE");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Hand a counter printer the module grid for a live QR. Razorpay never returns
+ * the underlying UPI string, so the printed QR is recovered from the provider's
+ * own image rather than re-encoded — a QR we generated ourselves would collect
+ * money outside the intent this bill is going to be settled against.
+ */
+export async function getRetailPaymentQrBitmap({ shopId, intentId }) {
+  const intent = await db.retailPaymentIntent.findFirst({ where: { id: intentId, shopId } });
+  if (!intent) throw new AppError("Retail payment intent not found", 404, "RETAIL_PAYMENT_INTENT_NOT_FOUND");
+  if (intent.checkoutMode !== "dynamic_qr") throw new AppError("This retail payment has no printable QR", 409, "RETAIL_QR_NOT_PRINTABLE");
+  // Never put a settled, cancelled or expired QR on paper: a customer who scans
+  // it either pays nothing or pays into an intent no bill will consume.
+  if (!["creating", "pending"].includes(intent.status)) throw new AppError("This QR is no longer collectable", 409, "RETAIL_QR_NOT_COLLECTABLE");
+  if (intent.expiresAt <= new Date()) throw new AppError("This QR has expired", 409, "RETAIL_QR_NOT_COLLECTABLE");
+  const imageUrl = safeRazorpayQrImageUrl(intent.providerQrImageUrl);
+  if (!imageUrl) throw new AppError("Provider QR image URL is not trusted", 502, "RETAIL_QR_PROVIDER_MISMATCH");
+
+  const png = await fetchProviderQrPng(imageUrl);
+  const extracted = extractQrModules(png);
+  return {
+    intentId: intent.id,
+    amountPaise: intent.amountPaise,
+    moduleCount: extracted.moduleCount,
+    modules: packQrModules(extracted),
+    reference: intent.providerQrCodeId,
+    expiresAt: intent.expiresAt.toISOString(),
+  };
 }
 
 export async function cancelRetailPaymentIntent({ shopId, intentId, userId, userRole }) {

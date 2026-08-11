@@ -59,6 +59,10 @@ export async function retailIntentStatus(req, res, next) {
   try { res.json({ success: true, data: await retailService.getRetailPaymentIntentStatus({ shopId: req.shopId, intentId: req.params.id }) }); } catch (err) { next(err); }
 }
 
+export async function retailIntentQrBitmap(req, res, next) {
+  try { res.json({ success: true, data: await retailService.getRetailPaymentQrBitmap({ shopId: req.shopId, intentId: req.params.id }) }); } catch (err) { next(err); }
+}
+
 export async function cancelRetailIntent(req, res, next) {
   try {
     res.json({ success: true, data: await retailService.cancelRetailPaymentIntent({ shopId: req.shopId, intentId: req.params.id, userId: req.user?.userId, userRole: req.user?.role }) });

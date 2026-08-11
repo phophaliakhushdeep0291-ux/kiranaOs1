@@ -1,3 +1,5 @@
+import { formatInrFromPaise } from "./money.mjs";
+
 const DISPLAY_STATES = new Set(["idle", "sale", "awaiting_payment", "paid", "cancelled"]);
 const DEFAULT_WIDTH = 20;
 const MIN_WIDTH = 12;
@@ -13,12 +15,6 @@ function fitLine(value, width) {
   if (/[^\x20-\x7e]/.test(line)) throw hardwareInputError("Customer display text must contain printable ASCII only");
   if (line.length > width) throw hardwareInputError(`Customer display text exceeds the configured ${width}-character width`);
   return line;
-}
-
-function formatAmount(totalPaise) {
-  const rupees = Math.floor(totalPaise / 100);
-  const paise = String(totalPaise % 100).padStart(2, "0");
-  return `INR ${rupees}.${paise}`;
 }
 
 export function normalizeDisplayWidth(value) {
@@ -58,7 +54,7 @@ export function buildCustomerDisplayFrame(input, { width = DEFAULT_WIDTH } = {})
   if (!Number.isInteger(itemCount) || itemCount < 0 || itemCount > 9_999) throw hardwareInputError("Customer display item count is invalid");
   if (!Number.isSafeInteger(totalPaise) || totalPaise < 0 || totalPaise > MAX_TOTAL_PAISE) throw hardwareInputError("Customer display total is invalid");
 
-  const lines = displayLines(state, itemCount, formatAmount(totalPaise));
+  const lines = displayLines(state, itemCount, formatInrFromPaise(totalPaise));
 
   return {
     revision,

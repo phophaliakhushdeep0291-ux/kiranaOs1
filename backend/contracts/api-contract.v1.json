@@ -372,6 +372,15 @@
       "purpose": "poll provider API for dynamic QR payment confirmation"
     },
     {
+      "method": "GET",
+      "path": "/api/payment-provider/retail/intents/:id/qr-bitmap",
+      "authRequired": true,
+      "deviceRequired": true,
+      "responseMustInclude": ["data.intentId", "data.moduleCount", "data.modules", "data.amountPaise"],
+      "integrityGuarantees": ["only the provider's own QR image is decoded, never a locally generated one", "settled, cancelled and expired intents are not printable", "the image host stays restricted to the trusted provider domain", "the module grid is verified against the QR finder patterns before it can print"],
+      "purpose": "recover the provider QR module grid so a counter printer can render it"
+    },
+    {
       "method": "POST",
       "path": "/api/payment-provider/retail/intents/:id/cancel",
       "authRequired": true,

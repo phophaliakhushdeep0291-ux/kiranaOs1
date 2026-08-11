@@ -12,6 +12,7 @@ router.post("/razorpay/webhook", ctrl.razorpayWebhook);
 router.get("/retail/readiness", requireAuth, requireShop, requireDeviceActivated(), ctrl.retailReadiness);
 router.post("/retail/intents", requireAuth, requireShop, requireDeviceActivated(), validate(retailIntentSchema), ctrl.createRetailIntent);
 router.get("/retail/intents/:id/status", requireAuth, requireShop, requireDeviceActivated(), ctrl.retailIntentStatus);
+router.get("/retail/intents/:id/qr-bitmap", requireAuth, requireShop, requireDeviceActivated(), ctrl.retailIntentQrBitmap);
 router.post("/retail/intents/:id/cancel", requireAuth, requireShop, requireDeviceActivated(), ctrl.cancelRetailIntent);
 router.post("/retail/intents/:id/verify", requireAuth, requireShop, requireDeviceActivated(), validate(verifyRetailIntentSchema), ctrl.verifyRetailIntent);
 router.get("/events", requireAuth, requireShop, requireDeviceActivated(), requireRole("owner", "admin"), ctrl.listEvents);

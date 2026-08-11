@@ -5,7 +5,7 @@ export interface HardwareBridgeHealth {
   ok: boolean;
   version?: string;
   deviceName?: string;
-  capabilities?: { print?: boolean; cutter?: boolean; cashDrawer?: boolean; scale?: boolean; customerDisplay?: boolean };
+  capabilities?: { print?: boolean; cutter?: boolean; cashDrawer?: boolean; scale?: boolean; customerDisplay?: boolean; qrPrint?: boolean };
   update?: { available?: boolean; currentVersion?: string; latestVersion?: string; downloadUrl?: string };
 }
 
@@ -138,6 +138,20 @@ export async function readScaleViaHardwareBridge(bridgeUrl: string) {
     throw new Error("Hardware bridge returned an invalid scale reading.");
   }
   return { ...reading, weight: Number(reading.weight) };
+}
+
+/**
+ * Print a provider-issued payment QR. Only the module grid and an integer
+ * amount cross the wire — the bridge builds every printable byte itself, so a
+ * counter printer can never be steered from the page.
+ */
+export async function printQrSlipViaHardwareBridge(bridgeUrl: string, input: { moduleCount: number; modules: string; amountPaise: number; paperSize: string; reference?: string | null }) {
+  if (!Number.isInteger(input.moduleCount) || input.moduleCount < 21 || input.moduleCount > 177) throw new Error("Payment QR size is invalid.");
+  if (!Number.isSafeInteger(input.amountPaise) || input.amountPaise <= 0) throw new Error("Payment QR amount is invalid.");
+  return bridgeRequest<{ ok: boolean }>(bridgeUrl, "/v1/print-qr", {
+    method: "POST",
+    body: JSON.stringify({ ...input, reference: input.reference ?? "" }),
+  }, 12_000);
 }
 
 export async function showCustomerDisplayViaHardwareBridge(bridgeUrl: string, input: HardwareCustomerDisplayState) {

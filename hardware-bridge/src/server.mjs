@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { buildDrawerPulse, buildEscPosJob } from "./escpos.mjs";
 import { readScaleCommand, sendNetworkRaw, sendWindowsRaw, writeCustomerDisplayCommand } from "./adapters.mjs";
 import { buildCustomerDisplayFrame } from "./customer-display.mjs";
+import { buildQrPaymentSlip } from "./qr-raster.mjs";
 import { PrintJobJournal } from "./job-journal.mjs";
 import { defaultConfigPath, loadBridgeConfig, saveBridgeConfig } from "./config.mjs";
 import { consumePairingCode } from "./pairing.mjs";
@@ -12,7 +13,7 @@ import { fingerprintPrintPayload, PrintJobExecutor } from "./print-executor.mjs"
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.KIRANA_BRIDGE_PORT || 17873);
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
 const CONFIG_PATH = defaultConfigPath();
 let bridgeConfig = await loadBridgeConfig(CONFIG_PATH);
 const TOKEN = String(bridgeConfig.token || "");
@@ -146,6 +147,7 @@ const server = http.createServer(async (req, res) => {
           cashDrawer: ["network", "windows"].includes(TRANSPORT),
           scale: Boolean(bridgeConfig.scale?.executable),
           customerDisplay: Boolean(bridgeConfig.customerDisplay?.executable),
+          qrPrint: ["network", "windows"].includes(TRANSPORT),
         },
       }, origin);
     }
@@ -181,6 +183,20 @@ const server = http.createServer(async (req, res) => {
       await readJson(req);
       const reading = await readScaleCommand({ executable: bridgeConfig.scale?.executable, args: bridgeConfig.scale?.args || [] });
       return json(res, 200, { ok: true, ...reading }, origin);
+    }
+    if (req.method === "POST" && url.pathname === "/v1/print-qr") {
+      const body = await readJson(req);
+      // Deliberately not journalled like /v1/print: a payment QR slip carries no
+      // sale, so reprinting one is safe and is something customers do ask for.
+      const paperSize = ["58mm", "76mm", "80mm"].includes(body.paperSize) ? body.paperSize : "80mm";
+      await sendRaw(buildQrPaymentSlip({
+        moduleCount: Number(body.moduleCount),
+        modules: body.modules,
+        amountPaise: body.amountPaise,
+        paperSize,
+        reference: body.reference,
+      }));
+      return json(res, 200, { ok: true }, origin);
     }
     if (req.method === "POST" && url.pathname === "/v1/customer-display/show") {
       const body = await readJson(req);

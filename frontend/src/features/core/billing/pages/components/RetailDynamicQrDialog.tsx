@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Loader2, QrCode, ShieldCheck, TimerReset, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Loader2, Printer, QrCode, ShieldCheck, TimerReset, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { cancelRetailPaymentQr, getRetailPaymentQrStatus, type RetailQrCheckout } from "@/features/core/billing/retail-payment";
+import { cancelRetailPaymentQr, getRetailPaymentQrBitmap, getRetailPaymentQrStatus, type RetailQrCheckout } from "@/features/core/billing/retail-payment";
+import { printQrSlipViaHardwareBridge } from "@/features/core/hardware/local-hardware-bridge";
+import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 
 interface RetailDynamicQrDialogProps {
@@ -29,6 +31,10 @@ export function RetailDynamicQrDialog({ checkout, onConfirmed, onClose, onStatus
   const [status, setStatus] = useState(checkout?.status ?? "pending");
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  // A counter printer only reaches the customer's side of the desk through the
+  // paired local bridge; browser print dialogs are a cashier-facing fallback.
+  const canPrintSlip = getPrinterConfigSync().connection === "bridge";
   const expiresAt = checkout ? new Date(checkout.expiresAt).getTime() : 0;
   const remaining = Math.max(0, expiresAt - now);
   const trustedImage = useMemo(() => {
@@ -82,6 +88,27 @@ export function RetailDynamicQrDialog({ checkout, onConfirmed, onClose, onStatus
     return () => { active = false; if (timer) window.clearTimeout(timer); };
   }, [checkout, onConfirmed, status]);
 
+  async function printSlip() {
+    if (!checkout || printing) return;
+    setPrinting(true);
+    setError(null);
+    try {
+      const printer = getPrinterConfigSync();
+      const bitmap = await getRetailPaymentQrBitmap(checkout.intentId);
+      await printQrSlipViaHardwareBridge(printer.bridgeUrl, {
+        moduleCount: bitmap.moduleCount,
+        modules: bitmap.modules,
+        amountPaise: bitmap.amountPaise,
+        paperSize: printer.paperSize,
+        reference: bitmap.reference,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("billing.pay.dynamicQr.printFailed"));
+    } finally {
+      setPrinting(false);
+    }
+  }
+
   async function cancel() {
     if (!checkout || cancelling) return;
     setCancelling(true);
@@ -120,7 +147,12 @@ export function RetailDynamicQrDialog({ checkout, onConfirmed, onClose, onStatus
         </div> : null}
 
         <DialogFooter>
-          {terminal ? <Button onClick={onClose}>{t("billing.pay.dynamicQr.close")}</Button> : <Button variant="outline" disabled={cancelling} onClick={() => void cancel()}>{cancelling ? t("billing.pay.dynamicQr.closing") : t("billing.pay.dynamicQr.cancel")}</Button>}
+          {terminal ? <Button onClick={onClose}>{t("billing.pay.dynamicQr.close")}</Button> : <>
+            {canPrintSlip ? <Button variant="outline" className="gap-1.5" disabled={printing || cancelling} onClick={() => void printSlip()}>
+              <Printer size={15} /> {printing ? t("billing.pay.dynamicQr.printing") : t("billing.pay.dynamicQr.print")}
+            </Button> : null}
+            <Button variant="outline" disabled={cancelling} onClick={() => void cancel()}>{cancelling ? t("billing.pay.dynamicQr.closing") : t("billing.pay.dynamicQr.cancel")}</Button>
+          </>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -133,6 +133,21 @@ export function getRetailPaymentQrStatus(intentId: string) {
   return apiRequest<RetailQrStatus>(`/payment-provider/retail/intents/${encodeURIComponent(intentId)}/status`, { method: "GET", background: true });
 }
 
+export interface RetailQrBitmap {
+  intentId: string;
+  amountPaise: number;
+  /** Modules per side; a QR version, never a pixel count. */
+  moduleCount: number;
+  /** Base64, row-major, MSB first — handed straight to the counter printer. */
+  modules: string;
+  reference: string | null;
+  expiresAt: string;
+}
+
+export function getRetailPaymentQrBitmap(intentId: string) {
+  return apiRequest<RetailQrBitmap>(`/payment-provider/retail/intents/${encodeURIComponent(intentId)}/qr-bitmap`, { method: "GET" });
+}
+
 export function cancelRetailPaymentQr(intentId: string) {
   return apiRequest<RetailQrStatus>(`/payment-provider/retail/intents/${encodeURIComponent(intentId)}/cancel`, { method: "POST", body: "{}" });
 }
