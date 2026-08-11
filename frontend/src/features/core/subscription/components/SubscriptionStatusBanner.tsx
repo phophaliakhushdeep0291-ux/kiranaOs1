@@ -57,9 +57,13 @@ export function SubscriptionStatusBanner() {
   return (
     <div className={`border-b px-3 py-1.5 sm:px-4 ${isDanger ? "bg-amber-50 text-amber-950" : "bg-amber-50 text-amber-800"}`}>
       <div className="flex min-h-11 items-center gap-2 text-xs sm:text-sm">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          {snapshot.graceActive ? <AlertTriangle size={16} /> : <Icon size={16} />}
-          <span className="truncate sm:whitespace-normal">{plainMessage}</span>
+        <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
+          <span className="mt-0.5 shrink-0 sm:mt-0">{snapshot.graceActive ? <AlertTriangle size={16} /> : <Icon size={16} />}</span>
+          {/* One `truncate` clipped this sentence to 210px of the 460px it needs,
+              so a phone read "Trial active. Your data is safe locall…" and learned
+              nothing. Two lines is the smallest budget that carries the meaning;
+              the desktop, which has the room, still gets it on one. */}
+          <span className="line-clamp-2 leading-snug sm:line-clamp-none sm:whitespace-normal">{plainMessage}</span>
         </div>
         <Link href="/subscription" className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 font-black text-current hover:bg-black/5">
           Owner details <ChevronRight size={14} aria-hidden="true" />

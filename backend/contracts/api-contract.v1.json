@@ -373,6 +373,41 @@
     },
     {
       "method": "GET",
+      "path": "/api/payment-provider/terminal/readiness",
+      "authRequired": true,
+      "deviceRequired": true,
+      "responseMustInclude": ["data.provider", "data.configured", "data.tenderMode"],
+      "integrityGuarantees": ["a simulated terminal cannot be enabled in production", "a vendor terminal without credentials fails at startup"],
+      "purpose": "report whether a counter card/EDC terminal is available"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payment-provider/terminal/charges",
+      "authRequired": true,
+      "deviceRequired": true,
+      "responseMustInclude": ["data.intentId", "data.status", "data.chargeId"],
+      "integrityGuarantees": ["the charge is bound to one branch and one amount", "the intent id is the idempotency key so a retry cannot double-present the card", "a failed start marks the intent failed rather than leaving it open"],
+      "purpose": "push an amount to the counter card terminal"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payment-provider/terminal/charges/:id/status",
+      "authRequired": true,
+      "deviceRequired": true,
+      "responseMustInclude": ["data.intentId", "data.status", "data.confirmationSource"],
+      "integrityGuarantees": ["approval is read from the acquirer, never from the terminal screen", "a settled amount that differs from the request fails closed", "confirmation is claimed atomically so concurrent polls cannot double-confirm", "an unpresented card expires the intent"],
+      "purpose": "poll the acquirer for card terminal approval"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payment-provider/terminal/charges/:id/cancel",
+      "authRequired": true,
+      "deviceRequired": true,
+      "integrityGuarantees": ["an approved charge cannot be cancelled", "non-admin cashiers can cancel only their own charge"],
+      "purpose": "abandon a card charge the customer did not complete"
+    },
+    {
+      "method": "GET",
       "path": "/api/payment-provider/retail/intents/:id/qr-bitmap",
       "authRequired": true,
       "deviceRequired": true,
