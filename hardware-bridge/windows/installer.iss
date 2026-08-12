@@ -65,8 +65,14 @@ Filename: "{app}\KiranaOSHardwareBridge.exe"; Parameters: "uninstall"; Flags: ru
 
 [Code]
 const
-  ChromePolicyKey = 'SOFTWARE\Policies\Google\Chrome\LocalNetworkAccessAllowedForUrls';
-  EdgePolicyKey = 'SOFTWARE\Policies\Microsoft\Edge\LocalNetworkAccessAllowedForUrls';
+  { Loopback, not "local network": Chrome governs 127.0.0.1 with the
+    loopback_network content setting, and granting local_network alone leaves the
+    request hanging while navigator.permissions still reports "granted"
+    (measured on 151.0.7922.77). The bridge is loopback-only by design, so this
+    also grants strictly less than the local-network policy would. The Edge key
+    mirrors Chrome's but has not been verified against Edge itself. }
+  ChromePolicyKey = 'SOFTWARE\Policies\Google\Chrome\LoopbackNetworkAllowedForUrls';
+  EdgePolicyKey = 'SOFTWARE\Policies\Microsoft\Edge\LoopbackNetworkAllowedForUrls';
 
 var
   ServiceExistedBeforeInstall: Boolean;
@@ -185,7 +191,7 @@ begin
   ApplyLocalNetworkAccessPolicy(EdgePolicyKey);
   if PolicySkipped then
     MsgBox('This computer already has a managed browser policy for local network access, so Setup left it untouched.'#13#10#13#10
-      + 'Ask whoever manages these computers to add the KiranaOS address to LocalNetworkAccessAllowedForUrls, or printing from the browser will not reach this counter.',
+      + 'Ask whoever manages these computers to add the KiranaOS address to LoopbackNetworkAllowedForUrls, or printing from the browser will not reach this counter.',
       mbInformation, MB_OK);
 end;
 

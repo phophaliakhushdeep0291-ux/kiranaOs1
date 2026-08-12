@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { isScaleBillingUnit, normalizeHardwareBridgeUrl, scaleReadingToBillingQuantity } from "@/features/core/hardware/local-hardware-bridge";
+import { hardwareBridgeFailureMessage, isScaleBillingUnit, normalizeHardwareBridgeUrl, scaleReadingToBillingQuantity } from "@/features/core/hardware/local-hardware-bridge";
 
 describe("local hardware bridge security boundary", () => {
   it("accepts only loopback HTTP(S) endpoints", () => {
@@ -22,6 +22,40 @@ describe("local hardware bridge security boundary", () => {
     expect(source).toContain("pairHardwareBridge");
     expect(source).not.toContain("Per-device pairing token");
     expect(source).not.toContain("setHardwareBridgeToken(bridgeToken)");
+  });
+
+  it("blames the browser, not the printer, when the request is silently held", () => {
+    // A browser holding the request until our abort fires is the one failure a
+    // counter cannot diagnose: the bridge logs nothing and the printer was never
+    // contacted. Sending staff to check paper and cables is the wrong advice.
+    const blocked = hardwareBridgeFailureMessage("stalled", "blocked");
+    expect(blocked).toMatch(/browser is blocking/i);
+    expect(blocked).toMatch(/local network/i);
+    expect(blocked).toMatch(/printer itself is not the problem/i);
+
+    // Without evidence the browser is at fault we must not accuse it outright,
+    // but must still stop pointing at the printer first.
+    const ambiguous = hardwareBridgeFailureMessage("stalled", "unknown");
+    expect(ambiguous).toMatch(/service is stopped or this browser is blocking/i);
+    expect(ambiguous).toMatch(/before checking the printer/i);
+
+    // A refused connection is a different fault with different advice.
+    expect(hardwareBridgeFailureMessage("unreachable", "unknown")).toMatch(/service is running/i);
+
+    // The old wording named a timeout and nothing else, which read as a dead
+    // printer. No variant may regress to it.
+    for (const state of ["blocked", "unknown"] as const) {
+      expect(hardwareBridgeFailureMessage("stalled", state)).not.toMatch(/did not respond in time/i);
+    }
+  });
+
+  it("only accuses the browser on evidence, never on a granted permission", () => {
+    const source = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/hardware/local-hardware-bridge.ts"), "utf8");
+    // Chrome reports "granted" for local-network access while loopback stays
+    // blocked and every request still hangs, so a granted state must collapse
+    // into "unknown" rather than clearing the browser.
+    expect(source).toContain('state === "granted" ? "unknown" : "blocked"');
+    expect(source).not.toContain("Hardware bridge did not respond in time.");
   });
 
   it("converts stable gram and kilogram readings to millesimal billing quantities", () => {

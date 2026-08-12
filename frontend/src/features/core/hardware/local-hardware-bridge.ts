@@ -75,7 +75,10 @@ export async function pairHardwareBridge(bridgeUrl: string, pairingCode: string)
     setHardwareBridgeToken(body.token);
     return checkHardwareBridge(base);
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw new Error("Hardware bridge did not respond in time.");
+    // Pairing is the first thing a counter does, so this is where the browser's
+    // loopback gate is most likely to be met for the first time.
+    if (error instanceof DOMException && error.name === "AbortError") throw await stalledBridgeError();
+    if (error instanceof TypeError) throw new Error(hardwareBridgeFailureMessage("unreachable", "unknown"));
     throw error;
   } finally {
     window.clearTimeout(timeout);
@@ -91,6 +94,44 @@ export function normalizeHardwareBridgeUrl(value: string) {
   if (url.username || url.password || url.search || url.hash) throw new Error("Hardware bridge URL cannot contain credentials, query parameters, or fragments.");
   url.pathname = url.pathname.replace(/\/$/, "");
   return url.toString().replace(/\/$/, "");
+}
+
+/**
+ * Recent Chrome gates a request from an HTTPS page to 127.0.0.1 behind a
+ * loopback permission. Until it is granted the request is neither answered nor
+ * refused — it is held until our own abort fires, with no console warning and
+ * nothing in the bridge's log. A plain timeout message sends the shopkeeper to
+ * check paper, cables and power on a printer that was never contacted.
+ */
+export function hardwareBridgeFailureMessage(reason: "stalled" | "unreachable", loopbackPermission: "blocked" | "unknown") {
+  if (reason === "unreachable") {
+    return "Could not reach the counter hardware on this computer. Check that the KiranaOS Hardware Bridge service is running, and that it was set up for this KiranaOS address.";
+  }
+  if (loopbackPermission === "blocked") {
+    return "This browser is blocking KiranaOS from reaching the counter hardware. Allow this site to reach devices on your local network, then try again. The printer itself is not the problem.";
+  }
+  return "The counter hardware did not answer. Either the KiranaOS Hardware Bridge service is stopped or this browser is blocking access to it — check those before checking the printer.";
+}
+
+/**
+ * Only ever returns "blocked" on evidence. A granted state proves nothing here:
+ * granting local-network access while loopback stays blocked still reports
+ * "granted" while every request continues to hang, so "granted" and "no such
+ * permission in this browser" collapse into the same ambiguous answer.
+ */
+async function loopbackPermissionState(): Promise<"blocked" | "unknown"> {
+  try {
+    const permissions = navigator?.permissions;
+    if (!permissions?.query) return "unknown";
+    const status = await permissions.query({ name: "local-network-access" as PermissionName });
+    return status.state === "granted" ? "unknown" : "blocked";
+  } catch {
+    return "unknown";
+  }
+}
+
+async function stalledBridgeError() {
+  return new Error(hardwareBridgeFailureMessage("stalled", await loopbackPermissionState()));
 }
 
 async function bridgeRequest<T>(bridgeUrl: string, path: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
@@ -111,7 +152,11 @@ async function bridgeRequest<T>(bridgeUrl: string, path: string, init: RequestIn
     if (!response.ok) throw new Error((body as { message?: string }).message || `Hardware bridge returned ${response.status}`);
     return body as T;
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw new Error("Hardware bridge did not respond in time.");
+    if (error instanceof DOMException && error.name === "AbortError") throw await stalledBridgeError();
+    // fetch reports a refused connection, and an origin the bridge will not
+    // answer, as the same opaque TypeError. Both mean the request reached the
+    // network and came back — unlike the stall above.
+    if (error instanceof TypeError) throw new Error(hardwareBridgeFailureMessage("unreachable", "unknown"));
     throw error;
   } finally {
     window.clearTimeout(timeout);
