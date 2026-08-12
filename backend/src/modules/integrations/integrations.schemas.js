@@ -36,4 +36,9 @@ export const integrationListQuerySchema = z.object({
 export const tallyExportQuerySchema = z.object({
   from: z.string().date().optional(),
   to: z.string().date().optional(),
+  // Off by default: most retail shops run Tally accounts-only and keep stock in
+  // the POS, and a voucher naming a stock item their company has never heard of
+  // is rejected on import. z.coerce.boolean() is not usable here — it reads the
+  // string "false" as true.
+  inventory: z.enum(["0", "1", "true", "false"]).default("0").transform((value) => value === "1" || value === "true"),
 });

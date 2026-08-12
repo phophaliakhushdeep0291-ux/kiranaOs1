@@ -15,11 +15,14 @@ import { getWhatsAppProviderStatus } from "../reminders/whatsapp.provider.js";
 import { hasFeature, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
 import { addJob } from "../../lib/queue.js";
 import { JOB_NAMES, QUEUE_NAMES } from "../../workers/queueNames.js";
+import { buildTallyEnvelope } from "./tally-voucher.js";
+import { validateGstin } from "../../utils/gst.js";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 const MAX_ACTIVE_API_KEYS = 10;
 const MAX_WEBHOOK_ENDPOINTS = 10;
 const MAX_TALLY_BILLS = 10000;
+const MAX_TALLY_INVENTORY_BILLS = 2000;
 
 function jsonArray(value) {
   try { const parsed = JSON.parse(value || "[]"); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
@@ -393,9 +396,6 @@ export async function listApiResource({ shopId, resource, scope, query }) {
   return { items, hasMore, nextCursor: hasMore ? items.at(-1)?.id ?? null : null };
 }
 
-function xml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;"); }
-function tallyDate(date, timeZone = env.DAILY_CLOSING_TIMEZONE) { return formatDateInTimeZone(date, timeZone).replaceAll("-", ""); }
-
 export async function buildTallyExport(shopId, query) {
   const timeZone = env.DAILY_CLOSING_TIMEZONE;
   const toKey = query.to || formatDateInTimeZone(new Date(), timeZone);
@@ -407,19 +407,34 @@ export async function buildTallyExport(shopId, query) {
   const from = fromRange.start;
   const to = toRange.end;
   if (from > to || daysBetweenInclusive(from, to) > 366) throw new AppError("Choose a valid date range of up to 366 days", 400, "EXPORT_DATE_RANGE_INVALID");
+
+  // Loading every line of every bill is a different order of query, so the
+  // inventory variant gets its own, much lower ceiling.
+  const inventory = Boolean(query.inventory);
+  const maxBills = inventory ? MAX_TALLY_INVENTORY_BILLS : MAX_TALLY_BILLS;
+
   const [shop, bills] = await Promise.all([
     db.shop.findUnique({ where: { id: shopId }, select: { name: true, gstNumber: true } }),
-    db.bill.findMany({ where: { shopId, status: "active", billType: { not: "estimate" }, createdAt: { gte: from, lte: to } }, orderBy: { createdAt: "asc" }, take: MAX_TALLY_BILLS + 1 }),
+    db.bill.findMany({
+      // businessDate, not createdAt: a bill written offline on the 31st and
+      // synced on the 2nd belongs to the month it was sold in, or the export
+      // silently disagrees with the GST report it is supposed to match.
+      // deletedAt is checked explicitly because soft-deleting a bill does not
+      // change its status, so status:"active" alone still returns deleted ones.
+      where: { shopId, status: "active", deletedAt: null, billType: { not: "estimate" }, businessDate: { gte: from, lte: to } },
+      orderBy: { businessDate: "asc" },
+      take: maxBills + 1,
+      ...(inventory && { include: { items: true } }),
+    }),
   ]);
-  if (bills.length > MAX_TALLY_BILLS) throw new AppError(`Export exceeds ${MAX_TALLY_BILLS} bills. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
-  const vouchers = bills.map((bill) => {
-    const isReturn = bill.billType === "sales_return";
-    const voucherType = isReturn ? "Credit Note" : "Sales";
-    const party = bill.customerName && bill.customerName !== "Walk-in" ? bill.customerName : "Cash";
-    const total = Math.abs(Number(bill.grandTotal || 0)).toFixed(2);
-    const partyAmount = isReturn ? total : `-${total}`;
-    const salesAmount = isReturn ? `-${total}` : total;
-    return `<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="${voucherType}" ACTION="Create"><DATE>${tallyDate(bill.createdAt, timeZone)}</DATE><VOUCHERNUMBER>${xml(bill.billNo)}</VOUCHERNUMBER><PARTYLEDGERNAME>${xml(party)}</PARTYLEDGERNAME><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><NARRATION>KiranaOS ${xml(bill.billType)}</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>${xml(party)}</LEDGERNAME><ISDEEMEDPOSITIVE>${isReturn ? "No" : "Yes"}</ISDEEMEDPOSITIVE><AMOUNT>${partyAmount}</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><ISDEEMEDPOSITIVE>${isReturn ? "Yes" : "No"}</ISDEEMEDPOSITIVE><AMOUNT>${salesAmount}</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER></TALLYMESSAGE>`;
-  }).join("");
-  return { filename: `kiranaos-tally-${fromKey}-${toKey}.xml`, xml: `<?xml version="1.0" encoding="UTF-8"?><ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>${xml(shop?.name || "KiranaOS")}</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>${vouchers}</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>`, count: bills.length };
+  if (bills.length > maxBills) throw new AppError(`Export exceeds ${maxBills} bills. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
+
+  const { xml, count, masterCount } = buildTallyEnvelope({
+    companyName: shop?.name || "KiranaOS",
+    sellerStateCode: validateGstin(shop?.gstNumber).stateCode || "",
+    bills,
+    timeZone,
+    inventory,
+  });
+  return { filename: `kiranaos-tally-${fromKey}-${toKey}.xml`, xml, count, masterCount };
 }

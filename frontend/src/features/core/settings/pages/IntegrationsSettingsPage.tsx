@@ -82,6 +82,7 @@ export default function IntegrationsSettingsPage() {
   const [secret, setSecret] = useState<NewSecret | null>(null);
   const [from, setFrom] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [tallyInventory, setTallyInventory] = useState(false);
 
   const overviewQ = useQuery({ queryKey: ["integrations", "overview"], queryFn: () => apiRequest<Overview>("/integrations/overview"), retry: 1 });
   const keysQ = useQuery({ queryKey: ["integrations", "keys"], queryFn: () => apiRequest<ApiKeyRow[]>("/integrations/api-keys"), retry: 1 });
@@ -94,7 +95,7 @@ export default function IntegrationsSettingsPage() {
     retry: 1,
   });
   const tallyM = useMutation({
-    mutationFn: () => apiRequest<string>(`/integrations/exports/tally?from=${from}&to=${to}`),
+    mutationFn: () => apiRequest<string>(`/integrations/exports/tally?from=${from}&to=${to}&inventory=${tallyInventory ? "1" : "0"}`),
     onSuccess: (xml) => { downloadText(`artha-tally-${from}-${to}.xml`, xml, "application/xml;charset=utf-8"); toast({ title: "Tally export downloaded", description: "Import it from TallyPrime > Import Data > Vouchers." }); },
     onError: (error) => toast({ title: "Export failed", description: errorMessage(error), variant: "destructive" }),
   });
@@ -227,7 +228,7 @@ export default function IntegrationsSettingsPage() {
 
         <Card>
           <CardHead icon={<Download size={15} />} title="TallyPrime export" sub="Accounting vouchers in import-ready XML" action={<Badge tone={tallyPlanEnabled ? "green" : "amber"}>{tallyPlanEnabled ? "Operational" : "Pro plan"}</Badge>} />
-          <div className="space-y-4 px-5 pb-5"><div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900"><div className="flex items-start gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0" /><p>{tallyPlanEnabled ? "Generated from server-authoritative bills and scoped to this shop. Customer names and voucher totals are XML-escaped." : "TallyPrime export is available on the Pro plan. Existing integration history remains visible after a downgrade."}</p></div></div><div className="grid grid-cols-2 gap-3"><Fld label="From"><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></Fld><Fld label="To"><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></Fld></div><Button className="w-full gap-2" disabled={!tallyPlanEnabled || tallyM.isPending || !from || !to || from > to} onClick={() => tallyM.mutate()}>{tallyM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} {tallyPlanEnabled ? "Download Tally XML" : "Upgrade to export"}</Button><a className="inline-flex items-center gap-1 text-xs font-bold text-[var(--brand)] hover:underline" href="https://help.tallysolutions.com/import-data-in-tallyprime/" target="_blank" rel="noreferrer">Tally import instructions <ExternalLink size={12} /></a></div>
+          <div className="space-y-4 px-5 pb-5"><div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900"><div className="flex items-start gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0" /><p>{tallyPlanEnabled ? "Vouchers carry a CGST/SGST/IGST split and create any party or tax ledger they reference, so TallyPrime can import them into a fresh company. Dates follow the sale, not the sync." : "TallyPrime export is available on the Pro plan. Existing integration history remains visible after a downgrade."}</p></div></div><div className="grid grid-cols-2 gap-3"><Fld label="From"><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></Fld><Fld label="To"><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></Fld></div><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#e4ebf6] p-3"><Checkbox checked={tallyInventory} onCheckedChange={(checked) => setTallyInventory(checked === true)} disabled={!tallyPlanEnabled} /><span><span className="block text-sm font-bold text-[var(--brand-ink)]">Include stock items</span><span className="block text-xs leading-5 text-[#64748b]">Adds item lines with HSN and creates stock item masters. Leave off if your accountant runs Tally accounts-only — those companies reject vouchers naming stock they do not carry.</span></span></label><Button className="w-full gap-2" disabled={!tallyPlanEnabled || tallyM.isPending || !from || !to || from > to} onClick={() => tallyM.mutate()}>{tallyM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} {tallyPlanEnabled ? "Download Tally XML" : "Upgrade to export"}</Button><a className="inline-flex items-center gap-1 text-xs font-bold text-[var(--brand)] hover:underline" href="https://help.tallysolutions.com/import-data-in-tallyprime/" target="_blank" rel="noreferrer">Tally import instructions <ExternalLink size={12} /></a></div>
         </Card>
       </div>
 
