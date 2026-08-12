@@ -101,7 +101,7 @@
     "test:batch-mrp": "node tests/batch-mrp.examples.js",
     "test:near-expiry": "node tests/near-expiry-alerts.examples.js",
     "test:schedule-h": "node tests/schedule-h-enforcement.examples.js && node tests/sale-guards.examples.js && node tests/prescription-register.examples.js",
-    "test:variants": "node tests/product-variants.examples.js && node tests/per-pack-stock.examples.js",
+    "test:variants": "node tests/product-variants.examples.js && node tests/per-pack-stock.examples.js && node tests/location-stock-scoping.examples.js",
     "test:event-bus-redis": "node tests/event-bus-redis.examples.js",
     "test:prescriptions": "node tests/prescription-register.examples.js",
     "test:serial-units": "node tests/product-unit-register.examples.js",
