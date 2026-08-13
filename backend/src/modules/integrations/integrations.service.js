@@ -415,7 +415,12 @@ export async function buildTallyExport(shopId, query) {
     // splitting follows exactly the rule getGstReport uses, so a filter held on one side and
     // not the other makes the GST screen and this export disagree. Soft-delete leaves `status`
     // as "active", so excluding the recycle bin takes an explicit `deletedAt: null`.
-    db.bill.findMany({ where: { shopId, status: "active", billType: { not: "estimate" }, deletedAt: null, createdAt: { gte: from, lte: to } }, orderBy: { createdAt: "asc" }, take: MAX_TALLY_BILLS + 1 }),
+    //
+    // Selected by `businessDate` — when the sale happened — not `createdAt`, when the row was
+    // written. They differ for a bill rung up offline and synced later, and every report in
+    // the app works in businessDate, so keying the export off createdAt filed that sale in the
+    // period it synced in rather than the one it was made in.
+    db.bill.findMany({ where: { shopId, status: "active", billType: { not: "estimate" }, deletedAt: null, businessDate: { gte: from, lte: to } }, orderBy: { businessDate: "asc" }, take: MAX_TALLY_BILLS + 1 }),
   ]);
   if (bills.length > MAX_TALLY_BILLS) throw new AppError(`Export exceeds ${MAX_TALLY_BILLS} bills. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
   const vouchers = bills.map((bill) => {
@@ -425,7 +430,7 @@ export async function buildTallyExport(shopId, query) {
     const total = Math.abs(Number(bill.grandTotal || 0)).toFixed(2);
     const partyAmount = isReturn ? total : `-${total}`;
     const salesAmount = isReturn ? `-${total}` : total;
-    return `<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="${voucherType}" ACTION="Create"><DATE>${tallyDate(bill.createdAt, timeZone)}</DATE><VOUCHERNUMBER>${xml(bill.billNo)}</VOUCHERNUMBER><PARTYLEDGERNAME>${xml(party)}</PARTYLEDGERNAME><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><NARRATION>KiranaOS ${xml(bill.billType)}</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>${xml(party)}</LEDGERNAME><ISDEEMEDPOSITIVE>${isReturn ? "No" : "Yes"}</ISDEEMEDPOSITIVE><AMOUNT>${partyAmount}</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><ISDEEMEDPOSITIVE>${isReturn ? "Yes" : "No"}</ISDEEMEDPOSITIVE><AMOUNT>${salesAmount}</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER></TALLYMESSAGE>`;
+    return `<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="${voucherType}" ACTION="Create"><DATE>${tallyDate(bill.businessDate, timeZone)}</DATE><VOUCHERNUMBER>${xml(bill.billNo)}</VOUCHERNUMBER><PARTYLEDGERNAME>${xml(party)}</PARTYLEDGERNAME><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><NARRATION>KiranaOS ${xml(bill.billType)}</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>${xml(party)}</LEDGERNAME><ISDEEMEDPOSITIVE>${isReturn ? "No" : "Yes"}</ISDEEMEDPOSITIVE><AMOUNT>${partyAmount}</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><ISDEEMEDPOSITIVE>${isReturn ? "Yes" : "No"}</ISDEEMEDPOSITIVE><AMOUNT>${salesAmount}</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER></TALLYMESSAGE>`;
   }).join("");
   return { filename: `kiranaos-tally-${fromKey}-${toKey}.xml`, xml: `<?xml version="1.0" encoding="UTF-8"?><ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>${xml(shop?.name || "KiranaOS")}</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>${vouchers}</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>`, count: bills.length };
 }
