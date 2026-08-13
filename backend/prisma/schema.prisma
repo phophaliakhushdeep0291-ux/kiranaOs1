@@ -83,6 +83,7 @@ model Shop {
   integrationApiKeys            IntegrationApiKey[]
   webhookEndpoints              WebhookEndpoint[]
   webhookDeliveries             WebhookDelivery[]
+  tallyPosts                    TallyPost[]
   storeLocations                StoreLocation[]
   locationStocks                LocationStock[]
   stockTransfers                StockTransfer[]
@@ -1308,6 +1309,30 @@ model UdharLedger {
   @@index([shopId, sourceType, sourceId])
   // Sync pull keyset pagination
   @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// TALLY POST — one row per document already pushed into TallyPrime.
+//
+// Tally's importer is not idempotent: the same envelope sent twice creates the
+// vouchers twice, and a shop that double-clicks "Send to Tally" would double a
+// month's turnover in its own books. This is the record that makes the second
+// send a no-op. It deliberately holds no money — only the identity of what was
+// sent — so it can never disagree with the documents it points at.
+// ─────────────────────────────────────────────
+model TallyPost {
+  id            String   @id @default(cuid())
+  shopId        String
+  documentType  String // sale | sales_return | purchase | purchase_return | receipt | expense
+  documentId    String
+  voucherNumber String
+  remoteId      String
+  postedAt      DateTime @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, documentType, documentId])
+  @@index([shopId, postedAt])
 }
 
 // ─────────────────────────────────────────────

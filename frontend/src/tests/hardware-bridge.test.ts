@@ -50,7 +50,7 @@ describe("local hardware bridge security boundary", () => {
     // 4ms. Wrong in both directions, so it must not drive what the counter is
     // told — a confident wrong cause is worse than naming both.
     expect(source).not.toContain("local-network-access");
-    expect(source).not.toContain("navigator.permissions");
+    expect(source).not.toContain("permissions.query");
     expect(source).not.toContain("Hardware bridge did not respond in time.");
   });
 

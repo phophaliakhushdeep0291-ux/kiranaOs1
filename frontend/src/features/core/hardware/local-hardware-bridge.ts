@@ -5,7 +5,7 @@ export interface HardwareBridgeHealth {
   ok: boolean;
   version?: string;
   deviceName?: string;
-  capabilities?: { print?: boolean; cutter?: boolean; cashDrawer?: boolean; scale?: boolean; customerDisplay?: boolean; qrPrint?: boolean };
+  capabilities?: { print?: boolean; cutter?: boolean; cashDrawer?: boolean; scale?: boolean; customerDisplay?: boolean; qrPrint?: boolean; tally?: boolean };
   update?: { available?: boolean; currentVersion?: string; latestVersion?: string; downloadUrl?: string };
 }
 
@@ -184,6 +184,31 @@ export async function printQrSlipViaHardwareBridge(bridgeUrl: string, input: { m
     method: "POST",
     body: JSON.stringify({ ...input, reference: input.reference ?? "" }),
   }, 12_000);
+}
+
+export interface TallyPostResult {
+  ok: boolean;
+  created: number;
+  altered: number;
+  ignored: number;
+  errors: number;
+  exceptions: number;
+  lineErrors?: string[];
+}
+
+/**
+ * Push accounting vouchers into the TallyPrime running on this same counter.
+ *
+ * The bridge decides where they go — the address is its configuration, never
+ * ours — so all that crosses the wire is the envelope itself.
+ *
+ * The timeout is minutes rather than seconds: Tally imports a year of vouchers
+ * synchronously, and giving up early would leave the caller unable to tell a
+ * slow import from a failed one, which is the one thing it must not guess at.
+ */
+export async function postTallyViaHardwareBridge(bridgeUrl: string, xml: string) {
+  if (!xml.trim()) throw new Error("There are no vouchers to send.");
+  return bridgeRequest<TallyPostResult>(bridgeUrl, "/v1/tally/post", { method: "POST", body: JSON.stringify({ xml }) }, 180_000);
 }
 
 export async function showCustomerDisplayViaHardwareBridge(bridgeUrl: string, input: HardwareCustomerDisplayState) {

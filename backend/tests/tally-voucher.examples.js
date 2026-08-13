@@ -1,6 +1,7 @@
 import assert from "assert";
 import fs from "fs";
-import { buildTallyEnvelope, splitGst } from "../src/modules/integrations/tally-voucher.js";
+import { buildTallyEnvelope, remoteVoucherId, splitGst } from "../src/modules/integrations/tally-voucher.js";
+import { tallyExportQuerySchema } from "../src/modules/integrations/integrations.schemas.js";
 import { round2, toPaise } from "../src/utils/money.js";
 
 // TallyPrime export. The export is a one-way door: whatever these vouchers say
@@ -162,13 +163,58 @@ assert.equal(ledgerAmount(returnVoucher, "Sales"), -100, "turnover is reversed o
 assert.equal(ledgerAmount(returnVoucher, "Output CGST"), -2.5, "tax is reversed on a return, not collected again");
 assert.ok(returnVoucher.includes("<ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>"), "the reversed legs are marked as debits");
 
+/* ── Tender: who was actually debited ─────────────────────────────────────── */
+
+// The bug this guards: debiting the customer the whole bill when they only put
+// part of it on udhar. The shop then chases a debt that does not exist.
+const partPaid = vouchersOf(envelope([bill({
+  billNo: "P-1", grandTotal: 500, subtotal: 500, gst: 0, customerName: "Iqbal",
+  creditAmount: 300, paidAmount: 200, payments: [{ mode: "cash", amount: 200, status: "confirmed" }],
+})]).xml)[0];
+assert.equal(ledgerAmount(partPaid, "Cash"), -200, "only the cash actually tendered hits the cash book");
+assert.equal(ledgerAmount(partPaid, "Iqbal"), -300, "only the unpaid part becomes a receivable");
+assert.equal(balanceOf(partPaid), 0, "a part-paid bill balances");
+
+// A named customer who paid in full owes nothing, so no debtor ledger is
+// invented for them — but the voucher still records who bought.
+const cashNamed = envelope([bill({ billNo: "P-2", customerName: "Sharma & Sons" })]);
+assert.equal(ledgerAmount(vouchersOf(cashNamed.xml)[0], "Cash"), -105, "a fully paid sale debits cash");
+assert.ok(!declaredLedgers(cashNamed.xml).includes("Sharma &amp; Sons"), "a customer who owes nothing gets no debtor ledger");
+assert.ok(cashNamed.xml.includes("<PARTYNAME>Sharma &amp; Sons</PARTYNAME>"), "the buyer is still named on the voucher");
+
+// Split tender across instruments.
+const splitTender = vouchersOf(envelope([bill({
+  billNo: "P-3", grandTotal: 500, subtotal: 500, gst: 0,
+  payments: [{ mode: "cash", amount: 200, status: "confirmed" }, { mode: "upi", amount: 300, status: "confirmed" }],
+})]).xml)[0];
+assert.equal(ledgerAmount(splitTender, "Cash"), -200, "the cash leg goes to cash");
+assert.equal(ledgerAmount(splitTender, "UPI Collections"), -300, "the UPI leg goes to a bank ledger");
+
+// An unconfirmed payment is not money in the till yet; the residual keeps the
+// voucher balanced rather than silently dropping ₹300.
+const pending = vouchersOf(envelope([bill({
+  billNo: "P-4", grandTotal: 500, subtotal: 500, gst: 0,
+  payments: [{ mode: "upi", amount: 300, status: "pending" }],
+})]).xml)[0];
+assert.equal(ledgerAmount(pending, "UPI Collections"), 0, "an unconfirmed payment is not posted");
+assert.equal(balanceOf(pending), 0, "an unconfirmed payment still leaves a balanced voucher");
+
+// A tender mode nobody has taught this exporter about must be visible, not
+// quietly folded into cash where a wrong cash book hides forever.
+const unknownTender = envelope([bill({
+  billNo: "P-5", grandTotal: 100, subtotal: 100, gst: 0,
+  payments: [{ mode: "crypto", amount: 100, status: "confirmed" }],
+})]);
+assert.equal(ledgerAmount(vouchersOf(unknownTender.xml)[0], "Unclassified Tender"), -100, "an unknown tender mode lands in suspense");
+assert.ok(declaredLedgers(unknownTender.xml).includes("Unclassified Tender"), "the suspense ledger is declared");
+
 /* ── Masters: every ledger a voucher names must be declared ───────────────── */
 
 const mixed = envelope([
-  bill({ billNo: "M-1", customerName: "Sharma & Sons", buyerGstin: "27AAECS1234F1Z5" }),
-  bill({ billNo: "M-2", customerName: "Sharma & Sons" }),
+  bill({ billNo: "M-1", customerName: "Sharma & Sons", buyerGstin: "27AAECS1234F1Z5", creditAmount: 105 }),
+  bill({ billNo: "M-2", customerName: "Sharma & Sons", creditAmount: 105 }),
   bill({ billNo: "M-3", customerName: "Walk-in" }),
-  bill({ billNo: "M-4", customerName: "Rao Traders", buyerStateCode: "29", gst: 18, subtotal: 118, grandTotal: 118 }),
+  bill({ billNo: "M-4", customerName: "Rao Traders", buyerStateCode: "29", gst: 18, subtotal: 118, grandTotal: 118, creditAmount: 118 }),
 ]);
 assertWellFormed(mixed.xml);
 
@@ -276,12 +322,169 @@ const oddUnit = envelope([bill({ billNo: "U-1", items: [item({ rateUnit: "bushel
 assertWellFormed(oddUnit.xml);
 assert.equal(balanceOf(vouchersOf(oddUnit.xml)[0]), 0, "an unconvertible unit still yields a balanced voucher");
 
+/* ── Purchases ────────────────────────────────────────────────────────────── */
+
+const purchase = envelope([], {
+  purchases: [
+    { receiptNumber: "GRN-1", supplierInvoiceNumber: "SUP/2026/44", supplierInvoiceAmount: 4000, totalAmount: 3950, paidAmount: 1000, paymentMode: "bank", supplier: { name: "Agarwal Wholesale" }, createdAt: new Date("2026-08-11T06:00:00.000Z") },
+    { receiptNumber: "GRN-2", totalAmount: 2000, paidAmount: 0, supplier: null, createdAt: new Date("2026-08-11T06:00:00.000Z") },
+  ],
+});
+assertWellFormed(purchase.xml);
+for (const voucher of vouchersOf(purchase.xml)) assert.equal(balanceOf(voucher), 0, "a purchase voucher balances");
+
+const firstPurchase = vouchersOf(purchase.xml)[0];
+assert.ok(firstPurchase.includes('VCHTYPE="Purchase"'), "a goods receipt is a purchase voucher");
+// The supplier's own invoice is the accounting document, not our internal GRN.
+assert.ok(firstPurchase.includes("<VOUCHERNUMBER>SUP/2026/44</VOUCHERNUMBER>"), "the supplier invoice number is the voucher number");
+assert.ok(firstPurchase.includes("<REFERENCE>GRN-1</REFERENCE>"), "the internal receipt stays as the reference");
+assert.equal(ledgerAmount(firstPurchase, "Purchase"), -4000, "the supplier's invoice value is what enters the books");
+assert.equal(ledgerAmount(firstPurchase, "Agarwal Wholesale"), 3000, "only the unpaid part becomes a payable");
+assert.equal(ledgerAmount(firstPurchase, "Bank"), 1000, "the part paid at receipt leaves the bank");
+assert.ok(declaredLedgers(purchase.xml).includes("Agarwal Wholesale"), "the supplier ledger is created");
+assert.ok(purchase.xml.includes("<PARENT>Sundry Creditors</PARENT>"), "a supplier is a creditor, not a debtor");
+// A receipt whose supplier row was deleted still has to post somewhere real.
+assert.ok(declaredLedgers(purchase.xml).includes("Sundry Supplier"), "a receipt with no supplier still posts to a named ledger");
+
+const debitNote = envelope([], {
+  purchaseReturns: [
+    { returnNumber: "PR-1", totalAmount: 500, refundAmount: 200, supplierCreditAmount: 300, refundMode: "cash", supplier: { name: "Agarwal Wholesale" }, createdAt: new Date("2026-08-11T06:00:00.000Z") },
+    { returnNumber: "PR-2", totalAmount: 500, refundAmount: 0, supplierCreditAmount: 500, refundMode: "supplier_credit", supplier: { name: "Agarwal Wholesale" }, createdAt: new Date("2026-08-11T06:00:00.000Z") },
+  ],
+});
+assertWellFormed(debitNote.xml);
+for (const voucher of vouchersOf(debitNote.xml)) assert.equal(balanceOf(voucher), 0, "a debit note balances");
+const refunded = vouchersOf(debitNote.xml)[0];
+assert.ok(refunded.includes('VCHTYPE="Debit Note"'), "a purchase return is a debit note");
+assert.equal(ledgerAmount(refunded, "Purchase"), 500, "returned goods reverse the purchase");
+assert.equal(ledgerAmount(refunded, "Cash"), -200, "cash refunded by the supplier comes back in");
+assert.equal(ledgerAmount(refunded, "Agarwal Wholesale"), -300, "the rest reduces what we owe them");
+// A credit-note settlement moves no money, so nothing may touch the cash book.
+assert.equal(ledgerAmount(vouchersOf(debitNote.xml)[1], "Cash"), 0, "a supplier-credit return moves no cash");
+
+/* ── Receipts and payments ────────────────────────────────────────────────── */
+
+const receipts = envelope([], {
+  receipts: [
+    { id: "clx0000000001", customerName: "Iqbal", amount: 300, mode: "cash", billNo: "KOS-2026-0001", businessDate: new Date("2026-08-11T06:00:00.000Z") },
+    { id: "clx0000000002", customerName: "Iqbal", amount: 200, mode: "upi", note: "part payment", businessDate: new Date("2026-08-11T06:00:00.000Z") },
+  ],
+});
+assertWellFormed(receipts.xml);
+for (const voucher of vouchersOf(receipts.xml)) assert.equal(balanceOf(voucher), 0, "a receipt balances");
+const cashReceipt = vouchersOf(receipts.xml)[0];
+assert.ok(cashReceipt.includes('VCHTYPE="Receipt"'), "an udhar collection is a receipt voucher");
+assert.equal(ledgerAmount(cashReceipt, "Cash"), -300, "collected cash comes into the till");
+assert.equal(ledgerAmount(cashReceipt, "Iqbal"), 300, "the customer's balance comes down");
+assert.equal(ledgerAmount(vouchersOf(receipts.xml)[1], "UPI Collections"), -200, "a UPI collection lands in the bank ledger");
+assert.ok(declaredLedgers(receipts.xml).filter((name) => name === "Iqbal").length === 1, "one ledger for a customer paying twice");
+
+const expenses = envelope([], {
+  expenses: [
+    { id: "clx0000000003", title: "August rent", category: "rent", amount: 12000, paymentMode: "bank", vendor: "Landlord", spentAt: new Date("2026-08-11T06:00:00.000Z") },
+    { id: "clx0000000004", title: "Tea", category: "general", amount: 60, paymentMode: "cash", spentAt: new Date("2026-08-11T06:00:00.000Z") },
+    { id: "clx0000000005", title: "Bulbs", category: "shop_upkeep", amount: 250, paymentMode: "cash", spentAt: new Date("2026-08-11T06:00:00.000Z") },
+  ],
+});
+assertWellFormed(expenses.xml);
+for (const voucher of vouchersOf(expenses.xml)) assert.equal(balanceOf(voucher), 0, "an expense payment balances");
+const rent = vouchersOf(expenses.xml)[0];
+assert.ok(rent.includes('VCHTYPE="Payment"'), "an expense is a payment voucher");
+assert.equal(ledgerAmount(rent, "Rent"), -12000, "the expense hits its own category ledger");
+assert.equal(ledgerAmount(rent, "Bank"), 12000, "the money leaves the account it was paid from");
+// Categories become the P&L breakdown the shopkeeper already thinks in.
+assert.ok(declaredLedgers(expenses.xml).includes("General Expenses"), "an uncategorised expense gets a general ledger");
+assert.ok(declaredLedgers(expenses.xml).includes("Shop Upkeep"), "a snake_case category becomes a readable ledger name");
+assert.ok(expenses.xml.includes("<PARENT>Indirect Expenses</PARENT>"), "expense ledgers sit under indirect expenses");
+
+/* ── A full book in one envelope ──────────────────────────────────────────── */
+
+const fullBook = envelope([bill({ billNo: "F-1", customerName: "Iqbal", creditAmount: 105 })], {
+  purchases: [{ receiptNumber: "GRN-9", totalAmount: 1000, paidAmount: 0, supplier: { name: "Agarwal Wholesale" }, createdAt: new Date("2026-08-11T06:00:00.000Z") }],
+  purchaseReturns: [{ returnNumber: "PR-9", totalAmount: 100, refundAmount: 0, refundMode: "supplier_credit", supplier: { name: "Agarwal Wholesale" }, createdAt: new Date("2026-08-11T06:00:00.000Z") }],
+  receipts: [{ id: "clx0000000006", customerName: "Iqbal", amount: 105, mode: "cash", businessDate: new Date("2026-08-11T06:00:00.000Z") }],
+  expenses: [{ id: "clx0000000007", title: "Tea", category: "general", amount: 60, paymentMode: "cash", spentAt: new Date("2026-08-11T06:00:00.000Z") }],
+});
+assertWellFormed(fullBook.xml);
+assert.equal(fullBook.count, 5, "every document type produces a voucher");
+assert.deepEqual(fullBook.counts, { sales: 1, purchases: 1, purchaseReturns: 1, receipts: 1, expenses: 1 }, "the caller can see what went in");
+for (const voucher of vouchersOf(fullBook.xml)) {
+  const number = /<VOUCHERNUMBER>([^<]*)</.exec(voucher)[1];
+  assert.equal(balanceOf(voucher), 0, `voucher ${number} does not balance`);
+}
+
+// The whole point of masters-first: nothing in a mixed book may reference a
+// ledger the envelope forgot, and Iqbal must appear once despite being both a
+// debtor on the sale and the payer on the receipt.
+const fullDeclared = new Set([...declaredLedgers(fullBook.xml), "Cash"]);
+for (const voucher of vouchersOf(fullBook.xml)) {
+  for (const ledger of ledgerNamesIn(voucher)) {
+    assert.ok(fullDeclared.has(ledger), `mixed book names an undeclared ledger: ${ledger}`);
+  }
+}
+assert.equal(declaredLedgers(fullBook.xml).filter((name) => name === "Iqbal").length, 1, "one ledger for a party appearing in two voucher types");
+assert.ok(fullBook.xml.indexOf("<LEDGER ") < fullBook.xml.indexOf("<VOUCHER "), "masters still lead in a mixed book");
+
 /* ── Empty range ──────────────────────────────────────────────────────────── */
 
 const empty = envelope([]);
 assertWellFormed(empty.xml);
 assert.equal(empty.count, 0, "an empty range exports no vouchers");
 assert.ok(empty.xml.includes("<REQUESTDATA></REQUESTDATA>"), "an empty range is still a valid import file");
+
+/* ── Voucher identity, so a re-send is not a second voucher ───────────────── */
+
+// Derived, never random: re-exporting last month has to produce byte-identical
+// identifiers, or "send again" quietly doubles that month's turnover in Tally.
+assert.equal(
+  remoteVoucherId("shop_1", "sale", "bill_1"),
+  remoteVoucherId("shop_1", "sale", "bill_1"),
+  "the same document always has the same identity",
+);
+assert.notEqual(remoteVoucherId("shop_1", "sale", "bill_1"), remoteVoucherId("shop_1", "sale", "bill_2"), "two bills are two vouchers");
+// A sale and its return share nothing but the bill row they came from.
+assert.notEqual(remoteVoucherId("shop_1", "sale", "bill_1"), remoteVoucherId("shop_1", "sales_return", "bill_1"), "a return is not its own sale");
+// Two shops importing into one Tally company must not overwrite each other.
+assert.notEqual(remoteVoucherId("shop_1", "sale", "bill_1"), remoteVoucherId("shop_2", "sale", "bill_1"), "identity is per shop");
+assert.match(remoteVoucherId("shop_1", "sale", "bill_1"), /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/, "Tally expects a GUID-shaped remote id");
+
+const identified = buildTallyEnvelope({
+  companyName: "Test Shop", shopId: "shop_1", sellerStateCode: "27", timeZone: TZ,
+  bills: [bill({ id: "bill_1", billNo: "X-1" }), bill({ id: "bill_2", billNo: "X-2", billType: "sales_return" })],
+  expenses: [{ id: "exp_1", title: "Tea", category: "general", amount: 60, paymentMode: "cash", spentAt: new Date("2026-08-11T06:00:00.000Z") }],
+});
+assertWellFormed(identified.xml);
+assert.equal(identified.documents.length, 3, "every voucher is reported to the caller");
+assert.deepEqual(
+  identified.documents.map((document) => document.type),
+  ["sale", "sales_return", "expense"],
+  "a return is reported as its own kind so it is tracked separately",
+);
+// What the caller records as sent must be exactly what is in the envelope.
+for (const document of identified.documents) {
+  assert.ok(identified.xml.includes(`REMOTEID="${document.remoteId}"`), `envelope carries the id reported for ${document.voucherNumber}`);
+  assert.equal(document.remoteId, remoteVoucherId("shop_1", document.type, document.id), "reported identity matches the derivation");
+}
+assert.equal(new Set(identified.documents.map((d) => d.remoteId)).size, 3, "no two vouchers share an identity");
+
+/* ── Which books the caller asked for ─────────────────────────────────────── */
+
+const parseQuery = (input) => tallyExportQuerySchema.safeParse(input);
+
+// Sales-only would leave the accountant re-keying every purchase and
+// collection, which is the whole problem this export exists to remove.
+assert.deepEqual(parseQuery({}).data.include, ["sales", "purchases", "returns", "receipts", "expenses"], "the default is the whole book");
+assert.deepEqual(parseQuery({ include: "sales,expenses" }).data.include, ["sales", "expenses"], "a subset is respected");
+assert.deepEqual(parseQuery({ include: " Sales , SALES ,expenses " }).data.include, ["sales", "expenses"], "casing, padding and repeats are tolerated");
+
+// A typo must not silently export less than the shopkeeper believes it did.
+assert.equal(parseQuery({ include: "sales,payroll" }).success, false, "an unknown document type is rejected, not ignored");
+assert.equal(parseQuery({ include: "" }).success, false, "exporting nothing is a mistake worth reporting");
+
+// z.coerce.boolean() reads the string "false" as true, which would turn the
+// stock-item opt-in into an opt-out for anyone passing it explicitly.
+assert.equal(parseQuery({ inventory: "false" }).data.inventory, false, '"false" must mean false');
+assert.equal(parseQuery({ inventory: "1" }).data.inventory, true, '"1" must mean true');
 
 /* ── Bill selection (guarded at the query, so assert the query) ───────────── */
 

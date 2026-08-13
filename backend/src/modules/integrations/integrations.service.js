@@ -23,6 +23,7 @@ const MAX_ACTIVE_API_KEYS = 10;
 const MAX_WEBHOOK_ENDPOINTS = 10;
 const MAX_TALLY_BILLS = 10000;
 const MAX_TALLY_INVENTORY_BILLS = 2000;
+const MAX_TALLY_VOUCHERS = 20000;
 
 function jsonArray(value) {
   try { const parsed = JSON.parse(value || "[]"); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
@@ -412,29 +413,162 @@ export async function buildTallyExport(shopId, query) {
   // inventory variant gets its own, much lower ceiling.
   const inventory = Boolean(query.inventory);
   const maxBills = inventory ? MAX_TALLY_INVENTORY_BILLS : MAX_TALLY_BILLS;
+  const wants = (document) => query.include.includes(document);
 
-  const [shop, bills] = await Promise.all([
+  const [shop, bills, purchases, purchaseReturns, receipts, expenses] = await Promise.all([
     db.shop.findUnique({ where: { id: shopId }, select: { name: true, gstNumber: true } }),
-    db.bill.findMany({
-      // businessDate, not createdAt: a bill written offline on the 31st and
-      // synced on the 2nd belongs to the month it was sold in, or the export
-      // silently disagrees with the GST report it is supposed to match.
-      // deletedAt is checked explicitly because soft-deleting a bill does not
-      // change its status, so status:"active" alone still returns deleted ones.
-      where: { shopId, status: "active", deletedAt: null, billType: { not: "estimate" }, businessDate: { gte: from, lte: to } },
-      orderBy: { businessDate: "asc" },
-      take: maxBills + 1,
-      ...(inventory && { include: { items: true } }),
-    }),
-  ]);
-  if (bills.length > maxBills) throw new AppError(`Export exceeds ${maxBills} bills. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
 
-  const { xml, count, masterCount } = buildTallyEnvelope({
+    wants("sales")
+      ? db.bill.findMany({
+          // businessDate, not createdAt: a bill written offline on the 31st and
+          // synced on the 2nd belongs to the month it was sold in, or the export
+          // silently disagrees with the GST report it is supposed to match.
+          // deletedAt is checked explicitly because soft-deleting a bill does not
+          // change its status, so status:"active" alone still returns deleted ones.
+          where: { shopId, status: "active", deletedAt: null, billType: { not: "estimate" }, businessDate: { gte: from, lte: to } },
+          orderBy: { businessDate: "asc" },
+          take: maxBills + 1,
+          // Payments decide which ledger each bill is actually debited to, so
+          // they are needed even when stock lines are not.
+          include: { payments: true, ...(inventory && { items: true }) },
+        })
+      : [],
+
+    wants("purchases")
+      ? db.purchaseReceipt.findMany({
+          where: { shopId, createdAt: { gte: from, lte: to } },
+          orderBy: { createdAt: "asc" },
+          take: MAX_TALLY_BILLS + 1,
+          include: { supplier: { select: { name: true } } },
+        })
+      : [],
+
+    wants("returns")
+      ? db.purchaseReturn.findMany({
+          where: { shopId, status: "active", createdAt: { gte: from, lte: to } },
+          orderBy: { createdAt: "asc" },
+          take: MAX_TALLY_BILLS + 1,
+          include: { supplier: { select: { name: true } } },
+        })
+      : [],
+
+    wants("receipts")
+      ? db.udharLedger.findMany({
+          // The same filter the udhar reports use: a reversed collection never
+          // happened, and a "reversal" row is the undo, not a second payment.
+          where: { shopId, type: "payment", mode: { not: "reversal" }, reversedAt: null, businessDate: { gte: from, lte: to } },
+          orderBy: { businessDate: "asc" },
+          take: MAX_TALLY_BILLS + 1,
+        })
+      : [],
+
+    wants("expenses")
+      ? db.expense.findMany({
+          // A Payment voucher asserts money left the shop, so a pending expense
+          // is an accrual this export has no business posting.
+          where: { shopId, deletedAt: null, status: "paid", spentAt: { gte: from, lte: to } },
+          orderBy: { spentAt: "asc" },
+          take: MAX_TALLY_BILLS + 1,
+        })
+      : [],
+  ]);
+
+  if (bills.length > maxBills) throw new AppError(`Export exceeds ${maxBills} bills. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
+  const documentCount = bills.length + purchases.length + purchaseReturns.length + receipts.length + expenses.length;
+  if (documentCount > MAX_TALLY_VOUCHERS) throw new AppError(`Export exceeds ${MAX_TALLY_VOUCHERS} vouchers. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
+
+  const selected = query.unsent
+    ? await withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns, receipts, expenses })
+    : { bills, purchases, purchaseReturns, receipts, expenses };
+
+  const { xml, count, masterCount, counts, documents } = buildTallyEnvelope({
     companyName: shop?.name || "KiranaOS",
+    shopId,
     sellerStateCode: validateGstin(shop?.gstNumber).stateCode || "",
-    bills,
+    ...selected,
     timeZone,
     inventory,
   });
-  return { filename: `kiranaos-tally-${fromKey}-${toKey}.xml`, xml, count, masterCount };
+  return { filename: `kiranaos-tally-${fromKey}-${toKey}.xml`, xml, count, masterCount, counts, documents, skipped: documentCount - count };
+}
+
+function saleDocumentType(bill) {
+  return bill.billType === "sales_return" ? "sales_return" : "sale";
+}
+
+/**
+ * Drop anything already pushed into Tally.
+ *
+ * Without this, a shopkeeper who clicks "Send to Tally" twice — after a timeout,
+ * or simply unsure whether the first click worked — books the month twice.
+ * Tally's importer will not stop them, so this is where it has to stop.
+ */
+async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns, receipts, expenses }) {
+  const groups = [
+    ["sale", bills.filter((bill) => saleDocumentType(bill) === "sale").map((bill) => bill.id)],
+    ["sales_return", bills.filter((bill) => saleDocumentType(bill) === "sales_return").map((bill) => bill.id)],
+    ["purchase", purchases.map((row) => row.id)],
+    ["purchase_return", purchaseReturns.map((row) => row.id)],
+    ["receipt", receipts.map((row) => row.id)],
+    ["expense", expenses.map((row) => row.id)],
+  ].filter(([, ids]) => ids.length > 0);
+
+  if (groups.length === 0) return { bills, purchases, purchaseReturns, receipts, expenses };
+
+  const posted = await db.tallyPost.findMany({
+    where: { shopId, OR: groups.map(([documentType, ids]) => ({ documentType, documentId: { in: ids } })) },
+    select: { documentType: true, documentId: true },
+  });
+  const sent = new Set(posted.map((row) => `${row.documentType}:${row.documentId}`));
+  const keep = (type) => (row) => !sent.has(`${type}:${row.id}`);
+
+  return {
+    bills: bills.filter((bill) => !sent.has(`${saleDocumentType(bill)}:${bill.id}`)),
+    purchases: purchases.filter(keep("purchase")),
+    purchaseReturns: purchaseReturns.filter(keep("purchase_return")),
+    receipts: receipts.filter(keep("receipt")),
+    expenses: expenses.filter(keep("expense")),
+  };
+}
+
+/**
+ * Record what TallyPrime accepted.
+ *
+ * Called only after the bridge reports a successful import, which leaves a real
+ * at-least-once window: if the shop loses power between Tally accepting and this
+ * landing, those documents look unsent and would be pushed again. That is why
+ * every voucher also carries a derived REMOTEID — Tally recognises the repeat as
+ * the same object instead of a second one.
+ */
+export async function markTallyPosted(shopId, documents) {
+  const rows = documents.map((document) => ({
+    shopId,
+    documentType: document.type,
+    documentId: document.id,
+    voucherNumber: document.voucherNumber,
+    remoteId: document.remoteId,
+  }));
+  if (rows.length === 0) return { recorded: 0 };
+
+  let recorded = 0;
+  for (let index = 0; index < rows.length; index += 500) {
+    const chunk = rows.slice(index, index + 500);
+    try {
+      const result = await db.tallyPost.createMany({ data: chunk });
+      recorded += result.count;
+    } catch {
+      // Two tills confirming the same batch race here, and skipDuplicates is not
+      // available on SQLite. Losing the record would be worse than the retry
+      // cost, because an unrecorded post is one that gets sent again.
+      for (const row of chunk) {
+        await db.tallyPost.upsert({
+          where: { shopId_documentType_documentId: { shopId, documentType: row.documentType, documentId: row.documentId } },
+          update: {},
+          create: row,
+        });
+        recorded += 1;
+      }
+    }
+  }
+  return { recorded };
 }

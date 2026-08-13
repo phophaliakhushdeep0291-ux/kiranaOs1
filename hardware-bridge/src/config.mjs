@@ -38,6 +38,12 @@ function envConfig(env) {
       width: Number(env.KIRANA_BRIDGE_DISPLAY_WIDTH || 20),
     },
     pairing: null,
+    tally: {
+      // Blank means the shop does not use Tally, which is the default. The
+      // address is configuration only — never taken from a request — so the
+      // bridge can never be steered into posting somewhere else.
+      url: String(env.KIRANA_BRIDGE_TALLY_URL || ""),
+    },
     updateManifestUrl: String(env.KIRANA_BRIDGE_UPDATE_MANIFEST_URL || ""),
   };
 }
@@ -76,6 +82,9 @@ export async function loadBridgeConfig(filePath = defaultConfigPath(), env = pro
       width: Number(disk?.customerDisplay?.width || fallback.customerDisplay.width || 20),
     },
     pairing: disk?.pairing && typeof disk.pairing === "object" ? { ...disk.pairing } : null,
+    tally: {
+      url: String(disk?.tally?.url || fallback.tally.url),
+    },
     updateManifestUrl: String(disk?.updateManifestUrl || fallback.updateManifestUrl),
   };
 }
