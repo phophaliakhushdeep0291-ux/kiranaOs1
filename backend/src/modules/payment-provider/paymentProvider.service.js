@@ -210,6 +210,19 @@ function subscriptionCheckoutTransactionId(shopId, idempotencyKey) {
     .update(`${shopId}\0${idempotencyKey}`)
     .digest("hex");
   return `subchk_${digest.slice(0, 32)}`;
+<<<<<<< HEAD
+=======
+
+function normalizeSubscriptionCheckoutIdempotencyKey(value) {
+  const key = String(value || crypto.randomUUID()).trim();
+  if (key.length < 8 || key.length > 120 || !/^[A-Za-z0-9:_-]+$/.test(key)) {
+    const err = new AppError("Checkout idempotency key is invalid", 400);
+    err.code = "SUBSCRIPTION_CHECKOUT_IDEMPOTENCY_KEY_INVALID";
+    throw err;
+  }
+  return key;
+}
+>>>>>>> fb0385730d47e18b07d00c252cde6e8846520f01
 }
 
 function normalizeSubscriptionCheckoutIdempotencyKey(value) {
