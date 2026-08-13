@@ -36,6 +36,11 @@ internal sealed class CustomerDisplayConfig : ExecutableAdapterConfig
     [JsonPropertyName("width")] public int Width { get; set; } = 20;
 }
 
+internal sealed class TallyConfig
+{
+    [JsonPropertyName("url")] public string Url { get; set; } = "";
+}
+
 internal sealed class BridgeConfig
 {
     [JsonPropertyName("version")] public int Version { get; set; } = 1;
@@ -46,6 +51,11 @@ internal sealed class BridgeConfig
     [JsonPropertyName("scale")] public ExecutableAdapterConfig Scale { get; set; } = new();
     [JsonPropertyName("customerDisplay")] public CustomerDisplayConfig CustomerDisplay { get; set; } = new();
     [JsonPropertyName("pairing")] public PairingState? Pairing { get; set; }
+    // Saving this window rewrites the whole file, so a key it does not know
+    // about is a key it silently deletes. The Tally address is set by hand
+    // today, and losing it on the next printer change would take the counter's
+    // accounting link down with no visible cause.
+    [JsonPropertyName("tally")] public TallyConfig Tally { get; set; } = new();
     [JsonPropertyName("updateManifestUrl")] public string UpdateManifestUrl { get; set; } =
         "https://updates.kiranaos.in/hardware-bridge/stable.json";
 }

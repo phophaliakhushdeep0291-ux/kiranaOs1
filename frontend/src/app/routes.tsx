@@ -15,7 +15,7 @@ import { useScreenTracking } from "@/lib/activity";
 import type { FeatureName } from "@/features/core/subscription/plans";
 import { isPathInBusinessProfile, profileHasCapability, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { PermissionDenied } from "@/components/shared/PermissionDenied";
-import { loadBillingRoute, loadCustomersRoute, loadInventoryRoute, loadPurchasesRoute, loadSalesOverviewRoute, loadUdharRoute } from "./route-preload";
+import { loadBillingRoute, loadCustomersRoute, loadInventoryRoute, loadPurchasesRoute, loadSalesOverviewRoute } from "./route-preload";
 
 const Login = lazy(() => import("@/features/core/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/core/auth/pages/RegisterPage"));
@@ -36,7 +36,6 @@ const NewReturnPage = lazy(() => import("@/features/core/returns/pages/NewReturn
 const Products = lazy(() => import("@/features/core/products/pages/ProductsPage"));
 const ProductPricing = lazy(() => import("@/features/core/pricing/pages/ProductPricingPage"));
 const Customers = lazy(loadCustomersRoute);
-const Udhar = lazy(loadUdharRoute);
 const CustomerDetailPage = lazy(() => import("@/features/core/customers/pages/CustomerDetailPage"));
 const Inventory = lazy(loadInventoryRoute);
 const StockIn = lazy(() => import("@/features/core/inventory/pages/StockInPage"));
@@ -399,7 +398,7 @@ export function AppRoutes() {
           is redirected in one place rather than rewritten at each call site —
           the server can still send "/udhar" at any time. */}
       <Route path="/udhar">
-        <ProtectedRoute component={Udhar} />
+        <Redirect to="/customers?filter=udhar" />
       </Route>
       <Route path="/inventory/stock-in">
         <ProtectedRoute component={StockIn} />

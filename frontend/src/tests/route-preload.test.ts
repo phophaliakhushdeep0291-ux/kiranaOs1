@@ -9,7 +9,7 @@ describe("high-frequency route preloading", () => {
     const preload = source("../app/route-preload.ts");
     const routes = source("../app/routes.tsx");
 
-    for (const name of ["loadBillingRoute", "loadCustomersRoute", "loadUdharRoute", "loadInventoryRoute", "loadPurchasesRoute", "loadSalesOverviewRoute"]) {
+    for (const name of ["loadBillingRoute", "loadCustomersRoute", "loadInventoryRoute", "loadPurchasesRoute", "loadSalesOverviewRoute"]) {
       expect(routes).toContain(`lazy(${name})`);
       expect(preload).toContain(`export const ${name}`);
     }

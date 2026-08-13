@@ -33,8 +33,12 @@ test("installer grants the frontend browser permission to reach the counter", as
   // Recent Chrome and Edge gate a public page's request to 127.0.0.1 behind
   // local network access. Without this policy the bridge answers nothing and
   // the counter sees only a timeout.
-  assert.match(installer, /SOFTWARE\\Policies\\Google\\Chrome\\LocalNetworkAccessAllowedForUrls/);
-  assert.match(installer, /SOFTWARE\\Policies\\Microsoft\\Edge\\LocalNetworkAccessAllowedForUrls/);
+  // It must be the LOOPBACK policy: granting local_network instead leaves the
+  // request hanging while navigator.permissions still reports "granted", so the
+  // wrong key here fails silently and convincingly.
+  assert.match(installer, /SOFTWARE\\Policies\\Google\\Chrome\\LoopbackNetworkAllowedForUrls/);
+  assert.match(installer, /SOFTWARE\\Policies\\Microsoft\\Edge\\LoopbackNetworkAllowedForUrls/);
+  assert.doesNotMatch(installer, /LocalNetworkAccessAllowedForUrls/);
   assert.match(installer, /Name: "browserpolicy"/);
   assert.match(installer, /WizardIsTaskSelected\('browserpolicy'\)/);
   // A machine-wide browser policy must never silently overwrite one the shop's
