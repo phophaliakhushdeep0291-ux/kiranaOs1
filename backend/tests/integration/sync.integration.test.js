@@ -706,8 +706,8 @@ if (ctx.skip) {
       const stockLedger = await ctx.db.stockLedger.findFirstOrThrow({
         where: { shopId: tenant.shop.id, idempotencyKey: "purchase-lifecycle-create" },
       });
-      const locationStock = () => ctx.db.locationStock.findUniqueOrThrow({
-        where: { locationId_productId_sellingUnitId: { locationId: branch.id, productId: product.id, sellingUnitId: null } },
+      const locationStock = () => ctx.db.locationStock.findFirstOrThrow({
+        where: { locationId: branch.id, productId: product.id, sellingUnitId: null },
       });
       const updatePayload = {
         purchaseHistoryId: purchaseHistory.id,

@@ -508,6 +508,15 @@ if (ctx.skip) {
 
     test("routes public customer orders to one branch with live stock, pricing, and guarded fulfillment", async () => {
       const { tenant, auth } = await ownerContext();
+      const webhook = await ctx.db.webhookEndpoint.create({
+        data: {
+          shopId: tenant.shop.id,
+          name: "Order outbox proof",
+          url: "https://webhook.example.test/orders",
+          eventsJson: JSON.stringify(["customer_order.created", "customer_order.updated"]),
+          createdByUserId: tenant.owner.id,
+        },
+      });
       await ctx.db.shop.update({
         where: { id: tenant.shop.id },
         data: { settingsJson: JSON.stringify({ customerOrdering: { enabled: true } }) },
@@ -536,24 +545,74 @@ if (ctx.skip) {
       assert.equal(catalog.location.id, branch.id);
       assert.equal(catalog.products.find((row) => row.id === product.id).price, 45);
 
-      const submitted = assertSuccess(await ctx.post(`/api/public/shops/${tenant.shop.id}/orders`, {
+      const orderPayload = {
         locationId: branch.id,
         fulfillmentType: "pickup",
         promisedSlot: "Tomorrow morning",
         customerName: "Online Customer",
         customerMobile: "9876543210",
         items: [{ productId: product.id, qty: 2 }],
-      }, { headers: { "Idempotency-Key": "branch-order-integration-1" } }), 201);
+      };
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_customer_order_create_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'CUSTOMER_ORDER_CREATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced customer-order create audit failure');
+        END;
+      `);
+      try {
+        const failedCreate = assertFailure(await ctx.post(`/api/public/shops/${tenant.shop.id}/orders`, orderPayload, { headers: { "Idempotency-Key": "branch-order-integration-1" } }), 503);
+        assert.equal(failedCreate.code, "ORDER_AUDIT_UNAVAILABLE");
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_customer_order_create_audit_failure");
+      }
+      assert.equal(await ctx.db.customerOrder.count({ where: { shopId: tenant.shop.id, idempotencyKey: "branch-order-integration-1" } }), 0, "public order must roll back with its required audit");
+      assert.equal(await ctx.db.webhookDelivery.count({ where: { endpointId: webhook.id } }), 0, "a rolled-back order must not leave an integration event");
+
+      const submitted = assertSuccess(await ctx.post(`/api/public/shops/${tenant.shop.id}/orders`, orderPayload, { headers: { "Idempotency-Key": "branch-order-integration-1" } }), 201);
       assert.equal(submitted.locationId, branch.id);
       assert.equal(submitted.estimatedTotal, 90);
+      const createdDelivery = await ctx.db.webhookDelivery.findFirstOrThrow({ where: { endpointId: webhook.id, eventType: "customer_order.created" } });
+      assert.match(createdDelivery.payloadJson, new RegExp(submitted.orderId));
 
       const branchOrders = assertSuccess(await ctx.get("/api/orders", { token: auth.accessToken, headers: { "x-location-id": branch.id } }));
       const primaryOrders = assertSuccess(await ctx.get("/api/orders", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
       assert.equal(branchOrders.orders.length, 1);
       assert.equal(primaryOrders.orders.length, 0);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_customer_order_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'CUSTOMER_ORDER_STATUS_UPDATED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced customer-order audit failure');
+        END;
+      `);
+      try {
+        const failed = assertFailure(await ctx.patch(`/api/orders/${submitted.orderId}`, { status: "accepted" }, { token: auth.accessToken, headers: { "x-location-id": branch.id } }), 503);
+        assert.equal(failed.code, "ORDER_AUDIT_UNAVAILABLE");
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_customer_order_audit_failure");
+      }
+      assert.equal((await ctx.db.customerOrder.findUniqueOrThrow({ where: { id: submitted.orderId } })).status, "new", "order state must roll back with its required audit");
+      assert.equal(await ctx.db.webhookDelivery.count({ where: { endpointId: webhook.id } }), 1, "a rolled-back status change must not leave an integration event");
+
       const accepted = assertSuccess(await ctx.patch(`/api/orders/${submitted.orderId}`, { status: "accepted" }, { token: auth.accessToken, headers: { "x-location-id": branch.id } }));
       assert.equal(accepted.status, "accepted");
       assert.ok(accepted.acceptedAt);
+      const acceptedAudit = await ctx.db.auditLog.findFirstOrThrow({
+        where: { shopId: tenant.shop.id, entityId: submitted.orderId, action: "CUSTOMER_ORDER_STATUS_UPDATED" },
+      });
+      assert.match(acceptedAudit.beforeJson ?? "", /"status":"new"/);
+      assert.match(acceptedAudit.afterJson ?? "", /"status":"accepted"/);
+      const auditCount = await ctx.db.auditLog.count({ where: { entityId: submitted.orderId, action: "CUSTOMER_ORDER_STATUS_UPDATED" } });
+      const deliveryCount = await ctx.db.webhookDelivery.count({ where: { endpointId: webhook.id } });
+      assert.equal(deliveryCount, 2, "accepted order must atomically stage its update webhook");
+      const acceptedReplay = assertSuccess(await ctx.patch(`/api/orders/${submitted.orderId}`, { status: "accepted" }, { token: auth.accessToken, headers: { "x-location-id": branch.id } }));
+      assert.equal(acceptedReplay.status, "accepted");
+      assert.equal(await ctx.db.auditLog.count({ where: { entityId: submitted.orderId, action: "CUSTOMER_ORDER_STATUS_UPDATED" } }), auditCount, "an idempotent status replay must not duplicate audit or webhook outbox work");
+      assert.equal(await ctx.db.webhookDelivery.count({ where: { endpointId: webhook.id } }), deliveryCount, "an idempotent status replay must not duplicate webhook outbox work");
       const ready = assertSuccess(await ctx.patch(`/api/orders/${submitted.orderId}`, { status: "ready" }, { token: auth.accessToken, headers: { "x-location-id": branch.id } }));
       assert.equal(ready.status, "ready");
       const invalid = assertFailure(await ctx.patch(`/api/orders/${submitted.orderId}`, { status: "accepted" }, { token: auth.accessToken, headers: { "x-location-id": branch.id } }), 409);

@@ -25,6 +25,8 @@ export interface ReceiptLine {
   /** Product MRP — shown struck-through under the item when Show MRP is on and it beats the rate. */
   mrp?: number | null;
   hsn?: string | null;
+  /** GST percentage captured on this line. Used by the detailed A4 tax invoice. */
+  gstRate?: number;
 }
 
 export interface ReceiptGstInfo {
@@ -168,6 +170,46 @@ function receiptRows(rows: ReceiptLine[], showHsn = false, showMrp = false) {
         </tr>`).join("");
 }
 
+function a4InvoiceRows(snapshot: ReceiptSnapshot) {
+  if (snapshot.rows.length === 0) return `<tr><td class="empty" colspan="8">No items recorded</td></tr>`;
+  const gstMode = snapshot.gst?.mode ?? "none";
+  return snapshot.rows.map((item, index) => {
+    const gross = Number(item.rate) * Number(item.quantity);
+    const discount = Math.max(0, Number(item.lineDiscount) || Math.max(0, gross - Number(item.total)));
+    const rate = Math.max(0, Number(item.gstRate) || 0);
+    const lineTotal = Number(item.total) || 0;
+    const taxable = gstMode === "inclusive" && rate > 0 ? lineTotal / (1 + rate / 100) : lineTotal;
+    const tax = gstMode === "none" ? 0 : gstMode === "inclusive" ? Math.max(0, lineTotal - taxable) : taxable * rate / 100;
+    const invoiceLineTotal = gstMode === "exclusive" ? taxable + tax : lineTotal;
+    return `<tr>
+      <td>${index + 1}</td>
+      <td class="a4-description"><strong>${escapeHtml(safeText(item.name, "Item"))}</strong>${item.hsn ? `<small>HSN: ${escapeHtml(safeText(item.hsn))}</small>` : ""}${cleanText(item.note) ? `<small>${escapeHtml(cleanText(item.note))}</small>` : ""}</td>
+      <td class="right">${formatQuantity(item.quantity)} ${escapeHtml(safeText(item.unit))}</td>
+      <td class="right">${formatReceiptMoney(item.rate)}</td>
+      <td class="right">${discount > 0 ? formatReceiptMoney(discount) : "-"}</td>
+      <td class="right">${formatReceiptMoney(taxable)}</td>
+      <td class="right">${rate > 0 ? `${formatQuantity(rate)}%<small>${formatReceiptMoney(tax)}</small>` : "-"}</td>
+      <td class="right"><strong>${formatReceiptMoney(invoiceLineTotal)}</strong></td>
+    </tr>`;
+  }).join("");
+}
+
+function buildA4InvoiceInner(snapshot: ReceiptSnapshot) {
+  const shopName = safeText(snapshot.shop?.name, "Artha");
+  const customerName = safeText(snapshot.customerName, "Walk-in customer");
+  const isTaxInvoice = safeText(snapshot.billTypeLabel).toLowerCase().includes("gst") || Boolean(snapshot.gst && snapshot.gst.gst > 0);
+  const cancelled = safeText(snapshot.status).toLowerCase() === "cancelled";
+  return `<div class="a4-invoice">
+    <header class="a4-header"><div><div class="a4-brand">${escapeHtml(shopName)}</div><div class="a4-muted">${escapeHtml(safeText(snapshot.shop?.address))}${snapshot.shop?.city ? `<br>${escapeHtml(safeText(snapshot.shop.city))}` : ""}${snapshot.shop?.phone ? `<br>Phone: ${escapeHtml(safeText(snapshot.shop.phone))}` : ""}${snapshot.shop?.gstNumber ? `<br><strong>GSTIN: ${escapeHtml(safeText(snapshot.shop.gstNumber))}</strong>` : ""}</div></div><div class="a4-title"><h1>${isTaxInvoice ? "TAX INVOICE" : escapeHtml(safeText(snapshot.billTypeLabel, "INVOICE").toUpperCase())}</h1><div>${escapeHtml(safeText(snapshot.copyLabel, "Original for recipient"))}</div></div></header>
+    ${cancelled ? `<div class="cancelled">Cancelled bill</div>` : ""}
+    <section class="a4-parties"><div><span>Sold by</span><strong>${escapeHtml(shopName)}</strong><p>${escapeHtml(safeText(snapshot.shop?.address, "Address not provided"))}${snapshot.shop?.city ? `, ${escapeHtml(safeText(snapshot.shop.city))}` : ""}</p></div><div><span>Bill to</span><strong>${escapeHtml(customerName)}</strong><p>${escapeHtml(safeText(snapshot.buyerAddress, "Address not provided"))}</p>${snapshot.customerMobile ? `<p>Phone: ${escapeHtml(safeText(snapshot.customerMobile))}</p>` : ""}${snapshot.buyerGstin ? `<p><strong>GSTIN: ${escapeHtml(safeText(snapshot.buyerGstin))}</strong></p>` : ""}</div></section>
+    <section class="a4-meta"><div><span>Invoice number</span><strong>${escapeHtml(safeText(snapshot.billNo, "Pending"))}</strong></div><div><span>Invoice date</span><strong>${escapeHtml(formatDateTime(snapshot.createdAt) || "-")}</strong></div><div><span>Place of supply</span><strong>${escapeHtml(safeText(snapshot.buyerStateCode, "-"))}</strong></div><div><span>Payment status</span><strong>${snapshot.credit > 0 ? `Due ${escapeHtml(formatReceiptMoney(snapshot.credit))}` : "Paid"}</strong></div></section>
+    <table class="a4-table"><thead><tr><th>#</th><th>Description</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Discount</th><th class="right">Taxable</th><th class="right">GST</th><th class="right">Total</th></tr></thead><tbody>${a4InvoiceRows(snapshot)}</tbody></table>
+    <section class="a4-bottom"><div class="a4-notes"><strong>Declaration</strong><p>We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</p>${snapshot.gst?.mode === "inclusive" ? `<p>Prices are inclusive of GST.</p>` : ""}</div><div class="a4-totals"><div><span>Subtotal</span><strong>${formatReceiptMoney(snapshot.subtotal)}</strong></div>${snapshot.discount > 0 ? `<div><span>Discount</span><strong>-${formatReceiptMoney(snapshot.discount)}</strong></div>` : ""}${snapshot.gst && snapshot.gst.gst > 0 ? `<div><span>${snapshot.gst.supplyType === "interstate" ? "IGST" : "CGST + SGST"}</span><strong>${formatReceiptMoney(snapshot.gst.gst)}</strong></div>` : ""}${snapshot.roundOff ? `<div><span>Round off</span><strong>${snapshot.roundOff > 0 ? "+" : "-"}${formatReceiptMoney(Math.abs(snapshot.roundOff))}</strong></div>` : ""}<div class="a4-grand"><span>Grand total</span><strong>${formatReceiptMoney(snapshot.total)}</strong></div></div></section>
+    <footer class="a4-footer"><div>${escapeHtml(safeText(snapshot.footerNote, "Thank you for your business."))}</div><div class="signature">For ${escapeHtml(shopName)}<br><br><strong>Authorised Signatory</strong></div></footer>
+  </div>`;
+}
+
 function paymentRows(snapshot: ReceiptSnapshot) {
   const explicit = (snapshot.payments ?? []).filter((payment) => Number(payment.amount) > 0);
   const fallback: ReceiptPaymentLine[] = explicit.length > 0 ? explicit : [
@@ -235,7 +277,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
   const cancelled = safeText(snapshot.status).toLowerCase() === "cancelled";
   const isEstimate = safeText(snapshot.billTypeLabel).trim().toLowerCase() === "estimate";
 
-  const innerHtml = `<header class="shop">
+  const thermalInnerHtml = `<header class="shop">
           <div class="shop-name">${escapeHtml(shopName)}</div>
           <div class="shop-meta">${shopLines(snapshot.shop)}</div>
         </header>
@@ -278,7 +320,8 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
         <footer class="footer">
           <strong>${escapeHtml(footerNote)}</strong>
           <div class="system-note">Powered by Artha - local-first counter billing.</div>
-        </footer>`;
+          </footer>`;
+  const innerHtml = paperSize === "A4" ? buildA4InvoiceInner(snapshot) : thermalInnerHtml;
 
   const actionsHtml = `<div class="actions"><button onclick="window.print()">Print / Save PDF</button></div>`;
   // Stack `copies` receipts in one print job (merchant + customer). The first copy
@@ -492,6 +535,33 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
       padding: 0 14px 14px;
       text-align: center;
     }
+    .a4-invoice { min-height: 245mm; color: #111827; }
+    .a4-header { display: flex; justify-content: space-between; gap: 28px; padding-bottom: 16px; border-bottom: 3px solid #172554; }
+    .a4-brand { color: #172554; font-size: 26px; font-weight: 900; letter-spacing: .3px; }
+    .a4-muted { margin-top: 5px; color: #4b5563; line-height: 1.55; }
+    .a4-title { text-align: right; }
+    .a4-title h1 { margin: 0 0 5px; color: #172554; font-size: 22px; letter-spacing: 1px; }
+    .a4-title div { color: #6b7280; font-size: 10px; text-transform: uppercase; }
+    .a4-parties { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #cbd5e1; border-top: 0; }
+    .a4-parties > div { min-height: 90px; padding: 13px; }
+    .a4-parties > div + div { border-left: 1px solid #cbd5e1; }
+    .a4-parties span, .a4-meta span { display: block; margin-bottom: 4px; color: #64748b; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+    .a4-parties p { margin: 4px 0 0; color: #475569; line-height: 1.45; }
+    .a4-meta { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #cbd5e1; border-top: 0; }
+    .a4-meta > div { padding: 10px; }
+    .a4-meta > div + div { border-left: 1px solid #cbd5e1; }
+    .a4-table { margin-top: 16px; border: 1px solid #cbd5e1; }
+    .a4-table th { padding: 8px 5px; border: 1px solid #cbd5e1; background: #eff6ff; color: #172554; }
+    .a4-table td { padding: 9px 5px; border: 1px solid #cbd5e1; }
+    .a4-description { min-width: 155px; }
+    .a4-description small, .a4-table td small { display: block; margin-top: 3px; color: #64748b; font-size: 9px; }
+    .a4-bottom { display: grid; grid-template-columns: 1fr 245px; margin-top: 14px; gap: 20px; }
+    .a4-notes { color: #475569; font-size: 10px; line-height: 1.5; }
+    .a4-notes p { margin: 5px 0; }
+    .a4-totals > div { display: flex; justify-content: space-between; gap: 15px; padding: 5px 0; }
+    .a4-grand { margin-top: 4px; padding: 9px 8px !important; background: #172554; color: white; font-size: 14px; }
+    .a4-footer { display: grid; grid-template-columns: 1fr 240px; gap: 20px; margin-top: 34px; border-top: 1px solid #cbd5e1; padding-top: 13px; color: #475569; }
+    .signature { text-align: center; color: #111827; }
     button {
       width: 100%;
       border: 0;

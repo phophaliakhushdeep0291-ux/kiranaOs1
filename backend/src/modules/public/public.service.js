@@ -7,6 +7,8 @@ import { prepareStorefrontOrderLines, resolveStorefrontOrderContext, shapeStoref
 import { parseShopSettings } from "../shops/businessProfiles.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { toBaseQty } from "../../utils/units.js";
+import { createAuditLog } from "../audit/audit.service.js";
+import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
 
 /**
  * Public, unauthenticated read of a shop's catalog for the QR customer self-order page.
@@ -194,6 +196,18 @@ function shapeOrderSubmitResponse(order, shopName, duplicate = false) {
   };
 }
 
+async function writeRequiredPublicOrderAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Order was not accepted because its audit record could not be stored",
+      503,
+      "ORDER_AUDIT_UNAVAILABLE",
+    );
+  }
+  return audit;
+}
+
 /**
  * A customer submits an order from the public QR page. We re-price every line from the shop's own
  * catalog (never trust client-sent prices) and store it in the owner's "Orders Received" inbox.
@@ -303,35 +317,67 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   const estimatedTotal = round2(lines.reduce((sum, l) => sum + l.qty * l.price, 0));
 
   try {
-    const order = await db.customerOrder.create({
-      data: {
+    const result = await db.$transaction(async (tx) => {
+      const order = await tx.customerOrder.create({
+        data: {
+          shopId,
+          locationId: location.id,
+          customerName: orderedName.slice(0, 120),
+          customerMobile: customerMobile.replace(/[\s-]/g, "").slice(0, 15),
+          customerAddress: customerAddress ? customerAddress.slice(0, 400) : null,
+          note: note ? note.slice(0, 400) : null,
+          fulfillmentType,
+          // Both the id and the name: the id is how the floor screen finds the
+          // table, the name is what the kitchen ticket prints and must survive the
+          // table being renamed or taken off the floor plan mid-service.
+          tableId: storefrontOrder?.tableId ?? null,
+          tableName: storefrontOrder?.tableName ?? null,
+          guestCount: storefrontOrder?.guestCount ?? null,
+          promisedSlot,
+          sourceChannel: "customer_portal",
+          paymentStatus: "unpaid",
+          fulfillmentStatus: "unfulfilled",
+          itemsJson: JSON.stringify(lines),
+          itemCount,
+          estimatedTotal,
+          status: "new",
+          idempotencyKey,
+        },
+        select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, tableId: true, tableName: true, createdAt: true },
+      });
+      await writeRequiredPublicOrderAudit({
         shopId,
-        locationId: location.id,
-        customerName: orderedName.slice(0, 120),
-        customerMobile: customerMobile.replace(/[\s-]/g, "").slice(0, 15),
-        customerAddress: customerAddress ? customerAddress.slice(0, 400) : null,
-        note: note ? note.slice(0, 400) : null,
-        fulfillmentType,
-        // Both the id and the name: the id is how the floor screen finds the
-        // table, the name is what the kitchen ticket prints and must survive the
-        // table being renamed or taken off the floor plan mid-service.
-        tableId: storefrontOrder?.tableId ?? null,
-        tableName: storefrontOrder?.tableName ?? null,
-        guestCount: storefrontOrder?.guestCount ?? null,
-        promisedSlot,
-        sourceChannel: "customer_portal",
-        paymentStatus: "unpaid",
-        fulfillmentStatus: "unfulfilled",
-        itemsJson: JSON.stringify(lines),
-        itemCount,
-        estimatedTotal,
-        status: "new",
-        idempotencyKey,
-      },
-      select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, tableId: true, tableName: true, createdAt: true },
-    });
+        userId: null,
+        deviceId: null,
+        action: "CUSTOMER_ORDER_CREATED",
+        entityType: "CustomerOrder",
+        entityId: order.id,
+        before: null,
+        after: {
+          id: order.id,
+          locationId: order.locationId,
+          fulfillmentType: order.fulfillmentType,
+          status: order.status,
+          itemCount: order.itemCount,
+          estimatedTotal: order.estimatedTotal,
+          tableId: order.tableId ?? null,
+        },
+        metadata: { sourceChannel: "customer_portal", idempotencyKey: idempotencyKey ?? null },
+        req: options.actor?.req ?? null,
+      }, tx);
+      const deliveries = await stageIntegrationEvent(shopId, "customer_order.created", {
+        id: order.id,
+        locationId: order.locationId,
+        fulfillmentType: order.fulfillmentType,
+        status: order.status,
+        itemCount: order.itemCount,
+        estimatedTotal: order.estimatedTotal,
+      }, { client: tx });
+      return { order, deliveries };
+    }, { isolationLevel: "Serializable" });
 
-    return shapeOrderSubmitResponse(order, shop.name);
+    await dispatchIntegrationDeliveries(result.deliveries);
+    return shapeOrderSubmitResponse(result.order, shop.name);
   } catch (error) {
     if (idempotencyKey && error?.code === "P2002") {
       const existing = await db.customerOrder.findFirst({

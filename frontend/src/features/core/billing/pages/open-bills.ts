@@ -9,6 +9,26 @@ import type { BillingDraft, CartItem, HeldBill } from "./billing-types";
 
 export const MAX_OPEN_BILLS = 10;
 
+/**
+ * Interactive hold/new transitions must never silently evict another parked
+ * cart when the hygiene cap is reached. Callers use this guard before upsert.
+ */
+export function wouldEvictOpenBill(
+  bills: readonly HeldBill[],
+  incoming: Pick<HeldBill, "id" | "sourceOrderId">,
+): boolean {
+  const replacesExisting = bills.some(
+    (bill) =>
+      bill.id === incoming.id ||
+      Boolean(
+        incoming.sourceOrderId &&
+          bill.sourceOrderId === incoming.sourceOrderId,
+      ),
+  );
+
+  return bills.length >= MAX_OPEN_BILLS && !replacesExisting;
+}
+
 /** A parked bill older than this is shown with a "stale" marker in the switcher. */
 export const HELD_BILL_STALE_MS = 12 * 60 * 60 * 1000; // 12 hours
 /** A parked bill older than this is auto-archived on load — a week-old cart is abandoned. */

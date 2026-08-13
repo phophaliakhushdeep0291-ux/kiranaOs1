@@ -11,7 +11,7 @@ import { useSyncExternalStore } from "react";
  */
 export const BUSINESS_TYPE_IDS = [
   "kirana", "clothing", "footwear", "auto_parts", "electronics",
-  "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "other",
+  "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "manufacturing", "other",
 ] as const;
 
 export type BusinessType = (typeof BUSINESS_TYPE_IDS)[number];

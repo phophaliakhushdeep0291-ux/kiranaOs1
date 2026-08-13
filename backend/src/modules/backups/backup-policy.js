@@ -49,6 +49,10 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // Row depends on Import and Event on Row, but restoreModelOrder() derives that from
   // the Prisma relation metadata, so their position in this list does not matter.
   "ChannelSettlementImport", "ChannelSettlementRow", "ChannelSettlementEvent",
+  // Tally is not idempotent. This tenant-scoped delivery ledger is the proof
+  // that a voucher was already exported, so omitting it from restore can cause
+  // the same sale or purchase to be posted twice after disaster recovery.
+  "TallyPost",
   // A booking is business history — who took which garment, for which days, and
   // what money is still owed on it. It restores with the rest of the ledger.
   "RentalBooking",

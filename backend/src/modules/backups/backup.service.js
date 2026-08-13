@@ -24,7 +24,7 @@ import {
 import { acquireShopMaintenanceLock, releaseShopMaintenanceLock } from "./maintenance-lock.service.js";
 
 const BACKUP_FORMAT = "kiranaos_aes256gcm_gzip_v1";
-const BACKUP_SCHEMA_VERSION = "2026-08-08-complete-v3";
+const BACKUP_SCHEMA_VERSION = "2026-08-13-complete-v4";
 const BACKUP_HEADER = Buffer.from("KOSB1", "ascii");
 const MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024;
 const RESTORE_PRESERVED_AUDIT_ACTIONS = Object.freeze([

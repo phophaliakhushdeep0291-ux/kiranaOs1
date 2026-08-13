@@ -1,6 +1,4 @@
 import * as svc from "./orders.service.js";
-import { createAuditLog } from "../audit/audit.service.js";
-import { publishIntegrationEvent } from "../integrations/integrations.service.js";
 
 export async function list(req, res, next) {
   try {
@@ -25,26 +23,11 @@ export async function updateStatus(req, res, next) {
       paymentStatus: req.body?.paymentStatus,
       billId: req.body?.billId,
       locationId: req.operationalLocation?.id,
-    });
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "CUSTOMER_ORDER_STATUS_UPDATED",
-      entityType: "CustomerOrder",
-      entityId: data.id,
-      metadata: { status: data.status, paymentStatus: data.paymentStatus, fulfillmentStatus: data.fulfillmentStatus, billId: data.billId, locationId: data.locationId },
-      req,
-    });
-    await publishIntegrationEvent(req.shopId, "customer_order.updated", {
-      id: data.id,
-      locationId: data.locationId,
-      fulfillmentType: data.fulfillmentType,
-      status: data.status,
-      sourceChannel: data.sourceChannel,
-      paymentStatus: data.paymentStatus,
-      fulfillmentStatus: data.fulfillmentStatus,
-      billId: data.billId,
-      updatedAt: data.updatedAt,
+      actor: {
+        userId: req.user?.userId ?? null,
+        deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : undefined,
+        req,
+      },
     });
     res.json({ success: true, data });
   } catch (err) {

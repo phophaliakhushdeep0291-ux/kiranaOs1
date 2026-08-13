@@ -8,9 +8,9 @@ import {
 import { getEffectivePlan, getSubscriptionStatus, isSubscriptionActive } from "../subscription/subscription.service.js";
 import { FEATURE_REGISTRY, OLD_DATA_VIEW_FEATURE } from "./featureRegistry.js";
 
-export async function hasFeature(shopId, featureName) {
+export async function hasFeature(shopId, featureName, client = db) {
   if (featureName === OLD_DATA_VIEW_FEATURE) return true; // view_old_data is always allowed so shops are not trapped after expiry.
-  const effective = await getEffectivePlan(shopId);
+  const effective = await getEffectivePlan(shopId, client);
   const subscription = effective.subscription;
   if (!isSubscriptionActive(subscription)) return false;
   return effective.features.includes(featureName) || hasLegacyShopTypeFeatureAccess(effective.features, featureName);

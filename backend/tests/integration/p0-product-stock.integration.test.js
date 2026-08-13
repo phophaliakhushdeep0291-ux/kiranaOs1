@@ -56,11 +56,11 @@ if (ctx.skip) {
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 0 });
 
       for (const qty of [10, 45, 7]) {
-        await ctx.patch(
+        assertSuccess(await ctx.patch(
           `/api/products/${product.id}`,
           { stockBaseQty: qty },
           { token: session.accessToken, ownerPin: tenant.ownerPin },
-        );
+        ), 200);
       }
 
       const fresh = await ctx.db.product.findUnique({ where: { id: product.id } });

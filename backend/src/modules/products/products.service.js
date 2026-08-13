@@ -313,6 +313,20 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
           await writeLocationStockRow(tx, {
             shopId, locationId: openingLocation.id, productId: created.id, absolute: openingQty,
           });
+          if (resolvedPackagingMode === "per_pack") {
+            for (const unit of hydrated.sellingUnits.filter((row) => row.isActive !== false && Number(row.onHandQty ?? 0) !== 0)) {
+              await writeLocationStockRow(tx, {
+                shopId,
+                locationId: openingLocation.id,
+                productId: created.id,
+                sellingUnitId: unit.id,
+                // Variant rows are stored in the selling unit's own count, not
+                // base units. The product-level row above remains the branch's
+                // base-unit total used by ordinary stock reports.
+                absolute: round2(Number(unit.onHandQty ?? 0)),
+              });
+            }
+          }
         }
         const commonLedgerData = {
           shopId,
@@ -545,10 +559,13 @@ export async function updateProduct(shopId, id, data, { actor = {}, locationId =
         "PACKAGING_MODE_STOCK_MIGRATION_REQUIRED",
       );
     }
-    const changed = await tx.product.updateMany({
-      where: { id, shopId, deletedAt: null, updatedAt: existing.updatedAt },
-      data: updateData,
-    });
+    const hasNonStockUpdate = Object.values(updateData).some((value) => value !== undefined);
+    const changed = hasNonStockUpdate
+      ? await tx.product.updateMany({
+        where: { id, shopId, deletedAt: null, updatedAt: existing.updatedAt },
+        data: updateData,
+      })
+      : { count: new Date(current.updatedAt).getTime() === new Date(existing.updatedAt).getTime() ? 1 : 0 };
     if (changed.count !== 1) {
       throw new AppError(
         `"${existing.name}" changed while this edit was being saved. Reload and try again.`,

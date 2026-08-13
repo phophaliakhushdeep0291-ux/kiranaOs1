@@ -112,6 +112,7 @@ interface BillingSummaryProps {
   newBillingReason?: string;
   createBillAllowed: boolean;
   confirmBillPending: boolean;
+  holdBillPending: boolean;
   hasLastPrintableBill: boolean;
   onConfirmBill: () => void;
   onNewBill: () => void;
@@ -248,6 +249,7 @@ export function BillingSummary({
   newBillingReason,
   createBillAllowed,
   confirmBillPending,
+  holdBillPending,
   hasLastPrintableBill,
   onConfirmBill,
   onNewBill,
@@ -810,7 +812,14 @@ export function BillingSummary({
         {cart.length > 0 ? (
           <div className="mt-2 grid grid-cols-2 gap-1.5">
             <SecBtn testId="button-save-as-estimate" onClick={onSaveEstimate} disabled={confirmBillPending} icon={<FileText size={13} />} label={t("billing.summary.saveEstimate")} />
-            <SecBtn onClick={onHoldBill} icon={<PauseCircle size={13} />} label={t("billing.summary.hold")} shortcut="F9" />
+            <SecBtn
+              testId="button-hold-bill"
+              onClick={onHoldBill}
+              disabled={confirmBillPending || holdBillPending}
+              icon={holdBillPending ? <Loader2 size={13} className="animate-spin" /> : <PauseCircle size={13} />}
+              label={holdBillPending ? t("billing.summary.holding") : t("billing.summary.hold")}
+              shortcut="F9"
+            />
           </div>
         ) : hasLastPrintableBill ? (
           <div className="mt-2 grid grid-cols-2 gap-1.5" aria-label="Saved bill actions">
@@ -873,7 +882,7 @@ function SecBtn({
       data-testid={testId}
       onClick={onClick}
       disabled={disabled}
-      className={primary ? "flex flex-col items-center gap-1 rounded-[9px] border border-[#15803d] bg-[#16a34a] py-2 text-xs font-bold text-white transition-colors hover:bg-[#15803d] disabled:pointer-events-none disabled:opacity-40" : "flex flex-col items-center gap-1 rounded-[9px] border border-[#e2eaf5] bg-white py-2 text-xs font-bold text-[#13274d] transition-colors hover:bg-[#f7f9fd] disabled:pointer-events-none disabled:opacity-40"}
+      className={primary ? "flex min-h-11 flex-col items-center gap-1 rounded-[9px] border border-[#15803d] bg-[#16a34a] py-2 text-xs font-bold text-white transition-colors hover:bg-[#15803d] disabled:pointer-events-none disabled:opacity-40" : "flex min-h-11 flex-col items-center gap-1 rounded-[9px] border border-[#e2eaf5] bg-white py-2 text-xs font-bold text-[#13274d] transition-colors hover:bg-[#f7f9fd] disabled:pointer-events-none disabled:opacity-40"}
     >
       {icon}
       <span>{label}</span>

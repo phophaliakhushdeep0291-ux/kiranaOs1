@@ -18,7 +18,8 @@ import { BillingSearch } from "./components/BillingSearch";
 import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
 import { BillingOrderQrButton } from "@/features/core/customer-order/BillingOrderQrButton";
-import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills, upsertOpenBill } from "./open-bills";
+import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills } from "./open-bills";
+import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace } from "./billing-workspace";
 import { updateCustomerOrder } from "@/features/core/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { applyRoundOff, billNeedsCustomer, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, cartItemUnitRate, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
@@ -193,6 +194,8 @@ export default function Billing() {
   const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [activeBillId, setActiveBillId] = useState<string>(() => readBillingDraft().activeBillId ?? newBillId());
+  const openBillTransitionLockRef = useRef(false);
+  const [openBillTransitionPending, setOpenBillTransitionPending] = useState(false);
   // If the workspace bill came from a customer QR order, its id — so finalizing marks that order
   // fulfilled + links the bill. Mirrored into a ref so the save-success callback reads it live.
   const [sourceOrderId, setSourceOrderId] = useState<string | undefined>(() => readBillingDraft().sourceOrderId);
@@ -1699,38 +1702,87 @@ export default function Billing() {
 
   // Save the workspace bill back into the open-bills set — but only if it has items, so empty
   // bills aren't littered around.
-  function stashActiveBill(list: HeldBill[]): HeldBill[] {
-    return cart.length > 0 ? upsertOpenBill(list, serializeActiveBill()) : list;
-  }
+  async function newBill(): Promise<boolean> {
+    if (openBillTransitionLockRef.current) return false;
 
-  // Start a brand-new empty bill while keeping the current one in the Open Bills set.
-  function newBill() {
-    const nextHeld = stashActiveBill(heldBills);
-    setHeldBills(nextHeld);
-    saveSettingList(HELD_BILLS_KEY, nextHeld);
-    resetCurrentBill();
-    setActiveBillId(newBillId());
-    clearBillingDraft();
+    const nextActiveBillId = newBillId();
+    const transition = prepareNewBillWorkspace(
+      heldBills,
+      cart.length > 0 ? serializeActiveBill() : null,
+      nextActiveBillId,
+    );
+    if (!transition.ok) {
+      toast({
+        title: t("billing.page.openBillLimitReached"),
+        description: t("billing.page.openBillLimitReachedDetail"),
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    openBillTransitionLockRef.current = true;
+    setOpenBillTransitionPending(true);
+    try {
+      await commitBillingWorkspace(offlineDB, transition.snapshot, (snapshot) => {
+        billingDraftCache = snapshot.activeDraft;
+        setHeldBills(snapshot.heldBills);
+        resetCurrentBill();
+        setActiveBillId(nextActiveBillId);
+      });
+      return true;
+    } catch {
+      toast({
+        title: t("billing.page.openBillSaveFailed"),
+        description: t("billing.page.openBillSaveFailedDetail"),
+        variant: "destructive",
+      });
+      return false;
+    } finally {
+      openBillTransitionLockRef.current = false;
+      setOpenBillTransitionPending(false);
+    }
   }
 
   // Explicit "Hold" button: save the current bill and clear the workspace.
-  function holdCurrentBill() {
+  async function holdCurrentBill(): Promise<void> {
     if (cart.length === 0) {
       toast({ title: t("billing.page.nothingToHold"), description: t("billing.page.nothingToHoldDetail") });
       return;
     }
-    newBill();
-    toast({ title: t("billing.page.billHeld"), description: t("billing.page.billHeldDetail") });
+    if (await newBill()) {
+      toast({ title: t("billing.page.billHeld"), description: t("billing.page.billHeldDetail") });
+    }
   }
 
-  // Switch to another open bill WITHOUT losing the current one (it's stashed first).
-  function resumeHeldBill(id: string) {
-    const target = heldBills.find((entry) => entry.id === id);
-    if (!target) return;
-    const nextHeld = stashActiveBill(heldBills).filter((entry) => entry.id !== id);
-    setHeldBills(nextHeld);
-    saveSettingList(HELD_BILLS_KEY, nextHeld);
-    loadBillIntoActive(target);
+  // Switch only after the target draft and remaining parked set are durable.
+  // Removing the target before parking the current bill avoids cap eviction.
+  async function resumeHeldBill(id: string): Promise<void> {
+    if (openBillTransitionLockRef.current) return;
+    const transition = prepareResumeBillWorkspace(
+      heldBills,
+      cart.length > 0 ? serializeActiveBill() : null,
+      id,
+    );
+    if (!transition.ok) return;
+
+    openBillTransitionLockRef.current = true;
+    setOpenBillTransitionPending(true);
+    try {
+      await commitBillingWorkspace(offlineDB, transition.snapshot, (snapshot) => {
+        billingDraftCache = snapshot.activeDraft;
+        setHeldBills(snapshot.heldBills);
+        loadBillIntoActive(transition.target);
+      });
+    } catch {
+      toast({
+        title: t("billing.page.openBillSwitchFailed"),
+        description: t("billing.page.openBillSwitchFailedDetail"),
+        variant: "destructive",
+      });
+    } finally {
+      openBillTransitionLockRef.current = false;
+      setOpenBillTransitionPending(false);
+    }
   }
 
   function clearCartWithConfirmation() {
@@ -1856,7 +1908,7 @@ export default function Billing() {
       }
       if (event.key === "F9" && cart.length > 0) {
         event.preventDefault();
-        holdCurrentBill();
+        void holdCurrentBill();
         return;
       }
       if ((event.key === "F12" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s")) && cart.length > 0) {
@@ -1881,6 +1933,7 @@ export default function Billing() {
             ]}
             onSwitch={resumeHeldBill}
             onNew={newBill}
+            busy={openBillTransitionPending}
           />
         )}
         <BillingSearch
@@ -2052,6 +2105,7 @@ export default function Billing() {
         newBillingReason={newBillingFeature.reason}
         createBillAllowed={createBillPermission.allowed}
         confirmBillPending={confirmBill.isPending}
+        holdBillPending={openBillTransitionPending}
         hasLastPrintableBill={Boolean(lastPrintableBill)}
         onConfirmBill={() => handleConfirm()}
         onNewBill={newBill}

@@ -10,13 +10,14 @@ import stationery from "./stationery-books/profile.js";
 import furniture from "./furniture-home/profile.js";
 import cosmetics from "./beauty-cosmetics/profile.js";
 import restaurant from "./restaurant/profile.js";
+import manufacturing from "./manufacturing/profile.js";
 import custom from "./custom/profile.js";
 
 export { BUSINESS_TYPES, CAPABILITIES } from "./profile.js";
 
 export const BUSINESS_PROFILE_LIST = Object.freeze([
   kirana, clothing, footwear, autoParts, electronics, pharmacy,
-  stationery, furniture, cosmetics, restaurant, custom,
+  stationery, furniture, cosmetics, restaurant, manufacturing, custom,
 ]);
 
 /**
@@ -38,6 +39,7 @@ export const BUSINESS_TYPE_DIRECTORIES = Object.freeze({
   furniture: "furniture-home",
   cosmetics: "beauty-cosmetics",
   restaurant: "restaurant",
+  manufacturing: "manufacturing",
   other: "custom",
 });
 

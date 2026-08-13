@@ -1,4 +1,4 @@
-import { Plus, ReceiptText } from "lucide-react";
+import { Loader2, Plus, ReceiptText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 
@@ -19,21 +19,23 @@ export interface OpenBillChip {
  * "New bill" parks the current bill and starts a fresh one — so several customers can be
  * served at once without losing anyone's cart.
  */
-export function OpenBillsBar({ bills, onSwitch, onNew }: {
+export function OpenBillsBar({ bills, onSwitch, onNew, busy = false }: {
   bills: OpenBillChip[];
-  onSwitch: (id: string) => void;
-  onNew: () => void;
+  onSwitch: (id: string) => void | Promise<void>;
+  onNew: () => void | Promise<unknown>;
+  busy?: boolean;
 }) {
   const { t } = useAppLanguage();
 
   return (
-    <div className="app-scrollbar mb-2 flex shrink-0 items-center gap-2 overflow-x-auto rounded-[10px] border border-[#e6ecf4] bg-[#f7f9fd] px-2 py-1.5">
+    <div aria-busy={busy} className="app-scrollbar mb-2 flex shrink-0 items-center gap-2 overflow-x-auto rounded-[10px] border border-[#e6ecf4] bg-[#f7f9fd] px-2 py-1.5">
       <span className="shrink-0 pl-1 pr-0.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{t("billing.openBills")}</span>
       {bills.map((bill) => (
         <button
           key={bill.id}
           type="button"
-          onClick={() => { if (!bill.active) onSwitch(bill.id); }}
+          onClick={() => { if (!bill.active) void onSwitch(bill.id); }}
+          disabled={busy}
           aria-current={bill.active}
           title={bill.active
             ? t("billing.openBills.current")
@@ -44,7 +46,7 @@ export function OpenBillsBar({ bills, onSwitch, onNew }: {
             // Switching between the customers standing at the counter is a
             // thumb action, so the chip carries a phone-sized target and drops
             // back to the compact desktop height where a mouse takes over.
-            "flex h-11 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[12px] font-bold transition-colors lg:mouse:h-auto lg:mouse:py-1",
+            "flex h-11 shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 text-[12px] font-bold transition-colors disabled:pointer-events-none disabled:opacity-60 lg:mouse:h-auto lg:mouse:py-1",
             bill.active
               ? "border-[var(--brand)] bg-white text-[var(--brand)] shadow-[0_2px_8px_rgba(0,87,255,0.15)]"
               : bill.stale
@@ -59,11 +61,12 @@ export function OpenBillsBar({ bills, onSwitch, onNew }: {
       ))}
       <button
         type="button"
-        onClick={onNew}
+        onClick={() => { void onNew(); }}
+        disabled={busy}
         title={t("billing.openBills.startNew")}
-        className="ml-auto flex h-11 shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[var(--brand)] px-2.5 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] lg:mouse:h-auto lg:mouse:py-1"
+        className="ml-auto flex h-11 shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[var(--brand)] px-2.5 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] disabled:pointer-events-none disabled:opacity-60 lg:mouse:h-auto lg:mouse:py-1"
       >
-        <Plus size={14} /> {t("billing.openBills.new")}
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {t("billing.openBills.new")}
       </button>
     </div>
   );

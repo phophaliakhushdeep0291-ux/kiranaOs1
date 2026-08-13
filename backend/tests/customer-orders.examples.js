@@ -99,8 +99,12 @@ assert.ok(
   "order submission must re-price from the shop catalog instead of trusting client prices",
 );
 assert.ok(
-  publicService.includes("db.customerOrder.create"),
+  publicService.includes("customerOrder.create") && publicService.includes("db.$transaction"),
   "order submission must write a CustomerOrder row",
+);
+assert.ok(
+  publicService.includes("CUSTOMER_ORDER_CREATED") && publicService.includes("stageIntegrationEvent"),
+  "customer-order creation, its required audit, and webhook outbox evidence must share one transaction",
 );
 assert.ok(
   publicRoutes.includes('router.post("/shops/:shopId/orders"') && read("../src/modules/public/public.controller.js").includes("Idempotency-Key"),

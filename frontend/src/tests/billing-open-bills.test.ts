@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billingDraftFromHeldBill, heldBillFromBillingDraft, MAX_OPEN_BILLS, newBillId, upsertOpenBill } from "@/features/core/billing/pages/open-bills";
+import { billingDraftFromHeldBill, heldBillFromBillingDraft, MAX_OPEN_BILLS, newBillId, upsertOpenBill, wouldEvictOpenBill } from "@/features/core/billing/pages/open-bills";
 import type { BillingDraft, HeldBill } from "@/features/core/billing/pages/billing-types";
 
 function bill(id: string, items = 1): HeldBill {
@@ -42,6 +42,18 @@ describe("open bills switcher helpers", () => {
     let list: HeldBill[] = [];
     for (let i = 0; i < MAX_OPEN_BILLS + 5; i += 1) list = upsertOpenBill(list, bill(`b${i}`));
     expect(list).toHaveLength(MAX_OPEN_BILLS);
+  });
+
+  it("detects only a genuinely new bill as an eviction risk at the cap", () => {
+    const list = Array.from({ length: MAX_OPEN_BILLS }, (_, index) => bill(`b${index}`));
+    expect(wouldEvictOpenBill(list, bill("new"))).toBe(true);
+    expect(wouldEvictOpenBill(list, bill("b4"))).toBe(false);
+    expect(
+      wouldEvictOpenBill(
+        [{ ...list[0], sourceOrderId: "order-1" }, ...list.slice(1)],
+        { ...bill("different-id"), sourceOrderId: "order-1" },
+      ),
+    ).toBe(false);
   });
 
   it("mints unique bill ids", () => {

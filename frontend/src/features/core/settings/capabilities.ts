@@ -39,6 +39,9 @@ export type Capability =
   // Restaurant
   | "TABLE_MANAGEMENT" | "KOT" | "KITCHEN_DISPLAY" | "MENU_MODIFIERS"
   | "RECIPE_INVENTORY" | "SPLIT_BILLING" | "TAKEAWAY"
+  // Manufacturing, wholesale and export
+  | "BOM" | "PRODUCTION_RUNS" | "BATCH_GENEALOGY" | "PACKAGING_SKUS"
+  | "QUALITY_CONTROL" | "WASTAGE_TRACKING" | "WHOLESALE_ORDERS" | "EXPORT_DOCUMENTS"
   // Configurable
   | "CUSTOM_FIELDS";
 

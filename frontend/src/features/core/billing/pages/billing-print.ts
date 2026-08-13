@@ -66,6 +66,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
       note: [addonSummary(item.addons), item.note].filter(Boolean).join(" · ") || null,
       mrp: item.product.mrp ?? null,
       hsn: item.product.hsn ?? null,
+      gstRate: item.product.gstRate ?? 0,
     })),
     subtotal: bill.subtotal,
     discount: printer.showDiscount ? bill.discount : 0,
