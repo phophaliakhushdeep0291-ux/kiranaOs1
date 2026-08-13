@@ -372,11 +372,11 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
         ? "Subscription expired. You can still finish sales, bill again, and export your data; other changes and cloud sync are locked."
         : graceActive
           ? "Subscription is in offline grace. Billing can continue locally, but cloud sync may be limited."
-        : status === "trial"
-        : status === "cancelled"
-          ? "Subscription cancelled. Paid access remains available until the current period ends."
-          ? "Trial active. Your data is safe locally and can be backed up when sync is allowed."
-          : "Subscription active. Cloud backup and allowed plan features are available.",
+          : status === "cancelled"
+            ? "Subscription cancelled. Paid access remains available until the current period ends."
+            : status === "trial"
+              ? "Trial active. Your data is safe locally and can be backed up when sync is allowed."
+              : "Subscription active. Cloud backup and allowed plan features are available.",
     source: "local-cache",
     foundingCustomer,
     foundingEndsAt: foundingCustomer ? trialEndsAt : null,
