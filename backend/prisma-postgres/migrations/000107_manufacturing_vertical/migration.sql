@@ -1,3 +1,5 @@
+-- @replay-safe: every added column, table and index is guarded with IF NOT
+-- EXISTS, and this additive migration contains no backfill or unguarded DDL.
 ALTER TABLE "ProductSellingUnit" ADD COLUMN IF NOT EXISTS "sku" TEXT;
 ALTER TABLE "InventoryLot" ADD COLUMN IF NOT EXISTS "sellingUnitId" TEXT;
 ALTER TABLE "InventoryLot" ADD COLUMN IF NOT EXISTS "producedByRunId" TEXT;

@@ -55,6 +55,7 @@ async function main() {
   assert.equal(inferAuditModule("LOGOUT"), AUDIT_MODULES.AUTH);
   assert.equal(inferAuditModule("SYNC_COMPLETED"), AUDIT_MODULES.SYNC);
   assert.equal(inferAuditModule("SETTINGS_CHANGED"), AUDIT_MODULES.SETTINGS);
+  assert.equal(inferAuditModule("REMINDER_DELIVERED"), AUDIT_MODULES.REMINDERS);
   assert.equal(inferAuditModule("SOMETHING_UNMAPPED"), AUDIT_MODULES.OTHER);
 
   assert.equal(inferAuditResult("CREATE_BILL"), AUDIT_RESULTS.SUCCESS, "completed actions default to success");
