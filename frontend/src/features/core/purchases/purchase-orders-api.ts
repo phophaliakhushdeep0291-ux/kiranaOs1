@@ -52,6 +52,8 @@ export interface PurchaseReceipt {
   receiptNumber: string;
   supplierInvoiceNumber?: string | null;
   supplierInvoiceAmount?: number | null;
+  /** GST contained within supplierInvoiceAmount, as the supplier's invoice states it. */
+  supplierInvoiceTax?: number | null;
   expectedGoodsAmount: number;
   totalAmount: number;
   priceVarianceAmount: number;
