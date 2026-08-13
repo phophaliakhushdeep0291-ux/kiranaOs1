@@ -440,12 +440,11 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
       referenceId: ledger.id,
       recordedAt: businessDate,
     }, { client: tx });
-    return { ...paymentOutcome, integrationDeliveries };
+      return { ...paymentOutcome, integrationDeliveries };
     });
 
-    // §2 audit "Payment received". Written after the transaction commits so a
-    // rolled-back payment never appears on the timeline, and skipped for
-    // idempotent replays so a retried sync event is not logged twice.
+    // Ledger, financial posting, balance, audit and webhook outbox commit
+    // together; only transport dispatch happens after the transaction.
     await dispatchIntegrationDeliveries(outcome.integrationDeliveries);
     const { integrationDeliveries: _integrationDeliveries, ...publicOutcome } = outcome;
     return publicOutcome;

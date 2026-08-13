@@ -314,6 +314,30 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     },
   },
 
+  manufacturing: {
+    label: "Manufacturing, Wholesale & Export",
+    emoji: "🏭",
+    description: "Raw materials, production, packaging, wholesale and exports",
+    categories: ["raw_material", "packaging_material", "work_in_progress", "finished_goods", "by_product", "other"],
+    primaryUnits: ["kg", "gram", "litre", "ml", "piece", "packet", "pouch", "box", "carton", "pallet"],
+    voiceExample: "name turmeric 500 gram pouch, SKU TUR-500, wholesale 82, stock 500 packet",
+    defaultAccent: "teal",
+    dashboardVariant: "technical",
+    navConfig: { billing: "Dispatch Invoice", products: "Items & Packaging", inventory: "Materials & Stock", udhar: "Trade Receivables", tagline: "Manufacturing & Export" },
+    dashboard: {
+      heroTitle: "Factory operations",
+      heroSubtitle: "Materials, production batches, packaging and dispatch readiness.",
+      kpi: { revenue: "Dispatch Value", profit: "Gross Margin", credit: "Trade Receivables", cash: "Collections" },
+      creditLabel: "Receivables",
+      quickActions: [
+        { label: "Production", href: "/manufacturing", icon: "inventory", color: "teal" },
+        { label: "Purchase", href: "/purchase-bills", icon: "purchase", color: "amber" },
+        { label: "Dispatch", href: "/billing", icon: "billing", color: "primary" },
+        { label: "Reports", href: "/reports", icon: "reports", color: "violet" },
+      ],
+    },
+  },
+
   other: {
     label: "Other / Custom",
     emoji: "🏪",

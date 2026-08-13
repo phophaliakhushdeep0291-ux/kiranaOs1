@@ -274,6 +274,7 @@ const BUSINESS_TYPE_PRICES: Record<BusinessType, Record<Exclude<PlanCode, "stand
   furniture:   { starter: [399, 3999], growth: [799, 6999], pro: [1199, 10999] },
   pharmacy:    { starter: [499, 4999], growth: [899, 7999], pro: [1299, 11999] },
   restaurant:  { starter: [599, 5999], growth: [999, 8999], pro: [1499, 13999] },
+  manufacturing: { starter: [999, 9999], growth: [1999, 18999], pro: [3499, 32999] },
 };
 
 export const SHOP_TYPE_ENTITLEMENTS_V1: FeatureName = "shop_type_entitlements_v1";
@@ -345,6 +346,12 @@ const BUSINESS_TYPE_PLAN_ENTITLEMENTS: Record<BusinessType, BusinessTypePlanEnti
     growth: ["restaurant_recipe_inventory", "advanced_inventory"],
     starterBullets: ["Menu, tables, KOT and kitchen display", "Split billing plus batch/expiry for perishable stock"],
     growthBullets: ["Recipe-level ingredient and kitchen-stock control", "Staff roles, audit logs and advanced reports"],
+  },
+  manufacturing: {
+    starter: ["batch_expiry"],
+    growth: ["advanced_inventory"],
+    starterBullets: ["Packaging SKUs, batch stock and wholesale billing", "Raw-material purchasing and finished-goods traceability"],
+    growthBullets: ["BOMs, production runs, QC, wastage and packaging output", "Export documents, staff controls and Tally-ready operations"],
   },
   other: {
     starter: [],

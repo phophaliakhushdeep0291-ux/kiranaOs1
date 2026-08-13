@@ -30,6 +30,30 @@ export interface ShopWorkflowDefinition {
 }
 
 export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
+  manufacturing: {
+    title: "Manufacturing, wholesale and export workflow",
+    subtitle: "Buy traceable materials, convert them through controlled production, pack finished batches and dispatch to trade buyers.",
+    actions: [
+      { label: "Plan production", detail: "BOMs, material requirements and production runs", href: "/manufacturing", icon: "inventory" },
+      { label: "Receive materials", detail: "Purchase raw and packaging materials by batch", href: "/purchase-bills", icon: "purchase" },
+      { label: "Configure packs", detail: "Give every pouch, box and carton its own SKU", href: "/products?add=1", icon: "products" },
+      { label: "Dispatch goods", detail: "Wholesale or export invoice from released batches", href: "/billing", icon: "billing" },
+    ],
+    productEntry: {
+      helper: "Classify the item as raw material, packaging material or finished good, then define every sellable pack and carton separately.",
+      nameLabel: "Material or finished-good name",
+      namePlaceholder: "e.g. Turmeric powder",
+      looseNamePlaceholder: "e.g. Raw turmeric bulk",
+      brandLabel: "Brand / range",
+      brandPlaceholder: "e.g. House Brand",
+      identifierLabel: "Base SKU / material code",
+      identifierPlaceholder: "e.g. TUR-BASE",
+      notesLabel: "Specification and storage notes",
+      notesPlaceholder: "Grade, moisture limit, storage condition, buyer code...",
+      batchRecommendation: "Required for raw materials and finished goods so every dispatch can be traced back to its production inputs.",
+      recommendBatchTracking: true,
+    },
+  },
   kirana: {
     title: "Kirana daily workflow",
     subtitle: "Bill faster, manage loose and packed stock, refill shelves, and serve repeat customers.",
