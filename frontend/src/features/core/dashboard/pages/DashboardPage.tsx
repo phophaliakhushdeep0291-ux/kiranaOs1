@@ -348,6 +348,7 @@ interface LayoutProps {
 // ─── main data-loading shell ─────────────────────────────────────────────────
 
 export default function Dashboard() {
+  const { t } = useAppLanguage();
   const { user } = useAuth();
   const { businessType, def: btDef } = useBusinessType();
   const { toast } = useToast();
@@ -466,10 +467,10 @@ export default function Dashboard() {
       const result = await seedDemoShopData();
       toast({
         title: result.created ? "Demo shop loaded" : "Demo shop already loaded",
-        description: "The dashboard now has sample products, sales, udhar, and supplier due.",
+        description: t("dashboard.demoLoaded"),
       });
     } catch {
-      toast({ title: "Could not load demo shop", description: "Please try again after local storage is available.", variant: "destructive" });
+      toast({ title: t("dashboard.demoFailed"), description: t("dashboard.demoFailedHelp"), variant: "destructive" });
     } finally {
       setSeedingDemo(false);
     }
@@ -506,6 +507,7 @@ export default function Dashboard() {
 type PaymentSlice = { label: string; value: number; color: string; dot: string };
 
 function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
+  const { t } = useAppLanguage();
   const { isOnline, isSyncing, pendingCount, failedCount } = useOfflineStatus();
   const [, navigate] = useLocation();
   const insightsPersonalization = usePersonalization();
@@ -750,9 +752,9 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         <section className="overflow-hidden rounded-[18px] border border-[var(--brand-border)] bg-[linear-gradient(135deg,#f3f7ff_0%,#ffffff_62%)] p-5 shadow-[0_14px_36px_rgba(7,95,255,0.08)]">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="max-w-xl">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--brand)]">Quick start</p>
-              <h2 className="mt-1 font-display text-[22px] font-black text-[#071333]">Open your counter in three simple steps</h2>
-              <p className="mt-1 text-[13px] font-medium text-[#52627e]">Set up one product, complete a test bill, and check your receipt before serving customers.</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--brand)]">{t("dashboard.quickStart")}</p>
+              <h2 className="mt-1 font-display text-[22px] font-black text-[#071333]">{t("dashboard.quickStartSteps")}</h2>
+              <p className="mt-1 text-[13px] font-medium text-[#52627e]">{t("dashboard.quickStartHelp")}</p>
             </div>
             <div className="grid gap-2 sm:grid-cols-3 xl:w-[650px]">
               <QuickStartLink href="/products?add=1" step="1" icon={<PackagePlus size={17} />} title="Add products" detail="Name, price and stock" />
@@ -847,7 +849,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
             label="Low Stock Items"
             value={String(lowStockCount)}
             delta={null}
-            footer={<span className="text-xs font-semibold text-primary">View all</span>}
+            footer={<span className="text-xs font-semibold text-primary">{t("dashboard.viewAll")}</span>}
             icon={<Package size={18} />}
             iconBg={lowStockCount > 0 ? "border border-[#ffdca8] bg-[#fff2df] text-[#ff8500] shadow-[0_0_0_4px_rgba(255,133,0,0.035),0_10px_26px_rgba(255,133,0,0.22)]" : "border border-[#c8f1d5] bg-[#e7faee] text-[#11a84b] shadow-[0_0_0_4px_rgba(17,168,75,0.035),0_10px_26px_rgba(17,168,75,0.20)]"}
             loading={isLoading}
@@ -863,7 +865,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <p className={DASH_TITLE}>Sales Overview</p>
+                <p className={DASH_TITLE}>{t("dashboard.salesOverview")}</p>
                 <span className="grid h-[18px] w-[18px] place-items-center rounded-full border border-[#b9c7dc] text-[10px] font-black text-[#60708a]">i</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2.5">
@@ -875,7 +877,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                       {periodSalesDelta === 0 ? <Minus size={11} /> : periodSalesDelta > 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
                       {Math.abs(periodSalesDelta)}%
                     </span>
-                    <span className="text-[#7a879b]">vs previous period</span>
+                    <span className="text-[#7a879b]">{t("dashboard.vsPreviousPeriod")}</span>
                   </span>
                 )}
               </div>
@@ -943,8 +945,8 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         {/* Recent Bills */}
         <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden lg:col-span-2 2xl:col-span-1 2xl:min-h-0")}>
           <div className="flex min-h-[46px] items-center justify-between gap-3 border-b border-[#e8edf4] px-4 py-3">
-            <p className={DASH_TITLE}>Recent Bills</p>
-            <Link href="/bills" className="tap-target text-[11px] font-bold text-[var(--brand)] hover:underline">View all</Link>
+            <p className={DASH_TITLE}>{t("dashboard.recentBills")}</p>
+            <Link href="/bills" className="tap-target text-[11px] font-bold text-[var(--brand)] hover:underline">{t("dashboard.viewAll")}</Link>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="h-full w-full text-xs">
@@ -965,7 +967,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                     </tr>
                   ))
                 ) : recentBills.length === 0 ? (
-                  <tr><td colSpan={6} className={cn("px-5 py-8 text-center text-sm", DASH_MUTED)}>No recent bills yet</td></tr>
+                  <tr><td colSpan={6} className={cn("px-5 py-8 text-center text-sm", DASH_MUTED)}>{t("dashboard.noRecentBills")}</td></tr>
                 ) : (
                   recentBills.slice(0, 5).map(bill => {
                     const href = `/bills/${bill.id ?? ""}`;
@@ -1004,12 +1006,12 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                 <ReceiptText size={14} />
               </span>
               <div>
-                <p className={cn("text-[10px] font-medium", DASH_MUTED)}>Bills today</p>
+                <p className={cn("text-[10px] font-medium", DASH_MUTED)}>{t("dashboard.billsToday")}</p>
                 <p className="text-[15px] font-extrabold text-[#13223f] dark:text-card-foreground">{dashboard.billCount}</p>
               </div>
             </div>
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 sm:border-l sm:border-[#e8edf4]">
-              <p className={cn("text-[10px] font-medium", DASH_MUTED)}>Sales today</p>
+              <p className={cn("text-[10px] font-medium", DASH_MUTED)}>{t("dashboard.salesToday")}</p>
               <p className="text-[15px] font-extrabold text-[#13223f] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
             </div>
           </div>
@@ -1020,7 +1022,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
 
           {/* Quick Insights */}
           <div className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col p-4 2xl:min-h-0")}>
-            <p className={cn(DASH_TITLE, "mb-3")}>Quick Insights</p>
+            <p className={cn(DASH_TITLE, "mb-3")}>{t("dashboard.quickInsights")}</p>
             <div className="grid min-h-0 flex-1 grid-rows-4 gap-2">
               {/* §13: ordered by which destination this user actually opens.
                   The same four rows are always present — only their order moves. */}
@@ -1032,7 +1034,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
 
           {/* Sync & Health */}
           <div className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden p-4 2xl:min-h-0")}>
-            <p className={cn(DASH_TITLE, "mb-2")}>Sync & Health</p>
+            <p className={cn(DASH_TITLE, "mb-2")}>{t("dashboard.syncHealth")}</p>
             <div className="border-b border-[#edf2f8] pb-2.5">
               <div className="flex items-center gap-2 text-[13px] font-bold text-[#11a84b] dark:text-emerald-300">
                 <span className="grid h-5 w-5 place-items-center rounded-full bg-[#e7faee]">
@@ -1103,6 +1105,7 @@ interface MobileGeneralDashboardProps {
 }
 
 function MobileGeneralDashboard({
+  const { t } = useAppLanguage();
   businessType,
   dashboard,
   ownerReport,
@@ -1133,7 +1136,7 @@ function MobileGeneralDashboard({
         <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full bg-[var(--brand)]/35 blur-2xl" aria-hidden="true" />
         <div className="relative flex items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75">Today’s net sales</p>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75">{t("dashboard.netSalesToday")}</p>
             <p className="mt-2 font-display text-[34px] font-black leading-none tracking-[-0.04em]">{fmtCompactRs(dashboard.revenue)}</p>
             <div className="mt-2 flex items-center gap-2 text-[12px] font-semibold text-blue-100/75">
               <MobileDelta delta={salesDelta} inverse />
@@ -1165,9 +1168,9 @@ function MobileGeneralDashboard({
 
       {!dashboard.hasBusinessData && (
         <section className="rounded-[18px] border border-[var(--brand-border)] bg-[linear-gradient(145deg,#f1f6ff,#ffffff)] p-4 shadow-[0_12px_30px_rgba(7,95,255,0.08)]">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]">Quick start</p>
-          <h2 className="mt-1 font-display text-[19px] font-black text-[#071333]">Get ready for your first customer</h2>
-          <p className="mt-1 text-[12px] font-medium leading-5 text-[#52627e]">Complete these once, then billing stays fast every day.</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]">{t("dashboard.quickStart")}</p>
+          <h2 className="mt-1 font-display text-[19px] font-black text-[#071333]">{t("dashboard.getReady")}</h2>
+          <p className="mt-1 text-[12px] font-medium leading-5 text-[#52627e]">{t("dashboard.getReadyHelp")}</p>
           <div className="mt-3 grid gap-2">
             <QuickStartLink href="/products?add=1" step="1" icon={<PackagePlus size={17} />} title="Add your first product" detail="Set price and opening stock" />
             <QuickStartLink href="/billing" step="2" icon={<ShoppingCart size={17} />} title="Create a test bill" detail="Practice checkout without pressure" />
@@ -1181,8 +1184,8 @@ function MobileGeneralDashboard({
       <section>
         <div className="mb-3 flex items-center justify-between gap-3 px-0.5">
           <div>
-            <h2 className="font-display text-[19px] font-black text-[#071333]">Shop health</h2>
-            <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">The numbers that need your attention</p>
+            <h2 className="font-display text-[19px] font-black text-[#071333]">{t("dashboard.shopHealth")}</h2>
+            <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">{t("dashboard.shopHealthHelp")}</p>
           </div>
           <Link href="/reports" className="inline-flex min-h-11 items-center gap-1 rounded-[12px] px-3 text-[12px] font-black text-[var(--brand)]">All reports <ChevronRight size={15} /></Link>
         </div>
@@ -1197,9 +1200,9 @@ function MobileGeneralDashboard({
       <section className="rounded-[18px] border border-[#e4ebf4] bg-white p-4 shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-[20px] font-black text-[#071333]">Sales Trend</h2>
+            <h2 className="font-display text-[20px] font-black text-[#071333]">{t("dashboard.salesTrend")}</h2>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <span className="text-[13px] font-medium text-[#33456b]">Total Sales</span>
+              <span className="text-[13px] font-medium text-[#33456b]">{t("dashboard.totalSales")}</span>
               <span className="text-[15px] font-black text-[#071333]">{fmtCompactRs(periodSales)}</span>
               <MobileDelta delta={periodSalesDelta} />
             </div>
@@ -1230,7 +1233,7 @@ function MobileGeneralDashboard({
       </section>
 
       <section>
-        <h2 className="mb-3 font-display text-[20px] font-black text-[#071333]">Quick Insights</h2>
+        <h2 className="mb-3 font-display text-[20px] font-black text-[#071333]">{t("dashboard.quickInsights")}</h2>
         <div className="overflow-hidden rounded-[18px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
           <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={salesDelta == null ? "No sales yesterday to compare against yet." : `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle="Review the sales trend and payment mix." />
           <MobileInsight tone="orange" icon={<Package size={15} />} title={`${ownerReport?.topProducts[0]?.name ?? "Your top product"} is leading sales.`} subtitle="Keep the best sellers available in stock." />
@@ -1242,8 +1245,8 @@ function MobileGeneralDashboard({
       <section className="grid gap-3">
         <div className="overflow-hidden rounded-[20px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
           <div className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
-            <h2 className="text-[14px] font-black text-[var(--brand-ink)]">Top products</h2>
-            <Link href="/products" className="inline-flex min-h-11 items-center px-2 text-[11px] font-black text-[var(--brand)]">View all</Link>
+            <h2 className="text-[14px] font-black text-[var(--brand-ink)]">{t("dashboard.topProducts")}</h2>
+            <Link href="/products" className="inline-flex min-h-11 items-center px-2 text-[11px] font-black text-[var(--brand)]">{t("dashboard.viewAll")}</Link>
           </div>
           <div className="divide-y divide-[#edf2f8] px-3.5">
             {(topRows.length > 0 ? topRows : recentProducts.slice(0, 5).map((product) => ({ productId: product.id, name: product.name, quantitySold: Number(product.stockQuantity ?? 0), revenue: productPrice(product), profitEstimate: 0 }))).map((row) => (
@@ -1262,8 +1265,8 @@ function MobileGeneralDashboard({
 
         <div className="overflow-hidden rounded-[20px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
           <div className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
-            <h2 className="text-[14px] font-black text-[var(--brand-ink)]">Recent bills</h2>
-            <Link href="/bills" className="inline-flex min-h-11 items-center px-2 text-[11px] font-black text-[var(--brand)]">View all</Link>
+            <h2 className="text-[14px] font-black text-[var(--brand-ink)]">{t("dashboard.recentBills")}</h2>
+            <Link href="/bills" className="inline-flex min-h-11 items-center px-2 text-[11px] font-black text-[var(--brand)]">{t("dashboard.viewAll")}</Link>
           </div>
           <div className="divide-y divide-[#edf2f8] px-3.5">
             {recentBills.slice(0, 5).map((bill) => (
@@ -1327,13 +1330,18 @@ function MobileHealthCard({ href, label, value, detail, delta, positiveIsBad = f
 }
 
 function MobileDelta({ delta, inverse = false }: { delta: number | null; inverse?: boolean }) {
+  const { t } = useAppLanguage();
   const color = inverse
     ? delta == null || delta === 0 ? "text-blue-100/70" : delta > 0 ? "text-emerald-300" : "text-rose-300"
     : delta == null ? "text-[#94a3b8]" : delta === 0 ? "text-[#718096]" : delta > 0 ? "text-[#16a34a]" : "text-[#ef3340]";
+  const deltaIcon = delta === 0 ? <Minus size={9} /> : delta != null && delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />;
   return (
     <span className="inline-flex items-center gap-1 text-[9px] font-semibold">
-      <span className={cn("inline-flex items-center gap-0.5 font-bold", color)}>{delta == null ? <span>—</span> : <>{delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}{Math.abs(delta)}%</>}</span>
-      <span className={inverse ? "text-blue-100/70" : "text-[#7b8799]"}>vs yesterday</span>
+      {/* Chosen ahead of the JSX rather than inline: nested ternaries returning
+          elements read to the hardcoded-string scanner as literal text, which
+          reports a phantom string this file can never translate away. */}
+      <span className={cn("inline-flex items-center gap-0.5 font-bold", color)}>{delta == null ? <span>—</span> : <>{deltaIcon}{Math.abs(delta)}%</>}</span>
+      <span className={inverse ? "text-blue-100/70" : "text-[#7b8799]"}>{t("dashboard.vsYesterday")}</span>
     </span>
   );
 }
@@ -1459,6 +1467,7 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
 }
 
 function ShopWorkflowPanel({ businessType, compact = false }: { businessType: BusinessType; compact?: boolean }) {
+  const { t } = useAppLanguage();
   const workflow = getShopWorkflow(businessType);
   const { isHrefEnabled } = useModuleVisibility();
   // Same rule as the sidebar: a shortcut into a module the owner switched off
@@ -1470,7 +1479,7 @@ function ShopWorkflowPanel({ businessType, compact = false }: { businessType: Bu
     <section className={cn("overflow-hidden rounded-[18px] border border-[#dfe8f5] bg-[linear-gradient(135deg,#f8fbff_0%,#ffffff_64%)] shadow-[0_10px_28px_rgba(26,57,112,0.055)]", !compact && "mb-6")} data-testid="shop-workflow-panel">
       <div className="flex flex-col gap-3 border-b border-[#e8eef6] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--brand)]">Tools for your shop type</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--brand)]">{t("dashboard.shopTools")}</p>
           <h2 className="mt-1 font-display text-[18px] font-black text-[var(--brand-ink)]">{workflow.title}</h2>
           <p className="mt-1 max-w-3xl text-[11.5px] font-semibold leading-5 text-[#65748f]">{workflow.subtitle}</p>
         </div>
@@ -1511,6 +1520,7 @@ function QuickStartLink({ href, step, icon, title, detail }: { href: string; ste
 }
 
 function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: PaymentSlice[]; total: number; period: DashboardPeriod; onPeriodChange: (period: DashboardPeriod) => void }) {
+  const { t } = useAppLanguage();
   const realTotal = rows.reduce((sum, row) => sum + row.value, 0);
   const displayTotal = total > 0 ? total : realTotal;
   const chartRows = rows.length > 0 ? rows : [{ label: "No sales", value: 1, color: "#e5e7eb", dot: "bg-muted" }];
@@ -1519,7 +1529,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
   return (
     <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden p-4 2xl:min-h-0 2xl:p-5")}>
       <div className="flex min-h-7 min-w-0 items-center justify-between gap-2">
-        <p className={cn(DASH_TITLE, "min-w-0 truncate")}>Payment Mode Breakdown</p>
+        <p className={cn(DASH_TITLE, "min-w-0 truncate")}>{t("dashboard.paymentBreakdown")}</p>
         <DashboardPeriodSelect value={period} onChange={onPeriodChange} compact />
       </div>
       <div className="relative mt-2 min-h-[150px] flex-1">
@@ -1549,7 +1559,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
           <div>
             <p className="font-sans text-[17px] font-extrabold leading-none text-[var(--brand-ink)] dark:text-card-foreground">{fmtRs(displayTotal)}</p>
-            <p className={cn("mt-1 text-[11px] font-semibold", DASH_MUTED)}>Total Sales</p>
+            <p className={cn("mt-1 text-[11px] font-semibold", DASH_MUTED)}>{t("dashboard.totalSales")}</p>
           </div>
         </div>
       </div>
@@ -1572,11 +1582,12 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
 }
 
 function LowStockAlerts({ items, packs = [], productsById }: { items: LocalReportSnapshot["lowStock"]; packs?: LocalReportSnapshot["lowStockPacks"]; productsById: Record<string, Product> }) {
+  const { t } = useAppLanguage();
   return (
     <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden p-4 2xl:min-h-0 2xl:p-5")}>
       <div className="flex items-center justify-between gap-3">
-        <p className={DASH_TITLE}>Low Stock Alerts</p>
-        <Link href="/inventory" className="tap-target text-[12px] font-black text-[var(--brand)] hover:underline">View all</Link>
+        <p className={DASH_TITLE}>{t("dashboard.lowStockAlerts")}</p>
+        <Link href="/inventory" className="tap-target text-[12px] font-black text-[var(--brand)] hover:underline">{t("dashboard.viewAll")}</Link>
       </div>
       <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 2xl:justify-evenly">
         {/* Pack sizes come first: they name the exact thing to reorder ("8-pack box
@@ -1681,11 +1692,12 @@ function HealthRow({ icon, label, status, value }: {
 }
 
 function RecentProductsRail({ products }: { products: Product[] }) {
+  const { t } = useAppLanguage();
   return (
     <section className={cn(DASH_CARD, "overflow-hidden")}>
       <div className="flex items-center justify-between gap-3 border-b border-[#edf2f8] px-5 py-3">
-        <p className={DASH_TITLE}>Recently Added Products</p>
-        <Link href="/products" className="tap-target text-[12px] font-black text-[var(--brand)] hover:underline">View all</Link>
+        <p className={DASH_TITLE}>{t("dashboard.recentProducts")}</p>
+        <Link href="/products" className="tap-target text-[12px] font-black text-[var(--brand)] hover:underline">{t("dashboard.viewAll")}</Link>
       </div>
       {products.length === 0 ? (
         <div className={cn("m-4 rounded-[10px] border border-dashed border-[#dce7f5] px-4 py-7 text-center text-sm font-semibold", DASH_MUTED)}>
@@ -1783,7 +1795,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
       <section className="premium-hero mb-6 overflow-hidden">
         <div className="p-5 sm:p-6">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary ring-1 ring-primary/20">● Kitchen active</span>
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary ring-1 ring-primary/20">{t("dashboard.kitchenActive")}</span>
             <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
               {dashboard.billCount} orders today
             </span>
@@ -1801,7 +1813,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
 
           <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Revenue today</p>
+              <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">{t("dashboard.revenueToday")}</p>
               <p className="mt-1 font-display text-5xl font-black tracking-tight text-foreground sm:text-6xl">
                 {fmt(dashboard.revenue)}
               </p>
@@ -1846,7 +1858,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <DataTableCard title="Cash & UPI Collection" description="Today's payment breakdown by mode." loading={isLoading} actions={(
-          <button type="button" onClick={() => openDrilldown("collection")} className="inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">Breakdown</button>
+          <button type="button" onClick={() => openDrilldown("collection")} className="inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">{t("dashboard.breakdown")}</button>
         )}>
           <div className="space-y-2">
             <CollectionRow label="Cash collected" value={fmt(dashboard.cashCollected)} icon={<Wallet size={16} aria-hidden="true" />} />
@@ -1856,7 +1868,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
             )}
             <div className="mt-3 rounded-lg bg-primary/10 p-3 text-sm">
               <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-muted-foreground">Expected cash in drawer</span>
+                <span className="font-medium text-muted-foreground">{t("dashboard.expectedCashDrawer")}</span>
                 <span className="text-lg font-black text-foreground">{fmt(cashInDrawer)}</span>
               </div>
             </div>
@@ -1913,7 +1925,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary ring-1 ring-primary/20">● Counter live</span>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary ring-1 ring-primary/20">{t("dashboard.counterLive")}</span>
               <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 ring-1 ring-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900">
                 {dashboard.billCount} bills today
               </span>
@@ -1926,12 +1938,12 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
 
             <div className="mt-5 grid gap-5 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sales today</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t("dashboard.salesToday")}</p>
                 <p className="mt-1 font-display text-4xl font-black tracking-tight text-foreground">{fmt(dashboard.revenue)}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{Math.round(dashboard.grossMarginPct)}% gross margin</p>
               </div>
               <div className={`rounded-xl p-4 ring-1 ${dashboard.supplierDue > 0 ? "bg-rose-50 ring-rose-200/60 dark:bg-rose-950/30 dark:ring-rose-900" : "bg-muted/40 ring-black/[0.06]"}`}>
-                <p className={`text-xs font-bold uppercase tracking-widest ${dashboard.supplierDue > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}>Supplier balance due</p>
+                <p className={`text-xs font-bold uppercase tracking-widest ${dashboard.supplierDue > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}>{t("dashboard.supplierDue")}</p>
                 <p className={`mt-1 font-display text-3xl font-black ${dashboard.supplierDue > 0 ? "text-rose-700 dark:text-rose-300" : "text-foreground"}`}>
                   {dashboard.supplierDue > 0 ? fmt(dashboard.supplierDue) : "Clear"}
                 </p>
@@ -1939,7 +1951,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
                   <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">Today due: {fmt(dashboard.purchaseDue)}</p>
                 )}
                 {dashboard.supplierDue === 0 && (
-                  <p className="mt-1 text-xs text-muted-foreground">No outstanding to suppliers</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.noSupplierDue")}</p>
                 )}
               </div>
             </div>
@@ -1954,7 +1966,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
             </div>
           </div>
           <div className="border-t bg-background/40 p-5 sm:p-6 lg:border-l lg:border-t-0">
-            <p className="app-muted-label">Quick actions</p>
+            <p className="app-muted-label">{t("dashboard.quickActions")}</p>
             <div className="mt-3 grid grid-cols-1 gap-2.5">
               {quickActions.map((action) => (
                 <Link key={action.href + action.label} href={action.href}>
@@ -1997,7 +2009,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
           </div>
         </DataTableCard>
 
-        <DataTableCard title="Low Stock Parts" description="Parts below minimum stock — order soon." loading={isLoading} empty={lowStockItems.length === 0} emptyState={<EmptyState title="Parts stock healthy" description="No parts are below minimum stock level." icon={<Package size={24} className="text-muted-foreground" />} />} actions={<Link href="/inventory"><span className="cursor-pointer text-sm text-primary hover:underline">Godown view</span></Link>}>
+        <DataTableCard title="Low Stock Parts" description="Parts below minimum stock — order soon." loading={isLoading} empty={lowStockItems.length === 0} emptyState={<EmptyState title="Parts stock healthy" description="No parts are below minimum stock level." icon={<Package size={24} className="text-muted-foreground" />} />} actions={<Link href="/inventory"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.godownView")}</span></Link>}>
           <div className="space-y-2">
             {lowStockItems.slice(0, 6).map((item, i) => (
               <div key={item.productId ?? i} className="flex items-center justify-between gap-3 border-b py-2 last:border-0">
@@ -2037,7 +2049,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
             <p className="font-semibold text-rose-800 dark:text-rose-200">
               {lowStockCount} medicine{lowStockCount > 1 ? "s" : ""} below minimum stock — reorder required
             </p>
-            <span className="ml-auto shrink-0 text-xs font-bold text-rose-600 hover:underline dark:text-rose-400">View stock →</span>
+            <span className="ml-auto shrink-0 text-xs font-bold text-rose-600 hover:underline dark:text-rose-400">{t("dashboard.viewStock")}</span>
           </div>
         </Link>
       )}
@@ -2057,7 +2069,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary ring-1 ring-primary/20">● Dispensing active</span>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary ring-1 ring-primary/20">{t("dashboard.dispensingActive")}</span>
               <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 ring-1 ring-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900">
                 {dashboard.billCount} counters today
               </span>
@@ -2066,7 +2078,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
               </span>
             </div>
             <h2 className="mt-5 max-w-2xl font-display text-3xl font-black tracking-tight text-foreground sm:text-4xl">{dbCfg.heroTitle}</h2>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">Safe dispensing begins with accurate stock. Review low stock before close of day.</p>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{t("dashboard.dispensingHelp")}</p>
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-semibold">
               <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">Drawer {fmt(cashInDrawer)}</span>
               {!dashboard.hasBusinessData && (
@@ -2077,7 +2089,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
             </div>
           </div>
           <div className="border-t bg-background/40 p-5 sm:p-6 lg:border-l lg:border-t-0">
-            <p className="app-muted-label">Quick actions</p>
+            <p className="app-muted-label">{t("dashboard.quickActions")}</p>
             <div className="mt-3 grid grid-cols-1 gap-2.5">
               {quickActions.map((action) => (
                 <Link key={action.href + action.label} href={action.href}>
@@ -2107,7 +2119,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Low stock medicines — LEFT and prominent for pharmacy */}
-        <DataTableCard title="Low Stock Medicines" description="Medicines below minimum level — reorder immediately." loading={isLoading} empty={lowStockItems.length === 0} emptyState={<EmptyState title="All medicines in stock" description="No medicines are below minimum stock level." icon={<Pill size={24} className="text-muted-foreground" />} />} actions={<Link href="/inventory"><span className="cursor-pointer text-sm text-primary hover:underline">Full stock view</span></Link>}>
+        <DataTableCard title="Low Stock Medicines" description="Medicines below minimum level — reorder immediately." loading={isLoading} empty={lowStockItems.length === 0} emptyState={<EmptyState title="All medicines in stock" description="No medicines are below minimum stock level." icon={<Pill size={24} className="text-muted-foreground" />} />} actions={<Link href="/inventory"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.fullStockView")}</span></Link>}>
           <div className="space-y-2">
             {lowStockItems.slice(0, 7).map((item, i) => (
               <div key={item.productId ?? i} className="flex items-center justify-between gap-3 rounded-lg border border-rose-100 bg-rose-50/40 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/20">
@@ -2146,6 +2158,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
 // ─── drilldown dialog ─────────────────────────────────────────────────────────
 
 function DashboardDrilldownDialog({
+  const { t } = useAppLanguage();
   type, snapshot, cashInDrawer, onOpenChange,
 }: {
   type: DrilldownType | null;
@@ -2164,7 +2177,7 @@ function DashboardDrilldownDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {!snapshot ? (
-          <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">Financial snapshot is still loading.</div>
+          <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">{t("dashboard.snapshotLoading")}</div>
         ) : type === "revenue" ? (
           <div className="space-y-2">
             {snapshot.revenueBreakdown.length === 0 ? (
@@ -2207,9 +2220,9 @@ function DashboardDrilldownDialog({
             <CollectionTile label="Bank sales"     value={fmt(snapshot.bankSalesToday)}          icon={<Landmark size={16} aria-hidden="true" />} />
             <CollectionTile label="Old udhar bank" value={fmt(snapshot.bankUdharRecoveryToday)}  icon={<Landmark size={16} aria-hidden="true" />} />
             <div className="rounded-lg border bg-muted/35 p-3 sm:col-span-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cash drawer</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("dashboard.cashDrawer")}</p>
               <div className="mt-2 flex items-center justify-between gap-3">
-                <span className="text-sm text-muted-foreground">Expected closing cash</span>
+                <span className="text-sm text-muted-foreground">{t("dashboard.expectedClosingCash")}</span>
                 <span className="text-lg font-black">{fmt(cashInDrawer)}</span>
               </div>
             </div>
