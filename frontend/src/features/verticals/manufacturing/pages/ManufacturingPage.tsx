@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Factory,
   FlaskConical,
+  Globe2,
+  ClipboardList,
   Loader2,
   PackageCheck,
   Plus,
@@ -62,6 +64,13 @@ type Trace = {
   batchNumber: string;
   producedAs: unknown[];
   consumedBy: unknown[];
+  dispatchedBills?: Array<{ id: string; billNo: string; customerName?: string | null }>;
+};
+
+type TradeOrder = {
+  id: string; orderNumber: string; buyerPoNumber?: string | null; customerName: string;
+  orderType: "domestic" | "export"; status: string; currencyCode: string;
+  countryOfDestination?: string | null; items: Array<{ id: string; description: string; quantity: number; lineTotal: number }>;
 };
 
 const panel = "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.055)]";
@@ -78,6 +87,17 @@ export default function ManufacturingPage() {
   const [wastage, setWastage] = useState("0");
   const [traceBatch, setTraceBatch] = useState("");
   const [traceResult, setTraceResult] = useState<Trace | null>(null);
+  const [orderNumber, setOrderNumber] = useState("");
+  const [buyerPoNumber, setBuyerPoNumber] = useState("");
+  const [buyerName, setBuyerName] = useState("");
+  const [orderProductId, setOrderProductId] = useState("");
+  const [orderQty, setOrderQty] = useState("1");
+  const [orderPrice, setOrderPrice] = useState("0");
+  const [orderType, setOrderType] = useState<"domestic" | "export">("domestic");
+  const [currencyCode, setCurrencyCode] = useState("INR");
+  const [exchangeRate, setExchangeRate] = useState("1");
+  const [destination, setDestination] = useState("");
+  const [incoterm, setIncoterm] = useState("");
 
   const overviewQ = useQuery({
     queryKey: ["manufacturing", "overview"],
@@ -90,6 +110,10 @@ export default function ManufacturingPage() {
   const productsQ = useQuery({
     queryKey: ["products", "manufacturing"],
     queryFn: () => listProducts({ limit: 1000 }),
+  });
+  const tradeOrdersQ = useQuery({
+    queryKey: ["manufacturing", "trade-orders"],
+    queryFn: () => apiRequest<TradeOrder[]>("/manufacturing/trade-orders?status=all&limit=100"),
   });
   const productNames = useMemo(
     () => new Map((productsQ.data ?? []).map((row) => [row.id, row.name])),
@@ -145,11 +169,31 @@ export default function ManufacturingPage() {
     }),
   });
 
+  const createTradeOrder = useMutation({
+    mutationFn: () => apiRequest<TradeOrder>("/manufacturing/trade-orders", {
+      method: "POST",
+      body: JSON.stringify({
+        orderNumber, buyerPoNumber: buyerPoNumber || null, customerName: buyerName,
+        orderType, currencyCode: orderType === "domestic" ? "INR" : currencyCode.toUpperCase(),
+        exchangeRate: orderType === "domestic" ? 1 : Number(exchangeRate),
+        countryOfDestination: orderType === "export" ? destination : null,
+        incoterm: orderType === "export" ? incoterm : null,
+        items: [{ productId: orderProductId, quantity: Number(orderQty), unitPrice: Number(orderPrice), lineDiscount: 0 }],
+      }),
+    }),
+    onSuccess: async () => {
+      toast({ title: t("manufacturing.orders.createdTitle"), description: t("manufacturing.orders.createdDetail") });
+      setOrderNumber(""); setBuyerPoNumber(""); setBuyerName(""); setOrderProductId("");
+      await tradeOrdersQ.refetch();
+    },
+    onError: (error) => toast({ title: t("manufacturing.orders.failedTitle"), description: error instanceof Error ? error.message : t("manufacturing.orders.failedDetail"), variant: "destructive" }),
+  });
+
   const refresh = () => {
-    void Promise.all([overviewQ.refetch(), bomsQ.refetch(), productsQ.refetch()]);
+    void Promise.all([overviewQ.refetch(), bomsQ.refetch(), productsQ.refetch(), tradeOrdersQ.refetch()]);
   };
   const summary = overviewQ.data?.summary;
-  const hasLoadError = overviewQ.isError || bomsQ.isError || productsQ.isError;
+  const hasLoadError = overviewQ.isError || bomsQ.isError || productsQ.isError || tradeOrdersQ.isError;
 
   return (
     <PageShell className="space-y-4 px-3 py-3 sm:px-4 sm:py-4 lg:space-y-5 lg:px-6 lg:py-5" data-testid="manufacturing-page">
@@ -295,6 +339,34 @@ export default function ManufacturingPage() {
               ) : null}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className={panel}>
+          <div className="border-b border-slate-100 p-4 sm:p-5">
+            <h2 className="flex items-center gap-2 font-display font-black text-slate-900"><ClipboardList size={18} className="text-teal-700" />{t("manufacturing.orders.createTitle")}</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{t("manufacturing.orders.createDescription")}</p>
+          </div>
+          <div className="grid gap-3.5 p-4 sm:grid-cols-2 sm:p-5">
+            <Field label={t("manufacturing.orders.orderNumber")}><Input className="h-11" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} /></Field>
+            <Field label={t("manufacturing.orders.buyerPo")}><Input className="h-11" value={buyerPoNumber} onChange={(event) => setBuyerPoNumber(event.target.value)} /></Field>
+            <Field label={t("manufacturing.orders.buyerName")}><Input className="h-11" value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></Field>
+            <Field label={t("manufacturing.orders.type")}><select className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm" value={orderType} onChange={(event) => { const next = event.target.value as "domestic" | "export"; setOrderType(next); if (next === "domestic") { setCurrencyCode("INR"); setExchangeRate("1"); } }}><option value="domestic">{t("manufacturing.orders.domestic")}</option><option value="export">{t("manufacturing.orders.export")}</option></select></Field>
+            <Field label={t("manufacturing.orders.product")}><ProductSelect value={orderProductId} onChange={setOrderProductId} products={productsQ.data ?? []} emptyLabel={t("manufacturing.product.select")} unitFallback={t("manufacturing.product.unitFallback")} /></Field>
+            <Field label={t("manufacturing.orders.quantity")}><Input className="h-11" type="number" min="0.001" value={orderQty} onChange={(event) => setOrderQty(event.target.value)} /></Field>
+            <Field label={t("manufacturing.orders.unitPrice")}><Input className="h-11" type="number" min="0" value={orderPrice} onChange={(event) => setOrderPrice(event.target.value)} /></Field>
+            {orderType === "export" ? <><Field label={t("manufacturing.orders.currency")}><Input className="h-11 uppercase" maxLength={3} value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value.toUpperCase())} /></Field><Field label={t("manufacturing.orders.exchangeRate")}><Input className="h-11" type="number" min="0.000001" value={exchangeRate} onChange={(event) => setExchangeRate(event.target.value)} /></Field><Field label={t("manufacturing.orders.destination")}><Input className="h-11" value={destination} onChange={(event) => setDestination(event.target.value)} /></Field><Field label={t("manufacturing.orders.incoterm")}><Input className="h-11 uppercase" placeholder="FOB / CIF / DAP" value={incoterm} onChange={(event) => setIncoterm(event.target.value.toUpperCase())} /></Field></> : null}
+            <Button className="min-h-12 rounded-xl font-black sm:col-span-2" disabled={!orderNumber.trim() || !buyerName.trim() || !orderProductId || Number(orderQty) <= 0 || Number(orderPrice) < 0 || (orderType === "export" && (!destination.trim() || !incoterm.trim())) || createTradeOrder.isPending} onClick={() => createTradeOrder.mutate()}>{createTradeOrder.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : null}{t("manufacturing.orders.createAction")}</Button>
+          </div>
+        </div>
+
+        <div className={panel}>
+          <div className="border-b border-slate-100 p-4 sm:p-5"><h2 className="flex items-center gap-2 font-display font-black text-slate-900"><Globe2 size={18} className="text-teal-700" />{t("manufacturing.orders.registerTitle")}</h2></div>
+          <div className="divide-y divide-slate-100">
+            {(tradeOrdersQ.data ?? []).map((order) => <div key={order.id} className="grid gap-2 p-4 text-sm sm:grid-cols-[1fr_1fr_110px_110px]"><div><strong className="block text-slate-900">{order.orderNumber}</strong><span className="text-xs text-slate-500">{order.buyerPoNumber || t("manufacturing.orders.noBuyerPo")}</span></div><div><strong className="block">{order.customerName}</strong><span className="text-xs text-slate-500">{order.items.length} {t("manufacturing.orders.lines")}</span></div><span className="font-bold uppercase text-slate-600">{order.orderType}</span><span className="rounded-full bg-slate-100 px-2 py-1 text-center text-xs font-black text-slate-700">{order.status}</span></div>)}
+            {!tradeOrdersQ.isLoading && !tradeOrdersQ.data?.length ? <div className="p-8 text-center text-slate-500">{t("manufacturing.orders.empty")}</div> : null}
+          </div>
         </div>
       </section>
 

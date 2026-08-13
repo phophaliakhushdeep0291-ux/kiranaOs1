@@ -4,6 +4,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { confirmBillSchema } from "../bills/bills.schema.js";
+import { assertSensitiveBillReason, deriveSensitiveBillActions } from "../bills/bill-sensitive-approval.js";
 import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
 import { createCustomerSchema, updateCustomerSchema, udharPaymentSchema } from "../customers/customers.schema.js";
 import { createCustomer, getCustomer, recordUdharPayment, restoreCustomer, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
@@ -1614,6 +1615,12 @@ async function applyCreateBill(shopId, event, user, context) {
   await validateBillProductExpectations(shopId, resolvedBillBody.items ?? []);
 
   const parsed = confirmBillSchema.parse(resolvedBillBody);
+  const sensitiveBillActions = await deriveSensitiveBillActions(shopId, parsed);
+  parsed.sensitiveActions = sensitiveBillActions;
+  if (sensitiveBillActions.length > 0) {
+    assertSensitiveBillReason(sensitiveBillActions, parsed.reason);
+    await assertOwnerPermission(shopId, user, parsed.ownerPin);
+  }
   const creditLedgerClientId = getCreateBillCreditLedgerClientId(payload, billBody);
   // Cashier attribution is server-authoritative. Ignore any frontend-created createdByUserId.
   const bill = await confirmBill(shopId, parsed, {
@@ -1624,6 +1631,8 @@ async function applyCreateBill(shopId, event, user, context) {
     // Replayed offline sale: the goods already left the counter, so never drop it for
     // being stock-short — record it and flag any shortfall for reconciliation.
     allowStockShortfall: true,
+    ownerPinVerified: sensitiveBillActions.length > 0,
+    sensitiveBillActions,
     // Preserve the optimistic ledger row identity so push and pull echoes replace
     // that row instead of posting the same udhar effect a second time locally.
     creditLedgerClientId,

@@ -13,6 +13,7 @@ export async function tradeOrder(req, res, next) { try { res.json({ success: tru
 export async function createTradeOrder(req, res, next) { try { res.status(201).json({ success: true, data: await trade.createTradeOrder(req.shopId, { ...req.body, locationId: req.operationalLocation?.id ?? req.body.locationId }) }); } catch (e) { next(e); } }
 export async function confirmTradeOrder(req, res, next) { try { res.json({ success: true, data: await trade.confirmTradeOrder(req.shopId, req.params.id) }); } catch (e) { next(e); } }
 export async function allocateTradeOrder(req, res, next) { try { res.json({ success: true, data: await trade.allocateTradeOrder(req.shopId, req.params.id, req.body) }); } catch (e) { next(e); } }
+export async function autoAllocateTradeOrder(req, res, next) { try { res.json({ success: true, data: await trade.autoAllocateTradeOrder(req.shopId, req.params.id) }); } catch (e) { next(e); } }
 export async function packTradeOrder(req, res, next) { try { res.json({ success: true, data: await trade.packTradeOrder(req.shopId, req.params.id, req.body) }); } catch (e) { next(e); } }
 export async function dispatchTradeOrder(req, res, next) { try { res.json({ success: true, data: await trade.dispatchTradeOrder(req.shopId, req.params.id, req.body) }); } catch (e) { next(e); } }
 export async function attachTradeBill(req, res, next) { try { res.json({ success: true, data: await trade.attachTradeBill(req.shopId, req.params.id, req.body.billId) }); } catch (e) { next(e); } }

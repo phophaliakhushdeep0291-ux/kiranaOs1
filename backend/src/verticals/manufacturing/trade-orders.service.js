@@ -65,6 +65,32 @@ export async function allocateTradeOrder(shopId, id, input) {
   });
 }
 
+export async function autoAllocateTradeOrder(shopId, id) {
+  const order = await getTradeOrder(shopId, id);
+  if (!["confirmed", "allocated"].includes(order.status)) throw new AppError("Confirm the order before allocating batches", 409, "TRADE_ORDER_NOT_CONFIRMABLE_FOR_ALLOCATION");
+  const allocations = [];
+  for (const item of order.items) {
+    let remaining = Number(item.quantityBaseQty);
+    const lots = await db.inventoryLot.findMany({
+      where: { shopId, locationId: order.locationId, productId: item.productId, status: "active", availableBaseQty: { gt: 0 } },
+      orderBy: [{ expiryDate: "asc" }, { createdAt: "asc" }],
+    });
+    for (const lot of lots) {
+      const reserved = await db.tradeOrderAllocation.aggregate({
+        where: { shopId, inventoryLotId: lot.id, orderItem: { order: { status: { in: ["allocated", "packed"] }, id: { not: order.id } } } },
+        _sum: { quantityBaseQty: true },
+      });
+      const available = Math.max(0, round2(Number(lot.availableBaseQty) - Number(reserved._sum.quantityBaseQty || 0)));
+      const quantityBaseQty = Math.min(remaining, available);
+      if (quantityBaseQty > 0) allocations.push({ orderItemId: item.id, inventoryLotId: lot.id, quantityBaseQty });
+      remaining = round2(remaining - quantityBaseQty);
+      if (remaining <= 0.001) break;
+    }
+    if (remaining > 0.001) throw new AppError(`Insufficient available batches for ${item.description}; short by ${remaining} base units`, 409, "TRADE_ALLOCATION_STOCK_SHORT");
+  }
+  return allocateTradeOrder(shopId, id, { allocations });
+}
+
 export async function packTradeOrder(shopId, id, input) {
   return db.$transaction(async (tx) => {
     const order = await tx.tradeOrder.findFirst({ where: { id, shopId, status: "allocated" }, include: { items: true } });

@@ -23,6 +23,7 @@ import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferR
 import { sendTransactionalEmail } from "../../lib/authEmail.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
+import { assertSensitiveBillReason, deriveSensitiveBillActions } from "./bill-sensitive-approval.js";
 
 const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
@@ -256,6 +257,14 @@ export async function restoreDeletedBill(shopId, billId, actor = {}) {
 // If anything fails, everything rolls back.
 // ─────────────────────────────────────────────────────────────
 export async function confirmBill(shopId, body, actor = {}) {
+  const sensitiveActions = Array.isArray(actor.sensitiveBillActions)
+    ? [...new Set(actor.sensitiveBillActions)]
+    : await deriveSensitiveBillActions(shopId, body);
+  assertSensitiveBillReason(sensitiveActions, body.reason);
+  if (sensitiveActions.length > 0 && actor.ownerPinVerified !== true) {
+    throw new AppError("Owner PIN required for this sensitive bill action", 403, "OWNER_PIN_REQUIRED");
+  }
+  body = { ...body, sensitiveActions };
   const {
     billType,
     customerId,
@@ -871,6 +880,34 @@ export async function confirmBill(shopId, body, actor = {}) {
       },
       req: actor.req ?? null,
     }, tx);
+    const sensitiveAuditActions = {
+      large_discount: "BILL_LARGE_DISCOUNT_APPROVED",
+      selling_below_minimum_price: "BILL_BELOW_MINIMUM_PRICE_APPROVED",
+      loyalty_redemption: "BILL_LOYALTY_REDEMPTION_APPROVED",
+    };
+    for (const sensitiveAction of sensitiveActions) {
+      await writeRequiredBillAudit({
+        shopId,
+        userId: createdByUserId,
+        deviceId: deviceId ?? billIdentity.sourceDeviceId ?? null,
+        action: sensitiveAuditActions[sensitiveAction] ?? "BILL_SENSITIVE_ACTION_APPROVED",
+        entityType: "Bill",
+        entityId: bill.id,
+        after: {
+          billNo: bill.billNo,
+          sensitiveAction,
+          discount: bill.discount,
+          grandTotal: bill.grandTotal,
+        },
+        metadata: {
+          billNo: bill.billNo,
+          locationId: bill.locationId,
+          reason: body.reason.trim(),
+          offlineSyncEventId: actor.syncEventId ?? null,
+        },
+        req: actor.req ?? null,
+      }, tx);
+    }
     if (bill.offerId && Number(bill.offerDiscount || 0) > 0 && bill.billType !== "estimate") {
       await writeRequiredBillAudit({
         shopId,

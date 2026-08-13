@@ -7,15 +7,22 @@ import { validate, validateQuery } from "../../middleware/validate.js";
 import { confirmBillSchema, cancelBillSchema, billQuerySchema, emailReceiptSchema, saleReturnSchema, whatsappBillSchema } from "./bills.schema.js";
 import * as ctrl from "./bills.controller.js";
 import { requireLocationAccess } from "../stores/location-access.service.js";
+import { assertSensitiveBillReason, deriveSensitiveBillActions } from "./bill-sensitive-approval.js";
 
 const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated());
 
-function requireSensitiveBillApproval(req, res, next) {
-  const actions = Array.isArray(req.body?.sensitiveActions) ? [...req.body.sensitiveActions] : [];
-  if (Number(req.body?.loyaltyPointsToRedeem || 0) > 0) actions.push("loyalty_redemption");
-  if (!actions.some((action) => ["large_discount", "selling_below_minimum_price", "loyalty_redemption"].includes(action))) return next();
-  return requireOwnerPin(req, res, next);
+async function requireSensitiveBillApproval(req, res, next) {
+  try {
+    const actions = await deriveSensitiveBillActions(req.shopId, req.body);
+    req.body.sensitiveActions = actions;
+    req.sensitiveBillActions = actions;
+    if (actions.length === 0) return next();
+    assertSensitiveBillReason(actions, req.body.reason);
+    return requireOwnerPin(req, res, next);
+  } catch (error) {
+    return next(error);
+  }
 }
 
 router.get("/", requireLocationAccess("view"), validateQuery(billQuerySchema), ctrl.list);

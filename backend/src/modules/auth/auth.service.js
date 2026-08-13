@@ -224,12 +224,24 @@ export async function googleLogin({ credential, shopId }, reqMeta = {}) {
   return issueAuthResponse(user, user.shop, { ...reqMeta, loginMethod: "google" });
 }
 
-export async function verifyEmail(token) {
-  const authToken = await consumeAuthToken(token, "email_verification");
-  await db.user.update({
-    where: { id: authToken.userId },
-    data: { emailVerifiedAt: new Date() },
-  });
+export async function verifyEmail(token, reqMeta = {}) {
+  await db.$transaction(async (tx) => {
+    const authToken = await consumeAuthToken(token, "email_verification", tx);
+    const user = await tx.user.findFirst({ where: { id: authToken.userId, shopId: authToken.shopId } });
+    if (!user) throw new AppError("User not found", 404, "USER_NOT_FOUND");
+    const verifiedAt = new Date();
+    await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: verifiedAt } });
+    await writeRequiredAuthAudit(tx, {
+      shopId: authToken.shopId,
+      userId: user.id,
+      action: "EMAIL_VERIFIED",
+      entityType: "user",
+      entityId: user.id,
+      before: { emailVerifiedAt: user.emailVerifiedAt },
+      after: { emailVerifiedAt: verifiedAt },
+      req: auditReqShim(reqMeta),
+    });
+  }, { isolationLevel: "Serializable" });
   return { success: true, message: "Email verified successfully" };
 }
 
@@ -259,16 +271,26 @@ export async function requestPasswordReset(input) {
   return genericEmailSecurityResponse();
 }
 
-export async function resetPassword({ token, newPassword }) {
-  const authToken = await consumeAuthToken(token, "password_reset");
+export async function resetPassword({ token, newPassword }, reqMeta = {}) {
   const passwordHash = await bcrypt.hash(newPassword, 10);
   await db.$transaction(async (tx) => {
+    const authToken = await consumeAuthToken(token, "password_reset", tx);
     await tx.user.update({ where: { id: authToken.userId }, data: { passwordHash } });
-    await tx.session.updateMany({
+    const revokedAt = new Date();
+    const revoked = await tx.session.updateMany({
       where: { userId: authToken.userId, shopId: authToken.shopId, revokedAt: null },
-      data: { revokedAt: new Date(), revokedReason: "PASSWORD_RESET" },
+      data: { revokedAt, revokedReason: "PASSWORD_RESET" },
     });
-  });
+    await writeRequiredAuthAudit(tx, {
+      shopId: authToken.shopId,
+      userId: authToken.userId,
+      action: "PASSWORD_RESET_COMPLETED",
+      entityType: "user",
+      entityId: authToken.userId,
+      metadata: { sessionsRevoked: revoked.count, authTokenId: authToken.id },
+      req: auditReqShim(reqMeta),
+    });
+  }, { isolationLevel: "Serializable" });
   return { success: true, sessionsRevoked: true };
 }
 
@@ -476,13 +498,24 @@ export async function getMe(userId, shopId) {
 
 // ── PIN management ──────────────────────────────────────────
 
-export async function setPin(userId, shopId, pin) {
+export async function setPin(userId, shopId, pin, reqMeta = {}) {
   const user = await db.user.findFirst({ where: { id: userId, shopId, disabledAt: null } });
   if (!user) throw new AppError("User not found", 404);
   if (user.role !== "owner") throw new AppError("Only owner can set a PIN", 403);
 
   const pinHash = await bcrypt.hash(pin, 10);
-  await db.user.update({ where: { id: userId }, data: { pinHash } });
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { pinHash } });
+    await writeRequiredAuthAudit(tx, {
+      shopId,
+      userId,
+      action: user.pinHash ? "PIN_CHANGED" : "PIN_SET",
+      entityType: "user",
+      entityId: userId,
+      metadata: { previouslyConfigured: Boolean(user.pinHash) },
+      req: auditReqShim(reqMeta),
+    });
+  }, { isolationLevel: "Serializable" });
   return { success: true, message: "PIN set successfully" };
 }
 
@@ -758,7 +791,7 @@ export async function removeStaff(shopId, staffId, requestingUserId, reqMeta = {
   });
 }
 
-export async function changePassword(userId, shopId, { currentPassword, newPassword }) {
+export async function changePassword(userId, shopId, { currentPassword, newPassword }, reqMeta = {}) {
   const user = await db.user.findFirst({ where: { id: userId, shopId, disabledAt: null } });
   if (!user) throw new AppError("User not found", 404);
 
@@ -768,11 +801,20 @@ export async function changePassword(userId, shopId, { currentPassword, newPassw
   const passwordHash = await bcrypt.hash(newPassword, 10);
   await db.$transaction(async (tx) => {
     await tx.user.update({ where: { id: userId }, data: { passwordHash } });
-    await tx.session.updateMany({
+    const revoked = await tx.session.updateMany({
       where: { userId, shopId, revokedAt: null },
       data: { revokedAt: new Date(), revokedReason: "PASSWORD_CHANGED" },
     });
-  });
+    await writeRequiredAuthAudit(tx, {
+      shopId,
+      userId,
+      action: "PASSWORD_CHANGED",
+      entityType: "user",
+      entityId: userId,
+      metadata: { sessionsRevoked: revoked.count },
+      req: auditReqShim(reqMeta),
+    });
+  }, { isolationLevel: "Serializable" });
   return { success: true, sessionsRevoked: true };
 }
 
@@ -934,9 +976,9 @@ async function createAndSendAuthToken({ user, shop, type, ttlMs }) {
   };
 }
 
-async function consumeAuthToken(rawToken, type) {
+async function consumeAuthToken(rawToken, type, client = db) {
   const tokenHash = hashAuthToken(rawToken);
-  const authToken = await db.authToken.findFirst({
+  const authToken = await client.authToken.findFirst({
     where: {
       tokenHash,
       type,
@@ -949,7 +991,7 @@ async function consumeAuthToken(rawToken, type) {
     err.code = "AUTH_TOKEN_INVALID_OR_EXPIRED";
     throw err;
   }
-  await db.authToken.update({
+  await client.authToken.update({
     where: { id: authToken.id },
     data: { consumedAt: new Date() },
   });

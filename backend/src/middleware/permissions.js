@@ -61,7 +61,10 @@ export async function requireOwnerPin(req, _res, next) {
     // Production default: every destructive/financial action must prove intent with
     // the owner PIN, even when the current JWT belongs to the owner. Set
     // OWNER_PIN_REQUIRED=false only for trusted development/admin migration flows.
-    if (!env.OWNER_PIN_REQUIRED && req.user.role === "owner") return next();
+    if (!env.OWNER_PIN_REQUIRED && req.user.role === "owner") {
+      req.ownerPinVerified = true;
+      return next();
+    }
 
     await assertOwnerPinAttemptAllowed(req, _res);
 
@@ -89,6 +92,7 @@ export async function requireOwnerPin(req, _res, next) {
     }
 
     await logOwnerPinVerified(req);
+    req.ownerPinVerified = true;
     return next();
   } catch (err) {
     return next(err);

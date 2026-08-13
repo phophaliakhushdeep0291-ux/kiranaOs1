@@ -1,5 +1,6 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { createTenant, login, uniqueMobile } from "./factories.js";
 
@@ -156,6 +157,86 @@ if (ctx.skip) {
       assert.equal(assertFailure(failedLogout, 503).code, "AUTH_AUDIT_WRITE_FAILED");
       assert.equal((await ctx.db.session.findUniqueOrThrow({ where: { id: sessionId } })).revokedAt, null);
       assertSuccess(await ctx.post("/api/auth/refresh", { refreshToken: auth.refreshToken }));
+    });
+
+    test("PIN, email verification and password changes are atomic with their security audit", async () => {
+      const tenant = await createTenant(ctx.db);
+      const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+
+      async function failAudit(action, operation) {
+        const triggerName = `force_${action.toLowerCase()}_failure`;
+        await ctx.db.$executeRawUnsafe(`
+          CREATE TRIGGER ${triggerName}
+          BEFORE INSERT ON AuditLog
+          WHEN NEW.action = '${action}'
+          BEGIN
+            SELECT RAISE(ABORT, 'forced auth security audit failure');
+          END;
+        `);
+        try { return await operation(); }
+        finally { await ctx.db.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ${triggerName}`); }
+      }
+
+      const initialPinHash = (await ctx.db.user.findUniqueOrThrow({ where: { id: tenant.owner.id } })).pinHash;
+      const failedPin = assertFailure(await failAudit("PIN_CHANGED", () => ctx.post(
+        "/api/auth/pin/set",
+        { pin: "5678" },
+        { token: auth.accessToken },
+      )), 503);
+      assert.equal(failedPin.code, "AUTH_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.user.findUniqueOrThrow({ where: { id: tenant.owner.id } })).pinHash, initialPinHash);
+
+      const initialPasswordHash = (await ctx.db.user.findUniqueOrThrow({ where: { id: tenant.owner.id } })).passwordHash;
+      const failedChange = assertFailure(await failAudit("PASSWORD_CHANGED", () => ctx.post(
+        "/api/auth/change-password",
+        { currentPassword: tenant.ownerPassword, newPassword: "ChangedPassword123" },
+        { token: auth.accessToken },
+      )), 503);
+      assert.equal(failedChange.code, "AUTH_AUDIT_WRITE_FAILED");
+      const afterChangeFailure = await ctx.db.user.findUniqueOrThrow({ where: { id: tenant.owner.id } });
+      assert.equal(afterChangeFailure.passwordHash, initialPasswordHash);
+      const sessionId = auth.refreshToken.split(".")[0];
+      assert.equal((await ctx.db.session.findUniqueOrThrow({ where: { id: sessionId } })).revokedAt, null);
+
+      await ctx.db.user.update({ where: { id: tenant.owner.id }, data: { email: "atomic@example.test", emailVerifiedAt: null } });
+      const verifyRaw = "verify-email-atomic-proof";
+      const verifyToken = await ctx.db.authToken.create({
+        data: {
+          userId: tenant.owner.id,
+          shopId: tenant.shop.id,
+          type: "email_verification",
+          tokenHash: crypto.createHash("sha256").update(verifyRaw).digest("hex"),
+          sentToEmail: "atomic@example.test",
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      });
+      const failedVerification = assertFailure(await failAudit("EMAIL_VERIFIED", () => ctx.post(
+        "/api/auth/verify-email",
+        { token: verifyRaw },
+      )), 503);
+      assert.equal(failedVerification.code, "AUTH_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.user.findUniqueOrThrow({ where: { id: tenant.owner.id } })).emailVerifiedAt, null);
+      assert.equal((await ctx.db.authToken.findUniqueOrThrow({ where: { id: verifyToken.id } })).consumedAt, null);
+
+      const resetRaw = "reset-password-atomic-proof";
+      const resetToken = await ctx.db.authToken.create({
+        data: {
+          userId: tenant.owner.id,
+          shopId: tenant.shop.id,
+          type: "password_reset",
+          tokenHash: crypto.createHash("sha256").update(resetRaw).digest("hex"),
+          sentToEmail: "atomic@example.test",
+          expiresAt: new Date(Date.now() + 60_000),
+        },
+      });
+      const failedReset = assertFailure(await failAudit("PASSWORD_RESET_COMPLETED", () => ctx.post(
+        "/api/auth/password/reset",
+        { token: resetRaw, newPassword: "ResetPassword123" },
+      )), 503);
+      assert.equal(failedReset.code, "AUTH_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.user.findUniqueOrThrow({ where: { id: tenant.owner.id } })).passwordHash, initialPasswordHash);
+      assert.equal((await ctx.db.authToken.findUniqueOrThrow({ where: { id: resetToken.id } })).consumedAt, null);
+      assert.equal((await ctx.db.session.findUniqueOrThrow({ where: { id: sessionId } })).revokedAt, null);
     });
 
     test("protected route rejects missing token", async () => {
