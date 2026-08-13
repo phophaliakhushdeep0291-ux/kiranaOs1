@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api/http";
 import type { PlanCode, SubscriptionState } from "@/features/core/subscription/plans";
+import { safeRandomUUID } from "@/lib/safe-uuid";
 
 export type BillingCycle = "monthly" | "yearly";
 
@@ -55,6 +56,8 @@ export interface SubscriptionCheckoutDto {
   planCode: PlanCode | string;
   billingCycle: BillingCycle;
   transactionId: string;
+  completed?: boolean;
+  idempotent?: boolean;
 }
 
 export interface CouponValidationDto {
@@ -100,9 +103,11 @@ export function listSubscriptionPlans() {
   });
 }
 
-export function requestSubscriptionUpgrade(data: UpgradeRequestDto) {
+export function requestSubscriptionUpgrade(data: UpgradeRequestDto, idempotencyKey?: string) {
+  const checkoutIdempotencyKey = idempotencyKey ?? `subscription-checkout:${safeRandomUUID()}`;
   return apiRequest<SubscriptionCheckoutDto>("/subscription/checkout", {
     method: "POST",
+    headers: { "Idempotency-Key": checkoutIdempotencyKey },
     body: JSON.stringify({
       billingCycle: "monthly",
       provider: "razorpay",
