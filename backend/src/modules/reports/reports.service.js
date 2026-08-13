@@ -983,17 +983,15 @@ export async function getPaymentSummary(shopId, { from, to, locationId }) {
 // cancellation and restore rows are journaled at activity time, while operational
 // reports describe the bill's current state, and FinancialLedger has no locationId.
 // A scoped comparison would therefore look precise while comparing different truths.
+//
+// Recycle-bin bills are excluded here exactly as they are everywhere else, because
+// softDeleteBill posts a reversing journal entry (postBillDeletedLedger). Note that entry
+// deliberately leaves udhar_debit standing — a delete does not forgive the debt — which is
+// why `outstanding` below can still read every customer's balance and net to zero.
 export async function getFinancialLedgerReconciliation(shopId) {
   const [activeBills, recoveredUdhar, customers, ledgerRows] = await Promise.all([
-    // Deliberately NOT filtered on `deletedAt`, unlike every other bill read in this file.
-    // Cancel and restore post reversing journal rows (postBillCancelledLedger /
-    // postBillRestoredLedger) so they net out on both sides; soft-delete posts nothing at all
-    // — it only writes an audit row. Excluding deleted bills here would drop them from the
-    // operational side while the journal still carries their sale, reporting a variance for
-    // something neither side got wrong. The honest fix is a reversing entry on delete; until
-    // that exists, both sides must agree to ignore the recycle bin.
     db.bill.findMany({
-      where: { shopId, status: "active" },
+      where: { shopId, ...REAL_SALE_BILL_FILTER },
       include: { payments: true },
     }),
     db.udharLedger.findMany({

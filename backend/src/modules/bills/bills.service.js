@@ -6,7 +6,7 @@ import { generateBillNo } from "../../utils/billNumber.js";
 import { rangeEndInclusive, rangeStart } from "../../utils/dateRange.js";
 import { billSellerIdentity, locationSellerIdentity } from "../../utils/gstIdentity.js";
 import { ensureLegacyUdharOpeningLedger, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
-import { postBillCancelledLedger, postBillCreatedLedger, postBillRestoredLedger, postSaleReturnLedger } from "../finance/financial-ledger.service.js";
+import { postBillCancelledLedger, postBillCreatedLedger, postBillDeletedLedger, postBillRestoredLedger, postBillUndeletedLedger, postSaleReturnLedger } from "../finance/financial-ledger.service.js";
 import {
   decrementLocationInventory,
   getLocationQuantity,
@@ -150,13 +150,41 @@ export async function emailBillReceipt(shopId, billId, email) {
 
 export async function softDeleteBill(shopId, billId, { reason } = {}, actor = {}) {
   return db.$transaction(async (tx) => {
-    const bill = await tx.bill.findFirst({ where: { id: billId, shopId } });
+    const bill = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { payments: true } });
     if (!bill) throw new AppError("Bill not found", 404);
+    // Idempotent under offline replay: a re-delivered DELETE_BILL event stops here, so the
+    // ledger below is posted exactly once per actual trip to the recycle bin. The unique
+    // (shopId, idempotencyKey) index is the backstop if two ever raced.
     if (bill.deletedAt) return bill;
+    const deletedAt = new Date();
     const deleted = await tx.bill.update({
       where: { id: bill.id },
-      data: { deletedAt: new Date(), deletedReason: reason },
+      data: { deletedAt, deletedReason: reason },
     });
+
+    // FinancialLedger: take the bill off the journal the same way every report just dropped it,
+    // in this same transaction. Only an ACTIVE bill still has a reporting effect to reverse — a
+    // cancelled one was already reversed by cancelBill, and reversing it twice would push the
+    // journal negative. Bills that never posted at creation (legacy quote-era estimates) reverse
+    // nothing. The udhar and gift-card value deliberately stays posted: a delete does not touch
+    // the customer's khata, so the journal must not drop it either.
+    if (bill.status === "active") {
+      const creationLedgerRows = await tx.financialLedger.count({
+        where: { shopId, billId: bill.id },
+      });
+      if (creationLedgerRows > 0) {
+        await postBillDeletedLedger(tx, {
+          shopId,
+          bill,
+          tenderPayments: Array.isArray(bill.payments) ? bill.payments : [],
+          creditAmount: Number(bill.creditAmount ?? 0),
+          waivedAmount: Number(bill.waivedAmount ?? 0),
+          customerId: bill.customerId ?? null,
+          deletedAt,
+        });
+      }
+    }
+
     await writeRequiredBillAudit({
       shopId,
       userId: actor.userId ?? null,
@@ -175,13 +203,36 @@ export async function softDeleteBill(shopId, billId, { reason } = {}, actor = {}
 
 export async function restoreDeletedBill(shopId, billId, actor = {}) {
   return db.$transaction(async (tx) => {
-    const bill = await tx.bill.findFirst({ where: { id: billId, shopId } });
+    const bill = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { payments: true } });
     if (!bill) throw new AppError("Bill not found", 404);
+    // Same replay guard as softDeleteBill, from the other side.
     if (!bill.deletedAt) return bill;
+    const restoredAt = new Date();
     const restored = await tx.bill.update({
       where: { id: bill.id },
       data: { deletedAt: null, deletedReason: null },
     });
+
+    // Mirror image of the delete: the reports start counting this bill again, so the journal
+    // re-posts the reporting effect it reversed. A cancelled bill has nothing to re-post — it
+    // leaves the bin still cancelled.
+    if (bill.status === "active") {
+      const ledgerRows = await tx.financialLedger.count({
+        where: { shopId, billId: bill.id },
+      });
+      if (ledgerRows > 0) {
+        await postBillUndeletedLedger(tx, {
+          shopId,
+          bill,
+          tenderPayments: Array.isArray(bill.payments) ? bill.payments : [],
+          creditAmount: Number(bill.creditAmount ?? 0),
+          waivedAmount: Number(bill.waivedAmount ?? 0),
+          customerId: bill.customerId ?? null,
+          restoredAt,
+        });
+      }
+    }
+
     await writeRequiredBillAudit({
       shopId,
       userId: actor.userId ?? null,
@@ -959,6 +1010,11 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
         waivedAmount: Number(bill.waivedAmount ?? 0),
         customerId: bill.customerId ?? null,
         reversalAt: cancelledAt,
+        // Cancelling a bill already in the recycle bin (offline replay can deliver DELETE_BILL
+        // and CANCEL_BILL in either order): softDeleteBill has reversed the sale and its tenders
+        // already, so only the udhar/gift-card half is left to reverse. Reversing in full here
+        // would take the sale off the books twice.
+        scope: bill.deletedAt ? "retained" : "full",
       });
     }
 
@@ -1547,6 +1603,9 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
         waivedAmount: Number(bill.waivedAmount ?? 0),
         customerId: bill.customerId ?? null,
         restoreAt: restoredAt,
+        // Un-cancelling a bill that is also in the recycle bin only puts the udhar/gift-card
+        // half back; it stays off the reports until it leaves the bin. Mirrors cancelBill.
+        scope: bill.deletedAt ? "retained" : "full",
       });
     }
 
