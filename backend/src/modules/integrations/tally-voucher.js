@@ -491,6 +491,42 @@ function buildPaymentVoucher(expense, { timeZone, shopId }) {
   };
 }
 
+function stockJournalEntry(row, sign) {
+  const name = String(row.productName || row.productId || "Unnamed item").trim();
+  const unit = String(row.baseUnit || "piece").trim();
+  const qty = round2((Number(row.actualBaseQty ?? row.quantityBaseQty) || 0) * sign);
+  const amount = round2((Number(row.stockValue) || 0) * sign);
+  return `<ALLINVENTORYENTRIES.LIST><STOCKITEMNAME>${xmlEscape(name)}</STOCKITEMNAME><ISDEEMEDPOSITIVE>${sign < 0 ? "Yes" : "No"}</ISDEEMEDPOSITIVE><ACTUALQTY>${xmlEscape(`${qty} ${unit}`)}</ACTUALQTY><BILLEDQTY>${xmlEscape(`${qty} ${unit}`)}</BILLEDQTY><AMOUNT>${amount.toFixed(2)}</AMOUNT></ALLINVENTORYENTRIES.LIST>`;
+}
+
+/** One completed factory run becomes one Tally Stock Journal. */
+function buildProductionVoucher(run, { timeZone, shopId }) {
+  const consumptions = Array.isArray(run.consumptions) ? run.consumptions : [];
+  const outputs = Array.isArray(run.outputs) ? run.outputs : [];
+  const rows = [...consumptions, ...outputs];
+  const masters = [];
+  for (const row of rows) {
+    const unit = String(row.baseUnit || "piece").trim();
+    if (unit) masters.push({ kind: "unit", name: unit });
+    masters.push({ kind: "stockitem", name: String(row.productName || row.productId || "Unnamed item"), unit, hsn: row.hsn || null });
+  }
+  const remoteId = remoteVoucherId(shopId, "production", run.id);
+  return {
+    voucher: voucherXml({
+      type: "Stock Journal",
+      view: "Consumption Voucher View",
+      date: tallyDate(run.completedAt || run.manufacturedOn || run.createdAt, timeZone),
+      number: run.runNumber,
+      reference: run.finishedBatchNumber || run.runNumber,
+      narration: `KiranaOS production ${run.runNumber}${run.finishedBatchNumber ? ` — batch ${run.finishedBatchNumber}` : ""}`,
+      body: consumptions.map((row) => stockJournalEntry(row, -1)).join("") + outputs.map((row) => stockJournalEntry(row, 1)).join(""),
+      remoteId,
+    }),
+    masters,
+    document: { type: "production", id: run.id, voucherNumber: run.runNumber, remoteId },
+  };
+}
+
 /* ── Envelope ─────────────────────────────────────────────────────────────── */
 
 function collectMasters(all) {
@@ -537,6 +573,7 @@ export function buildTallyEnvelope({
   purchaseReturns = [],
   receipts = [],
   expenses = [],
+  productionRuns = [],
   timeZone,
   inventory = false,
 }) {
@@ -547,6 +584,7 @@ export function buildTallyEnvelope({
     ...purchaseReturns.map((ret) => buildDebitNoteVoucher(ret, context)),
     ...receipts.map((entry) => buildReceiptVoucher(entry, context)),
     ...expenses.map((expense) => buildPaymentVoucher(expense, context)),
+    ...productionRuns.map((run) => buildProductionVoucher(run, context)),
   ];
 
   const masters = collectMasters(built.flatMap((entry) => entry.masters))
@@ -571,6 +609,7 @@ export function buildTallyEnvelope({
       purchaseReturns: purchaseReturns.length,
       receipts: receipts.length,
       expenses: expenses.length,
+      production: productionRuns.length,
     },
   };
 }

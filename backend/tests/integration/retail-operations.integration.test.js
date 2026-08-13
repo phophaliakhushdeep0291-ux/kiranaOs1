@@ -1488,6 +1488,27 @@ if (ctx.skip) {
       const missingHsnProduct = await createProduct(ctx.db, tenant.shop.id, { name: "Unclassified Snack", category: "snacks", hsn: null, gstRate: 0 });
       const hsnBefore = assertSuccess(await ctx.get("/api/compliance/hsn-summary", { token: auth.accessToken }));
       assert.equal(hsnBefore.categories.find((row) => row.category === "snacks").missingHsn, 1);
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_hsn_assignment_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'HSN_CATEGORY_ASSIGNED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced HSN assignment audit failure');
+        END;
+      `);
+      try {
+        const failedAssignment = assertFailure(await ctx.request("PUT", "/api/compliance/hsn-category", {
+          token: auth.accessToken,
+          ownerPin: tenant.ownerPin,
+          body: { category: "snacks", hsn: "2106", gstRate: 12 },
+        }), 503);
+        assert.equal(failedAssignment.code, "AUDIT_WRITE_FAILED");
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_hsn_assignment_audit_failure");
+      }
+      const unchangedAfterAuditFailure = await ctx.db.product.findUnique({ where: { id: missingHsnProduct.id } });
+      assert.equal(unchangedAfterAuditFailure.hsn, null);
+      assert.equal(unchangedAfterAuditFailure.gstRate, 0);
       const assigned = assertSuccess(await ctx.request("PUT", "/api/compliance/hsn-category", {
         token: auth.accessToken,
         ownerPin: tenant.ownerPin,

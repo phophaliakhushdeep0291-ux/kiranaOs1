@@ -18,6 +18,7 @@ import { JOB_NAMES, QUEUE_NAMES } from "../../workers/queueNames.js";
 import { buildTallyEnvelope } from "./tally-voucher.js";
 import { validateGstin } from "../../utils/gst.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { baseQtyToRateQty } from "../../utils/units.js";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 const MAX_ACTIVE_API_KEYS = 10;
@@ -597,7 +598,7 @@ export async function buildTallyExport(shopId, query) {
   const maxBills = inventory ? MAX_TALLY_INVENTORY_BILLS : MAX_TALLY_BILLS;
   const wants = (document) => query.include.includes(document);
 
-  const [shop, bills, purchases, purchaseReturns, receipts, expenses] = await Promise.all([
+  const [shop, bills, purchases, purchaseReturns, receipts, expenses, productionRuns] = await Promise.all([
     db.shop.findUnique({ where: { id: shopId }, select: { name: true, gstNumber: true } }),
 
     wants("sales")
@@ -653,15 +654,44 @@ export async function buildTallyExport(shopId, query) {
           take: MAX_TALLY_BILLS + 1,
         })
       : [],
+
+    wants("production")
+      ? db.productionRun.findMany({
+          where: { shopId, status: "completed", completedAt: { gte: from, lte: to } },
+          orderBy: { completedAt: "asc" }, take: MAX_TALLY_BILLS + 1,
+          include: { consumptions: true, outputs: true },
+        })
+      : [],
   ]);
 
   if (bills.length > maxBills) throw new AppError(`Export exceeds ${maxBills} bills. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
-  const documentCount = bills.length + purchases.length + purchaseReturns.length + receipts.length + expenses.length;
+  const documentCount = bills.length + purchases.length + purchaseReturns.length + receipts.length + expenses.length + productionRuns.length;
   if (documentCount > MAX_TALLY_VOUCHERS) throw new AppError(`Export exceeds ${MAX_TALLY_VOUCHERS} vouchers. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
 
   const selected = query.unsent
-    ? await withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns, receipts, expenses })
-    : { bills, purchases, purchaseReturns, receipts, expenses };
+    ? await withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns, receipts, expenses, productionRuns })
+    : { bills, purchases, purchaseReturns, receipts, expenses, productionRuns };
+
+  if (selected.productionRuns.length) {
+    const ids = [...new Set(selected.productionRuns.flatMap((run) => [...run.consumptions, ...run.outputs].map((row) => row.productId)))];
+    const products = await db.product.findMany({ where: { shopId, id: { in: ids } }, select: { id: true, name: true, baseUnit: true, rateUnit: true, hsn: true, costPerRateUnit: true } });
+    const byId = new Map(products.map((row) => [row.id, row]));
+    selected.productionRuns = selected.productionRuns.map((run) => {
+      const consumptions = run.consumptions.map((row) => {
+        const product = byId.get(row.productId);
+        let rateQty = Number(row.actualBaseQty);
+        try { rateQty = baseQtyToRateQty(rateQty, product?.rateUnit, product?.baseUnit); } catch { /* use base quantity */ }
+        return { ...row, productName: product?.name, baseUnit: product?.baseUnit, hsn: product?.hsn, stockValue: rateQty * Number(product?.costPerRateUnit || 0) };
+      });
+      const totalInputValue = consumptions.reduce((sum, row) => sum + Number(row.stockValue || 0), 0);
+      const totalOutputQty = run.outputs.reduce((sum, row) => sum + Number(row.quantityBaseQty || 0), 0);
+      const outputs = run.outputs.map((row) => {
+        const product = byId.get(row.productId);
+        return { ...row, productName: product?.name, baseUnit: product?.baseUnit, hsn: product?.hsn, stockValue: totalOutputQty > 0 ? totalInputValue * Number(row.quantityBaseQty) / totalOutputQty : 0 };
+      });
+      return { ...run, consumptions, outputs };
+    });
+  }
 
   const { xml, count, masterCount, counts, documents } = buildTallyEnvelope({
     companyName: shop?.name || "KiranaOS",
@@ -685,7 +715,7 @@ function saleDocumentType(bill) {
  * or simply unsure whether the first click worked — books the month twice.
  * Tally's importer will not stop them, so this is where it has to stop.
  */
-async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns, receipts, expenses }) {
+async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns, receipts, expenses, productionRuns = [] }) {
   const groups = [
     ["sale", bills.filter((bill) => saleDocumentType(bill) === "sale").map((bill) => bill.id)],
     ["sales_return", bills.filter((bill) => saleDocumentType(bill) === "sales_return").map((bill) => bill.id)],
@@ -693,9 +723,10 @@ async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns,
     ["purchase_return", purchaseReturns.map((row) => row.id)],
     ["receipt", receipts.map((row) => row.id)],
     ["expense", expenses.map((row) => row.id)],
+    ["production", productionRuns.map((row) => row.id)],
   ].filter(([, ids]) => ids.length > 0);
 
-  if (groups.length === 0) return { bills, purchases, purchaseReturns, receipts, expenses };
+  if (groups.length === 0) return { bills, purchases, purchaseReturns, receipts, expenses, productionRuns };
 
   const posted = await db.tallyPost.findMany({
     where: { shopId, OR: groups.map(([documentType, ids]) => ({ documentType, documentId: { in: ids } })) },
@@ -710,6 +741,7 @@ async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns,
     purchaseReturns: purchaseReturns.filter(keep("purchase_return")),
     receipts: receipts.filter(keep("receipt")),
     expenses: expenses.filter(keep("expense")),
+    productionRuns: productionRuns.filter(keep("production")),
   };
 }
 

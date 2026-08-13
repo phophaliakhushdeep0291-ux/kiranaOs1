@@ -40,6 +40,7 @@ const TALLY_DOCUMENTS = [
   { id: "returns", label: "Purchase returns", detail: "Goods sent back as debit notes" },
   { id: "receipts", label: "Udhar collected", detail: "Customer credit repayments" },
   { id: "expenses", label: "Expenses", detail: "Rent, salary and daily costs" },
+  { id: "production", label: "Production", detail: "Completed runs as Tally Stock Journals" },
 ];
 
 const STATUS: Record<ProviderStatus, { label: string; tone: Tone }> = {

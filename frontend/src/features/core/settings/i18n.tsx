@@ -5,12 +5,13 @@ import { productsEn } from "./translations/products";
 import { reportsEn } from "./translations/reports";
 import { restaurantEn } from "./translations/restaurant";
 import { shellEn } from "./translations/shell";
+import { manufacturingEn } from "./translations/manufacturing";
 
 export type AppLanguage = "en" | "hi";
 
 const LANGUAGE_STORAGE_KEY = "kirana-os:ui-language:v1";
 
-const en = { ...shellEn, ...billingEn, ...productsEn, ...customersEn, ...restaurantEn, ...reportsEn };
+const en = { ...shellEn, ...billingEn, ...productsEn, ...customersEn, ...restaurantEn, ...reportsEn, ...manufacturingEn };
 
 /**
  * The registered modules, as data rather than only as a spread.
@@ -27,6 +28,7 @@ export const EN_MODULES = {
   customers: customersEn,
   restaurant: restaurantEn,
   reports: reportsEn,
+  manufacturing: manufacturingEn,
 } as const;
 
 // The English dictionary is the key catalog, so a new key only has to be declared
