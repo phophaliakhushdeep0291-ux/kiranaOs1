@@ -23,7 +23,7 @@ Run against a clean checkout with supported Node versions and frozen installs.
 | Gate | Command/evidence | Status |
 |---|---|---|
 | Frontend typecheck | `cd frontend && npm run typecheck` | Local working tree passed 2026-08-13 |
-| Frontend tests | `cd frontend && npm run test` | Local working tree passed 2026-08-13: 1,423 passed, 1 skipped across 229 passed files and 1 skipped file |
+| Frontend tests | `cd frontend && npm run test` | Local working tree passed 2026-08-13: 1,426 passed, 1 skipped across 229 passed files and 1 skipped file |
 | Hardware bridge software/installer contract | `cd hardware-bridge && npm test` plus PowerShell parser | Local working tree passed 2026-08-10: 15/15 software tests and `windows/build-installer.ps1` syntax. Native .NET setup compilation, signed workflow artifact, clean-Windows install and physical printer runs remain external evidence. |
 | Frontend production build/security | `cd frontend && npm run build && npm run security:check` | Local working tree passed 2026-08-13: 1,195 translation keys; startup 860.7 kB raw / 257.1 kB gzip across 5 files; total JavaScript 4,059.4 kB raw / 1,182.1 kB gzip; largest offline shop payload restaurant 2,468.7 kB raw / 734.8 kB gzip across 111 files; fixed bundle budgets and production-app checks passed. Vite still reports that the remote-support dynamic imports of `sync-engine` and `cloud-hydration` cannot split those already-static modules; the measured bundles remain inside the enforced budgets. |
 | Backend tests | `cd backend && npm test` | Full local working-tree suite passed 2026-08-10, including the guarded isolated database pretest/posttest, billing, money, sync, tenant, compliance, provider-contract, vertical, restaurant and per-pack stock groups. |
@@ -128,3 +128,10 @@ Single-bill WhatsApp sharing is a Starter feature with durable `not_sent`,
 idempotently on reconnect. Bulk automated reminders remain Business-only. A
 live external-provider send remains an environment/credential release proof and
 must not be inferred from a successful deep-link handoff.
+
+## Local checkpoint — BILL-008 owner approval (2026-08-13)
+
+- Automated status: frontend focused approval regression 8/8, full frontend 1,426 passed with one intentional skip, frontend typecheck passed, production build passed, backend production check passed, migration safety passed with 0 warnings, and the release gate passed with its expected missing-human-approval warning.
+- Trust boundary: the server derives sensitive bill actions from authoritative catalogue and pricing-rule records, verifies the claimed rule price, and records approval audits transactionally; local-first and sync paths recheck the same policy.
+- Live evidence: pending. The supported browser-control runtime exits before connecting because the Windows sandbox helper cannot apply its read ACLs. No screenshot or cashier-versus-owner live result is claimed.
+- Release impact: the overall decision remains NO-GO; this local checkpoint does not replace candidate CI, external hardware/provider, or manual mobile evidence.
