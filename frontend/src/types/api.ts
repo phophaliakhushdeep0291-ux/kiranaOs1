@@ -280,7 +280,11 @@ export interface Supplier {
   mobile?: string | null;
   phone?: string | null;
   address?: string | null;
-  gstNumber?: string | null;
+  // gstin, not gstNumber: the backend Supplier has never had a gstNumber column,
+  // so the old name here described a field that could only ever be undefined —
+  // sitting exactly where someone would reach for the real one. Customer keeps
+  // gstNumber; only Supplier was wrong.
+  gstin?: string | null;
   notes?: string | null;
   active?: boolean;
   createdAt?: string;
