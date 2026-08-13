@@ -424,6 +424,80 @@ assert.equal(ledgerAmount(refunded, "Agarwal Wholesale"), -300, "the rest reduce
 // A credit-note settlement moves no money, so nothing may touch the cash book.
 assert.equal(ledgerAmount(vouchersOf(debitNote.xml)[1], "Cash"), 0, "a supplier-credit return moves no cash");
 
+/* ── A return hands the input tax credit back ─────────────────────────────── */
+
+// The bug this closes: goods went back, the tax stayed claimed. The ledgers
+// balanced either way, which is exactly why nothing looked wrong.
+const taxedReturn = envelope([], {
+  purchaseReturns: [{
+    id: "pr_tax", returnNumber: "PR-T1", totalAmount: 1000, taxAmount: 180,
+    refundAmount: 0, refundMode: "supplier_credit",
+    supplier: { name: "Agarwal Wholesale", gstin: "27AAECS1234F1Z5" },
+    createdAt: new Date("2026-08-11T06:00:00.000Z"),
+  }],
+});
+assertWellFormed(taxedReturn.xml);
+const tr = vouchersOf(taxedReturn.xml)[0];
+assert.equal(balanceOf(tr), 0, "a return carrying tax balances");
+assert.equal(ledgerAmount(tr, "Purchase"), 1000, "the goods leg reverses");
+assert.equal(ledgerAmount(tr, "Input CGST"), 90, "half the tax goes back");
+assert.equal(ledgerAmount(tr, "Input SGST"), 90, "the other half goes back");
+// The payable moved by the tax-inclusive value on the purchase, so it has to
+// come back the same way — 1000 goods + 180 tax.
+assert.equal(ledgerAmount(tr, "Agarwal Wholesale"), -1180, "the supplier is debited the tax-inclusive value");
+
+// Sign check: a purchase DEBITS the input ledgers, a return CREDITS them. Same
+// sign on both would double the claim instead of unwinding it.
+assert.ok(ledgerAmount(lp, "Input CGST") < 0 && ledgerAmount(tr, "Input CGST") > 0, "purchase and return move input tax in opposite directions");
+
+// Buy then return the whole lot: the input ledgers must end flat.
+const roundTrip = envelope([], {
+  purchases: [receipt({ id: "rt_p", supplierInvoiceAmount: 1180, supplierInvoiceTax: 180 })],
+  purchaseReturns: [{
+    id: "rt_r", returnNumber: "PR-T2", totalAmount: 1000, taxAmount: 180,
+    refundAmount: 0, refundMode: "supplier_credit",
+    supplier: { name: "Agarwal Wholesale", gstin: "27AAECS1234F1Z5" },
+    createdAt: new Date("2026-08-11T06:00:00.000Z"),
+  }],
+});
+const netInputCgst = vouchersOf(roundTrip.xml).reduce((sum, voucher) => sum + ledgerAmount(voucher, "Input CGST"), 0);
+const netPurchase = vouchersOf(roundTrip.xml).reduce((sum, voucher) => sum + ledgerAmount(voucher, "Purchase"), 0);
+assert.equal(netInputCgst, 0, "a full return leaves no input tax claimed");
+assert.equal(netPurchase, 0, "a full return leaves no purchase value");
+
+// An inter-state supplier reverses out of IGST, never the local pair.
+const interStateReturn = vouchersOf(envelope([], {
+  purchaseReturns: [{
+    id: "pr_is", returnNumber: "PR-T3", totalAmount: 1000, taxAmount: 180,
+    refundAmount: 0, refundMode: "supplier_credit",
+    supplier: { name: "Delhi Traders", gstin: "07AAECS1234F1Z5" },
+    createdAt: new Date("2026-08-11T06:00:00.000Z"),
+  }],
+}).xml)[0];
+assert.equal(ledgerAmount(interStateReturn, "Input IGST"), 180, "an inter-state return reverses integrated tax");
+assert.equal(ledgerAmount(interStateReturn, "Input CGST"), 0, "and touches neither local ledger");
+
+// Cash refunded alongside a taxed return still balances.
+const refundedTaxed = vouchersOf(envelope([], {
+  purchaseReturns: [{
+    id: "pr_rf", returnNumber: "PR-T4", totalAmount: 1000, taxAmount: 180,
+    refundAmount: 500, refundMode: "cash",
+    supplier: { name: "Agarwal Wholesale", gstin: "27AAECS1234F1Z5" },
+    createdAt: new Date("2026-08-11T06:00:00.000Z"),
+  }],
+}).xml)[0];
+assert.equal(ledgerAmount(refundedTaxed, "Cash"), -500, "the refund comes back in cash");
+assert.equal(ledgerAmount(refundedTaxed, "Agarwal Wholesale"), -680, "the rest comes off the payable");
+assert.equal(balanceOf(refundedTaxed), 0, "a part-refunded taxed return balances");
+
+// A return recorded before this existed carries no tax and posts as it did.
+const untaxedReturn = vouchersOf(envelope([], {
+  purchaseReturns: [{ id: "pr_none", returnNumber: "PR-T5", totalAmount: 1000, taxAmount: 0, refundAmount: 0, refundMode: "supplier_credit", supplier: { name: "Agarwal Wholesale" }, createdAt: new Date("2026-08-11T06:00:00.000Z") }],
+}).xml)[0];
+assert.ok(!untaxedReturn.includes("Input CGST"), "no tax leg when none was reversed");
+assert.equal(ledgerAmount(untaxedReturn, "Agarwal Wholesale"), -1000, "the payable moves by the goods value alone");
+assert.equal(balanceOf(untaxedReturn), 0, "an untaxed return still balances");
+
 /* ── Receipts and payments ────────────────────────────────────────────────── */
 
 const receipts = envelope([], {
@@ -528,6 +602,32 @@ for (const document of identified.documents) {
   assert.equal(document.remoteId, remoteVoucherId("shop_1", document.type, document.id), "reported identity matches the derivation");
 }
 assert.equal(new Set(identified.documents.map((d) => d.remoteId)).size, 3, "no two vouchers share an identity");
+
+/* ── How much tax a return hands back (guarded at the service) ────────────── */
+
+// The proportion is taken on GOODS value, not the invoice total, so it does not
+// drift with how much tax the invoice carried. Source-asserted because the
+// arithmetic lives inside a transaction that needs a database to exercise.
+const returnsService = fs.readFileSync(new URL("../src/modules/purchase-returns/purchaseReturns.service.js", import.meta.url), "utf8");
+assert.match(returnsService, /function reversedInputTax\(/, "the reversal has a named derivation");
+assert.match(returnsService, /invoiceTotal - invoiceTax/, "the share is taken on goods value, not the tax-inclusive total");
+assert.match(returnsService, /Math\.min\(1,\s*Math\.max\(0,/, "the share is clamped so a return cannot hand back more than was claimed");
+assert.match(returnsService, /taxAmount,\s*supplierCreditAmount/, "the derived tax is persisted on the return");
+assert.match(returnsService, /moneyShadows\(\{ totalAmount, taxAmount/, "and carries its paise shadow like every other money column");
+
+// Replicated here so the proportional rule itself is pinned, not just its shape.
+const shareOf = (invoiceTotal, invoiceTax, returned) => {
+  const goods = round2(invoiceTotal - invoiceTax);
+  if (invoiceTax <= 0 || goods <= 0) return 0;
+  return round2(invoiceTax * Math.min(1, Math.max(0, returned / goods)));
+};
+assert.equal(shareOf(1180, 180, 1000), 180, "returning everything hands back all the tax");
+assert.equal(shareOf(1180, 180, 500), 90, "returning half hands back half");
+assert.equal(shareOf(1180, 180, 0), 0, "returning nothing hands back nothing");
+assert.equal(shareOf(1000, 0, 1000), 0, "an untaxed purchase reverses no tax");
+// A return can never exceed the purchase, but the clamp must hold if data ever says otherwise.
+assert.equal(shareOf(1180, 180, 99999), 180, "the reversal is capped at what was claimed");
+assert.equal(shareOf(180, 180, 100), 0, "a total that is entirely tax leaves no goods value to apportion");
 
 /* ── Which books the caller asked for ─────────────────────────────────────── */
 

@@ -1627,6 +1627,12 @@ model PurchaseReturn {
   refundMode                String    @default("supplier_credit") // supplier_credit | cash | bank
   totalAmount               Float
   totalAmountPaise          BigInt?
+  // Input GST being given back with these goods: the returned value's share of
+  // the tax on the receipt's invoice. Stored rather than derived at read time so
+  // the amount reversed is a fact of the return, not something that shifts if
+  // the receipt is reconciled again later.
+  taxAmount                 Float     @default(0)
+  taxAmountPaise            BigInt?
   supplierCreditAmount      Float     @default(0)
   supplierCreditAmountPaise BigInt?
   refundAmount              Float     @default(0)
