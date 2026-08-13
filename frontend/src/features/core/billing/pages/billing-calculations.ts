@@ -210,9 +210,73 @@ export function productMinSellingPrice(product: Product): number {
  */
 export function lineNeedsOwnerApproval(item: CartItem): boolean {
   if (item.isCustom) return false;
-  if (item.rate < productMinSellingPrice(item.product)) return true;
+  const quantity = Math.max(0, Number(item.quantity) || 0);
+  const effectiveRate = quantity > 0
+    ? roundMoney(Number(item.rate) - cartItemLineDiscount(item) / quantity)
+    : Number(item.rate);
+  const minimumRate = Number(item.sellingUnit?.minimumPrice ?? productMinSellingPrice(item.product));
+  if (effectiveRate < minimumRate) return true;
   if (!item.manualRate && item.pricing?.requiresApproval === true) return true;
   return false;
+}
+
+export const LARGE_DISCOUNT_MIN_AMOUNT = 100;
+export const LARGE_DISCOUNT_MIN_PERCENT = 10;
+
+export interface BillingDiscountApprovalSummary {
+  referenceSubtotal: number;
+  approvalDiscount: number;
+  threshold: number;
+  requiresApproval: boolean;
+}
+
+/**
+ * Owner-approval discount total. It includes bill and line discounts plus a
+ * manual markdown from the configured/default product price. A recognised
+ * pricing rule is owner-configured, so its normal price is not counted again;
+ * rules that explicitly require approval are handled by lineNeedsOwnerApproval.
+ */
+export function billingDiscountApprovalSummary(cart: CartItem[], billDiscount: number): BillingDiscountApprovalSummary {
+  let referenceSubtotal = 0;
+  let approvalDiscount = Math.max(0, Number(billDiscount) || 0);
+  for (const item of cart) {
+    const quantity = Math.max(0, Number(item.quantity) || 0);
+    const addonRate = addonUnitPrice(item.addons);
+    const referenceBaseRate = item.isCustom
+      ? Number(item.rate) || 0
+      : Number(item.sellingUnit?.defaultPrice ?? item.pricing?.originalUnitPrice ?? productSellingPrice(item.product, quantity)) || 0;
+    referenceSubtotal += roundMoney((referenceBaseRate + addonRate) * quantity);
+    approvalDiscount += cartItemLineDiscount(item);
+    if (!item.isCustom && !item.pricing?.appliedRuleId && referenceBaseRate > item.rate) {
+      approvalDiscount += roundMoney((referenceBaseRate - item.rate) * quantity);
+    }
+  }
+  referenceSubtotal = roundMoney(referenceSubtotal);
+  approvalDiscount = roundMoney(approvalDiscount);
+  const threshold = roundMoney(Math.max(LARGE_DISCOUNT_MIN_AMOUNT, referenceSubtotal * LARGE_DISCOUNT_MIN_PERCENT / 100));
+  return {
+    referenceSubtotal,
+    approvalDiscount,
+    threshold,
+    requiresApproval: referenceSubtotal > 0 && approvalDiscount >= threshold - 0.005,
+  };
+}
+
+/** Exact commercial state an owner approved; any later edit must prompt again. */
+export function billingSensitiveApprovalFingerprint(cart: CartItem[], billDiscount: number, loyaltyPoints: number): string {
+  return JSON.stringify({
+    discount: roundMoney(billDiscount),
+    loyaltyPoints: Math.max(0, Math.floor(Number(loyaltyPoints) || 0)),
+    lines: cart.map((item) => ({
+      productId: item.product.id,
+      unitId: item.sellingUnit?.id ?? item.sellingUnit?.unitCode ?? item.unit,
+      quantity: roundQuantity(item.quantity),
+      rate: roundMoney(item.rate),
+      lineDiscount: cartItemLineDiscount(item),
+      pricingRuleId: item.pricing?.appliedRuleId ?? null,
+      addons: (item.addons ?? []).map((addon) => ({ id: addon.optionId, quantity: addon.quantity ?? 1, price: roundMoney(addon.price) })),
+    })),
+  });
 }
 
 /** Gross line amount before any per-line discount. */

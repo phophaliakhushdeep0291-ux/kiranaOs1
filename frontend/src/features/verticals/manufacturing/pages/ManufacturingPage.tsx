@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Factory,
   FlaskConical,
+  Globe2,
+  ClipboardList,
   Loader2,
   PackageCheck,
   Plus,
@@ -62,9 +64,24 @@ type Trace = {
   batchNumber: string;
   producedAs: unknown[];
   consumedBy: unknown[];
+  dispatchedBills?: Array<{ id: string; billNo: string; customerName?: string | null }>;
 };
 
+type TradeOrder = {
+  id: string; orderNumber: string; buyerPoNumber?: string | null; customerName: string;
+  orderType: "domestic" | "export"; status: string; currencyCode: string;
+  billId?: string | null;
+  countryOfDestination?: string | null; items: Array<{ id: string; description: string; quantity: number; lineTotal: number }>;
+};
+type DraftOrderLine = { productId: string; description: string; quantity: number; unitPrice: number };
+type FlipkartStatus = { enabled: boolean; configured: boolean; officialDocuments: boolean };
+
 const panel = "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.055)]";
+const tradeActionKey = {
+  draft: "manufacturing.orders.action.draft",
+  confirmed: "manufacturing.orders.action.confirmed",
+  allocated: "manufacturing.orders.action.allocated",
+} as const;
 
 export default function ManufacturingPage() {
   const client = useQueryClient();
@@ -78,6 +95,31 @@ export default function ManufacturingPage() {
   const [wastage, setWastage] = useState("0");
   const [traceBatch, setTraceBatch] = useState("");
   const [traceResult, setTraceResult] = useState<Trace | null>(null);
+  const [orderNumber, setOrderNumber] = useState("");
+  const [buyerPoNumber, setBuyerPoNumber] = useState("");
+  const [buyerName, setBuyerName] = useState("");
+  const [orderProductId, setOrderProductId] = useState("");
+  const [orderQty, setOrderQty] = useState("1");
+  const [orderPrice, setOrderPrice] = useState("0");
+  const [orderLines, setOrderLines] = useState<DraftOrderLine[]>([]);
+  const [orderType, setOrderType] = useState<"domestic" | "export">("domestic");
+  const [currencyCode, setCurrencyCode] = useState("INR");
+  const [exchangeRate, setExchangeRate] = useState("1");
+  const [destination, setDestination] = useState("");
+  const [incoterm, setIncoterm] = useState("");
+  const [dispatchOrderId, setDispatchOrderId] = useState("");
+  const [dispatchNumber, setDispatchNumber] = useState("");
+  const [transporterName, setTransporterName] = useState("");
+  const [vehicleNumber, setVehicleNumber] = useState("");
+  const [lrAwbNumber, setLrAwbNumber] = useState("");
+  const [ewayBillNumber, setEwayBillNumber] = useState("");
+  const [shippingBillNumber, setShippingBillNumber] = useState("");
+  const [invoiceOrderId, setInvoiceOrderId] = useState("");
+  const [invoiceBillId, setInvoiceBillId] = useState("");
+  const [returnOrderId, setReturnOrderId] = useState("");
+  const [returnReason, setReturnReason] = useState("");
+  const [returnOwnerPin, setReturnOwnerPin] = useState("");
+  const [flipkartShipmentId, setFlipkartShipmentId] = useState("");
 
   const overviewQ = useQuery({
     queryKey: ["manufacturing", "overview"],
@@ -91,6 +133,11 @@ export default function ManufacturingPage() {
     queryKey: ["products", "manufacturing"],
     queryFn: () => listProducts({ limit: 1000 }),
   });
+  const tradeOrdersQ = useQuery({
+    queryKey: ["manufacturing", "trade-orders"],
+    queryFn: () => apiRequest<TradeOrder[]>("/manufacturing/trade-orders?status=all&limit=100"),
+  });
+  const flipkartQ = useQuery({ queryKey: ["integrations", "flipkart", "status"], queryFn: () => apiRequest<FlipkartStatus>("/integrations/flipkart/status") });
   const productNames = useMemo(
     () => new Map((productsQ.data ?? []).map((row) => [row.id, row.name])),
     [productsQ.data],
@@ -145,11 +192,78 @@ export default function ManufacturingPage() {
     }),
   });
 
+  const createTradeOrder = useMutation({
+    mutationFn: () => apiRequest<TradeOrder>("/manufacturing/trade-orders", {
+      method: "POST",
+      body: JSON.stringify({
+        orderNumber, buyerPoNumber: buyerPoNumber || null, customerName: buyerName,
+        orderType, currencyCode: orderType === "domestic" ? "INR" : currencyCode.toUpperCase(),
+        exchangeRate: orderType === "domestic" ? 1 : Number(exchangeRate),
+        countryOfDestination: orderType === "export" ? destination : null,
+        incoterm: orderType === "export" ? incoterm : null,
+        items: orderLines.map((line) => ({ productId: line.productId, quantity: line.quantity, unitPrice: line.unitPrice, lineDiscount: 0 })),
+      }),
+    }),
+    onSuccess: async () => {
+      toast({ title: t("manufacturing.orders.createdTitle"), description: t("manufacturing.orders.createdDetail") });
+      setOrderNumber(""); setBuyerPoNumber(""); setBuyerName(""); setOrderProductId(""); setOrderLines([]);
+      await tradeOrdersQ.refetch();
+    },
+    onError: (error) => toast({ title: t("manufacturing.orders.failedTitle"), description: error instanceof Error ? error.message : t("manufacturing.orders.failedDetail"), variant: "destructive" }),
+  });
+
+  const advanceTradeOrder = useMutation({
+    mutationFn: async (order: TradeOrder) => {
+      if (order.status === "draft") return apiRequest(`/manufacturing/trade-orders/${order.id}/confirm`, { method: "POST", body: "{}" });
+      if (order.status === "confirmed") return apiRequest(`/manufacturing/trade-orders/${order.id}/auto-allocate`, { method: "POST", body: "{}" });
+      if (order.status === "allocated") return apiRequest(`/manufacturing/trade-orders/${order.id}/pack`, { method: "POST", body: JSON.stringify({ items: order.items.map((item) => ({ orderItemId: item.id, packedQuantity: Number(item.quantity) })) }) });
+      return null;
+    },
+    onSuccess: async () => { toast({ title: t("manufacturing.orders.updatedTitle"), description: t("manufacturing.orders.updatedDetail") }); await tradeOrdersQ.refetch(); },
+    onError: (error) => toast({ title: t("manufacturing.orders.failedTitle"), description: error instanceof Error ? error.message : t("manufacturing.orders.failedDetail"), variant: "destructive" }),
+  });
+
+  const dispatchTradeOrder = useMutation({
+    mutationFn: () => apiRequest(`/manufacturing/trade-orders/${dispatchOrderId}/dispatch`, { method: "POST", body: JSON.stringify({ dispatchNumber, dispatchDate: new Date().toISOString().slice(0, 10), transporterName: transporterName || null, vehicleNumber: vehicleNumber || null, lrAwbNumber: lrAwbNumber || null, ewayBillNumber: ewayBillNumber || null, shippingBillNumber: shippingBillNumber || null }) }),
+    onSuccess: async () => { setDispatchOrderId(""); setDispatchNumber(""); setTransporterName(""); setVehicleNumber(""); setLrAwbNumber(""); setEwayBillNumber(""); setShippingBillNumber(""); toast({ title: t("manufacturing.orders.updatedTitle"), description: t("manufacturing.orders.updatedDetail") }); await tradeOrdersQ.refetch(); },
+    onError: (error) => toast({ title: t("manufacturing.orders.failedTitle"), description: error instanceof Error ? error.message : t("manufacturing.orders.failedDetail"), variant: "destructive" }),
+  });
+
+  const linkTradeInvoice = useMutation({
+    mutationFn: () => apiRequest(`/manufacturing/trade-orders/${invoiceOrderId}/invoice`, { method: "POST", body: JSON.stringify({ billId: invoiceBillId }) }),
+    onSuccess: async () => { setInvoiceOrderId(""); setInvoiceBillId(""); toast({ title: t("manufacturing.orders.updatedTitle"), description: t("manufacturing.orders.invoiceLinked") }); await tradeOrdersQ.refetch(); },
+    onError: (error) => toast({ title: t("manufacturing.orders.failedTitle"), description: error instanceof Error ? error.message : t("manufacturing.orders.failedDetail"), variant: "destructive" }),
+  });
+
+  const returnTradeOrder = useMutation({
+    mutationFn: () => apiRequest(`/manufacturing/trade-orders/${returnOrderId}/return`, { method: "POST", ownerPin: returnOwnerPin, body: JSON.stringify({ reason: returnReason, refundMode: "bank" }) }),
+    onSuccess: async () => { setReturnOrderId(""); setReturnReason(""); setReturnOwnerPin(""); toast({ title: t("manufacturing.orders.returnedTitle"), description: t("manufacturing.orders.returnedDetail") }); await tradeOrdersQ.refetch(); },
+    onError: (error) => toast({ title: t("manufacturing.orders.failedTitle"), description: error instanceof Error ? error.message : t("manufacturing.orders.failedDetail"), variant: "destructive" }),
+  });
+
+  const addOrderLine = () => {
+    const product = (productsQ.data ?? []).find((row) => row.id === orderProductId);
+    if (!product || Number(orderQty) <= 0 || Number(orderPrice) < 0) return;
+    setOrderLines((current) => [...current, { productId: product.id, description: product.name, quantity: Number(orderQty), unitPrice: Number(orderPrice) }]);
+    setOrderProductId(""); setOrderQty("1"); setOrderPrice("0");
+  };
+
+  const openTradePdf = async (order: TradeOrder, kind: "tax-invoice" | "packing-list" | "shipping-label") => {
+    try {
+      const blob = await apiRequest<Blob>(`/manufacturing/trade-orders/${order.id}/documents/${kind}.pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(blob); window.open(url, "_blank", "noopener,noreferrer"); window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) { toast({ title: t("manufacturing.orders.failedTitle"), description: error instanceof Error ? error.message : t("manufacturing.orders.failedDetail"), variant: "destructive" }); }
+  };
+  const openFlipkartPdf = async (kind: "invoice" | "label") => {
+    try { const blob = await apiRequest<Blob>(`/integrations/flipkart/shipments/${encodeURIComponent(flipkartShipmentId)}/${kind}.pdf`, { responseType: "blob" }); const url = URL.createObjectURL(blob); window.open(url, "_blank", "noopener,noreferrer"); window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }
+    catch (error) { toast({ title: t("manufacturing.orders.failedTitle"), description: error instanceof Error ? error.message : t("manufacturing.orders.failedDetail"), variant: "destructive" }); }
+  };
+
   const refresh = () => {
-    void Promise.all([overviewQ.refetch(), bomsQ.refetch(), productsQ.refetch()]);
+    void Promise.all([overviewQ.refetch(), bomsQ.refetch(), productsQ.refetch(), tradeOrdersQ.refetch()]);
   };
   const summary = overviewQ.data?.summary;
-  const hasLoadError = overviewQ.isError || bomsQ.isError || productsQ.isError;
+  const hasLoadError = overviewQ.isError || bomsQ.isError || productsQ.isError || tradeOrdersQ.isError;
 
   return (
     <PageShell className="space-y-4 px-3 py-3 sm:px-4 sm:py-4 lg:space-y-5 lg:px-6 lg:py-5" data-testid="manufacturing-page">
@@ -296,6 +410,44 @@ export default function ManufacturingPage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className={panel}>
+          <div className="border-b border-slate-100 p-4 sm:p-5">
+            <h2 className="flex items-center gap-2 font-display font-black text-slate-900"><ClipboardList size={18} className="text-teal-700" />{t("manufacturing.orders.createTitle")}</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{t("manufacturing.orders.createDescription")}</p>
+          </div>
+          <div className="grid gap-3.5 p-4 sm:grid-cols-2 sm:p-5">
+            <Field label={t("manufacturing.orders.orderNumber")}><Input className="h-11" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} /></Field>
+            <Field label={t("manufacturing.orders.buyerPo")}><Input className="h-11" value={buyerPoNumber} onChange={(event) => setBuyerPoNumber(event.target.value)} /></Field>
+            <Field label={t("manufacturing.orders.buyerName")}><Input className="h-11" value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></Field>
+            <Field label={t("manufacturing.orders.type")}><select className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm" value={orderType} onChange={(event) => { const next = event.target.value as "domestic" | "export"; setOrderType(next); if (next === "domestic") { setCurrencyCode("INR"); setExchangeRate("1"); } }}><option value="domestic">{t("manufacturing.orders.domestic")}</option><option value="export">{t("manufacturing.orders.export")}</option></select></Field>
+            <Field label={t("manufacturing.orders.product")}><ProductSelect value={orderProductId} onChange={setOrderProductId} products={productsQ.data ?? []} emptyLabel={t("manufacturing.product.select")} unitFallback={t("manufacturing.product.unitFallback")} /></Field>
+            <Field label={t("manufacturing.orders.quantity")}><Input className="h-11" type="number" min="0.001" value={orderQty} onChange={(event) => setOrderQty(event.target.value)} /></Field>
+            <Field label={t("manufacturing.orders.unitPrice")}><Input className="h-11" type="number" min="0" value={orderPrice} onChange={(event) => setOrderPrice(event.target.value)} /></Field>
+            <Button type="button" variant="outline" className="min-h-11 sm:col-span-2" disabled={!orderProductId || Number(orderQty) <= 0 || Number(orderPrice) < 0} onClick={addOrderLine}>{t("manufacturing.orders.addLine")}</Button>
+            {orderLines.length ? <div className="space-y-2 rounded-xl bg-slate-50 p-3 sm:col-span-2">{orderLines.map((line, index) => <div key={`${line.productId}-${index}`} className="flex items-center justify-between gap-3 text-sm"><span><strong>{line.description}</strong> - {line.quantity} x {line.unitPrice.toFixed(2)}</span><Button size="sm" variant="ghost" onClick={() => setOrderLines((current) => current.filter((_, rowIndex) => rowIndex !== index))}>{t("manufacturing.orders.removeLine")}</Button></div>)}</div> : null}
+            {orderType === "export" ? <><Field label={t("manufacturing.orders.currency")}><Input className="h-11 uppercase" maxLength={3} value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value.toUpperCase())} /></Field><Field label={t("manufacturing.orders.exchangeRate")}><Input className="h-11" type="number" min="0.000001" value={exchangeRate} onChange={(event) => setExchangeRate(event.target.value)} /></Field><Field label={t("manufacturing.orders.destination")}><Input className="h-11" value={destination} onChange={(event) => setDestination(event.target.value)} /></Field><Field label={t("manufacturing.orders.incoterm")}><Input className="h-11 uppercase" placeholder={t("manufacturing.orders.incotermPlaceholder")} value={incoterm} onChange={(event) => setIncoterm(event.target.value.toUpperCase())} /></Field></> : null}
+            <Button className="min-h-12 rounded-xl font-black sm:col-span-2" disabled={!orderNumber.trim() || !buyerName.trim() || orderLines.length === 0 || (orderType === "export" && (!destination.trim() || !incoterm.trim())) || createTradeOrder.isPending} onClick={() => createTradeOrder.mutate()}>{createTradeOrder.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : null}{t("manufacturing.orders.createAction")}</Button>
+          </div>
+        </div>
+
+        <div className={panel}>
+          <div className="border-b border-slate-100 p-4 sm:p-5"><h2 className="flex items-center gap-2 font-display font-black text-slate-900"><Globe2 size={18} className="text-teal-700" />{t("manufacturing.orders.registerTitle")}</h2></div>
+          {dispatchOrderId ? <div className="grid gap-2 border-b border-amber-200 bg-amber-50 p-4 sm:grid-cols-2"><Input placeholder={t("manufacturing.orders.dispatchNumber")} value={dispatchNumber} onChange={(event) => setDispatchNumber(event.target.value)} /><Input placeholder={t("manufacturing.orders.transporter")} value={transporterName} onChange={(event) => setTransporterName(event.target.value)} /><Input placeholder={t("manufacturing.orders.vehicle")} value={vehicleNumber} onChange={(event) => setVehicleNumber(event.target.value)} /><Input placeholder={t("manufacturing.orders.awb")} value={lrAwbNumber} onChange={(event) => setLrAwbNumber(event.target.value)} /><Input placeholder={t("manufacturing.orders.eway")} value={ewayBillNumber} onChange={(event) => setEwayBillNumber(event.target.value)} /><Input placeholder={t("manufacturing.orders.shippingBill")} value={shippingBillNumber} onChange={(event) => setShippingBillNumber(event.target.value)} /><Button disabled={!dispatchNumber.trim() || dispatchTradeOrder.isPending} onClick={() => dispatchTradeOrder.mutate()}>{t("manufacturing.orders.action.packed")}</Button><Button variant="outline" onClick={() => setDispatchOrderId("")}>{t("manufacturing.orders.cancelDispatch")}</Button></div> : null}
+          {invoiceOrderId ? <div className="flex flex-col gap-2 border-b border-blue-200 bg-blue-50 p-4 sm:flex-row"><Input placeholder={t("manufacturing.orders.billId")} value={invoiceBillId} onChange={(event) => setInvoiceBillId(event.target.value)} /><Button disabled={!invoiceBillId.trim() || linkTradeInvoice.isPending} onClick={() => linkTradeInvoice.mutate()}>{t("manufacturing.orders.linkInvoice")}</Button><Button variant="outline" onClick={() => setInvoiceOrderId("")}>{t("manufacturing.orders.close")}</Button></div> : null}
+          {returnOrderId ? <div className="grid gap-2 border-b border-rose-200 bg-rose-50 p-4 sm:grid-cols-2"><Input placeholder={t("manufacturing.orders.returnReason")} value={returnReason} onChange={(event) => setReturnReason(event.target.value)} /><Input type="password" inputMode="numeric" maxLength={4} placeholder={t("manufacturing.orders.ownerPin")} value={returnOwnerPin} onChange={(event) => setReturnOwnerPin(event.target.value.replace(/\D/g, ""))} /><Button disabled={returnReason.trim().length < 3 || returnOwnerPin.length !== 4 || returnTradeOrder.isPending} onClick={() => returnTradeOrder.mutate()}>{t("manufacturing.orders.createCreditNote")}</Button><Button variant="outline" onClick={() => setReturnOrderId("")}>{t("manufacturing.orders.close")}</Button></div> : null}
+          <div className="divide-y divide-slate-100">
+            {(tradeOrdersQ.data ?? []).map((order) => <div key={order.id} className="grid gap-2 p-4 text-sm sm:grid-cols-[1fr_1fr_100px_100px_220px]"><div><strong className="block text-slate-900">{order.orderNumber}</strong><span className="text-xs text-slate-500">{order.buyerPoNumber || t("manufacturing.orders.noBuyerPo")}</span></div><div><strong className="block">{order.customerName}</strong><span className="text-xs text-slate-500">{order.items.length} {t("manufacturing.orders.lines")}</span></div><span className="font-bold uppercase text-slate-600">{order.orderType}</span><span className="rounded-full bg-slate-100 px-2 py-1 text-center text-xs font-black text-slate-700">{order.status}</span><div>{order.status in tradeActionKey ? <Button size="sm" className="w-full" disabled={advanceTradeOrder.isPending} onClick={() => advanceTradeOrder.mutate(order)}>{t(tradeActionKey[order.status as keyof typeof tradeActionKey])}</Button> : order.status === "packed" ? <Button size="sm" className="w-full" onClick={() => { setDispatchOrderId(order.id); setDispatchNumber(`DSP-${order.orderNumber}`.slice(0, 64)); }}>{t("manufacturing.orders.action.packed")}</Button> : <div className="flex flex-wrap gap-1"><Button size="sm" variant="outline" onClick={() => void openTradePdf(order, "tax-invoice")}>{t("manufacturing.orders.invoicePdf")}</Button><Button size="sm" variant="outline" onClick={() => void openTradePdf(order, "packing-list")}>{t("manufacturing.orders.packingPdf")}</Button><Button size="sm" variant="outline" onClick={() => void openTradePdf(order, "shipping-label")}>{t("manufacturing.orders.labelPdf")}</Button>{order.status === "dispatched" ? <Button size="sm" onClick={() => setInvoiceOrderId(order.id)}>{t("manufacturing.orders.linkInvoice")}</Button> : null}{order.status === "invoiced" ? <Button size="sm" variant="destructive" onClick={() => setReturnOrderId(order.id)}>{t("manufacturing.orders.return")}</Button> : null}</div>}</div></div>)}
+            {!tradeOrdersQ.isLoading && !tradeOrdersQ.data?.length ? <div className="p-8 text-center text-slate-500">{t("manufacturing.orders.empty")}</div> : null}
+          </div>
+        </div>
+      </section>
+
+      <section className={panel}>
+        <div className="border-b border-slate-100 p-4 sm:p-5"><h2 className="font-display font-black text-slate-900">{t("manufacturing.flipkart.title")}</h2><p className="mt-1 text-xs text-slate-500">{flipkartQ.data?.configured ? t("manufacturing.flipkart.connected") : t("manufacturing.flipkart.notConfigured")}</p></div>
+        <div className="flex flex-col gap-2 p-4 sm:flex-row"><Input value={flipkartShipmentId} onChange={(event) => setFlipkartShipmentId(event.target.value)} placeholder={t("manufacturing.flipkart.shipmentId")} /><Button disabled={!flipkartQ.data?.configured || !flipkartShipmentId.trim()} onClick={() => void openFlipkartPdf("invoice")}>{t("manufacturing.flipkart.invoice")}</Button><Button disabled={!flipkartQ.data?.configured || !flipkartShipmentId.trim()} onClick={() => void openFlipkartPdf("label")}>{t("manufacturing.flipkart.label")}</Button></div>
       </section>
 
       <section className={panel}>

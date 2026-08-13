@@ -20,7 +20,35 @@ if (!files.length) {
   process.exit(1);
 }
 
-const env = buildTestEnv();
+// A fixed prisma/test.db lets overlapping verification runs corrupt one
+// another. Unless the caller deliberately supplies a test database (for
+// example PostgreSQL in CI), allocate one SQLite file for this invocation and
+// pass that exact URL to every child process.
+const ownsEphemeralSqlite = !process.env.TEST_DATABASE_URL && !process.env.POSTGRES_TEST_DATABASE_URL;
+const ephemeralDatabasePath = ownsEphemeralSqlite
+  ? path.join(process.cwd(), "prisma", `integration-test-${process.pid}-${Date.now()}.db`)
+  : null;
+const ephemeralDatabaseUrl = ephemeralDatabasePath
+  ? `file:${ephemeralDatabasePath.replace(/\\/g, "/")}`
+  : null;
+const env = buildTestEnv(ephemeralDatabaseUrl
+  ? { TEST_DATABASE_URL: ephemeralDatabaseUrl, DATABASE_URL: ephemeralDatabaseUrl }
+  : {});
+
+function cleanupEphemeralDatabase() {
+  if (!ephemeralDatabasePath) return;
+  for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+    try {
+      fs.unlinkSync(`${ephemeralDatabasePath}${suffix}`);
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        console.warn(`Could not remove isolated integration database${suffix}: ${error.message}`);
+      }
+    }
+  }
+}
+
+process.once("exit", cleanupEphemeralDatabase);
 
 function prepareTestDatabase() {
   const result = spawnSync(process.execPath, ["scripts/setup-test-db.js"], {

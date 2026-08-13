@@ -105,6 +105,14 @@ export const confirmBillSchema = z.object({
   idempotencyKey: z.string().min(1).optional(),
   idempotency_key: z.string().min(1).optional(),
 }).superRefine((data, ctx) => {
+  const declaredLineNet = (item) => Math.max(0, Number(item.quantity) * Number(item.ratePerRateUnit) - Number(item.lineDiscount || 0));
+  const declaredSubtotal = data.items.reduce((sum, item) => sum + declaredLineNet(item), 0);
+  const declaredGstToAdd = data.gstMode === "exclusive"
+    ? data.items.reduce((sum, item) => sum + declaredLineNet(item) * Number(item.gstRate || 0) / 100, 0)
+    : 0;
+  if (Number(data.discount || 0) > declaredSubtotal + declaredGstToAdd + 0.005) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["discount"], message: "Discount cannot exceed bill total" });
+  }
   if (data.billType !== "estimate" && data.payments.length === 0 && Number(data.creditAmount ?? 0) <= 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

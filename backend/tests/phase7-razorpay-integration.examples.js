@@ -14,6 +14,8 @@ const subscriptionService = read("src/modules/subscription/subscription.service.
 const paymentService = read("src/modules/payment-provider/paymentProvider.service.js");
 const razorpayProvider = read("src/modules/payment-provider/razorpay.provider.js");
 const paymentRoutes = read("src/modules/payment-provider/paymentProvider.routes.js");
+const sqliteSchema = read("prisma/schema.prisma");
+const postgresSchema = read("prisma-postgres/schema.prisma");
 const productionCheck = read("scripts/production-check.js");
 const packageJson = JSON.parse(read("package.json"));
 
@@ -78,6 +80,11 @@ for (const snippet of [
 }
 assert(paymentService.includes("signatureVerified: true"), "webhook events must store verified signature flag");
 assert(paymentService.includes("Razorpay payment already applied"), "same payment id should not be applied twice");
+assert(paymentService.includes("PAYMENT_TRANSACTION_ALREADY_PAID"), "a second payment id must not overwrite a paid transaction");
+assert(paymentService.includes("PROVIDER_PAYMENT_ALREADY_USED"), "one provider payment must not be applied to another transaction");
+for (const schema of [sqliteSchema, postgresSchema]) {
+  assert.match(schema, /model PaymentTransaction[\s\S]*@@unique\(\[provider, providerPaymentId\]\)/, "provider payment idempotency must be database-enforced");
+}
 
 for (const action of [
   "SUBSCRIPTION_CHECKOUT_CREATED",

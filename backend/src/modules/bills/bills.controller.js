@@ -47,6 +47,8 @@ export async function confirm(req, res, next) {
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       locationId: requestLocationId(req),
       allowStockShortfall: true,
+      ownerPinVerified: req.ownerPinVerified === true,
+      sensitiveBillActions: req.sensitiveBillActions,
       req,
     });
     res.status(201).json({ success: true, data });

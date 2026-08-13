@@ -270,8 +270,9 @@ export default function SecuritySettingsPage() {
         <div className="px-5 pb-5">
           <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
             {PROTECTED_ACTIONS.map((action) => {
-              const rule = sec.actions[action.key] ?? DEFAULT_ACTION_RULE;
               const locked = action.serverEnforced;
+              const savedRule = sec.actions[action.key] ?? DEFAULT_ACTION_RULE;
+              const rule = locked ? { ...savedRule, on: true, approver: "owner" as const } : savedRule;
               const on = locked || rule.on;
               return (
                 <section key={action.key} className="min-w-0 space-y-3 rounded-xl border border-[#e7edf7] bg-[#fbfcff] p-3.5">
@@ -291,7 +292,7 @@ export default function SecuritySettingsPage() {
                   <div>
                     <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">Who can approve</p>
                     <Select value={rule.approver} onValueChange={(value) => setAction(action.key, { ...rule, approver: value as ActionRule["approver"] })}>
-                      <SelectTrigger className="min-h-11 w-full text-[12px]" disabled={!on} aria-label={`Approver for ${action.label}`}><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="min-h-11 w-full text-[12px]" disabled={locked || !on} aria-label={`Approver for ${action.label}`}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="owner">Owner only</SelectItem>
                         <SelectItem value="ownerManager">Owner or Manager</SelectItem>
@@ -318,8 +319,9 @@ export default function SecuritySettingsPage() {
               </thead>
               <tbody>
                 {PROTECTED_ACTIONS.map((a, i) => {
-                  const rule = sec.actions[a.key] ?? DEFAULT_ACTION_RULE;
                   const locked = a.serverEnforced;
+                  const savedRule = sec.actions[a.key] ?? DEFAULT_ACTION_RULE;
+                  const rule = locked ? { ...savedRule, on: true, approver: "owner" as const } : savedRule;
                   const on = locked || rule.on;
                   return (
                     <tr key={a.key} className={i < PROTECTED_ACTIONS.length - 1 ? "border-b border-[#eef2f8]" : ""}>
@@ -340,7 +342,7 @@ export default function SecuritySettingsPage() {
                       </td>
                       <td className="px-3 py-2.5">
                         <Select value={rule.approver} onValueChange={(v) => setAction(a.key, { ...rule, approver: v as ActionRule["approver"] })}>
-                          <SelectTrigger className="min-h-11 w-[170px] text-[12px]" disabled={!on}><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="min-h-11 w-[170px] text-[12px]" disabled={locked || !on}><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="owner">Owner only</SelectItem>
                             <SelectItem value="ownerManager">Owner or Manager</SelectItem>

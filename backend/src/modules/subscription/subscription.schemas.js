@@ -40,6 +40,7 @@ export const checkoutSchema = z.object({
   billingCycle: billingCycle.default("monthly"),
   provider: z.enum(["razorpay"]).default("razorpay"),
   couponCode: couponCode.optional(),
+  idempotencyKey: z.string().trim().min(8).max(120).regex(/^[A-Za-z0-9:_-]+$/).optional(),
 });
 
 export const validateCouponSchema = z.object({ planCode, billingCycle, couponCode });

@@ -1,5 +1,6 @@
 import * as svc from "./integrations.service.js";
 import { AppError } from "../../middleware/error.js";
+import { downloadFlipkartDocument, flipkartStatus } from "./flipkart-seller.service.js";
 
 const ok = (res, data, status = 200) => res.status(status).json({ success: true, data });
 const actor = (req) => ({
@@ -25,3 +26,6 @@ export async function tally(req, res, next) { try { const data = await svc.build
 // cannot carry, so live sends read JSON here instead of downloading a file.
 export async function tallyEnvelope(req, res, next) { try { const data = await svc.buildTallyExport(req.shopId, req.query); ok(res, data); } catch (e) { next(e); } }
 export async function tallyPosted(req, res, next) { try { const data = await svc.markTallyPosted(req.shopId, req.body.documents, actor(req)); ok(res, data); } catch (e) { next(e); } }
+export async function tallyPush(req, res, next) { try { ok(res, await svc.pushTallyExport(req.shopId, req.query, actor(req))); } catch (e) { next(e); } }
+export async function flipkartConnectorStatus(_req, res, next) { try { ok(res, flipkartStatus()); } catch (e) { next(e); } }
+export async function flipkartDocument(req, res, next) { try { const pdf = await downloadFlipkartDocument(req.params.shipmentId, req.params.kind); res.setHeader("content-type", "application/pdf"); res.setHeader("content-disposition", `attachment; filename="flipkart-${req.params.kind}-${req.params.shipmentId}.pdf"`); res.send(pdf); } catch (e) { next(e); } }

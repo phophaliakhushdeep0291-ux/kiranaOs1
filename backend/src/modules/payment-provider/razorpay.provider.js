@@ -46,6 +46,14 @@ export async function fetchRazorpayOrder(orderId) {
   return razorpayRequest(`/orders/${encodeURIComponent(orderId)}`, { method: "GET" });
 }
 
+export async function fetchRazorpayOrderByReceipt(receipt) {
+  assertRazorpayConfigured();
+  if (!receipt) throw new AppError("Razorpay order receipt is required", 400);
+  const result = await razorpayRequest(`/orders?receipt=${encodeURIComponent(receipt)}&count=10`, { method: "GET" });
+  const items = Array.isArray(result?.items) ? result.items : [];
+  return items.find((order) => order?.receipt === receipt) ?? null;
+}
+
 export async function createRazorpayQrCode({ amountPaise, name, description, closeBy, notes = {} }) {
   assertRazorpayConfigured();
   return razorpayRequest("/payments/qr_codes", {

@@ -34,9 +34,12 @@ router.get("/deliveries", validateQuery(integrationListQuerySchema), ctrl.delive
 router.post("/deliveries/:id/retry", requireFeature("api_webhook_later"), requireOwnerPin, ctrl.retryDelivery);
 router.get("/exports/tally", requireFeature("tally_export"), validateQuery(tallyExportQuerySchema), ctrl.tally);
 router.get("/exports/tally/envelope", requireFeature("tally_export"), validateQuery(tallyExportQuerySchema), ctrl.tallyEnvelope);
+router.post("/exports/tally/push", requireFeature("tally_export"), requireOwnerPin, validateQuery(tallyExportQuerySchema), ctrl.tallyPush);
 // Confirmation that a live TallyPrime accepted an envelope. Not owner-PIN gated:
 // it records what already happened, and a prompt the shopkeeper cannot answer
 // here would leave Tally holding vouchers this app thinks it never sent.
 router.post("/exports/tally/posted", requireFeature("tally_export"), validate(tallyPostedBodySchema), ctrl.tallyPosted);
+router.get("/flipkart/status", ctrl.flipkartConnectorStatus);
+router.get("/flipkart/shipments/:shipmentId/:kind(invoice|label).pdf", ctrl.flipkartDocument);
 
 export default router;

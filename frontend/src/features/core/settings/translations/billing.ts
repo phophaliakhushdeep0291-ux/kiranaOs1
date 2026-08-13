@@ -423,6 +423,7 @@ export const billingEn = {
   "billing.page.verifyUpiPayment": "Verify UPI payment",
   "billing.page.permissionDenied": "Permission denied",
   "billing.page.ownerApprovalRequired": "Owner approval required",
+  "billing.page.ownerApprovalDetail": "A total discount of at least ₹{amount} and {percent}% of the configured price, loyalty redemption, or selling below minimum price needs the owner PIN. Any cart or price change asks again.",
   "billing.page.approveBill": "Approve bill",
   "billing.page.sensitiveActionProtection": "Sensitive Action Protection",
   "billing.page.clearBillTitle": "Clear this bill?",

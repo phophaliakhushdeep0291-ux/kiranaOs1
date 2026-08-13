@@ -12,13 +12,13 @@ import { postUdharPaymentLedger } from "../finance/financial-ledger.service.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
 
-async function writeRequiredCustomerAudit(entry, client) {
+async function writeRequiredCustomerAudit(entry, client, failure = {}) {
   const audit = await createAuditLog({ ...entry, client });
   if (!audit) {
     throw new AppError(
-      "Customer action was not saved because its audit record could not be stored",
+      failure.message ?? "Customer action was not saved because its audit record could not be stored",
       503,
-      "CUSTOMER_AUDIT_WRITE_FAILED",
+      failure.code ?? "CUSTOMER_AUDIT_WRITE_FAILED",
     );
   }
   return audit;
@@ -544,10 +544,9 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
       repairNote: `System repair after reversing payment ${payment.id}: udhar balance went negative`,
     });
 
-    const audit = await createAuditLog({
+    await writeRequiredCustomerAudit({
       shopId,
       userId: actorUserId,
-      deviceId,
       deviceId,
       action: "UDHAR_PAYMENT_REVERSED",
       entityType: "UdharLedger",
@@ -556,15 +555,10 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
       after: { reversedAt, reversalLedgerEntryId: reversal.id, newBalance: round2(refreshed?.balance ?? 0) },
       metadata: { reason },
       req,
-      client: tx,
+    }, tx, {
+      message: "Udhar payment reversal was not saved because its audit record could not be stored",
+      code: "UDHAR_REVERSAL_AUDIT_WRITE_FAILED",
     });
-    if (!audit) {
-      throw new AppError(
-        "Udhar payment reversal was not saved because its audit record could not be stored",
-        503,
-        "UDHAR_REVERSAL_AUDIT_WRITE_FAILED",
-      );
-    }
 
     return {
       customerId,

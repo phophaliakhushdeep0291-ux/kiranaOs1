@@ -94,26 +94,54 @@ if (ctx.skip) {
       assertFailure(await ctx.post(`/api/bills/${bill.id}/email`, { email: "attacker@example.com" }, { token: otherAuth.accessToken }), 404);
     });
 
-    test("sensitive bill actions survive validation and require the owner PIN", async () => {
+    test("server derives large discounts, requires owner PIN and writes the approval audit atomically", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100 });
       const payload = {
         ...billPayload(product, {
-        discount: 20,
-        actualAmount: 180,
-        buyerPaidAmount: 180,
-        payments: [{ mode: "cash", amount: 180 }],
+        discount: 100,
+        actualAmount: 100,
+        buyerPaidAmount: 100,
+        payments: [{ mode: "cash", amount: 100 }],
         }),
-        sensitiveActions: ["large_discount"],
         reason: "Manager-approved promotion",
       };
 
       const blocked = await ctx.post("/api/bills/confirm", payload, { token: ownerAuth.accessToken });
       assertFailure(blocked, 403);
+      assert.equal(await ctx.db.bill.count({ where: { shopId: tenant.shop.id } }), 0);
 
       const approved = assertSuccess(await ctx.post("/api/bills/confirm", { ...payload, ownerPin: tenant.ownerPin }, { token: ownerAuth.accessToken }), 201);
-      assert.equal(approved.discount, 20);
-      assert.equal(approved.grandTotal, 180);
+      assert.equal(approved.discount, 100);
+      assert.equal(approved.grandTotal, 100);
+      const approvalAudit = await ctx.db.auditLog.findFirst({
+        where: { shopId: tenant.shop.id, entityId: approved.id, action: "BILL_LARGE_DISCOUNT_APPROVED" },
+      });
+      assert.ok(approvalAudit);
+      assert.equal(JSON.parse(approvalAudit.metadataJson).reason, "Manager-approved promotion");
+      assert.equal(approvalAudit.userId, tenant.owner.id);
+    });
+
+    test("server rejects an undeclared below-minimum line until the owner approves it", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, {
+        stockBaseQty: 10,
+        defaultPricePerRateUnit: 50,
+        minPricePerRateUnit: 45,
+      });
+      const payload = {
+        ...billPayload(product, { quantity: 2, ratePerRateUnit: 44, actualAmount: 88, buyerPaidAmount: 88, payments: [{ mode: "cash", amount: 88 }] }),
+        sensitiveActions: [],
+        reason: "Clear short-dated stock",
+      };
+
+      assertFailure(await ctx.post("/api/bills/confirm", payload, { token: ownerAuth.accessToken }), 403);
+      const approved = assertSuccess(await ctx.post("/api/bills/confirm", { ...payload, ownerPin: tenant.ownerPin }, { token: ownerAuth.accessToken }), 201);
+      const approvalAudit = await ctx.db.auditLog.findFirst({
+        where: { shopId: tenant.shop.id, entityId: approved.id, action: "BILL_BELOW_MINIMUM_PRICE_APPROVED" },
+      });
+      assert.ok(approvalAudit);
+      assert.equal(JSON.parse(approvalAudit.metadataJson).reason, "Clear short-dated stock");
     });
 
     test("coupon validation and usage accounting commit with the bill lifecycle", async () => {

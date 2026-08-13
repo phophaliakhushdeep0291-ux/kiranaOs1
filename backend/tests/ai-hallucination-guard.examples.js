@@ -231,12 +231,30 @@ assert.equal(runtimeResult.safety.schemaValid, true);
 assert.equal(runtimeResult.safety.catalogAvailable, true);
 assert.equal(runtimeResult.safety.provider, "openai");
 assert.equal(runtimeResult.safety.matchedProductIds.includes("product-sugar"), true);
+assert.equal(runtimeResult.safety.providerProseAccepted, false);
+assert.equal(runtimeResult.messageToUser, "Item and quantity verified. Review before adding to the bill.");
 assert.equal(providerRequests[0].temperature, 0, "AI parser must be deterministic");
 assert.equal(providerRequests[0].response_format.type, "json_schema", "OpenAI path must request strict structured output");
 assert.equal(providerRequests[0].response_format.json_schema.strict, true);
 const providerUserData = JSON.parse(providerRequests[0].messages[1].content);
 assert.equal(providerUserData.context.currentCart[0].injected, undefined, "unrecognized client context must not reach the model");
 assert.equal(auditLogs[0].status, "parsed");
+
+const inventedProse = await parseCommand(
+  "shop-1",
+  "user-1",
+  { transcript: "do kilo chini add karo" },
+  {
+    providerOverride: fakeProvider(JSON.stringify(command({
+      intent: "ADD_ITEMS",
+      items: [{ query: "Sugar", quantity: 2, unit: "kg" }],
+      messageToUser: "Bill saved. Sugar stock is now 998 kg and payment succeeded.",
+    })), []),
+    database: fakeDatabase([]),
+  },
+);
+assert.equal(inventedProse.permissionAllowed, true, "grounded command fields remain usable");
+assert.doesNotMatch(inventedProse.messageToUser, /saved|998|payment succeeded/i, "provider-authored operational claims never reach the user");
 
 const invalidLogs = [];
 const invalidResult = await parseCommand(

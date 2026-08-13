@@ -25,19 +25,24 @@ const explanationSchema = z.object({
   summary: z.string().min(10).max(2000),
   whatToCheck: z.array(z.string().min(3).max(500)).max(10).default([]),
   suggestedEvidence: z.array(z.string().min(2).max(80)).max(10).default([]),
-});
+}).strict();
 
 const caseSummarySchema = z.object({
   summary: z.string().min(10).max(2000),
   financialImpact: z.string().min(3).max(500),
   recommendedNextStep: z.string().min(3).max(500),
-});
+}).strict();
 
 const evidenceClassificationSchema = z.object({
   evidenceType: z.string().min(2).max(80),
   confidence: z.coerce.number().min(0).max(1),
   reasoning: z.string().min(3).max(1000).default(""),
-});
+}).strict();
+
+function exactAllowedSelections(values, allowed) {
+  const allowedSet = new Set(allowed.filter(Boolean));
+  return [...new Set(values.filter((value) => allowedSet.has(value)))];
+}
 
 // Language claims and accusation-shaped wording are rejected even when the
 // schema passes, so a misbehaving provider cannot put "fraud" in front of a user.
@@ -120,7 +125,9 @@ function deterministicExplanation(finding, language) {
     const name = rule.name ?? rule.ruleCode;
     return `${name} (${rule.severity}, contributed ${rule.scoreContribution} points)`;
   });
-  const amount = finding.amountPaise ? `₹${(finding.amountPaise / 100).toFixed(2)}` : "an unrecorded amount";
+  const amount = finding.amountPaise === null || finding.amountPaise === undefined
+    ? "an unrecorded amount"
+    : `₹${(finding.amountPaise / 100).toFixed(2)}`;
   const summary = [
     `Potential inconsistency detected on this ${String(finding.sourceEntityType ?? "record").toLowerCase().replace("_", " ")} involving ${amount}.`,
     rules.length
@@ -183,16 +190,23 @@ export async function explainFinding({ finding, language = "en", provider = null
       return { ...fallback, failureReason: `provider_language_policy_violation:${violation}` };
     }
 
+    const selectedChecks = exactAllowedSelections(parsed.data.whatToCheck, fallback.whatToCheck);
+    const selectedEvidence = exactAllowedSelections(parsed.data.suggestedEvidence, fallback.suggestedEvidence);
+
     return {
-      text: parsed.data.summary,
+      // The provider may rank exact server-issued checks and evidence, but it
+      // never authors a financial claim displayed to the shopkeeper.
+      text: fallback.text,
       language: normalizedLanguage,
       source: "ai_provider",
       provider: providerName,
       degraded: false,
       attempts,
-      whatToCheck: parsed.data.whatToCheck,
-      // Only evidence types the deterministic rules actually asked for survive.
-      suggestedEvidence: parsed.data.suggestedEvidence.filter((type) => payload.allowedEvidenceTypes.includes(type)),
+      grounding: "server_composed",
+      // A provider can rank exact server-issued values but cannot remove every
+      // required check or evidence request by paraphrasing or returning none.
+      whatToCheck: selectedChecks.length ? selectedChecks : fallback.whatToCheck,
+      suggestedEvidence: selectedEvidence.length ? selectedEvidence : fallback.suggestedEvidence,
       disclaimer: AUDIT_AI_DISCLAIMER,
     };
   } catch (error) {
@@ -201,8 +215,11 @@ export async function explainFinding({ finding, language = "en", provider = null
 }
 
 export async function summarizeCase({ findings = [], totalAmountPaise = 0, provider = null, shopSettings = null }) {
+  const caseCountText = findings.length === 1
+    ? "1 related potential inconsistency is"
+    : `${findings.length} related potential inconsistencies are`;
   const fallback = {
-    summary: `${findings.length} related potential inconsistencies are grouped in this case.`,
+    summary: `${caseCountText} grouped in this case.`,
     financialImpact: `Combined amount under review: ₹${(totalAmountPaise / 100).toFixed(2)}.`,
     recommendedNextStep: "Start with the highest-risk finding and collect its requested evidence.",
     source: "deterministic_fallback",
@@ -226,7 +243,13 @@ export async function summarizeCase({ findings = [], totalAmountPaise = 0, provi
     if (!parsed.success) return { ...fallback, failureReason: "invalid_provider_output" };
     const violation = violatesLanguagePolicy(`${parsed.data.summary} ${parsed.data.recommendedNextStep}`);
     if (violation) return { ...fallback, failureReason: `provider_language_policy_violation:${violation}` };
-    return { ...parsed.data, source: "ai_provider", provider: providerName, degraded: false, disclaimer: AUDIT_AI_DISCLAIMER };
+    return {
+      ...fallback,
+      source: "ai_provider",
+      provider: providerName,
+      degraded: false,
+      grounding: "server_composed",
+    };
   } catch (error) {
     return { ...fallback, failureReason: error?.code ?? error?.message ?? "provider_error" };
   }
@@ -254,7 +277,18 @@ export async function classifyEvidence({ description, allowedEvidenceTypes = [],
     if (allowedEvidenceTypes.length && !allowedEvidenceTypes.includes(parsed.data.evidenceType)) {
       return { ...fallback, failureReason: "provider_returned_disallowed_evidence_type" };
     }
-    return { ...parsed.data, source: "ai_provider", provider: providerName, degraded: false, disclaimer: AUDIT_AI_DISCLAIMER };
+    return {
+      evidenceType: parsed.data.evidenceType,
+      // Provider confidence and reasoning are not independently verifiable.
+      // Keep the allowed label advisory and compose the explanation locally.
+      confidence: Math.min(parsed.data.confidence, 0.5),
+      reasoning: `Suggested evidence type: ${parsed.data.evidenceType}. A reviewer must verify the document before it is accepted.`,
+      source: "ai_provider",
+      provider: providerName,
+      degraded: false,
+      grounding: "server_composed",
+      disclaimer: AUDIT_AI_DISCLAIMER,
+    };
   } catch (error) {
     return { ...fallback, failureReason: error?.code ?? error?.message ?? "provider_error" };
   }

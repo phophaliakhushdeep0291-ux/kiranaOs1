@@ -62,6 +62,37 @@ const TARGET_ALIASES = Object.freeze({
   last: ["last", "pichla", "pichli", "\u092a\u093f\u091b\u0932\u093e", "\u092a\u093f\u091b\u0932\u0940"],
 });
 
+// A structured command can be fully grounded while its free-form provider
+// message still invents an outcome (for example, "bill saved" or "stock is
+// now 10"). Parsing never executes an action, so every user-facing sentence is
+// server-owned and describes only the verified proposal.
+const VERIFIED_COMMAND_MESSAGES = Object.freeze({
+  [AI_INTENTS.SEARCH_PRODUCT]: "Search command verified. Review the matching products.",
+  [AI_INTENTS.ADD_ITEMS]: "Item and quantity verified. Review before adding to the bill.",
+  [AI_INTENTS.REMOVE_ITEM]: "Item removal command verified. Review before applying it.",
+  [AI_INTENTS.UPDATE_QUANTITY]: "Quantity change verified. Review before applying it.",
+  [AI_INTENTS.SET_CUSTOMER]: "Customer details verified. Review before selecting the customer.",
+  [AI_INTENTS.OPEN_REPORTS]: "Report request verified. Opening the selected report is safe.",
+  [AI_INTENTS.OPEN_INVENTORY]: "Inventory request verified. Opening inventory is safe.",
+  [AI_INTENTS.SHOW_KHATA]: "Khata request verified. Opening customer credit records is safe.",
+  [AI_INTENTS.CREATE_CUSTOMER]: "Customer details verified. Confirm before creating the customer.",
+  [AI_INTENTS.SET_PAYMENT]: "Payment details verified. Confirm the amounts before applying them.",
+  [AI_INTENTS.APPLY_DISCOUNT]: "Discount value verified. Confirm before applying it.",
+  [AI_INTENTS.CONFIRM_BILL]: "Bill confirmation command verified. Review the bill total before saving.",
+  [AI_INTENTS.CANCEL_BILL]: "Cancellation target verified. Owner confirmation is still required.",
+  [AI_INTENTS.UPDATE_PRODUCT_PRICE]: "Price change details verified. Owner confirmation is still required.",
+  [AI_INTENTS.ADJUST_STOCK]: "Stock adjustment details verified. Owner confirmation is still required.",
+  [AI_INTENTS.DELETE_PRODUCT]: "Product deletion target verified. Owner confirmation is still required.",
+  [AI_INTENTS.EXPORT_DATA]: "Export request verified. Owner confirmation is still required.",
+});
+
+const SERVER_CLARIFICATION = "Please repeat one exact action using the item, customer, quantity, and amount shown in the app.";
+
+function verifiedCommandMessage(intent) {
+  return VERIFIED_COMMAND_MESSAGES[intent]
+    ?? "Command details verified. Review them before continuing.";
+}
+
 const UNIT_EVIDENCE = Object.freeze({
   kg: ["kg", "kilo", "kilogram", "\u0915\u093f\u0932\u094b"],
   g: ["g", "gram", "grams", "\u0917\u094d\u0930\u093e\u092e"],
@@ -227,10 +258,10 @@ export function groundAiCommand(command, { transcript, catalog = [] } = {}) {
     needsConfirmation: command.needsConfirmation || !allowed,
     clarificationNeeded: command.clarificationNeeded || !allowed,
     clarificationQuestion: command.clarificationNeeded || !allowed
-      ? command.clarificationQuestion ?? "Please repeat one exact action using the item, customer, quantity, and amount shown in the app."
-      : command.clarificationQuestion,
+      ? SERVER_CLARIFICATION
+      : null,
     messageToUser: allowed
-      ? command.messageToUser
+      ? verifiedCommandMessage(command.intent)
       : "I could not verify every detail from your words. Please review or rephrase the command.",
   };
 
@@ -244,6 +275,7 @@ export function groundAiCommand(command, { transcript, catalog = [] } = {}) {
       reasons: reasons.map((reason) => reason.code),
       matchedProductIds: [...matchedProductIds].slice(0, 50),
       requiresManualFallback: !allowed,
+      providerProseAccepted: false,
     },
   };
 }

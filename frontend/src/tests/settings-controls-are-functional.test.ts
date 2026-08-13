@@ -46,7 +46,7 @@ describe("security policy drives real behaviour", () => {
     expect(sessionTimeoutMs()).toBe(0);
   });
 
-  it("lets the counter turn off only the prompts the server does not require", () => {
+  it("cannot turn off server-derived billing or destructive approval prompts", () => {
     setSecurityPolicyCache({
       ...DEFAULT_SECURITY_POLICY,
       actions: {
@@ -55,8 +55,11 @@ describe("security policy drives real behaviour", () => {
         cancelBill: { on: false, approver: "owner" },
       },
     });
-    // Counter-side rule: switching it off really removes the prompt.
-    expect(isActionProtected("largeDiscount")).toBe(false);
+    // The API derives this from bill money/catalogue data, so stale settings
+    // cannot disable the prompt or authorize a modified client.
+    expect(isServerEnforced("largeDiscount")).toBe(true);
+    expect(isServerEnforced("sellBelowMin")).toBe(true);
+    expect(isActionProtected("largeDiscount")).toBe(true);
     // Server-enforced rule: the API rejects it without a PIN, so it stays on.
     expect(isServerEnforced("cancelBill")).toBe(true);
     expect(isActionProtected("cancelBill")).toBe(true);

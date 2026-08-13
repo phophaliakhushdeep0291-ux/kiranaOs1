@@ -53,6 +53,13 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // that a voucher was already exported, so omitting it from restore can cause
   // the same sale or purchase to be posted twice after disaster recovery.
   "TallyPost",
+  // Manufacturing recipes and their immutable genealogy are one restore unit.
+  // Restoring stock without the BOM, run, consumption, and output chain would
+  // leave finished batches with no defensible source or recall trail.
+  "ManufacturingBom", "ManufacturingBomItem", "ProductionRun",
+  "ProductionConsumption", "ProductionOutput",
+  // Supermarket/export PO, reserved finished batches and dispatch evidence.
+  "TradeOrder", "TradeOrderItem", "TradeOrderAllocation", "TradeDispatch",
   // A booking is business history — who took which garment, for which days, and
   // what money is still owed on it. It restores with the rest of the ledger.
   "RentalBooking",

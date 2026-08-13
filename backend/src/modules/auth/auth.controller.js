@@ -44,7 +44,7 @@ export async function googleLogin(req, res, next) {
 }
 
 export async function verifyEmail(req, res, next) {
-  try { res.json({ success: true, data: await authService.verifyEmail(req.body.token) }); }
+  try { res.json({ success: true, data: await authService.verifyEmail(req.body.token, requestMeta(req)) }); }
   catch (err) { next(err); }
 }
 
@@ -59,7 +59,7 @@ export async function forgotPassword(req, res, next) {
 }
 
 export async function resetPassword(req, res, next) {
-  try { res.json({ success: true, data: await authService.resetPassword(req.body) }); }
+  try { res.json({ success: true, data: await authService.resetPassword(req.body, requestMeta(req)) }); }
   catch (err) { next(err); }
 }
 
@@ -85,7 +85,7 @@ export async function me(req, res, next) {
 
 export async function setPin(req, res, next) {
   try {
-    const data = await authService.setPin(req.user.userId, req.user.shopId, req.body.pin);
+    const data = await authService.setPin(req.user.userId, req.user.shopId, req.body.pin, requestMeta(req));
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -157,7 +157,7 @@ export async function updateStaffLocations(req, res, next) {
 
 export async function changePassword(req, res, next) {
   try {
-    const data = await authService.changePassword(req.user.userId, req.user.shopId, req.body);
+    const data = await authService.changePassword(req.user.userId, req.user.shopId, req.body, requestMeta(req));
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

@@ -8,9 +8,9 @@ import { DEFAULT_GRACE_DAYS } from "../subscription/planConfig.js";
 export const LICENSE_VERSION = 1;
 export const LICENSE_ALGORITHM = "HMAC-SHA256";
 
-export async function buildLicensePayload(shopId, deviceId) {
-  const device = await getActiveLicenseDevice(shopId, deviceId);
-  const effective = await getEffectivePlan(shopId);
+export async function buildLicensePayload(shopId, deviceId, client = db) {
+  const device = await getActiveLicenseDevice(shopId, deviceId, client);
+  const effective = await getEffectivePlan(shopId, client);
   const issuedAt = new Date();
   const subscription = effective.subscription || {};
   const subscriptionStatus = subscription.status || "trial";
@@ -66,14 +66,14 @@ export function verifyLicenseSignature(payload, signature, secret = env.LICENSE_
   return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
-export async function issueDeviceLicense(shopId, deviceId) {
-  const payload = await buildLicensePayload(shopId, deviceId);
+export async function issueDeviceLicense(shopId, deviceId, client = db) {
+  const payload = await buildLicensePayload(shopId, deviceId, client);
   const signature = signLicensePayload(payload);
   const signatureHash = signature ? hashSignature(signature) : null;
   const validUntil = new Date(payload.validUntil);
   const offlineGraceUntil = new Date(payload.offlineGraceUntil);
 
-  await db.deviceLicense.create({
+  await client.deviceLicense.create({
     data: {
       shopId,
       deviceId,
@@ -97,8 +97,8 @@ export async function issueDeviceLicense(shopId, deviceId) {
   };
 }
 
-export async function refreshDeviceLicense(shopId, deviceId) {
-  return issueDeviceLicense(shopId, deviceId);
+export async function refreshDeviceLicense(shopId, deviceId, client = db) {
+  return issueDeviceLicense(shopId, deviceId, client);
 }
 
 export async function getCurrentDeviceLicense(shopId, deviceId) {
@@ -108,22 +108,22 @@ export async function getCurrentDeviceLicense(shopId, deviceId) {
   });
 }
 
-export async function revokeDeviceLicense(shopId, deviceId, reason = "device_revoked") {
+export async function revokeDeviceLicense(shopId, deviceId, reason = "device_revoked", client = db) {
   const now = new Date();
-  await db.deviceLicense.updateMany({
+  await client.deviceLicense.updateMany({
     where: { shopId, deviceId, revokedAt: null },
     data: { revokedAt: now },
   });
   return { revokedAt: now, reason };
 }
 
-async function getActiveLicenseDevice(shopId, deviceId) {
+async function getActiveLicenseDevice(shopId, deviceId, client = db) {
   if (!deviceId) {
     const err = new AppError("Device id is required", 400);
     err.code = "DEVICE_REQUIRED";
     throw err;
   }
-  const device = await db.device.findUnique({ where: { shopId_deviceId: { shopId, deviceId } } });
+  const device = await client.device.findUnique({ where: { shopId_deviceId: { shopId, deviceId } } });
   if (!device) {
     const err = new AppError("Device not found", 404);
     err.code = "DEVICE_NOT_FOUND";

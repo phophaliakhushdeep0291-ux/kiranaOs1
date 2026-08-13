@@ -13,6 +13,7 @@ import {
   getPlanConfigForBusinessType,
 } from "./planConfig.js";
 import { businessTypeFromSettings, parseShopSettings } from "../shops/businessProfiles.js";
+import { createAuditLog } from "../audit/audit.service.js";
 
 export async function seedPlans(tx = db) {
   const plans = [];
@@ -123,13 +124,14 @@ export async function getEffectivePlan(shopId, client = db) {
 export async function activateManualSubscription(shopId, planCode, period = "monthly", options = {}) {
   if (!validatePlanCode(planCode)) throw new AppError("Invalid plan code", 400);
   await ensurePlansSeeded();
-  const plan = await getBillablePlan(shopId, planCode);
   const now = options.paidAt ? new Date(options.paidAt) : new Date();
   const currentPeriodEnd = addPeriod(now, period);
-  const amountPaise = options.amountPaise ?? (period === "yearly" ? plan.priceYearlyPaise : plan.priceMonthlyPaise);
   const provider = options.provider ?? "manual";
 
   return db.$transaction(async (tx) => {
+    const plan = await getBillablePlan(shopId, planCode, tx);
+    const amountPaise = options.amountPaise ?? (period === "yearly" ? plan.priceYearlyPaise : plan.priceMonthlyPaise);
+    const before = await tx.subscription.findUnique({ where: { shopId } });
     const subscription = await tx.subscription.upsert({
       where: { shopId },
       update: {
@@ -179,11 +181,15 @@ export async function activateManualSubscription(shopId, planCode, period = "mon
       userId: options.userId ?? null,
       action: "SUBSCRIPTION_ACTIVATED",
       entityId: subscription.id,
+      deviceId: options.deviceId,
+      req: options.req ?? null,
+      before,
+      after: subscription,
       metadata: { provider, planCode, period, amountPaise, transactionId: paymentTransaction.id },
     });
 
     return { subscription: normalizeSubscriptionDates(subscription), paymentTransaction };
-  });
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function activateSubscriptionAfterPayment({
@@ -195,6 +201,8 @@ export async function activateSubscriptionAfterPayment({
   transactionId = null,
   billingCycle = "monthly",
   tx = db,
+  deviceId = undefined,
+  req = null,
 } = {}) {
   if (!shopId) throw new AppError("Shop is required", 400);
   if (!validatePlanCode(planCode)) throw new AppError("Invalid plan code", 400);
@@ -256,6 +264,10 @@ export async function activateSubscriptionAfterPayment({
     userId,
     action: action === "renewed" ? "SUBSCRIPTION_RENEWED" : action === "plan_changed" ? "SUBSCRIPTION_PLAN_CHANGED" : "SUBSCRIPTION_ACTIVATED",
     entityId: subscription.id,
+    deviceId,
+    req,
+    before: current,
+    after: subscription,
     metadata: { provider, providerPaymentId, transactionId, planCode, billingCycle, currentPeriodStart: startsAt, currentPeriodEnd: endsAt },
   });
 
@@ -302,48 +314,62 @@ export async function reconcileSubscriptionAfterRefund({
     userId: null,
     action: "SUBSCRIPTION_REFUND_RECONCILED",
     entityId: subscription.id,
+    before: subscription,
+    after: updated,
     metadata: { providerPaymentId, transactionId, eventId, previousStatus: subscription.status },
   });
 
   return { subscriptionChanged: true, subscription: normalizeSubscriptionDates(updated) };
 }
 
-export async function changePlan(shopId, planCode) {
+export async function changePlan(shopId, planCode, actor = {}) {
   if (!validatePlanCode(planCode)) throw new AppError("Invalid plan code", 400);
   await ensurePlansSeeded();
-  const nextPlan = await getBillablePlan(shopId, planCode);
-  const now = new Date();
-  const current = await db.subscription.findUnique({ where: { shopId } });
-  if (!current) {
-    const trialEnd = addDays(now, DEFAULT_TRIAL_DAYS);
-    return db.subscription.create({
-      data: {
-        shopId,
-        planCode,
-        status: "trial",
-        provider: "admin",
-        currentPeriodStart: now,
-        currentPeriodEnd: trialEnd,
-        trialEndsAt: trialEnd,
-        graceEndsAt: addDays(trialEnd, DEFAULT_GRACE_DAYS),
-        lockedPriceMonthlyPaise: nextPlan.priceMonthlyPaise,
-        lockedPriceYearlyPaise: nextPlan.priceYearlyPaise,
-        entitledFeaturesJson: nextPlan.featuresJson,
-        intendedPaidPlanCode: planCode,
-      },
+  return db.$transaction(async (tx) => {
+    const nextPlan = await getBillablePlan(shopId, planCode, tx);
+    const now = new Date();
+    const current = await tx.subscription.findUnique({ where: { shopId } });
+    const next = current
+      ? await tx.subscription.update({
+        where: { shopId },
+        data: {
+          planCode,
+          lockedPriceMonthlyPaise: nextPlan.priceMonthlyPaise,
+          lockedPriceYearlyPaise: nextPlan.priceYearlyPaise,
+          entitledFeaturesJson: nextPlan.featuresJson,
+          intendedPaidPlanCode: planCode,
+          updatedAt: now,
+        },
+      })
+      : await tx.subscription.create({
+        data: {
+          shopId,
+          planCode,
+          status: "trial",
+          provider: "admin",
+          currentPeriodStart: now,
+          currentPeriodEnd: addDays(now, DEFAULT_TRIAL_DAYS),
+          trialEndsAt: addDays(now, DEFAULT_TRIAL_DAYS),
+          graceEndsAt: addDays(addDays(now, DEFAULT_TRIAL_DAYS), DEFAULT_GRACE_DAYS),
+          lockedPriceMonthlyPaise: nextPlan.priceMonthlyPaise,
+          lockedPriceYearlyPaise: nextPlan.priceYearlyPaise,
+          entitledFeaturesJson: nextPlan.featuresJson,
+          intendedPaidPlanCode: planCode,
+        },
+      });
+    await createSubscriptionAudit(tx, {
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId,
+      req: actor.req ?? null,
+      action: current ? "SUBSCRIPTION_PLAN_CHANGED" : "SUBSCRIPTION_TRIAL_GRANTED",
+      entityId: next.id,
+      before: current,
+      after: next,
+      metadata: { planCode, source: "internal_override" },
     });
-  }
-  return db.subscription.update({
-    where: { shopId },
-    data: {
-      planCode,
-      lockedPriceMonthlyPaise: nextPlan.priceMonthlyPaise,
-      lockedPriceYearlyPaise: nextPlan.priceYearlyPaise,
-      entitledFeaturesJson: nextPlan.featuresJson,
-      intendedPaidPlanCode: planCode,
-      updatedAt: now,
-    },
-  });
+    return next;
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function grantFoundingCustomer(shopId, intendedPaidPlanCode = "starter", options = {}) {
@@ -351,35 +377,64 @@ export async function grantFoundingCustomer(shopId, intendedPaidPlanCode = "star
   const now = options.startsAt ? new Date(options.startsAt) : new Date();
   const trialEndsAt = options.endsAt ? new Date(options.endsAt) : addDays(now, 365);
   if (!(trialEndsAt > now)) throw new AppError("Founding-customer end date must be in the future", 400);
-  const plan = await getBillablePlan(shopId, intendedPaidPlanCode);
-  return db.subscription.upsert({
-    where: { shopId },
-    update: {
-      planCode: intendedPaidPlanCode, status: "trial", provider: "founding",
-      currentPeriodStart: now, currentPeriodEnd: trialEndsAt, trialEndsAt,
-      graceEndsAt: addDays(trialEndsAt, DEFAULT_GRACE_DAYS), cancelledAt: null,
-      intendedPaidPlanCode, lockedPriceMonthlyPaise: plan.priceMonthlyPaise,
-      lockedPriceYearlyPaise: plan.priceYearlyPaise, entitledFeaturesJson: plan.featuresJson,
-    },
-    create: {
-      shopId, planCode: intendedPaidPlanCode, status: "trial", provider: "founding",
-      currentPeriodStart: now, currentPeriodEnd: trialEndsAt, trialEndsAt,
-      graceEndsAt: addDays(trialEndsAt, DEFAULT_GRACE_DAYS), intendedPaidPlanCode,
-      lockedPriceMonthlyPaise: plan.priceMonthlyPaise, lockedPriceYearlyPaise: plan.priceYearlyPaise,
-      entitledFeaturesJson: plan.featuresJson,
-    },
-  });
+  await ensurePlansSeeded();
+  return db.$transaction(async (tx) => {
+    const plan = await getBillablePlan(shopId, intendedPaidPlanCode, tx);
+    const before = await tx.subscription.findUnique({ where: { shopId } });
+    const subscription = await tx.subscription.upsert({
+      where: { shopId },
+      update: {
+        planCode: intendedPaidPlanCode, status: "trial", provider: "founding",
+        currentPeriodStart: now, currentPeriodEnd: trialEndsAt, trialEndsAt,
+        graceEndsAt: addDays(trialEndsAt, DEFAULT_GRACE_DAYS), cancelledAt: null,
+        intendedPaidPlanCode, lockedPriceMonthlyPaise: plan.priceMonthlyPaise,
+        lockedPriceYearlyPaise: plan.priceYearlyPaise, entitledFeaturesJson: plan.featuresJson,
+      },
+      create: {
+        shopId, planCode: intendedPaidPlanCode, status: "trial", provider: "founding",
+        currentPeriodStart: now, currentPeriodEnd: trialEndsAt, trialEndsAt,
+        graceEndsAt: addDays(trialEndsAt, DEFAULT_GRACE_DAYS), intendedPaidPlanCode,
+        lockedPriceMonthlyPaise: plan.priceMonthlyPaise, lockedPriceYearlyPaise: plan.priceYearlyPaise,
+        entitledFeaturesJson: plan.featuresJson,
+      },
+    });
+    await createSubscriptionAudit(tx, {
+      shopId,
+      userId: options.userId ?? null,
+      deviceId: options.deviceId,
+      req: options.req ?? null,
+      action: "SUBSCRIPTION_FOUNDING_GRANTED",
+      entityId: subscription.id,
+      before,
+      after: subscription,
+      metadata: { intendedPaidPlanCode, trialEndsAt, source: "internal_override" },
+    });
+    return subscription;
+  }, { isolationLevel: "Serializable" });
 }
 
-export async function recordOnboardingPurchase(shopId, userId, input = {}) {
+export async function recordOnboardingPurchase(shopId, userId, input = {}, actor = {}) {
   const includes = input.includes ?? FIRST_YEAR_ONBOARDING_SKU.includes;
-  return db.onboardingPurchase.create({ data: {
-    shopId, recordedByUserId: userId ?? null, sku: FIRST_YEAR_ONBOARDING_SKU.code,
-    amountPaise: input.amountPaise ?? FIRST_YEAR_ONBOARDING_SKU.amountPaise,
-    status: input.status ?? "recorded", includesJson: JSON.stringify(includes),
-    deliveredAt: input.status === "delivered" ? (input.deliveredAt ?? new Date()) : null,
-    notes: input.notes ?? null,
-  }});
+  return db.$transaction(async (tx) => {
+    const purchase = await tx.onboardingPurchase.create({ data: {
+      shopId, recordedByUserId: userId ?? null, sku: FIRST_YEAR_ONBOARDING_SKU.code,
+      amountPaise: input.amountPaise ?? FIRST_YEAR_ONBOARDING_SKU.amountPaise,
+      status: input.status ?? "recorded", includesJson: JSON.stringify(includes),
+      deliveredAt: input.status === "delivered" ? (input.deliveredAt ?? new Date()) : null,
+      notes: input.notes ?? null,
+    }});
+    await createSubscriptionAudit(tx, {
+      shopId,
+      userId: actor.userId ?? userId ?? null,
+      deviceId: actor.deviceId,
+      req: actor.req ?? null,
+      action: "SUBSCRIPTION_ONBOARDING_PURCHASE_RECORDED",
+      entityId: purchase.id,
+      after: purchase,
+      metadata: { sku: purchase.sku, amountPaise: purchase.amountPaise, status: purchase.status },
+    });
+    return purchase;
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function listOnboardingPurchases(shopId) {
@@ -394,25 +449,52 @@ export async function getBillablePlan(shopId, planCode, client = db) {
   return planForBusinessType(plan, businessType);
 }
 
-export async function cancelSubscription(shopId) {
-  const subscription = await db.subscription.findUnique({ where: { shopId } });
-  if (!subscription) return getCurrentSubscription(shopId);
-  return db.subscription.update({
-    where: { shopId },
-    data: { status: "cancelled", cancelledAt: new Date() },
-  });
+export async function cancelSubscription(shopId, actor = {}) {
+  return db.$transaction(async (tx) => {
+    const subscription = await tx.subscription.findUnique({ where: { shopId } });
+    if (!subscription) return getCurrentSubscription(shopId, tx);
+    const cancelled = await tx.subscription.update({
+      where: { shopId },
+      data: { status: "cancelled", cancelledAt: new Date() },
+    });
+    await createSubscriptionAudit(tx, {
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId,
+      req: actor.req ?? null,
+      action: "SUBSCRIPTION_CANCELLED",
+      entityId: cancelled.id,
+      before: subscription,
+      after: cancelled,
+    });
+    return cancelled;
+  }, { isolationLevel: "Serializable" });
 }
 
-export async function extendGrace(shopId, days) {
-  const subscription = await db.subscription.findUnique({ where: { shopId } });
-  if (!subscription) throw new AppError("Subscription not found", 404);
-  const graceBase = subscription.graceEndsAt && subscription.graceEndsAt > new Date()
-    ? subscription.graceEndsAt
-    : new Date();
-  return db.subscription.update({
-    where: { shopId },
-    data: { status: "grace", graceEndsAt: addDays(graceBase, days) },
-  });
+export async function extendGrace(shopId, days, actor = {}) {
+  return db.$transaction(async (tx) => {
+    const subscription = await tx.subscription.findUnique({ where: { shopId } });
+    if (!subscription) throw new AppError("Subscription not found", 404);
+    const graceBase = subscription.graceEndsAt && subscription.graceEndsAt > new Date()
+      ? subscription.graceEndsAt
+      : new Date();
+    const extended = await tx.subscription.update({
+      where: { shopId },
+      data: { status: "grace", graceEndsAt: addDays(graceBase, days) },
+    });
+    await createSubscriptionAudit(tx, {
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId,
+      req: actor.req ?? null,
+      action: "SUBSCRIPTION_GRACE_EXTENDED",
+      entityId: extended.id,
+      before: subscription,
+      after: extended,
+      metadata: { days, source: "internal_override" },
+    });
+    return extended;
+  }, { isolationLevel: "Serializable" });
 }
 
 export function isSubscriptionActive(subscription) {
@@ -580,20 +662,36 @@ function addDays(date, days) {
   return d;
 }
 
-async function createSubscriptionAudit(tx, { shopId, userId = null, action, entityId = null, metadata = {} }) {
-  if (!shopId || !action || !tx.auditLog) return null;
-  try {
-    return await tx.auditLog.create({
-      data: {
-        shopId,
-        userId,
-        action,
-        entityType: "subscription",
-        entityId,
-        metadataJson: JSON.stringify(metadata),
-      },
-    });
-  } catch {
-    return null;
+async function createSubscriptionAudit(tx, {
+  shopId,
+  userId = null,
+  deviceId = undefined,
+  action,
+  entityId = null,
+  before = undefined,
+  after = undefined,
+  metadata = {},
+  req = null,
+}) {
+  const audit = await createAuditLog({
+    shopId,
+    userId,
+    deviceId,
+    action,
+    entityType: "subscription",
+    entityId,
+    before,
+    after,
+    metadata,
+    req,
+    client: tx,
+  });
+  if (!audit) {
+    throw new AppError(
+      "Subscription change was not saved because its audit record could not be stored",
+      503,
+      "SUBSCRIPTION_AUDIT_WRITE_FAILED",
+    );
   }
+  return audit;
 }

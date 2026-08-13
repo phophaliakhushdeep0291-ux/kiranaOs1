@@ -16,6 +16,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
   const originalFetch = global.fetch;
   let orderCounter = 1;
   const razorpayCalls = [];
+  const paymentOrderIds = new Map();
 
   global.fetch = async (url, options = {}) => {
     const target = typeof url === "string" ? url : url?.toString?.() || "";
@@ -37,7 +38,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
       return jsonResponse({
         id: paymentId,
         entity: "payment",
-        order_id: "order_test_1",
+        order_id: paymentOrderIds.get(paymentId) || "order_test_1",
         amount: 59900,
         currency: "INR",
         status: "captured",
@@ -88,6 +89,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
     assert.equal(invalidVerify.body.code, "INVALID_PAYMENT_SIGNATURE");
 
     const paymentId = "pay_test_valid_1";
+    paymentOrderIds.set(paymentId, checkout.orderId);
     const signature = signPayment(checkout.orderId, paymentId, RAZORPAY_SECRET);
     const verifyRes = await ctx.post("/api/subscription/verify-payment", {
       transactionId: checkout.transactionId,
@@ -114,6 +116,16 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
     const duplicateData = assertSuccess(duplicateVerify);
     assert.equal(duplicateData.idempotent, true);
 
+    const differentPaymentId = "pay_test_different_for_paid_transaction";
+    const differentPaymentVerify = await ctx.post("/api/subscription/verify-payment", {
+      transactionId: checkout.transactionId,
+      razorpay_order_id: checkout.orderId,
+      razorpay_payment_id: differentPaymentId,
+      razorpay_signature: signPayment(checkout.orderId, differentPaymentId, RAZORPAY_SECRET),
+    }, { token });
+    assert.equal(assertFailure(differentPaymentVerify, 409).code, "PAYMENT_TRANSACTION_ALREADY_PAID");
+    assert.equal((await ctx.db.paymentTransaction.findUniqueOrThrow({ where: { id: checkout.transactionId } })).providerPaymentId, paymentId);
+
     const event = {
       id: "evt_payment_captured_1",
       event: "payment.captured",
@@ -138,8 +150,13 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
 
     const webhookBody = JSON.stringify(event);
     const webhookSig = signWebhook(webhookBody, RAZORPAY_WEBHOOK_SECRET);
+    const beforeConflictingWebhookEnd = (await ctx.db.subscription.findUniqueOrThrow({ where: { shopId: tenant.shop.id } })).currentPeriodEnd.getTime();
     const webhookRes = await postRawWebhook(ctx.baseUrl, webhookBody, webhookSig, true);
-    assertSuccess(webhookRes);
+    const conflictingWebhook = assertSuccess(webhookRes);
+    assert.equal(conflictingWebhook.conflict, true);
+    assert.equal(conflictingWebhook.code, "PAYMENT_TRANSACTION_ALREADY_PAID");
+    assert.equal((await ctx.db.subscription.findUniqueOrThrow({ where: { shopId: tenant.shop.id } })).currentPeriodEnd.getTime(), beforeConflictingWebhookEnd);
+    assert.equal((await ctx.db.paymentTransaction.findUniqueOrThrow({ where: { id: checkout.transactionId } })).providerPaymentId, paymentId);
     const providerEvent = await ctx.db.paymentProviderEvent.findUnique({ where: { provider_eventId: { provider: "razorpay", eventId: event.id } } });
     assert.ok(providerEvent);
     assert.equal(providerEvent.signatureVerified, true);
@@ -150,6 +167,66 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
     assert.equal(duplicateWebhook.duplicate, true);
     const afterDuplicateEnd = (await ctx.db.subscription.findUnique({ where: { shopId: tenant.shop.id } })).currentPeriodEnd.getTime();
     assert.equal(afterDuplicateEnd, beforeDuplicateEnd);
+
+    const secondCheckout = assertSuccess(await ctx.post(
+      "/api/subscription/checkout",
+      { planCode: "growth", billingCycle: "monthly", provider: "razorpay" },
+      { token },
+    ));
+    const reusedPaymentEvent = {
+      id: "evt_reused_provider_payment_1",
+      event: "payment.captured",
+      payload: {
+        payment: {
+          entity: {
+            id: paymentId,
+            order_id: secondCheckout.orderId,
+            amount: 59900,
+            currency: "INR",
+            status: "captured",
+            notes: { shopId: tenant.shop.id, planCode: "growth", billingCycle: "monthly", transactionId: secondCheckout.transactionId },
+          },
+        },
+      },
+    };
+    const reusedBody = JSON.stringify(reusedPaymentEvent);
+    const reusedResult = assertSuccess(await postRawWebhook(ctx.baseUrl, reusedBody, signWebhook(reusedBody, RAZORPAY_WEBHOOK_SECRET), true));
+    assert.equal(reusedResult.conflict, true);
+    assert.equal(reusedResult.code, "PROVIDER_PAYMENT_ALREADY_USED");
+    assert.equal((await ctx.db.paymentTransaction.findUniqueOrThrow({ where: { id: secondCheckout.transactionId } })).status, "created");
+    assert.equal((await ctx.db.subscription.findUniqueOrThrow({ where: { shopId: tenant.shop.id } })).currentPeriodEnd.getTime(), beforeConflictingWebhookEnd);
+
+    const auditRollbackCheckout = assertSuccess(await ctx.post(
+      "/api/subscription/checkout",
+      { planCode: "growth", billingCycle: "monthly", provider: "razorpay" },
+      { token },
+    ));
+    const auditRollbackPaymentId = "pay_audit_rollback_1";
+    paymentOrderIds.set(auditRollbackPaymentId, auditRollbackCheckout.orderId);
+    await ctx.db.$executeRawUnsafe(`
+      CREATE TRIGGER force_payment_verified_audit_failure
+      BEFORE INSERT ON AuditLog
+      WHEN NEW.action = 'PAYMENT_VERIFIED'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced payment audit failure');
+      END;
+    `);
+    let failedVerifiedPayment;
+    try {
+      failedVerifiedPayment = await ctx.post("/api/subscription/verify-payment", {
+        transactionId: auditRollbackCheckout.transactionId,
+        razorpay_order_id: auditRollbackCheckout.orderId,
+        razorpay_payment_id: auditRollbackPaymentId,
+        razorpay_signature: signPayment(auditRollbackCheckout.orderId, auditRollbackPaymentId, RAZORPAY_SECRET),
+      }, { token });
+    } finally {
+      await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_payment_verified_audit_failure");
+    }
+    assert.equal(assertFailure(failedVerifiedPayment, 503).code, "PAYMENT_AUDIT_WRITE_FAILED");
+    const rolledBackPayment = await ctx.db.paymentTransaction.findUniqueOrThrow({ where: { id: auditRollbackCheckout.transactionId } });
+    assert.equal(rolledBackPayment.status, "created");
+    assert.equal(rolledBackPayment.providerPaymentId, null);
+    assert.equal((await ctx.db.subscription.findUniqueOrThrow({ where: { shopId: tenant.shop.id } })).currentPeriodEnd.getTime(), beforeConflictingWebhookEnd);
 
     const failureEventBody = JSON.stringify({
       id: "evt_payment_failed_1",
@@ -162,6 +239,24 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
 
     const manualRes = await ctx.post("/api/subscription/manual-activate", { planCode: "pro", period: "monthly", amountPaise: 99900 }, { token, ownerPin: tenant.ownerPin });
     assertSuccess(manualRes, 201);
+
+    const beforePlanOverride = await ctx.db.subscription.findUniqueOrThrow({ where: { shopId: tenant.shop.id } });
+    await ctx.db.$executeRawUnsafe(`
+      CREATE TRIGGER force_subscription_plan_audit_failure
+      BEFORE INSERT ON AuditLog
+      WHEN NEW.action = 'SUBSCRIPTION_PLAN_CHANGED'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced subscription audit failure');
+      END;
+    `);
+    let failedPlanOverride;
+    try {
+      failedPlanOverride = await ctx.post("/api/subscription/change-plan", { planCode: "growth" }, { token, ownerPin: tenant.ownerPin });
+    } finally {
+      await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_subscription_plan_audit_failure");
+    }
+    assert.equal(assertFailure(failedPlanOverride, 503).code, "SUBSCRIPTION_AUDIT_WRITE_FAILED");
+    assert.equal((await ctx.db.subscription.findUniqueOrThrow({ where: { shopId: tenant.shop.id } })).planCode, beforePlanOverride.planCode);
 
     const auditCount = await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: { in: ["SUBSCRIPTION_CHECKOUT_CREATED", "PAYMENT_VERIFIED", "SUBSCRIPTION_ACTIVATED", "PAYMENT_WEBHOOK_RECEIVED"] } } });
     assert.ok(auditCount >= 3);

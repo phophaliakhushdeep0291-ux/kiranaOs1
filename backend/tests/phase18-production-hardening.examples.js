@@ -38,7 +38,12 @@ for (const key of [
 }
 
 assert(envSource.includes("ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION"), "manual activation must be controlled by env flag");
+assert(envSource.includes("ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION must stay false in production"), "production startup must reject internal subscription overrides");
 assert(subscriptionController.includes("MANUAL_SUBSCRIPTION_ACTIVATION_DISABLED"), "subscription manual activation must be disabled by default");
+for (const handler of ["changePlan", "extendGrace", "foundingCustomer", "recordOnboardingPurchase"]) {
+  const handlerSource = subscriptionController.slice(subscriptionController.indexOf(`function ${handler}`), subscriptionController.indexOf("\n}", subscriptionController.indexOf(`function ${handler}`)) + 2);
+  assert(handlerSource.includes("requireInternalSubscriptionOverride"), `${handler} must be disabled outside explicit internal-override mode`);
+}
 assert(paymentController.includes("MANUAL_SUBSCRIPTION_ACTIVATION_DISABLED"), "provider manual activation must be disabled by default");
 assert(!paymentController.includes("req.body.shopId ?? req.shopId"), "manual payment activation must not trust body shopId");
 assert(!paymentSchema.includes("shopId: z.string().optional()"), "manual payment schema must not accept tenant shopId from body");
@@ -69,5 +74,7 @@ for (const code of [
   assert(paymentService.includes(code), `payment service must harden Razorpay with ${code}`);
 }
 assert(paymentService.includes("validateRazorpayPaymentAgainstTransaction"), "Razorpay verify/webhook must validate amount/currency/order against local transaction");
+assert(paymentService.includes("PAYMENT_TRANSACTION_ALREADY_PAID"), "a paid transaction must reject a different provider payment id");
+assert(paymentService.includes("PROVIDER_PAYMENT_ALREADY_USED"), "one provider payment must not activate multiple transactions");
 
 console.log("Phase 18 production hardening examples passed");

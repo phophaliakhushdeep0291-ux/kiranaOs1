@@ -18,6 +18,12 @@ const EMAIL_VERIFICATION_TTL_HOURS = 24;
 const PASSWORD_RESET_TTL_MINUTES = 30;
 const staffInviteLocks = new Map();
 
+async function writeRequiredAuthAudit(client, entry) {
+  const audit = await createAuditLog({ module: AUDIT_MODULES.AUTH, ...entry, client });
+  if (!audit) throw new AppError("Authentication change could not be audited", 503, "AUTH_AUDIT_WRITE_FAILED");
+  return audit;
+}
+
 function usesPostgresDatabase() {
   return /^postgres(?:ql)?:\/\//i.test(env.DATABASE_URL || "");
 }
@@ -72,8 +78,30 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
     const user = await tx.user.create({
       data: { shopId: shop.id, name: ownerName, mobile, email: normalizedEmail, passwordHash, pinHash, role: "owner" },
     });
+    await writeRequiredAuthAudit(tx, {
+      shopId: shop.id,
+      userId: user.id,
+      action: "SHOP_REGISTERED",
+      entityType: "shop",
+      entityId: shop.id,
+      after: { shopId: shop.id, ownerUserId: user.id, businessType },
+      metadata: { loginIdentifier: normalizedEmail ? "email" : "mobile" },
+      req: auditReqShim(reqMeta),
+    });
     return { shop, user };
   });
+
+  let auth;
+  try {
+    auth = await issueAuthResponse(result.user, result.shop, { ...reqMeta, loginMethod: "registration" });
+  } catch (error) {
+    // A registration that cannot establish its first audited session must not
+    // leave a hidden shop which the user then duplicates on retry.
+    await rollbackNewRegistration(result.shop.id, result.user.id).catch((rollbackError) => {
+      console.error("Registration rollback failed", rollbackError);
+    });
+    throw error;
+  }
 
   let emailVerification = null;
   if (normalizedEmail) {
@@ -84,9 +112,20 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
       ttlMs: EMAIL_VERIFICATION_TTL_HOURS * 60 * 60 * 1000,
     });
   }
-
-  const auth = await issueAuthResponse(result.user, result.shop, { ...reqMeta, loginMethod: "registration" });
   return { ...auth, emailVerification };
+}
+
+async function rollbackNewRegistration(shopId, userId) {
+  await db.$transaction(async (tx) => {
+    await tx.deviceLicense.deleteMany({ where: { shopId } });
+    await tx.session.deleteMany({ where: { shopId } });
+    await tx.deviceReplacementChallenge.deleteMany({ where: { shopId } });
+    await tx.device.deleteMany({ where: { shopId } });
+    await tx.authToken.deleteMany({ where: { shopId } });
+    await tx.auditLog.deleteMany({ where: { shopId } });
+    await tx.user.deleteMany({ where: { id: userId, shopId } });
+    await tx.shop.delete({ where: { id: shopId } });
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function login({ mobile, email, identifier, password, shopId }, reqMeta = {}) {
@@ -185,12 +224,24 @@ export async function googleLogin({ credential, shopId }, reqMeta = {}) {
   return issueAuthResponse(user, user.shop, { ...reqMeta, loginMethod: "google" });
 }
 
-export async function verifyEmail(token) {
-  const authToken = await consumeAuthToken(token, "email_verification");
-  await db.user.update({
-    where: { id: authToken.userId },
-    data: { emailVerifiedAt: new Date() },
-  });
+export async function verifyEmail(token, reqMeta = {}) {
+  await db.$transaction(async (tx) => {
+    const authToken = await consumeAuthToken(token, "email_verification", tx);
+    const user = await tx.user.findFirst({ where: { id: authToken.userId, shopId: authToken.shopId } });
+    if (!user) throw new AppError("User not found", 404, "USER_NOT_FOUND");
+    const verifiedAt = new Date();
+    await tx.user.update({ where: { id: user.id }, data: { emailVerifiedAt: verifiedAt } });
+    await writeRequiredAuthAudit(tx, {
+      shopId: authToken.shopId,
+      userId: user.id,
+      action: "EMAIL_VERIFIED",
+      entityType: "user",
+      entityId: user.id,
+      before: { emailVerifiedAt: user.emailVerifiedAt },
+      after: { emailVerifiedAt: verifiedAt },
+      req: auditReqShim(reqMeta),
+    });
+  }, { isolationLevel: "Serializable" });
   return { success: true, message: "Email verified successfully" };
 }
 
@@ -220,16 +271,26 @@ export async function requestPasswordReset(input) {
   return genericEmailSecurityResponse();
 }
 
-export async function resetPassword({ token, newPassword }) {
-  const authToken = await consumeAuthToken(token, "password_reset");
+export async function resetPassword({ token, newPassword }, reqMeta = {}) {
   const passwordHash = await bcrypt.hash(newPassword, 10);
   await db.$transaction(async (tx) => {
+    const authToken = await consumeAuthToken(token, "password_reset", tx);
     await tx.user.update({ where: { id: authToken.userId }, data: { passwordHash } });
-    await tx.session.updateMany({
+    const revokedAt = new Date();
+    const revoked = await tx.session.updateMany({
       where: { userId: authToken.userId, shopId: authToken.shopId, revokedAt: null },
-      data: { revokedAt: new Date(), revokedReason: "PASSWORD_RESET" },
+      data: { revokedAt, revokedReason: "PASSWORD_RESET" },
     });
-  });
+    await writeRequiredAuthAudit(tx, {
+      shopId: authToken.shopId,
+      userId: authToken.userId,
+      action: "PASSWORD_RESET_COMPLETED",
+      entityType: "user",
+      entityId: authToken.userId,
+      metadata: { sessionsRevoked: revoked.count, authTokenId: authToken.id },
+      req: auditReqShim(reqMeta),
+    });
+  }, { isolationLevel: "Serializable" });
   return { success: true, sessionsRevoked: true };
 }
 
@@ -351,7 +412,20 @@ export async function logout(refreshToken, user = null) {
       data: { revokedAt, revokedReason: "LOGOUT" },
     });
     if (!session.deviceId || revoked.count === 0) {
-      return { revokedSessions: revoked.count, remainingDeviceSessions: null, deviceStatus: null };
+      const noDeviceResult = { revokedSessions: revoked.count, remainingDeviceSessions: null, deviceStatus: null };
+      if (revoked.count === 1) {
+        await writeRequiredAuthAudit(tx, {
+          shopId: session.shopId,
+          userId: session.userId,
+          deviceId: session.deviceId ?? null,
+          action: "LOGOUT",
+          entityType: "session",
+          entityId: session.id,
+          metadata: noDeviceResult,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+      return noDeviceResult;
     }
 
     const remainingDeviceSessions = await tx.session.count({
@@ -370,28 +444,23 @@ export async function logout(refreshToken, user = null) {
       });
       deviceStatus = "logged_out";
     }
-    return { revokedSessions: revoked.count, remainingDeviceSessions, deviceStatus };
+    const logoutResult = { revokedSessions: revoked.count, remainingDeviceSessions, deviceStatus };
+    await writeRequiredAuthAudit(tx, {
+      shopId: session.shopId,
+      userId: session.userId,
+      deviceId: session.deviceId ?? null,
+      action: "LOGOUT",
+      entityType: "session",
+      entityId: session.id,
+      metadata: logoutResult,
+      durationMs: Date.now() - startedAt,
+    });
+    return logoutResult;
   });
 
   // §2 audit: logged here rather than in the controller so the entry only fires
   // for a session that was actually revoked (a replayed/expired token returns
   // early above and must not look like a fresh logout on the timeline).
-  await createAuditLog({
-    shopId: session.shopId,
-    userId: session.userId,
-    deviceId: session.deviceId ?? null,
-    module: AUDIT_MODULES.AUTH,
-    action: "LOGOUT",
-    entityType: "session",
-    entityId: session.id,
-    metadata: {
-      revokedSessions: result.revokedSessions,
-      remainingDeviceSessions: result.remainingDeviceSessions,
-      deviceStatus: result.deviceStatus,
-    },
-    durationMs: Date.now() - startedAt,
-  });
-
   return { success: true, message: "Logged out", ...result };
 }
 
@@ -429,13 +498,24 @@ export async function getMe(userId, shopId) {
 
 // ── PIN management ──────────────────────────────────────────
 
-export async function setPin(userId, shopId, pin) {
+export async function setPin(userId, shopId, pin, reqMeta = {}) {
   const user = await db.user.findFirst({ where: { id: userId, shopId, disabledAt: null } });
   if (!user) throw new AppError("User not found", 404);
   if (user.role !== "owner") throw new AppError("Only owner can set a PIN", 403);
 
   const pinHash = await bcrypt.hash(pin, 10);
-  await db.user.update({ where: { id: userId }, data: { pinHash } });
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { pinHash } });
+    await writeRequiredAuthAudit(tx, {
+      shopId,
+      userId,
+      action: user.pinHash ? "PIN_CHANGED" : "PIN_SET",
+      entityType: "user",
+      entityId: userId,
+      metadata: { previouslyConfigured: Boolean(user.pinHash) },
+      req: auditReqShim(reqMeta),
+    });
+  }, { isolationLevel: "Serializable" });
   return { success: true, message: "PIN set successfully" };
 }
 
@@ -711,7 +791,7 @@ export async function removeStaff(shopId, staffId, requestingUserId, reqMeta = {
   });
 }
 
-export async function changePassword(userId, shopId, { currentPassword, newPassword }) {
+export async function changePassword(userId, shopId, { currentPassword, newPassword }, reqMeta = {}) {
   const user = await db.user.findFirst({ where: { id: userId, shopId, disabledAt: null } });
   if (!user) throw new AppError("User not found", 404);
 
@@ -721,11 +801,20 @@ export async function changePassword(userId, shopId, { currentPassword, newPassw
   const passwordHash = await bcrypt.hash(newPassword, 10);
   await db.$transaction(async (tx) => {
     await tx.user.update({ where: { id: userId }, data: { passwordHash } });
-    await tx.session.updateMany({
+    const revoked = await tx.session.updateMany({
       where: { userId, shopId, revokedAt: null },
       data: { revokedAt: new Date(), revokedReason: "PASSWORD_CHANGED" },
     });
-  });
+    await writeRequiredAuthAudit(tx, {
+      shopId,
+      userId,
+      action: "PASSWORD_CHANGED",
+      entityType: "user",
+      entityId: userId,
+      metadata: { sessionsRevoked: revoked.count },
+      req: auditReqShim(reqMeta),
+    });
+  }, { isolationLevel: "Serializable" });
   return { success: true, sessionsRevoked: true };
 }
 
@@ -755,33 +844,27 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
   };
   const bound = deviceId
     ? await createDeviceBoundLoginSession({ user, reqMeta, sessionData })
-    : {
-        device: null,
-        session: await db.session.create({ data: { ...sessionData, userId: user.id, shopId: user.shopId } }),
-      };
+    : await db.$transaction(async (tx) => {
+        const session = await tx.session.create({ data: { ...sessionData, userId: user.id, shopId: user.shopId } });
+        await writeRequiredAuthAudit(tx, {
+          shopId: user.shopId,
+          userId: user.id,
+          deviceId: null,
+          action: "LOGIN",
+          entityType: "user",
+          entityId: user.id,
+          metadata: { role: user.role, method: reqMeta.loginMethod ?? "password", sessionId: session.id },
+          durationMs: Date.now() - startedAt,
+          req: auditReqShim(reqMeta),
+        });
+        return { device: null, session };
+      }, { isolationLevel: "Serializable" });
   const { device, session } = bound;
   const accessToken = signDeviceAccessToken(user, session, device);
 
   // §2 audit: every sign-in lands on the timeline regardless of which door it
   // came through (password, Google, shop-selection retry) — this is the single
   // choke point all of them funnel into.
-  await createAuditLog({
-    shopId: user.shopId,
-    userId: user.id,
-    deviceId: device?.deviceId ?? deviceId ?? null,
-    module: AUDIT_MODULES.AUTH,
-    action: "LOGIN",
-    entityType: "user",
-    entityId: user.id,
-    metadata: {
-      role: user.role,
-      method: reqMeta.loginMethod ?? "password",
-      sessionId: session.id,
-    },
-    durationMs: Date.now() - startedAt,
-    req: auditReqShim(reqMeta),
-  });
-
   return {
     accessToken,
     token: accessToken, // Backward compatibility for existing frontend/API clients.
@@ -893,9 +976,9 @@ async function createAndSendAuthToken({ user, shop, type, ttlMs }) {
   };
 }
 
-async function consumeAuthToken(rawToken, type) {
+async function consumeAuthToken(rawToken, type, client = db) {
   const tokenHash = hashAuthToken(rawToken);
-  const authToken = await db.authToken.findFirst({
+  const authToken = await client.authToken.findFirst({
     where: {
       tokenHash,
       type,
@@ -908,7 +991,7 @@ async function consumeAuthToken(rawToken, type) {
     err.code = "AUTH_TOKEN_INVALID_OR_EXPIRED";
     throw err;
   }
-  await db.authToken.update({
+  await client.authToken.update({
     where: { id: authToken.id },
     data: { consumedAt: new Date() },
   });

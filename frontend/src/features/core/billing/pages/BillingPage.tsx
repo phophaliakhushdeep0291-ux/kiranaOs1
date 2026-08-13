@@ -22,7 +22,7 @@ import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, 
 import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace } from "./billing-workspace";
 import { updateCustomerOrder } from "@/features/core/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
-import { applyRoundOff, billNeedsCustomer, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, cartItemUnitRate, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
+import { applyRoundOff, billNeedsCustomer, billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, cartItemUnitRate, clampAmount, LARGE_DISCOUNT_MIN_AMOUNT, LARGE_DISCOUNT_MIN_PERCENT, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
 import { resolveLinePrice } from "@/features/core/pricing/resolve-line-price";
 import { sellingUnitMaxPrice } from "@/features/core/products/pages/product-pricing";
 import { useShopPricingRules } from "@/features/core/pricing/pricing-rules-cache";
@@ -219,7 +219,7 @@ export default function Billing() {
     document.body.setAttribute("data-app-mobile-task-open", "true");
     return () => document.body.removeAttribute("data-app-mobile-task-open");
   }, [mobileCheckoutOpen]);
-  const [sensitiveApproval, setSensitiveApproval] = useState<{ ownerPin: string; reason: string; actions: BillingSensitiveAction[] } | null>(null);
+  const [sensitiveApproval, setSensitiveApproval] = useState<{ ownerPin: string; reason: string; actions: BillingSensitiveAction[]; fingerprint: string } | null>(null);
   const [pendingSensitiveBillType, setPendingSensitiveBillType] = useState<BillTypeSelection | null>(null);
   const [voiceCommand, setVoiceCommand] = useState("");
   const [voiceDraft, setVoiceDraft] = useState<VoiceParsedDraft | null>(null);
@@ -1448,14 +1448,19 @@ export default function Billing() {
 
   function billingSensitiveApprovalCovers(actions: BillingSensitiveAction[]) {
     if (actions.length === 0) return true;
-    return Boolean(sensitiveApproval?.ownerPin && actions.every((action) => sensitiveApproval.actions.includes(action)));
+    const fingerprint = billingSensitiveApprovalFingerprint(cart, safeDiscount, effectiveLoyaltyPoints);
+    return Boolean(
+      sensitiveApproval?.ownerPin
+      && sensitiveApproval.fingerprint === fingerprint
+      && actions.every((action) => sensitiveApproval.actions.includes(action)),
+    );
   }
 
   function requiredBillingSensitiveActions(): BillingSensitiveAction[] {
     const actions: BillingSensitiveAction[] = [];
-    // Both of these are decided here at the counter, so Settings -> Security
-    // "Sensitive Action Protection" is the only thing that turns them on or off.
-    const isLargeDiscount = subtotal > 0 && safeDiscount >= Math.max(100, subtotal * 0.1);
+    // The counter prompts early for good UX; the server independently derives
+    // the same actions from catalogue and money data and cannot be switched off.
+    const isLargeDiscount = billingDiscountApprovalSummary(cart, safeDiscount).requiresApproval;
     if (isLargeDiscount && isActionProtected("largeDiscount")) actions.push("large_discount");
     const hasBelowMinimumRate = cart.some(lineNeedsOwnerApproval);
     if (hasBelowMinimumRate && isActionProtected("sellBelowMin")) actions.push("selling_below_minimum_price");
@@ -2185,12 +2190,17 @@ export default function Billing() {
         open={sensitivePinOpen}
         onCancel={() => setSensitivePinOpen(false)}
         title={t("billing.page.ownerApprovalRequired")}
-        description="Large discounts, loyalty redemption, or selling below minimum price need owner PIN before the bill can be saved. Online loyalty redemption commits the points ledger and bill together."
+        description={t("billing.page.ownerApprovalDetail", { amount: LARGE_DISCOUNT_MIN_AMOUNT, percent: LARGE_DISCOUNT_MIN_PERCENT })}
         confirmLabel={t("billing.page.approveBill")}
         reasonRequired
         onConfirm={async ({ ownerPin, reason }) => {
           const actions = requiredBillingSensitiveActions();
-          setSensitiveApproval({ ownerPin, reason, actions });
+          setSensitiveApproval({
+            ownerPin,
+            reason,
+            actions,
+            fingerprint: billingSensitiveApprovalFingerprint(cart, safeDiscount, effectiveLoyaltyPoints),
+          });
           setSensitivePinOpen(false);
           const nextType = pendingSensitiveBillType ?? undefined;
           setPendingSensitiveBillType(null);

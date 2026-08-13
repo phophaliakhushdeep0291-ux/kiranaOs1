@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "@/lib/api/client";
-import { calculateCartSubtotal, calculateDiscount, calculateGrandTotal, cartItemProfit, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productCostPrice, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "@/features/core/billing/pages/billing-calculations";
+import { billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateDiscount, calculateGrandTotal, cartItemProfit, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productCostPrice, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "@/features/core/billing/pages/billing-calculations";
 import type { CartItem } from "@/features/core/billing/pages/billing-types";
 
 function product(overrides: Partial<Product> = {}): Product {
@@ -61,6 +61,7 @@ describe("billing calculations", () => {
     expect(lineNeedsOwnerApproval({ product: priced, quantity: 1, rate: 45, unit: "kg" })).toBe(false);
     // Cashier typed a rate under the floor → approval.
     expect(lineNeedsOwnerApproval({ product: priced, quantity: 1, rate: 38, unit: "kg", manualRate: true })).toBe(true);
+    expect(lineNeedsOwnerApproval({ product: priced, quantity: 2, rate: 40, unit: "kg", lineDiscount: 1 })).toBe(true);
     // Custom line is never gated by this rule.
     expect(lineNeedsOwnerApproval({ product: priced, quantity: 1, rate: 5, unit: "kg", isCustom: true })).toBe(false);
     // Engine floored a below-margin rule: rate sits AT the min, but the flag is set → approval.
@@ -82,5 +83,28 @@ describe("billing calculations", () => {
     expect(searchText).toContain(normalizeSearchText("चीनी"));
     expect(searchText).toContain("sugar");
     expect(searchText).toContain("kirana");
+  });
+
+  it("counts bill, line, and unruled manual markdowns toward the large-discount gate", () => {
+    const priced = product({ defaultPricePerRateUnit: 100, minimumSellingPrice: 60 });
+    const manual: CartItem = { product: priced, quantity: 10, rate: 95, unit: "piece", manualRate: true, lineDiscount: 25 };
+
+    const gated = billingDiscountApprovalSummary([manual], 25);
+    expect(gated).toMatchObject({ referenceSubtotal: 1000, approvalDiscount: 100, threshold: 100, requiresApproval: true });
+
+    const configuredRule: CartItem = {
+      ...manual,
+      pricing: { explanation: "Owner rule", appliedRuleType: "PRODUCT_QUANTITY_PRICE", appliedRuleId: "rule-1", originalUnitPrice: 100, requiresApproval: false, confidence: 1 },
+    };
+    expect(billingDiscountApprovalSummary([configuredRule], 25)).toMatchObject({ approvalDiscount: 50, requiresApproval: false });
+  });
+
+  it("invalidates a sensitive approval after any commercial cart edit", () => {
+    const line: CartItem = { product: product(), quantity: 2, rate: 42, unit: "piece", lineDiscount: 5 };
+    const approved = billingSensitiveApprovalFingerprint([line], 100, 0);
+    expect(billingSensitiveApprovalFingerprint([line], 100, 0)).toBe(approved);
+    expect(billingSensitiveApprovalFingerprint([{ ...line, quantity: 3 }], 100, 0)).not.toBe(approved);
+    expect(billingSensitiveApprovalFingerprint([line], 110, 0)).not.toBe(approved);
+    expect(billingSensitiveApprovalFingerprint([line], 100, 10)).not.toBe(approved);
   });
 });

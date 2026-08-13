@@ -200,6 +200,32 @@ describe("billing business rules", () => {
     expect(tableRows("local_audit_logs").some((row) => row.action === "selling_below_minimum_price" && row.owner_pin_provided === true)).toBe(true);
   });
 
+  it("derives sensitive approval locally even when a caller omits sensitiveActions", async () => {
+    dbState.committed.products = [{
+      id: "product_1",
+      name: "Sugar",
+      defaultPricePerRateUnit: 100,
+      minPricePerRateUnit: 45,
+      stockBaseQty: 20,
+      baseUnit: "kg",
+      rateUnit: "kg",
+    }];
+    const discounted = baseInput({
+      items: [{ productId: "product_1", name: "Sugar", quantity: 2, enteredUnit: "kg", ratePerRateUnit: 100, gstRate: 0 }],
+      discount: 100,
+      actualAmount: 100,
+      buyerPaidAmount: 100,
+      payments: [{ mode: BillPaymentMode.cash, amount: 100 }],
+      sensitiveActions: [],
+      reason: "Owner approved promotion",
+    });
+
+    await expect(createBillLocalFirst(discounted)).rejects.toThrow(/owner.?pin/i);
+    const bill = await createBillLocalFirst({ ...discounted, ownerPin: "1234" });
+    expect(bill.discount).toBe(100);
+    expect(tableRows("local_audit_logs").some((row) => row.action === "large_discount" && row.owner_pin_provided === true)).toBe(true);
+  });
+
   it("persists the pricing snapshot on bill items and carries it into the CREATE_BILL sync payload", async () => {
     await createBillLocalFirst(baseInput({
       items: [{

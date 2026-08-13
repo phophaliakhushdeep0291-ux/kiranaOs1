@@ -442,6 +442,87 @@ if (ctx.skip) {
       }), 2);
     });
 
+    test("device management rolls back sessions, licences and device state when auditing fails", async () => {
+      const tenant = await createTenant(ctx.db, { planCode: "starter" });
+      const target = assertSuccess(await loginDevice(tenant, "device-audit-target", { deviceName: "Target device" }));
+      const manager = assertSuccess(await loginDevice(tenant, "device-audit-manager", { deviceName: "Manager device" }));
+      assertSuccess(await ctx.post("/api/devices/activate", metadata("device-audit-target", "Target device"), {
+        token: target.accessToken,
+        headers: { "x-device-id": "device-audit-target" },
+        autoDevice: false,
+      }), 201);
+      const approved = {
+        token: manager.accessToken,
+        ownerPin: tenant.ownerPin,
+        headers: { "x-device-id": "device-audit-manager" },
+        autoDevice: false,
+      };
+
+      async function failAudit(action, operation) {
+        const triggerName = `force_${action.toLowerCase()}_failure`;
+        await ctx.db.$executeRawUnsafe(`
+          CREATE TRIGGER ${triggerName}
+          BEFORE INSERT ON AuditLog
+          WHEN NEW.action = '${action}'
+          BEGIN
+            SELECT RAISE(ABORT, 'forced device audit failure');
+          END;
+        `);
+        try { return await operation(); }
+        finally { await ctx.db.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ${triggerName}`); }
+      }
+
+      const failedRename = assertFailure(await failAudit("DEVICE_RENAMED", () => ctx.patch(
+        "/api/devices/device-audit-target",
+        { deviceName: "Should roll back" },
+        approved,
+      )), 503);
+      assert.equal(failedRename.code, "DEVICE_AUDIT_WRITE_FAILED");
+      let stored = await ctx.db.device.findUniqueOrThrow({ where: { shopId_deviceId: { shopId: tenant.shop.id, deviceId: "device-audit-target" } } });
+      assert.equal(stored.deviceName, "Target device");
+
+      const failedBlock = assertFailure(await failAudit("DEVICE_BLOCKED", () => ctx.post(
+        "/api/devices/device-audit-target/block",
+        {},
+        approved,
+      )), 503);
+      assert.equal(failedBlock.code, "DEVICE_AUDIT_WRITE_FAILED");
+      stored = await ctx.db.device.findUniqueOrThrow({ where: { id: stored.id } });
+      assert.equal(stored.status, "active");
+      assert.equal(await ctx.db.session.count({ where: { shopId: tenant.shop.id, deviceId: "device-audit-target", revokedAt: null } }), 1);
+      assert.equal(await ctx.db.deviceLicense.count({ where: { shopId: tenant.shop.id, deviceId: "device-audit-target", revokedAt: null } }), 1);
+
+      assertSuccess(await ctx.post("/api/devices/device-audit-target/block", {}, approved));
+      const failedReactivate = assertFailure(await failAudit("DEVICE_REACTIVATED", () => ctx.post(
+        "/api/devices/device-audit-target/reactivate",
+        {},
+        approved,
+      )), 503);
+      assert.equal(failedReactivate.code, "DEVICE_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.device.findUniqueOrThrow({ where: { id: stored.id } })).status, "blocked");
+
+      assertSuccess(await ctx.post("/api/devices/device-audit-target/reactivate", {}, approved));
+      const reloggedTarget = assertSuccess(await loginDevice(tenant, "device-audit-target"));
+      assertSuccess(await ctx.post("/api/devices/activate", metadata("device-audit-target", "Target device"), {
+        token: reloggedTarget.accessToken,
+        headers: { "x-device-id": "device-audit-target" },
+        autoDevice: false,
+      }), 201);
+      const failedRemove = assertFailure(await failAudit("DEVICE_REMOVED", () => ctx.delete(
+        "/api/devices/device-audit-target",
+        approved,
+      )), 503);
+      assert.equal(failedRemove.code, "DEVICE_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.device.findUniqueOrThrow({ where: { id: stored.id } })).status, "active");
+      assert.equal(await ctx.db.session.count({ where: { shopId: tenant.shop.id, deviceId: "device-audit-target", revokedAt: null } }), 1);
+      assert.equal(await ctx.db.deviceLicense.count({ where: { shopId: tenant.shop.id, deviceId: "device-audit-target", revokedAt: null } }), 1);
+      assertSuccess(await ctx.get("/api/auth/me", {
+        token: reloggedTarget.accessToken,
+        headers: { "x-device-id": "device-audit-target" },
+        autoDevice: false,
+      }));
+    });
+
     test("concurrent refresh-token reuse revokes the token family", async () => {
       const tenant = await createTenant(ctx.db, { planCode: "starter" });
       const signedIn = assertSuccess(await loginDevice(tenant, "refresh-device"));
