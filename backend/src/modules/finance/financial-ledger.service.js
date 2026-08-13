@@ -13,9 +13,9 @@
 //
 // Idempotency: every row's idempotencyKey is deterministic and `@@unique([shopId,
 // idempotencyKey])` enforces exactly-once. Create keys off the immutable bill id; cancel/
-// restore keys include the operation timestamp so a legitimate cancel→restore→cancel
-// cycle posts distinct rows instead of colliding.
-import { toPaiseBigInt } from "../../utils/money.js";
+// restore/delete/undelete keys include the operation timestamp so a legitimate
+// cancel→restore→cancel cycle posts distinct rows instead of colliding.
+import { round2, toPaiseBigInt } from "../../utils/money.js";
 
 const TENDER_ENTRY = {
   cash: { entryType: "cash_in", direction: "debit" },
@@ -68,6 +68,20 @@ function ledgerRow({
 
 // Posts a bill's full economic effect (sale + tenders + udhar debit) with a sign and key
 // prefix. sign=+1 records it (create/restore); sign=-1 reverses it (cancel).
+//
+// `scope` splits that effect in two, because a recycle-bin delete is not a cancellation:
+//   "reporting" — sale, cash/upi/bank tenders, waiver and GST. Exactly what the reports in
+//                 reports.service.js count, and so exactly what a delete takes off the books.
+//   "retained"  — udhar_debit and gift-card tenders. These are backed by the customer's khata
+//                 and the gift-card balance, and softDeleteBill unwinds neither, so they stay
+//                 posted until the bill is actually cancelled.
+// Cancel reverses both ("full"). A delete reverses only the reporting half, which is what keeps
+// journal `outstanding` in step with Customer.udharAmount — a figure a delete never touches.
+// Reversing one half alone leaves that group short by the retained amount (a receivable whose
+// revenue has left the books), so a `recycle_bin_offset` row parks the difference in a suspense
+// account and the later cancel/restore clears it. Every source group therefore still balances.
+const RETAINED_TENDER_MODES = new Set(["gift_card"]);
+
 async function postBillEffectLedger(tx, {
   shopId,
   bill,
@@ -78,29 +92,35 @@ async function postBillEffectLedger(tx, {
   keyBase,
   sourceType,
   sign = 1,
+  scope = "full",
   businessDate,
 }) {
   if (!bill?.id) return;
   const date = businessDate ?? bill.businessDate ?? bill.createdAt ?? new Date();
+  const postsReporting = scope === "full" || scope === "reporting";
+  const postsRetained = scope === "full" || scope === "retained";
   const rows = [];
 
-  rows.push(ledgerRow({
-    shopId,
-    billId: bill.id,
-    customerId,
-    sourceType,
-    sourceId: bill.id,
-    entryType: "sale",
-    direction: "credit",
-    amount: sign * Number(bill.grandTotal ?? 0),
-    businessDate: date,
-    idempotencyKey: `${keyBase}:sale`,
-  }));
+  if (postsReporting) {
+    rows.push(ledgerRow({
+      shopId,
+      billId: bill.id,
+      customerId,
+      sourceType,
+      sourceId: bill.id,
+      entryType: "sale",
+      direction: "credit",
+      amount: sign * Number(bill.grandTotal ?? 0),
+      businessDate: date,
+      idempotencyKey: `${keyBase}:sale`,
+    }));
+  }
 
   tenderPayments.forEach((payment, index) => {
     const mode = String(payment?.mode ?? "").toLowerCase();
     const mapping = TENDER_ENTRY[mode];
     if (!mapping) return;
+    if (!(RETAINED_TENDER_MODES.has(mode) ? postsRetained : postsReporting)) return;
     rows.push(ledgerRow({
       shopId,
       billId: bill.id,
@@ -119,7 +139,7 @@ async function postBillEffectLedger(tx, {
     }));
   });
 
-  if (creditAmount > 0 && customerId) {
+  if (postsRetained && creditAmount > 0 && customerId) {
     rows.push(ledgerRow({
       shopId,
       billId: bill.id,
@@ -135,7 +155,7 @@ async function postBillEffectLedger(tx, {
     }));
   }
 
-  if (waivedAmount > 0) {
+  if (postsReporting && waivedAmount > 0) {
     rows.push(ledgerRow({
       shopId,
       billId: bill.id,
@@ -150,7 +170,7 @@ async function postBillEffectLedger(tx, {
     }));
   }
 
-  const gstAmount = Number(bill.gst ?? 0);
+  const gstAmount = postsReporting ? Number(bill.gst ?? 0) : 0;
   if (gstAmount !== 0) {
     rows.push(ledgerRow({
       shopId,
@@ -178,6 +198,36 @@ async function postBillEffectLedger(tx, {
     }));
   }
 
+  if (scope !== "full") {
+    // What the half being posted leaves on the other side of the books. Derived from the bill's
+    // own arithmetic — grandTotal = tenders + creditAmount + waivedAmount — rather than read off
+    // creditAmount, so it is also right for a sale return refunded to udhar or to a gift card,
+    // which park their value in udhar_return_credit / gift_card_issued instead.
+    const reportingTenderTotal = tenderPayments.reduce((total, payment) => {
+      const mode = String(payment?.mode ?? "").toLowerCase();
+      if (!TENDER_ENTRY[mode] || RETAINED_TENDER_MODES.has(mode)) return total;
+      return total + Number(payment?.amount ?? 0);
+    }, 0);
+    const retainedAmount = round2(Number(bill.grandTotal ?? 0) - reportingTenderTotal - Number(waivedAmount ?? 0));
+    if (retainedAmount !== 0) {
+      rows.push(ledgerRow({
+        shopId,
+        billId: bill.id,
+        customerId,
+        sourceType,
+        sourceId: bill.id,
+        entryType: "recycle_bin_offset",
+        direction: "credit",
+        // Reversing the reporting half parks the retained value here; reversing the retained
+        // half later (cancelling an already-deleted bill) clears it again. Opposite signs, so
+        // the pair nets to zero once the bill's whole effect is off the books.
+        amount: (postsReporting ? -sign : sign) * retainedAmount,
+        businessDate: date,
+        idempotencyKey: `${keyBase}:recycle_bin_offset`,
+      }));
+    }
+  }
+
   for (const row of rows) {
     await tx.financialLedger.create({ data: row });
   }
@@ -187,24 +237,58 @@ export async function postBillCreatedLedger(tx, args) {
   return postBillEffectLedger(tx, { ...args, keyBase: `bill:${args.bill.id}`, sourceType: "bill", sign: 1 });
 }
 
-export async function postBillCancelledLedger(tx, { reversalAt, ...args }) {
+// `scope` is "retained" when the bill is already in the recycle bin: postBillDeletedLedger has
+// reversed its reporting half, so only the udhar/gift-card half is still standing.
+export async function postBillCancelledLedger(tx, { reversalAt, scope = "full", ...args }) {
   const date = reversalAt ?? new Date();
   return postBillEffectLedger(tx, {
     ...args,
     keyBase: `bill:${args.bill.id}:cancel:${date.getTime()}`,
     sourceType: "bill_cancel",
     sign: -1,
+    scope,
     businessDate: date,
   });
 }
 
-export async function postBillRestoredLedger(tx, { restoreAt, ...args }) {
+export async function postBillRestoredLedger(tx, { restoreAt, scope = "full", ...args }) {
   const date = restoreAt ?? new Date();
   return postBillEffectLedger(tx, {
     ...args,
     keyBase: `bill:${args.bill.id}:restore:${date.getTime()}`,
     sourceType: "bill_restore",
     sign: 1,
+    scope,
+    businessDate: date,
+  });
+}
+
+// Moving a bill to the recycle bin takes it off every report (reports.service.js filters
+// `deletedAt: null`) without unwinding anything operational: stock stays deducted, the customer
+// still owes the udhar, a spent gift card stays spent. So this reverses the reporting half only
+// — which is what lets getFinancialLedgerReconciliation exclude deleted bills and still read zero
+// variance, including on `outstanding`. Like cancel/restore, the key embeds the operation's
+// timestamp so a legitimate delete → restore → delete cycle posts distinct rows.
+export async function postBillDeletedLedger(tx, { deletedAt, ...args }) {
+  const date = deletedAt ?? new Date();
+  return postBillEffectLedger(tx, {
+    ...args,
+    keyBase: `bill:${args.bill.id}:delete:${date.getTime()}`,
+    sourceType: "bill_delete",
+    sign: -1,
+    scope: "reporting",
+    businessDate: date,
+  });
+}
+
+export async function postBillUndeletedLedger(tx, { restoredAt, ...args }) {
+  const date = restoredAt ?? new Date();
+  return postBillEffectLedger(tx, {
+    ...args,
+    keyBase: `bill:${args.bill.id}:undelete:${date.getTime()}`,
+    sourceType: "bill_undelete",
+    sign: 1,
+    scope: "reporting",
     businessDate: date,
   });
 }

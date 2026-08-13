@@ -65,8 +65,18 @@ for (const field of [
 
 assert(service.includes('status: "active"'), "reports must filter active bills for real sales");
 // Estimates count as sales everywhere except the GST report, which keeps its own filter.
-assert(service.includes('const GST_BILL_FILTER = { status: "active", billType: { not: "estimate" } }'), "GST report must keep excluding estimates (kacha bills are not tax documents)");
+assert(service.includes('const GST_BILL_FILTER = { status: "active", billType: { not: "estimate" }, deletedAt: null }'), "GST report must keep excluding estimates (kacha bills are not tax documents)");
 assert(service.includes('status: "cancelled"'), "daily/report logic must count cancelled bills separately");
+// Soft-delete stamps deletedAt but leaves status "active", and there is no Prisma soft-delete
+// middleware — so a status-only filter silently keeps recycle-bin bills in the totals.
+// The behavioural proof is report-deleted-bills.examples.js; this guards the shared filters.
+for (const filter of [
+  'const REAL_SALE_BILL_FILTER = { status: "active", deletedAt: null }',
+  'const GST_BILL_FILTER = { status: "active", billType: { not: "estimate" }, deletedAt: null }',
+  'const CANCELLED_BILL_FILTER = { status: "cancelled", deletedAt: null }',
+]) {
+  assert(service.includes(filter), `reports must exclude soft-deleted bills: ${filter}`);
+}
 assert(service.includes("offlineSyncEvent.count"), "daily closing must include pending sync count");
 
 for (const field of [
