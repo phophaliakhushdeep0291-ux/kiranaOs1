@@ -23,8 +23,9 @@ export function listBoms(shopId) {
 
 export async function createBom(shopId, input) {
   const productIds = [input.finishedProductId, ...input.items.map((row) => row.materialProductId)];
-  const products = await db.product.findMany({ where: { shopId, id: { in: productIds }, deletedAt: null }, select: { id: true } });
+  const products = await db.product.findMany({ where: { shopId, id: { in: productIds }, deletedAt: null }, select: { id: true, batchTrackingEnabled: true } });
   if (new Set(products.map((row) => row.id)).size !== new Set(productIds).size) throw new AppError("One or more BOM products are unavailable", 422, "BOM_PRODUCT_UNAVAILABLE");
+  if (!products.find((row) => row.id === input.finishedProductId)?.batchTrackingEnabled) throw new AppError("Enable batch tracking on the finished product before creating its BOM", 422, "FINISHED_PRODUCT_BATCH_TRACKING_REQUIRED");
   const latest = await db.manufacturingBom.findFirst({ where: { shopId, finishedProductId: input.finishedProductId }, orderBy: { version: "desc" }, select: { version: true } });
   return db.$transaction(async (tx) => {
     await tx.manufacturingBom.updateMany({ where: { shopId, finishedProductId: input.finishedProductId, status: "active" }, data: { status: "superseded" } });
@@ -94,5 +95,16 @@ export async function completeRun(shopId, runId, input) {
 export async function traceBatch(shopId, batchNumber) {
   const outputs = await db.productionOutput.findMany({ where: { shopId, batchNumber }, include: { run: { include: { bom: true, consumptions: true } } } });
   const source = await db.productionConsumption.findMany({ where: { shopId, sourceBatchNumber: batchNumber }, include: { run: { include: { bom: true, outputs: true } } } });
-  return { batchNumber, producedAs: outputs, consumedBy: source };
+  const lots = await db.inventoryLot.findMany({ where: { shopId, batchNumber }, include: { allocations: { include: { billItem: { include: { bill: { select: { id: true, billNo: true, customerName: true, businessDate: true, status: true } } } } } } } });
+  const dispatchedBills = [...new Map(lots.flatMap((lot) => lot.allocations.map((allocation) => allocation.billItem.bill)).map((bill) => [bill.id, bill])).values()];
+  return { batchNumber, producedAs: outputs, consumedBy: source, dispatchedBills };
+}
+
+export async function releaseRun(shopId, runId) {
+  return db.$transaction(async (tx) => {
+    const run = await tx.productionRun.findFirst({ where: { id: runId, shopId, status: "quarantined" } });
+    if (!run) throw new AppError("Only a QC-held production run can be released", 409, "PRODUCTION_RUN_NOT_ON_HOLD");
+    await tx.inventoryLot.updateMany({ where: { shopId, producedByRunId: run.id, status: "quarantined" }, data: { status: "active", note: `QC released from ${run.runNumber}` } });
+    return tx.productionRun.update({ where: { id: run.id }, data: { status: "completed", qcStatus: "passed" }, include: { bom: true, consumptions: true, outputs: true } });
+  });
 }

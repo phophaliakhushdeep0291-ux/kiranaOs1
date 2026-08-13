@@ -1,7 +1,7 @@
 import db from "../db.js";
 import { hasFeature } from "../modules/feature-gates/featureGate.service.js";
 import { sendWhatsAppMessage } from "../modules/reminders/whatsapp.provider.js";
-import { markReminderFromProvider } from "../modules/reminders/reminders.service.js";
+import { claimReminderForDispatch, markReminderFromProvider } from "../modules/reminders/reminders.service.js";
 import { JOB_NAMES } from "./queueNames.js";
 
 // Worker never fakes delivery. Provider disabled returns WHATSAPP_PROVIDER_NOT_CONFIGURED.
@@ -42,10 +42,17 @@ async function sendWhatsAppReminder(payload = {}) {
     error.code = "REMINDER_LOG_NOT_FOUND";
     throw error;
   }
-  if (log.status !== "queued") return { status: log.status, reminderLogId: log.id, alreadyProcessed: true };
+  if (log.status !== "queued") {
+    return { status: log.status, reminderLogId: log.id, alreadyProcessed: true, deliveryUncertain: log.status === "sending" };
+  }
   if (!log.customer?.mobile) {
     const updated = await markReminderFromProvider(log.id, { success: false, status: "failed", code: "CUSTOMER_PHONE_REQUIRED", provider: "disabled" });
     return { status: updated.status, code: updated.error, reminderLogId: log.id };
+  }
+
+  const claim = await claimReminderForDispatch(log.id);
+  if (!claim.claimed) {
+    return { status: claim.log.status, reminderLogId: log.id, alreadyProcessed: true, deliveryUncertain: claim.log.status === "sending" };
   }
 
   const result = await sendWhatsAppMessage({

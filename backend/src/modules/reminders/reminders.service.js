@@ -26,6 +26,12 @@ function appError(message, statusCode, code) {
   return err;
 }
 
+async function writeRequiredReminderAudit(client, entry) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) throw appError("Reminder state could not be audited", 503, "AUDIT_WRITE_FAILED");
+  return audit;
+}
+
 function nowMinusHours(hours) {
   const d = new Date();
   d.setHours(d.getHours() - Number(hours || 6));
@@ -77,17 +83,31 @@ async function checkCooldown(shopId, customerId, channel) {
       shopId,
       customerId,
       channel,
-      status: { in: ["queued", "accepted", "sent", "delivered", "read"] },
+      status: { in: ["queued", "sending", "accepted", "sent", "delivered", "read"] },
       createdAt: { gte: since },
     },
     orderBy: { createdAt: "desc" },
   });
 }
 
-async function createReminderLog({ shopId, customerId, channel, templateId = null, message, status, provider, error = null, requestedByUserId }) {
-  return db.reminderLog.create({
+async function createReminderLog({ shopId, customerId, channel, templateId = null, message, status, provider, error = null, requestedByUserId }, client = db) {
+  return client.reminderLog.create({
     data: { shopId, customerId, channel, templateId, message, status, provider, error, requestedByUserId },
   });
+}
+
+async function createAuditedReminderLog(logData, auditData) {
+  return db.$transaction(async (tx) => {
+    const log = await createReminderLog(logData, tx);
+    await writeRequiredReminderAudit(tx, {
+      shopId: log.shopId,
+      userId: log.requestedByUserId,
+      entityType: "ReminderLog",
+      entityId: log.id,
+      ...auditData,
+    });
+    return log;
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function listReminderLogs(shopId, filters = {}, user = {}) {
@@ -157,9 +177,12 @@ export async function getReminderStatus() {
 async function enqueueOrSkip(log, userId, req) {
   recordReminderMetric({ status: "requested", provider: log.provider, channel: log.channel });
   if (!isQueueEnabled()) {
-    const updated = await db.reminderLog.update({ where: { id: log.id }, data: { status: "skipped", error: "JOB_QUEUE_DISABLED" } });
+    const updated = await db.$transaction(async (tx) => {
+      const saved = await tx.reminderLog.update({ where: { id: log.id }, data: { status: "skipped", error: "JOB_QUEUE_DISABLED" } });
+      await writeRequiredReminderAudit(tx, { shopId: log.shopId, userId, action: "REMINDER_PROVIDER_NOT_CONFIGURED", entityType: "ReminderLog", entityId: log.id, metadata: { customerId: log.customerId, channel: log.channel, status: "skipped", provider: log.provider, reason: "JOB_QUEUE_DISABLED" }, req });
+      return saved;
+    }, { isolationLevel: "Serializable" });
     recordReminderMetric({ status: "skipped", provider: updated.provider, channel: updated.channel });
-    await createAuditLog({ shopId: log.shopId, userId, action: "REMINDER_PROVIDER_NOT_CONFIGURED", entityType: "ReminderLog", entityId: log.id, metadata: { customerId: log.customerId, channel: log.channel, status: "skipped", provider: log.provider, reason: "JOB_QUEUE_DISABLED" }, req });
     return { log: updated, queued: false, code: "JOB_QUEUE_DISABLED" };
   }
   const queueResult = await addJob(QUEUE_NAMES.reminderQueue, JOB_NAMES.SEND_WHATSAPP_REMINDER, {
@@ -169,9 +192,14 @@ async function enqueueOrSkip(log, userId, req) {
     requestedAt: new Date().toISOString(),
   }, { jobId: `whatsapp-reminder-${log.id}` });
   if (!queueResult.success) {
-    const updated = await db.reminderLog.update({ where: { id: log.id }, data: { status: "failed", error: queueResult.code || "JOB_QUEUE_UNAVAILABLE" } });
+    const code = queueResult.code || "JOB_QUEUE_UNAVAILABLE";
+    const updated = await db.$transaction(async (tx) => {
+      const saved = await tx.reminderLog.update({ where: { id: log.id }, data: { status: "failed", error: code, failedAt: new Date(), lastStatusAt: new Date() } });
+      await writeRequiredReminderAudit(tx, { shopId: log.shopId, userId, action: "REMINDER_FAILED", entityType: "ReminderLog", entityId: log.id, metadata: { customerId: log.customerId, channel: log.channel, status: "failed", provider: log.provider, reason: code }, req });
+      return saved;
+    }, { isolationLevel: "Serializable" });
     recordReminderMetric({ status: "failed", provider: updated.provider, channel: updated.channel });
-    return { log: updated, queued: false, code: queueResult.code || "JOB_QUEUE_UNAVAILABLE" };
+    return { log: updated, queued: false, code };
   }
   return { log, queued: true, queueJobId: queueResult.jobId };
 }
@@ -200,22 +228,28 @@ export async function sendReminder(shopId, user, input, { req = null } = {}) {
   }
 
   if (Number(customer.udharAmount || 0) <= 0) {
-    const log = await createReminderLog({ shopId, customerId, channel, templateId: template?.id ?? null, message, status: "skipped", provider: "disabled", error: "CUSTOMER_HAS_NO_PENDING_UDHAR", requestedByUserId: user?.userId });
+    const log = await createAuditedReminderLog(
+      { shopId, customerId, channel, templateId: template?.id ?? null, message, status: "skipped", provider: "disabled", error: "CUSTOMER_HAS_NO_PENDING_UDHAR", requestedByUserId: user?.userId },
+      { action: "REMINDER_FAILED", metadata: { customerId, channel, status: "skipped", reason: "CUSTOMER_HAS_NO_PENDING_UDHAR" }, req },
+    );
     recordReminderMetric({ status: "skipped", provider: log.provider, channel });
-    await createAuditLog({ shopId, userId: user?.userId, action: "REMINDER_FAILED", entityType: "ReminderLog", entityId: log.id, metadata: { customerId, channel, status: "skipped", reason: "CUSTOMER_HAS_NO_PENDING_UDHAR" }, req });
     return { reminderLogId: log.id, status: log.status, code: "CUSTOMER_HAS_NO_PENDING_UDHAR", messagePreview: messagePreview(message), providerConfigured: getWhatsAppProviderStatus().configured, queued: false };
   }
 
   const cooldown = await checkCooldown(shopId, customerId, channel);
   if (cooldown && !overrideCooldown) {
-    const log = await createReminderLog({ shopId, customerId, channel, templateId: template?.id ?? null, message, status: "skipped", provider: "disabled", error: "REMINDER_COOLDOWN_ACTIVE", requestedByUserId: user?.userId });
+    const log = await createAuditedReminderLog(
+      { shopId, customerId, channel, templateId: template?.id ?? null, message, status: "skipped", provider: "disabled", error: "REMINDER_COOLDOWN_ACTIVE", requestedByUserId: user?.userId },
+      { action: "REMINDER_SKIPPED_COOLDOWN", metadata: { customerId, channel, cooldownHours: env.REMINDER_COOLDOWN_HOURS }, req },
+    );
     recordReminderMetric({ status: "skipped", provider: log.provider, channel });
-    await createAuditLog({ shopId, userId: user?.userId, action: "REMINDER_SKIPPED_COOLDOWN", entityType: "ReminderLog", entityId: log.id, metadata: { customerId, channel, cooldownHours: env.REMINDER_COOLDOWN_HOURS }, req });
     return { reminderLogId: log.id, status: "skipped", code: "REMINDER_COOLDOWN_ACTIVE", messagePreview: messagePreview(message), providerConfigured: getWhatsAppProviderStatus().configured, queued: false };
   }
 
-  const log = await createReminderLog({ shopId, customerId, channel, templateId: template?.id ?? null, message, status: "queued", provider: "disabled", requestedByUserId: user?.userId });
-  await createAuditLog({ shopId, userId: user?.userId, action: "REMINDER_REQUESTED", entityType: "ReminderLog", entityId: log.id, metadata: { customerId, templateId: template?.id ?? null, channel, status: "queued", overrideCooldown: Boolean(overrideCooldown) }, req });
+  const log = await createAuditedReminderLog(
+    { shopId, customerId, channel, templateId: template?.id ?? null, message, status: "queued", provider: "disabled", requestedByUserId: user?.userId },
+    { action: "REMINDER_REQUESTED", metadata: { customerId, templateId: template?.id ?? null, channel, status: "queued", overrideCooldown: Boolean(overrideCooldown) }, req },
+  );
   logger.info({ type: "reminder_request", shopId, userId: user?.userId, customerId, channel, reminderLogId: log.id, customerPhone: "[REDACTED]" });
   const result = await enqueueOrSkip(log, user?.userId, req);
   return { reminderLogId: result.log.id, status: result.log.status, code: result.code, messagePreview: messagePreview(message), providerConfigured: getWhatsAppProviderStatus().configured, queued: result.queued, queueJobId: result.queueJobId };
@@ -243,35 +277,75 @@ export async function sendStatementReminder(shopId, user, input, { req = null } 
   return sendReminder(shopId, user, { customerId, channel, customMessage: message, overrideCooldown }, { req });
 }
 
+/**
+ * Claim a queued reminder before crossing the provider boundary. A worker crash
+ * after this point leaves an explicit `sending`/delivery-uncertain state instead
+ * of automatically sending the same customer message twice on retry.
+ */
+export async function claimReminderForDispatch(reminderLogId) {
+  return db.$transaction(async (tx) => {
+    const existing = await tx.reminderLog.findUnique({ where: { id: reminderLogId } });
+    if (!existing) throw appError("Reminder log not found", 404, "REMINDER_LOG_NOT_FOUND");
+    if (existing.status !== "queued") return { log: existing, claimed: false };
+    const claimedAt = new Date();
+    const changed = await tx.reminderLog.updateMany({
+      where: { id: reminderLogId, status: "queued" },
+      data: { status: "sending", lastStatusAt: claimedAt },
+    });
+    if (changed.count !== 1) {
+      return { log: await tx.reminderLog.findUnique({ where: { id: reminderLogId } }), claimed: false };
+    }
+    const claimed = await tx.reminderLog.findUnique({ where: { id: reminderLogId } });
+    await writeRequiredReminderAudit(tx, {
+      shopId: claimed.shopId,
+      userId: claimed.requestedByUserId,
+      action: "REMINDER_DISPATCH_STARTED",
+      entityType: "ReminderLog",
+      entityId: claimed.id,
+      before: { status: "queued" },
+      after: { status: "sending" },
+      metadata: { customerId: claimed.customerId, channel: claimed.channel, claimedAt },
+    });
+    return { log: claimed, claimed: true };
+  }, { isolationLevel: "Serializable" });
+}
+
 export async function markReminderFromProvider(reminderLogId, result, { req = null } = {}) {
-  const existing = await db.reminderLog.findUnique({ where: { id: reminderLogId } });
-  if (!existing) throw appError("Reminder log not found", 404, "REMINDER_LOG_NOT_FOUND");
   const status = result?.success ? "accepted" : (result?.status === "skipped" ? "skipped" : "failed");
-  const changed = await db.reminderLog.updateMany({
-    where: { id: reminderLogId, status: "queued" },
-    data: {
-      status,
-      provider: result?.provider ?? existing.provider ?? "disabled",
-      providerMessageId: result?.providerMessageId ?? null,
-      error: result?.success ? null : (result?.code || "WHATSAPP_SEND_FAILED"),
-      acceptedAt: result?.success ? new Date(result?.acceptedAt || Date.now()) : null,
-      failedAt: status === "failed" ? new Date() : null,
-      lastStatusAt: new Date(),
-    },
-  });
-  const updated = await db.reminderLog.findUnique({ where: { id: reminderLogId } });
-  if (changed.count !== 1) return updated;
+  const transition = await db.$transaction(async (tx) => {
+    const existing = await tx.reminderLog.findUnique({ where: { id: reminderLogId } });
+    if (!existing) throw appError("Reminder log not found", 404, "REMINDER_LOG_NOT_FOUND");
+    const changed = await tx.reminderLog.updateMany({
+      where: { id: reminderLogId, status: { in: ["queued", "sending"] } },
+      data: {
+        status,
+        provider: result?.provider ?? existing.provider ?? "disabled",
+        providerMessageId: result?.providerMessageId ?? null,
+        error: result?.success ? null : (result?.code || "WHATSAPP_SEND_FAILED"),
+        acceptedAt: result?.success ? new Date(result?.acceptedAt || Date.now()) : null,
+        failedAt: status === "failed" ? new Date() : null,
+        lastStatusAt: new Date(),
+      },
+    });
+    const updated = await tx.reminderLog.findUnique({ where: { id: reminderLogId } });
+    if (changed.count !== 1) return { updated, changed: false };
+    await writeRequiredReminderAudit(tx, {
+      shopId: updated.shopId,
+      userId: updated.requestedByUserId,
+      action: status === "accepted" ? "REMINDER_ACCEPTED" : (status === "skipped" ? "REMINDER_PROVIDER_NOT_CONFIGURED" : "REMINDER_FAILED"),
+      entityType: "ReminderLog",
+      entityId: updated.id,
+      before: { status: existing.status, provider: existing.provider, providerMessageId: existing.providerMessageId },
+      after: { status, provider: updated.provider, providerMessageId: updated.providerMessageId },
+      metadata: { customerId: updated.customerId, channel: updated.channel, status, provider: updated.provider, errorCode: updated.error },
+      req,
+    });
+    return { updated, changed: true };
+  }, { isolationLevel: "Serializable" });
+  const updated = transition.updated;
+  if (!transition.changed) return updated;
   recordReminderMetric({ status, provider: updated.provider, channel: updated.channel });
   if (status === "failed") recordWhatsAppProviderError(updated.provider, status);
-  await createAuditLog({
-    shopId: updated.shopId,
-    userId: updated.requestedByUserId,
-    action: status === "accepted" ? "REMINDER_ACCEPTED" : (status === "skipped" ? "REMINDER_PROVIDER_NOT_CONFIGURED" : "REMINDER_FAILED"),
-    entityType: "ReminderLog",
-    entityId: updated.id,
-    metadata: { customerId: updated.customerId, channel: updated.channel, status, provider: updated.provider, errorCode: updated.error },
-    req,
-  });
   logger.info({ type: status === "accepted" ? "reminder_accepted" : status === "skipped" ? "reminder_skipped" : "reminder_failed", shopId: updated.shopId, customerId: updated.customerId, reminderLogId: updated.id, provider: updated.provider, status });
   if (status === "accepted" && updated.providerMessageId) {
     await reconcileReminderDeliveryEvents(updated.provider, updated.providerMessageId, updated.id);

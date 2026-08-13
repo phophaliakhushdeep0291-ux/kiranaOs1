@@ -42,7 +42,7 @@ export const manufacturingHi: Record<keyof typeof manufacturingEn, string> = {
   "manufacturing.flow.dispatchTitle": "डिस्पैच",
   "manufacturing.flow.dispatchText": "रिलीज़ बैच से घरेलू थोक या निर्यात इनवॉइस बनाएँ।",
   "manufacturing.register.title": "BOM रजिस्टर",
-  "manufacturing.register.bom": "BOM",
+  "manufacturing.register.bom": "सामग्री सूची (BOM)",
   "manufacturing.register.finishedGood": "तैयार माल",
   "manufacturing.register.version": "वर्ज़न",
   "manufacturing.register.versionValue": "वर्ज़न {version}",
