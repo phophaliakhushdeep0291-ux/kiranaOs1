@@ -12,8 +12,19 @@ import { baseQtyToRateQty } from "../../utils/units.js";
 // Estimates (kacha bills) are full sales — stock, tender, udhar — so they count in every
 // sales/cash/P&L report. The one exception is GST: an estimate is not a tax document, so the
 // GST report keeps its own estimate-excluding filter below.
-const REAL_SALE_BILL_FILTER = { status: "active" };
-const GST_BILL_FILTER = { status: "active", billType: { not: "estimate" } };
+//
+// Every bill filter here carries `deletedAt: null`. Soft-deleting a bill only stamps
+// `deletedAt` — it leaves `status` as "active" — and there is no global Prisma soft-delete
+// middleware, so selecting on status alone silently keeps recycle-bin bills in the totals.
+// listBills and getBill have always excluded them; reports were the outlier. GST_BILL_FILTER
+// in particular has to stay in step with the Tally export's bill query (integrations.service.js
+// buildTallyExport) — tally-voucher.js splits tax by exactly the rule getGstReport uses, so any
+// filter that holds on one side and not the other makes the two disagree by the deleted bills.
+const REAL_SALE_BILL_FILTER = { status: "active", deletedAt: null };
+const GST_BILL_FILTER = { status: "active", billType: { not: "estimate" }, deletedAt: null };
+// Cancelled bills are reported on their own line ("cancelled today"), so they need the same
+// exclusion: a bill that was cancelled and then deleted has left the books entirely.
+const CANCELLED_BILL_FILTER = { status: "cancelled", deletedAt: null };
 const DEFAULT_TOP_LIMIT = 20;
 const MAX_TOP_LIMIT = 100;
 
@@ -162,10 +173,10 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
       include: { payments: true },
     }),
     db.bill.findMany({
-      where: { shopId, ...(locationId && { locationId }), status: "cancelled", businessDate: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), ...CANCELLED_BILL_FILTER, businessDate: { gte: start, lte: end } },
       select: { id: true, grandTotal: true },
     }),
-    db.bill.count({ where: { shopId, ...(locationId && { locationId }), billType: "estimate", businessDate: { gte: start, lte: end } } }),
+    db.bill.count({ where: { shopId, ...(locationId && { locationId }), billType: "estimate", deletedAt: null, businessDate: { gte: start, lte: end } } }),
     db.udharLedger.findMany({
       where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, businessDate: { gte: start, lte: end }, reversedAt: null },
       select: { amount: true, mode: true },
@@ -310,7 +321,7 @@ export async function getSalesSummary(shopId, { range, from, to, locationId, inc
       orderBy: { businessDate: "asc" },
     }),
     db.bill.findMany({
-      where: { shopId, ...(locationId && { locationId }), status: "cancelled", businessDate: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), ...CANCELLED_BILL_FILTER, businessDate: { gte: start, lte: end } },
       select: { grandTotal: true, businessDate: true },
     }),
   ]);
@@ -492,7 +503,7 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
       where: {
         shopId,
         ...(locationId && { locationId }),
-        status: "active",
+        ...REAL_SALE_BILL_FILTER,
         businessDate: { gte: start, lte: end },
       },
       include: { payments: true },
@@ -501,7 +512,7 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
       where: {
         shopId,
         ...(locationId && { locationId }),
-        status: "cancelled",
+        ...CANCELLED_BILL_FILTER,
         businessDate: { gte: start, lte: end },
       },
       select: { grandTotal: true, creditAmount: true },
@@ -646,7 +657,7 @@ export async function getMonthlyBreakdown(shopId, { year, untilMonth, locationId
   const end = dateRangeForDateOnly(`${year}-${String(untilMonth).padStart(2, "0")}-${String(daysInUntilMonth).padStart(2, "0")}`, tz).end;
   const [bills, damageRows] = await Promise.all([
     db.bill.findMany({
-      where: { shopId, ...(locationId && { locationId }), status: "active", businessDate: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), ...REAL_SALE_BILL_FILTER, businessDate: { gte: start, lte: end } },
       select: { grandTotal: true, grossProfit: true, businessDate: true },
     }),
     db.stockLedger.findMany({
@@ -727,7 +738,7 @@ export async function getInventoryHealth(shopId, { includeCost = false, windowDa
   const [products, soldItems] = await Promise.all([
     db.product.findMany({ where: { shopId }, orderBy: { name: "asc" } }),
     db.billItem.findMany({
-      where: { bill: { shopId, ...(locationId && { locationId }), status: "active", businessDate: { gte: since } } },
+      where: { bill: { shopId, ...(locationId && { locationId }), ...REAL_SALE_BILL_FILTER, businessDate: { gte: since } } },
       select: { productId: true, name: true, quantityInBaseUnit: true, lineTotal: true },
     }),
   ]);
@@ -818,8 +829,10 @@ export async function getStaffSales(shopId, { from, to, locationId } = {}) {
   const { start, end } = normalizeDateRange({ from, to });
   await enforceReportRangeLimit(shopId, { start, end }, "custom");
 
+  // No status filter: this report buckets active and cancelled bills per staff member below,
+  // so it needs both. Deleted bills are a different matter — they belong to neither bucket.
   const bills = await db.bill.findMany({
-    where: { shopId, ...(locationId && { locationId }), businessDate: { gte: start, lte: end } },
+    where: { shopId, ...(locationId && { locationId }), deletedAt: null, businessDate: { gte: start, lte: end } },
     include: { payments: true },
   });
 
@@ -896,7 +909,7 @@ export async function getPaymentSummary(shopId, { from, to, locationId }) {
   const [payments, bills, oldUdharRecovered, purchases] = await Promise.all([
     db.payment.findMany({
       where: {
-        bill: { shopId, ...(locationId && { locationId }), status: "active", businessDate: { gte: start, lte: end } },
+        bill: { shopId, ...(locationId && { locationId }), ...REAL_SALE_BILL_FILTER, businessDate: { gte: start, lte: end } },
       },
       select: { mode: true, amount: true },
     }),
@@ -972,6 +985,13 @@ export async function getPaymentSummary(shopId, { from, to, locationId }) {
 // A scoped comparison would therefore look precise while comparing different truths.
 export async function getFinancialLedgerReconciliation(shopId) {
   const [activeBills, recoveredUdhar, customers, ledgerRows] = await Promise.all([
+    // Deliberately NOT filtered on `deletedAt`, unlike every other bill read in this file.
+    // Cancel and restore post reversing journal rows (postBillCancelledLedger /
+    // postBillRestoredLedger) so they net out on both sides; soft-delete posts nothing at all
+    // — it only writes an audit row. Excluding deleted bills here would drop them from the
+    // operational side while the journal still carries their sale, reporting a variance for
+    // something neither side got wrong. The honest fix is a reversing entry on delete; until
+    // that exists, both sides must agree to ignore the recycle bin.
     db.bill.findMany({
       where: { shopId, status: "active" },
       include: { payments: true },
@@ -1075,6 +1095,9 @@ export async function exportBillsData(shopId, { from, to, status, locationId, li
   const take = Math.min(Number(limit) || SYNC_EXPORT_BILL_LIMIT, SYNC_EXPORT_BILL_LIMIT);
   const where = {
     shopId,
+    // Matches listBills: `status: "all"` means every status, not every row — a bill in the
+    // recycle bin is off the books and must not reappear in an accountant's CSV.
+    deletedAt: null,
     ...(locationId && { locationId }),
     ...(status && status !== "all" ? { status } : {}),
     ...(from || to ? { businessDate: exportDateBounds(from, to) } : {}),
