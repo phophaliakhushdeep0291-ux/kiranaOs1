@@ -677,7 +677,14 @@ async function applyPerPackStockEditInTransaction(tx, {
     const oldQty = round2(Number(previous?.onHandQty ?? 0));
     const newQty = round2(Number(unit.onHandQty ?? 0));
     const deltaQty = round2(newQty - oldQty);
-    return deltaQty === 0 ? [] : [{ unit, oldQty, newQty, deltaQty }];
+    const oldBaseQty = round2(
+      oldQty * Number(previous?.conversionToBase ?? unit.conversionToBase ?? 0),
+    );
+    const newBaseQty = round2(newQty * Number(unit.conversionToBase ?? 0));
+    const baseDelta = round2(newBaseQty - oldBaseQty);
+    return deltaQty === 0 && baseDelta === 0
+      ? []
+      : [{ unit, oldQty, newQty, deltaQty, baseDelta }];
   });
   const globalDifference = round2(desiredTotal - Number(product.stockBaseQty ?? 0));
   if (!unitChanges.length && globalDifference === 0) return;
@@ -710,7 +717,7 @@ async function applyPerPackStockEditInTransaction(tx, {
   let runningTotal = round2(Number(product.stockBaseQty ?? 0));
   for (const change of unitChanges) {
     const stored = storedByCode.get(change.unit.unitCode);
-    const baseDelta = round2(change.deltaQty * Number(change.unit.conversionToBase ?? 0));
+    const baseDelta = change.baseDelta;
     const nextTotal = round2(runningTotal + baseDelta);
     await tx.stockLedger.create({
       data: {
