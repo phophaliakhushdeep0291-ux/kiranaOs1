@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import db from "../src/db.js";
 import { cancelBill, confirmBill, softDeleteBill } from "../src/modules/bills/bills.service.js";
+import { buildTallyExport, listApiResource } from "../src/modules/integrations/integrations.service.js";
+import { env } from "../src/config/env.js";
+import { dateRangeForDateOnly, formatDateInTimeZone } from "../src/utils/dates.js";
 import {
   exportBillsData,
   getDailyClosing,
@@ -17,16 +20,42 @@ import {
 
 // Soft-deleting a bill stamps `deletedAt` and leaves `status` as "active"
 // (bills.service.js softDeleteBill), and there is no global Prisma soft-delete
-// middleware. So any report filtering on status alone keeps recycle-bin bills in
-// its totals — the GST screen was reporting tax on bills the shop had deleted,
-// and disagreeing with the Tally export of the same period, which does filter.
+// middleware. So any query filtering on status alone keeps recycle-bin bills in its
+// totals — the GST screen was reporting tax on bills the shop had deleted, and so
+// were the TallyPrime export and the partner REST API that read the same bills.
 //
 // The shape of the test: bill everything TWICE, delete one copy, and assert every
 // report reads exactly the surviving half. Halving is what makes a missed filter
 // visible — an absolute figure would still look plausible if the delete were ignored.
+//
+// The GST screen and the Tally export are asserted to AGREE, not merely to be right
+// separately: tally-voucher splits tax by exactly the rule getGstReport uses, so a
+// filter fixed on one side alone is the regression worth catching.
 
+// Day keys must be resolved in the SHOP timezone, not UTC. `toISOString().slice(0,10)` is the
+// UTC day, which between 00:00 and 05:30 IST names yesterday — every range assertion below
+// would then query a window the freshly-created bills fall outside of, so the suite would fail
+// for five and a half hours a day. Every report keys off this helper for the same reason.
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  return formatDateInTimeZone(new Date(), env.DAILY_CLOSING_TIMEZONE);
+}
+
+function dayKeyBefore(key, daysBack) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d - daysBack)).toISOString().slice(0, 10);
+}
+
+// buildTallyExport reads `query.include` directly, and the default for it lives in the Zod
+// route schema — so calling the service straight has to supply it. Sales only: this file is
+// about which BILLS the export selects, not the purchase/receipt/expense voucher kinds.
+function salesExport(shopId, from, to) {
+  return buildTallyExport(shopId, { from, to, include: ["sales"] });
+}
+
+// Midday in the shop timezone — a timestamp put here cannot drift across a day boundary,
+// unlike one placed exactly on it.
+function middayOn(key) {
+  return new Date(dateRangeForDateOnly(key, env.DAILY_CLOSING_TIMEZONE).start.getTime() + 12 * 60 * 60 * 1000);
 }
 
 async function sellOne(shopId, product, tag) {
@@ -183,6 +212,93 @@ async function main() {
     assert.equal((await getDailyClosing(shop.id, { date: day, allLocations: true })).roughBills, 0, "and uncounted once deleted");
     // An estimate is not a tax document, so it was never in the GST report to begin with.
     assert.equal((await getGstReport(shop.id, range)).totalBills, 1, "the GST report still sees only the one pakka bill");
+
+    // ── the Tally export agrees with the GST screen ─────────────────
+    // This is the pairing that exposed the bug: tally-voucher splitting follows exactly the
+    // rule getGstReport uses, so the two are only ever right together. Assert agreement, not
+    // just a count — a filter fixed on one side alone is the failure being guarded against.
+    const tally = await salesExport(shop.id, day, day);
+    assert.equal(tally.count, 1, "the Tally export drops the deleted bill too");
+    assert.equal(tally.xml.includes(doomed.billNo), false, "the deleted bill has no voucher");
+    assert.equal(tally.xml.includes(kept.billNo), true, "the surviving one does");
+    // One voucher per bill the GST report counted…
+    const gstNow = await getGstReport(shop.id, range);
+    assert.equal(
+      (tally.xml.match(/<VOUCHER /g) ?? []).length,
+      gstNow.totalBills,
+      "GST screen and Tally export must count the same bills for the same period",
+    );
+    // …carrying the same money, split the same way. The voucher posts the taxable value to
+    // Sales and each half of the tax to its own Output ledger, which is precisely the split
+    // getGstReport reports — so assert them against each other rather than against literals.
+    const ledgerAmount = (name) => {
+      const match = tally.xml.match(new RegExp(`<LEDGERNAME>${name}</LEDGERNAME>[\\s\\S]*?<AMOUNT>(-?[\\d.]+)</AMOUNT>`));
+      return match ? Number(match[1]) : null;
+    };
+    assert.equal(ledgerAmount("Sales"), gstNow.taxableSales, "Sales ledger carries the taxable value the GST report shows");
+    assert.equal(ledgerAmount("Output CGST"), gstNow.cgst, "CGST matches the GST report");
+    assert.equal(ledgerAmount("Output SGST"), gstNow.sgst, "SGST matches the GST report");
+    // The party is credited the gross, which is taxable + both halves of the tax.
+    assert.equal(ledgerAmount("Cash"), -(gstNow.taxableSales + gstNow.cgst + gstNow.sgst), "the party line is the gross");
+    // Estimates are not tax documents, so neither surface may carry the one binned above.
+    assert.equal(tally.xml.includes("EST-"), false, "no estimate voucher in a tax export");
+
+    // The partner REST API reads bills through a different function; same rule applies.
+    const api = await listApiResource({
+      shopId: shop.id,
+      resource: "bills",
+      scope: "bills:read",
+      query: { limit: 50 },
+    });
+    assert.equal(api.items.some((row) => row.billNo === doomed.billNo), false, "the integrations API drops it as well");
+    assert.equal(api.items.some((row) => row.billNo === kept.billNo), true, "and still serves the live one");
+
+    // ── the export is keyed on the SALE date, not the sync date ─────
+    // A bill rung up offline on Monday and synced on Thursday has businessDate Monday and
+    // createdAt Thursday. Every report in the app works in businessDate, so an export keyed
+    // on createdAt filed that sale in the week it synced in — a month-boundary sync moves it
+    // into the wrong filing period outright.
+    const backdated = await sellOne(shop.id, product, "rdb-bill-offline");
+    const saleDay = dayKeyBefore(day, 3);
+    await db.bill.update({
+      where: { id: backdated.id },
+      // businessDate moves to the day of the sale; createdAt stays today, as a delayed sync leaves it.
+      data: { businessDate: middayOn(saleDay) },
+    });
+
+    const todayExport = await salesExport(shop.id, day, day);
+    assert.equal(
+      todayExport.xml.includes(backdated.billNo),
+      false,
+      "a sale made three days ago is not today's business, whenever its row was written",
+    );
+    assert.equal(todayExport.count, 1, "today still exports only the bill actually sold today");
+
+    const saleDayExport = await salesExport(shop.id, saleDay, saleDay);
+    assert.equal(saleDayExport.count, 1, "and it appears in the period it was actually sold in");
+    assert.equal(saleDayExport.xml.includes(backdated.billNo), true);
+    // The voucher date Tally files under must be the sale date too, not the sync date.
+    assert.equal(
+      saleDayExport.xml.includes(`<DATE>${saleDay.replaceAll("-", "")}</DATE>`),
+      true,
+      "the voucher is dated the day of the sale",
+    );
+    assert.equal(
+      saleDayExport.xml.includes(`<DATE>${day.replaceAll("-", "")}</DATE>`),
+      false,
+      "never the day the row synced",
+    );
+
+    // Same period, same bills: the whole point of matching the report's date basis.
+    assert.equal(
+      (await getGstReport(shop.id, { from: saleDay, to: saleDay })).totalBills,
+      saleDayExport.count,
+      "GST screen and Tally export must agree on which period a backdated sale belongs to",
+    );
+
+    // Put it back on today so the restore assertions below read the same books as before.
+    await db.bill.update({ where: { id: backdated.id }, data: { businessDate: new Date() } });
+    await softDeleteBill(shop.id, backdated.id, { reason: "test fixture" });
 
     // ── restore puts it back ────────────────────────────────────────
     // The filter must read current state, not "was ever deleted".
