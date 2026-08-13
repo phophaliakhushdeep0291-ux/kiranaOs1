@@ -1,0 +1,113 @@
+{
+  "capturedAt": "2026-08-13T11:36:50.322Z",
+  "sourceRevision": "67b9199ca48461b72e93f425f79f206fd6b12b84",
+  "billingImplementationRevision": "6214663c9e32625cc10a66278b6f4dd3b492bf6a",
+  "workingTreeState": "dirty; evidence reflects the verified local tree and is not exact-candidate CI",
+  "route": "/billing",
+  "viewportMatrix": [
+    {
+      "width": 375,
+      "height": 812,
+      "documentClientWidth": 375,
+      "documentScrollWidth": 375,
+      "activeControls": 53,
+      "undersizedControls": 0
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "documentClientWidth": 390,
+      "documentScrollWidth": 390,
+      "activeControls": 53,
+      "undersizedControls": 0
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "documentClientWidth": 430,
+      "documentScrollWidth": 430,
+      "activeControls": 53,
+      "undersizedControls": 0
+    },
+    {
+      "width": 768,
+      "height": 1024,
+      "documentClientWidth": 768,
+      "documentScrollWidth": 768,
+      "activeControls": 61,
+      "undersizedControls": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "held bill persisted while the active workspace reset",
+      "artifact": "bill-hold-persisted-390x844.png",
+      "bytes": 35589,
+      "sha256": "3856643bf6a10ea9f4bb010bcfacbe00b4043bf3d8b889df585985602a4ad5ee"
+    },
+    {
+      "name": "held bill resumed after a full reload",
+      "artifact": "bill-resumed-after-reload-390x844.png",
+      "bytes": 38387,
+      "sha256": "0060e9b3e2bc6ad597caa54bc3cf54c2b03b50143e6619f40c54e562c1ffab13"
+    }
+  ],
+  "lifecycleProof": {
+    "activeCart": "one Parle-G Biscuit at INR 6",
+    "holdCommittedBeforeUiReset": true,
+    "heldBillSurvivedReload": true,
+    "resumeRestoredExactCart": true,
+    "resumedCartSurvivedSecondReload": true,
+    "mobileCheckoutClosedAfterSuccessfulHold": true,
+    "fullOpenBillSetDoesNotEvictUnrelatedBill": true,
+    "failedPersistenceLeavesCurrentUiIntact": true,
+    "consoleErrors": 0
+  },
+  "databaseInvariant": {
+    "before": {
+      "billCount": 130,
+      "ledgerCount": 387,
+      "productId": "cmqo3sfc3000zqeat4tp9itc6",
+      "productName": "Parle-G Biscuit",
+      "stockBaseQty": 95
+    },
+    "afterHold": {
+      "billCount": 130,
+      "ledgerCount": 387,
+      "stockBaseQty": 95
+    },
+    "afterResume": {
+      "billCount": 130,
+      "ledgerCount": 387,
+      "stockBaseQty": 95
+    }
+  },
+  "verification": {
+    "focusedBillingWorkspace": "13 passed, 0 failed",
+    "frontendTypecheck": "passed",
+    "frontendProductionCheck": {
+      "status": "passed",
+      "translationKeys": 1195,
+      "testFilesPassed": 229,
+      "testFilesSkipped": 1,
+      "testsPassed": 1423,
+      "testsSkipped": 1,
+      "initialJsRawKb": 860.7,
+      "initialJsGzipKb": 257.1,
+      "totalJsRawKb": 4059.4,
+      "totalJsGzipKb": 1182.1,
+      "largestOfflineShopPayload": "restaurant",
+      "largestOfflineShopPayloadRawKb": 2468.7,
+      "largestOfflineShopPayloadGzipKb": 734.8,
+      "largestOfflineShopPayloadFiles": 111
+    },
+    "backendProductionCheck": "passed",
+    "migrationSafety": "passed with 0 warnings",
+    "releaseGate": "passed with the expected missing human RELEASE_APPROVED warning"
+  },
+  "limitations": [
+    "This is local software QA, not exact-candidate CI evidence.",
+    "Stateful hold, reload and resume were exercised live at 390x844; the other widths certify the settled responsive layout and touch targets.",
+    "Physical hardware, provider delivery, managed deployment and production restore remain separate gates."
+  ]
+}

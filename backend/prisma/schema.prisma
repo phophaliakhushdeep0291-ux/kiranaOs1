@@ -1804,6 +1804,123 @@ model ProductionOutput {
   @@index([inventoryLotId])
 }
 
+// WHOLESALE / EXPORT — buyer PO through batch allocation and dispatch.
+// This is deliberately not a Bill: an order reserves a promise; billing posts
+// tax, revenue and receivables only when goods are actually dispatched.
+model TradeOrder {
+  id                    String    @id @default(cuid())
+  shopId                String
+  locationId            String
+  orderNumber           String
+  buyerPoNumber         String?
+  customerId            String?
+  customerName          String
+  customerGstin         String?
+  billingAddress        String?
+  shippingAddress       String?
+  orderType             String    @default("domestic") // domestic | export
+  status                String    @default("draft") // draft | confirmed | allocated | packed | dispatched | invoiced | cancelled
+  currencyCode          String    @default("INR")
+  exchangeRate          Float     @default(1)
+  priceBasis            String? // ex_works | fob | cif | dap
+  requestedDeliveryDate DateTime?
+  // Export-only commercial/shipping facts. Null on domestic supermarket POs.
+  iec                   String?
+  lutBondReference      String?
+  countryOfDestination  String?
+  countryOfOrigin       String?
+  portOfLoading         String?
+  portOfDischarge       String?
+  incoterm              String?
+  paymentTerms          String?
+  notes                 String?
+  billId                String?
+  confirmedAt           DateTime?
+  allocatedAt           DateTime?
+  packedAt              DateTime?
+  dispatchedAt          DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  items    TradeOrderItem[]
+  dispatch TradeDispatch?
+
+  @@unique([shopId, orderNumber])
+  @@index([shopId, status, createdAt])
+  @@index([shopId, buyerPoNumber])
+  @@index([shopId, customerId, createdAt])
+}
+
+model TradeOrderItem {
+  id                 String   @id @default(cuid())
+  shopId             String
+  orderId            String
+  productId          String
+  sellingUnitId      String?
+  sku                 String?
+  buyerProductCode   String?
+  description        String
+  hsn                 String?
+  quantity            Float
+  quantityBaseQty     Float
+  unitPrice           Float
+  gstRate             Float   @default(0)
+  lineDiscount        Float   @default(0)
+  lineTotal           Float
+  packedQuantity      Float   @default(0)
+  createdAt           DateTime @default(now())
+
+  order       TradeOrder             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  allocations TradeOrderAllocation[]
+
+  @@index([shopId, productId])
+  @@index([orderId])
+}
+
+model TradeOrderAllocation {
+  id                 String   @id @default(cuid())
+  shopId             String
+  orderItemId        String
+  inventoryLotId     String
+  batchNumber        String
+  quantityBaseQty    Float
+  createdAt          DateTime @default(now())
+
+  orderItem TradeOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@unique([orderItemId, inventoryLotId])
+  @@index([shopId, inventoryLotId])
+}
+
+model TradeDispatch {
+  id                 String   @id @default(cuid())
+  shopId             String
+  orderId            String   @unique
+  dispatchNumber     String
+  dispatchDate       DateTime
+  transporterName    String?
+  transporterGstin   String?
+  vehicleNumber      String?
+  lrAwbNumber        String?
+  ewayBillNumber     String?
+  shippingBillNumber String?
+  shippingBillDate   DateTime?
+  containerNumber    String?
+  packageCount       Float?
+  netWeight          Float?
+  grossWeight        Float?
+  sealNumber         String?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  order TradeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([shopId, dispatchNumber])
+  @@index([shopId, dispatchDate])
+}
+
 model BillItemLotAllocation {
   id              String   @id @default(cuid())
   billItemId      String

@@ -263,6 +263,79 @@ if (ctx.skip) {
       assert.equal(await ctx.db.shopMaintenanceLock.count({ where: { shopId: tenant.shop.id } }), 0, "lock releases after success");
     });
 
+    test("restores the complete manufacturing genealogy without losing recall evidence", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      const finished = await createProduct(ctx.db, tenant.shop.id, { name: "Finished Spice" });
+      const material = await createProduct(ctx.db, tenant.shop.id, { name: "Raw Spice" });
+      const bom = await ctx.db.manufacturingBom.create({ data: {
+        shopId: tenant.shop.id,
+        finishedProductId: finished.id,
+        name: "Backup recipe",
+        outputQuantityBaseQty: 10,
+      } });
+      const bomItem = await ctx.db.manufacturingBomItem.create({ data: {
+        shopId: tenant.shop.id,
+        bomId: bom.id,
+        materialProductId: material.id,
+        quantityBaseQty: 11,
+        wastagePercent: 2,
+      } });
+      const run = await ctx.db.productionRun.create({ data: {
+        shopId: tenant.shop.id,
+        locationId: "backup-manufacturing-location",
+        bomId: bom.id,
+        runNumber: "RUN-BACKUP-001",
+        status: "completed",
+        plannedOutputBaseQty: 10,
+        actualOutputBaseQty: 9.8,
+        finishedBatchNumber: "FG-BACKUP-001",
+        qcStatus: "passed",
+      } });
+      const consumption = await ctx.db.productionConsumption.create({ data: {
+        shopId: tenant.shop.id,
+        runId: run.id,
+        productId: material.id,
+        plannedBaseQty: 11,
+        actualBaseQty: 10.8,
+        sourceBatchNumber: "RM-BACKUP-001",
+      } });
+      const output = await ctx.db.productionOutput.create({ data: {
+        shopId: tenant.shop.id,
+        runId: run.id,
+        productId: finished.id,
+        quantityBaseQty: 9.8,
+        batchNumber: "FG-BACKUP-001",
+      } });
+      const artifact = await ctx.db.backupArtifact.create({ data: {
+        shopId: tenant.shop.id,
+        requestedByUserId: tenant.owner.id,
+        type: "shop_logical",
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      } });
+
+      await processShopBackupArtifact(artifact.id, tenant.shop.id);
+      const snapshot = await verifyBackupArtifactForTest(tenant.shop.id, artifact.id);
+      assert.equal(snapshot.data.tables.ManufacturingBom.some((row) => row.id === bom.id), true);
+      assert.equal(snapshot.data.tables.ManufacturingBomItem.some((row) => row.id === bomItem.id), true);
+      assert.equal(snapshot.data.tables.ProductionRun.some((row) => row.id === run.id), true);
+      assert.equal(snapshot.data.tables.ProductionConsumption.some((row) => row.id === consumption.id), true);
+      assert.equal(snapshot.data.tables.ProductionOutput.some((row) => row.id === output.id), true);
+
+      await ctx.db.productionOutput.deleteMany({ where: { shopId: tenant.shop.id } });
+      await ctx.db.productionConsumption.deleteMany({ where: { shopId: tenant.shop.id } });
+      await ctx.db.productionRun.deleteMany({ where: { shopId: tenant.shop.id } });
+      await ctx.db.manufacturingBomItem.deleteMany({ where: { shopId: tenant.shop.id } });
+      await ctx.db.manufacturingBom.deleteMany({ where: { shopId: tenant.shop.id } });
+
+      const confirmation = "RESTORE " + artifact.id.slice(-6);
+      await restoreShopBackup(tenant.shop.id, artifact.id, tenant.owner.id, confirmation);
+
+      assert.deepEqual((await ctx.db.manufacturingBom.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [bom.id]);
+      assert.deepEqual((await ctx.db.manufacturingBomItem.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [bomItem.id]);
+      assert.deepEqual((await ctx.db.productionRun.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [run.id]);
+      assert.deepEqual((await ctx.db.productionConsumption.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [consumption.id]);
+      assert.deepEqual((await ctx.db.productionOutput.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [output.id]);
+    });
     test("rolls back every deletion when a restored row fails and blocks concurrent tenant writes", async () => {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Rollback Product", stockBaseQty: 4 });

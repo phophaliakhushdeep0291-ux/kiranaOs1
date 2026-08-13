@@ -18,6 +18,12 @@ const EMAIL_VERIFICATION_TTL_HOURS = 24;
 const PASSWORD_RESET_TTL_MINUTES = 30;
 const staffInviteLocks = new Map();
 
+async function writeRequiredAuthAudit(client, entry) {
+  const audit = await createAuditLog({ module: AUDIT_MODULES.AUTH, ...entry, client });
+  if (!audit) throw new AppError("Authentication change could not be audited", 503, "AUTH_AUDIT_WRITE_FAILED");
+  return audit;
+}
+
 function usesPostgresDatabase() {
   return /^postgres(?:ql)?:\/\//i.test(env.DATABASE_URL || "");
 }
@@ -351,7 +357,20 @@ export async function logout(refreshToken, user = null) {
       data: { revokedAt, revokedReason: "LOGOUT" },
     });
     if (!session.deviceId || revoked.count === 0) {
-      return { revokedSessions: revoked.count, remainingDeviceSessions: null, deviceStatus: null };
+      const noDeviceResult = { revokedSessions: revoked.count, remainingDeviceSessions: null, deviceStatus: null };
+      if (revoked.count === 1) {
+        await writeRequiredAuthAudit(tx, {
+          shopId: session.shopId,
+          userId: session.userId,
+          deviceId: session.deviceId ?? null,
+          action: "LOGOUT",
+          entityType: "session",
+          entityId: session.id,
+          metadata: noDeviceResult,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+      return noDeviceResult;
     }
 
     const remainingDeviceSessions = await tx.session.count({
@@ -370,28 +389,23 @@ export async function logout(refreshToken, user = null) {
       });
       deviceStatus = "logged_out";
     }
-    return { revokedSessions: revoked.count, remainingDeviceSessions, deviceStatus };
+    const logoutResult = { revokedSessions: revoked.count, remainingDeviceSessions, deviceStatus };
+    await writeRequiredAuthAudit(tx, {
+      shopId: session.shopId,
+      userId: session.userId,
+      deviceId: session.deviceId ?? null,
+      action: "LOGOUT",
+      entityType: "session",
+      entityId: session.id,
+      metadata: logoutResult,
+      durationMs: Date.now() - startedAt,
+    });
+    return logoutResult;
   });
 
   // §2 audit: logged here rather than in the controller so the entry only fires
   // for a session that was actually revoked (a replayed/expired token returns
   // early above and must not look like a fresh logout on the timeline).
-  await createAuditLog({
-    shopId: session.shopId,
-    userId: session.userId,
-    deviceId: session.deviceId ?? null,
-    module: AUDIT_MODULES.AUTH,
-    action: "LOGOUT",
-    entityType: "session",
-    entityId: session.id,
-    metadata: {
-      revokedSessions: result.revokedSessions,
-      remainingDeviceSessions: result.remainingDeviceSessions,
-      deviceStatus: result.deviceStatus,
-    },
-    durationMs: Date.now() - startedAt,
-  });
-
   return { success: true, message: "Logged out", ...result };
 }
 
@@ -755,33 +769,27 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
   };
   const bound = deviceId
     ? await createDeviceBoundLoginSession({ user, reqMeta, sessionData })
-    : {
-        device: null,
-        session: await db.session.create({ data: { ...sessionData, userId: user.id, shopId: user.shopId } }),
-      };
+    : await db.$transaction(async (tx) => {
+        const session = await tx.session.create({ data: { ...sessionData, userId: user.id, shopId: user.shopId } });
+        await writeRequiredAuthAudit(tx, {
+          shopId: user.shopId,
+          userId: user.id,
+          deviceId: null,
+          action: "LOGIN",
+          entityType: "user",
+          entityId: user.id,
+          metadata: { role: user.role, method: reqMeta.loginMethod ?? "password", sessionId: session.id },
+          durationMs: Date.now() - startedAt,
+          req: auditReqShim(reqMeta),
+        });
+        return { device: null, session };
+      }, { isolationLevel: "Serializable" });
   const { device, session } = bound;
   const accessToken = signDeviceAccessToken(user, session, device);
 
   // §2 audit: every sign-in lands on the timeline regardless of which door it
   // came through (password, Google, shop-selection retry) — this is the single
   // choke point all of them funnel into.
-  await createAuditLog({
-    shopId: user.shopId,
-    userId: user.id,
-    deviceId: device?.deviceId ?? deviceId ?? null,
-    module: AUDIT_MODULES.AUTH,
-    action: "LOGIN",
-    entityType: "user",
-    entityId: user.id,
-    metadata: {
-      role: user.role,
-      method: reqMeta.loginMethod ?? "password",
-      sessionId: session.id,
-    },
-    durationMs: Date.now() - startedAt,
-    req: auditReqShim(reqMeta),
-  });
-
   return {
     accessToken,
     token: accessToken, // Backward compatibility for existing frontend/API clients.
