@@ -33,12 +33,13 @@ describe("subscription api contract", () => {
   it("creates a real checkout instead of a legacy upgrade request", async () => {
     apiRequestMock.mockResolvedValueOnce({ orderId: "order_1", transactionId: "txn_1" });
 
-    await requestSubscriptionUpgrade({ planCode: "growth" });
+    await requestSubscriptionUpgrade({ planCode: "growth" }, "subscription-checkout:test-attempt-1");
 
     expect(apiRequestMock).toHaveBeenCalledWith(
       "/subscription/checkout",
       expect.objectContaining({
         method: "POST",
+        headers: { "Idempotency-Key": "subscription-checkout:test-attempt-1" },
         body: JSON.stringify({
           billingCycle: "monthly",
           provider: "razorpay",

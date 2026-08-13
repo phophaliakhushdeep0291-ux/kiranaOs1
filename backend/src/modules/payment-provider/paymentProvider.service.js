@@ -210,6 +210,7 @@ function subscriptionCheckoutTransactionId(shopId, idempotencyKey) {
     .update(`${shopId}\0${idempotencyKey}`)
     .digest("hex");
   return `subchk_${digest.slice(0, 32)}`;
+}
 
 function normalizeSubscriptionCheckoutIdempotencyKey(value) {
   const key = String(value || crypto.randomUUID()).trim();
@@ -220,7 +221,7 @@ function normalizeSubscriptionCheckoutIdempotencyKey(value) {
   }
   return key;
 }
-}
+
 
 function hashIdempotencyKey(idempotencyKey) {
   return crypto.createHash("sha256").update(idempotencyKey).digest("hex");
