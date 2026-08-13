@@ -50,7 +50,7 @@ interface ReminderLog {
   customerName: string | null;
   customerMobileMasked: string;
   channel: string;
-  status: "queued" | "accepted" | "sent" | "delivered" | "read" | "failed" | "skipped";
+  status: "queued" | "sending" | "accepted" | "sent" | "delivered" | "read" | "failed" | "skipped";
   provider: string;
   error?: string | null;
   acceptedAt?: string | null;
@@ -414,6 +414,7 @@ function DeliveryBadge({ status }: { status: ReminderLog["status"] }) {
   if (status === "sent") return <Badge tone="blue">Sent</Badge>;
   if (status === "accepted") return <Badge tone="blue">Accepted</Badge>;
   if (status === "queued") return <Badge tone="blue">Queued</Badge>;
+  if (status === "sending") return <Badge tone="amber">Sending</Badge>;
   if (status === "failed") return <Badge tone="red">Failed</Badge>;
   return <Badge tone="gray">Skipped</Badge>;
 }

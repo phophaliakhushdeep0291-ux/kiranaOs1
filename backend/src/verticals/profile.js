@@ -2,7 +2,7 @@ import { isEngineId } from "../engines/catalog.js";
 
 export const BUSINESS_TYPES = [
   "kirana", "clothing", "footwear", "auto_parts", "electronics",
-  "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "other",
+  "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "manufacturing", "other",
 ];
 
 export const CAPABILITIES = [
@@ -30,6 +30,9 @@ export const CAPABILITIES = [
   // Restaurant
   "TABLE_MANAGEMENT", "KOT", "KITCHEN_DISPLAY", "MENU_MODIFIERS",
   "RECIPE_INVENTORY", "SPLIT_BILLING", "TAKEAWAY",
+  // Manufacturing, wholesale and export
+  "BOM", "PRODUCTION_RUNS", "BATCH_GENEALOGY", "PACKAGING_SKUS",
+  "QUALITY_CONTROL", "WASTAGE_TRACKING", "WHOLESALE_ORDERS", "EXPORT_DOCUMENTS",
   // Configurable
   "CUSTOM_FIELDS",
 ];
@@ -55,6 +58,7 @@ export const NAVIGATION_KEYS = [
   "quotations", "sales-orders", "custom-orders", "delivery", "installation", "warehouses",
   "shades-variants", "tester-stock", "loyalty", "offers",
   "tables", "orders", "kitchen-kot", "recipes", "takeaway", "reservations",
+  "manufacturing", "bom", "production-runs", "packaging-runs", "traceability", "wholesale-orders", "export-documents",
   "custom-fields",
 ];
 

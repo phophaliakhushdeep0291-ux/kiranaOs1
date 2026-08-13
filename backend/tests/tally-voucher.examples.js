@@ -407,7 +407,7 @@ const fullBook = envelope([bill({ billNo: "F-1", customerName: "Iqbal", creditAm
 });
 assertWellFormed(fullBook.xml);
 assert.equal(fullBook.count, 5, "every document type produces a voucher");
-assert.deepEqual(fullBook.counts, { sales: 1, purchases: 1, purchaseReturns: 1, receipts: 1, expenses: 1 }, "the caller can see what went in");
+assert.deepEqual(fullBook.counts, { sales: 1, purchases: 1, purchaseReturns: 1, receipts: 1, expenses: 1, production: 0 }, "the caller can see what went in");
 for (const voucher of vouchersOf(fullBook.xml)) {
   const number = /<VOUCHERNUMBER>([^<]*)</.exec(voucher)[1];
   assert.equal(balanceOf(voucher), 0, `voucher ${number} does not balance`);
@@ -473,7 +473,7 @@ const parseQuery = (input) => tallyExportQuerySchema.safeParse(input);
 
 // Sales-only would leave the accountant re-keying every purchase and
 // collection, which is the whole problem this export exists to remove.
-assert.deepEqual(parseQuery({}).data.include, ["sales", "purchases", "returns", "receipts", "expenses"], "the default is the whole book");
+assert.deepEqual(parseQuery({}).data.include, ["sales", "purchases", "returns", "receipts", "expenses", "production"], "the default is the whole book");
 assert.deepEqual(parseQuery({ include: "sales,expenses" }).data.include, ["sales", "expenses"], "a subset is respected");
 assert.deepEqual(parseQuery({ include: " Sales , SALES ,expenses " }).data.include, ["sales", "expenses"], "casing, padding and repeats are tolerated");
 
@@ -485,6 +485,23 @@ assert.equal(parseQuery({ include: "" }).success, false, "exporting nothing is a
 // stock-item opt-in into an opt-out for anyone passing it explicitly.
 assert.equal(parseQuery({ inventory: "false" }).data.inventory, false, '"false" must mean false');
 assert.equal(parseQuery({ inventory: "1" }).data.inventory, true, '"1" must mean true');
+
+const factory = buildTallyEnvelope({
+  companyName: "Test Shop", shopId: "shop_1", timeZone: TZ,
+  productionRuns: [{
+    id: "run_1", runNumber: "PR-001", finishedBatchNumber: "FG-001", completedAt: new Date("2026-08-12T06:00:00.000Z"),
+    consumptions: [{ productId: "raw_1", productName: "Raw turmeric", baseUnit: "kg", actualBaseQty: 100, stockValue: 10000 }],
+    outputs: [{ productId: "fg_1", productName: "Turmeric powder", baseUnit: "kg", quantityBaseQty: 95, stockValue: 10000 }],
+  }],
+});
+assertWellFormed(factory.xml);
+assert.equal(factory.count, 1);
+assert.equal(factory.documents[0].type, "production");
+assert.match(factory.xml, /VCHTYPE="Stock Journal"/);
+assert.match(factory.xml, /<ACTUALQTY>-100 kg<\/ACTUALQTY>/);
+assert.match(factory.xml, /<ACTUALQTY>95 kg<\/ACTUALQTY>/);
+assert.match(factory.xml, /<AMOUNT>-10000\.00<\/AMOUNT>/);
+assert.match(factory.xml, /<AMOUNT>10000\.00<\/AMOUNT>/);
 
 /* ── Bill selection (guarded at the query, so assert the query) ───────────── */
 

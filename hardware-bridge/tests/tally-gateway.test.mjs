@@ -52,6 +52,12 @@ test("a 200 from Tally is not the same as an import that worked", () => {
   assert.equal(parseTallyResponse("").ok, false, "an empty reply is not an import");
 });
 
+test("an ignored Tally object fails closed because it may be a voucher", () => {
+  const result = parseTallyResponse("<RESPONSE><CREATED>2</CREATED><ALTERED>0</ALTERED><IGNORED>1</IGNORED><ERRORS>0</ERRORS><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>");
+  assert.equal(result.ok, false);
+  assert.match(tallyFailureMessage(result, ""), /ignored 1 object/);
+});
+
 /* ── The whole path, against a stub Tally ─────────────────────────────────── */
 
 async function startStubTally(handler) {

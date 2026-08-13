@@ -54,7 +54,10 @@ export function parseTallyResponse(body) {
   const recognised = /<(CREATED|ALTERED|ERRORS|EXCEPTIONS|LINEERROR|RESPONSE)>/i.test(body);
 
   return {
-    ok: recognised && errors === 0 && exceptions === 0 && lineErrors.length === 0,
+    // IGNORED means Tally skipped at least one object. The caller cannot tell
+    // whether that object was a harmless master or a voucher, so it must not
+    // mark the entire batch as posted and hide a missing accounting entry.
+    ok: recognised && ignored === 0 && errors === 0 && exceptions === 0 && lineErrors.length === 0,
     recognised,
     created,
     altered,
@@ -71,6 +74,7 @@ export function tallyFailureMessage(result, body) {
     return `Tally answered, but not with an import result.${hint}`;
   }
   if (result.lineErrors.length > 0) return `Tally rejected the import: ${result.lineErrors[0]}`.slice(0, 300);
+  if (result.ignored > 0) return `Tally ignored ${result.ignored} object(s). Review Tally.imp before marking this batch as sent.`;
   return `Tally reported ${result.errors} error(s) and ${result.exceptions} exception(s) while importing.`;
 }
 

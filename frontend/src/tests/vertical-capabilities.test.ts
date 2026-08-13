@@ -43,6 +43,8 @@ describe("vertical capabilities", () => {
     // A clothing shop does not weigh out a shirt. This is the regression that
     // put "loose item" and kg/gram/ml on the clothing product form.
     expect(withLoose.sort()).toEqual(["kirana", "stationery-books"]);
-    expect(withPacks).toEqual(["kirana"]);
+    // A manufacturer converts base material into pouches, boxes and cartons;
+    // that is a real pack conversion even though the shop does not sell loose.
+    expect(withPacks.sort()).toEqual(["kirana", "manufacturing"]);
   });
 });

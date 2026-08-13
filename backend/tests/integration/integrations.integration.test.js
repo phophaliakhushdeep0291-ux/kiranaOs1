@@ -93,6 +93,107 @@ if (ctx.skip) {
       assert.equal(overview.providers.find((provider) => provider.id === "tally").status, "upgrade_required");
     });
 
+    test("integration credentials, endpoints, retry requests, and Tally confirmations roll back with required audit", async () => {
+      const { tenant, auth } = await ownerContext();
+      const key = assertSuccess(await ctx.post("/api/integrations/api-keys", {
+        name: "Rollback key",
+        scopes: ["catalog:read"],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      const endpoint = assertSuccess(await ctx.post("/api/integrations/webhooks", {
+        name: "Rollback endpoint",
+        url: "https://hooks.example.com/rollback-proof",
+        events: ["bill.created"],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      const delivery = await ctx.db.webhookDelivery.create({
+        data: {
+          shopId: tenant.shop.id,
+          endpointId: endpoint.id,
+          eventId: "evt_retry_audit_rollback",
+          eventType: "bill.created",
+          payloadJson: JSON.stringify({ billNo: "ROLLBACK-1" }),
+          status: "failed",
+          attemptCount: 1,
+          lastError: "Original failure",
+        },
+      });
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_integration_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action IN (
+          'INTEGRATION_API_KEY_CREATED',
+          'INTEGRATION_API_KEY_REVOKED',
+          'WEBHOOK_ENDPOINT_CREATED',
+          'WEBHOOK_ENDPOINT_UPDATED',
+          'WEBHOOK_ENDPOINT_ARCHIVED',
+          'WEBHOOK_ENDPOINT_TEST_REQUESTED',
+          'WEBHOOK_DELIVERY_RETRY_REQUESTED',
+          'TALLY_VOUCHERS_POSTED'
+        )
+        BEGIN
+          SELECT RAISE(ABORT, 'forced integration audit failure');
+        END;
+      `);
+      try {
+        const keyCount = await ctx.db.integrationApiKey.count({ where: { shopId: tenant.shop.id } });
+        const failedKey = assertFailure(await ctx.post("/api/integrations/api-keys", {
+          name: "Must not survive",
+          scopes: ["catalog:read"],
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 503);
+        assert.equal(failedKey.code, "INTEGRATION_AUDIT_UNAVAILABLE");
+        assert.equal(await ctx.db.integrationApiKey.count({ where: { shopId: tenant.shop.id } }), keyCount);
+
+        assertFailure(await ctx.delete(`/api/integrations/api-keys/${key.id}`, {
+          token: auth.accessToken,
+          ownerPin: tenant.ownerPin,
+        }), 503);
+        assert.equal((await ctx.db.integrationApiKey.findUniqueOrThrow({ where: { id: key.id } })).revokedAt, null);
+
+        const endpointCount = await ctx.db.webhookEndpoint.count({ where: { shopId: tenant.shop.id } });
+        assertFailure(await ctx.post("/api/integrations/webhooks", {
+          name: "Must not survive",
+          url: "https://hooks.example.com/must-not-survive",
+          events: ["bill.created"],
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 503);
+        assert.equal(await ctx.db.webhookEndpoint.count({ where: { shopId: tenant.shop.id } }), endpointCount);
+
+        assertFailure(await ctx.patch(`/api/integrations/webhooks/${endpoint.id}`, {
+          name: "Changed without audit",
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 503);
+        assert.equal((await ctx.db.webhookEndpoint.findUniqueOrThrow({ where: { id: endpoint.id } })).name, "Rollback endpoint");
+
+        const deliveryCount = await ctx.db.webhookDelivery.count({ where: { endpointId: endpoint.id } });
+        assertFailure(await ctx.post(`/api/integrations/webhooks/${endpoint.id}/test`, {}, {
+          token: auth.accessToken,
+          ownerPin: tenant.ownerPin,
+        }), 503);
+        assert.equal(await ctx.db.webhookDelivery.count({ where: { endpointId: endpoint.id } }), deliveryCount);
+
+        assertFailure(await ctx.post(`/api/integrations/deliveries/${delivery.id}/retry`, {}, {
+          token: auth.accessToken,
+          ownerPin: tenant.ownerPin,
+        }), 503);
+        const retryRolledBack = await ctx.db.webhookDelivery.findUniqueOrThrow({ where: { id: delivery.id } });
+        assert.equal(retryRolledBack.status, "failed");
+        assert.equal(retryRolledBack.lastError, "Original failure");
+
+        assertFailure(await ctx.delete(`/api/integrations/webhooks/${endpoint.id}`, {
+          token: auth.accessToken,
+          ownerPin: tenant.ownerPin,
+        }), 503);
+        const archiveRolledBack = await ctx.db.webhookEndpoint.findUniqueOrThrow({ where: { id: endpoint.id } });
+        assert.equal(archiveRolledBack.deletedAt, null);
+        assert.equal(archiveRolledBack.enabled, true);
+
+        assertFailure(await ctx.post("/api/integrations/exports/tally/posted", {
+          documents: [{ type: "sale", id: "bill-audit-rollback", voucherNumber: "INV-ROLLBACK", remoteId: "artha-sale-audit-rollback" }],
+        }, { token: auth.accessToken }), 503);
+        assert.equal(await ctx.db.tallyPost.count({ where: { shopId: tenant.shop.id, documentId: "bill-audit-rollback" } }), 0);
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_integration_audit_failure");
+      }
+    });
+
     test("archiving an endpoint preserves delivery evidence and permits later URL reuse", async () => {
       const { tenant, auth } = await ownerContext();
       const endpoint = assertSuccess(await ctx.post("/api/integrations/webhooks", {

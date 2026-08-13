@@ -2,7 +2,6 @@ import * as svc from "./bills.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
 import { ENTITY_TYPES } from "../assurance/assurance.constants.js";
-import { publishIntegrationEvent } from "../integrations/integrations.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 import { assertLocationCapability } from "../stores/location-access.service.js";
 import { deliverBillWhatsapp } from "./bill-whatsapp.service.js";
@@ -50,56 +49,6 @@ export async function confirm(req, res, next) {
       allowStockShortfall: true,
       req,
     });
-    await publishIntegrationEvent(req.shopId, "bill.created", {
-      id: data.id,
-      billNo: data.billNo,
-      billType: data.billType,
-      status: data.status,
-      customerId: data.customerId,
-      customerName: data.customerName,
-      grandTotal: data.grandTotal,
-      paidAmount: data.paidAmount,
-      creditAmount: data.creditAmount,
-      offerId: data.offerId,
-      offerCode: data.offerCode,
-      offerDiscount: data.offerDiscount,
-      createdAt: data.createdAt,
-      locationId: data.locationId,
-    }).catch(() => []);
-    if (data.offerId && Number(data.offerDiscount || 0) > 0 && data.billType !== "estimate") {
-      await createAuditLog({
-        shopId: req.shopId,
-        userId: req.user?.userId,
-        action: "OFFER_REDEEMED",
-        entityType: "Bill",
-        entityId: data.id,
-        metadata: {
-          billNo: data.billNo,
-          offerId: data.offerId,
-          offerCode: data.offerCode,
-          discount: data.offerDiscount,
-          locationId: data.locationId,
-        },
-        req,
-      }).catch(() => null);
-    }
-    if (Number(data.loyaltyPointsRedeemed || 0) > 0) {
-      await createAuditLog({
-        shopId: req.shopId,
-        userId: req.user?.userId,
-        action: "LOYALTY_POINTS_REDEEMED",
-        entityType: "Bill",
-        entityId: data.id,
-        metadata: {
-          billNo: data.billNo,
-          customerId: data.customerId,
-          points: data.loyaltyPointsRedeemed,
-          discount: data.loyaltyDiscount,
-          locationId: data.locationId,
-        },
-        req,
-      }).catch(() => null);
-    }
     res.status(201).json({ success: true, data });
     // Post-commit, post-response: the assurance engine evaluates this sale
     // without adding latency to billing and can never fail the bill.
@@ -116,14 +65,6 @@ export async function saleReturn(req, res, next) {
       locationId: requestLocationId(req),
       req,
     });
-    await publishIntegrationEvent(req.shopId, "sale.return_created", {
-      id: data.id,
-      billNo: data.billNo,
-      returnOfBillId: data.returnOfBillId,
-      grandTotal: data.grandTotal,
-      refundMode: data.refundMode,
-      locationId: data.locationId,
-    }).catch(() => []);
     res.status(201).json({ success: true, data });
     scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.BILL, data.id, { userId: req.user?.userId });
     if (data.returnOfBillId) scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.BILL, data.returnOfBillId, { userId: req.user?.userId });

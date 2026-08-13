@@ -30,7 +30,22 @@ if (ctx.skip) {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       const other = await createTenant(ctx.db, { ownerPin: "5678" });
       const ownProduct = await createProduct(ctx.db, tenant.shop.id, { name: "Backup Rice" });
-      const otherProduct = await createProduct(ctx.db, other.shop.id, { name: "Other Shop Secret" });      const ledgerRow = await ctx.db.financialLedger.create({ data: {
+      const otherProduct = await createProduct(ctx.db, other.shop.id, { name: "Other Shop Secret" });
+      const ownTallyPost = await ctx.db.tallyPost.create({ data: {
+        shopId: tenant.shop.id,
+        documentType: "sale",
+        documentId: "backup-own-sale",
+        voucherNumber: "SALE-BACKUP-OWN",
+        remoteId: "kiranaos-backup-own-sale",
+      } });
+      const otherTallyPost = await ctx.db.tallyPost.create({ data: {
+        shopId: other.shop.id,
+        documentType: "sale",
+        documentId: "backup-other-sale",
+        voucherNumber: "SALE-BACKUP-OTHER",
+        remoteId: "kiranaos-backup-other-sale",
+      } });
+      const ledgerRow = await ctx.db.financialLedger.create({ data: {
         shopId: tenant.shop.id,
         sourceType: "backup_reconciliation",
         sourceId: "backup-bank-source",
@@ -120,6 +135,8 @@ if (ctx.skip) {
       assert.equal(snapshot.data.tables.BankStatementTransaction.some((row) => row.id === statementTransaction.id), true);
       assert.equal(snapshot.data.tables.BankReconciliationAllocation.some((row) => row.id === allocation.id), true);
       assert.equal(snapshot.data.tables.BankReconciliationEvent.some((row) => row.id === reconciliationEvent.id), true);
+      assert.equal(snapshot.data.tables.TallyPost.some((row) => row.id === ownTallyPost.id), true);
+      assert.equal(snapshot.data.tables.TallyPost.some((row) => row.id === otherTallyPost.id), false);
       const serialized = JSON.stringify(snapshot);
       assert.equal(serialized.includes("passwordHash"), true, "manifest documents intentional credential exclusion");
       assert.equal(serialized.includes(tenant.owner.passwordHash), false, "credential hashes are never present in the artifact");
@@ -203,6 +220,13 @@ if (ctx.skip) {
     test("transactionally restores business data, preserves credentials, creates recovery backup, and releases maintenance lock", async () => {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Before Restore", stockBaseQty: 7 });
+      const tallyPost = await ctx.db.tallyPost.create({ data: {
+        shopId: tenant.shop.id,
+        documentType: "sale",
+        documentId: "sale-before-restore",
+        voucherNumber: "SALE-BEFORE-RESTORE",
+        remoteId: "kiranaos-sale-before-restore",
+      } });
       const device = await ctx.db.device.create({ data: { shopId: tenant.shop.id, userId: tenant.owner.id, deviceId: "restore-stale-device", status: "active", dataEpoch: 0 } });
       const artifact = await ctx.db.backupArtifact.create({ data: {
         shopId: tenant.shop.id, requestedByUserId: tenant.owner.id, type: "shop_logical",
@@ -212,6 +236,14 @@ if (ctx.skip) {
       const ownerBefore = await ctx.db.user.findUnique({ where: { id: tenant.owner.id }, select: { passwordHash: true, pinHash: true } });
       await ctx.db.product.update({ where: { id: product.id }, data: { name: "Changed Later", stockBaseQty: 99 } });
       await createProduct(ctx.db, tenant.shop.id, { name: "Created Later" });
+      await ctx.db.tallyPost.delete({ where: { id: tallyPost.id } });
+      await ctx.db.tallyPost.create({ data: {
+        shopId: tenant.shop.id,
+        documentType: "sale",
+        documentId: "sale-created-later",
+        voucherNumber: "SALE-CREATED-LATER",
+        remoteId: "kiranaos-sale-created-later",
+      } });
 
       const restored = await restoreShopBackup(tenant.shop.id, artifact.id, tenant.owner.id, `RESTORE ${artifact.id.slice(-6)}`);
       assert.ok(restored.restoredRecords > 0);
@@ -220,6 +252,8 @@ if (ctx.skip) {
       const products = await ctx.db.product.findMany({ where: { shopId: tenant.shop.id }, orderBy: { name: "asc" } });
       assert.deepEqual(products.map((row) => row.name), ["Before Restore"]);
       assert.equal(products[0].stockBaseQty, 7);
+      const restoredTallyPosts = await ctx.db.tallyPost.findMany({ where: { shopId: tenant.shop.id } });
+      assert.deepEqual(restoredTallyPosts.map((row) => row.id), [tallyPost.id], "Tally idempotency history is restored so vouchers cannot be posted twice");
       const ownerAfter = await ctx.db.user.findUnique({ where: { id: tenant.owner.id }, select: { passwordHash: true, pinHash: true } });
       assert.deepEqual(ownerAfter, ownerBefore, "password and PIN hashes remain installation-controlled");
       const epochState = await ctx.db.shop.findUnique({ where: { id: tenant.shop.id }, select: { dataEpoch: true } });

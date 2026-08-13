@@ -34,6 +34,7 @@ export type VerticalId =
   | "furniture-home"
   | "beauty-cosmetics"
   | "restaurant"
+  | "manufacturing"
   | "custom";
 
 /**
@@ -63,7 +64,8 @@ export type VerticalPageId =
   | "restaurant/tables"
   | "restaurant/kitchen"
   | "restaurant/menu"
-  | "restaurant/kitchen-stock";
+  | "restaurant/kitchen-stock"
+  | "manufacturing/operations";
 
 /**
  * A control one trade contributes to a shared core screen — see

@@ -10,6 +10,7 @@ import {
 } from "../udhar/udharBalance.service.js";
 import { postUdharPaymentLedger } from "../finance/financial-ledger.service.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
+import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
 
 async function writeRequiredCustomerAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -155,12 +156,23 @@ export async function createCustomer(shopId, data, { reuseExistingMobile = false
       durationMs: Date.now() - startedAt,
       req: actor.req ?? null,
     }, tx);
-    return withBalance;
+    const deliveries = await stageIntegrationEvent(shopId, "customer.updated", {
+      id: withBalance.id,
+      name: withBalance.name,
+      mobile: withBalance.mobile,
+      type: withBalance.type,
+      customerGroup: withBalance.customerGroup,
+      udharAmount: withBalance.udharAmount,
+      operation: "created",
+      updatedAt: withBalance.updatedAt,
+    }, { client: tx });
+    return { customer: withBalance, deliveries };
   });
 
   // §2 audit "Customer creation". `before` is null because the record did not
   // exist — that asymmetry is what marks a create on the timeline.
-  return created;
+  await dispatchIntegrationDeliveries(created.deliveries);
+  return created.customer;
 }
 
 export async function updateCustomer(shopId, id, data, actor = {}) {
@@ -170,7 +182,7 @@ export async function updateCustomer(shopId, id, data, actor = {}) {
     throw err;
   }
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const existing = await tx.customer.findFirst({ where: { id, shopId, deletedAt: null } });
     if (!existing) throw new AppError("Customer not found", 404);
     if (data.mobile) {
@@ -195,8 +207,20 @@ export async function updateCustomer(shopId, id, data, actor = {}) {
       metadata: { offlineSyncEventId: actor.syncEventId ?? null },
       req: actor.req ?? null,
     }, tx);
-    return withBalance;
+    const deliveries = await stageIntegrationEvent(shopId, "customer.updated", {
+      id: withBalance.id,
+      name: withBalance.name,
+      mobile: withBalance.mobile,
+      type: withBalance.type,
+      customerGroup: withBalance.customerGroup,
+      udharAmount: withBalance.udharAmount,
+      operation: "updated",
+      updatedAt: withBalance.updatedAt,
+    }, { client: tx });
+    return { customer: withBalance, deliveries };
   });
+  await dispatchIntegrationDeliveries(result.deliveries);
+  return result.customer;
 }
 
 export async function softDeleteCustomer(shopId, id, { actorUserId = null, deviceId = null, req = null, syncEventId = null } = {}) {
@@ -338,6 +362,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
           newBalance: currentBalance.balance,
           amountPaid: existingLedger.amount,
           idempotentReplay: true,
+          integrationDeliveries: [],
         };
       }
 
@@ -388,35 +413,41 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
       repairNote: `System repair after payment ${ledger.id}: udhar balance went negative`,
     });
 
-    return {
+    const paymentOutcome = {
       customerId,
       ledgerEntryId: ledger.id,
       newBalance: refreshed.balance,
       amountPaid: paymentAmount,
     };
+    await writeRequiredCustomerAudit({
+      shopId,
+      userId: actor.userId ?? actor.actorUserId ?? null,
+      deviceId: actor.deviceId ?? null,
+      module: AUDIT_MODULES.PAYMENTS,
+      action: "UDHAR_PAYMENT_RECEIVED",
+      entityType: "udhar_ledger",
+      entityId: ledger.id,
+      before: { customerId, outstanding: currentBalance.balance },
+      after: { customerId, outstanding: refreshed.balance },
+      metadata: { customerName: customer.name, amount: paymentAmount, mode, note: note ?? null },
+      durationMs: Date.now() - startedAt,
+      req: actor.req ?? null,
+    }, tx);
+    const integrationDeliveries = await stageIntegrationEvent(shopId, "payment.recorded", {
+      customerId,
+      amount: paymentAmount,
+      paymentMode: mode ?? null,
+      referenceId: ledger.id,
+      recordedAt: businessDate,
+    }, { client: tx });
+      return { ...paymentOutcome, integrationDeliveries };
     });
 
-    // §2 audit "Payment received". Written after the transaction commits so a
-    // rolled-back payment never appears on the timeline, and skipped for
-    // idempotent replays so a retried sync event is not logged twice.
-    if (!outcome.idempotentReplay) {
-      await createAuditLog({
-        shopId,
-        userId: actor.userId ?? actor.actorUserId ?? null,
-        deviceId: actor.deviceId ?? null,
-        module: AUDIT_MODULES.PAYMENTS,
-        action: "UDHAR_PAYMENT_RECEIVED",
-        entityType: "udhar_ledger",
-        entityId: outcome.ledgerEntryId,
-        before: { customerId, outstanding: round2(outcome.newBalance + paymentAmount) },
-        after: { customerId, outstanding: outcome.newBalance },
-        metadata: { customerName: customer.name, amount: paymentAmount, mode, note: note ?? null },
-        durationMs: Date.now() - startedAt,
-        req: actor.req ?? null,
-      });
-    }
-
-    return outcome;
+    // Ledger, financial posting, balance, audit and webhook outbox commit
+    // together; only transport dispatch happens after the transaction.
+    await dispatchIntegrationDeliveries(outcome.integrationDeliveries);
+    const { integrationDeliveries: _integrationDeliveries, ...publicOutcome } = outcome;
+    return publicOutcome;
   } catch (error) {
     if (isUniqueConstraintError(error) && hasLedgerIdentity(identity)) {
       const existingLedger = await findExistingUdharPaymentByIdentity(db, shopId, customerId, identity);

@@ -18,7 +18,7 @@ export const updateTemplateSchema = z.object({
 
 export const listLogsQuerySchema = z.object({
   customerId: z.string().optional(),
-  status: z.enum(["queued", "sent", "failed", "skipped"]).optional(),
+  status: z.enum(["queued", "sending", "accepted", "sent", "delivered", "read", "failed", "skipped"]).optional(),
   channel: z.enum(["whatsapp", "sms", "email"]).optional(),
   from: z.string().optional(),
   to: z.string().optional(),

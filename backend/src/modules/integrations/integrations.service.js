@@ -17,6 +17,8 @@ import { addJob } from "../../lib/queue.js";
 import { JOB_NAMES, QUEUE_NAMES } from "../../workers/queueNames.js";
 import { buildTallyEnvelope } from "./tally-voucher.js";
 import { validateGstin } from "../../utils/gst.js";
+import { createAuditLog } from "../audit/audit.service.js";
+import { baseQtyToRateQty } from "../../utils/units.js";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 const MAX_ACTIVE_API_KEYS = 10;
@@ -24,6 +26,42 @@ const MAX_WEBHOOK_ENDPOINTS = 10;
 const MAX_TALLY_BILLS = 10000;
 const MAX_TALLY_INVENTORY_BILLS = 2000;
 const MAX_TALLY_VOUCHERS = 20000;
+
+async function writeRequiredIntegrationAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Integration change was not saved because its audit record could not be stored",
+      503,
+      "INTEGRATION_AUDIT_UNAVAILABLE",
+    );
+  }
+  return audit;
+}
+
+function apiKeyAuditSnapshot(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    keyPrefix: row.keyPrefix,
+    scopes: jsonArray(row.scopesJson),
+    expiresAt: row.expiresAt ?? null,
+    revokedAt: row.revokedAt ?? null,
+  };
+}
+
+function webhookAuditSnapshot(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    url: row.url,
+    events: jsonArray(row.eventsJson),
+    enabled: row.enabled,
+    deletedAt: row.deletedAt ?? null,
+  };
+}
 
 function jsonArray(value) {
   try { const parsed = JSON.parse(value || "[]"); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
@@ -163,18 +201,48 @@ export async function listApiKeys(shopId) {
   return rows.map((row) => ({ ...row, scopes: jsonArray(row.scopesJson), scopesJson: undefined }));
 }
 
-export async function createApiKey({ shopId, userId, input }) {
-  const activeCount = await db.integrationApiKey.count({ where: { shopId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } });
-  if (activeCount >= MAX_ACTIVE_API_KEYS) throw new AppError(`A shop can have at most ${MAX_ACTIVE_API_KEYS} active API keys`, 409, "INTEGRATION_KEY_LIMIT_REACHED");
+export async function createApiKey({ shopId, userId, input, actor = {} }) {
   const raw = crypto.randomBytes(32).toString("base64url");
   const secret = `kos_${env.NODE_ENV === "production" ? "live" : "test"}_${raw}`;
-  const row = await db.integrationApiKey.create({ data: { shopId, name: input.name, keyPrefix: secret.slice(0, 18), keyHash: hashApiKey(secret), scopesJson: JSON.stringify([...new Set(input.scopes)].sort()), createdByUserId: userId || null, expiresAt: input.expiresAt ? new Date(input.expiresAt) : null }, select: { id: true, name: true, keyPrefix: true, scopesJson: true, expiresAt: true, createdAt: true } });
+  const row = await db.$transaction(async (tx) => {
+    const activeCount = await tx.integrationApiKey.count({ where: { shopId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } });
+    if (activeCount >= MAX_ACTIVE_API_KEYS) throw new AppError(`A shop can have at most ${MAX_ACTIVE_API_KEYS} active API keys`, 409, "INTEGRATION_KEY_LIMIT_REACHED");
+    const created = await tx.integrationApiKey.create({ data: { shopId, name: input.name, keyPrefix: secret.slice(0, 18), keyHash: hashApiKey(secret), scopesJson: JSON.stringify([...new Set(input.scopes)].sort()), createdByUserId: userId || null, expiresAt: input.expiresAt ? new Date(input.expiresAt) : null } });
+    await writeRequiredIntegrationAudit({
+      shopId,
+      userId: actor.userId ?? userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      action: "INTEGRATION_API_KEY_CREATED",
+      entityType: "IntegrationApiKey",
+      entityId: created.id,
+      before: null,
+      after: apiKeyAuditSnapshot(created),
+      req: actor.req ?? null,
+    }, tx);
+    return created;
+  }, { isolationLevel: "Serializable" });
   return { ...row, scopes: jsonArray(row.scopesJson), scopesJson: undefined, secret };
 }
 
-export async function revokeApiKey(shopId, id) {
-  const result = await db.integrationApiKey.updateMany({ where: { id, shopId, revokedAt: null }, data: { revokedAt: new Date() } });
-  if (!result.count) throw new AppError("API key not found or already revoked", 404, "INTEGRATION_KEY_NOT_FOUND");
+export async function revokeApiKey(shopId, id, actor = {}) {
+  await db.$transaction(async (tx) => {
+    const existing = await tx.integrationApiKey.findFirst({ where: { id, shopId, revokedAt: null } });
+    if (!existing) throw new AppError("API key not found or already revoked", 404, "INTEGRATION_KEY_NOT_FOUND");
+    const revokedAt = new Date();
+    const result = await tx.integrationApiKey.updateMany({ where: { id, shopId, revokedAt: null }, data: { revokedAt } });
+    if (!result.count) throw new AppError("API key changed while it was being revoked", 409, "CONCURRENT_INTEGRATION_KEY_UPDATE");
+    await writeRequiredIntegrationAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      action: "INTEGRATION_API_KEY_REVOKED",
+      entityType: "IntegrationApiKey",
+      entityId: id,
+      before: apiKeyAuditSnapshot(existing),
+      after: apiKeyAuditSnapshot({ ...existing, revokedAt }),
+      req: actor.req ?? null,
+    }, tx);
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function authenticateApiKey(secret) {
@@ -198,33 +266,78 @@ export async function listWebhookEndpoints(shopId) {
   return rows.map((row) => ({ ...row, events: jsonArray(row.eventsJson), eventsJson: undefined, signingSecretConfigured: true }));
 }
 
-export async function createWebhookEndpoint({ shopId, userId, input }) {
+export async function createWebhookEndpoint({ shopId, userId, input, actor = {} }) {
   const url = assertWebhookUrlSyntax(input.url).toString();
-  const [endpointCount, duplicate] = await Promise.all([
-    db.webhookEndpoint.count({ where: { shopId, deletedAt: null } }),
-    db.webhookEndpoint.findFirst({ where: { shopId, deletedAt: null, url }, select: { id: true } }),
-  ]);
-  if (endpointCount >= MAX_WEBHOOK_ENDPOINTS) throw new AppError(`A shop can have at most ${MAX_WEBHOOK_ENDPOINTS} webhook endpoints`, 409, "WEBHOOK_LIMIT_REACHED");
-  if (duplicate) throw new AppError("This webhook URL is already configured", 409, "WEBHOOK_URL_DUPLICATE");
-  const row = await db.webhookEndpoint.create({ data: { shopId, name: input.name, url, eventsJson: JSON.stringify([...new Set(input.events)].sort()), createdByUserId: userId || null } });
+  const row = await db.$transaction(async (tx) => {
+    const endpointCount = await tx.webhookEndpoint.count({ where: { shopId, deletedAt: null } });
+    const duplicate = await tx.webhookEndpoint.findFirst({ where: { shopId, deletedAt: null, url }, select: { id: true } });
+    if (endpointCount >= MAX_WEBHOOK_ENDPOINTS) throw new AppError(`A shop can have at most ${MAX_WEBHOOK_ENDPOINTS} webhook endpoints`, 409, "WEBHOOK_LIMIT_REACHED");
+    if (duplicate) throw new AppError("This webhook URL is already configured", 409, "WEBHOOK_URL_DUPLICATE");
+    const created = await tx.webhookEndpoint.create({ data: { shopId, name: input.name, url, eventsJson: JSON.stringify([...new Set(input.events)].sort()), createdByUserId: userId || null } });
+    await writeRequiredIntegrationAudit({
+      shopId,
+      userId: actor.userId ?? userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      action: "WEBHOOK_ENDPOINT_CREATED",
+      entityType: "WebhookEndpoint",
+      entityId: created.id,
+      before: null,
+      after: webhookAuditSnapshot(created),
+      req: actor.req ?? null,
+    }, tx);
+    return created;
+  }, { isolationLevel: "Serializable" });
   return { ...row, events: jsonArray(row.eventsJson), eventsJson: undefined, secret: deriveWebhookSecret(row.id) };
 }
 
-export async function updateWebhookEndpoint(shopId, id, input) {
+export async function updateWebhookEndpoint(shopId, id, input, actor = {}) {
   const normalizedUrl = input.url ? assertWebhookUrlSyntax(input.url).toString() : undefined;
-  const existing = await db.webhookEndpoint.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!existing) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
-  if (normalizedUrl) {
-    const duplicate = await db.webhookEndpoint.findFirst({ where: { shopId, url: normalizedUrl, deletedAt: null, NOT: { id } }, select: { id: true } });
-    if (duplicate) throw new AppError("This webhook URL is already configured", 409, "WEBHOOK_URL_DUPLICATE");
-  }
-  const row = await db.webhookEndpoint.update({ where: { id }, data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(normalizedUrl !== undefined ? { url: normalizedUrl } : {}), ...(input.events !== undefined ? { eventsJson: JSON.stringify([...new Set(input.events)].sort()) } : {}), ...(input.enabled !== undefined ? { enabled: input.enabled } : {}) } });
+  const row = await db.$transaction(async (tx) => {
+    const existing = await tx.webhookEndpoint.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
+    if (normalizedUrl) {
+      const duplicate = await tx.webhookEndpoint.findFirst({ where: { shopId, url: normalizedUrl, deletedAt: null, NOT: { id } }, select: { id: true } });
+      if (duplicate) throw new AppError("This webhook URL is already configured", 409, "WEBHOOK_URL_DUPLICATE");
+    }
+    const data = { ...(input.name !== undefined ? { name: input.name } : {}), ...(normalizedUrl !== undefined ? { url: normalizedUrl } : {}), ...(input.events !== undefined ? { eventsJson: JSON.stringify([...new Set(input.events)].sort()) } : {}), ...(input.enabled !== undefined ? { enabled: input.enabled } : {}) };
+    const claimed = await tx.webhookEndpoint.updateMany({ where: { id, shopId, deletedAt: null, updatedAt: existing.updatedAt }, data });
+    if (claimed.count !== 1) throw new AppError("Webhook endpoint changed on another device. Refresh and try again.", 409, "CONCURRENT_WEBHOOK_UPDATE");
+    const updated = await tx.webhookEndpoint.findUniqueOrThrow({ where: { id } });
+    await writeRequiredIntegrationAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      action: "WEBHOOK_ENDPOINT_UPDATED",
+      entityType: "WebhookEndpoint",
+      entityId: id,
+      before: webhookAuditSnapshot(existing),
+      after: webhookAuditSnapshot(updated),
+      req: actor.req ?? null,
+    }, tx);
+    return updated;
+  }, { isolationLevel: "Serializable" });
   return { ...row, events: jsonArray(row.eventsJson), eventsJson: undefined };
 }
 
-export async function deleteWebhookEndpoint(shopId, id) {
-  const result = await db.webhookEndpoint.updateMany({ where: { id, shopId, deletedAt: null }, data: { enabled: false, deletedAt: new Date() } });
-  if (!result.count) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
+export async function deleteWebhookEndpoint(shopId, id, actor = {}) {
+  await db.$transaction(async (tx) => {
+    const existing = await tx.webhookEndpoint.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
+    const deletedAt = new Date();
+    const result = await tx.webhookEndpoint.updateMany({ where: { id, shopId, deletedAt: null, updatedAt: existing.updatedAt }, data: { enabled: false, deletedAt } });
+    if (!result.count) throw new AppError("Webhook endpoint changed on another device. Refresh and try again.", 409, "CONCURRENT_WEBHOOK_UPDATE");
+    await writeRequiredIntegrationAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      action: "WEBHOOK_ENDPOINT_ARCHIVED",
+      entityType: "WebhookEndpoint",
+      entityId: id,
+      before: webhookAuditSnapshot(existing),
+      after: webhookAuditSnapshot({ ...existing, enabled: false, deletedAt }),
+      req: actor.req ?? null,
+    }, tx);
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function listWebhookDeliveries(shopId, { limit, cursor }) {
@@ -234,16 +347,64 @@ export async function listWebhookDeliveries(shopId, { limit, cursor }) {
   return { items, hasMore, nextCursor: hasMore ? items.at(-1)?.id ?? null : null };
 }
 
-export async function testWebhookEndpoint(shopId, endpointId) {
-  const endpoint = await db.webhookEndpoint.findFirst({ where: { id: endpointId, shopId, deletedAt: null } });
-  if (!endpoint) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
-  return deliverWebhook(endpoint, "integration.test", { message: "KiranaOS webhook connection test", shopId, sentAt: new Date().toISOString() });
+export async function testWebhookEndpoint(shopId, endpointId, actor = {}) {
+  const delivery = await db.$transaction(async (tx) => {
+    const endpoint = await tx.webhookEndpoint.findFirst({ where: { id: endpointId, shopId, deletedAt: null } });
+    if (!endpoint) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
+    if (!endpoint.enabled) throw new AppError("Webhook endpoint is disabled", 409, "WEBHOOK_DISABLED");
+    const eventId = `evt_${crypto.randomUUID().replaceAll("-", "")}`;
+    const payloadJson = JSON.stringify({ message: "KiranaOS webhook connection test", shopId, sentAt: new Date().toISOString() });
+    const created = await tx.webhookDelivery.create({
+      data: { shopId, endpointId, eventId, eventType: "integration.test", payloadJson },
+    });
+    await writeRequiredIntegrationAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      action: "WEBHOOK_ENDPOINT_TEST_REQUESTED",
+      entityType: "WebhookEndpoint",
+      entityId: endpointId,
+      before: null,
+      after: { deliveryId: created.id, status: created.status },
+      req: actor.req ?? null,
+    }, tx);
+    return created;
+  }, { isolationLevel: "Serializable" });
+  // The durable request and audit are committed before the network call. A crash
+  // here leaves a pending row that recoverWebhookDeliveries will pick up.
+  return retryWebhookDelivery(shopId, delivery.id);
 }
 
 export async function retryWebhookDelivery(shopId, deliveryId) {
   const delivery = await db.webhookDelivery.findFirst({ where: { id: deliveryId, shopId }, include: { endpoint: true } });
   if (!delivery || delivery.endpoint.deletedAt) throw new AppError("Webhook delivery not found or endpoint has been archived", 404, "WEBHOOK_DELIVERY_NOT_FOUND");
   return deliverWebhook(delivery.endpoint, delivery.eventType, JSON.parse(delivery.payloadJson), delivery.eventId, delivery.createdAt);
+}
+
+export async function requestWebhookDeliveryRetry(shopId, deliveryId, actor = {}) {
+  await db.$transaction(async (tx) => {
+    const delivery = await tx.webhookDelivery.findFirst({ where: { id: deliveryId, shopId }, include: { endpoint: true } });
+    if (!delivery || delivery.endpoint.deletedAt) throw new AppError("Webhook delivery not found or endpoint has been archived", 404, "WEBHOOK_DELIVERY_NOT_FOUND");
+    if (!delivery.endpoint.enabled) throw new AppError("Webhook endpoint is disabled", 409, "WEBHOOK_DISABLED");
+    await tx.webhookDelivery.update({
+      where: { id: delivery.id },
+      data: { status: "pending", deliveredAt: null },
+    });
+    await writeRequiredIntegrationAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      action: "WEBHOOK_DELIVERY_RETRY_REQUESTED",
+      entityType: "WebhookDelivery",
+      entityId: delivery.id,
+      before: { status: delivery.status, attemptCount: delivery.attemptCount, lastError: delivery.lastError },
+      after: { status: "pending", attemptCount: delivery.attemptCount },
+      metadata: { endpointId: delivery.endpointId, eventId: delivery.eventId, eventType: delivery.eventType },
+      req: actor.req ?? null,
+    }, tx);
+  }, { isolationLevel: "Serializable" });
+  // If the process exits after commit, the recovery scan sees status=pending.
+  return retryWebhookDelivery(shopId, deliveryId);
 }
 
 async function scheduleWebhookDelivery(delivery) {
@@ -361,27 +522,47 @@ async function deliverWebhook(endpoint, eventType, payload, existingEventId = nu
   } finally { clearTimeout(timer); }
 }
 
-// Business writes call this only after their database transaction succeeds.
-// Persist pending delivery evidence before returning, then perform network I/O
-// in the background. A slow consumer never blocks the POS response, while an
-// immediate process restart cannot make the event disappear without a trace.
-export async function publishIntegrationEvent(shopId, eventType, payload) {
-  if (!(await hasFeature(shopId, "api_webhook_later"))) return [];
-  const endpoints = await db.webhookEndpoint.findMany({ where: { shopId, enabled: true, deletedAt: null } });
+/**
+ * Persist webhook-outbox rows on the caller's transaction client.
+ *
+ * Business mutations use this inside their own transaction so an order/payment
+ * and the durable event describing it either both commit or neither does. Network
+ * dispatch is deliberately separate and happens only after commit.
+ */
+export async function stageIntegrationEvent(shopId, eventType, payload, { client = db } = {}) {
+  const endpoints = await client.webhookEndpoint.findMany({ where: { shopId, enabled: true, deletedAt: null } });
   const matching = endpoints.filter((endpoint) => jsonArray(endpoint.eventsJson).includes(eventType));
   if (!matching.length) return [];
+  // Most shops have no endpoint, so only perform the subscription/entitlement
+  // reads once there is real outbox work to stage. This keeps billing fast while
+  // still disabling leftover endpoints immediately after a plan downgrade.
+  if (!(await hasFeature(shopId, "api_webhook_later", client))) return [];
   const eventId = `evt_${crypto.randomUUID().replaceAll("-", "")}`;
   const eventCreatedAt = new Date();
   const payloadJson = JSON.stringify(payload, integrationJsonReplacer);
   const envelope = JSON.stringify({ id: eventId, type: eventType, createdAt: eventCreatedAt.toISOString(), data: JSON.parse(payloadJson) });
   if (Buffer.byteLength(envelope) > MAX_WEBHOOK_BODY_BYTES) throw new AppError("Webhook payload is too large", 413, "WEBHOOK_PAYLOAD_TOO_LARGE");
 
-  const pending = await Promise.all(matching.map((endpoint) => db.webhookDelivery.create({
-    data: { shopId, endpointId: endpoint.id, eventId, eventType, payloadJson },
-  })));
-
-  await Promise.all(pending.map(scheduleWebhookDelivery));
+  const pending = [];
+  for (const endpoint of matching) {
+    pending.push(await client.webhookDelivery.create({
+      data: { shopId, endpointId: endpoint.id, eventId, eventType, payloadJson },
+    }));
+  }
   return pending;
+}
+
+export async function dispatchIntegrationDeliveries(deliveries = []) {
+  await Promise.all(deliveries.map(scheduleWebhookDelivery));
+  return deliveries;
+}
+
+// Standalone publishers keep the same API. Transactional business services use
+// stageIntegrationEvent(...) within their transaction, then dispatch this result
+// after commit so external I/O never holds a database lock.
+export async function publishIntegrationEvent(shopId, eventType, payload) {
+  const pending = await stageIntegrationEvent(shopId, eventType, payload);
+  return dispatchIntegrationDeliveries(pending);
 }
 
 export async function listApiResource({ shopId, resource, scope, query }) {
@@ -417,7 +598,7 @@ export async function buildTallyExport(shopId, query) {
   const maxBills = inventory ? MAX_TALLY_INVENTORY_BILLS : MAX_TALLY_BILLS;
   const wants = (document) => query.include.includes(document);
 
-  const [shop, bills, purchases, purchaseReturns, receipts, expenses] = await Promise.all([
+  const [shop, bills, purchases, purchaseReturns, receipts, expenses, productionRuns] = await Promise.all([
     db.shop.findUnique({ where: { id: shopId }, select: { name: true, gstNumber: true } }),
 
     wants("sales")
@@ -473,15 +654,44 @@ export async function buildTallyExport(shopId, query) {
           take: MAX_TALLY_BILLS + 1,
         })
       : [],
+
+    wants("production")
+      ? db.productionRun.findMany({
+          where: { shopId, status: "completed", completedAt: { gte: from, lte: to } },
+          orderBy: { completedAt: "asc" }, take: MAX_TALLY_BILLS + 1,
+          include: { consumptions: true, outputs: true },
+        })
+      : [],
   ]);
 
   if (bills.length > maxBills) throw new AppError(`Export exceeds ${maxBills} bills. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
-  const documentCount = bills.length + purchases.length + purchaseReturns.length + receipts.length + expenses.length;
+  const documentCount = bills.length + purchases.length + purchaseReturns.length + receipts.length + expenses.length + productionRuns.length;
   if (documentCount > MAX_TALLY_VOUCHERS) throw new AppError(`Export exceeds ${MAX_TALLY_VOUCHERS} vouchers. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
 
   const selected = query.unsent
-    ? await withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns, receipts, expenses })
-    : { bills, purchases, purchaseReturns, receipts, expenses };
+    ? await withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns, receipts, expenses, productionRuns })
+    : { bills, purchases, purchaseReturns, receipts, expenses, productionRuns };
+
+  if (selected.productionRuns.length) {
+    const ids = [...new Set(selected.productionRuns.flatMap((run) => [...run.consumptions, ...run.outputs].map((row) => row.productId)))];
+    const products = await db.product.findMany({ where: { shopId, id: { in: ids } }, select: { id: true, name: true, baseUnit: true, rateUnit: true, hsn: true, costPerRateUnit: true } });
+    const byId = new Map(products.map((row) => [row.id, row]));
+    selected.productionRuns = selected.productionRuns.map((run) => {
+      const consumptions = run.consumptions.map((row) => {
+        const product = byId.get(row.productId);
+        let rateQty = Number(row.actualBaseQty);
+        try { rateQty = baseQtyToRateQty(rateQty, product?.rateUnit, product?.baseUnit); } catch { /* use base quantity */ }
+        return { ...row, productName: product?.name, baseUnit: product?.baseUnit, hsn: product?.hsn, stockValue: rateQty * Number(product?.costPerRateUnit || 0) };
+      });
+      const totalInputValue = consumptions.reduce((sum, row) => sum + Number(row.stockValue || 0), 0);
+      const totalOutputQty = run.outputs.reduce((sum, row) => sum + Number(row.quantityBaseQty || 0), 0);
+      const outputs = run.outputs.map((row) => {
+        const product = byId.get(row.productId);
+        return { ...row, productName: product?.name, baseUnit: product?.baseUnit, hsn: product?.hsn, stockValue: totalOutputQty > 0 ? totalInputValue * Number(row.quantityBaseQty) / totalOutputQty : 0 };
+      });
+      return { ...run, consumptions, outputs };
+    });
+  }
 
   const { xml, count, masterCount, counts, documents } = buildTallyEnvelope({
     companyName: shop?.name || "KiranaOS",
@@ -505,7 +715,7 @@ function saleDocumentType(bill) {
  * or simply unsure whether the first click worked — books the month twice.
  * Tally's importer will not stop them, so this is where it has to stop.
  */
-async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns, receipts, expenses }) {
+async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns, receipts, expenses, productionRuns = [] }) {
   const groups = [
     ["sale", bills.filter((bill) => saleDocumentType(bill) === "sale").map((bill) => bill.id)],
     ["sales_return", bills.filter((bill) => saleDocumentType(bill) === "sales_return").map((bill) => bill.id)],
@@ -513,9 +723,10 @@ async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns,
     ["purchase_return", purchaseReturns.map((row) => row.id)],
     ["receipt", receipts.map((row) => row.id)],
     ["expense", expenses.map((row) => row.id)],
+    ["production", productionRuns.map((row) => row.id)],
   ].filter(([, ids]) => ids.length > 0);
 
-  if (groups.length === 0) return { bills, purchases, purchaseReturns, receipts, expenses };
+  if (groups.length === 0) return { bills, purchases, purchaseReturns, receipts, expenses, productionRuns };
 
   const posted = await db.tallyPost.findMany({
     where: { shopId, OR: groups.map(([documentType, ids]) => ({ documentType, documentId: { in: ids } })) },
@@ -530,6 +741,7 @@ async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns,
     purchaseReturns: purchaseReturns.filter(keep("purchase_return")),
     receipts: receipts.filter(keep("receipt")),
     expenses: expenses.filter(keep("expense")),
+    productionRuns: productionRuns.filter(keep("production")),
   };
 }
 
@@ -542,7 +754,7 @@ async function withoutAlreadyPosted(shopId, { bills, purchases, purchaseReturns,
  * every voucher also carries a derived REMOTEID — Tally recognises the repeat as
  * the same object instead of a second one.
  */
-export async function markTallyPosted(shopId, documents) {
+export async function markTallyPosted(shopId, documents, actor = {}) {
   const rows = documents.map((document) => ({
     shopId,
     documentType: document.type,
@@ -552,25 +764,50 @@ export async function markTallyPosted(shopId, documents) {
   }));
   if (rows.length === 0) return { recorded: 0 };
 
-  let recorded = 0;
-  for (let index = 0; index < rows.length; index += 500) {
-    const chunk = rows.slice(index, index + 500);
-    try {
-      const result = await db.tallyPost.createMany({ data: chunk });
-      recorded += result.count;
-    } catch {
-      // Two tills confirming the same batch race here, and skipDuplicates is not
-      // available on SQLite. Losing the record would be worse than the retry
-      // cost, because an unrecorded post is one that gets sent again.
-      for (const row of chunk) {
-        await db.tallyPost.upsert({
+  const recordAudit = async (tx, recorded) => {
+    await writeRequiredIntegrationAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? undefined,
+      action: "TALLY_VOUCHERS_POSTED",
+      entityType: "Shop",
+      entityId: shopId,
+      before: null,
+      after: { recorded },
+      metadata: {
+        documentTypes: [...new Set(rows.map((row) => row.documentType))],
+        firstRemoteId: rows[0]?.remoteId ?? null,
+        lastRemoteId: rows.at(-1)?.remoteId ?? null,
+      },
+      req: actor.req ?? null,
+    }, tx);
+  };
+
+  try {
+    return await db.$transaction(async (tx) => {
+      let recorded = 0;
+      for (let index = 0; index < rows.length; index += 500) {
+        const result = await tx.tallyPost.createMany({ data: rows.slice(index, index + 500) });
+        recorded += result.count;
+      }
+      await recordAudit(tx, recorded);
+      return { recorded };
+    }, { isolationLevel: "Serializable" });
+  } catch (error) {
+    if (error?.code !== "P2002") throw error;
+    // Two tills confirming the same batch can collide. SQLite has no
+    // skipDuplicates for createMany, so retry the whole confirmation as
+    // idempotent upserts in one fresh transaction. Audit remains atomic with it.
+    return db.$transaction(async (tx) => {
+      for (const row of rows) {
+        await tx.tallyPost.upsert({
           where: { shopId_documentType_documentId: { shopId, documentType: row.documentType, documentId: row.documentId } },
           update: {},
           create: row,
         });
-        recorded += 1;
       }
-    }
+      await recordAudit(tx, rows.length);
+      return { recorded: rows.length };
+    }, { isolationLevel: "Serializable" });
   }
-  return { recorded };
 }

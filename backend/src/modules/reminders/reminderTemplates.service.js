@@ -9,6 +9,12 @@ function appError(message, statusCode, code) {
   return err;
 }
 
+async function writeRequiredReminderTemplateAudit(client, entry) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) throw appError("Reminder template change could not be audited", 503, "AUDIT_WRITE_FAILED");
+  return audit;
+}
+
 export async function ensureDefaultReminderTemplates(shopId, userId = null) {
   const existing = await db.reminderTemplate.findMany({
     where: { shopId, deletedAt: null },
@@ -43,24 +49,32 @@ export async function getReminderTemplate(shopId, id) {
 
 export async function createReminderTemplate(shopId, userId, data, { req = null } = {}) {
   validateTemplateVariables(data.templateText);
-  const template = await db.reminderTemplate.create({
-    data: { shopId, createdByUserId: userId, active: data.active ?? true, name: data.name, channel: data.channel, templateText: data.templateText },
-  });
-  await createAuditLog({ shopId, userId, action: "REMINDER_TEMPLATE_CREATED", entityType: "ReminderTemplate", entityId: template.id, metadata: { channel: template.channel, name: template.name }, req });
-  return template;
+  return db.$transaction(async (tx) => {
+    const template = await tx.reminderTemplate.create({
+      data: { shopId, createdByUserId: userId, active: data.active ?? true, name: data.name, channel: data.channel, templateText: data.templateText },
+    });
+    await writeRequiredReminderTemplateAudit(tx, { shopId, userId, action: "REMINDER_TEMPLATE_CREATED", entityType: "ReminderTemplate", entityId: template.id, metadata: { channel: template.channel, name: template.name }, req });
+    return template;
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function updateReminderTemplate(shopId, id, userId, data, { req = null } = {}) {
-  await getReminderTemplate(shopId, id);
   if (data.templateText) validateTemplateVariables(data.templateText);
-  const template = await db.reminderTemplate.update({ where: { id }, data });
-  await createAuditLog({ shopId, userId, action: "REMINDER_TEMPLATE_UPDATED", entityType: "ReminderTemplate", entityId: id, metadata: { channel: template.channel, active: template.active }, req });
-  return template;
+  return db.$transaction(async (tx) => {
+    const existing = await tx.reminderTemplate.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw appError("Reminder template not found", 404, "REMINDER_TEMPLATE_NOT_FOUND");
+    const template = await tx.reminderTemplate.update({ where: { id: existing.id }, data });
+    await writeRequiredReminderTemplateAudit(tx, { shopId, userId, action: "REMINDER_TEMPLATE_UPDATED", entityType: "ReminderTemplate", entityId: id, before: { channel: existing.channel, active: existing.active, name: existing.name }, after: { channel: template.channel, active: template.active, name: template.name }, req });
+    return template;
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function deleteReminderTemplate(shopId, id, userId, { req = null } = {}) {
-  const existing = await getReminderTemplate(shopId, id);
-  const template = await db.reminderTemplate.update({ where: { id }, data: { deletedAt: new Date(), active: false } });
-  await createAuditLog({ shopId, userId, action: "REMINDER_TEMPLATE_DELETED", entityType: "ReminderTemplate", entityId: id, metadata: { channel: existing.channel, softDelete: true }, req });
-  return template;
+  return db.$transaction(async (tx) => {
+    const existing = await tx.reminderTemplate.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw appError("Reminder template not found", 404, "REMINDER_TEMPLATE_NOT_FOUND");
+    const template = await tx.reminderTemplate.update({ where: { id: existing.id }, data: { deletedAt: new Date(), active: false } });
+    await writeRequiredReminderTemplateAudit(tx, { shopId, userId, action: "REMINDER_TEMPLATE_DELETED", entityType: "ReminderTemplate", entityId: id, before: { active: existing.active, deletedAt: existing.deletedAt }, after: { active: false, deletedAt: template.deletedAt }, metadata: { channel: existing.channel, softDelete: true }, req });
+    return template;
+  }, { isolationLevel: "Serializable" });
 }

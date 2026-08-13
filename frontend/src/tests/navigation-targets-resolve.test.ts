@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { BUSINESS_TYPE_DEFS, type BusinessType } from "@/features/core/settings/business-types";
 import { SHOP_WORKFLOWS } from "@/features/core/settings/shop-workflows";
 import { ROUTES as VOICE_ROUTES } from "@/features/core/voice/voice-command-parser";
+import { VERTICAL_PACKS } from "@/features/verticals/registry";
 
 /**
  * Every shortcut the app offers must land on a page that exists.
@@ -16,7 +17,10 @@ import { ROUTES as VOICE_ROUTES } from "@/features/core/voice/voice-command-pars
 
 const routesSource = readFileSync(join(process.cwd(), "src/app/routes.tsx"), "utf8");
 
-const REGISTERED = [...routesSource.matchAll(/<Route path="([^"]+)"/g)].map((match) => match[1]);
+const REGISTERED = [
+  ...[...routesSource.matchAll(/<Route path="([^"]+)"/g)].map((match) => match[1]),
+  ...VERTICAL_PACKS.flatMap((pack) => pack.routes.map((route) => route.path)),
+];
 
 function pathOf(href: string) {
   return (href.split(/[?#]/)[0] || "/").replace(/\/+$/, "") || "/";

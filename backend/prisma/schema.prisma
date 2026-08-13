@@ -225,6 +225,7 @@ model ProductSellingUnit {
   packSizeUnit      String?
   conversionToBase  Float    @default(1)
   barcode           String?
+  sku               String?
   defaultPrice      Float
   defaultPricePaise BigInt?
   minimumPrice      Float?
@@ -261,6 +262,7 @@ model ProductSellingUnit {
   @@unique([shopId, productId, unitCode])
   @@index([shopId, productId, isActive])
   @@index([shopId, barcode])
+  @@index([shopId, sku])
   @@index([shopId, updatedAt, id])
 }
 
@@ -1670,6 +1672,8 @@ model InventoryLot {
   locationId            String
   productId             String
   purchaseReceiptItemId String?
+  sellingUnitId          String?
+  producedByRunId        String?
   batchNumber           String
   manufacturedOn        DateTime?
   expiresOn             DateTime
@@ -1697,6 +1701,107 @@ model InventoryLot {
   @@unique([shopId, locationId, productId, batchNumber, expiresOn])
   @@index([shopId, locationId, status, expiresOn])
   @@index([shopId, productId, expiresOn])
+  @@index([shopId, sellingUnitId, status])
+  @@index([producedByRunId])
+}
+
+// MANUFACTURING — recipes, runs and immutable material/output genealogy.
+model ManufacturingBom {
+  id                    String   @id @default(cuid())
+  shopId                String
+  finishedProductId     String
+  name                  String
+  version               Int      @default(1)
+  status                String   @default("active")
+  outputQuantityBaseQty Float
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  items ManufacturingBomItem[]
+  runs  ProductionRun[]
+
+  @@unique([shopId, finishedProductId, version])
+  @@index([shopId, status, updatedAt])
+}
+
+model ManufacturingBomItem {
+  id                String   @id @default(cuid())
+  shopId            String
+  bomId             String
+  materialProductId String
+  quantityBaseQty   Float
+  wastagePercent    Float    @default(0)
+  createdAt         DateTime @default(now())
+
+  bom ManufacturingBom @relation(fields: [bomId], references: [id], onDelete: Cascade)
+
+  @@unique([bomId, materialProductId])
+  @@index([shopId, materialProductId])
+}
+
+model ProductionRun {
+  id                    String    @id @default(cuid())
+  shopId                String
+  locationId            String
+  bomId                  String
+  runNumber              String
+  status                 String    @default("planned")
+  plannedOutputBaseQty  Float
+  actualOutputBaseQty   Float?
+  finishedBatchNumber   String?
+  manufacturedOn        DateTime?
+  expiresOn             DateTime?
+  qcStatus               String    @default("pending")
+  notes                  String?
+  startedAt              DateTime?
+  completedAt            DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  bom          ManufacturingBom       @relation(fields: [bomId], references: [id], onDelete: Restrict)
+  consumptions ProductionConsumption[]
+  outputs      ProductionOutput[]
+
+  @@unique([shopId, runNumber])
+  @@index([shopId, status, createdAt])
+  @@index([shopId, finishedBatchNumber])
+}
+
+model ProductionConsumption {
+  id                 String   @id @default(cuid())
+  shopId             String
+  runId              String
+  productId          String
+  inventoryLotId     String?
+  plannedBaseQty     Float
+  actualBaseQty      Float
+  sourceBatchNumber  String?
+  createdAt          DateTime @default(now())
+
+  run ProductionRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, productId])
+  @@index([inventoryLotId])
+}
+
+model ProductionOutput {
+  id                 String   @id @default(cuid())
+  shopId             String
+  runId              String
+  productId          String
+  sellingUnitId      String?
+  inventoryLotId     String?
+  packagingSku       String?
+  quantityBaseQty    Float
+  packageCount       Float?
+  batchNumber        String
+  createdAt          DateTime @default(now())
+
+  run ProductionRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, productId, batchNumber])
+  @@index([inventoryLotId])
 }
 
 model BillItemLotAllocation {

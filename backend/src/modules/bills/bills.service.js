@@ -22,6 +22,7 @@ import { allocateLotsForBill, batchMrpCeilings, reapplyBillLotAllocations, resto
 import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferRedemption, validateOfferForBill } from "../offers/offers.service.js";
 import { sendTransactionalEmail } from "../../lib/authEmail.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
 
 const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
@@ -314,10 +315,11 @@ export async function confirmBill(shopId, body, actor = {}) {
   const operationalLocation = await resolveOperationalLocation(shopId, requestedLocationId);
 
   let bill;
+  let integrationDeliveries = [];
   try {
-    bill = await db.$transaction(async (tx) => {
+    const transactionResult = await db.$transaction(async (tx) => {
     const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
-    if (existingBill) return existingBill;
+    if (existingBill) return { bill: existingBill, deliveries: [] };
     const location = await resolveOperationalLocation(shopId, operationalLocation.id, tx);
     const shop = await tx.shop.findUnique({ where: { id: shopId } });
     if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
@@ -869,9 +871,53 @@ export async function confirmBill(shopId, body, actor = {}) {
       },
       req: actor.req ?? null,
     }, tx);
+    if (bill.offerId && Number(bill.offerDiscount || 0) > 0 && bill.billType !== "estimate") {
+      await writeRequiredBillAudit({
+        shopId,
+        userId: createdByUserId,
+        deviceId: deviceId ?? billIdentity.sourceDeviceId ?? null,
+        action: "OFFER_REDEEMED",
+        entityType: "Bill",
+        entityId: bill.id,
+        after: { offerId: bill.offerId, offerCode: bill.offerCode, discount: bill.offerDiscount },
+        metadata: { billNo: bill.billNo, locationId: bill.locationId },
+        req: actor.req ?? null,
+      }, tx);
+    }
+    if (Number(bill.loyaltyPointsRedeemed || 0) > 0) {
+      await writeRequiredBillAudit({
+        shopId,
+        userId: createdByUserId,
+        deviceId: deviceId ?? billIdentity.sourceDeviceId ?? null,
+        action: "LOYALTY_POINTS_REDEEMED",
+        entityType: "Bill",
+        entityId: bill.id,
+        after: { customerId: bill.customerId, points: bill.loyaltyPointsRedeemed, discount: bill.loyaltyDiscount },
+        metadata: { billNo: bill.billNo, locationId: bill.locationId },
+        req: actor.req ?? null,
+      }, tx);
+    }
+    const deliveries = await stageIntegrationEvent(shopId, "bill.created", {
+      id: bill.id,
+      billNo: bill.billNo,
+      billType: bill.billType,
+      status: bill.status,
+      customerId: bill.customerId,
+      customerName: bill.customerName,
+      grandTotal: bill.grandTotal,
+      paidAmount: bill.paidAmount,
+      creditAmount: bill.creditAmount,
+      offerId: bill.offerId,
+      offerCode: bill.offerCode,
+      offerDiscount: bill.offerDiscount,
+      createdAt: bill.createdAt,
+      locationId: bill.locationId,
+    }, { client: tx });
 
-    return bill;
+    return { bill, deliveries };
   });
+    bill = transactionResult.bill;
+    integrationDeliveries = transactionResult.deliveries;
   } catch (error) {
     if (isUniqueConstraintError(error) && hasBillIdentity(billIdentity)) {
       const existingBill = await findExistingBillByIdentity(db, shopId, billIdentity);
@@ -881,6 +927,8 @@ export async function confirmBill(shopId, body, actor = {}) {
       throw error;
     }
   }
+
+  await dispatchIntegrationDeliveries(integrationDeliveries);
 
   return {
     ...bill,
@@ -1076,10 +1124,11 @@ export async function createSaleReturn(shopId, body, actor = {}) {
   const billIdentity = normalizeBillIdentity(shopId, body, actor);
 
   let bill;
+  let integrationDeliveries = [];
   try {
-    bill = await db.$transaction(async (tx) => {
+    const transactionResult = await db.$transaction(async (tx) => {
       const existing = await findExistingBillByIdentity(tx, shopId, billIdentity);
-      if (existing) return existing;
+      if (existing) return { bill: existing, deliveries: [] };
 
       // Optional link to the original sale (bill-linked returns).
       const original = returnOfBillId
@@ -1466,9 +1515,19 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         },
         req: actor.req ?? null,
       }, tx);
+      const deliveries = await stageIntegrationEvent(shopId, "sale.return_created", {
+        id: returnBill.id,
+        billNo: returnBill.billNo,
+        returnOfBillId: returnBill.returnOfBillId,
+        grandTotal: returnBill.grandTotal,
+        refundMode: returnBill.refundMode,
+        locationId: returnBill.locationId,
+      }, { client: tx });
 
-      return issuedGiftCard ? { ...returnBill, issuedGiftCard } : returnBill;
+      return { bill: issuedGiftCard ? { ...returnBill, issuedGiftCard } : returnBill, deliveries };
     });
+    bill = transactionResult.bill;
+    integrationDeliveries = transactionResult.deliveries;
   } catch (error) {
     if (isUniqueConstraintError(error) && hasBillIdentity(billIdentity)) {
       const existingBill = await findExistingBillByIdentity(db, shopId, billIdentity);
@@ -1479,6 +1538,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
     }
   }
 
+  await dispatchIntegrationDeliveries(integrationDeliveries);
   return bill;
 }
 

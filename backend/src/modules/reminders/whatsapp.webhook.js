@@ -9,11 +9,11 @@ import { createAuditLog } from "../audit/audit.service.js";
 
 const PROVIDERS = new Set(["meta", "twilio", "gupshup", "interakt"]);
 const STATUS_PREDECESSORS = Object.freeze({
-  accepted: ["queued"],
-  sent: ["queued", "accepted"],
-  delivered: ["queued", "accepted", "sent"],
-  read: ["queued", "accepted", "sent", "delivered"],
-  failed: ["queued", "accepted", "sent"],
+  accepted: ["queued", "sending"],
+  sent: ["queued", "sending", "accepted"],
+  delivered: ["queued", "sending", "accepted", "sent"],
+  read: ["queued", "sending", "accepted", "sent", "delivered"],
+  failed: ["queued", "sending", "accepted", "sent"],
 });
 const ACTION_BY_STATUS = Object.freeze({
   accepted: "REMINDER_ACCEPTED",
@@ -27,6 +27,12 @@ let lastDeliveryEventCleanupAt = 0;
 
 function webhookError(message, statusCode, code) {
   return new AppError(message, statusCode, code);
+}
+
+async function writeRequiredReminderDeliveryAudit(client, entry) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) throw webhookError("Reminder delivery state could not be audited", 503, "AUDIT_WRITE_FAILED");
+  return audit;
 }
 
 function headerValue(headers, name) {
@@ -243,47 +249,54 @@ function statusTimestampData(status, at) {
 }
 
 async function applyDeliveryEvent(event, fallbackReminderLogId = null) {
-  let reminder = await db.reminderLog.findFirst({ where: { provider: event.provider, providerMessageId: event.providerMessageId } });
-  const fallbackId = validReference(fallbackReminderLogId ?? event.reminderLogId);
-  if (!reminder && fallbackId) {
-    reminder = await db.reminderLog.findFirst({
-      where: {
-        id: fallbackId,
-        provider: { in: ["disabled", event.provider] },
-        OR: [{ providerMessageId: null }, { providerMessageId: event.providerMessageId }],
+  const outcome = await db.$transaction(async (tx) => {
+    let reminder = await tx.reminderLog.findFirst({ where: { provider: event.provider, providerMessageId: event.providerMessageId } });
+    const fallbackId = validReference(fallbackReminderLogId ?? event.reminderLogId);
+    if (!reminder && fallbackId) {
+      reminder = await tx.reminderLog.findFirst({
+        where: {
+          id: fallbackId,
+          provider: { in: ["disabled", event.provider] },
+          OR: [{ providerMessageId: null }, { providerMessageId: event.providerMessageId }],
+        },
+      });
+    }
+    if (!reminder) return { matched: false, advanced: false };
+
+    const allowedStatuses = STATUS_PREDECESSORS[event.status] ?? [];
+    const failureCode = event.status === "failed" ? `WHATSAPP_DELIVERY_FAILED${event.errorCode ? `:${event.errorCode}` : ""}` : null;
+    const changed = await tx.reminderLog.updateMany({
+      where: { id: reminder.id, status: { in: allowedStatuses } },
+      data: {
+        status: event.status,
+        provider: event.provider,
+        providerMessageId: reminder.providerMessageId ?? event.providerMessageId,
+        error: failureCode,
+        lastStatusAt: event.eventAt,
+        ...statusTimestampData(event.status, event.eventAt),
       },
     });
-  }
-  if (!reminder) return { matched: false, advanced: false };
+    await tx.reminderDeliveryEvent.update({ where: { id: event.id }, data: { reminderLogId: reminder.id, processedAt: new Date() } });
+    if (changed.count !== 1) return { matched: true, advanced: false, reminderLogId: reminder.id };
 
-  const allowedStatuses = STATUS_PREDECESSORS[event.status] ?? [];
-  const failureCode = event.status === "failed" ? `WHATSAPP_DELIVERY_FAILED${event.errorCode ? `:${event.errorCode}` : ""}` : null;
-  const changed = await db.reminderLog.updateMany({
-    where: { id: reminder.id, status: { in: allowedStatuses } },
-    data: {
-      status: event.status,
-      provider: event.provider,
-      providerMessageId: reminder.providerMessageId ?? event.providerMessageId,
-      error: failureCode,
-      lastStatusAt: event.eventAt,
-      ...statusTimestampData(event.status, event.eventAt),
-    },
-  });
-  await db.reminderDeliveryEvent.update({ where: { id: event.id }, data: { reminderLogId: reminder.id, processedAt: new Date() } });
-  if (changed.count !== 1) return { matched: true, advanced: false, reminderLogId: reminder.id };
+    await writeRequiredReminderDeliveryAudit(tx, {
+      shopId: reminder.shopId,
+      userId: reminder.requestedByUserId,
+      action: ACTION_BY_STATUS[event.status],
+      entityType: "ReminderLog",
+      entityId: reminder.id,
+      before: { status: reminder.status, provider: reminder.provider, providerMessageId: reminder.providerMessageId },
+      after: { status: event.status, provider: event.provider, providerMessageId: reminder.providerMessageId ?? event.providerMessageId },
+      metadata: { customerId: reminder.customerId, channel: reminder.channel, provider: event.provider, status: event.status, errorCode: failureCode },
+    });
+    return { matched: true, advanced: true, reminderLogId: reminder.id, reminder, failureCode };
+  }, { isolationLevel: "Serializable" });
 
-  recordReminderMetric({ status: event.status, provider: event.provider, channel: reminder.channel });
+  if (!outcome.advanced) return outcome;
+  recordReminderMetric({ status: event.status, provider: event.provider, channel: outcome.reminder.channel });
   if (event.status === "failed") recordWhatsAppProviderError(event.provider, "delivery_failed");
-  await createAuditLog({
-    shopId: reminder.shopId,
-    userId: reminder.requestedByUserId,
-    action: ACTION_BY_STATUS[event.status],
-    entityType: "ReminderLog",
-    entityId: reminder.id,
-    metadata: { customerId: reminder.customerId, channel: reminder.channel, provider: event.provider, status: event.status, errorCode: failureCode },
-  });
-  logger.info({ type: "whatsapp_delivery_status", shopId: reminder.shopId, customerId: reminder.customerId, reminderLogId: reminder.id, provider: event.provider, status: event.status });
-  return { matched: true, advanced: true, reminderLogId: reminder.id };
+  logger.info({ type: "whatsapp_delivery_status", shopId: outcome.reminder.shopId, customerId: outcome.reminder.customerId, reminderLogId: outcome.reminder.id, provider: event.provider, status: event.status });
+  return { matched: true, advanced: true, reminderLogId: outcome.reminder.id };
 }
 
 export async function reconcileReminderDeliveryEvents(provider, providerMessageId, reminderLogId) {

@@ -130,4 +130,24 @@ describe("receipt GST breakup", () => {
     const html = buildReceiptHtml(base);
     expect(html).not.toContain("GST Breakup");
   });
+
+  it("renders a marketplace-style A4 tax invoice with party and line-tax details", () => {
+    const html = buildReceiptHtml({
+      ...base,
+      billTypeLabel: "GST invoice",
+      buyerGstin: "29AAPFU0939F1ZR",
+      buyerStateCode: "29",
+      buyerAddress: "Bengaluru, Karnataka",
+      shop: { name: "Test Store", address: "Pune, Maharashtra", gstNumber: "27AAPFU0939F1ZV" },
+      rows: [{ ...base.rows[0], gstRate: 18 }],
+      gst: { mode: "inclusive", gst: 90, cgst: 0, sgst: 0, igst: 90, supplyType: "interstate", byRate: [{ rate: 18, taxable: 500, cgst: 0, sgst: 0, igst: 90 }] },
+    }, { paperSize: "A4" });
+    expect(html).toContain("TAX INVOICE");
+    expect(html).toContain("Sold by");
+    expect(html).toContain("Bill to");
+    expect(html).toContain("Invoice number");
+    expect(html).toContain("HSN: 0405");
+    expect(html).toContain("18%");
+    expect(html).toContain("Authorised Signatory");
+  });
 });

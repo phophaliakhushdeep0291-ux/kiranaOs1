@@ -35,7 +35,7 @@ describe("product form fits the trade", () => {
     expect(measures("stationery")).toEqual(["piece"]);
   });
 
-  it("settles what every one of the eleven trades is asked", () => {
+  it("settles what every registered trade is asked", () => {
     const posture = Object.fromEntries(
       (Object.keys(BUSINESS_TYPE_DEFS) as BusinessType[]).map((type) => {
         const capabilities = packForBusinessType(type).capabilities;
@@ -60,6 +60,9 @@ describe("product form fits the trade", () => {
       // A kitchen buys dated goods even though it sells undated dishes. The
       // dish leaving the pass has no use-by; the cream it was made from does.
       restaurant: "-/batch",
+      // Raw inputs and finished output are batch-traced, but manufacturing
+      // items are not sold loose at the counter.
+      manufacturing: "-/batch",
       other: "-/-",
     });
   });

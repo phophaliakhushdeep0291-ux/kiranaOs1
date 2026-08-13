@@ -36,7 +36,7 @@ export const integrationListQuerySchema = z.object({
 // The books a shop can post to Tally. Sales alone leaves the accountant
 // re-keying every purchase and collection by hand, so the default is the full
 // set and narrowing it is the deliberate choice.
-export const TALLY_DOCUMENTS = Object.freeze(["sales", "purchases", "returns", "receipts", "expenses"]);
+export const TALLY_DOCUMENTS = Object.freeze(["sales", "purchases", "returns", "receipts", "expenses", "production"]);
 
 export const tallyExportQuerySchema = z.object({
   from: z.string().date().optional(),
@@ -62,7 +62,7 @@ export const tallyExportQuerySchema = z.object({
   unsent: z.enum(["0", "1", "true", "false"]).default("0").transform((value) => value === "1" || value === "true"),
 });
 
-export const TALLY_DOCUMENT_TYPES = Object.freeze(["sale", "sales_return", "purchase", "purchase_return", "receipt", "expense"]);
+export const TALLY_DOCUMENT_TYPES = Object.freeze(["sale", "sales_return", "purchase", "purchase_return", "receipt", "expense", "production"]);
 
 export const tallyPostedBodySchema = z.object({
   documents: z

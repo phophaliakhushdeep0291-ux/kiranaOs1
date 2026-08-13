@@ -15,6 +15,7 @@ import { stationeryPack } from "./stationery-books/pack";
 import { furniturePack } from "./furniture-home/pack";
 import { cosmeticsPack } from "./beauty-cosmetics/pack";
 import { restaurantPack } from "./restaurant/pack";
+import { manufacturingPack } from "./manufacturing/pack";
 import { customPack } from "./custom/pack";
 
 export type { VerticalId, VerticalPack, VerticalRoute, VerticalNavEntry, VerticalPageId, VerticalSlotId, Capability } from "./types";
@@ -31,6 +32,7 @@ export const VERTICAL_PACKS: readonly VerticalPack[] = [
   furniturePack,
   cosmeticsPack,
   restaurantPack,
+  manufacturingPack,
   customPack,
 ];
 

@@ -11,6 +11,7 @@ export const ENGINE_CATALOG = Object.freeze({
   ORDER_RETAIL: { base: "retail", strategies: ["variant-sku", "sales-order", "delivery"] },
   VARIANT_BATCH_RETAIL: { base: "retail", strategies: ["variant-sku", "batch-expiry", "stock-ledger"] },
   RESTAURANT: { base: "restaurant-order", strategies: ["tables", "kot", "recipe-inventory"] },
+  MANUFACTURING: { base: "manufacturing", strategies: ["batch-genealogy", "bom", "production-run", "packaging-sku", "wholesale-order", "export-document", "stock-ledger"] },
   CONFIGURABLE_RETAIL: { base: "retail", strategies: ["owner-selected"] },
 });
 

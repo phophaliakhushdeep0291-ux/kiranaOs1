@@ -71,6 +71,7 @@ function productAuditSnapshot(product) {
           id: unit.id,
           unitCode: unit.unitCode,
           barcode: unit.barcode ?? null,
+          sku: unit.sku ?? null,
           conversionToBase: Number(unit.conversionToBase ?? 0),
           defaultPrice: Number(unit.defaultPrice ?? 0),
           minimumPrice: unit.minimumPrice == null ? null : Number(unit.minimumPrice),
@@ -313,6 +314,20 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
           await writeLocationStockRow(tx, {
             shopId, locationId: openingLocation.id, productId: created.id, absolute: openingQty,
           });
+          if (resolvedPackagingMode === "per_pack") {
+            for (const unit of hydrated.sellingUnits.filter((row) => row.isActive !== false && Number(row.onHandQty ?? 0) !== 0)) {
+              await writeLocationStockRow(tx, {
+                shopId,
+                locationId: openingLocation.id,
+                productId: created.id,
+                sellingUnitId: unit.id,
+                // Variant rows are stored in the selling unit's own count, not
+                // base units. The product-level row above remains the branch's
+                // base-unit total used by ordinary stock reports.
+                absolute: round2(Number(unit.onHandQty ?? 0)),
+              });
+            }
+          }
         }
         const commonLedgerData = {
           shopId,
@@ -545,10 +560,13 @@ export async function updateProduct(shopId, id, data, { actor = {}, locationId =
         "PACKAGING_MODE_STOCK_MIGRATION_REQUIRED",
       );
     }
-    const changed = await tx.product.updateMany({
-      where: { id, shopId, deletedAt: null, updatedAt: existing.updatedAt },
-      data: updateData,
-    });
+    const hasNonStockUpdate = Object.values(updateData).some((value) => value !== undefined);
+    const changed = hasNonStockUpdate
+      ? await tx.product.updateMany({
+        where: { id, shopId, deletedAt: null, updatedAt: existing.updatedAt },
+        data: updateData,
+      })
+      : { count: new Date(current.updatedAt).getTime() === new Date(existing.updatedAt).getTime() ? 1 : 0 };
     if (changed.count !== 1) {
       throw new AppError(
         `"${existing.name}" changed while this edit was being saved. Reload and try again.`,
@@ -677,7 +695,14 @@ async function applyPerPackStockEditInTransaction(tx, {
     const oldQty = round2(Number(previous?.onHandQty ?? 0));
     const newQty = round2(Number(unit.onHandQty ?? 0));
     const deltaQty = round2(newQty - oldQty);
-    return deltaQty === 0 ? [] : [{ unit, oldQty, newQty, deltaQty }];
+    const oldBaseQty = round2(
+      oldQty * Number(previous?.conversionToBase ?? unit.conversionToBase ?? 0),
+    );
+    const newBaseQty = round2(newQty * Number(unit.conversionToBase ?? 0));
+    const baseDelta = round2(newBaseQty - oldBaseQty);
+    return deltaQty === 0 && baseDelta === 0
+      ? []
+      : [{ unit, oldQty, newQty, deltaQty, baseDelta }];
   });
   const globalDifference = round2(desiredTotal - Number(product.stockBaseQty ?? 0));
   if (!unitChanges.length && globalDifference === 0) return;
@@ -710,7 +735,7 @@ async function applyPerPackStockEditInTransaction(tx, {
   let runningTotal = round2(Number(product.stockBaseQty ?? 0));
   for (const change of unitChanges) {
     const stored = storedByCode.get(change.unit.unitCode);
-    const baseDelta = round2(change.deltaQty * Number(change.unit.conversionToBase ?? 0));
+    const baseDelta = change.baseDelta;
     const nextTotal = round2(runningTotal + baseDelta);
     await tx.stockLedger.create({
       data: {
@@ -1288,6 +1313,7 @@ async function writeSellingUnits(tx, shopId, productId, units) {
       packSizeUnit: unit.packSizeUnit,
       conversionToBase: unit.conversionToBase,
       barcode: unit.barcode,
+      sku: unit.sku,
       defaultPrice: unit.defaultPrice,
       ...moneyShadows({
         defaultPrice: unit.defaultPrice,

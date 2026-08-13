@@ -463,7 +463,7 @@ export function BillingSearch({
         <div className="shrink-0 rounded-[10px] border border-blue-200 bg-blue-50 px-4 py-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
             <span>{t(cartLength === 1 ? "billing.search.draftRestored" : "billing.search.draftRestoredPlural", { count: cartLength })}</span>
-            <button type="button" onClick={onHideDraftRestored} className="tap-target ml-auto text-blue-500 hover:underline">
+            <button type="button" onClick={onHideDraftRestored} className="ml-auto inline-flex min-h-11 min-w-11 items-center justify-center px-2 text-blue-600 hover:underline">
               {t("billing.search.dismiss")}
             </button>
           </div>
@@ -859,7 +859,7 @@ export function BillingSearch({
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={() => setShowAll((v) => !v)}
-                  className="flex h-11 items-center justify-center gap-2 rounded-[8px] border border-[#dfe8f5] bg-white px-7 text-[12px] font-semibold text-[var(--brand)] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#f5f9ff] sm:h-[38px]"
+                  className="flex h-11 items-center justify-center gap-2 rounded-[8px] border border-[#dfe8f5] bg-white px-7 text-[12px] font-semibold text-[var(--brand)] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#f5f9ff] lg:mouse:h-[38px]"
                 >
                   {showAll ? (
                     <>{t("billing.search.showLess")} <ChevronUp size={13} /></>
