@@ -1,0 +1,93 @@
+name: Pre-merge checks
+
+# The fast counterpart to KiranaOS Release Certification. That workflow is
+# thorough and takes tens of minutes, which is exactly why it certifies main on
+# push instead of gating pull requests: merges here land within minutes of the
+# branch push, so a slow job is still running when the merge happens.
+#
+# This workflow exists to be quick enough to win that race. Two commits reached
+# production in one afternoon unable to run at all — a committed merge conflict
+# marker that stopped the backend booting on Railway, and a malformed ternary
+# that failed the Vite build on Vercel. Both are catchable in seconds.
+#
+# Keep it fast. Anything that needs a database, Redis, or an image build belongs
+# in the certification workflow, not here.
+
+# Both triggers are deliberate and they do overlap on a pull request branch.
+# The push run is the one that can finish before a fast merge; the pull_request
+# run is the one that can be marked a required status check in branch
+# protection, which is what actually blocks a merge. Neither alone gives both.
+# The jobs are cheap and superseded runs cancel, but if this repository goes
+# private again and minutes are billed, drop `push:` and rely on branch
+# protection.
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Unlike the certification, superseding a run here is correct: this proves the
+  # tip parses, not a per-commit evidence artifact, so an outdated run has no
+  # value once a newer push exists.
+  group: pre-merge-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parse:
+    name: Conflict markers and JavaScript parse
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Deliberately no dependency install: this check only shells out to git
+      # and node --check, so it reports in seconds and cannot be blocked by a
+      # registry outage or a lockfile problem.
+      - name: Check source parses
+        run: node scripts/check-source-parses.mjs
+
+      - name: Reject tracked generated and runtime artifacts
+        run: node scripts/check-repository-hygiene.mjs
+
+  frontend:
+    name: Frontend typecheck and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm must exist before setup-node so its pnpm cache backend resolves.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      # tsc catches what the build cannot: Vite strips types without checking
+      # them, so a type error ships clean while the bundle still builds.
+      - name: Typecheck
+        working-directory: frontend
+        run: pnpm run typecheck
+
+      - name: Build
+        working-directory: frontend
+        run: pnpm run build
