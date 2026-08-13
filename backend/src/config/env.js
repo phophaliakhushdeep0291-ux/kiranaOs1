@@ -142,6 +142,11 @@ const envSchema = z.object({
   INTEGRATION_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(8000),
   TALLY_BASE_URL: z.string().url().default("http://127.0.0.1:9000"),
   TALLY_PUSH_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(30000),
+  FLIPKART_SELLER_API_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  FLIPKART_APP_ID: z.string().optional(),
+  FLIPKART_APP_SECRET: z.string().optional(),
+  FLIPKART_API_BASE_URL: z.string().url().default("https://api.flipkart.net"),
+  FLIPKART_API_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),
   // GST compliance submission is disabled until a certified provider adapter is
   // configured. Sandbox documents are visibly non-legal and cannot be mistaken
   // for a GSTN acknowledgement.

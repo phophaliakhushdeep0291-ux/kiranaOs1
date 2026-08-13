@@ -106,6 +106,7 @@ export async function checkout(req, res, next) {
       billingCycle: req.body.billingCycle,
       couponCode: req.body.couponCode,
       provider: req.body.provider,
+      idempotencyKey: req.headers["idempotency-key"] ?? req.body.idempotencyKey,
       req,
     });
     res.json({ success: true, data });

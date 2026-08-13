@@ -93,4 +93,5 @@ export const dispatchTradeOrderSchema = z.object({
   sealNumber: optionalText(80), notes: optionalText(1000),
 }).refine((value) => value.grossWeight == null || value.netWeight == null || value.grossWeight >= value.netWeight, { path: ["grossWeight"], message: "Gross weight cannot be below net weight" });
 export const attachTradeBillSchema = z.object({ billId: id });
-export const tradeOrderListQuerySchema = z.object({ status: z.enum(["all", "draft", "confirmed", "allocated", "packed", "dispatched", "invoiced", "cancelled"]).default("all"), limit: z.coerce.number().int().min(1).max(500).default(100) });
+export const returnTradeOrderSchema = z.object({ reason: z.string().trim().min(3).max(500), refundMode: z.enum(["cash", "upi", "bank", "udhar", "gift_card"]).default("bank") });
+export const tradeOrderListQuerySchema = z.object({ status: z.enum(["all", "draft", "confirmed", "allocated", "packed", "dispatched", "invoiced", "returned", "cancelled"]).default("all"), limit: z.coerce.number().int().min(1).max(500).default(100) });

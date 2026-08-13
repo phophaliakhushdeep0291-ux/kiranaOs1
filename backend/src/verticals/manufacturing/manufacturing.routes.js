@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
-import { requireShop } from "../../middleware/permissions.js";
+import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
 import { validate, validateQuery } from "../../middleware/validate.js";
 import { requireDeviceActivated } from "../../modules/devices/device.middleware.js";
 import { requireCapability } from "../../modules/shops/businessProfile.middleware.js";
 import { requireLocationAccess } from "../../modules/stores/location-access.service.js";
-import { createBomSchema, createRunSchema, completeRunSchema, traceQuerySchema, createTradeOrderSchema, allocateTradeOrderSchema, packTradeOrderSchema, dispatchTradeOrderSchema, attachTradeBillSchema, tradeOrderListQuerySchema } from "./manufacturing.schemas.js";
+import { createBomSchema, createRunSchema, completeRunSchema, traceQuerySchema, createTradeOrderSchema, allocateTradeOrderSchema, packTradeOrderSchema, dispatchTradeOrderSchema, attachTradeBillSchema, returnTradeOrderSchema, tradeOrderListQuerySchema } from "./manufacturing.schemas.js";
 import * as ctrl from "./manufacturing.controller.js";
 
 const router = Router();
@@ -27,6 +27,7 @@ router.post("/trade-orders/:id/pack", requireRole("owner", "admin"), validate(pa
 router.post("/trade-orders/:id/dispatch", requireRole("owner", "admin"), requireLocationAccess("inventory"), validate(dispatchTradeOrderSchema), ctrl.dispatchTradeOrder);
 router.post("/trade-orders/:id/invoice", requireRole("owner", "admin"), validate(attachTradeBillSchema), ctrl.attachTradeBill);
 router.post("/trade-orders/:id/cancel", requireRole("owner", "admin"), ctrl.cancelTradeOrder);
+router.post("/trade-orders/:id/return", requireRole("owner", "admin"), requireOwnerPin, validate(returnTradeOrderSchema), ctrl.returnTradeOrder);
 router.get("/trade-orders/:id/documents", ctrl.tradeDocuments);
 router.get("/trade-orders/:id/documents/:kind.pdf", ctrl.tradeDocumentPdf);
 export default router;

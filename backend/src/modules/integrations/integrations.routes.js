@@ -39,5 +39,7 @@ router.post("/exports/tally/push", requireFeature("tally_export"), requireOwnerP
 // it records what already happened, and a prompt the shopkeeper cannot answer
 // here would leave Tally holding vouchers this app thinks it never sent.
 router.post("/exports/tally/posted", requireFeature("tally_export"), validate(tallyPostedBodySchema), ctrl.tallyPosted);
+router.get("/flipkart/status", ctrl.flipkartConnectorStatus);
+router.get("/flipkart/shipments/:shipmentId/:kind(invoice|label).pdf", ctrl.flipkartDocument);
 
 export default router;

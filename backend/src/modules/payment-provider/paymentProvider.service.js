@@ -8,6 +8,7 @@ import {
   assertRazorpayConfigured,
   createRazorpayOrder,
   fetchRazorpayOrder,
+  fetchRazorpayOrderByReceipt,
   fetchRazorpayPayment,
   getRazorpayCheckoutKeyId,
   parseWebhookBody,
@@ -49,7 +50,7 @@ export async function activateManualProviderPayment(shopId, input) {
 }
 
 // createRazorpayOrder/assertRazorpayConfigured throws RAZORPAY_NOT_CONFIGURED when Razorpay is disabled.
-export async function createSubscriptionCheckout({ shopId, userId, planCode, billingCycle = "monthly", couponCode = null, provider = "razorpay", req = null }) {
+export async function createSubscriptionCheckout({ shopId, userId, planCode, billingCycle = "monthly", couponCode = null, provider = "razorpay", idempotencyKey = null, req = null }) {
   if (provider !== "razorpay") {
     const err = new AppError("Unsupported payment provider", 400);
     err.code = "UNSUPPORTED_PAYMENT_PROVIDER";
@@ -68,69 +69,123 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
   const coupon = applySubscriptionCoupon({ couponCode, planCode, billingCycle, baseAmountPaise });
   const amountPaise = coupon.finalAmountPaise;
   const currency = "INR";
+  const normalizedIdempotencyKey = String(idempotencyKey || crypto.randomUUID()).trim();
+  const transactionId = subscriptionCheckoutTransactionId(shopId, normalizedIdempotencyKey);
+  const checkoutFingerprint = subscriptionCheckoutFingerprint({ planCode, billingCycle, couponCode: coupon.couponCode, amountPaise, currency });
 
-  const transaction = await db.$transaction(async (tx) => {
-    const created = await tx.paymentTransaction.create({
-      data: {
+  let transaction;
+  let createdNow = false;
+  try {
+    transaction = await db.$transaction(async (tx) => {
+      const created = await tx.paymentTransaction.create({
+        data: {
+          id: transactionId,
+          shopId,
+          provider: "razorpay",
+          amountPaise,
+          currency,
+          status: "created",
+          rawPayloadJson: JSON.stringify({
+            source: "checkout_requested",
+            planCode,
+            billingCycle,
+            ...coupon,
+            checkoutFingerprint,
+            idempotencyKeyHash: hashIdempotencyKey(normalizedIdempotencyKey),
+          }),
+        },
+      });
+      await writeRequiredPaymentAudit(tx, {
         shopId,
-        provider: "razorpay",
-        amountPaise,
-        currency,
-        status: "created",
-        rawPayloadJson: JSON.stringify({ source: "checkout_requested", planCode, billingCycle, ...coupon }),
-      },
-    });
-    await writeRequiredPaymentAudit(tx, {
-      shopId,
-      userId,
-      action: "SUBSCRIPTION_CHECKOUT_REQUESTED",
-      entityId: created.id,
-      after: created,
-      metadata: { provider: "razorpay", planCode, billingCycle, couponCode: coupon.couponCode, amountPaise },
-      req,
-    });
-    return created;
-  }, { isolationLevel: "Serializable" });
+        userId,
+        action: "SUBSCRIPTION_CHECKOUT_REQUESTED",
+        entityId: created.id,
+        after: created,
+        metadata: { provider: "razorpay", planCode, billingCycle, couponCode: coupon.couponCode, amountPaise, checkoutFingerprint },
+        req,
+      });
+      return created;
+    }, { isolationLevel: "Serializable" });
+    createdNow = true;
+  } catch (error) {
+    if (error?.code !== "P2002") throw error;
+    transaction = await db.paymentTransaction.findUnique({ where: { id: transactionId } });
+  }
+
+  if (!transaction || transaction.shopId !== shopId || transaction.provider !== "razorpay") {
+    throw checkoutIdempotencyConflictError();
+  }
+  assertCheckoutReplayMatches(transaction, checkoutFingerprint);
+
+  const existingMeta = readJson(transaction.rawPayloadJson);
+  if (existingMeta.razorpayOrderId) {
+    return buildSubscriptionCheckoutResponse({ transaction, orderId: existingMeta.razorpayOrderId, planCode, billingCycle, coupon, baseAmountPaise, idempotent: true });
+  }
+  if (["refunded"].includes(transaction.status)) {
+    const err = new AppError("This checkout attempt is no longer reusable", 409);
+    err.code = "SUBSCRIPTION_CHECKOUT_NOT_REUSABLE";
+    throw err;
+  }
 
   let order;
   try {
-    order = await createRazorpayOrder({
-      amountPaise,
-      currency,
-      receipt: transaction.id,
-      notes: {
-        shopId,
-        planCode,
-        billingCycle,
-        couponCode: coupon.couponCode,
-        transactionId: transaction.id,
-        product: "kiranaos_subscription",
-      },
-    });
+    if (!createdNow) order = await fetchRazorpayOrderByReceipt(transaction.id);
+    if (!order) {
+      order = await createRazorpayOrder({
+        amountPaise,
+        currency,
+        receipt: transaction.id,
+        notes: {
+          shopId,
+          planCode,
+          billingCycle,
+          couponCode: coupon.couponCode,
+          transactionId: transaction.id,
+          product: "kiranaos_subscription",
+        },
+      });
+    }
   } catch (error) {
-    await db.paymentTransaction.update({
-      where: { id: transaction.id },
-      data: { status: "failed", failureReason: String(error?.message || "Razorpay order creation failed").slice(0, 500) },
-    });
-    throw error;
+    // Razorpay treats receipt as unique. If the create response was lost or a
+    // concurrent retry won, recover that exact provider order by receipt.
+    try { order = await fetchRazorpayOrderByReceipt(transaction.id); } catch { order = null; }
+    if (!order) {
+      await markPaymentFailed(transaction.id, error?.message || "Razorpay order creation failed", { checkoutFingerprint }, {
+        shopId,
+        userId,
+        action: "SUBSCRIPTION_CHECKOUT_FAILED",
+        metadata: { provider: "razorpay", planCode, billingCycle, checkoutFingerprint },
+        req,
+      });
+      throw error;
+    }
   }
 
+  assertRecoveredRazorpayOrder(order, transaction);
+
   const safeOrder = sanitizePayload(order);
-  await db.paymentTransaction.update({
-    where: { id: transaction.id },
-    data: {
-      rawPayloadJson: JSON.stringify({
-        source: "checkout_created",
-        planCode,
-        billingCycle,
-        couponCode: coupon.couponCode,
-        baseAmountPaise,
-        discountPaise: coupon.discountPaise,
-        razorpayOrderId: order.id,
-        order: safeOrder,
-      }),
-    },
-  });
+  transaction = await db.$transaction(async (tx) => {
+    const fresh = await tx.paymentTransaction.findUnique({ where: { id: transaction.id } });
+    if (!fresh || fresh.shopId !== shopId) throw checkoutIdempotencyConflictError();
+    assertCheckoutReplayMatches(fresh, checkoutFingerprint);
+    return tx.paymentTransaction.update({
+      where: { id: fresh.id },
+      data: {
+        ...(fresh.status === "failed" ? { status: "created", failureReason: null } : {}),
+        rawPayloadJson: JSON.stringify({
+          ...readJson(fresh.rawPayloadJson),
+          source: fresh.status === "paid" ? "payment_completed" : "checkout_created",
+          planCode,
+          billingCycle,
+          couponCode: coupon.couponCode,
+          baseAmountPaise,
+          discountPaise: coupon.discountPaise,
+          razorpayOrderId: order.id,
+          order: safeOrder,
+        }),
+      },
+    });
+  }, { isolationLevel: "Serializable" });
 
   await auditPaymentAction({
     shopId,
@@ -141,18 +196,79 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
     req,
   });
 
+  return buildSubscriptionCheckoutResponse({ transaction, orderId: order.id, planCode, billingCycle, coupon, baseAmountPaise, idempotent: !createdNow });
+}
+
+function subscriptionCheckoutTransactionId(shopId, idempotencyKey) {
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${shopId}\0${idempotencyKey}`)
+    .digest("hex");
+  return `sub_checkout_${digest}`;
+}
+
+function hashIdempotencyKey(idempotencyKey) {
+  return crypto.createHash("sha256").update(idempotencyKey).digest("hex");
+}
+
+function subscriptionCheckoutFingerprint({ planCode, billingCycle, couponCode, amountPaise, currency }) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify({
+      planCode: String(planCode),
+      billingCycle: String(billingCycle),
+      couponCode: couponCode ? String(couponCode).toUpperCase() : null,
+      amountPaise: Number(amountPaise),
+      currency: String(currency).toUpperCase(),
+    }))
+    .digest("hex");
+}
+
+function checkoutIdempotencyConflictError() {
+  const err = new AppError("This checkout key was already used for a different request", 409);
+  err.code = "SUBSCRIPTION_CHECKOUT_IDEMPOTENCY_CONFLICT";
+  return err;
+}
+
+function assertCheckoutReplayMatches(transaction, expectedFingerprint) {
+  const metadata = readJson(transaction.rawPayloadJson);
+  if (metadata.checkoutFingerprint !== expectedFingerprint) {
+    throw checkoutIdempotencyConflictError();
+  }
+}
+
+function assertRecoveredRazorpayOrder(order, transaction) {
+  if (!order?.id || String(order.receipt || "") !== transaction.id) {
+    const err = new AppError("Recovered Razorpay order does not match this checkout", 409);
+    err.code = "RAZORPAY_ORDER_MISMATCH";
+    throw err;
+  }
+  if (Number(order.amount) !== Number(transaction.amountPaise)) {
+    const err = new AppError("Recovered Razorpay order amount does not match this checkout", 409);
+    err.code = "RAZORPAY_ORDER_AMOUNT_MISMATCH";
+    throw err;
+  }
+  if (String(order.currency || "").toUpperCase() !== String(transaction.currency || "INR").toUpperCase()) {
+    const err = new AppError("Recovered Razorpay order currency does not match this checkout", 409);
+    err.code = "RAZORPAY_ORDER_CURRENCY_MISMATCH";
+    throw err;
+  }
+}
+
+function buildSubscriptionCheckoutResponse({ transaction, orderId, planCode, billingCycle, coupon, baseAmountPaise, idempotent }) {
   return {
     provider: "razorpay",
     razorpayKeyId: getRazorpayCheckoutKeyId(),
-    orderId: order.id,
-    amountPaise,
+    orderId,
+    amountPaise: transaction.amountPaise,
     baseAmountPaise,
     discountPaise: coupon.discountPaise,
     couponCode: coupon.couponCode,
-    currency,
+    currency: transaction.currency,
     planCode,
     billingCycle,
     transactionId: transaction.id,
+    idempotent: Boolean(idempotent),
   };
 }
 
@@ -785,6 +901,23 @@ async function processPaymentFailureWebhook(payload, event) {
         metadata: { provider: "razorpay", eventId: event.eventId, reason: "Paid transaction cannot be downgraded", razorpayPaymentId: payment?.id },
       });
       return { activated: false, paymentFailed: false, idempotent: true };
+    }
+
+    if (payment?.id) {
+      const paymentUsedElsewhere = await tx.paymentTransaction.findFirst({
+        where: { provider: "razorpay", providerPaymentId: payment.id, id: { not: transaction.id } },
+        select: { id: true },
+      });
+      if (paymentUsedElsewhere) {
+        await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId: authoritativeShopId, processedAt: new Date() } });
+        await writeRequiredPaymentAudit(tx, {
+          shopId: authoritativeShopId,
+          action: "PAYMENT_WEBHOOK_CONFLICT",
+          entityId: transaction.id,
+          metadata: { provider: "razorpay", eventId: event.eventId, razorpayPaymentId: payment.id, appliedTransactionId: paymentUsedElsewhere.id, eventType: "payment.failed" },
+        });
+        return { activated: false, paymentFailed: false, conflict: true, code: "PROVIDER_PAYMENT_ALREADY_USED" };
+      }
     }
 
     const failed = await tx.paymentTransaction.update({

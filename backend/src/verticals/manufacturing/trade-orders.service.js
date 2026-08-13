@@ -2,6 +2,7 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { decrementLocationInventory, resolveOperationalLocation } from "../../modules/stores/location-context.service.js";
+import { createSaleReturn, getBill } from "../../modules/bills/bills.service.js";
 
 const detailInclude = { items: { include: { allocations: true } }, dispatch: true };
 const date = (value) => value ? new Date(`${value}T00:00:00.000Z`) : null;
@@ -138,6 +139,21 @@ export async function cancelTradeOrder(shopId, id) {
   const order = await getTradeOrder(shopId, id);
   if (["dispatched", "invoiced", "cancelled"].includes(order.status)) throw new AppError("This order can no longer be cancelled", 409, "TRADE_ORDER_CANNOT_CANCEL");
   return db.tradeOrder.update({ where: { id }, data: { status: "cancelled", cancelledAt: new Date() }, include: detailInclude });
+}
+
+export async function returnTradeOrder(shopId, id, input, actor = {}) {
+  const order = await getTradeOrder(shopId, id);
+  if (!order.billId || !["invoiced", "dispatched"].includes(order.status)) throw new AppError("Link the dispatched invoice before creating a credit note", 409, "TRADE_ORDER_INVOICE_REQUIRED");
+  const bill = await getBill(shopId, order.billId);
+  if (bill.status !== "active" || bill.billType === "sales_return") throw new AppError("The linked invoice cannot be returned", 409, "TRADE_ORDER_BILL_NOT_RETURNABLE");
+  const creditNote = await createSaleReturn(shopId, {
+    locationId: order.locationId, refundMode: input.refundMode, gstMode: bill.gstMode,
+    customerId: bill.customerId || undefined, customerName: bill.customerName, returnOfBillId: bill.id, reason: input.reason,
+    clientBillId: `trade-return:${order.id}`, idempotencyKey: `trade-return:${order.id}`,
+    items: bill.items.map((line) => ({ originalBillItemId: line.id, productId: line.productId || undefined, name: line.name, quantity: Math.abs(Number(line.quantity)), enteredUnit: line.enteredUnit, ratePerRateUnit: Math.abs(Number(line.ratePerRateUnit)), lineDiscount: Math.abs(Number(line.lineDiscount || 0)), gstRate: Number(line.gstRate || 0), damaged: false })),
+  }, { ...actor, locationId: order.locationId });
+  await db.tradeOrder.update({ where: { id: order.id }, data: { status: "returned" } });
+  return { order: await getTradeOrder(shopId, order.id), creditNote };
 }
 
 export async function tradeDocuments(shopId, id) {
