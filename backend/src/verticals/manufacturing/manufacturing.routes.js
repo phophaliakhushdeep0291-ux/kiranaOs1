@@ -5,7 +5,7 @@ import { validate, validateQuery } from "../../middleware/validate.js";
 import { requireDeviceActivated } from "../../modules/devices/device.middleware.js";
 import { requireCapability } from "../../modules/shops/businessProfile.middleware.js";
 import { requireLocationAccess } from "../../modules/stores/location-access.service.js";
-import { createBomSchema, createRunSchema, completeRunSchema, traceQuerySchema } from "./manufacturing.schemas.js";
+import { createBomSchema, createRunSchema, completeRunSchema, traceQuerySchema, createTradeOrderSchema, allocateTradeOrderSchema, packTradeOrderSchema, dispatchTradeOrderSchema, attachTradeBillSchema, tradeOrderListQuerySchema } from "./manufacturing.schemas.js";
 import * as ctrl from "./manufacturing.controller.js";
 
 const router = Router();
@@ -17,4 +17,14 @@ router.post("/runs", requireRole("owner", "admin"), requireLocationAccess("inven
 router.post("/runs/:id/complete", requireRole("owner", "admin"), requireLocationAccess("inventory"), validate(completeRunSchema), ctrl.completeRun);
 router.post("/runs/:id/release", requireRole("owner", "admin"), requireLocationAccess("inventory"), ctrl.releaseRun);
 router.get("/trace", validateQuery(traceQuerySchema), ctrl.trace);
+router.get("/trade-orders", validateQuery(tradeOrderListQuerySchema), ctrl.tradeOrders);
+router.get("/trade-orders/:id", ctrl.tradeOrder);
+router.post("/trade-orders", requireRole("owner", "admin"), requireLocationAccess("inventory"), validate(createTradeOrderSchema), ctrl.createTradeOrder);
+router.post("/trade-orders/:id/confirm", requireRole("owner", "admin"), ctrl.confirmTradeOrder);
+router.post("/trade-orders/:id/allocate", requireRole("owner", "admin"), requireLocationAccess("inventory"), validate(allocateTradeOrderSchema), ctrl.allocateTradeOrder);
+router.post("/trade-orders/:id/pack", requireRole("owner", "admin"), validate(packTradeOrderSchema), ctrl.packTradeOrder);
+router.post("/trade-orders/:id/dispatch", requireRole("owner", "admin"), requireLocationAccess("inventory"), validate(dispatchTradeOrderSchema), ctrl.dispatchTradeOrder);
+router.post("/trade-orders/:id/invoice", requireRole("owner", "admin"), validate(attachTradeBillSchema), ctrl.attachTradeBill);
+router.post("/trade-orders/:id/cancel", requireRole("owner", "admin"), ctrl.cancelTradeOrder);
+router.get("/trade-orders/:id/documents", ctrl.tradeDocuments);
 export default router;

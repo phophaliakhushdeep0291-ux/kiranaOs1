@@ -77,6 +77,87 @@ if (ctx.skip) {
       assertFailure(await ctx.post("/api/auth/refresh", { refreshToken: auth.refreshToken }), 401);
     });
 
+    test("login and logout session changes roll back when required auth auditing fails", async () => {
+      const tenant = await createTenant(ctx.db);
+      const registrationMobile = uniqueMobile();
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_registration_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'SHOP_REGISTERED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced registration audit failure');
+        END;
+      `);
+      let failedRegistrationAudit;
+      try {
+        failedRegistrationAudit = await ctx.post("/api/auth/register", {
+          shopName: "Atomic Registration Audit",
+          ownerName: "Atomic Owner",
+          city: "Jodhpur",
+          address: "Atomic test address",
+          mobile: registrationMobile,
+          password: "Password123",
+        });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_registration_audit_failure");
+      }
+      assert.equal(assertFailure(failedRegistrationAudit, 503).code, "AUTH_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.shop.count({ where: { name: "Atomic Registration Audit" } }), 0);
+      assert.equal(await ctx.db.user.count({ where: { mobile: registrationMobile } }), 0);
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_login_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'LOGIN'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced login audit failure');
+        END;
+      `);
+      let failedLogin;
+      try {
+        const loginAuditRegistrationMobile = uniqueMobile();
+        const failedFirstSession = await ctx.post("/api/auth/register", {
+          shopName: "Atomic First Session",
+          ownerName: "Atomic Owner",
+          city: "Jodhpur",
+          address: "Atomic test address",
+          mobile: loginAuditRegistrationMobile,
+          password: "Password123",
+        });
+        assert.equal(assertFailure(failedFirstSession, 503).code, "AUTH_AUDIT_WRITE_FAILED");
+        assert.equal(await ctx.db.shop.count({ where: { name: "Atomic First Session" } }), 0);
+        assert.equal(await ctx.db.user.count({ where: { mobile: loginAuditRegistrationMobile } }), 0);
+        failedLogin = await ctx.post("/api/auth/login", {
+          mobile: tenant.ownerMobile,
+          password: tenant.ownerPassword,
+        });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_login_audit_failure");
+      }
+      assert.equal(assertFailure(failedLogin, 503).code, "AUTH_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.session.count({ where: { shopId: tenant.shop.id } }), 0);
+
+      const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const sessionId = auth.refreshToken.split(".")[0];
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_logout_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'LOGOUT'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced logout audit failure');
+        END;
+      `);
+      let failedLogout;
+      try {
+        failedLogout = await ctx.post("/api/auth/logout", { refreshToken: auth.refreshToken });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_logout_audit_failure");
+      }
+      assert.equal(assertFailure(failedLogout, 503).code, "AUTH_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.session.findUniqueOrThrow({ where: { id: sessionId } })).revokedAt, null);
+      assertSuccess(await ctx.post("/api/auth/refresh", { refreshToken: auth.refreshToken }));
+    });
+
     test("protected route rejects missing token", async () => {
       const response = await ctx.get("/api/auth/me");
       assertFailure(response, 401);

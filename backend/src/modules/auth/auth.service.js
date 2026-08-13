@@ -78,8 +78,30 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
     const user = await tx.user.create({
       data: { shopId: shop.id, name: ownerName, mobile, email: normalizedEmail, passwordHash, pinHash, role: "owner" },
     });
+    await writeRequiredAuthAudit(tx, {
+      shopId: shop.id,
+      userId: user.id,
+      action: "SHOP_REGISTERED",
+      entityType: "shop",
+      entityId: shop.id,
+      after: { shopId: shop.id, ownerUserId: user.id, businessType },
+      metadata: { loginIdentifier: normalizedEmail ? "email" : "mobile" },
+      req: auditReqShim(reqMeta),
+    });
     return { shop, user };
   });
+
+  let auth;
+  try {
+    auth = await issueAuthResponse(result.user, result.shop, { ...reqMeta, loginMethod: "registration" });
+  } catch (error) {
+    // A registration that cannot establish its first audited session must not
+    // leave a hidden shop which the user then duplicates on retry.
+    await rollbackNewRegistration(result.shop.id, result.user.id).catch((rollbackError) => {
+      console.error("Registration rollback failed", rollbackError);
+    });
+    throw error;
+  }
 
   let emailVerification = null;
   if (normalizedEmail) {
@@ -90,9 +112,20 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
       ttlMs: EMAIL_VERIFICATION_TTL_HOURS * 60 * 60 * 1000,
     });
   }
-
-  const auth = await issueAuthResponse(result.user, result.shop, { ...reqMeta, loginMethod: "registration" });
   return { ...auth, emailVerification };
+}
+
+async function rollbackNewRegistration(shopId, userId) {
+  await db.$transaction(async (tx) => {
+    await tx.deviceLicense.deleteMany({ where: { shopId } });
+    await tx.session.deleteMany({ where: { shopId } });
+    await tx.deviceReplacementChallenge.deleteMany({ where: { shopId } });
+    await tx.device.deleteMany({ where: { shopId } });
+    await tx.authToken.deleteMany({ where: { shopId } });
+    await tx.auditLog.deleteMany({ where: { shopId } });
+    await tx.user.deleteMany({ where: { id: userId, shopId } });
+    await tx.shop.delete({ where: { id: shopId } });
+  }, { isolationLevel: "Serializable" });
 }
 
 export async function login({ mobile, email, identifier, password, shopId }, reqMeta = {}) {
