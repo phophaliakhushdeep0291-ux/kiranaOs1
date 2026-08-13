@@ -1406,6 +1406,40 @@ if (ctx.skip) {
         },
       });
 
+      const rollbackProviderMessageId = "wamid-receipt-audit-rollback";
+      const rollbackReminder = await ctx.db.reminderLog.create({
+        data: {
+          shopId: tenant.shop.id,
+          customerId: customer.id,
+          message: "Delivery audit rollback proof",
+          status: "accepted",
+          provider: "meta",
+          providerMessageId: rollbackProviderMessageId,
+        },
+      });
+      const rollbackEvent = await ctx.db.reminderDeliveryEvent.create({
+        data: { provider: "meta", providerMessageId: rollbackProviderMessageId, status: "delivered", eventAt: new Date("2026-01-01T09:58:00.000Z") },
+      });
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_reminder_delivery_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'REMINDER_DELIVERED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced reminder delivery audit failure');
+        END;
+      `);
+      try {
+        await assert.rejects(
+          reconcileReminderDeliveryEvents("meta", rollbackProviderMessageId, rollbackReminder.id),
+          (error) => error?.code === "AUDIT_WRITE_FAILED",
+        );
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_reminder_delivery_audit_failure");
+      }
+      assert.equal((await ctx.db.reminderLog.findUniqueOrThrow({ where: { id: rollbackReminder.id } })).status, "accepted");
+      assert.equal((await ctx.db.reminderDeliveryEvent.findUniqueOrThrow({ where: { id: rollbackEvent.id } })).processedAt, null);
+      assert.deepEqual(await reconcileReminderDeliveryEvents("meta", rollbackProviderMessageId, rollbackReminder.id), { matched: 1, advanced: 1 });
+
       const callbackPayload = { entry: [{ changes: [{ value: { statuses: [{ id: providerMessageId, status: "sent", timestamp: "1767261600" }] } }] }] };
       const callbackBytes = Buffer.from(JSON.stringify(callbackPayload));
       const secret = "integration-meta-webhook-secret-at-least-32-characters";

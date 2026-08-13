@@ -1,7 +1,7 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
-import { createTenant, login } from "./factories.js";
+import { createCustomer, createTenant, login } from "./factories.js";
 
 const ctx = await createIntegrationContext();
 
@@ -112,6 +112,66 @@ if (ctx.skip) {
       const deleted = await ctx.db.reminderTemplate.findUniqueOrThrow({ where: { id: created.id } });
       assert.ok(deleted.deletedAt);
       assert.equal(deleted.active, false);
+    });
+
+    test("persists reminder requests atomically and claims provider dispatch at most once", async () => {
+      const { claimReminderForDispatch, markReminderFromProvider } = await import("../../src/modules/reminders/reminders.service.js");
+      const tenant = await createTenant(ctx.db, { planCode: "pro" });
+      const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Reminder Customer", udharAmount: 500, mobile: "9876543210" });
+      assertSuccess(await ctx.get("/api/reminders/templates", { token: auth.accessToken }));
+
+      const failedRequest = await forceAuditFailure("REMINDER_REQUESTED", () => ctx.post(
+        "/api/reminders/send",
+        { customerId: customer.id, channel: "whatsapp" },
+        { token: auth.accessToken },
+      ));
+      assert.equal(assertFailure(failedRequest, 503).code, "AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.reminderLog.count({ where: { shopId: tenant.shop.id, customerId: customer.id } }), 0);
+
+      const log = await ctx.db.reminderLog.create({
+        data: {
+          shopId: tenant.shop.id,
+          customerId: customer.id,
+          message: "A durable reminder",
+          status: "queued",
+          provider: "disabled",
+          requestedByUserId: tenant.owner.id,
+        },
+      });
+      await assert.rejects(
+        forceAuditFailure("REMINDER_DISPATCH_STARTED", () => claimReminderForDispatch(log.id)),
+        (error) => error?.code === "AUDIT_WRITE_FAILED",
+      );
+      assert.equal((await ctx.db.reminderLog.findUniqueOrThrow({ where: { id: log.id } })).status, "queued");
+
+      const firstClaim = await claimReminderForDispatch(log.id);
+      assert.equal(firstClaim.claimed, true);
+      assert.equal(firstClaim.log.status, "sending");
+      const replayedClaim = await claimReminderForDispatch(log.id);
+      assert.equal(replayedClaim.claimed, false);
+      assert.equal(replayedClaim.log.status, "sending");
+      assert.equal(await ctx.db.auditLog.count({ where: { entityId: log.id, action: "REMINDER_DISPATCH_STARTED" } }), 1);
+
+      await assert.rejects(
+        forceAuditFailure("REMINDER_ACCEPTED", () => markReminderFromProvider(log.id, {
+          success: true,
+          provider: "meta",
+          providerMessageId: "wamid-atomic-reminder-proof",
+        })),
+        (error) => error?.code === "AUDIT_WRITE_FAILED",
+      );
+      const afterProviderAuditFailure = await ctx.db.reminderLog.findUniqueOrThrow({ where: { id: log.id } });
+      assert.equal(afterProviderAuditFailure.status, "sending");
+      assert.equal(afterProviderAuditFailure.providerMessageId, null);
+
+      const accepted = await markReminderFromProvider(log.id, {
+        success: true,
+        provider: "meta",
+        providerMessageId: "wamid-atomic-reminder-proof",
+      });
+      assert.equal(accepted.status, "accepted");
+      assert.equal(accepted.providerMessageId, "wamid-atomic-reminder-proof");
     });
   });
 }
