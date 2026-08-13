@@ -69,7 +69,7 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
   const coupon = applySubscriptionCoupon({ couponCode, planCode, billingCycle, baseAmountPaise });
   const amountPaise = coupon.finalAmountPaise;
   const currency = "INR";
-  const normalizedIdempotencyKey = String(idempotencyKey || crypto.randomUUID()).trim();
+  const normalizedIdempotencyKey = normalizeSubscriptionCheckoutIdempotencyKey(idempotencyKey);
   const transactionId = subscriptionCheckoutTransactionId(shopId, normalizedIdempotencyKey);
   const checkoutFingerprint = subscriptionCheckoutFingerprint({ planCode, billingCycle, couponCode: coupon.couponCode, amountPaise, currency });
 
@@ -168,7 +168,7 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
     const fresh = await tx.paymentTransaction.findUnique({ where: { id: transaction.id } });
     if (!fresh || fresh.shopId !== shopId) throw checkoutIdempotencyConflictError();
     assertCheckoutReplayMatches(fresh, checkoutFingerprint);
-    return tx.paymentTransaction.update({
+    const updated = await tx.paymentTransaction.update({
       where: { id: fresh.id },
       data: {
         ...(fresh.status === "failed" ? { status: "created", failureReason: null } : {}),
@@ -185,16 +185,21 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
         }),
       },
     });
+    await writeRequiredPaymentAudit(tx, {
+      shopId,
+      userId,
+      action: "SUBSCRIPTION_CHECKOUT_CREATED",
+      entityId: updated.id,
+      before: fresh,
+      after: updated,
+      metadata: { provider: "razorpay", planCode, billingCycle, couponCode: coupon.couponCode, baseAmountPaise, discountPaise: coupon.discountPaise, amountPaise, razorpayOrderId: order.id },
+      req,
+    });
+    return updated;
+
+
   }, { isolationLevel: "Serializable" });
 
-  await auditPaymentAction({
-    shopId,
-    userId,
-    action: "SUBSCRIPTION_CHECKOUT_CREATED",
-    entityId: transaction.id,
-    metadata: { provider: "razorpay", planCode, billingCycle, couponCode: coupon.couponCode, baseAmountPaise, discountPaise: coupon.discountPaise, amountPaise, razorpayOrderId: order.id },
-    req,
-  });
 
   return buildSubscriptionCheckoutResponse({ transaction, orderId: order.id, planCode, billingCycle, coupon, baseAmountPaise, idempotent: !createdNow });
 }
@@ -204,7 +209,17 @@ function subscriptionCheckoutTransactionId(shopId, idempotencyKey) {
     .createHash("sha256")
     .update(`${shopId}\0${idempotencyKey}`)
     .digest("hex");
-  return `sub_checkout_${digest}`;
+  return `subchk_${digest.slice(0, 32)}`;
+
+function normalizeSubscriptionCheckoutIdempotencyKey(value) {
+  const key = String(value || crypto.randomUUID()).trim();
+  if (key.length < 8 || key.length > 120 || !/^[A-Za-z0-9:_-]+$/.test(key)) {
+    const err = new AppError("Checkout idempotency key is invalid", 400);
+    err.code = "SUBSCRIPTION_CHECKOUT_IDEMPOTENCY_KEY_INVALID";
+    throw err;
+  }
+  return key;
+}
 }
 
 function hashIdempotencyKey(idempotencyKey) {
@@ -268,6 +283,7 @@ function buildSubscriptionCheckoutResponse({ transaction, orderId, planCode, bil
     planCode,
     billingCycle,
     transactionId: transaction.id,
+    completed: transaction.status === "paid",
     idempotent: Boolean(idempotent),
   };
 }
