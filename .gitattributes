@@ -1,0 +1,13 @@
+# Migration SQL is checksummed byte-for-byte: backend/scripts/migration-safety-check.js holds a
+# list of historical migrations with their SHA-256 and refuses any change to them, because an
+# already-applied migration that is edited afterwards silently diverges from what production ran.
+#
+# With core.autocrlf=true — the Windows default — those files check out with CRLF, so every hash
+# differs from the recorded one and the check reports migrations as "modified" on a completely
+# clean tree (000062_bill_discount_reason and 000062_bill_item_hsn_snapshot did exactly that).
+# The check is then unrunnable on Windows, which is worse than it sounds: it is the guard that
+# would catch a genuine edit to an applied migration.
+#
+# Every tracked .sql file is already stored as LF, so this pins the working copy to what is
+# committed. It changes checkout only, never content.
+*.sql text eol=lf
