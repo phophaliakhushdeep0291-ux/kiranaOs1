@@ -14,6 +14,10 @@ const ACCOUNTS = {
   giftCards: { code: "2100", name: "Gift card liability", category: "liability" },
   gstOutput: { code: "2200", name: "GST output payable", category: "liability" },
   expensePayables: { code: "2300", name: "Accrued expense payables", category: "liability" },
+  // Holds the udhar and gift-card value of bills sitting in the recycle bin: a delete takes the
+  // sale off the books but leaves the debt on the customer's khata, and that receivable has to
+  // sit against something. Clears when the bill is cancelled (debt reversed) or restored.
+  recycleBinSuspense: { code: "2900", name: "Recycle-bin suspense", category: "liability" },
   sales: { code: "4000", name: "Net sales", category: "income" },
   operatingExpenses: { code: "6000", name: "Operating expenses", category: "expense" },
   waivers: { code: "6100", name: "Waivers and rounding", category: "expense" },
@@ -30,6 +34,7 @@ const ENTRY_MAPPING = {
   gift_card_issued: { account: ACCOUNTS.giftCards, side: "credit" },
   gift_card_redeemed: { account: ACCOUNTS.giftCards, side: "debit" },
   waiver_expense: { account: ACCOUNTS.waivers, side: "debit" },
+  recycle_bin_offset: { account: ACCOUNTS.recycleBinSuspense, side: "credit" },
   gst_output: { account: ACCOUNTS.gstOutput, side: "credit" },
   gst_sales_reclassification: { account: ACCOUNTS.sales, side: "debit" },
   inventory_purchase: { account: ACCOUNTS.inventory, side: "debit" },
