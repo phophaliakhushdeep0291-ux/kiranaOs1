@@ -40,7 +40,8 @@ assert.equal(isSubscriptionActive({ status: "grace", graceEndsAt: past(1 * DAY) 
 
 // terminal states stay inactive
 assert.equal(isSubscriptionActive({ status: "expired", graceEndsAt: future(5 * DAY) }), false, "expired stays inactive");
-assert.equal(isSubscriptionActive({ status: "cancelled", currentPeriodEnd: future(5 * DAY) }), false, "cancelled stays inactive");
+assert.equal(isSubscriptionActive({ status: "cancelled", currentPeriodEnd: future(5 * DAY) }), true, "cancelled remains active through its paid period");
+assert.equal(isSubscriptionActive({ status: "cancelled", currentPeriodEnd: past(1 * DAY), graceEndsAt: future(5 * DAY) }), false, "cancelled does not gain extra grace after its paid period");
 
 // no subscription row → active (free/legacy default preserved)
 assert.equal(isSubscriptionActive(null), true, "no subscription → active default preserved");

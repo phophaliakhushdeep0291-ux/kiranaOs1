@@ -315,4 +315,37 @@ describe("subscription and plan gating", () => {
     expect(cloudBackup.allowed).toBe(false);
     expect(stockAdjustment.allowed).toBe(false);
   });
+
+  it("keeps a cancelled subscription active through the paid period", async () => {
+    mockState.subscriptionRows = [cachedSubscription({
+      planCode: "growth",
+      status: "cancelled",
+      currentPeriodEnd: "2026-06-10T00:00:00.000Z",
+      offlineGraceEndsAt: "2026-06-17T00:00:00.000Z",
+    })];
+
+    const current = await getCurrentSubscriptionSnapshot();
+
+    expect(current.status).toBe("cancelled");
+    expect(current.isExpired).toBe(false);
+    expect(current.graceActive).toBe(false);
+    expect(current.cloudSyncAllowed).toBe(true);
+    expect(current.localOnlyAfterExpiry).toBe(false);
+  });
+
+  it("ends cancelled access at period end without adding grace", async () => {
+    mockState.subscriptionRows = [cachedSubscription({
+      planCode: "growth",
+      status: "cancelled",
+      currentPeriodEnd: "2026-06-05T00:00:00.000Z",
+      offlineGraceEndsAt: "2026-06-17T00:00:00.000Z",
+    })];
+
+    const current = await getCurrentSubscriptionSnapshot();
+
+    expect(current.isExpired).toBe(true);
+    expect(current.graceActive).toBe(false);
+    expect(current.cloudSyncAllowed).toBe(false);
+    expect(current.localOnlyAfterExpiry).toBe(true);
+  });
 });
