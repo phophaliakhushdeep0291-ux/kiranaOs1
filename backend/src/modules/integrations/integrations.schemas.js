@@ -33,7 +33,47 @@ export const integrationListQuerySchema = z.object({
   cursor: z.string().trim().min(1).optional(),
 });
 
+// The books a shop can post to Tally. Sales alone leaves the accountant
+// re-keying every purchase and collection by hand, so the default is the full
+// set and narrowing it is the deliberate choice.
+export const TALLY_DOCUMENTS = Object.freeze(["sales", "purchases", "returns", "receipts", "expenses"]);
+
 export const tallyExportQuerySchema = z.object({
   from: z.string().date().optional(),
   to: z.string().date().optional(),
+  include: z
+    .string()
+    .trim()
+    .default(TALLY_DOCUMENTS.join(","))
+    .transform((value) => [...new Set(value.split(",").map((token) => token.trim().toLowerCase()).filter(Boolean))])
+    .refine((tokens) => tokens.length > 0, "Choose at least one kind of document to export")
+    .refine(
+      (tokens) => tokens.every((token) => TALLY_DOCUMENTS.includes(token)),
+      `Documents must be any of: ${TALLY_DOCUMENTS.join(", ")}`,
+    ),
+  // Off by default: most retail shops run Tally accounts-only and keep stock in
+  // the POS, and a voucher naming a stock item their company has never heard of
+  // is rejected on import. z.coerce.boolean() is not usable here — it reads the
+  // string "false" as true.
+  inventory: z.enum(["0", "1", "true", "false"]).default("0").transform((value) => value === "1" || value === "true"),
+  // Set when pushing to a live Tally, where re-sending a document creates a
+  // second voucher. A plain file download leaves it off, because the accountant
+  // choosing a date range means to see that whole range.
+  unsent: z.enum(["0", "1", "true", "false"]).default("0").transform((value) => value === "1" || value === "true"),
+});
+
+export const TALLY_DOCUMENT_TYPES = Object.freeze(["sale", "sales_return", "purchase", "purchase_return", "receipt", "expense"]);
+
+export const tallyPostedBodySchema = z.object({
+  documents: z
+    .array(
+      z.object({
+        type: z.enum(TALLY_DOCUMENT_TYPES),
+        id: z.string().trim().min(1).max(64),
+        voucherNumber: z.string().trim().min(1).max(120),
+        remoteId: z.string().trim().min(1).max(80),
+      }),
+    )
+    .min(1, "Nothing was reported as posted")
+    .max(20000, "Too many documents in one confirmation"),
 });

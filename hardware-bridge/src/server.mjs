@@ -10,16 +10,26 @@ import { consumePairingCode } from "./pairing.mjs";
 import { plainHardwareError } from "./plain-errors.mjs";
 import { UpdateChecker } from "./update-check.mjs";
 import { fingerprintPrintPayload, PrintJobExecutor } from "./print-executor.mjs";
+import { normalizeTallyUrl, parseTallyResponse, postTallyEnvelope, tallyFailureMessage } from "./tally-gateway.mjs";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.KIRANA_BRIDGE_PORT || 17873);
-const VERSION = "1.3.0";
+const VERSION = "1.4.0";
 const CONFIG_PATH = defaultConfigPath();
 let bridgeConfig = await loadBridgeConfig(CONFIG_PATH);
 const TOKEN = String(bridgeConfig.token || "");
 const TRANSPORT = String(bridgeConfig.printer?.transport || "").toLowerCase();
 const ALLOWED_ORIGINS = new Set(bridgeConfig.allowedOrigins);
 const MAX_BODY_BYTES = 1024 * 1024;
+// A year of vouchers is a far bigger document than a receipt, and refusing it
+// here would cap how much history a shop can ever move into Tally.
+const MAX_TALLY_BODY_BYTES = 16 * 1024 * 1024;
+
+// A misconfigured address should stop the bridge at startup, where an installer
+// or an operator sees it, rather than at the moment a shopkeeper presses send.
+let TALLY_TARGET = null;
+try { TALLY_TARGET = normalizeTallyUrl(bridgeConfig.tally?.url); }
+catch (error) { console.error(`Tally address is not usable: ${error.message}`); process.exit(1); }
 const printJournal = new PrintJobJournal();
 const updateChecker = new UpdateChecker({ currentVersion: VERSION, manifestUrl: bridgeConfig.updateManifestUrl });
 let pairingExchange = Promise.resolve();
@@ -49,12 +59,12 @@ function authorized(req) {
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
-async function readJson(req) {
+async function readJson(req, maxBytes = MAX_BODY_BYTES) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) throw Object.assign(new Error("Request body is too large"), { status: 413 });
+    if (size > maxBytes) throw Object.assign(new Error("Request body is too large"), { status: 413 });
     chunks.push(chunk);
   }
   try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
@@ -148,6 +158,10 @@ const server = http.createServer(async (req, res) => {
           scale: Boolean(bridgeConfig.scale?.executable),
           customerDisplay: Boolean(bridgeConfig.customerDisplay?.executable),
           qrPrint: ["network", "windows"].includes(TRANSPORT),
+          // The app reads this rather than comparing versions: an older bridge
+          // simply omits it, which reads as "cannot post to Tally" without the
+          // app needing to know which release added the ability.
+          tally: Boolean(TALLY_TARGET),
         },
       }, origin);
     }
@@ -197,6 +211,35 @@ const server = http.createServer(async (req, res) => {
         reference: body.reference,
       }));
       return json(res, 200, { ok: true }, origin);
+    }
+    if (req.method === "POST" && url.pathname === "/v1/tally/post") {
+      if (!TALLY_TARGET) return json(res, 503, { message: "This counter is not set up to send to Tally. Add the Tally address in Hardware Bridge Setup." }, origin);
+      const body = await readJson(req, MAX_TALLY_BODY_BYTES);
+      const xml = typeof body.xml === "string" ? body.xml : "";
+      // Only an import envelope goes to Tally. This is not a security boundary —
+      // the caller is already paired — but it turns "Tally rejected something
+      // incomprehensible" into a failure that names its own cause.
+      if (!xml.trim()) return json(res, 400, { message: "Tally envelope is required" }, origin);
+      if (!/^\s*(<\?xml[^>]*\?>)?\s*<ENVELOPE[\s>]/i.test(xml)) return json(res, 400, { message: "Body is not a Tally import envelope" }, origin);
+
+      // Handled here rather than by the shared catch below, whose messages are
+      // written for a printer — telling a shopkeeper to check paper and cables
+      // when Tally is simply closed sends them to the wrong machine entirely.
+      let status;
+      let reply;
+      try { ({ status, body: reply } = await postTallyEnvelope({ target: TALLY_TARGET, xml })); }
+      catch (error) {
+        return json(res, Number(error?.status) || 502, { message: String(error?.message || "Sending to Tally failed.").slice(0, 300) }, origin);
+      }
+      if (status !== 200) return json(res, 502, { message: `Tally answered with HTTP ${status}.` }, origin);
+
+      const result = parseTallyResponse(reply);
+      // Reported separately from the HTTP result on purpose: Tally answers 200
+      // even when it imported nothing, so "ok" here means the vouchers are
+      // actually in the books, which is what decides whether the app may record
+      // them as sent.
+      if (!result.ok) return json(res, 422, { ok: false, message: tallyFailureMessage(result, reply), ...result }, origin);
+      return json(res, 200, { ok: true, ...result }, origin);
     }
     if (req.method === "POST" && url.pathname === "/v1/customer-display/show") {
       const body = await readJson(req);

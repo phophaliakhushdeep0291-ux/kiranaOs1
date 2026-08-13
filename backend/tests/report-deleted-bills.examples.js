@@ -45,6 +45,13 @@ function dayKeyBefore(key, daysBack) {
   return new Date(Date.UTC(y, m - 1, d - daysBack)).toISOString().slice(0, 10);
 }
 
+// buildTallyExport reads `query.include` directly, and the default for it lives in the Zod
+// route schema — so calling the service straight has to supply it. Sales only: this file is
+// about which BILLS the export selects, not the purchase/receipt/expense voucher kinds.
+function salesExport(shopId, from, to) {
+  return buildTallyExport(shopId, { from, to, include: ["sales"] });
+}
+
 // Midday in the shop timezone — a timestamp put here cannot drift across a day boundary,
 // unlike one placed exactly on it.
 function middayOn(key) {
@@ -210,17 +217,29 @@ async function main() {
     // This is the pairing that exposed the bug: tally-voucher splitting follows exactly the
     // rule getGstReport uses, so the two are only ever right together. Assert agreement, not
     // just a count — a filter fixed on one side alone is the failure being guarded against.
-    const tally = await buildTallyExport(shop.id, { from: day, to: day });
+    const tally = await salesExport(shop.id, day, day);
     assert.equal(tally.count, 1, "the Tally export drops the deleted bill too");
     assert.equal(tally.xml.includes(doomed.billNo), false, "the deleted bill has no voucher");
     assert.equal(tally.xml.includes(kept.billNo), true, "the surviving one does");
-    // One voucher per bill the GST report counted, at the same money.
+    // One voucher per bill the GST report counted…
+    const gstNow = await getGstReport(shop.id, range);
     assert.equal(
       (tally.xml.match(/<VOUCHER /g) ?? []).length,
-      (await getGstReport(shop.id, range)).totalBills,
+      gstNow.totalBills,
       "GST screen and Tally export must count the same bills for the same period",
     );
-    assert.equal(tally.xml.includes("<AMOUNT>118.00</AMOUNT>"), true, "and the same grand total");
+    // …carrying the same money, split the same way. The voucher posts the taxable value to
+    // Sales and each half of the tax to its own Output ledger, which is precisely the split
+    // getGstReport reports — so assert them against each other rather than against literals.
+    const ledgerAmount = (name) => {
+      const match = tally.xml.match(new RegExp(`<LEDGERNAME>${name}</LEDGERNAME>[\\s\\S]*?<AMOUNT>(-?[\\d.]+)</AMOUNT>`));
+      return match ? Number(match[1]) : null;
+    };
+    assert.equal(ledgerAmount("Sales"), gstNow.taxableSales, "Sales ledger carries the taxable value the GST report shows");
+    assert.equal(ledgerAmount("Output CGST"), gstNow.cgst, "CGST matches the GST report");
+    assert.equal(ledgerAmount("Output SGST"), gstNow.sgst, "SGST matches the GST report");
+    // The party is credited the gross, which is taxable + both halves of the tax.
+    assert.equal(ledgerAmount("Cash"), -(gstNow.taxableSales + gstNow.cgst + gstNow.sgst), "the party line is the gross");
     // Estimates are not tax documents, so neither surface may carry the one binned above.
     assert.equal(tally.xml.includes("EST-"), false, "no estimate voucher in a tax export");
 
@@ -247,7 +266,7 @@ async function main() {
       data: { businessDate: middayOn(saleDay) },
     });
 
-    const todayExport = await buildTallyExport(shop.id, { from: day, to: day });
+    const todayExport = await salesExport(shop.id, day, day);
     assert.equal(
       todayExport.xml.includes(backdated.billNo),
       false,
@@ -255,7 +274,7 @@ async function main() {
     );
     assert.equal(todayExport.count, 1, "today still exports only the bill actually sold today");
 
-    const saleDayExport = await buildTallyExport(shop.id, { from: saleDay, to: saleDay });
+    const saleDayExport = await salesExport(shop.id, saleDay, saleDay);
     assert.equal(saleDayExport.count, 1, "and it appears in the period it was actually sold in");
     assert.equal(saleDayExport.xml.includes(backdated.billNo), true);
     // The voucher date Tally files under must be the sale date too, not the sync date.

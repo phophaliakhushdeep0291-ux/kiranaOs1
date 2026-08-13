@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { isScaleBillingUnit, normalizeHardwareBridgeUrl, scaleReadingToBillingQuantity } from "@/features/core/hardware/local-hardware-bridge";
+import { hardwareBridgeFailureMessage, isScaleBillingUnit, normalizeHardwareBridgeUrl, scaleReadingToBillingQuantity } from "@/features/core/hardware/local-hardware-bridge";
 
 describe("local hardware bridge security boundary", () => {
   it("accepts only loopback HTTP(S) endpoints", () => {
@@ -22,6 +22,36 @@ describe("local hardware bridge security boundary", () => {
     expect(source).toContain("pairHardwareBridge");
     expect(source).not.toContain("Per-device pairing token");
     expect(source).not.toContain("setHardwareBridgeToken(bridgeToken)");
+  });
+
+  it("stops pointing at the printer when the request is silently held", () => {
+    // A held request is the one failure a counter cannot diagnose: the bridge
+    // logs nothing and the printer was never contacted. Sending staff to check
+    // paper and cables is the wrong advice.
+    const stalled = hardwareBridgeFailureMessage("stalled");
+    expect(stalled).toMatch(/printer was never contacted/i);
+    expect(stalled).toMatch(/blocking access to local devices/i);
+    expect(stalled).toMatch(/service is stopped/i);
+
+    // A refused connection is a different fault with different advice.
+    expect(hardwareBridgeFailureMessage("unreachable")).toMatch(/service is running/i);
+
+    // The old wording named a timeout and nothing else, which read as a dead
+    // printer. Neither variant may regress to it.
+    for (const reason of ["stalled", "unreachable"] as const) {
+      expect(hardwareBridgeFailureMessage(reason)).not.toMatch(/did not respond in time/i);
+    }
+  });
+
+  it("never decides the cause from navigator.permissions", () => {
+    const source = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/hardware/local-hardware-bridge.ts"), "utf8");
+    // Measured: Chrome 151 reports "granted" while loopback is blocked and every
+    // request hangs; Chromium 148 reports "denied" while loopback succeeds in
+    // 4ms. Wrong in both directions, so it must not drive what the counter is
+    // told — a confident wrong cause is worse than naming both.
+    expect(source).not.toContain("local-network-access");
+    expect(source).not.toContain("permissions.query");
+    expect(source).not.toContain("Hardware bridge did not respond in time.");
   });
 
   it("converts stable gram and kilogram readings to millesimal billing quantities", () => {

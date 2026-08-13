@@ -5,7 +5,7 @@ export interface HardwareBridgeHealth {
   ok: boolean;
   version?: string;
   deviceName?: string;
-  capabilities?: { print?: boolean; cutter?: boolean; cashDrawer?: boolean; scale?: boolean; customerDisplay?: boolean; qrPrint?: boolean };
+  capabilities?: { print?: boolean; cutter?: boolean; cashDrawer?: boolean; scale?: boolean; customerDisplay?: boolean; qrPrint?: boolean; tally?: boolean };
   update?: { available?: boolean; currentVersion?: string; latestVersion?: string; downloadUrl?: string };
 }
 
@@ -75,7 +75,10 @@ export async function pairHardwareBridge(bridgeUrl: string, pairingCode: string)
     setHardwareBridgeToken(body.token);
     return checkHardwareBridge(base);
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw new Error("Hardware bridge did not respond in time.");
+    // Pairing is the first thing a counter does, so this is where the browser's
+    // loopback gate is most likely to be met for the first time.
+    if (error instanceof DOMException && error.name === "AbortError") throw new Error(hardwareBridgeFailureMessage("stalled"));
+    if (error instanceof TypeError) throw new Error(hardwareBridgeFailureMessage("unreachable"));
     throw error;
   } finally {
     window.clearTimeout(timeout);
@@ -91,6 +94,26 @@ export function normalizeHardwareBridgeUrl(value: string) {
   if (url.username || url.password || url.search || url.hash) throw new Error("Hardware bridge URL cannot contain credentials, query parameters, or fragments.");
   url.pathname = url.pathname.replace(/\/$/, "");
   return url.toString().replace(/\/$/, "");
+}
+
+/**
+ * Recent Chrome gates a request from an HTTPS page to 127.0.0.1 behind a
+ * loopback permission. Until it is granted the request is neither answered nor
+ * refused — it is held until our own abort fires, with no console warning and
+ * nothing in the bridge's log. A plain timeout message sends the shopkeeper to
+ * check paper, cables and power on a printer that was never contacted.
+ *
+ * We deliberately do NOT consult navigator.permissions to sharpen this. That
+ * API is wrong in both directions here, both measured: Chrome 151 reports
+ * "granted" while loopback stays blocked and every request hangs, and Chromium
+ * 148 reports "denied" while loopback requests succeed in milliseconds. Naming
+ * both causes beats confidently naming the wrong one.
+ */
+export function hardwareBridgeFailureMessage(reason: "stalled" | "unreachable") {
+  if (reason === "unreachable") {
+    return "Could not reach the counter hardware on this computer. Check that the KiranaOS Hardware Bridge service is running, and that it was set up for this KiranaOS address.";
+  }
+  return "The counter hardware did not answer, so the printer was never contacted. Either this browser is blocking access to local devices — allow this site to reach them — or the Hardware Bridge service is stopped.";
 }
 
 async function bridgeRequest<T>(bridgeUrl: string, path: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
@@ -111,7 +134,11 @@ async function bridgeRequest<T>(bridgeUrl: string, path: string, init: RequestIn
     if (!response.ok) throw new Error((body as { message?: string }).message || `Hardware bridge returned ${response.status}`);
     return body as T;
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw new Error("Hardware bridge did not respond in time.");
+    if (error instanceof DOMException && error.name === "AbortError") throw new Error(hardwareBridgeFailureMessage("stalled"));
+    // fetch reports a refused connection, and an origin the bridge will not
+    // answer, as the same opaque TypeError. Both mean the request reached the
+    // network and came back — unlike the stall above.
+    if (error instanceof TypeError) throw new Error(hardwareBridgeFailureMessage("unreachable"));
     throw error;
   } finally {
     window.clearTimeout(timeout);
@@ -157,6 +184,31 @@ export async function printQrSlipViaHardwareBridge(bridgeUrl: string, input: { m
     method: "POST",
     body: JSON.stringify({ ...input, reference: input.reference ?? "" }),
   }, 12_000);
+}
+
+export interface TallyPostResult {
+  ok: boolean;
+  created: number;
+  altered: number;
+  ignored: number;
+  errors: number;
+  exceptions: number;
+  lineErrors?: string[];
+}
+
+/**
+ * Push accounting vouchers into the TallyPrime running on this same counter.
+ *
+ * The bridge decides where they go — the address is its configuration, never
+ * ours — so all that crosses the wire is the envelope itself.
+ *
+ * The timeout is minutes rather than seconds: Tally imports a year of vouchers
+ * synchronously, and giving up early would leave the caller unable to tell a
+ * slow import from a failed one, which is the one thing it must not guess at.
+ */
+export async function postTallyViaHardwareBridge(bridgeUrl: string, xml: string) {
+  if (!xml.trim()) throw new Error("There are no vouchers to send.");
+  return bridgeRequest<TallyPostResult>(bridgeUrl, "/v1/tally/post", { method: "POST", body: JSON.stringify({ xml }) }, 180_000);
 }
 
 export async function showCustomerDisplayViaHardwareBridge(bridgeUrl: string, input: HardwareCustomerDisplayState) {

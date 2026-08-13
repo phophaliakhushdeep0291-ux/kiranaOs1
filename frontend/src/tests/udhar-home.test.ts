@@ -26,31 +26,18 @@ describe("udhar home search and reminders", () => {
   });
 });
 
-describe("udhar route and phone-first shell", () => {
-  const page = readFileSync("src/features/core/udhar/pages/UdharPage.tsx", "utf8");
+describe("the udhar route", () => {
   const routes = readFileSync("src/app/routes.tsx", "utf8");
-  it("makes /udhar a dedicated first-class route", () => {
-    expect(routes).toContain('from "./route-preload"');
-    expect(routes).toContain("loadUdharRoute");
-    expect(routes).toContain("const Udhar = lazy(loadUdharRoute)");
-    expect(routes).toContain("<ProtectedRoute component={Udhar} />");
-  });
   /**
-   * This was written as `it.each([375, 390, 430, 768])` over the same four source
-   * assertions, which never read the width and so reported four passes for one check —
-   * it looked like proof that /udhar survives 375px when nothing had measured a
-   * viewport. There is no DOM environment here, so the honest split is: source keeps the
-   * structural guards below, and the real widths are measured by the CDP matrix in
-   * scripts/capture-mobile-core-matrix-v1.mjs, which /udhar is now part of.
+   * `/udhar` is an alias, not a screen. It briefly rendered a standalone page,
+   * which split the same concept across two lists — the dashboard "Outstanding
+   * Udhar" card opened one and the sidebar's "Customers / Udhar" the other, and
+   * only the sidebar's could record a payment. Both land on the customer credit
+   * view again. The widths that view survives are measured by the CDP matrix in
+   * scripts/capture-mobile-core-matrix-v1.mjs, not by source assertions here.
    */
-  it("keeps the structural guards that make the page survive a narrow viewport", () => {
-    expect(page).toContain("overflow-x-hidden");
-    expect(page).toContain("min-w-0");
-  });
-
-  it("keeps primary controls at or above the 44px touch target", () => {
-    // h-12 is 48px in this scale; the reminder button is the one a shopkeeper hits most.
-    expect(page).toContain('className="h-12 w-full');
-    expect(page).toContain('className="h-12 w-12');
+  it("resolves to the customer credit view rather than a screen of its own", () => {
+    expect(routes).toContain('<Redirect to="/customers?filter=udhar" />');
+    expect(routes).not.toContain("loadUdharRoute");
   });
 });

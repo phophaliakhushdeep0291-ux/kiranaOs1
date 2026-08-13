@@ -16,10 +16,10 @@ const ROUTES = [
   ["MQA-CUST-01", "/customers"], ["MQA-INV-01", "/inventory"],
   ["MQA-PUR-01", "/purchase-bills"], ["MQA-RPT-01", "/reports"],
   ["MQA-SET-01", "/settings"], ["MQA-SYNC-01", "/sync-status"],
-  // /udhar is the one-tap khata screen. It shipped with only a source-level assertion
-  // that claimed four widths without measuring one, so it belongs in the harness that
-  // actually resizes a viewport.
-  ["MQA-UDHAR-01", "/udhar"],
+  // /udhar is the one-tap khata entry point. It is an alias, so the third element is
+  // where it must land — measuring it still earns its place next to MQA-CUST-01
+  // because ?filter=udhar renders a different list (only customers who owe).
+  ["MQA-UDHAR-01", "/udhar", "/customers"],
 ];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const assert = (value, message) => { if (!value) throw new Error(message); };
@@ -116,7 +116,7 @@ async function closeChrome(client, chrome) {
   if (chrome.exitCode === null) chrome.kill();
 }
 
-async function auditPage(client, qaId, route, width, height) {
+async function auditPage(client, qaId, route, width, height, expectedPath = route) {
   await client.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: true });
   await navigate(client, route);
   const metrics = await client.evaluate(`(()=>{const visible=node=>{const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&rect.width>0&&rect.height>0&&rect.bottom>0&&rect.top<innerHeight};const controls=[...document.querySelectorAll("button,input,select,textarea,[role=button],[role=combobox],a[href]")].filter(visible).map(node=>{const rect=node.getBoundingClientRect();return{tag:node.tagName,type:node.getAttribute("type")||"",label:(node.getAttribute("aria-label")||node.textContent||node.getAttribute("placeholder")||"").trim().replace(/\\s+/g," ").slice(0,70),width:Math.round(rect.width),height:Math.round(rect.height)}}).filter(control=>!(["checkbox","radio","hidden"].includes(control.type))&&!(control.width<=2&&control.height<=2));const undersized=controls.filter(control=>control.width<44||control.height<44),text=document.body.innerText;return{path:location.pathname,viewport:[innerWidth,innerHeight],documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,undersized:undersized.slice(0,30),undersizedCount:undersized.length,visibleControlCount:controls.length,desktopSidebarVisible:[...document.querySelectorAll(".app-desktop-sidebar")].some(visible),genericFailure:/something went wrong|unexpected error|page failed to load/i.test(text),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[]}})()`);
@@ -126,7 +126,7 @@ async function auditPage(client, qaId, route, width, height) {
   // the ignored artifact directory before each durable write.
   await mkdir(OUTPUT_DIR, { recursive: true });
   await writeFile(path.join(OUTPUT_DIR, filename), Buffer.from(image.data, "base64"));
-  assert(metrics.path === route, `${qaId} redirected from ${route} to ${metrics.path}`);
+  assert(metrics.path === expectedPath, `${qaId} redirected from ${route} to ${metrics.path}`);
   assert(metrics.documentWidth <= width + 1 && metrics.bodyWidth <= width + 1, `${qaId} ${width}px horizontal overflow: ${JSON.stringify(metrics)}`);
   assert(!metrics.desktopSidebarVisible, `${qaId} ${width}px shows desktop sidebar`);
   assert(!metrics.genericFailure, `${qaId} ${width}px rendered an error boundary`);
@@ -150,7 +150,7 @@ async function main() {
     await prepareAppOrigin(client);
     await ensureSession(client);
     const results = [];
-    for (const [qaId, route] of ROUTES) for (const [width, height] of VIEWPORTS) results.push(await auditPage(client, qaId, route, width, height));
+    for (const [qaId, route, expectedPath] of ROUTES) for (const [width, height] of VIEWPORTS) results.push(await auditPage(client, qaId, route, width, height, expectedPath ?? route));
     await mkdir(OUTPUT_DIR, { recursive: true });
     await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), frontendUrl: FRONTEND_URL, apiUrl: API_URL, results }, null, 2));
     const undersized = results.filter((result) => result.undersizedCount > 0);

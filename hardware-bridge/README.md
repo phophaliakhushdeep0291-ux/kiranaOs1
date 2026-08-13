@@ -18,7 +18,9 @@ Choose the receipt printer, select **Save printer and create pairing code**, the
 
 Recent Chrome and Edge gate a request from a public HTTPS page to a loopback address behind local network access. When it is not granted the request is neither answered nor refused — it is issued and then held, so the bridge logs nothing, the browser reports no CORS error and files no console warning, and the frontend's four-second abort surfaces the misleading "Hardware bridge did not respond in time." Measured on Chrome 151.0.7922.77 with a default profile; Chromium 148 still allowed the same request, so the change is recent and the exact first affected version is not established here. `Access-Control-Allow-Private-Network` does **not** address it: a `no-cors` request, which involves no preflight at all, is held in exactly the same way, so the gate sits above CORS.
 
-The installer therefore offers a task that writes the frontend origins into `LocalNetworkAccessAllowedForUrls` under `HKLM\SOFTWARE\Policies\Google\Chrome` and the matching Edge key. The list comes from the same `KIRANA_FRONTEND_ORIGINS` that becomes the bridge's own origin allowlist, so a counter can never be allowed in the browser but rejected by the bridge. If either key already holds an entry this installer did not write — a shop managed by group policy or MDM — Setup leaves it alone and tells the operator which policy to ask their administrator for. Uninstalling withdraws only an allowlist that still matches ours.
+The permission that matters is **loopback**, not "local network". Chrome keeps them apart: granting the `loopback_network` content setting for the frontend origin makes the same request succeed in ~10ms, while granting `local_network` leaves it hanging exactly as before — and does so while `navigator.permissions.query({ name: "local-network-access" })` reports `"granted"`. That query is therefore useless as a readiness check for the bridge, and it is wrong in *both* directions: Chromium 148 reports `"denied"` for the same permission while loopback requests succeed in about 4ms. Only an actual request settles the question, which is why the counter's error message names both possible causes instead of accusing the browser from a permission state.
+
+The installer therefore offers a task that writes the frontend origins into `LoopbackNetworkAllowedForUrls` under `HKLM\SOFTWARE\Policies\Google\Chrome` and the matching Edge key. Loopback is also the narrower grant, which suits a bridge that refuses any non-loopback address anyway. The Edge key mirrors Chrome's naming but has not been verified against an Edge binary. The list comes from the same `KIRANA_FRONTEND_ORIGINS` that becomes the bridge's own origin allowlist, so a counter can never be allowed in the browser but rejected by the bridge. If either key already holds an entry this installer did not write — a shop managed by group policy or MDM — Setup leaves it alone and tells the operator which policy to ask their administrator for. Uninstalling withdraws only an allowlist that still matches ours.
 
 This grants nothing beyond the shop's own KiranaOS origin, and only on the machine where the bridge is installed. Browsers other than Chrome and Edge have their own policy stores and are not covered.
 
@@ -52,6 +54,28 @@ npm.cmd start
 ```
 
 This source-debug path is not part of shop installation. A shopkeeper never needs PowerShell or a terminal.
+
+## Sending accounting vouchers to TallyPrime
+
+A shop that keeps its books in Tally can push sales, purchases, receipts and expenses straight into the copy of TallyPrime running on the same counter, from Settings → Integrations. The browser cannot do this itself: it will not open a connection from an HTTPS page to a loopback port, and Tally answers no CORS preflight, so the bridge forwards the envelope.
+
+Set the address and restart the service:
+
+```powershell
+$env:KIRANA_BRIDGE_TALLY_URL = "http://127.0.0.1:9000"
+```
+
+or add `"tally": { "url": "http://127.0.0.1:9000" }` to `config.json`. Leaving it blank means the shop does not use Tally: `/v1/health` then reports `capabilities.tally: false` and the app hides the option rather than failing at the moment somebody presses send.
+
+Three constraints are deliberate:
+
+- **The address is configuration, never a request field.** A bridge that posted wherever the page asked would be an open proxy running inside the shop's network with the shop's trust.
+- **It must be loopback.** Tally has no authentication on this gateway, so reaching one across the shop's LAN would let any device on that network write to the books.
+- **An unusable address stops the service at startup**, where an installer or operator sees it, rather than at the counter on a Saturday evening.
+
+In Tally itself, the gateway must be switched on (F1 → Settings → Connectivity → Gateway of Tally) and the right company open. Tally answers HTTP 200 even when it imports nothing, so the bridge reads the counters in its reply and reports a rejection as a failure — the app records vouchers as sent only when Tally actually took them.
+
+Every voucher carries a `REMOTEID` derived from the shop and the document it came from, so an envelope that arrives twice is recognised as the same vouchers rather than a second set. The app additionally records what it has already pushed and asks only for the remainder.
 
 Print job ids, a SHA-256 fingerprint of the exact receipt payload, and per-copy progress are persisted at `~/.kiranaos/hardware-bridge-print-jobs.json` by default; override with `KIRANA_BRIDGE_JOB_JOURNAL`. Concurrent retries share one in-flight job, restarts resume only unfinished copies, and reusing a job id with different content, printer controls, or copy count is rejected. Pre-fingerprint legacy journal rows fail closed and require operator inspection plus a new job id. As with every raw printer protocol, a machine crash in the tiny interval after the printer accepts bytes but before the journal fsync can still require an operator to inspect the last receipt.
 

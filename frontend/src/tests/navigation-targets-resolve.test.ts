@@ -61,8 +61,15 @@ describe("every navigation target resolves to a registered route", () => {
     expect(unresolved(VOICE_ROUTES.map((route) => route.route))).toEqual([]);
   });
 
+  /**
+   * "Outstanding Udhar" on the dashboard once opened a standalone page of its
+   * own, so the same concept had two screens: the sidebar's "Customers / Udhar"
+   * and a separate list that could not record a payment. The alias resolves to
+   * the customer credit view, and that is the only udhar screen.
+   */
   it("keeps the /udhar alias pointing at the customer credit view", () => {
     expect(isRegistered("/udhar")).toBe(true);
-    expect(routesSource).toContain('<ProtectedRoute component={Udhar} />');
+    expect(routesSource).toContain('<Redirect to="/customers?filter=udhar" />');
+    expect(routesSource).not.toContain("component={Udhar}");
   });
 });

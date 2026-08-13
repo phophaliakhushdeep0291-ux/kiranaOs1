@@ -11,6 +11,8 @@ import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useToast } from "@/hooks/use-toast";
 import { SettingsShell } from "@/features/core/settings/SettingsShell";
 import { Badge, Card, CardHead, Fld, Kpi, type Tone } from "@/features/core/settings/ui";
+import { loadPrinterConfig } from "@/features/core/settings/printer-config";
+import { postTallyViaHardwareBridge, type TallyPostResult } from "@/features/core/hardware/local-hardware-bridge";
 import type { ReactNode } from "react";
 
 type ProviderStatus = "ready" | "available" | "setup_required" | "sandbox_only" | "adapter_required" | "development_only" | "upgrade_required";
@@ -21,12 +23,23 @@ type Overview = { maturityScore: number; activeKeys: number; activeWebhooks: num
 type ApiKeyRow = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; expiresAt: string | null; revokedAt: string | null; createdAt: string };
 type WebhookRow = { id: string; name: string; url: string; events: string[]; enabled: boolean; lastSuccessAt: string | null; lastFailureAt: string | null; lastError: string | null; createdAt: string; _count: { deliveries: number } };
 type NewSecret = { title: string; value: string; note: string };
+type TallyDocument = { type: string; id: string; voucherNumber: string; remoteId: string };
 type Approval = { title: string; description: string; confirmLabel: string; run: (pin: string) => Promise<void> };
 
 const SCOPES = [
   { id: "catalog:read", label: "Catalog", detail: "Products, price and stock" },
   { id: "customers:read", label: "Customers", detail: "Customer and balance data" },
   { id: "bills:read", label: "Bills", detail: "Sales and payment totals" },
+];
+
+// Exporting sales alone leaves the accountant re-keying every purchase and
+// collection, so all five are on by default and narrowing is deliberate.
+const TALLY_DOCUMENTS = [
+  { id: "sales", label: "Sales", detail: "Invoices and credit notes" },
+  { id: "purchases", label: "Purchases", detail: "Supplier bills you received" },
+  { id: "returns", label: "Purchase returns", detail: "Goods sent back as debit notes" },
+  { id: "receipts", label: "Udhar collected", detail: "Customer credit repayments" },
+  { id: "expenses", label: "Expenses", detail: "Rent, salary and daily costs" },
 ];
 
 const STATUS: Record<ProviderStatus, { label: string; tone: Tone }> = {
@@ -82,6 +95,8 @@ export default function IntegrationsSettingsPage() {
   const [secret, setSecret] = useState<NewSecret | null>(null);
   const [from, setFrom] = useState(() => new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [tallyInventory, setTallyInventory] = useState(false);
+  const [tallyDocs, setTallyDocs] = useState<string[]>(TALLY_DOCUMENTS.map((document) => document.id));
 
   const overviewQ = useQuery({ queryKey: ["integrations", "overview"], queryFn: () => apiRequest<Overview>("/integrations/overview"), retry: 1 });
   const keysQ = useQuery({ queryKey: ["integrations", "keys"], queryFn: () => apiRequest<ApiKeyRow[]>("/integrations/api-keys"), retry: 1 });
@@ -94,9 +109,39 @@ export default function IntegrationsSettingsPage() {
     retry: 1,
   });
   const tallyM = useMutation({
-    mutationFn: () => apiRequest<string>(`/integrations/exports/tally?from=${from}&to=${to}`),
+    mutationFn: () => apiRequest<string>(`/integrations/exports/tally?from=${from}&to=${to}&inventory=${tallyInventory ? "1" : "0"}&include=${tallyDocs.join(",")}`),
     onSuccess: (xml) => { downloadText(`artha-tally-${from}-${to}.xml`, xml, "application/xml;charset=utf-8"); toast({ title: "Tally export downloaded", description: "Import it from TallyPrime > Import Data > Vouchers." }); },
     onError: (error) => toast({ title: "Export failed", description: errorMessage(error), variant: "destructive" }),
+  });
+
+  /**
+   * Send straight into the TallyPrime running on this counter.
+   *
+   * The order matters and is not interchangeable: ask only for what has not
+   * been sent, let Tally accept it, and only then record it as sent. Recording
+   * first would lose vouchers Tally never received; the way round it is, a
+   * crash in between costs a re-send that Tally recognises by REMOTEID.
+   */
+  const tallyPushM = useMutation({
+    mutationFn: async () => {
+      const printer = await loadPrinterConfig();
+      const envelope = await apiRequest<{ xml: string; count: number; skipped: number; documents: TallyDocument[] }>(
+        `/integrations/exports/tally/envelope?from=${from}&to=${to}&inventory=${tallyInventory ? "1" : "0"}&include=${tallyDocs.join(",")}&unsent=1`,
+      );
+      if (envelope.count === 0) return { sent: 0, skipped: envelope.skipped, result: null as TallyPostResult | null };
+      const result = await postTallyViaHardwareBridge(printer.bridgeUrl, envelope.xml);
+      await apiRequest("/integrations/exports/tally/posted", { method: "POST", body: JSON.stringify({ documents: envelope.documents }) });
+      return { sent: envelope.count, skipped: envelope.skipped, result };
+    },
+    onSuccess: ({ sent, skipped, result }) => {
+      if (sent === 0) {
+        toast({ title: "Tally is already up to date", description: skipped > 0 ? `${skipped} voucher${skipped === 1 ? "" : "s"} in this range had already been sent.` : "Nothing new in this date range." });
+        return;
+      }
+      const already = skipped > 0 ? ` ${skipped} already sent, skipped.` : "";
+      toast({ title: `Sent ${sent} voucher${sent === 1 ? "" : "s"} to Tally`, description: `Tally created ${result?.created ?? 0} and updated ${result?.altered ?? 0}.${already}` });
+    },
+    onError: (error) => toast({ title: "Could not send to Tally", description: errorMessage(error), variant: "destructive" }),
   });
 
   const overview = overviewQ.data;
@@ -227,7 +272,7 @@ export default function IntegrationsSettingsPage() {
 
         <Card>
           <CardHead icon={<Download size={15} />} title="TallyPrime export" sub="Accounting vouchers in import-ready XML" action={<Badge tone={tallyPlanEnabled ? "green" : "amber"}>{tallyPlanEnabled ? "Operational" : "Pro plan"}</Badge>} />
-          <div className="space-y-4 px-5 pb-5"><div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900"><div className="flex items-start gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0" /><p>{tallyPlanEnabled ? "Generated from server-authoritative bills and scoped to this shop. Customer names and voucher totals are XML-escaped." : "TallyPrime export is available on the Pro plan. Existing integration history remains visible after a downgrade."}</p></div></div><div className="grid grid-cols-2 gap-3"><Fld label="From"><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></Fld><Fld label="To"><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></Fld></div><Button className="w-full gap-2" disabled={!tallyPlanEnabled || tallyM.isPending || !from || !to || from > to} onClick={() => tallyM.mutate()}>{tallyM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} {tallyPlanEnabled ? "Download Tally XML" : "Upgrade to export"}</Button><a className="inline-flex items-center gap-1 text-xs font-bold text-[var(--brand)] hover:underline" href="https://help.tallysolutions.com/import-data-in-tallyprime/" target="_blank" rel="noreferrer">Tally import instructions <ExternalLink size={12} /></a></div>
+          <div className="space-y-4 px-5 pb-5"><div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900"><div className="flex items-start gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0" /><p>{tallyPlanEnabled ? "Vouchers carry a CGST/SGST/IGST split and create any party or tax ledger they reference, so TallyPrime can import them into a fresh company. Dates follow the sale, not the sync." : "TallyPrime export is available on the Pro plan. Existing integration history remains visible after a downgrade."}</p></div></div><div className="grid grid-cols-2 gap-3"><Fld label="From"><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></Fld><Fld label="To"><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></Fld></div><div><p className="mb-1.5 text-[12px] font-semibold text-[#45577a]">Books to export</p><div className="grid gap-2 sm:grid-cols-2">{TALLY_DOCUMENTS.map((document) => <label key={document.id} className="flex cursor-pointer items-start gap-2 rounded-lg border border-[#e4ebf6] p-2.5"><Checkbox checked={tallyDocs.includes(document.id)} disabled={!tallyPlanEnabled} onCheckedChange={(checked) => setTallyDocs((current) => checked ? [...new Set([...current, document.id])] : current.filter((item) => item !== document.id))} /><span><span className="block text-xs font-bold text-[var(--brand-ink)]">{document.label}</span><span className="block text-[11px] leading-4 text-[#64748b]">{document.detail}</span></span></label>)}</div></div><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#e4ebf6] p-3"><Checkbox checked={tallyInventory} onCheckedChange={(checked) => setTallyInventory(checked === true)} disabled={!tallyPlanEnabled || !tallyDocs.includes("sales")} /><span><span className="block text-sm font-bold text-[var(--brand-ink)]">Include stock items</span><span className="block text-xs leading-5 text-[#64748b]">Adds item lines with HSN to sales and creates stock item masters. Leave off if your accountant runs Tally accounts-only — those companies reject vouchers naming stock they do not carry.</span></span></label><div className="grid gap-2 sm:grid-cols-2"><Button className="w-full gap-2" disabled={!tallyPlanEnabled || tallyPushM.isPending || tallyM.isPending || !from || !to || from > to || tallyDocs.length === 0} onClick={() => tallyPushM.mutate()}>{tallyPushM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} {tallyPushM.isPending ? "Sending to Tally…" : "Send to Tally"}</Button><Button variant="outline" className="w-full gap-2" disabled={!tallyPlanEnabled || tallyM.isPending || tallyPushM.isPending || !from || !to || from > to || tallyDocs.length === 0} onClick={() => tallyM.mutate()}>{tallyM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} {tallyPlanEnabled ? "Download XML" : "Upgrade to export"}</Button></div><p className="text-[11px] leading-4 text-[#64748b]">Send posts straight into the TallyPrime open on this counter and never sends the same voucher twice. Download gives you the file to import by hand, including vouchers already sent.</p><a className="inline-flex items-center gap-1 text-xs font-bold text-[var(--brand)] hover:underline" href="https://help.tallysolutions.com/import-data-in-tallyprime/" target="_blank" rel="noreferrer">Tally import instructions <ExternalLink size={12} /></a></div>
         </Card>
       </div>
 
