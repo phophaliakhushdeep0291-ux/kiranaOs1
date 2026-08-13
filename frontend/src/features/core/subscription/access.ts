@@ -331,9 +331,9 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
     ? new Date(offlineGraceEndsAt).getTime()
     : periodEndTime + 7 * DAY_MS;
   const timeExpired = Number.isFinite(periodEndTime) && now > periodEndTime;
-  const explicitlyExpired = status === "expired" || status === "cancelled";
+  const explicitlyExpired = status === "expired" || (status === "cancelled" && timeExpired);
   const subscriptionAccessExpired = timeExpired || explicitlyExpired || status === "grace";
-  const graceActive = subscriptionAccessExpired && now <= graceEndTime;
+  const graceActive = status !== "cancelled" && subscriptionAccessExpired && now <= graceEndTime;
   const isPaymentFailed =
     status === "payment_failed" ||
     payload.paymentFailed === true ||
@@ -373,6 +373,8 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
         : graceActive
           ? "Subscription is in offline grace. Billing can continue locally, but cloud sync may be limited."
         : status === "trial"
+        : status === "cancelled"
+          ? "Subscription cancelled. Paid access remains available until the current period ends."
           ? "Trial active. Your data is safe locally and can be backed up when sync is allowed."
           : "Subscription active. Cloud backup and allowed plan features are available.",
     source: "local-cache",

@@ -500,7 +500,8 @@ export async function extendGrace(shopId, days, actor = {}) {
 export function isSubscriptionActive(subscription) {
   if (!subscription) return true;
   const now = new Date();
-  if (["cancelled", "expired", "payment_failed"].includes(subscription.status)) return false;
+  if (subscription.status === "cancelled") return !!subscription.currentPeriodEnd && subscription.currentPeriodEnd > now;
+  if (["expired", "payment_failed"].includes(subscription.status)) return false;
   if (subscription.status === "trial") {
     if (!subscription.trialEndsAt || subscription.trialEndsAt > now) return true;
     return !!subscription.graceEndsAt && subscription.graceEndsAt > now;
@@ -633,6 +634,9 @@ async function getShopBusinessType(shopId, client = db) {
 
 function warningForSubscription(subscription) {
   if (subscription.status === "grace") return "Subscription is in grace period.";
+  if (subscription.status === "cancelled" && subscription.currentPeriodEnd > new Date()) {
+    return `Subscription is cancelled; paid access continues until ${subscription.currentPeriodEnd.toISOString()}.`;
+  }
   if (["expired", "cancelled", "payment_failed"].includes(subscription.status)) {
     return "Subscription is not active. Old data viewing is allowed, premium/cloud actions are blocked.";
   }
