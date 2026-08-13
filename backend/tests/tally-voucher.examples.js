@@ -347,6 +347,67 @@ assert.ok(purchase.xml.includes("<PARENT>Sundry Creditors</PARENT>"), "a supplie
 // A receipt whose supplier row was deleted still has to post somewhere real.
 assert.ok(declaredLedgers(purchase.xml).includes("Sundry Supplier"), "a receipt with no supplier still posts to a named ledger");
 
+/* ── Input tax on purchases ───────────────────────────────────────────────── */
+
+// The gap that made this export incomplete: purchases posted the whole supplier
+// invoice as goods value, so the accountant re-keyed every one of them to claim
+// input tax credit.
+function receipt(overrides = {}) {
+  return {
+    id: "grn_1", receiptNumber: "GRN-T1", supplierInvoiceNumber: "SUP/1",
+    supplierInvoiceAmount: 4000, supplierInvoiceTax: 610, paidAmount: 0,
+    supplier: { name: "Agarwal Wholesale", gstin: "27AAECS1234F1Z5" },
+    createdAt: new Date("2026-08-11T06:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+const localPurchase = envelope([], { purchases: [receipt()] });
+assertWellFormed(localPurchase.xml);
+const lp = vouchersOf(localPurchase.xml)[0];
+assert.equal(balanceOf(lp), 0, "a purchase with input tax balances");
+// Goods value is the residual, so it can never disagree with the invoice.
+assert.equal(ledgerAmount(lp, "Purchase"), -3390, "goods value is the invoice less its tax");
+assert.equal(ledgerAmount(lp, "Input CGST"), -305, "half the tax is central");
+assert.equal(ledgerAmount(lp, "Input SGST"), -305, "half the tax is state");
+assert.equal(ledgerAmount(lp, "Agarwal Wholesale"), 4000, "the supplier is owed the whole invoice");
+
+// Input tax is a receivable from the government; netting it against Output would
+// make the return impossible to reconcile.
+assert.ok(!lp.includes("Output CGST"), "purchase tax must not touch the output ledgers");
+assert.ok(declaredLedgers(localPurchase.xml).includes("Input CGST"), "the input ledger is declared");
+assert.ok(localPurchase.xml.includes("<PARTYGSTIN>27AAECS1234F1Z5</PARTYGSTIN>"), "the supplier's GSTIN reaches the voucher");
+
+// Jurisdiction runs the opposite way from a sale: the SUPPLIER is the
+// counterparty, so it is their state that decides the split.
+const interState = vouchersOf(envelope([], { purchases: [receipt({ supplier: { name: "Delhi Traders", gstin: "07AAECS1234F1Z5" } })] }).xml)[0];
+assert.equal(ledgerAmount(interState, "Input IGST"), -610, "a supplier in another state charges integrated tax");
+assert.equal(ledgerAmount(interState, "Input CGST"), 0, "no central tax on an inter-state purchase");
+assert.equal(balanceOf(interState), 0, "an inter-state purchase balances");
+
+// An unregistered supplier charges no GST to claim, and guessing "inter-state"
+// would send the credit to the wrong government.
+const noGstin = vouchersOf(envelope([], { purchases: [receipt({ supplier: { name: "Local Kirana", gstin: null } })] }).xml)[0];
+assert.equal(ledgerAmount(noGstin, "Input IGST"), 0, "a supplier with no GSTIN is not assumed inter-state");
+assert.equal(ledgerAmount(noGstin, "Input CGST"), -305, "it falls back to a local split");
+
+// A receipt recorded before this feature existed has no tax and must post
+// exactly as it did before.
+const untaxed = vouchersOf(envelope([], { purchases: [receipt({ supplierInvoiceTax: 0 })] }).xml)[0];
+assert.equal(ledgerAmount(untaxed, "Purchase"), -4000, "no tax recorded means the whole invoice is goods");
+assert.ok(!untaxed.includes("Input CGST"), "no tax line is emitted when none was captured");
+assert.equal(balanceOf(untaxed), 0, "an untaxed purchase still balances");
+
+// Odd paise must reconstitute exactly, or the voucher cannot balance.
+const oddTax = vouchersOf(envelope([], { purchases: [receipt({ supplierInvoiceAmount: 100, supplierInvoiceTax: 3.03 })] }).xml)[0];
+assert.equal(balanceOf(oddTax), 0, "tax that cannot halve evenly still balances");
+
+// Part-paid at receipt: the tender leg must not disturb the tax split.
+const partPaidPurchase = vouchersOf(envelope([], { purchases: [receipt({ paidAmount: 1000, paymentMode: "bank" })] }).xml)[0];
+assert.equal(ledgerAmount(partPaidPurchase, "Bank"), 1000, "what was paid leaves the bank");
+assert.equal(ledgerAmount(partPaidPurchase, "Agarwal Wholesale"), 3000, "only the rest is payable");
+assert.equal(balanceOf(partPaidPurchase), 0, "a part-paid taxed purchase balances");
+
 const debitNote = envelope([], {
   purchaseReturns: [
     { returnNumber: "PR-1", totalAmount: 500, refundAmount: 200, supplierCreditAmount: 300, refundMode: "cash", supplier: { name: "Agarwal Wholesale" }, createdAt: new Date("2026-08-11T06:00:00.000Z") },

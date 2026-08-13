@@ -20,6 +20,9 @@ const schema = z.object({
   name: z.string().min(1, "Name required"),
   mobile: z.string().optional(),
   address: z.string().optional(),
+  // Validated here too so a typo is caught at the keyboard, not by the server:
+  // the first two digits pick which government receives the input tax credit.
+  gstin: z.string().trim().optional().refine((v) => !v || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v.toUpperCase()), "Enter a valid 15-character GSTIN"),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -35,7 +38,7 @@ export default function Suppliers() {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", mobile: "", address: "" },
+    defaultValues: { name: "", mobile: "", address: "", gstin: "" },
   });
 
   const createSupplier = useCreateSupplier({
@@ -73,18 +76,18 @@ export default function Suppliers() {
 
   const openEdit = (s: Supplier) => {
     setEditing(s);
-    form.reset({ name: s.name, mobile: s.mobile ?? "", address: s.address ?? "" });
+    form.reset({ name: s.name, mobile: s.mobile ?? "", address: s.address ?? "", gstin: s.gstin ?? "" });
     setOpen(true);
   };
 
   const openAdd = () => {
     setEditing(null);
-    form.reset({ name: "", mobile: "", address: "" });
+    form.reset({ name: "", mobile: "", address: "", gstin: "" });
     setOpen(true);
   };
 
   const onSubmit = (values: FormData) => {
-    const data = { name: values.name, mobile: values.mobile || undefined, address: values.address || undefined };
+    const data = { name: values.name, mobile: values.mobile || undefined, address: values.address || undefined, gstin: values.gstin ? values.gstin.toUpperCase() : null };
     if (editing) {
       updateSupplier.mutate({ id: editing.id, data });
     } else {
@@ -186,6 +189,12 @@ export default function Suppliers() {
             <div>
               <Label>Address</Label>
               <Input data-testid="input-supplier-address" className="mt-1" placeholder="Address" {...form.register("address")} />
+            </div>
+            <div>
+              <Label>GSTIN</Label>
+              <Input data-testid="input-supplier-gstin" className="mt-1 uppercase" placeholder="27AAECS1234F1Z5" maxLength={15} {...form.register("gstin")} />
+              {form.formState.errors.gstin && <p className="text-destructive text-xs mt-1">{form.formState.errors.gstin.message}</p>}
+              <p className="text-muted-foreground text-xs mt-1">Needed to claim input GST on this supplier&apos;s bills. Its first two digits decide whether the tax is CGST+SGST or IGST.</p>
             </div>
             <div className="flex gap-3 pt-2">
               <Button type="button" variant="outline" className="flex-1" onClick={() => { setOpen(false); setEditing(null); }}>Cancel</Button>

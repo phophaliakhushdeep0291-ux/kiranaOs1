@@ -622,7 +622,8 @@ export async function buildTallyExport(shopId, query) {
           where: { shopId, createdAt: { gte: from, lte: to } },
           orderBy: { createdAt: "asc" },
           take: MAX_TALLY_BILLS + 1,
-          include: { supplier: { select: { name: true } } },
+          // gstin decides whether input tax posts as central+state or integrated.
+          include: { supplier: { select: { name: true, gstin: true } } },
         })
       : [],
 
@@ -631,7 +632,8 @@ export async function buildTallyExport(shopId, query) {
           where: { shopId, status: "active", createdAt: { gte: from, lte: to } },
           orderBy: { createdAt: "asc" },
           take: MAX_TALLY_BILLS + 1,
-          include: { supplier: { select: { name: true } } },
+          // gstin decides whether input tax posts as central+state or integrated.
+          include: { supplier: { select: { name: true, gstin: true } } },
         })
       : [],
 

@@ -302,6 +302,19 @@ export async function sendPurchaseOrder(shopId, id, actor = {}) {
   });
 }
 
+/**
+ * GST recorded off the supplier's invoice, in rupees.
+ *
+ * Only meaningful alongside an invoice total, because it is the portion *of*
+ * that total: without one there is nothing for the goods value to be the
+ * remainder of, so tax entered on its own is dropped rather than posted against
+ * an amount nobody supplied.
+ */
+function invoiceTaxOf(data, reconciliation) {
+  if (reconciliation.supplierInvoiceAmount == null) return 0;
+  return round2(Math.min(Number(data.supplierInvoiceTax) || 0, reconciliation.supplierInvoiceAmount));
+}
+
 function paymentAllocation(total, paid, lines) {
   let allocatedPaid = 0;
   return lines.map((line, index) => {
@@ -381,11 +394,13 @@ export async function receivePurchaseOrder(shopId, id, data, actor = {}) {
           receiptNumber: reference("GRN"),
           supplierInvoiceNumber: data.supplierInvoiceNumber || null,
           supplierInvoiceAmount: reconciliation.supplierInvoiceAmount,
+          supplierInvoiceTax: invoiceTaxOf(data, reconciliation),
           expectedGoodsAmount: reconciliation.expectedGoodsAmount,
           priceVarianceAmount: reconciliation.priceVarianceAmount,
           invoiceVarianceAmount: reconciliation.invoiceVarianceAmount,
           ...moneyShadows({
             supplierInvoiceAmount: reconciliation.supplierInvoiceAmount,
+            supplierInvoiceTax: invoiceTaxOf(data, reconciliation),
             expectedGoodsAmount: reconciliation.expectedGoodsAmount,
             priceVarianceAmount: reconciliation.priceVarianceAmount,
             invoiceVarianceAmount: reconciliation.invoiceVarianceAmount,
@@ -594,11 +609,13 @@ export async function reconcilePurchaseReceipt(shopId, purchaseOrderId, receiptI
       data: {
         supplierInvoiceNumber: data.supplierInvoiceNumber.trim(),
         supplierInvoiceAmount: reconciliation.supplierInvoiceAmount,
+        supplierInvoiceTax: invoiceTaxOf(data, reconciliation),
         expectedGoodsAmount: reconciliation.expectedGoodsAmount,
         priceVarianceAmount: reconciliation.priceVarianceAmount,
         invoiceVarianceAmount: reconciliation.invoiceVarianceAmount,
         ...moneyShadows({
           supplierInvoiceAmount: reconciliation.supplierInvoiceAmount,
+          supplierInvoiceTax: invoiceTaxOf(data, reconciliation),
           expectedGoodsAmount: reconciliation.expectedGoodsAmount,
           priceVarianceAmount: reconciliation.priceVarianceAmount,
           invoiceVarianceAmount: reconciliation.invoiceVarianceAmount,

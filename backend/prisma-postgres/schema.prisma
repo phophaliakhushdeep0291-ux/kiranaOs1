@@ -1302,6 +1302,10 @@ model Supplier {
   id        String    @id @default(cuid())
   shopId    String
   name      String
+  // Their GSTIN, which is what makes a purchase claimable: it identifies the
+  // counterparty on the return, and its first two digits are the supplier's
+  // state, which decides whether the tax is central+state or integrated.
+  gstin     String?
   mobile    String?
   address   String?
   deletedAt DateTime?
@@ -1505,6 +1509,11 @@ model PurchaseReceipt {
   supplierInvoiceNumber      String?
   supplierInvoiceAmount      Float?
   supplierInvoiceAmountPaise BigInt?
+  // GST contained WITHIN supplierInvoiceAmount, exactly as the supplier's
+  // invoice states it. Kept as the tax rather than the taxable value so the
+  // goods value stays a residual and can never disagree with the invoice total.
+  supplierInvoiceTax         Float     @default(0)
+  supplierInvoiceTaxPaise    BigInt?
   expectedGoodsAmount        Float     @default(0)
   expectedGoodsAmountPaise   BigInt?
   priceVarianceAmount        Float     @default(0)
