@@ -247,7 +247,7 @@ export function billingDiscountApprovalSummary(cart: CartItem[], billDiscount: n
       : Number(item.sellingUnit?.defaultPrice ?? item.pricing?.originalUnitPrice ?? productSellingPrice(item.product, quantity)) || 0;
     referenceSubtotal += roundMoney((referenceBaseRate + addonRate) * quantity);
     approvalDiscount += cartItemLineDiscount(item);
-    if (!item.isCustom && !item.pricing?.appliedRuleId && referenceBaseRate > item.rate) {
+    if (!item.isCustom && (!item.pricing?.appliedRuleId || item.manualRate) && referenceBaseRate > item.rate) {
       approvalDiscount += roundMoney((referenceBaseRate - item.rate) * quantity);
     }
   }

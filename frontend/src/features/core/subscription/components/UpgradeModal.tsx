@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, CreditCard, ShieldCheck, Tag, X } from "lucide-react";
 import {
   Dialog,
@@ -27,6 +27,7 @@ import {
 } from "@/features/core/subscription/api";
 import { ApiClientError } from "@/lib/api/http";
 import { useToast } from "@/hooks/use-toast";
+import { safeRandomUUID } from "@/lib/safe-uuid";
 
 interface RazorpaySuccessResponse {
   razorpay_order_id: string;
@@ -180,6 +181,7 @@ export function UpgradeModal({
   const [appliedCoupon, setAppliedCoupon] = useState<CouponValidationDto | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>(billingCycle);
+  const checkoutAttemptKeyRef = useRef<string | null>(null);
   const businessType = useBusinessTypeKey();
   const target = getPlanForBusinessType(targetPlanCode ?? "growth", businessType);
 
@@ -188,6 +190,7 @@ export function UpgradeModal({
     setCouponCode("");
     setAppliedCoupon(null);
     setCouponError(null);
+    checkoutAttemptKeyRef.current = null;
   }, [open, target.code, billingCycle]);
 
   function chooseBillingCycle(cycle: BillingCycle) {
@@ -195,6 +198,7 @@ export function UpgradeModal({
     setCouponCode("");
     setAppliedCoupon(null);
     setCouponError(null);
+    checkoutAttemptKeyRef.current = null;
   }
 
   async function applyCoupon() {
@@ -221,27 +225,34 @@ export function UpgradeModal({
     setCouponCode("");
     setAppliedCoupon(null);
     setCouponError(null);
+    checkoutAttemptKeyRef.current = null;
   }
 
   async function requestUpgrade() {
     setSaving(true);
+    const checkoutAttemptKey = checkoutAttemptKeyRef.current ?? `subscription-checkout:${safeRandomUUID()}`;
+    checkoutAttemptKeyRef.current = checkoutAttemptKey;
     try {
       const checkout = await requestSubscriptionUpgrade({
         planCode: target.code,
         billingCycle: selectedCycle,
         ...(appliedCoupon ? { couponCode: appliedCoupon.couponCode } : {}),
-      });
-      const payment = await openRazorpayCheckout(checkout, target.name);
-      const result = await verifySubscriptionPayment({
-        ...payment,
-        transactionId: checkout.transactionId,
-      });
-      if (result.subscription) {
+      }, checkoutAttemptKey);
+      let result: Awaited<ReturnType<typeof verifySubscriptionPayment>> | null = null;
+      if (!checkout.completed) {
+        const payment = await openRazorpayCheckout(checkout, target.name);
+        result = await verifySubscriptionPayment({
+          ...payment,
+          transactionId: checkout.transactionId,
+        });
+      }
+      if (result?.subscription) {
         await writeSubscriptionSnapshot(
           result.subscription as unknown as Record<string, unknown>,
         );
       }
       await subscriptionRefreshLocalFirst(target.code);
+      checkoutAttemptKeyRef.current = null;
       toast({
         title: "Subscription upgraded",
         description: `${target.name} is active after verified payment.`,
@@ -313,6 +324,7 @@ export function UpgradeModal({
                   value={couponCode}
                   onChange={(event) => {
                     setCouponCode(event.target.value.toUpperCase());
+                    checkoutAttemptKeyRef.current = null;
                     setAppliedCoupon(null);
                     setCouponError(null);
                   }}

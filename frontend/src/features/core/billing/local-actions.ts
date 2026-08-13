@@ -43,7 +43,7 @@ function deriveLocalSensitiveBillActions(input: BillInput, productsById: Map<str
 
     referenceSubtotal += roundMoney(defaultRate * quantity);
     approvalDiscount += lineDiscount;
-    if (!item.appliedPricingRuleId && defaultRate > enteredRate) {
+    if ((!item.appliedPricingRuleId || item.wasPriceOverridden === true) && defaultRate > enteredRate) {
       approvalDiscount += roundMoney((defaultRate - enteredRate) * quantity);
     }
     const effectiveRate = quantity > 0 ? roundMoney(enteredRate - lineDiscount / quantity) : enteredRate;

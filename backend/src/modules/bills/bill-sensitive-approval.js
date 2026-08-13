@@ -38,6 +38,37 @@ function ruleApplies(rule, item, body, customerGroup, billDate) {
   return true;
 }
 
+function resolveRulePrice(rule, defaultRate, productCost, minimumRate) {
+  if (!rule) return null;
+  let price = null;
+  if (rule.fixedUnitPrice != null && number(rule.fixedUnitPrice) > 0) {
+    price = roundMoney(rule.fixedUnitPrice);
+  } else {
+    const adjustmentValue = number(rule.adjustmentValue);
+    switch (rule.adjustmentType) {
+      case "FIXED_PRICE":
+        price = roundMoney(adjustmentValue);
+        break;
+      case "FIXED_DISCOUNT":
+        price = roundMoney(defaultRate - adjustmentValue);
+        break;
+      case "PERCENTAGE_DISCOUNT":
+        price = roundMoney(defaultRate * (1 - adjustmentValue / 100));
+        break;
+      case "MARKUP_ON_COST":
+        price = roundMoney(productCost * (1 + adjustmentValue / 100));
+        break;
+      case "MARGIN_ON_COST":
+        price = adjustmentValue >= 100 ? null : roundMoney(productCost / (1 - adjustmentValue / 100));
+        break;
+      default:
+        price = null;
+    }
+  }
+  if (price == null || !Number.isFinite(price)) return null;
+  return roundMoney(Math.max(minimumRate, price));
+}
+
 /**
  * Derive the approval decision from server-owned catalogue/rule records. The
  * client may describe the UI state, but it never gets to decide whether a PIN
@@ -53,13 +84,13 @@ export async function deriveSensitiveBillActions(shopId, body, client = db) {
     productIds.length
       ? client.product.findMany({
           where: { shopId, id: { in: productIds }, deletedAt: null },
-          select: { id: true, defaultPricePerRateUnit: true, minPricePerRateUnit: true },
+          select: { id: true, defaultPricePerRateUnit: true, minPricePerRateUnit: true, costPerRateUnit: true },
         })
       : [],
     sellingUnitIds.length
       ? client.productSellingUnit.findMany({
           where: { shopId, id: { in: sellingUnitIds }, isActive: true },
-          select: { id: true, productId: true, unitCode: true, defaultPrice: true, minimumPrice: true },
+          select: { id: true, productId: true, unitCode: true, defaultPrice: true, minimumPrice: true, costPrice: true },
         })
       : [],
     claimedRuleIds.length
@@ -94,12 +125,20 @@ export async function deriveSensitiveBillActions(shopId, body, client = db) {
     const applicableRule = ruleApplies(claimedRule, item, body, customer?.customerGroup, effectiveBillDate)
       ? claimedRule
       : null;
+    const recognisedRulePrice = resolveRulePrice(
+      applicableRule,
+      defaultRate,
+      Math.max(0, number(unit?.costPrice ?? product?.costPerRateUnit)),
+      minimumRate,
+    );
+    const isRecognisedRuleRate = recognisedRulePrice != null
+      && Math.abs(recognisedRulePrice - enteredRate) < MONEY_EPSILON;
 
     referenceSubtotal += roundMoney(defaultRate * quantity);
     approvalDiscount += lineDiscount;
     // A server-recognised pricing rule is an owner-configured price. A bare
     // manual markdown is a discount and counts toward the approval threshold.
-    if (!applicableRule && defaultRate > enteredRate) {
+    if ((!applicableRule || !isRecognisedRuleRate) && defaultRate > enteredRate) {
       approvalDiscount += roundMoney((defaultRate - enteredRate) * quantity);
     }
     if (applicableRule?.requiresOwnerApproval) approvalRuleApplied = true;

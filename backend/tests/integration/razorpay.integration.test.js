@@ -17,13 +17,15 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
   let orderCounter = 1;
   const razorpayCalls = [];
   const paymentOrderIds = new Map();
+  const ordersByReceipt = new Map();
+  let loseNextOrderResponse = false;
 
   global.fetch = async (url, options = {}) => {
     const target = typeof url === "string" ? url : url?.toString?.() || "";
     if (target.startsWith("https://api.razorpay.com/v1/orders") && options.method === "POST") {
       razorpayCalls.push({ target, options });
       const body = JSON.parse(options.body);
-      return jsonResponse({
+      const order = {
         id: `order_test_${orderCounter++}`,
         entity: "order",
         amount: body.amount,
@@ -31,7 +33,17 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
         receipt: body.receipt,
         status: "created",
         notes: body.notes,
-      });
+      };
+      ordersByReceipt.set(body.receipt, order);
+      if (loseNextOrderResponse) {
+        loseNextOrderResponse = false;
+        throw new TypeError("simulated response loss after provider order creation");
+      }
+      return jsonResponse(order);
+    }
+    if (target.startsWith("https://api.razorpay.com/v1/orders?") && options.method === "GET") {
+      const receipt = new URL(target).searchParams.get("receipt");
+      return jsonResponse({ entity: "collection", count: ordersByReceipt.has(receipt) ? 1 : 0, items: ordersByReceipt.has(receipt) ? [ordersByReceipt.get(receipt)] : [] });
     }
     if (target.includes("https://api.razorpay.com/v1/payments/")) {
       const paymentId = target.split("/").pop();
@@ -66,7 +78,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
     const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
     const token = auth.accessToken;
 
-    const checkoutRes = await ctx.post("/api/subscription/checkout", { planCode: "growth", billingCycle: "monthly", provider: "razorpay" }, { token });
+    const checkoutRes = await ctx.post("/api/subscription/checkout", { planCode: "growth", billingCycle: "monthly", provider: "razorpay", idempotencyKey: "checkout-retry-main-1" }, { token });
     const checkout = assertSuccess(checkoutRes);
     assert.equal(checkout.provider, "razorpay");
     assert.equal(checkout.razorpayKeyId, "rzp_test_kiranaos");
@@ -78,6 +90,35 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
     const createdTxn = await ctx.db.paymentTransaction.findUnique({ where: { id: checkout.transactionId } });
     assert.equal(createdTxn.status, "created");
     assert.equal(razorpayCalls.length, 1);
+
+    const replayCheckout = assertSuccess(await ctx.post(
+      "/api/subscription/checkout",
+      { planCode: "growth", billingCycle: "monthly", provider: "razorpay", idempotencyKey: "checkout-retry-main-1" },
+      { token },
+    ));
+    assert.equal(replayCheckout.idempotent, true);
+    assert.equal(replayCheckout.transactionId, checkout.transactionId);
+    assert.equal(replayCheckout.orderId, checkout.orderId);
+    assert.equal(razorpayCalls.length, 1);
+
+    const conflictingCheckoutRes = await ctx.post(
+      "/api/subscription/checkout",
+      { planCode: "pro", billingCycle: "monthly", provider: "razorpay", idempotencyKey: "checkout-retry-main-1" },
+      { token },
+    );
+    assert.equal(assertFailure(conflictingCheckoutRes, 409).code, "SUBSCRIPTION_CHECKOUT_IDEMPOTENCY_CONFLICT");
+    assert.equal(razorpayCalls.length, 1);
+
+    loseNextOrderResponse = true;
+    const recoveredCheckout = assertSuccess(await ctx.post(
+      "/api/subscription/checkout",
+      { planCode: "growth", billingCycle: "monthly", provider: "razorpay", idempotencyKey: "checkout-lost-response-1" },
+      { token },
+    ));
+    assert.equal(recoveredCheckout.idempotent, false);
+    assert.ok(recoveredCheckout.orderId);
+    assert.equal(razorpayCalls.length, 2);
+    assert.equal(ordersByReceipt.get(recoveredCheckout.transactionId)?.id, recoveredCheckout.orderId);
 
     const invalidVerify = await ctx.post("/api/subscription/verify-payment", {
       transactionId: checkout.transactionId,
