@@ -483,6 +483,7 @@ function sellingUnitData(input) {
     packSizeUnit: input.packSizeUnit ? String(input.packSizeUnit).trim() : null,
     conversionToBase: Number(input.conversionToBase),
     barcode: input.barcode ? String(input.barcode).trim() : null,
+    sku: input.sku ? String(input.sku).trim().toUpperCase() : null,
     defaultPrice: Number(input.defaultPrice),
     minimumPrice: input.minimumPrice == null ? null : Number(input.minimumPrice),
     maximumPrice: input.maximumPrice == null ? null : Number(input.maximumPrice),

@@ -56,6 +56,7 @@ export interface ProductSellingUnit {
   packSizeUnit?: string | null;
   conversionToBase: number;
   barcode?: string | null;
+  sku?: string | null;
   defaultPrice: number;
   minimumPrice?: number | null;
   maximumPrice?: number | null;

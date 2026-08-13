@@ -55,6 +55,7 @@ export const sellingUnitSchema = z.object({
   packSizeUnit: z.string().trim().min(1).max(40).optional().nullable(),
   conversionToBase: qty.positive(),
   barcode: z.string().trim().max(120).optional().nullable(),
+  sku: z.string().trim().max(120).optional().nullable(),
   defaultPrice: money.positive(),
   minimumPrice: money.optional().nullable(),
   maximumPrice: money.optional().nullable(),

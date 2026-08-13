@@ -1728,6 +1728,7 @@ export default function Billing() {
         setHeldBills(snapshot.heldBills);
         resetCurrentBill();
         setActiveBillId(nextActiveBillId);
+        setMobileCheckoutOpen(false);
       });
       return true;
     } catch {

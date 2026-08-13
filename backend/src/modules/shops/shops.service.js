@@ -3,6 +3,12 @@ import { AppError } from "../../shared/errors/index.js";
 import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
 import { BUSINESS_PROFILES, assertBusinessTypeOffered, bootstrapForShop, businessTypeFromSettings, parseShopSettings, requestedBusinessTypeFromSettings, settingsForBusinessType } from "./businessProfiles.js";
 
+async function writeRequiredShopAudit(client, entry) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) throw new AppError("Shop settings change could not be audited", 503, "AUDIT_WRITE_FAILED");
+  return audit;
+}
+
 export async function getShop(shopId) {
   const shop = await db.shop.findUnique({ where: { id: shopId } });
   if (!shop) throw new AppError("Shop not found", 404);
@@ -20,65 +26,57 @@ export async function getBootstrap(shopId, role) {
 
 export async function updateShop(shopId, data, actor = {}) {
   const startedAt = Date.now();
-  // Read the current row first so the audit entry can carry the spec's
-  // "Previous value" / "New value" pair. This PATCH is also the settings blob's
-  // write path, so it is the shop's "Settings changed" event.
-  const previous = await db.shop.findUnique({ where: { id: shopId } });
-  if (data.settingsJson && previous) {
-    const beforeSettings = parseShopSettings(previous.settingsJson);
-    const nextSettings = parseShopSettings(data.settingsJson);
-    const beforeType = businessTypeFromSettings(beforeSettings);
-    // The stored shop is read server-owned-first; the incoming payload is read
-    // as a request, so the owner's new choice is not overruled by the old value
-    // it travelled next to. See `requestedBusinessTypeFromSettings`.
-    const nextType = requestedBusinessTypeFromSettings(nextSettings);
-    const capabilitiesChanged = JSON.stringify(beforeSettings.businessProfile?.capabilities ?? null)
-      !== JSON.stringify(nextSettings.businessProfile?.capabilities ?? null);
-    if (capabilitiesChanged && actor.role !== "owner") {
-      throw new AppError("Only the shop owner can change business capabilities", 403, "OWNER_REQUIRED");
-    }
-    if (beforeType !== nextType) {
-      assertBusinessTypeOffered(nextType);
-      const [productCount, billCount] = await Promise.all([
-        db.product.count({ where: { shopId } }),
-        db.bill.count({ where: { shopId } }),
-      ]);
-      if (productCount + billCount > 0) {
-        const error = new AppError("Business type cannot be changed after products or bills exist. Create a new shop profile or request a reviewed migration.", 409, "BUSINESS_TYPE_CHANGE_REQUIRES_MIGRATION");
-        error.publicData = { currentBusinessType: beforeType, requestedBusinessType: nextType, productCount, billCount };
-        throw error;
+  const requestedData = { ...(data ?? {}) };
+  return db.$transaction(async (tx) => {
+    const previous = await tx.shop.findUnique({ where: { id: shopId } });
+    if (!previous) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
+
+    let nextData = requestedData;
+    if (requestedData.settingsJson) {
+      const beforeSettings = parseShopSettings(previous.settingsJson);
+      const nextSettings = parseShopSettings(requestedData.settingsJson);
+      const beforeType = businessTypeFromSettings(beforeSettings);
+      const nextType = requestedBusinessTypeFromSettings(nextSettings);
+      const capabilitiesChanged = JSON.stringify(beforeSettings.businessProfile?.capabilities ?? null)
+        !== JSON.stringify(nextSettings.businessProfile?.capabilities ?? null);
+      if (capabilitiesChanged && actor.role !== "owner") {
+        throw new AppError("Only the shop owner can change business capabilities", 403, "OWNER_REQUIRED");
       }
+      if (beforeType !== nextType) {
+        assertBusinessTypeOffered(nextType);
+        const [productCount, billCount] = await Promise.all([
+          tx.product.count({ where: { shopId } }),
+          tx.bill.count({ where: { shopId } }),
+        ]);
+        if (productCount + billCount > 0) {
+          const error = new AppError("Business type cannot be changed after products or bills exist. Create a new shop profile or request a reviewed migration.", 409, "BUSINESS_TYPE_CHANGE_REQUIRES_MIGRATION");
+          error.publicData = { currentBusinessType: beforeType, requestedBusinessType: nextType, productCount, billCount };
+          throw error;
+        }
+      }
+      // Profile engine/version/capabilities are server-owned catalog values.
+      nextData = { ...requestedData, settingsJson: JSON.stringify(settingsForBusinessType(nextType, nextSettings)) };
     }
-    // Engine, profile version and capabilities are server-owned. Preserve other
-    // preference keys, but always rebuild profile metadata from the catalog.
-    data = { ...data, settingsJson: JSON.stringify(settingsForBusinessType(nextType, nextSettings)) };
-  }
-  const shop = await db.shop.update({ where: { id: shopId }, data });
 
-  const changedKeys = Object.keys(data ?? {}).filter(
-    (key) => !valuesMatch(previous?.[key], shop?.[key]),
-  );
-
-  if (changedKeys.length > 0) {
-    await createAuditLog({
-      shopId,
-      userId: actor.userId ?? null,
-      module: AUDIT_MODULES.SETTINGS,
-      action: "SETTINGS_CHANGED",
-      entityType: "shop",
-      entityId: shopId,
-      // Only the fields that actually moved — a full shop row (settingsJson can
-      // be kilobytes) on every save would bloat the timeline it is meant to make
-      // readable.
-      before: pickKeys(previous, changedKeys),
-      after: pickKeys(shop, changedKeys),
-      metadata: { changedFields: changedKeys },
-      durationMs: Date.now() - startedAt,
-      req: actor.req ?? null,
-    });
-  }
-
-  return shop;
+    const shop = await tx.shop.update({ where: { id: shopId }, data: nextData });
+    const changedKeys = Object.keys(nextData).filter((key) => !valuesMatch(previous[key], shop[key]));
+    if (changedKeys.length > 0) {
+      await writeRequiredShopAudit(tx, {
+        shopId,
+        userId: actor.userId ?? null,
+        module: AUDIT_MODULES.SETTINGS,
+        action: "SETTINGS_CHANGED",
+        entityType: "shop",
+        entityId: shopId,
+        before: pickKeys(previous, changedKeys),
+        after: pickKeys(shop, changedKeys),
+        metadata: { changedFields: changedKeys },
+        durationMs: Date.now() - startedAt,
+        req: actor.req ?? null,
+      });
+    }
+    return shop;
+  }, { isolationLevel: "Serializable" });
 }
 
 const COMPATIBLE_PROFILE_CHANGES = new Set([
@@ -116,7 +114,7 @@ export async function getBusinessTypeCompatibility(shopId, targetBusinessType, a
     migrationSupported,
     decision: sameProfile ? "NO_CHANGE" : !hasMeaningfulData ? "SAFE_BEFORE_TRANSACTIONS" : migrationSupported ? "REVIEWED_MIGRATION_REQUIRED" : "NEW_SHOP_REQUIRED",
   };
-  await createAuditLog({
+  await writeRequiredShopAudit(db, {
     shopId,
     userId: actor.userId ?? null,
     module: AUDIT_MODULES.SETTINGS,
@@ -130,23 +128,27 @@ export async function getBusinessTypeCompatibility(shopId, targetBusinessType, a
 }
 
 export async function updateSetupStatus(shopId, status, actor = {}) {
-  const shop = await getShop(shopId);
-  const settings = parseShopSettings(shop.settingsJson);
-  const businessType = businessTypeFromSettings(settings);
-  const next = settingsForBusinessType(businessType, settings);
-  next.businessProfile.setupStatus = status;
-  const updated = await db.shop.update({ where: { id: shopId }, data: { settingsJson: JSON.stringify(next) } });
-  await createAuditLog({
-    shopId,
-    userId: actor.userId ?? null,
-    module: AUDIT_MODULES.SETTINGS,
-    action: "SHOP_SETUP_STATUS_CHANGED",
-    entityType: "shop",
-    entityId: shopId,
-    before: { setupStatus: settings.businessProfile?.setupStatus ?? "pending" },
-    after: { setupStatus: status },
-    req: actor.req ?? null,
-  });
+  const updated = await db.$transaction(async (tx) => {
+    const shop = await tx.shop.findUnique({ where: { id: shopId } });
+    if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
+    const settings = parseShopSettings(shop.settingsJson);
+    const businessType = businessTypeFromSettings(settings);
+    const next = settingsForBusinessType(businessType, settings);
+    next.businessProfile.setupStatus = status;
+    const saved = await tx.shop.update({ where: { id: shopId }, data: { settingsJson: JSON.stringify(next) } });
+    await writeRequiredShopAudit(tx, {
+      shopId,
+      userId: actor.userId ?? null,
+      module: AUDIT_MODULES.SETTINGS,
+      action: "SHOP_SETUP_STATUS_CHANGED",
+      entityType: "shop",
+      entityId: shopId,
+      before: { setupStatus: settings.businessProfile?.setupStatus ?? "pending" },
+      after: { setupStatus: status },
+      req: actor.req ?? null,
+    });
+    return saved;
+  }, { isolationLevel: "Serializable" });
   return bootstrapForShop(updated, actor.role ?? null);
 }
 

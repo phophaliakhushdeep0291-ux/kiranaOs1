@@ -7,6 +7,7 @@ import { getLocationQuantity, incrementLocationInventory, resolveOperationalLoca
 import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
 import { postPurchaseReceiptLedger } from "../finance/financial-ledger.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
 import {
   calculateReorderRecommendation,
   REORDER_SALES_WINDOW_DAYS,
@@ -200,7 +201,7 @@ export async function getReorderSuggestions(shopId, requestedLocationId = null) 
 
 export async function createPurchaseOrder(shopId, data, actor = {}) {
   const auditActor = normalizeActor(actor);
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const location = await resolveOperationalLocation(shopId, data.locationId, tx);
     const supplier = data.supplierId
       ? await tx.supplier.findFirst({ where: { id: data.supplierId, shopId, deletedAt: null } })
@@ -260,8 +261,19 @@ export async function createPurchaseOrder(shopId, data, actor = {}) {
       },
       metadata: { locationId: order.locationId, itemCount: order.items.length },
     }, tx);
-    return withReconciliation(order);
+    const response = withReconciliation(order);
+    const deliveries = await stageIntegrationEvent(shopId, "purchase_order.created", {
+      id: response.id,
+      orderNumber: response.orderNumber,
+      supplierName: response.supplierName,
+      expectedTotal: response.expectedTotal,
+      locationId: response.locationId,
+      status: response.status,
+    }, { client: tx });
+    return { response, deliveries };
   });
+  await dispatchIntegrationDeliveries(result.deliveries);
+  return result.response;
 }
 
 export async function sendPurchaseOrder(shopId, id, actor = {}) {
@@ -309,7 +321,7 @@ export async function receivePurchaseOrder(shopId, id, data, actor = {}) {
     if (existing) return assertCompatibleReplay(existing, id, data);
   }
   try {
-    return await db.$transaction(async (tx) => {
+    const transactionResult = await db.$transaction(async (tx) => {
       const order = await tx.purchaseOrder.findFirst({
         where: { id, shopId },
         include: { location: true, items: { include: { product: true } } },
@@ -520,8 +532,19 @@ export async function receivePurchaseOrder(shopId, id, data, actor = {}) {
           idempotencyKey: data.idempotencyKey ?? null,
         },
       }, tx);
-      return { receipt: fullReceipt, purchaseOrder: withReconciliation(purchaseOrder), idempotentReplay: false, remainingLineCount: remaining };
+      const response = { receipt: fullReceipt, purchaseOrder: withReconciliation(purchaseOrder), idempotentReplay: false, remainingLineCount: remaining };
+      const deliveries = await stageIntegrationEvent(shopId, "purchase_order.received", {
+        id: response.purchaseOrder.id,
+        orderNumber: response.purchaseOrder.orderNumber,
+        receiptId: response.receipt.id,
+        totalAmount: response.receipt.totalAmount,
+        locationId: response.purchaseOrder.locationId,
+        status: response.purchaseOrder.status,
+      }, { client: tx });
+      return { response, deliveries };
     });
+    await dispatchIntegrationDeliveries(transactionResult.deliveries);
+    return transactionResult.response;
   } catch (error) {
     if (error?.code === "P2002" && data.idempotencyKey) {
       const existing = await db.purchaseReceipt.findFirst({ where: { shopId, idempotencyKey: data.idempotencyKey }, include: receiptReplayInclude });
@@ -534,7 +557,7 @@ export async function receivePurchaseOrder(shopId, id, data, actor = {}) {
 export async function reconcilePurchaseReceipt(shopId, purchaseOrderId, receiptId, data, actor = {}) {
   const auditActor = normalizeActor(actor);
   const userId = auditActor.userId;
-  await db.$transaction(async (tx) => {
+  const deliveries = await db.$transaction(async (tx) => {
     const receipt = await tx.purchaseReceipt.findFirst({
       where: { id: receiptId, shopId, purchaseOrderId },
       include: { items: { include: { purchaseOrderItem: true } } },
@@ -608,7 +631,14 @@ export async function reconcilePurchaseReceipt(shopId, purchaseOrderId, receiptI
       },
       metadata: { purchaseOrderId, locationId: receipt.locationId, varianceReason: updated.varianceReason },
     }, tx);
+    return stageIntegrationEvent(shopId, "purchase_receipt.reconciled", {
+      purchaseOrderId,
+      receiptId,
+      locationId: receipt.locationId,
+      matchStatus: updated.matchStatus,
+    }, { client: tx });
   });
+  await dispatchIntegrationDeliveries(deliveries);
   return getPurchaseOrder(shopId, purchaseOrderId);
 }
 

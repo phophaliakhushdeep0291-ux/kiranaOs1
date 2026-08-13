@@ -71,6 +71,7 @@ function productAuditSnapshot(product) {
           id: unit.id,
           unitCode: unit.unitCode,
           barcode: unit.barcode ?? null,
+          sku: unit.sku ?? null,
           conversionToBase: Number(unit.conversionToBase ?? 0),
           defaultPrice: Number(unit.defaultPrice ?? 0),
           minimumPrice: unit.minimumPrice == null ? null : Number(unit.minimumPrice),
@@ -1312,6 +1313,7 @@ async function writeSellingUnits(tx, shopId, productId, units) {
       packSizeUnit: unit.packSizeUnit,
       conversionToBase: unit.conversionToBase,
       barcode: unit.barcode,
+      sku: unit.sku,
       defaultPrice: unit.defaultPrice,
       ...moneyShadows({
         defaultPrice: unit.defaultPrice,

@@ -529,10 +529,13 @@ async function deliverWebhook(endpoint, eventType, payload, existingEventId = nu
  * dispatch is deliberately separate and happens only after commit.
  */
 export async function stageIntegrationEvent(shopId, eventType, payload, { client = db } = {}) {
-  if (!(await hasFeature(shopId, "api_webhook_later", client))) return [];
   const endpoints = await client.webhookEndpoint.findMany({ where: { shopId, enabled: true, deletedAt: null } });
   const matching = endpoints.filter((endpoint) => jsonArray(endpoint.eventsJson).includes(eventType));
   if (!matching.length) return [];
+  // Most shops have no endpoint, so only perform the subscription/entitlement
+  // reads once there is real outbox work to stage. This keeps billing fast while
+  // still disabling leftover endpoints immediately after a plan downgrade.
+  if (!(await hasFeature(shopId, "api_webhook_later", client))) return [];
   const eventId = `evt_${crypto.randomUUID().replaceAll("-", "")}`;
   const eventCreatedAt = new Date();
   const payloadJson = JSON.stringify(payload, integrationJsonReplacer);

@@ -6,6 +6,7 @@ import { rateUnitToBase } from "../../utils/units.js";
 import { decrementLocationInventory, incrementLocationInventory } from "../stores/location-context.service.js";
 import { postPurchaseReturnCancelledLedger, postPurchaseReturnCreatedLedger } from "../finance/financial-ledger.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
 
 const include = { location: true, supplier: true, purchaseReceipt: true, items: { include: { product: true, purchaseReceiptItem: true } } };
 const ref = () => `PR-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
@@ -111,9 +112,17 @@ export async function createPurchaseReturn(shopId, data, actor = {}, requestedLo
         idempotencyKey: data.idempotencyKey ?? null,
       },
     }, tx);
-    return result;
+    const deliveries = await stageIntegrationEvent(shopId, "purchase_return.created", {
+      id: result.id,
+      returnNumber: result.returnNumber,
+      totalAmount: result.totalAmount,
+      supplierId: result.supplierId,
+      locationId: result.locationId,
+    }, { client: tx });
+    return { result, deliveries };
     });
-    return { ...created, idempotentReplay: false };
+    await dispatchIntegrationDeliveries(created.deliveries);
+    return { ...created.result, idempotentReplay: false };
   } catch (error) {
     if (error?.code === "P2002" && data.idempotencyKey) {
       const concurrentReplay = await replay();
@@ -125,14 +134,14 @@ export async function createPurchaseReturn(shopId, data, actor = {}, requestedLo
 
 export async function cancelPurchaseReturn(shopId, id, reason, actor = {}, requestedLocationId) {
   const auditActor = normalizeActor(actor);
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const purchaseReturn = await tx.purchaseReturn.findFirst({
       where: { id, shopId },
       include: { location: true, supplier: true, purchaseReceipt: true, items: { include: { product: true, purchaseReceiptItem: true } } },
     });
     if (!purchaseReturn) throw new AppError("Purchase return not found", 404, "PURCHASE_RETURN_NOT_FOUND");
     if (requestedLocationId && purchaseReturn.locationId !== requestedLocationId) throw new AppError("Purchase return belongs to another branch", 403, "LOCATION_ACCESS_DENIED");
-    if (purchaseReturn.status === "cancelled") return { ...purchaseReturn, idempotentReplay: true };
+    if (purchaseReturn.status === "cancelled") return { purchaseReturn: { ...purchaseReturn, idempotentReplay: true }, deliveries: [] };
 
     for (const item of purchaseReturn.items) {
       const stock = await incrementLocationInventory(tx, {
@@ -191,6 +200,16 @@ export async function cancelPurchaseReturn(shopId, id, reason, actor = {}, reque
         refundAmount: purchaseReturn.refundAmount,
       },
     }, tx);
-    return { ...cancelled, location: purchaseReturn.location, supplier: purchaseReturn.supplier, purchaseReceipt: purchaseReturn.purchaseReceipt, items: purchaseReturn.items, idempotentReplay: false };
+    const response = { ...cancelled, location: purchaseReturn.location, supplier: purchaseReturn.supplier, purchaseReceipt: purchaseReturn.purchaseReceipt, items: purchaseReturn.items, idempotentReplay: false };
+    const deliveries = await stageIntegrationEvent(shopId, "purchase_return.cancelled", {
+      id: response.id,
+      returnNumber: response.returnNumber,
+      totalAmount: response.totalAmount,
+      supplierId: response.supplierId,
+      locationId: response.locationId,
+    }, { client: tx });
+    return { purchaseReturn: response, deliveries };
   });
+  await dispatchIntegrationDeliveries(result.deliveries);
+  return result.purchaseReturn;
 }
