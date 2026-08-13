@@ -42,8 +42,11 @@ export async function updateSupplier(shopId, id, data, actor = {}) {
     await writeRequiredSupplierAudit({
       shopId, userId: actor.userId ?? null, deviceId: actor.deviceId ?? null,
       action: "SUPPLIER_UPDATED", entityType: "Supplier", entityId: id,
-      before: { name: existing.name, mobile: existing.mobile, gstNumber: existing.gstNumber },
-      after: { name: updated.name, mobile: updated.mobile, gstNumber: updated.gstNumber },
+      // gstin, not gstNumber: Supplier has never had a gstNumber column, so this
+      // recorded undefined on both sides and a GSTIN edit left no trace — which
+      // matters now that the value decides how a purchase's tax is posted.
+      before: { name: existing.name, mobile: existing.mobile, gstin: existing.gstin ?? null },
+      after: { name: updated.name, mobile: updated.mobile, gstin: updated.gstin ?? null },
       metadata: { offlineSyncEventId: actor.syncEventId ?? null }, req: actor.req ?? null,
     }, tx);
     return updated;

@@ -36,6 +36,8 @@ export const receivePurchaseOrderSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
   supplierInvoiceNumber: z.string().trim().max(100).optional(),
   supplierInvoiceAmount: moneyAmount({ positive: true }).optional(),
+  // GST contained within the invoice total, as the supplier's invoice states it.
+  supplierInvoiceTax: moneyAmount().optional(),
   varianceReason: z.string().trim().min(3).max(500).optional(),
   paidAmount: moneyAmount().optional(),
   paymentMode: z.enum(["cash", "upi", "bank"]).optional(),
@@ -57,6 +59,7 @@ export const receivePurchaseOrderSchema = z.object({
   if (value.supplierInvoiceAmount !== undefined && !value.supplierInvoiceNumber) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["supplierInvoiceNumber"], message: "Supplier invoice number is required when an invoice total is entered" });
   }
+  assertInvoiceTaxWithinTotal(value, context);
   const ids = new Set();
   value.items.forEach((item, index) => {
     if (ids.has(item.purchaseOrderItemId)) context.addIssue({ code: z.ZodIssueCode.custom, path: ["items", index, "purchaseOrderItemId"], message: "A purchase-order line can be received only once per receipt" });
@@ -67,8 +70,27 @@ export const receivePurchaseOrderSchema = z.object({
 export const reconcilePurchaseReceiptSchema = z.object({
   supplierInvoiceNumber: z.string().trim().min(1).max(100),
   supplierInvoiceAmount: moneyAmount({ positive: true }),
+  supplierInvoiceTax: moneyAmount().optional(),
   varianceReason: z.string().trim().min(3).max(500).optional(),
+}).superRefine((value, context) => {
+  assertInvoiceTaxWithinTotal(value, context);
 });
+
+/**
+ * Tax is contained within the invoice total, so it cannot exceed it — and a tax
+ * with no total to sit inside is a number nothing can be derived from. Both
+ * mistakes would otherwise reach Tally as a negative goods value.
+ */
+function assertInvoiceTaxWithinTotal(value, context) {
+  if (value.supplierInvoiceTax === undefined || value.supplierInvoiceTax === 0) return;
+  if (value.supplierInvoiceAmount === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["supplierInvoiceAmount"], message: "Enter the supplier invoice total before its GST" });
+    return;
+  }
+  if (value.supplierInvoiceTax > value.supplierInvoiceAmount) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["supplierInvoiceTax"], message: "GST cannot be more than the invoice total it is part of" });
+  }
+}
 
 export const cancelPurchaseOrderSchema = z.object({
   reason: z.string().trim().min(3).max(300),

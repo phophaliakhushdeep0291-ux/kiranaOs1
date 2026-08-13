@@ -41,6 +41,15 @@ const TAX_LEDGERS = Object.freeze({
   igst: { name: "Output IGST", dutyHead: "Integrated Tax" },
 });
 
+// Tax paid to a supplier is a receivable from the government, not a liability to
+// it, so it cannot share a ledger with tax collected on sales — netting the two
+// into one balance is what makes a return impossible to reconcile.
+const INPUT_TAX_LEDGERS = Object.freeze({
+  cgst: { name: "Input CGST", dutyHead: "Central Tax" },
+  sgst: { name: "Input SGST", dutyHead: "State Tax" },
+  igst: { name: "Input IGST", dutyHead: "Integrated Tax" },
+});
+
 // The POS records tender as cash | upi | bank. Anything else is a mode added
 // after this map was written, and it must not be quietly folded into cash.
 const TENDER_LEDGERS = Object.freeze({
@@ -80,8 +89,8 @@ function partyMaster(name, gstin) {
   return { kind: "ledger", name, parent: "Sundry Debtors", gstin: gstin || null };
 }
 
-function supplierMaster(name) {
-  return { kind: "ledger", name, parent: "Sundry Creditors" };
+function supplierMaster(name, gstin = null) {
+  return { kind: "ledger", name, parent: "Sundry Creditors", gstin: gstin || null };
 }
 
 function renderLedgerMaster(master) {
@@ -181,6 +190,28 @@ export function splitGst(bill, fallbackSellerStateCode = "") {
   if (interState) return { cgst: 0, sgst: 0, igst: gst, interState: true };
   const central = round2(gst / 2);
   return { cgst: central, sgst: subtractMoney(gst, central), igst: 0, interState: false };
+}
+
+/**
+ * Split a purchase's input tax into central/state or integrated.
+ *
+ * The mirror of splitGst, with the states the other way round: on a purchase the
+ * counterparty is the seller, so the supplier's state is compared against the
+ * shop's. The supplier's state comes from the first two digits of their GSTIN —
+ * which is also why a purchase from a supplier with no GSTIN on file is treated
+ * as local: an unregistered supplier charges no GST to claim anyway, and
+ * guessing "inter-state" would send the credit to the wrong government.
+ */
+export function splitInputGst(receipt, supplierGstin, shopStateCode = "") {
+  const tax = round2(Number(receipt.supplierInvoiceTax) || 0);
+  if (isZero(tax)) return { cgst: 0, sgst: 0, igst: 0, interState: false };
+
+  const supplierStateCode = String(supplierGstin || "").slice(0, 2);
+  const interState = Boolean(shopStateCode && /^\d{2}$/.test(supplierStateCode) && supplierStateCode !== String(shopStateCode));
+
+  if (interState) return { cgst: 0, sgst: 0, igst: tax, interState: true };
+  const central = round2(tax / 2);
+  return { cgst: central, sgst: subtractMoney(tax, central), igst: 0, interState: false };
 }
 
 /* ── Inventory ────────────────────────────────────────────────────────────── */
@@ -351,20 +382,33 @@ function buildSaleVoucher(bill, { timeZone, sellerStateCode, inventory, shopId }
 /* ── Purchases and debit notes ────────────────────────────────────────────── */
 
 /**
- * A supplier bill.
+ * A supplier bill, with the input tax credit it carries.
  *
- * Note what is deliberately absent: no input CGST/SGST split. PurchaseReceipt
- * records totalAmount but no tax breakup, and Supplier has no GSTIN column, so
- * the data to claim input tax credit simply is not captured by the POS. Posting
- * a guessed split would put a number in a statutory return that nothing in this
- * system can support, so the whole invoice value goes to Purchase and the
- * accountant applies the tax treatment they already hold.
+ * The tax is what the supplier's invoice states, not something derived here —
+ * a purchase's rate mix is the supplier's business and guessing it would put an
+ * unsupportable number in a statutory return. Goods value is the residual
+ * (invoice total − tax), so it can never disagree with the invoice.
+ *
+ * Jurisdiction runs the opposite way from a sale: the counterparty is the
+ * seller, so it is the *supplier's* state that is compared against the shop's.
  */
-function buildPurchaseVoucher(receipt, { timeZone, shopId }) {
+function buildPurchaseVoucher(receipt, { timeZone, shopId, sellerStateCode }) {
   const total = round2(Number(receipt.supplierInvoiceAmount ?? receipt.totalAmount) || 0);
   const paid = round2(Number(receipt.paidAmount) || 0);
+  const supplierGstin = receipt.supplier?.gstin || null;
   const supplier = String(receipt.supplier?.name || "").trim() || "Sundry Supplier";
-  const masters = [supplierMaster(supplier), { kind: "ledger", name: LEDGER_PURCHASE, parent: "Purchase Accounts" }];
+  const masters = [supplierMaster(supplier, supplierGstin), { kind: "ledger", name: LEDGER_PURCHASE, parent: "Purchase Accounts" }];
+
+  const tax = splitInputGst(receipt, supplierGstin, sellerStateCode);
+  const taxTotal = addMoney(tax.cgst, tax.sgst, tax.igst);
+  const goodsValue = subtractMoney(total, taxTotal);
+  for (const [key, ledger] of Object.entries(INPUT_TAX_LEDGERS)) {
+    if (!isZero(tax[key])) masters.push({ kind: "ledger", name: ledger.name, parent: "Duties & Taxes", extra: `<TAXTYPE>GST</TAXTYPE><GSTDUTYHEAD>${ledger.dutyHead}</GSTDUTYHEAD><AFFECTSSTOCK>No</AFFECTSSTOCK>` });
+  }
+  const taxXml =
+    ledgerEntry(INPUT_TAX_LEDGERS.cgst.name, -tax.cgst) +
+    ledgerEntry(INPUT_TAX_LEDGERS.sgst.name, -tax.sgst) +
+    ledgerEntry(INPUT_TAX_LEDGERS.igst.name, -tax.igst);
 
   // Payable is the residual so a receipt whose paid/due columns disagree with
   // the invoice total still yields a balanced voucher.
@@ -386,8 +430,9 @@ function buildPurchaseVoucher(receipt, { timeZone, shopId }) {
       number,
       reference: receipt.receiptNumber,
       party: supplier,
+      gstin: supplierGstin,
       narration: `KiranaOS purchase ${receipt.receiptNumber}`,
-      body: ledgerEntry(LEDGER_PURCHASE, -total) + ledgerEntry(supplier, payable) + tenderXml,
+      body: ledgerEntry(LEDGER_PURCHASE, -goodsValue) + taxXml + ledgerEntry(supplier, payable) + tenderXml,
       remoteId,
     }),
     masters,
@@ -395,6 +440,10 @@ function buildPurchaseVoucher(receipt, { timeZone, shopId }) {
   };
 }
 
+// PurchaseReturn records the goods value returned and no tax, so this reverses
+// the goods leg only. The input tax credit on returned stock stays claimed —
+// correct in Tally's arithmetic but not in the return, and it needs a tax field
+// on PurchaseReturn before it can be split the way a purchase now is.
 function buildDebitNoteVoucher(ret, { timeZone, shopId }) {
   const total = round2(Number(ret.totalAmount) || 0);
   const refund = round2(Number(ret.refundAmount) || 0);
