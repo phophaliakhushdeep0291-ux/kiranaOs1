@@ -202,8 +202,8 @@ export function splitGst(bill, fallbackSellerStateCode = "") {
  * as local: an unregistered supplier charges no GST to claim anyway, and
  * guessing "inter-state" would send the credit to the wrong government.
  */
-export function splitInputGst(receipt, supplierGstin, shopStateCode = "") {
-  const tax = round2(Number(receipt.supplierInvoiceTax) || 0);
+export function splitInputGst(amount, supplierGstin, shopStateCode = "") {
+  const tax = round2(Number(amount) || 0);
   if (isZero(tax)) return { cgst: 0, sgst: 0, igst: 0, interState: false };
 
   const supplierStateCode = String(supplierGstin || "").slice(0, 2);
@@ -399,7 +399,7 @@ function buildPurchaseVoucher(receipt, { timeZone, shopId, sellerStateCode }) {
   const supplier = String(receipt.supplier?.name || "").trim() || "Sundry Supplier";
   const masters = [supplierMaster(supplier, supplierGstin), { kind: "ledger", name: LEDGER_PURCHASE, parent: "Purchase Accounts" }];
 
-  const tax = splitInputGst(receipt, supplierGstin, sellerStateCode);
+  const tax = splitInputGst(receipt.supplierInvoiceTax, supplierGstin, sellerStateCode);
   const taxTotal = addMoney(tax.cgst, tax.sgst, tax.igst);
   const goodsValue = subtractMoney(total, taxTotal);
   for (const [key, ledger] of Object.entries(INPUT_TAX_LEDGERS)) {
@@ -440,15 +440,34 @@ function buildPurchaseVoucher(receipt, { timeZone, shopId, sellerStateCode }) {
   };
 }
 
-// PurchaseReturn records the goods value returned and no tax, so this reverses
-// the goods leg only. The input tax credit on returned stock stays claimed —
-// correct in Tally's arithmetic but not in the return, and it needs a tax field
-// on PurchaseReturn before it can be split the way a purchase now is.
-function buildDebitNoteVoucher(ret, { timeZone, shopId }) {
+/**
+ * Goods going back to the supplier, and the input tax credit going back with
+ * them. Every leg is the purchase's, reversed: goods credit Purchase, the tax
+ * credits the same Input ledgers the purchase debited, and the supplier is
+ * debited the tax-inclusive value less anything refunded in money.
+ *
+ * Without the tax leg the ledgers still balanced, which is what made this worth
+ * fixing deliberately — the shop simply went on claiming credit on tax it had
+ * been given back, and nothing in the books looked wrong.
+ */
+function buildDebitNoteVoucher(ret, { timeZone, shopId, sellerStateCode }) {
   const total = round2(Number(ret.totalAmount) || 0);
   const refund = round2(Number(ret.refundAmount) || 0);
+  const supplierGstin = ret.supplier?.gstin || null;
   const supplier = String(ret.supplier?.name || "").trim() || "Sundry Supplier";
-  const masters = [supplierMaster(supplier), { kind: "ledger", name: LEDGER_PURCHASE, parent: "Purchase Accounts" }];
+  const masters = [supplierMaster(supplier, supplierGstin), { kind: "ledger", name: LEDGER_PURCHASE, parent: "Purchase Accounts" }];
+
+  // Same jurisdiction rule as the purchase, so a return can only ever reverse
+  // into the ledgers that purchase debited.
+  const tax = splitInputGst(ret.taxAmount, supplierGstin, sellerStateCode);
+  const taxTotal = addMoney(tax.cgst, tax.sgst, tax.igst);
+  for (const [key, ledger] of Object.entries(INPUT_TAX_LEDGERS)) {
+    if (!isZero(tax[key])) masters.push({ kind: "ledger", name: ledger.name, parent: "Duties & Taxes", extra: `<TAXTYPE>GST</TAXTYPE><GSTDUTYHEAD>${ledger.dutyHead}</GSTDUTYHEAD><AFFECTSSTOCK>No</AFFECTSSTOCK>` });
+  }
+  const taxXml =
+    ledgerEntry(INPUT_TAX_LEDGERS.cgst.name, tax.cgst) +
+    ledgerEntry(INPUT_TAX_LEDGERS.sgst.name, tax.sgst) +
+    ledgerEntry(INPUT_TAX_LEDGERS.igst.name, tax.igst);
 
   let refundXml = "";
   if (!isZero(refund)) {
@@ -456,8 +475,10 @@ function buildDebitNoteVoucher(ret, { timeZone, shopId }) {
     if (master) masters.push(master);
     refundXml = ledgerEntry(name, -refund);
   }
-  // Whatever was not refunded in money reduces the payable instead.
-  const creditToPayable = subtractMoney(total, refund);
+  // Whatever was not refunded in money reduces the payable instead — and the
+  // payable moved by the tax-inclusive value when the purchase was posted, so
+  // it has to come back the same way.
+  const creditToPayable = subtractMoney(addMoney(total, taxTotal), refund);
 
   const remoteId = remoteVoucherId(shopId, "purchase_return", ret.id);
 
@@ -468,8 +489,9 @@ function buildDebitNoteVoucher(ret, { timeZone, shopId }) {
       number: ret.returnNumber,
       reference: ret.supplierReference || ret.returnNumber,
       party: supplier,
+      gstin: supplierGstin,
       narration: `KiranaOS purchase return ${ret.returnNumber}`,
-      body: ledgerEntry(LEDGER_PURCHASE, total) + ledgerEntry(supplier, -creditToPayable) + refundXml,
+      body: ledgerEntry(LEDGER_PURCHASE, total) + taxXml + ledgerEntry(supplier, -creditToPayable) + refundXml,
       remoteId,
     }),
     masters,

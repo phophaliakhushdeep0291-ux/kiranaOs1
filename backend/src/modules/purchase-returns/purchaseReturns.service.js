@@ -23,6 +23,36 @@ async function writeRequiredPurchaseReturnAudit(entry, client) {
   return audit;
 }
 
+/**
+ * Input GST to hand back with returned goods.
+ *
+ * The returned value's share of the tax on the receipt's own invoice. Derived
+ * rather than asked for, because the rate is already a fact of the purchase and
+ * making a shopkeeper recompute it at the counter would mostly produce blanks.
+ *
+ * Proportion is taken on goods value, not the invoice total, so it is unaffected
+ * by how much tax that invoice carried.
+ *
+ * Known limitation: on a mixed-rate invoice — 5% staples and 18% packaged goods
+ * on one bill, ordinary for a kirana — returning only the high-rate items
+ * reverses an average rather than the exact tax on those lines. Bounded and far
+ * closer than reversing nothing, but it is an approximation, and exact reversal
+ * needs the tax captured per line rather than per invoice.
+ */
+function reversedInputTax(receipt, returnedGoodsValue) {
+  const invoiceTax = round2(Number(receipt.supplierInvoiceTax) || 0);
+  if (invoiceTax <= 0) return 0;
+
+  const invoiceTotal = Number(receipt.supplierInvoiceAmount ?? receipt.totalAmount) || 0;
+  const invoiceGoodsValue = round2(invoiceTotal - invoiceTax);
+  if (invoiceGoodsValue <= 0) return 0;
+
+  // Clamped because a return can never give back more tax than the purchase
+  // claimed, however the goods values were recorded.
+  const share = Math.min(1, Math.max(0, returnedGoodsValue / invoiceGoodsValue));
+  return round2(invoiceTax * share);
+}
+
 function normalizeActor(actor) {
   if (typeof actor === "string") return { userId: actor, deviceId: undefined, req: null };
   return { userId: actor?.userId ?? null, deviceId: actor?.deviceId ?? undefined, req: actor?.req ?? null };
@@ -75,10 +105,11 @@ export async function createPurchaseReturn(shopId, data, actor = {}, requestedLo
       return { input, item, lineAmount: multiplyMoney(item.actualRate, input.quantityBaseQty / factor) };
     });
     const totalAmount = round2(lines.reduce((sum, line) => sum + line.lineAmount, 0));
+    const taxAmount = reversedInputTax(receipt, totalAmount);
     const supplierCreditAmount = round2(Math.min(Number(receipt.dueAmount || 0), totalAmount));
     const refundAmount = round2(totalAmount - supplierCreditAmount);
     const purchaseReturn = await tx.purchaseReturn.create({
-      data: { shopId, locationId: receipt.locationId, supplierId: receipt.supplierId, purchaseReceiptId: receipt.id, returnNumber: ref(), refundMode: data.refundMode, totalAmount, supplierCreditAmount, refundAmount, ...moneyShadows({ totalAmount, supplierCreditAmount, refundAmount }), reason: data.reason, supplierReference: data.supplierReference || null, idempotencyKey: data.idempotencyKey || null, createdByUserId: auditActor.userId },
+      data: { shopId, locationId: receipt.locationId, supplierId: receipt.supplierId, purchaseReceiptId: receipt.id, returnNumber: ref(), refundMode: data.refundMode, totalAmount, taxAmount, supplierCreditAmount, refundAmount, ...moneyShadows({ totalAmount, taxAmount, supplierCreditAmount, refundAmount }), reason: data.reason, supplierReference: data.supplierReference || null, idempotencyKey: data.idempotencyKey || null, createdByUserId: auditActor.userId },
     });
     for (const line of lines) {
       const quantity = round2(line.input.quantityBaseQty);
