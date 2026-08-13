@@ -391,7 +391,9 @@ export async function listApiResource({ shopId, resource, scope, query }) {
   let rows;
   if (resource === "catalog") rows = await db.product.findMany({ where: { shopId, deletedAt: null, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, name: true, category: true, sku: true, barcode: true, displayUnit: true, stockBaseQty: true, defaultPricePerRateUnit: true, gstRate: true, updatedAt: true } });
   else if (resource === "customers") rows = await db.customer.findMany({ where: { shopId, deletedAt: null, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, name: true, mobile: true, type: true, customerGroup: true, udharAmount: true, updatedAt: true } });
-  else rows = await db.bill.findMany({ where: { shopId, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, billNo: true, billType: true, status: true, customerName: true, grandTotal: true, paidAmount: true, creditAmount: true, createdAt: true, updatedAt: true } });
+  // `deletedAt: null` to match the catalog and customer branches above: soft-delete leaves
+  // `status` as "active", so without it a partner integration keeps pulling binned bills.
+  else rows = await db.bill.findMany({ where: { shopId, deletedAt: null, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, billNo: true, billType: true, status: true, customerName: true, grandTotal: true, paidAmount: true, creditAmount: true, createdAt: true, updatedAt: true } });
   const hasMore = rows.length > take;
   const items = hasMore ? rows.slice(0, take) : rows;
   return { items, hasMore, nextCursor: hasMore ? items.at(-1)?.id ?? null : null };
