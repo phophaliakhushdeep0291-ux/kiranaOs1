@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import db from "../src/db.js";
 import { cancelBill, confirmBill, softDeleteBill } from "../src/modules/bills/bills.service.js";
+import { buildTallyExport, listApiResource } from "../src/modules/integrations/integrations.service.js";
 import {
   exportBillsData,
   getDailyClosing,
@@ -17,13 +18,17 @@ import {
 
 // Soft-deleting a bill stamps `deletedAt` and leaves `status` as "active"
 // (bills.service.js softDeleteBill), and there is no global Prisma soft-delete
-// middleware. So any report filtering on status alone keeps recycle-bin bills in
-// its totals — the GST screen was reporting tax on bills the shop had deleted,
-// and disagreeing with the Tally export of the same period, which does filter.
+// middleware. So any query filtering on status alone keeps recycle-bin bills in its
+// totals — the GST screen was reporting tax on bills the shop had deleted, and so
+// were the TallyPrime export and the partner REST API that read the same bills.
 //
 // The shape of the test: bill everything TWICE, delete one copy, and assert every
 // report reads exactly the surviving half. Halving is what makes a missed filter
 // visible — an absolute figure would still look plausible if the delete were ignored.
+//
+// The GST screen and the Tally export are asserted to AGREE, not merely to be right
+// separately: tally-voucher splits tax by exactly the rule getGstReport uses, so a
+// filter fixed on one side alone is the regression worth catching.
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -183,6 +188,34 @@ async function main() {
     assert.equal((await getDailyClosing(shop.id, { date: day, allLocations: true })).roughBills, 0, "and uncounted once deleted");
     // An estimate is not a tax document, so it was never in the GST report to begin with.
     assert.equal((await getGstReport(shop.id, range)).totalBills, 1, "the GST report still sees only the one pakka bill");
+
+    // ── the Tally export agrees with the GST screen ─────────────────
+    // This is the pairing that exposed the bug: tally-voucher splitting follows exactly the
+    // rule getGstReport uses, so the two are only ever right together. Assert agreement, not
+    // just a count — a filter fixed on one side alone is the failure being guarded against.
+    const tally = await buildTallyExport(shop.id, { from: day, to: day });
+    assert.equal(tally.count, 1, "the Tally export drops the deleted bill too");
+    assert.equal(tally.xml.includes(doomed.billNo), false, "the deleted bill has no voucher");
+    assert.equal(tally.xml.includes(kept.billNo), true, "the surviving one does");
+    // One voucher per bill the GST report counted, at the same money.
+    assert.equal(
+      (tally.xml.match(/<VOUCHER /g) ?? []).length,
+      (await getGstReport(shop.id, range)).totalBills,
+      "GST screen and Tally export must count the same bills for the same period",
+    );
+    assert.equal(tally.xml.includes("<AMOUNT>118.00</AMOUNT>"), true, "and the same grand total");
+    // Estimates are not tax documents, so neither surface may carry the one binned above.
+    assert.equal(tally.xml.includes("EST-"), false, "no estimate voucher in a tax export");
+
+    // The partner REST API reads bills through a different function; same rule applies.
+    const api = await listApiResource({
+      shopId: shop.id,
+      resource: "bills",
+      scope: "bills:read",
+      query: { limit: 50 },
+    });
+    assert.equal(api.items.some((row) => row.billNo === doomed.billNo), false, "the integrations API drops it as well");
+    assert.equal(api.items.some((row) => row.billNo === kept.billNo), true, "and still serves the live one");
 
     // ── restore puts it back ────────────────────────────────────────
     // The filter must read current state, not "was ever deleted".

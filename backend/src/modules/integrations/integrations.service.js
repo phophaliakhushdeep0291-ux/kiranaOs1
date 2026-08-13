@@ -387,7 +387,9 @@ export async function listApiResource({ shopId, resource, scope, query }) {
   let rows;
   if (resource === "catalog") rows = await db.product.findMany({ where: { shopId, deletedAt: null, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, name: true, category: true, sku: true, barcode: true, displayUnit: true, stockBaseQty: true, defaultPricePerRateUnit: true, gstRate: true, updatedAt: true } });
   else if (resource === "customers") rows = await db.customer.findMany({ where: { shopId, deletedAt: null, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, name: true, mobile: true, type: true, customerGroup: true, udharAmount: true, updatedAt: true } });
-  else rows = await db.bill.findMany({ where: { shopId, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, billNo: true, billType: true, status: true, customerName: true, grandTotal: true, paidAmount: true, creditAmount: true, createdAt: true, updatedAt: true } });
+  // `deletedAt: null` to match the catalog and customer branches above: soft-delete leaves
+  // `status` as "active", so without it a partner integration keeps pulling binned bills.
+  else rows = await db.bill.findMany({ where: { shopId, deletedAt: null, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, billNo: true, billType: true, status: true, customerName: true, grandTotal: true, paidAmount: true, creditAmount: true, createdAt: true, updatedAt: true } });
   const hasMore = rows.length > take;
   const items = hasMore ? rows.slice(0, take) : rows;
   return { items, hasMore, nextCursor: hasMore ? items.at(-1)?.id ?? null : null };
@@ -409,7 +411,11 @@ export async function buildTallyExport(shopId, query) {
   if (from > to || daysBetweenInclusive(from, to) > 366) throw new AppError("Choose a valid date range of up to 366 days", 400, "EXPORT_DATE_RANGE_INVALID");
   const [shop, bills] = await Promise.all([
     db.shop.findUnique({ where: { id: shopId }, select: { name: true, gstNumber: true } }),
-    db.bill.findMany({ where: { shopId, status: "active", billType: { not: "estimate" }, createdAt: { gte: from, lte: to } }, orderBy: { createdAt: "asc" }, take: MAX_TALLY_BILLS + 1 }),
+    // Must stay in step with GST_BILL_FILTER in reports/reports.service.js: tally-voucher tax
+    // splitting follows exactly the rule getGstReport uses, so a filter held on one side and
+    // not the other makes the GST screen and this export disagree. Soft-delete leaves `status`
+    // as "active", so excluding the recycle bin takes an explicit `deletedAt: null`.
+    db.bill.findMany({ where: { shopId, status: "active", billType: { not: "estimate" }, deletedAt: null, createdAt: { gte: from, lte: to } }, orderBy: { createdAt: "asc" }, take: MAX_TALLY_BILLS + 1 }),
   ]);
   if (bills.length > MAX_TALLY_BILLS) throw new AppError(`Export exceeds ${MAX_TALLY_BILLS} bills. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
   const vouchers = bills.map((bill) => {
