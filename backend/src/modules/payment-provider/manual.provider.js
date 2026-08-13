@@ -5,5 +5,8 @@ export async function activateManualPayment(shopId, input) {
     provider: "manual",
     amountPaise: input.amountPaise,
     note: input.note,
+    userId: input.userId ?? null,
+    deviceId: input.deviceId,
+    req: input.req ?? null,
   });
 }

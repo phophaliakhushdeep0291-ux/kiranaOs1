@@ -215,6 +215,11 @@ if (parsed.data.NODE_ENV === "production" && parsed.data.OWNER_PIN_REQUIRED !== 
   process.exit(1);
 }
 
+if (parsed.data.NODE_ENV === "production" && parsed.data.ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION) {
+  console.error("❌ ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION must stay false in production");
+  process.exit(1);
+}
+
 if (parsed.data.NODE_ENV === "production") {
   const origins = parsed.data.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()).filter(Boolean);
   if (!origins.length || origins.some(isLocalOrigin)) {

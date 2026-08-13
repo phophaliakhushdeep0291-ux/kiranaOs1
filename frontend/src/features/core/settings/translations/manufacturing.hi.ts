@@ -78,4 +78,12 @@ export const manufacturingHi: Record<keyof typeof manufacturingEn, string> = {
   "manufacturing.orders.noBuyerPo": "खरीदार PO नहीं",
   "manufacturing.orders.lines": "लाइनें",
   "manufacturing.orders.empty": "अभी कोई थोक या निर्यात ऑर्डर नहीं है।",
+  "manufacturing.orders.incotermPlaceholder": "FOB / CIF / DAP",
+  "manufacturing.orders.updatedTitle": "ऑर्डर अपडेट हुआ",
+  "manufacturing.orders.updatedDetail": "पूर्ति का अगला चरण पूरा हुआ।",
+  "manufacturing.orders.action.draft": "पुष्टि करें",
+  "manufacturing.orders.action.confirmed": "FEFO आवंटन",
+  "manufacturing.orders.action.allocated": "पैक चिह्नित करें",
+  "manufacturing.orders.action.packed": "डिस्पैच",
+  "manufacturing.orders.documents": "दस्तावेज़",
 };

@@ -14,7 +14,15 @@ export async function manualActivate(req, res, next) {
     }
     // Tenant safety: public/manual activation must never trust shopId from the request body.
     // Platform-admin cross-tenant activation should live in a separate internal admin route.
-    res.status(201).json({ success: true, data: await service.activateManualProviderPayment(req.shopId, req.body) });
+    res.status(201).json({
+      success: true,
+      data: await service.activateManualProviderPayment(req.shopId, {
+        ...req.body,
+        userId: req.user?.userId ?? req.user?.id ?? null,
+        deviceId: req.device?.id ?? req.headers?.["x-device-id"] ?? undefined,
+        req,
+      }),
+    });
   } catch (err) { next(err); }
 }
 

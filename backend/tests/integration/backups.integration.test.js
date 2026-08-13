@@ -336,6 +336,77 @@ if (ctx.skip) {
       assert.deepEqual((await ctx.db.productionConsumption.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [consumption.id]);
       assert.deepEqual((await ctx.db.productionOutput.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [output.id]);
     });
+    test("restores wholesale and export order allocation and dispatch evidence", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      const order = await ctx.db.tradeOrder.create({ data: {
+        shopId: tenant.shop.id,
+        locationId: "backup-trade-location",
+        orderNumber: "EXPORT-BACKUP-001",
+        customerName: "Backup Export Buyer",
+        orderType: "export",
+        currencyCode: "USD",
+        exchangeRate: 83.5,
+        status: "dispatched",
+        countryOfDestination: "AE",
+      } });
+      const item = await ctx.db.tradeOrderItem.create({ data: {
+        shopId: tenant.shop.id,
+        orderId: order.id,
+        productId: "backup-finished-product",
+        description: "Finished spice carton",
+        quantity: 10,
+        quantityBaseQty: 100,
+        unitPrice: 20,
+        lineTotal: 200,
+        packedQuantity: 10,
+      } });
+      const allocation = await ctx.db.tradeOrderAllocation.create({ data: {
+        shopId: tenant.shop.id,
+        orderItemId: item.id,
+        inventoryLotId: "backup-finished-lot",
+        batchNumber: "FG-BACKUP-001",
+        quantityBaseQty: 100,
+      } });
+      const dispatch = await ctx.db.tradeDispatch.create({ data: {
+        shopId: tenant.shop.id,
+        orderId: order.id,
+        dispatchNumber: "DSP-BACKUP-001",
+        dispatchDate: new Date("2026-08-13T00:00:00.000Z"),
+        transporterName: "Backup Transport",
+        shippingBillNumber: "SB-BACKUP-001",
+      } });
+      const artifact = await ctx.db.backupArtifact.create({ data: {
+        shopId: tenant.shop.id,
+        requestedByUserId: tenant.owner.id,
+        type: "shop_logical",
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      } });
+
+      await processShopBackupArtifact(artifact.id, tenant.shop.id);
+      const snapshot = await verifyBackupArtifactForTest(tenant.shop.id, artifact.id);
+      assert.equal(snapshot.data.tables.TradeOrder.some((row) => row.id === order.id), true);
+      assert.equal(snapshot.data.tables.TradeOrderItem.some((row) => row.id === item.id), true);
+      assert.equal(snapshot.data.tables.TradeOrderAllocation.some((row) => row.id === allocation.id), true);
+      assert.equal(snapshot.data.tables.TradeDispatch.some((row) => row.id === dispatch.id), true);
+
+      await ctx.db.tradeDispatch.deleteMany({ where: { shopId: tenant.shop.id } });
+      await ctx.db.tradeOrderAllocation.deleteMany({ where: { shopId: tenant.shop.id } });
+      await ctx.db.tradeOrderItem.deleteMany({ where: { shopId: tenant.shop.id } });
+      await ctx.db.tradeOrder.deleteMany({ where: { shopId: tenant.shop.id } });
+
+      await restoreShopBackup(
+        tenant.shop.id,
+        artifact.id,
+        tenant.owner.id,
+        `RESTORE ${artifact.id.slice(-6)}`,
+      );
+
+      assert.deepEqual((await ctx.db.tradeOrder.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [order.id]);
+      assert.deepEqual((await ctx.db.tradeOrderItem.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [item.id]);
+      assert.deepEqual((await ctx.db.tradeOrderAllocation.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [allocation.id]);
+      assert.deepEqual((await ctx.db.tradeDispatch.findMany({ where: { shopId: tenant.shop.id }, select: { id: true } })).map((row) => row.id), [dispatch.id]);
+    });
+
     test("rolls back every deletion when a restored row fails and blocks concurrent tenant writes", async () => {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Rollback Product", stockBaseQty: 4 });

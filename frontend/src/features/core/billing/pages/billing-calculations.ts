@@ -210,7 +210,12 @@ export function productMinSellingPrice(product: Product): number {
  */
 export function lineNeedsOwnerApproval(item: CartItem): boolean {
   if (item.isCustom) return false;
-  if (item.rate < productMinSellingPrice(item.product)) return true;
+  const quantity = Math.max(0, Number(item.quantity) || 0);
+  const effectiveRate = quantity > 0
+    ? roundMoney(Number(item.rate) - cartItemLineDiscount(item) / quantity)
+    : Number(item.rate);
+  const minimumRate = Number(item.sellingUnit?.minimumPrice ?? productMinSellingPrice(item.product));
+  if (effectiveRate < minimumRate) return true;
   if (!item.manualRate && item.pricing?.requiresApproval === true) return true;
   return false;
 }

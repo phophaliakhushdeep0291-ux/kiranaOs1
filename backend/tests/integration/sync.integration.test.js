@@ -1262,6 +1262,47 @@ if (ctx.skip) {
       assert.equal(refreshedProduct.stockBaseQty, 8);
     });
 
+    test("offline CREATE_BILL cannot bypass server-derived discount approval", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100 });
+      const localBillId = "local-sensitive-bill-1";
+      const baseBill = {
+        ...billPayload(product, {
+          quantity: 2,
+          ratePerRateUnit: 100,
+          discount: 100,
+          actualAmount: 100,
+          buyerPaidAmount: 100,
+          payments: [{ mode: "cash", amount: 100 }],
+        }),
+        localBillId,
+        clientBillId: localBillId,
+        idempotencyKey: "create-bill:sensitive:1",
+        sensitiveActions: [],
+        reason: "Owner-approved offline promotion",
+      };
+
+      const denied = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{ eventId: "sensitive-bill-denied", type: "CREATE_BILL", payload: { localBillId, bill: baseBill } }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(denied.summary.conflicts, 1);
+      assert.equal(await ctx.db.bill.count({ where: { shopId: tenant.shop.id } }), 0);
+
+      const approved = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{
+          eventId: "sensitive-bill-approved",
+          type: "CREATE_BILL",
+          payload: { localBillId, bill: { ...baseBill, ownerPin: tenant.ownerPin } },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(approved.summary.synced, 1);
+      const billId = approved.results[0].result.billId;
+      assert.ok(await ctx.db.auditLog.findFirst({
+        where: { shopId: tenant.shop.id, entityId: billId, action: "BILL_LARGE_DISCOUNT_APPROVED" },
+      }));
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 8);
+    });
+
     test("delayed offline bills and udhar payments retain their original business dates", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const customer = await createCustomer(ctx.db, tenant.shop.id);

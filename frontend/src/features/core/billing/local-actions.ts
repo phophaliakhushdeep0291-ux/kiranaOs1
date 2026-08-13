@@ -25,6 +25,39 @@ function readSensitiveBillActions(input: BillInput): SensitiveBillAction[] {
     .map((action) => String(action).trim())
     .filter(Boolean)));
 }
+
+function deriveLocalSensitiveBillActions(input: BillInput, productsById: Map<string, Product>): SensitiveBillAction[] {
+  const actions = new Set(readSensitiveBillActions(input));
+  let referenceSubtotal = 0;
+  let approvalDiscount = Math.max(0, readNumber(input.discount, 0));
+  let belowMinimum = false;
+
+  for (const item of input.items ?? []) {
+    const quantity = Math.max(0, readNumber(item.quantity, 0));
+    const enteredRate = Math.max(0, readNumber(item.baseRatePerRateUnit ?? item.ratePerRateUnit, 0));
+    const lineDiscount = Math.max(0, readNumber(item.lineDiscount, 0));
+    const product = item.productId ? productsById.get(item.productId) : undefined;
+    const unit = product?.sellingUnits?.find((candidate) => candidate.id === item.sellingUnitId);
+    const defaultRate = Math.max(0, readNumber(unit?.defaultPrice ?? product?.defaultPricePerRateUnit, enteredRate));
+    const minimumRate = Math.max(0, readNumber(unit?.minimumPrice ?? product?.minPricePerRateUnit, 0));
+
+    referenceSubtotal += roundMoney(defaultRate * quantity);
+    approvalDiscount += lineDiscount;
+    if (!item.appliedPricingRuleId && defaultRate > enteredRate) {
+      approvalDiscount += roundMoney((defaultRate - enteredRate) * quantity);
+    }
+    const effectiveRate = quantity > 0 ? roundMoney(enteredRate - lineDiscount / quantity) : enteredRate;
+    if (minimumRate > 0 && effectiveRate < minimumRate - 0.005) belowMinimum = true;
+  }
+
+  referenceSubtotal = roundMoney(referenceSubtotal);
+  approvalDiscount = roundMoney(approvalDiscount);
+  const threshold = roundMoney(Math.max(100, referenceSubtotal * 0.1));
+  if (referenceSubtotal > 0 && approvalDiscount >= threshold - 0.005) actions.add("large_discount");
+  if (belowMinimum) actions.add("selling_below_minimum_price");
+  if (readNumber(input.loyaltyPointsToRedeem, 0) > 0) actions.add("loyalty_redemption");
+  return [...actions];
+}
 function validateSensitiveBillApproval(input: BillInput, actions: SensitiveBillAction[]) {
   if (actions.length === 0) return;
   const action = actions.includes("large_discount") ? "large_discount" : "price_below_minimum";
@@ -531,10 +564,15 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   // Estimates (kacha bills) are full sales in everything but their EST- number series: they
   // move stock, record tender, and can carry udhar exactly like a pakka bill.
   const inputForCreation: BillInput = { ...input, locationId: input.locationId ?? getActiveLocationId() ?? undefined };
-  const sensitiveActions = readSensitiveBillActions(inputForCreation);
-  validateSensitiveBillApproval(inputForCreation, sensitiveActions);
   const validated = parseOrThrow(billCreationSchema, inputForCreation) as BillInput;
   validateBillCreationBusinessRules(validated);
+  const productsById = await loadBillProducts(validated.items);
+  const sensitiveActions = deriveLocalSensitiveBillActions(inputForCreation, productsById);
+  validated.sensitiveActions = sensitiveActions;
+  validated.ownerPin = inputForCreation.ownerPin;
+  validated.reason = inputForCreation.reason;
+  inputForCreation.sensitiveActions = sensitiveActions;
+  validateSensitiveBillApproval(inputForCreation, sensitiveActions);
 
   // Hard guard: a bill that references a demo product/customer would 404 on the server
   // ("Product not found: demo_product_…") and stick in CONFLICT forever. The UI also filters
@@ -560,7 +598,6 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const paid = roundMoney(readNumber(billData.buyerPaidAmount, billData.payments
     .filter((payment) => payment.mode !== BillPaymentMode.credit)
     .reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0)));
-  const productsById = await loadBillProducts(billData.items);
   const billItems = buildBillItems(billId, billData.items, calculatedAmounts.gstMode);
   const billPayments = buildPayments(billId, billData.customerId, billData.payments);
   const saleMovements = buildSaleMovements(billId, billData.items, productsById);

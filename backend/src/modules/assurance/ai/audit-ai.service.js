@@ -190,6 +190,9 @@ export async function explainFinding({ finding, language = "en", provider = null
       return { ...fallback, failureReason: `provider_language_policy_violation:${violation}` };
     }
 
+    const selectedChecks = exactAllowedSelections(parsed.data.whatToCheck, fallback.whatToCheck);
+    const selectedEvidence = exactAllowedSelections(parsed.data.suggestedEvidence, fallback.suggestedEvidence);
+
     return {
       // The provider may rank exact server-issued checks and evidence, but it
       // never authors a financial claim displayed to the shopkeeper.
@@ -200,9 +203,10 @@ export async function explainFinding({ finding, language = "en", provider = null
       degraded: false,
       attempts,
       grounding: "server_composed",
-      whatToCheck: exactAllowedSelections(parsed.data.whatToCheck, fallback.whatToCheck),
-      // Only evidence types the deterministic rules actually asked for survive.
-      suggestedEvidence: parsed.data.suggestedEvidence.filter((type) => payload.allowedEvidenceTypes.includes(type)),
+      // A provider can rank exact server-issued values but cannot remove every
+      // required check or evidence request by paraphrasing or returning none.
+      whatToCheck: selectedChecks.length ? selectedChecks : fallback.whatToCheck,
+      suggestedEvidence: selectedEvidence.length ? selectedEvidence : fallback.suggestedEvidence,
       disclaimer: AUDIT_AI_DISCLAIMER,
     };
   } catch (error) {
