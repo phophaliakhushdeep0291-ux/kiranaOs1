@@ -94,9 +94,13 @@ describe("billing calculations", () => {
 
     const configuredRule: CartItem = {
       ...manual,
+      manualRate: false,
       pricing: { explanation: "Owner rule", appliedRuleType: "PRODUCT_QUANTITY_PRICE", appliedRuleId: "rule-1", originalUnitPrice: 100, requiresApproval: false, confidence: 1 },
     };
     expect(billingDiscountApprovalSummary([configuredRule], 25)).toMatchObject({ approvalDiscount: 50, requiresApproval: false });
+
+    const overriddenRule: CartItem = { ...configuredRule, manualRate: true };
+    expect(billingDiscountApprovalSummary([overriddenRule], 25)).toMatchObject({ approvalDiscount: 100, requiresApproval: true });
   });
 
   it("invalidates a sensitive approval after any commercial cart edit", () => {
