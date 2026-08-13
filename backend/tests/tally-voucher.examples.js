@@ -2,6 +2,7 @@ import assert from "assert";
 import fs from "fs";
 import { buildTallyEnvelope, remoteVoucherId, splitGst } from "../src/modules/integrations/tally-voucher.js";
 import { tallyExportQuerySchema } from "../src/modules/integrations/integrations.schemas.js";
+import { parseTallyImportResponse } from "../src/modules/integrations/integrations.service.js";
 import { round2, toPaise } from "../src/utils/money.js";
 
 // TallyPrime export. The export is a one-way door: whatever these vouchers say
@@ -514,5 +515,9 @@ assert.ok(where[0].includes("deletedAt: null"), "the export must exclude soft-de
 assert.ok(where[0].includes("businessDate:"), "the export must range on the business date");
 assert.ok(!where[0].includes("createdAt:"), "the export must not range on the sync time");
 assert.ok(where[0].includes('billType: { not: "estimate" }'), "estimates are not tax documents and stay out of the books");
+
+assert.deepEqual(parseTallyImportResponse("<RESPONSE><CREATED>2</CREATED><ALTERED>1</ALTERED><IGNORED>0</IGNORED><ERRORS>0</ERRORS></RESPONSE>", 3), { created: 2, altered: 1, ignored: 0 });
+assert.throws(() => parseTallyImportResponse("<RESPONSE><CREATED>0</CREATED><ERRORS>1</ERRORS><LINEERROR>Unknown ledger</LINEERROR></RESPONSE>", 1), /Unknown ledger/);
+assert.throws(() => parseTallyImportResponse("<RESPONSE><CREATED>1</CREATED><ERRORS>0</ERRORS></RESPONSE>", 2), /acknowledged 1 of 2/);
 
 console.log("tally-voucher.examples.js: all assertions passed");

@@ -28,4 +28,5 @@ router.post("/trade-orders/:id/dispatch", requireRole("owner", "admin"), require
 router.post("/trade-orders/:id/invoice", requireRole("owner", "admin"), validate(attachTradeBillSchema), ctrl.attachTradeBill);
 router.post("/trade-orders/:id/cancel", requireRole("owner", "admin"), ctrl.cancelTradeOrder);
 router.get("/trade-orders/:id/documents", ctrl.tradeDocuments);
+router.get("/trade-orders/:id/documents/:kind.pdf", ctrl.tradeDocumentPdf);
 export default router;

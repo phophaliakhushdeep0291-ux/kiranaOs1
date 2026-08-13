@@ -11,6 +11,7 @@ const envConfig = read("src/config/env.js");
 assert.match(envConfig, /JWT_SECRET must be at least 32 characters in production/, "production JWT secret must be strong");
 assert.match(envConfig, /DATABASE_URL must use PostgreSQL in production/, "production database must be PostgreSQL");
 assert.match(envConfig, /OWNER_PIN_REQUIRED must stay true in production/, "production must not allow Owner PIN bypass");
+assert.match(envConfig, /ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION must stay false in production/, "production must reject internal subscription entitlement overrides");
 assert.match(envConfig, /ALLOWED_ORIGINS must contain only real production origins in production/, "production CORS must reject localhost/wildcards");
 assert.match(envConfig, /ALLOWED_ORIGINS must use HTTPS origins in production/, "production CORS origins must use HTTPS");
 assert.match(envConfig, /METRICS_REQUIRE_TOKEN must be true in production/, "production metrics must require token");
@@ -27,6 +28,7 @@ for (const route of ["remove", "block", "unblock"]) {
 }
 
 const subscriptionRoutes = read("src/modules/subscription/subscription.routes.js");
+const subscriptionController = read("src/modules/subscription/subscription.controller.js");
 for (const route of ["manualActivate", "changePlan", "cancel", "extendGrace"]) {
   assert.match(subscriptionRoutes, new RegExp(`requireOwnerPin[\\s\\S]*?ctrl\\.${route}`), `subscription ${route} must require Owner PIN`);
 }
@@ -38,6 +40,11 @@ assert.match(providerRoutes, /\/manual\/activate"[\s\S]*?requireOwnerPin[\s\S]*?
 const jobsRoutes = read("src/modules/jobs/jobs.routes.js");
 for (const route of ["retry", "discard"]) {
   assert.match(jobsRoutes, new RegExp(`requireOwnerPin[\\s\\S]*?ctrl\\.${route}`), `job ${route} must require Owner PIN`);
+}
+for (const handler of ["manualActivate", "changePlan", "extendGrace", "foundingCustomer", "recordOnboardingPurchase"]) {
+  const start = subscriptionController.indexOf(`function ${handler}`);
+  const handlerSource = subscriptionController.slice(start, subscriptionController.indexOf("\n}", start) + 2);
+  assert.match(handlerSource, /requireInternalSubscriptionOverride/, `subscription ${handler} must be internal-override gated`);
 }
 assert.doesNotMatch(jobsRoutes, /ctrl\.(?:pause|resume)/, "tenant owners must not pause or resume shared global queues");
 

@@ -409,6 +409,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.verifyUpiPayment": "UPI पेमेंट जांचें",
   "billing.page.permissionDenied": "इजाज़त नहीं है",
   "billing.page.ownerApprovalRequired": "मालिक की मंजूरी चाहिए",
+  "billing.page.ownerApprovalDetail": "कॉन्फ़िगर की गई कीमत पर कम से कम ₹{amount} और {percent}% की कुल छूट, लॉयल्टी रिडेम्प्शन या न्यूनतम कीमत से कम बिक्री के लिए मालिक का PIN ज़रूरी है। कार्ट या कीमत बदलने पर दोबारा मंजूरी माँगी जाएगी।",
   "billing.page.approveBill": "बिल मंजूर करें",
   "billing.page.sensitiveActionProtection": "जरूरी काम की सुरक्षा",
   "billing.page.clearBillTitle": "यह बिल हटाना है?",

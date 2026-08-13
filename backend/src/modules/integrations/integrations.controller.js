@@ -25,3 +25,4 @@ export async function tally(req, res, next) { try { const data = await svc.build
 // cannot carry, so live sends read JSON here instead of downloading a file.
 export async function tallyEnvelope(req, res, next) { try { const data = await svc.buildTallyExport(req.shopId, req.query); ok(res, data); } catch (e) { next(e); } }
 export async function tallyPosted(req, res, next) { try { const data = await svc.markTallyPosted(req.shopId, req.body.documents, actor(req)); ok(res, data); } catch (e) { next(e); } }
+export async function tallyPush(req, res, next) { try { ok(res, await svc.pushTallyExport(req.shopId, req.query, actor(req))); } catch (e) { next(e); } }

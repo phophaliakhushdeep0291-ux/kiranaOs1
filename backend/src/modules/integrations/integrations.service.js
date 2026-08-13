@@ -811,3 +811,27 @@ export async function markTallyPosted(shopId, documents, actor = {}) {
     }, { isolationLevel: "Serializable" });
   }
 }
+
+export function parseTallyImportResponse(xml, expectedCount, status = 200) {
+  const metric = (name) => Number(String(xml).match(new RegExp(`<${name}>(\\d+)</${name}>`, "i"))?.[1] || 0);
+  const created = metric("CREATED"); const altered = metric("ALTERED"); const ignored = metric("IGNORED"); const errors = metric("ERRORS");
+  const lineError = String(xml).match(/<LINEERROR>([\s\S]*?)<\/LINEERROR>/i)?.[1]?.replace(/<[^>]+>/g, " ").trim();
+  if (status < 200 || status >= 300 || errors > 0 || lineError) throw new AppError(lineError || `TallyPrime rejected the envelope (${status})`, 502, "TALLY_IMPORT_REJECTED");
+  if (created + altered < expectedCount) throw new AppError(`TallyPrime acknowledged ${created + altered} of ${expectedCount} vouchers`, 502, "TALLY_IMPORT_INCOMPLETE");
+  return { created, altered, ignored };
+}
+
+export async function pushTallyExport(shopId, query, actor = {}) {
+  const envelope = await buildTallyExport(shopId, { ...query, unsent: true });
+  if (envelope.documents.length === 0) return { posted: 0, created: 0, altered: 0, ignored: 0, message: "No unsent vouchers" };
+  let response;
+  try {
+    response = await fetch(env.TALLY_BASE_URL, { method: "POST", headers: { "content-type": "application/xml; charset=utf-8" }, body: envelope.xml, signal: AbortSignal.timeout(env.TALLY_PUSH_TIMEOUT_MS) });
+  } catch (error) {
+    throw new AppError(`Could not reach TallyPrime at the configured address: ${error.message}`, 502, "TALLY_UNREACHABLE");
+  }
+  const xml = await response.text();
+  const { created, altered, ignored } = parseTallyImportResponse(xml, envelope.count, response.status);
+  const result = await markTallyPosted(shopId, envelope.documents, actor);
+  return { posted: result.recorded, created, altered, ignored, counts: envelope.counts };
+}

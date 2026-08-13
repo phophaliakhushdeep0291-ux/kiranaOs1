@@ -2630,7 +2630,7 @@ model PaymentTransaction {
 
   @@index([shopId, createdAt])
   @@index([subscriptionId])
-  @@index([provider, providerPaymentId])
+  @@unique([provider, providerPaymentId])
 }
 
 model PaymentProviderEvent {

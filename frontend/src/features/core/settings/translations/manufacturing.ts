@@ -85,4 +85,9 @@ export const manufacturingEn = {
   "manufacturing.orders.action.allocated": "Mark packed",
   "manufacturing.orders.action.packed": "Dispatch",
   "manufacturing.orders.documents": "Documents",
+  "manufacturing.orders.addLine": "Add product line",
+  "manufacturing.orders.removeLine": "Remove",
+  "manufacturing.orders.invoicePdf": "Invoice",
+  "manufacturing.orders.packingPdf": "Packing",
+  "manufacturing.orders.labelPdf": "Label",
 } as const;

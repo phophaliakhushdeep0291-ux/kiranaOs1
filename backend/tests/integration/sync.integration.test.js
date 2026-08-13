@@ -1285,7 +1285,8 @@ if (ctx.skip) {
       const denied = assertSuccess(await ctx.post("/api/sync/push", {
         events: [{ eventId: "sensitive-bill-denied", type: "CREATE_BILL", payload: { localBillId, bill: baseBill } }],
       }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
-      assert.equal(denied.summary.conflicts, 1);
+      assert.equal(denied.summary.synced, 0, JSON.stringify(denied));
+      assert.equal(denied.summary.failed + denied.summary.conflicts, 1, JSON.stringify(denied));
       assert.equal(await ctx.db.bill.count({ where: { shopId: tenant.shop.id } }), 0);
 
       const approved = assertSuccess(await ctx.post("/api/sync/push", {

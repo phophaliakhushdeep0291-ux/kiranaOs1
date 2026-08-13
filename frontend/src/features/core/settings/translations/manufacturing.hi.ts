@@ -86,4 +86,9 @@ export const manufacturingHi: Record<keyof typeof manufacturingEn, string> = {
   "manufacturing.orders.action.allocated": "पैक चिह्नित करें",
   "manufacturing.orders.action.packed": "डिस्पैच",
   "manufacturing.orders.documents": "दस्तावेज़",
+  "manufacturing.orders.addLine": "उत्पाद लाइन जोड़ें",
+  "manufacturing.orders.removeLine": "हटाएँ",
+  "manufacturing.orders.invoicePdf": "इनवॉइस",
+  "manufacturing.orders.packingPdf": "पैकिंग",
+  "manufacturing.orders.labelPdf": "लेबल",
 };

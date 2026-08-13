@@ -262,6 +262,23 @@ export function billingDiscountApprovalSummary(cart: CartItem[], billDiscount: n
   };
 }
 
+/** Exact commercial state an owner approved; any later edit must prompt again. */
+export function billingSensitiveApprovalFingerprint(cart: CartItem[], billDiscount: number, loyaltyPoints: number): string {
+  return JSON.stringify({
+    discount: roundMoney(billDiscount),
+    loyaltyPoints: Math.max(0, Math.floor(Number(loyaltyPoints) || 0)),
+    lines: cart.map((item) => ({
+      productId: item.product.id,
+      unitId: item.sellingUnit?.id ?? item.sellingUnit?.unitCode ?? item.unit,
+      quantity: roundQuantity(item.quantity),
+      rate: roundMoney(item.rate),
+      lineDiscount: cartItemLineDiscount(item),
+      pricingRuleId: item.pricing?.appliedRuleId ?? null,
+      addons: (item.addons ?? []).map((addon) => ({ id: addon.optionId, quantity: addon.quantity ?? 1, price: roundMoney(addon.price) })),
+    })),
+  });
+}
+
 /** Gross line amount before any per-line discount. */
 export function cartItemGross(item: CartItem): number {
   return roundMoney(Number(item.quantity) * cartItemUnitRate(item));

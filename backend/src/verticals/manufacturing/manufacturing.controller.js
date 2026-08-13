@@ -1,5 +1,6 @@
 import * as service from "./manufacturing.service.js";
 import * as trade from "./trade-orders.service.js";
+import { buildTradePdf } from "./trade-documents.service.js";
 
 export async function overview(req, res, next) { try { res.json({ success: true, data: await service.overview(req.shopId) }); } catch (e) { next(e); } }
 export async function boms(req, res, next) { try { res.json({ success: true, data: await service.listBoms(req.shopId) }); } catch (e) { next(e); } }
@@ -19,3 +20,4 @@ export async function dispatchTradeOrder(req, res, next) { try { res.json({ succ
 export async function attachTradeBill(req, res, next) { try { res.json({ success: true, data: await trade.attachTradeBill(req.shopId, req.params.id, req.body.billId) }); } catch (e) { next(e); } }
 export async function cancelTradeOrder(req, res, next) { try { res.json({ success: true, data: await trade.cancelTradeOrder(req.shopId, req.params.id) }); } catch (e) { next(e); } }
 export async function tradeDocuments(req, res, next) { try { res.json({ success: true, data: await trade.tradeDocuments(req.shopId, req.params.id) }); } catch (e) { next(e); } }
+export async function tradeDocumentPdf(req, res, next) { try { const pdf = await buildTradePdf(req.shopId, req.params.id, req.params.kind); res.setHeader("content-type", "application/pdf"); res.setHeader("content-disposition", `attachment; filename="${req.params.kind}-${req.params.id}.pdf"`); res.send(pdf); } catch (e) { next(e); } }

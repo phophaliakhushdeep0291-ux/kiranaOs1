@@ -1,3 +1,4 @@
+-- @replay-safe
 CREATE TABLE IF NOT EXISTS "TradeOrder" (
   "id" TEXT PRIMARY KEY, "shopId" TEXT NOT NULL, "locationId" TEXT NOT NULL, "orderNumber" TEXT NOT NULL,
   "buyerPoNumber" TEXT, "customerId" TEXT, "customerName" TEXT NOT NULL, "customerGstin" TEXT,

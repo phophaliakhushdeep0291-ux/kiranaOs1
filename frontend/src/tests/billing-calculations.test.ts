@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "@/lib/api/client";
-import { billingDiscountApprovalSummary, calculateCartSubtotal, calculateDiscount, calculateGrandTotal, cartItemProfit, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productCostPrice, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "@/features/core/billing/pages/billing-calculations";
+import { billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateDiscount, calculateGrandTotal, cartItemProfit, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productCostPrice, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "@/features/core/billing/pages/billing-calculations";
 import type { CartItem } from "@/features/core/billing/pages/billing-types";
 
 function product(overrides: Partial<Product> = {}): Product {
@@ -97,5 +97,14 @@ describe("billing calculations", () => {
       pricing: { explanation: "Owner rule", appliedRuleType: "PRODUCT_QUANTITY_PRICE", appliedRuleId: "rule-1", originalUnitPrice: 100, requiresApproval: false, confidence: 1 },
     };
     expect(billingDiscountApprovalSummary([configuredRule], 25)).toMatchObject({ approvalDiscount: 50, requiresApproval: false });
+  });
+
+  it("invalidates a sensitive approval after any commercial cart edit", () => {
+    const line: CartItem = { product: product(), quantity: 2, rate: 42, unit: "piece", lineDiscount: 5 };
+    const approved = billingSensitiveApprovalFingerprint([line], 100, 0);
+    expect(billingSensitiveApprovalFingerprint([line], 100, 0)).toBe(approved);
+    expect(billingSensitiveApprovalFingerprint([{ ...line, quantity: 3 }], 100, 0)).not.toBe(approved);
+    expect(billingSensitiveApprovalFingerprint([line], 110, 0)).not.toBe(approved);
+    expect(billingSensitiveApprovalFingerprint([line], 100, 10)).not.toBe(approved);
   });
 });

@@ -1,0 +1,112 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 1513 >>
+stream
+BT
+/F2 16 Tf
+1 0 0 1 40 785.89 Tm
+(TAX INVOICE) Tj
+/F1 9.5 Tf
+1 0 0 1 40 766.89 Tm
+(Invoice INV-2026-001 | 2026-08-13) Tj
+/F1 9 Tf
+1 0 0 1 40 753.89 Tm
+(Seller: Example Foods Private Limited) Tj
+1 0 0 1 40 740.89 Tm
+(Seller GSTIN: 27ABCDE1234F1Z5) Tj
+1 0 0 1 40 727.89 Tm
+(Buyer: Example Supermart) Tj
+1 0 0 1 40 714.89 Tm
+(Buyer PO: PO-8842) Tj
+/F2 10 Tf
+1 0 0 1 40 691.89 Tm
+(Invoice items) Tj
+/F2 9 Tf
+1 0 0 1 40 676.89 Tm
+(SKU) Tj
+1 0 0 1 115 676.89 Tm
+(Description) Tj
+1 0 0 1 270 676.89 Tm
+(HSN) Tj
+1 0 0 1 330 676.89 Tm
+(Batch) Tj
+1 0 0 1 400 676.89 Tm
+(     Qty) Tj
+1 0 0 1 445 676.89 Tm
+(      Rate) Tj
+1 0 0 1 500 676.89 Tm
+(      Amount) Tj
+/F1 9 Tf
+1 0 0 1 40 663.89 Tm
+(SPC-500G) Tj
+1 0 0 1 115 663.89 Tm
+(Premium Spice Mix 500 g) Tj
+1 0 0 1 270 663.89 Tm
+(091099) Tj
+1 0 0 1 330 663.89 Tm
+(B240801) Tj
+1 0 0 1 400 663.89 Tm
+(       24) Tj
+1 0 0 1 445 663.89 Tm
+(     125.00) Tj
+1 0 0 1 500 663.89 Tm
+(      3000.00) Tj
+1 0 0 1 40 650.89 Tm
+(SPC-1KG) Tj
+1 0 0 1 115 650.89 Tm
+(Premium Spice Mix 1 kg) Tj
+1 0 0 1 270 650.89 Tm
+(091099) Tj
+1 0 0 1 330 650.89 Tm
+(B240802) Tj
+1 0 0 1 400 650.89 Tm
+(       12) Tj
+1 0 0 1 445 650.89 Tm
+(     230.00) Tj
+1 0 0 1 500 650.89 Tm
+(      2760.00) Tj
+/F2 10 Tf
+1 0 0 1 40 629.89 Tm
+(Totals) Tj
+/F1 9 Tf
+1 0 0 1 40 614.89 Tm
+(Subtotal: INR 5760.00) Tj
+1 0 0 1 40 601.89 Tm
+(GST: INR 691.20) Tj
+1 0 0 1 40 588.89 Tm
+(Invoice total: INR 6451.20) Tj
+/F1 8 Tf
+1 0 0 1 40 30 Tm
+(Sample generated for layout verification - not a legal invoice.   |   Page 1 of 1) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000212 00000 n 
+0000000314 00000 n 
+0000001879 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+2021
+%%EOF

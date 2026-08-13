@@ -69,16 +69,28 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
   const amountPaise = coupon.finalAmountPaise;
   const currency = "INR";
 
-  const transaction = await db.paymentTransaction.create({
-    data: {
+  const transaction = await db.$transaction(async (tx) => {
+    const created = await tx.paymentTransaction.create({
+      data: {
+        shopId,
+        provider: "razorpay",
+        amountPaise,
+        currency,
+        status: "created",
+        rawPayloadJson: JSON.stringify({ source: "checkout_requested", planCode, billingCycle, ...coupon }),
+      },
+    });
+    await writeRequiredPaymentAudit(tx, {
       shopId,
-      provider: "razorpay",
-      amountPaise,
-      currency,
-      status: "created",
-      rawPayloadJson: JSON.stringify({ source: "checkout_requested", planCode, billingCycle, ...coupon }),
-    },
-  });
+      userId,
+      action: "SUBSCRIPTION_CHECKOUT_REQUESTED",
+      entityId: created.id,
+      after: created,
+      metadata: { provider: "razorpay", planCode, billingCycle, couponCode: coupon.couponCode, amountPaise },
+      req,
+    });
+    return created;
+  }, { isolationLevel: "Serializable" });
 
   let order;
   try {
@@ -227,6 +239,9 @@ export async function verifySubscriptionPayment({ shopId, userId, input, req = n
       subscription: await db.subscription.findUnique({ where: { shopId } }),
     };
   }
+  if (transaction.status === "paid") {
+    throw paymentAlreadyAppliedError(transaction, razorpay_payment_id);
+  }
 
   const signature = verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature });
   if (!signature.verified) {
@@ -246,7 +261,13 @@ export async function verifySubscriptionPayment({ shopId, userId, input, req = n
   const checkoutMeta = readJson(transaction.rawPayloadJson);
   const expectedOrderId = checkoutMeta?.razorpayOrderId;
   if (expectedOrderId && expectedOrderId !== razorpay_order_id) {
-    await markPaymentFailed(transaction.id, "Razorpay order id mismatch", { razorpay_order_id, razorpay_payment_id });
+    await markPaymentFailed(transaction.id, "Razorpay order id mismatch", { razorpay_order_id, razorpay_payment_id }, {
+      shopId,
+      userId,
+      action: "PAYMENT_ORDER_MISMATCH",
+      metadata: { provider: "razorpay", razorpayOrderId: razorpay_order_id, razorpayPaymentId: razorpay_payment_id },
+      req,
+    });
     const err = new AppError("Payment order does not match transaction", 400);
     err.code = "PAYMENT_ORDER_MISMATCH";
     throw err;
@@ -274,12 +295,10 @@ export async function verifySubscriptionPayment({ shopId, userId, input, req = n
       razorpay_payment_id,
       payment: sanitizePayload(remotePayment),
       order: sanitizePayload(remoteOrder),
-    });
-    await auditPaymentAction({
+    }, {
       shopId,
       userId,
       action: "PAYMENT_VERIFICATION_MISMATCH",
-      entityId: transaction.id,
       metadata: { provider: "razorpay", reason: consistency.reason, razorpayOrderId: razorpay_order_id, razorpayPaymentId: razorpay_payment_id },
       req,
     });
@@ -295,12 +314,10 @@ export async function verifySubscriptionPayment({ shopId, userId, input, req = n
       razorpay_payment_id,
       payment: sanitizePayload(remotePayment),
       order: sanitizePayload(remoteOrder),
-    });
-    await auditPaymentAction({
+    }, {
       shopId,
       userId,
       action: "PAYMENT_FAILED",
-      entityId: transaction.id,
       metadata: { provider: "razorpay", status: remotePayment?.status, razorpayPaymentId: razorpay_payment_id },
       req,
     });
@@ -315,9 +332,40 @@ export async function verifySubscriptionPayment({ shopId, userId, input, req = n
     throw err;
   }
 
-  const result = await db.$transaction(async (tx) => {
-    const paidTransaction = await tx.paymentTransaction.update({
-      where: { id: transaction.id },
+  let result;
+  try {
+    result = await db.$transaction(async (tx) => {
+      const freshTransaction = await tx.paymentTransaction.findFirst({
+        where: { id: transaction.id, shopId, provider: "razorpay" },
+      });
+      if (!freshTransaction) {
+        const err = new AppError("Payment transaction not found", 404);
+        err.code = "PAYMENT_TRANSACTION_NOT_FOUND";
+        throw err;
+      }
+      if (freshTransaction.status === "paid") {
+        if (freshTransaction.providerPaymentId === razorpay_payment_id) {
+          return {
+            idempotent: true,
+            transaction: freshTransaction,
+            subscription: await tx.subscription.findUnique({ where: { shopId } }),
+          };
+        }
+        throw paymentAlreadyAppliedError(freshTransaction, razorpay_payment_id);
+      }
+
+      const paymentUsedElsewhere = await tx.paymentTransaction.findFirst({
+        where: {
+          provider: "razorpay",
+          providerPaymentId: razorpay_payment_id,
+          id: { not: freshTransaction.id },
+        },
+        select: { id: true, shopId: true, status: true },
+      });
+      if (paymentUsedElsewhere) throw providerPaymentAlreadyUsedError(razorpay_payment_id);
+
+      const paidTransaction = await tx.paymentTransaction.update({
+      where: { id: freshTransaction.id },
       data: {
         providerPaymentId: razorpay_payment_id,
         status: "paid",
@@ -334,29 +382,37 @@ export async function verifySubscriptionPayment({ shopId, userId, input, req = n
       },
     });
 
-    const activation = await activateSubscriptionAfterPayment({
-      shopId,
-      userId,
-      planCode,
-      provider: "razorpay",
-      providerPaymentId: razorpay_payment_id,
-      transactionId: transaction.id,
-      billingCycle,
-      tx,
-      req,
-    });
+      const activation = await activateSubscriptionAfterPayment({
+        shopId,
+        userId,
+        planCode,
+        provider: "razorpay",
+        providerPaymentId: razorpay_payment_id,
+        transactionId: freshTransaction.id,
+        billingCycle,
+        tx,
+        req,
+      });
 
-    return { transaction: paidTransaction, ...activation };
-  });
+      await writeRequiredPaymentAudit(tx, {
+        shopId,
+        userId,
+        action: "PAYMENT_VERIFIED",
+        entityId: freshTransaction.id,
+        before: freshTransaction,
+        after: paidTransaction,
+        metadata: { provider: "razorpay", planCode, billingCycle, amountPaise: freshTransaction.amountPaise, razorpayOrderId: razorpay_order_id, razorpayPaymentId: razorpay_payment_id },
+        req,
+      });
 
-  await auditPaymentAction({
-    shopId,
-    userId,
-    action: "PAYMENT_VERIFIED",
-    entityId: transaction.id,
-    metadata: { provider: "razorpay", planCode, billingCycle, amountPaise: transaction.amountPaise, razorpayOrderId: razorpay_order_id, razorpayPaymentId: razorpay_payment_id },
-    req,
-  });
+      return { transaction: paidTransaction, ...activation };
+    }, { isolationLevel: "Serializable" });
+  } catch (error) {
+    if (error?.code === "P2002") throw providerPaymentAlreadyUsedError(razorpay_payment_id);
+    throw error;
+  }
+
+  if (result.idempotent) return result;
 
   return { activated: true, ...result };
 }
@@ -550,95 +606,144 @@ async function processPaymentSuccessWebhook(payload, event) {
     return retailResult;
   }
   const transactionId = notes.transactionId || order?.receipt;
-  const shopId = notes.shopId;
-  const planCode = notes.planCode;
-  const billingCycle = notes.billingCycle || "monthly";
-
-  if (!shopId || !planCode || !transactionId) {
+  if (!transactionId || !paymentId) {
     await db.paymentProviderEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
-    return { activated: false, reason: "Webhook missing shop/plan/transaction metadata" };
+    return { activated: false, reason: "Webhook missing transaction or payment metadata" };
   }
 
-  const paidByPaymentId = paymentId
-    ? await db.paymentTransaction.findFirst({ where: { shopId, provider: "razorpay", providerPaymentId: paymentId, status: "paid" } })
-    : null;
-  if (paidByPaymentId) {
-    await db.paymentProviderEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
-    return { activated: false, idempotent: true, reason: "Razorpay payment already applied" };
+  try {
+    return await db.$transaction(async (tx) => {
+      const existingTransaction = await tx.paymentTransaction.findFirst({
+        where: { id: transactionId, provider: "razorpay" },
+      });
+      if (!existingTransaction) {
+        await tx.paymentProviderEvent.update({
+          where: { id: event.id },
+          data: { processedAt: new Date() },
+        });
+        return {
+          activated: false,
+          reason: "No matching local payment transaction found for Razorpay webhook",
+          code: "PAYMENT_WEBHOOK_TRANSACTION_MISSING",
+        };
+      }
+
+      const shopId = existingTransaction.shopId;
+      const checkoutMeta = readJson(existingTransaction.rawPayloadJson);
+      const planCode = checkoutMeta?.planCode;
+      const billingCycle = checkoutMeta?.billingCycle || "monthly";
+      const expectedOrderId = checkoutMeta?.razorpayOrderId || orderId;
+
+      if ((notes.shopId && notes.shopId !== shopId) || !planCode) {
+        await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId, processedAt: new Date() } });
+        await writeRequiredPaymentAudit(tx, {
+          shopId,
+          action: "PAYMENT_WEBHOOK_MISMATCH",
+          entityId: existingTransaction.id,
+          metadata: { provider: "razorpay", eventId: event.eventId, reason: notes.shopId && notes.shopId !== shopId ? "Webhook shop does not match local transaction" : "Local checkout plan metadata is missing", razorpayPaymentId: paymentId },
+        });
+        return { activated: false, reason: "Webhook metadata does not match the local checkout", code: "PAYMENT_WEBHOOK_METADATA_MISMATCH" };
+      }
+
+      if (existingTransaction.status === "paid") {
+        const samePayment = existingTransaction.providerPaymentId === paymentId;
+        await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId, processedAt: new Date() } });
+        await writeRequiredPaymentAudit(tx, {
+          shopId,
+          action: samePayment ? "PAYMENT_WEBHOOK_IDEMPOTENT" : "PAYMENT_WEBHOOK_CONFLICT",
+          entityId: existingTransaction.id,
+          metadata: { provider: "razorpay", eventId: event.eventId, existingProviderPaymentId: existingTransaction.providerPaymentId, attemptedProviderPaymentId: paymentId },
+        });
+        return samePayment
+          ? { activated: false, idempotent: true, reason: "Payment transaction already paid" }
+          : { activated: false, conflict: true, reason: "Payment transaction was already completed by a different payment", code: "PAYMENT_TRANSACTION_ALREADY_PAID" };
+      }
+
+      const paymentUsedElsewhere = await tx.paymentTransaction.findFirst({
+        where: { provider: "razorpay", providerPaymentId: paymentId, id: { not: existingTransaction.id } },
+        select: { id: true },
+      });
+      if (paymentUsedElsewhere) {
+        await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId, processedAt: new Date() } });
+        await writeRequiredPaymentAudit(tx, {
+          shopId,
+          action: "PAYMENT_WEBHOOK_CONFLICT",
+          entityId: existingTransaction.id,
+          metadata: { provider: "razorpay", eventId: event.eventId, razorpayPaymentId: paymentId, appliedTransactionId: paymentUsedElsewhere.id },
+        });
+        return { activated: false, conflict: true, reason: "Razorpay payment already applied to another transaction", code: "PROVIDER_PAYMENT_ALREADY_USED" };
+      }
+
+      const consistency = validateRazorpayPaymentAgainstTransaction({
+        payment,
+        order,
+        transaction: existingTransaction,
+        expectedOrderId,
+      });
+      if (!consistency.valid) {
+        const failedTransaction = await tx.paymentTransaction.update({
+          where: { id: existingTransaction.id },
+          data: {
+            status: "failed",
+            failureReason: String(consistency.reason).slice(0, 500),
+            rawPayloadJson: JSON.stringify({ source: "payment_webhook_mismatch", payment: sanitizePayload(payment), eventId: event.eventId }),
+          },
+        });
+        await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId, processedAt: new Date() } });
+        await writeRequiredPaymentAudit(tx, {
+          shopId,
+          action: "PAYMENT_WEBHOOK_MISMATCH",
+          entityId: existingTransaction.id,
+          before: existingTransaction,
+          after: failedTransaction,
+          metadata: { provider: "razorpay", eventId: event.eventId, reason: consistency.reason, razorpayOrderId: orderId, razorpayPaymentId: paymentId },
+        });
+        return { activated: false, reason: consistency.reason, code: consistency.code };
+      }
+
+      const paidTransaction = await tx.paymentTransaction.update({
+        where: { id: existingTransaction.id },
+        data: {
+          providerPaymentId: paymentId,
+          status: "paid",
+          paidAt: payment?.created_at ? new Date(payment.created_at * 1000) : new Date(),
+          failureReason: null,
+          rawPayloadJson: JSON.stringify({
+            ...checkoutMeta,
+            source: "payment_webhook_success",
+            razorpayOrderId: orderId,
+            razorpayPaymentId: paymentId,
+            payment: sanitizePayload(payment),
+          }),
+        },
+      });
+
+      const activation = await activateSubscriptionAfterPayment({
+        shopId,
+        userId: null,
+        planCode,
+        provider: "razorpay",
+        providerPaymentId: paymentId,
+        transactionId: paidTransaction.id,
+        billingCycle,
+        tx,
+      });
+      await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId, processedAt: new Date() } });
+      await writeRequiredPaymentAudit(tx, {
+        shopId,
+        action: "PAYMENT_WEBHOOK_APPLIED",
+        entityId: paidTransaction.id,
+        before: existingTransaction,
+        after: paidTransaction,
+        metadata: { provider: "razorpay", eventId: event.eventId, planCode, billingCycle, amountPaise: paidTransaction.amountPaise, razorpayPaymentId: paymentId },
+      });
+
+      return { activated: true, transactionId: paidTransaction.id, subscriptionId: activation.subscription.id };
+    }, { isolationLevel: "Serializable" });
+  } catch (error) {
+    if (error?.code === "P2002") throw providerPaymentAlreadyUsedError(paymentId);
+    throw error;
   }
-
-  const existingTransaction = await db.paymentTransaction.findFirst({ where: { id: transactionId, shopId, provider: "razorpay" } });
-  if (existingTransaction?.status === "paid" && existingTransaction.providerPaymentId === paymentId) {
-    await db.paymentProviderEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
-    return { activated: false, idempotent: true, reason: "Payment transaction already paid" };
-  }
-
-  if (!existingTransaction) {
-    await db.paymentProviderEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
-    await auditPaymentAction({
-      shopId,
-      action: "PAYMENT_WEBHOOK_TRANSACTION_MISSING",
-      entityId: transactionId,
-      metadata: { provider: "razorpay", eventId: event.eventId, razorpayOrderId: orderId, razorpayPaymentId: paymentId },
-    });
-    return { activated: false, reason: "No matching local payment transaction found for Razorpay webhook" };
-  }
-
-  const consistency = validateRazorpayPaymentAgainstTransaction({
-    payment,
-    order: extractOrderEntity(payload),
-    transaction: existingTransaction,
-    expectedOrderId: orderId,
-  });
-  if (!consistency.valid) {
-    await markPaymentFailed(existingTransaction.id, consistency.reason, { payment: sanitizePayload(payment), eventId: event.eventId });
-    await db.paymentProviderEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
-    await auditPaymentAction({
-      shopId,
-      action: "PAYMENT_WEBHOOK_MISMATCH",
-      entityId: existingTransaction.id,
-      metadata: { provider: "razorpay", eventId: event.eventId, reason: consistency.reason, razorpayOrderId: orderId, razorpayPaymentId: paymentId },
-    });
-    return { activated: false, reason: consistency.reason, code: consistency.code };
-  }
-
-  const amountPaise = Number(payment?.amount || existingTransaction.amountPaise || 0);
-  const transaction = await db.paymentTransaction.update({
-    where: { id: existingTransaction.id },
-    data: {
-      providerPaymentId: paymentId,
-      status: "paid",
-      paidAt: payment?.created_at ? new Date(payment.created_at * 1000) : new Date(),
-      failureReason: null,
-      rawPayloadJson: JSON.stringify({
-        ...readJson(existingTransaction.rawPayloadJson),
-        source: "payment_webhook_success",
-        razorpayOrderId: orderId,
-        razorpayPaymentId: paymentId,
-        payment: sanitizePayload(payment),
-      }),
-    },
-  });
-
-  const activation = await activateSubscriptionAfterPayment({
-    shopId,
-    userId: null,
-    planCode,
-    provider: "razorpay",
-    providerPaymentId: paymentId,
-    transactionId: transaction.id,
-    billingCycle,
-  });
-
-  await db.paymentProviderEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
-  await auditPaymentAction({
-    shopId,
-    action: activation.action === "renewed" ? "SUBSCRIPTION_RENEWED" : "SUBSCRIPTION_ACTIVATED",
-    entityId: activation.subscription.id,
-    metadata: { provider: "razorpay", eventId: event.eventId, planCode, billingCycle, amountPaise, razorpayPaymentId: paymentId },
-  });
-
-  return { activated: true, transactionId: transaction.id, subscriptionId: activation.subscription.id };
 }
 
 async function processPaymentFailureWebhook(payload, event) {
@@ -648,10 +753,42 @@ async function processPaymentFailureWebhook(payload, event) {
   const transactionId = notes.transactionId;
   const reason = payment?.error_description || payment?.error_reason || payment?.error_code || "Razorpay payment failed";
 
-  let transaction = null;
-  if (transactionId && shopId) {
-    transaction = await db.paymentTransaction.updateMany({
-      where: { id: transactionId, shopId, provider: "razorpay", status: { not: "paid" } },
+  if (!transactionId) {
+    await db.paymentProviderEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
+    return { activated: false, paymentFailed: true, reason: "Failure webhook missing local transaction id" };
+  }
+
+  return db.$transaction(async (tx) => {
+    const transaction = await tx.paymentTransaction.findFirst({ where: { id: transactionId, provider: "razorpay" } });
+    if (!transaction) {
+      await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
+      return { activated: false, paymentFailed: true, reason: "Failure webhook has no matching local transaction" };
+    }
+    const authoritativeShopId = transaction.shopId;
+    if (shopId && shopId !== authoritativeShopId) {
+      await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId: authoritativeShopId, processedAt: new Date() } });
+      await writeRequiredPaymentAudit(tx, {
+        shopId: authoritativeShopId,
+        action: "PAYMENT_WEBHOOK_MISMATCH",
+        entityId: transaction.id,
+        metadata: { provider: "razorpay", eventId: event.eventId, reason: "Failure webhook shop does not match local transaction", razorpayPaymentId: payment?.id },
+      });
+      return { activated: false, paymentFailed: false, reason: "Failure webhook shop does not match local transaction" };
+    }
+
+    if (transaction.status === "paid") {
+      await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId: authoritativeShopId, processedAt: new Date() } });
+      await writeRequiredPaymentAudit(tx, {
+        shopId: authoritativeShopId,
+        action: "PAYMENT_FAILURE_IGNORED",
+        entityId: transaction.id,
+        metadata: { provider: "razorpay", eventId: event.eventId, reason: "Paid transaction cannot be downgraded", razorpayPaymentId: payment?.id },
+      });
+      return { activated: false, paymentFailed: false, idempotent: true };
+    }
+
+    const failed = await tx.paymentTransaction.update({
+      where: { id: transaction.id },
       data: {
         providerPaymentId: payment?.id,
         status: "failed",
@@ -659,17 +796,17 @@ async function processPaymentFailureWebhook(payload, event) {
         rawPayloadJson: JSON.stringify({ source: "payment_webhook_failure", payment: sanitizePayload(payment) }),
       },
     });
-  }
-  await db.paymentProviderEvent.update({ where: { id: event.id }, data: { processedAt: new Date() } });
-  if (shopId) {
-    await auditPaymentAction({
-      shopId,
+    await tx.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId: authoritativeShopId, processedAt: new Date() } });
+    await writeRequiredPaymentAudit(tx, {
+      shopId: authoritativeShopId,
       action: "PAYMENT_FAILED",
-      entityId: transactionId || payment?.id || null,
+      entityId: transaction.id,
+      before: transaction,
+      after: failed,
       metadata: { provider: "razorpay", eventId: event.eventId, razorpayPaymentId: payment?.id, reason },
     });
-  }
-  return { activated: false, paymentFailed: true };
+    return { activated: false, paymentFailed: true };
+  }, { isolationLevel: "Serializable" });
 }
 
 async function processRefundWebhook(payload, event) {
@@ -782,15 +919,28 @@ async function markProviderEventFailed(id, error) {
   }).catch(() => null);
 }
 
-async function markPaymentFailed(transactionId, reason, payload) {
-  return db.paymentTransaction.update({
-    where: { id: transactionId },
-    data: {
-      status: "failed",
-      failureReason: String(reason || "Payment failed").slice(0, 500),
-      rawPayloadJson: JSON.stringify({ source: "payment_failed", ...sanitizePayload(payload || {}) }),
-    },
-  });
+async function markPaymentFailed(transactionId, reason, payload, audit = {}) {
+  return db.$transaction(async (tx) => {
+    const current = await tx.paymentTransaction.findUnique({ where: { id: transactionId } });
+    if (!current || current.status === "paid") return current;
+    const failed = await tx.paymentTransaction.update({
+      where: { id: transactionId },
+      data: {
+        status: "failed",
+        failureReason: String(reason || "Payment failed").slice(0, 500),
+        rawPayloadJson: JSON.stringify({ source: "payment_failed", ...sanitizePayload(payload || {}) }),
+      },
+    });
+    if (audit.shopId) {
+      await writeRequiredPaymentAudit(tx, {
+        ...audit,
+        entityId: transactionId,
+        before: current,
+        after: failed,
+      });
+    }
+    return failed;
+  }, { isolationLevel: "Serializable" });
 }
 
 async function markProviderEventDuplicate(event, req) {
@@ -835,6 +985,23 @@ function validateRazorpayPaymentAgainstTransaction({ payment, order = null, tran
 
 function isRazorpayPaymentPaid(payment) {
   return ["captured", "authorized"].includes(payment?.status) || payment?.captured === true;
+}
+
+function paymentAlreadyAppliedError(transaction, attemptedPaymentId) {
+  const err = new AppError("Payment transaction has already been completed with a different provider payment", 409);
+  err.code = "PAYMENT_TRANSACTION_ALREADY_PAID";
+  err.details = {
+    transactionId: transaction?.id ?? null,
+    attemptedPaymentId: attemptedPaymentId ?? null,
+  };
+  return err;
+}
+
+function providerPaymentAlreadyUsedError(providerPaymentId) {
+  const err = new AppError("Provider payment has already been applied to another transaction", 409);
+  err.code = "PROVIDER_PAYMENT_ALREADY_USED";
+  err.details = { provider: "razorpay", providerPaymentId: providerPaymentId ?? null };
+  return err;
 }
 
 export function getWebhookEventId(payload) {
@@ -900,4 +1067,38 @@ async function auditPaymentAction({ shopId, userId = null, action, entityId = nu
     metadata: sanitizePayload(metadata),
     req,
   });
+}
+
+async function writeRequiredPaymentAudit(client, {
+  shopId,
+  userId = null,
+  deviceId = undefined,
+  action,
+  entityId = null,
+  before = undefined,
+  after = undefined,
+  metadata = {},
+  req = null,
+}) {
+  const audit = await createAuditLog({
+    shopId,
+    userId,
+    deviceId,
+    action,
+    entityType: "subscription_payment",
+    entityId,
+    before,
+    after,
+    metadata: sanitizePayload(metadata),
+    req,
+    client,
+  });
+  if (!audit) {
+    throw new AppError(
+      "Payment change was not saved because its audit record could not be stored",
+      503,
+      "PAYMENT_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
 }
