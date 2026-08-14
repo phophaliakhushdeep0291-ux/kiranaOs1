@@ -214,6 +214,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.summary.shortcutSave": "सेव",
 
   "billing.search.placeholder": "माल का नाम, बारकोड या SKU से खोजें",
+  "billing.search.placeholderShort": "माल खोजें",
   "billing.search.scanBarcode": "बारकोड स्कैन करें",
   "billing.search.voiceBilling": "बोलकर बिल",
   "billing.search.openVoiceBilling": "बोलकर बिल खोलें",
