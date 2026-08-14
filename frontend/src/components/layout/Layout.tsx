@@ -43,6 +43,7 @@ import { useBusinessType } from "@/features/core/settings/business-types";
 import { useBusinessTypeServerSync } from "@/features/core/settings/business-type-sync";
 import { isPathAllowedByCapabilities, isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { useModuleVisibility } from "@/features/core/settings/modules";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useModuleVisibilityServerSync } from "@/features/core/settings/module-visibility-sync";
 import { useActiveVerticalPack } from "@/features/verticals/registry";
 import { VoiceAssistant } from "@/features/core/voice/VoiceAssistant";
@@ -242,6 +243,7 @@ function initials(name: string) {
  * exist. Every real route leaves it unset and stays URL-driven.
  */
 export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle?: string }) {
+  const { t } = useAppLanguage();
   const { user, logout, shop } = useAuth();
   const [loc] = useLocation();
   const resolvedPageTitle = pageTitle ?? getPageTitle(loc);
@@ -495,7 +497,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
 
   return (
     <div ref={shellRef} className="app-shell app-shell-root" style={shellStyle} data-sidebar-resizing={isResizing ? "true" : undefined}>
-      <a href="#main-content" className="app-skip-link">Skip to main content</a>
+      <a href="#main-content" className="app-skip-link">{t("chrome.skipToContent")}</a>
 
       {/* ── Desktop sidebar ─────────────────────────────────────────────────── */}
       <aside

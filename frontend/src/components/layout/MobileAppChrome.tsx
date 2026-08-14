@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
 import { useModuleVisibility } from "@/features/core/settings/modules";
 import { useActiveVerticalPack } from "@/features/verticals/registry";
 import { isPathAllowedByCapabilities, isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
@@ -176,11 +177,13 @@ const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
   },
 ];
 
-const TOP_LEVEL_TABS: Array<{ href: string; label: string; Icon: NavIcon; matches: string[] }> = [
-  { href: "/dashboard", label: "Home", Icon: Home, matches: ["/dashboard"] },
-  { href: "/billing", label: "Sell", Icon: ShoppingCart, matches: ["/billing"] },
-  { href: "/inventory", label: "Stock", Icon: Boxes, matches: ["/inventory", "/products", "/categories"] },
-  { href: "/customers", label: "Customers", Icon: Users, matches: ["/customers"] },
+// These five words are the most-seen text in the product — they sit under the
+// thumb on every screen — so they carry a key rather than a baked English label.
+const TOP_LEVEL_TABS: Array<{ href: string; labelKey: TranslationKey; Icon: NavIcon; matches: string[] }> = [
+  { href: "/dashboard", labelKey: "chrome.tab.home", Icon: Home, matches: ["/dashboard"] },
+  { href: "/billing", labelKey: "chrome.tab.sell", Icon: ShoppingCart, matches: ["/billing"] },
+  { href: "/inventory", labelKey: "chrome.tab.stock", Icon: Boxes, matches: ["/inventory", "/products", "/categories"] },
+  { href: "/customers", labelKey: "chrome.tab.customers", Icon: Users, matches: ["/customers"] },
 ];
 
 function cleanPath(value: string) {
@@ -390,6 +393,7 @@ export function MobileBottomNav({
   userRole,
 }: MobileBottomNavProps) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const { t } = useAppLanguage();
   const { isHrefEnabled } = useModuleVisibility();
   const businessProfile = useShopBusinessProfile();
   const tabs = useMemo(
@@ -403,7 +407,7 @@ export function MobileBottomNav({
       {/* The tab count changes with the owner's module choices, so the columns
           are driven from it instead of the stylesheet's default of five. */}
       <div className="mobile-tabbar-grid" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}>
-        {tabs.map(({ href, label, Icon, matches }) => {
+        {tabs.map(({ href, labelKey, Icon, matches }) => {
           const active = pathMatches(location, matches);
           return (
             <Link
@@ -416,7 +420,7 @@ export function MobileBottomNav({
               onTouchStart={() => void preloadCoreRoute(href)?.catch(() => undefined)}
             >
               <span className="mobile-tab-icon"><Icon size={21} strokeWidth={active ? 2.35 : 2} aria-hidden="true" /></span>
-              <span>{label}</span>
+              <span>{t(labelKey)}</span>
             </Link>
           );
         })}
@@ -425,7 +429,7 @@ export function MobileBottomNav({
           <DrawerTrigger asChild>
             <button type="button" className={cn("mobile-tab", moreOpen && "mobile-tab-active")} aria-label="Open all app areas" aria-expanded={moreOpen}>
               <span className="mobile-tab-icon"><Settings size={21} strokeWidth={moreOpen ? 2.35 : 2} aria-hidden="true" /></span>
-              <span>More</span>
+              <span>{t("chrome.tab.more")}</span>
             </button>
           </DrawerTrigger>
           <DrawerContent className="mobile-more-drawer">

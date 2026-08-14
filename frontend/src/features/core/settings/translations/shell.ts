@@ -191,4 +191,20 @@ export const shellEn = {
   "setup.step.firstBill.description": "Create one real or test bill and confirm totals, stock, udhar, and receipt output.",
   "setup.step.firstBill.action": "Open billing",
   "setup.step.firstBill.todo": "Run after products are ready",
+  // Bottom tab bar, the skip link and the subscription strip — the only strings
+  // that render on essentially every screen, so they set the language a shop
+  // thinks the app is in before any page content loads.
+  "chrome.tab.home": "Home",
+  "chrome.tab.sell": "Sell",
+  "chrome.tab.stock": "Stock",
+  "chrome.tab.customers": "Customers",
+  "chrome.tab.more": "More",
+  "chrome.skipToContent": "Skip to main content",
+  "chrome.subscription.details": "Details",
+  "chrome.subscription.ownerDetails": "Owner details",
+  "chrome.subscription.trialShort": "Trial active — your data is safe on this device",
+  "chrome.subscription.expiredShort": "Subscription expired — you can still bill and export",
+  "chrome.subscription.paymentFailedShort": "Payment failed — sales and exports still work",
+  "chrome.subscription.graceShort": "Offline grace — billing works, sync is limited",
+  "chrome.subscription.activeShort": "Subscription active",
 } as const;
