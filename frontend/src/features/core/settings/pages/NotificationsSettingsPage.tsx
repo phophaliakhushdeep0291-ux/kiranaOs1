@@ -95,21 +95,20 @@ const DATE_TIME_FORMAT = new Intl.DateTimeFormat("en-IN", {
 });
 
 function readableDate(value: string | null | undefined, t: Translate) {
-  const { t } = useAppLanguage();
   if (!value) return t("settings.notify.notCompleted");
   return DATE_TIME_FORMAT.format(new Date(value));
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Please try again.";
+function errorMessage(t: Translate, error: unknown) {
+  return error instanceof Error ? error.message : t("settings.notify.tryAgain");
 }
 
-function statusCopy(status?: ReminderStatus) {
-  if (!status) return { label: "Checking", tone: "gray" as const, detail: "Reading live backend readiness." };
-  if (status.operational) return { label: "Operational", tone: "green" as const, detail: "Provider, Redis queue, and reminder worker are ready." };
-  if (!status.providerConfigured) return { label: "Setup required", tone: "amber" as const, detail: "Configure a supported WhatsApp provider on the server." };
-  if (!status.queueEnabled) return { label: "Queue required", tone: "amber" as const, detail: "The provider is configured, but Redis job queues are disabled." };
-  return { label: "Worker offline", tone: "red" as const, detail: "The queue is enabled, but no fresh reminder worker heartbeat is available." };
+function statusCopy(t: Translate, status?: ReminderStatus) {
+  if (!status) return { label: t("settings.notify.checking"), tone: "gray" as const, detail: t("settings.notify.readingBackend") };
+  if (status.operational) return { label: t("settings.notify.operational"), tone: "green" as const, detail: t("settings.notify.allReady") };
+  if (!status.providerConfigured) return { label: t("settings.notify.setupRequired"), tone: "amber" as const, detail: t("settings.notify.setupRequiredHelp") };
+  if (!status.queueEnabled) return { label: t("settings.notify.queueRequired"), tone: "amber" as const, detail: t("settings.notify.queueRequiredHelp") };
+  return { label: t("settings.notify.workerOffline"), tone: "red" as const, detail: t("settings.notify.workerOfflineHelp") };
 }
 
 function previewTemplate(template: string) {
@@ -177,7 +176,7 @@ export default function NotificationsSettingsPage() {
       await queryClient.invalidateQueries({ queryKey: ["reminders", "templates"] });
       toast({ title: t("settings.notify.templateSaved"), description: t("settings.notify.templateSavedHelp") });
     },
-    onError: (error) => toast({ title: t("settings.notify.templateSaveFailed"), description: errorMessage(error), variant: "destructive" }),
+    onError: (error) => toast({ title: t("settings.notify.templateSaveFailed"), description: errorMessage(t, error), variant: "destructive" }),
   });
 
   function updateClosing(partial: Partial<ClosingPreferences>) {
@@ -210,7 +209,7 @@ export default function NotificationsSettingsPage() {
     toast({ title: t("settings.notify.refreshing") });
   }
 
-  const liveStatus = statusCopy(statusQ.data);
+  const liveStatus = statusCopy(t, statusQ.data);
   const logs = logsQ.data ?? [];
 
   return (

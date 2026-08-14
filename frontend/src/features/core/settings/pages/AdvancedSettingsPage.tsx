@@ -13,7 +13,7 @@ import { SettingsShell } from "@/features/core/settings/SettingsShell";
 import { Card, CardHead, Fld, RowToggle } from "@/features/core/settings/ui";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { useAppTheme, ACCENT_COLORS, type AccentColor } from "@/features/core/settings/theme";
-import { useAppLanguage, type AppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type AppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { setLandingPagePref } from "@/features/core/settings/landing-page";
 import { appVersion, buildId, databaseVersion, formatBytes, measureStorage, SUPPORT_EMAIL } from "@/features/core/settings/app-info";
 import { DATE_FORMATS, applyAppPreferences } from "@/features/core/settings/app-preferences";
@@ -49,24 +49,25 @@ const DEFAULT_ADV: AdvConfig = {
   dateFormat: "DD/MM/YYYY", landingPage: "Dashboard", compactMode: false, shortcuts: true, sound: true,
   defaultPayment: "Cash",
 };
-const DB_TOOLS = [
-  { key: "health", label: "Check database health" },
-  { key: "repair", label: "Repair local database" },
-  { key: "index", label: "Rebuild search index" },
-  { key: "dashboard", label: "Recalculate dashboard totals" },
-  { key: "ledgers", label: "Recalculate customer ledgers" },
-  { key: "inventory", label: "Recalculate inventory stock" },
+const dbTools = (t: Translate) => [
+  { key: "health", label: t("settings.advanced.tool.health") },
+  { key: "repair", label: t("settings.advanced.tool.repair") },
+  { key: "index", label: t("settings.advanced.tool.reindex") },
+  { key: "dashboard", label: t("settings.advanced.tool.dashboard") },
+  { key: "ledgers", label: t("settings.advanced.tool.ledgers") },
+  { key: "inventory", label: t("settings.advanced.tool.stock") },
 ];
-const DANGER = [
-  { key: "resetSettings", label: "Reset settings", desc: "Restore all settings to defaults", safe: true },
-  { key: "clearCache", label: "Clear local cache", desc: "Free up space; keeps your data", safe: true },
-  { key: "logoutAll", label: "Logout all other devices", desc: "Sign out every device except this one", safe: false },
-  { key: "removeDevice", label: "Remove this device", desc: "Unlink this device from the store", safe: false },
-  { key: "deleteLocal", label: "Delete local offline data", desc: "Clears this device's local copy", safe: false },
-  { key: "factoryReset", label: "Factory reset store", desc: "Permanently wipe local data & settings", safe: false },
+const dangerActions = (t: Translate) => [
+  { key: "resetSettings", label: t("settings.advanced.danger.resetSettings"), desc: t("settings.advanced.danger.resetSettingsHelp"), safe: true },
+  { key: "clearCache", label: t("settings.advanced.tool.clearCache"), desc: t("settings.advanced.tool.clearCacheHelp"), safe: true },
+  { key: "logoutAll", label: t("settings.advanced.danger.logoutOthers"), desc: t("settings.advanced.danger.logoutOthersHelp"), safe: false },
+  { key: "removeDevice", label: t("settings.advanced.danger.removeDevice"), desc: t("settings.advanced.danger.removeDeviceHelp"), safe: false },
+  { key: "deleteLocal", label: t("settings.advanced.danger.deleteLocal"), desc: t("settings.advanced.danger.deleteLocalHelp"), safe: false },
+  { key: "factoryReset", label: t("settings.advanced.danger.factoryReset"), desc: t("settings.advanced.danger.factoryResetHelp"), safe: false },
 ];
+type DangerAction = ReturnType<typeof dangerActions>[number];
+
 function downloadJson(filename: string, data: unknown) {
-  const { t } = useAppLanguage();
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -95,15 +96,16 @@ function mailSupport(subject: string, body: string) {
 }
 
 export default function AdvancedSettingsPage() {
-  const { t } = useAppLanguage();
   const { toast } = useToast();
   const { prefs, patch, hydrated } = useSettingsPrefs();
   const { accent, setAccent } = useAppTheme();
-  const { language, setLanguage } = useAppLanguage();
+  const { t, language, setLanguage } = useAppLanguage();
   const { logout } = useAuth();
   const [adv, setAdv] = useState<AdvConfig>(DEFAULT_ADV);
-  const [danger, setDanger] = useState<(typeof DANGER)[number] | null>(null);
+  const [danger, setDanger] = useState<DangerAction | null>(null);
   const [dangerError, setDangerError] = useState<string | null>(null);
+  const tools = dbTools(t);
+  const dangerRows = dangerActions(t);
   const [dangerRunning, setDangerRunning] = useState(false);
   const seeded = useRef(false);
   const currentDeviceId = getOfflineScope().device_id;
@@ -402,12 +404,12 @@ export default function AdvancedSettingsPage() {
           <CardHead icon={<Upload size={15} />} title={t("settings.advanced.importExportTitle")} sub={t("settings.advanced.importExportSub")} />
           <div className="grid grid-cols-1 gap-2 px-5 pb-5 sm:grid-cols-2">
             {[
-              { label: "Open product import", icon: Upload, run: () => { window.location.href = "/products?import=1"; } },
-              { label: "Customer CSV template", icon: Download, run: () => downloadCsvTemplate("artha-customers-template.csv", ["name", "mobile", "address", "openingBalance"]) },
-              { label: "Export products", icon: Download, run: () => void exportTable("products", "artha-products.json") },
-              { label: "Export customers", icon: Download, run: () => void exportTable("customers", "artha-customers.json") },
-              { label: "Export bills", icon: Download, run: () => void exportTable("bills", "artha-bills.json") },
-              { label: "Export full backup", icon: Download, run: () => void exportFullBackup() },
+              { label: t("settings.advanced.export.import"), icon: Upload, run: () => { window.location.href = "/products?import=1"; } },
+              { label: t("settings.advanced.export.template"), icon: Download, run: () => downloadCsvTemplate("artha-customers-template.csv", ["name", "mobile", "address", "openingBalance"]) },
+              { label: t("settings.advanced.export.products"), icon: Download, run: () => void exportTable("products", "artha-products.json") },
+              { label: t("settings.advanced.export.customers"), icon: Download, run: () => void exportTable("customers", "artha-customers.json") },
+              { label: t("settings.advanced.export.bills"), icon: Download, run: () => void exportTable("bills", "artha-bills.json") },
+              { label: t("settings.advanced.export.full"), icon: Download, run: () => void exportFullBackup() },
             ].map((b) => (
               <Button key={b.label} variant="outline" className="h-10 justify-start gap-2 rounded-[9px] text-[12px] font-bold" onClick={b.run}>
                 <b.icon size={14} /> {b.label}
@@ -420,8 +422,8 @@ export default function AdvancedSettingsPage() {
         <Card>
           <CardHead icon={<Wrench size={15} />} title={t("settings.advanced.dbToolsTitle")} sub={t("settings.advanced.dbToolsSub")} />
           <div className="px-5 pb-4">
-            {DB_TOOLS.map((tool, i) => (
-              <div key={tool.key} className={`flex items-center justify-between py-2.5 ${i < DB_TOOLS.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
+            {tools.map((tool, i) => (
+              <div key={tool.key} className={`flex items-center justify-between py-2.5 ${i < tools.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
                 <span className="text-[13px] font-semibold text-[#344668]">{tool.label}</span>
                 <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => void runDbTool(tool.key, tool.label)}>{t("settings.advanced.run")}</Button>
               </div>
@@ -457,8 +459,8 @@ export default function AdvancedSettingsPage() {
           <CardHead icon={<AlertTriangle size={15} />} title={t("settings.advanced.dangerTitle")} sub={t("settings.advanced.dangerSub")} />
           <div className="px-5 pb-5">
             <div className="rounded-[12px] border border-rose-200 bg-rose-50/60 p-2">
-              {DANGER.map((d, i) => (
-                <div key={d.key} className={`flex items-center gap-3 px-2 py-2.5 ${i < DANGER.length - 1 ? "border-b border-rose-100" : ""}`}>
+              {dangerRows.map((d, i) => (
+                <div key={d.key} className={`flex items-center gap-3 px-2 py-2.5 ${i < dangerRows.length - 1 ? "border-b border-rose-100" : ""}`}>
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-bold text-[#7f1d1d]">{d.label}</p>
                     <p className="text-[11px] text-rose-700/70">{d.desc}</p>
@@ -483,7 +485,7 @@ export default function AdvancedSettingsPage() {
 }
 
 function DangerDialog({ item, error, running, onClose, onConfirm }: {
-  item: (typeof DANGER)[number] | null;
+  item: DangerAction | null;
   error: string | null;
   running: boolean;
   onClose: () => void;

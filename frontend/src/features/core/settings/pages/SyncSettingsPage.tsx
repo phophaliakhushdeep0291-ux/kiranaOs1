@@ -106,7 +106,7 @@ export default function SyncSettingsPage() {
       setBackupApproval(null);
       await loadBackups();
     } catch (error) {
-      setBackupActionError(error instanceof Error ? error.message : "Backup action failed");
+      setBackupActionError(error instanceof Error ? error.message : t("settings.sync.backupFailed"));
     } finally {
       setBackupActionLoading(false);
     }
