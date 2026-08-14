@@ -94,6 +94,7 @@ function mailSupport(subject: string, body: string) {
 }
 
 export default function AdvancedSettingsPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const { prefs, patch, hydrated } = useSettingsPrefs();
   const { accent, setAccent } = useAppTheme();
@@ -137,8 +138,8 @@ export default function AdvancedSettingsPage() {
   async function clearCache() {
     try {
       if ("caches" in window) { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))); }
-      toast({ title: "Cache cleared", description: "Reopen the app to fetch the latest assets." });
-    } catch { toast({ title: "Could not clear cache", variant: "destructive" }); }
+      toast({ title: t("settings.advanced.cacheCleared"), description: t("settings.advanced.cacheClearedHelp") });
+    } catch { toast({ title: t("settings.advanced.cacheClearFailed"), variant: "destructive" }); }
   }
   function diagnosticsPayload() {
     return {
@@ -159,14 +160,14 @@ export default function AdvancedSettingsPage() {
   }
   function copyDiagnostics() {
     void navigator.clipboard?.writeText(JSON.stringify(diagnosticsPayload(), null, 2));
-    toast({ title: "Diagnostics copied" });
+    toast({ title: t("settings.advanced.diagnosticsCopied") });
   }
   async function optimizeDatabase() {
     try {
       await offlineDB.init();
-      toast({ title: "Database checked", description: "Local data opened cleanly and is ready." });
+      toast({ title: t("settings.advanced.dbChecked"), description: t("settings.advanced.dbCheckedHelp") });
     } catch {
-      toast({ title: "Database check failed", description: "Restart the app and try again.", variant: "destructive" });
+      toast({ title: t("settings.advanced.dbCheckFailed"), description: t("settings.advanced.restartAndRetry"), variant: "destructive" });
     }
   }
   async function runDbTool(key: string, label: string) {
@@ -175,31 +176,31 @@ export default function AdvancedSettingsPage() {
       if (key === "repair" || key === "index") await offlineDB.pruneExpiredRecentCache();
       if (key === "dashboard") {
         const [bills, payments, items] = await Promise.all([offlineDB.getAll("bills"), offlineDB.getAll("payments"), offlineDB.getAll("bill_items")]);
-        toast({ title: "Dashboard totals checked", description: `${bills.length} bills, ${payments.length} payments, ${items.length} items readable.` });
+        toast({ title: t("settings.advanced.dashboardChecked"), description: `${bills.length} bills, ${payments.length} payments, ${items.length} items readable.` });
         return;
       }
       if (key === "ledgers") {
         const rows = await offlineDB.getAll("customer_ledger");
-        toast({ title: "Customer ledgers checked", description: `${rows.length} ledger rows readable.` });
+        toast({ title: t("settings.advanced.ledgersChecked"), description: `${rows.length} ledger rows readable.` });
         return;
       }
       if (key === "inventory") {
         const rows = await offlineDB.getAll("inventory_movements");
-        toast({ title: "Inventory stock checked", description: `${rows.length} stock movement rows readable.` });
+        toast({ title: t("settings.advanced.stockChecked"), description: `${rows.length} stock movement rows readable.` });
         return;
       }
-      toast({ title: `${label} complete`, description: "Local database opened and maintenance checks passed." });
+      toast({ title: `${label} complete`, description: t("settings.advanced.maintenancePassed") });
     } catch {
-      toast({ title: `${label} failed`, description: "Restart the app and try again.", variant: "destructive" });
+      toast({ title: `${label} failed`, description: t("settings.advanced.restartAndRetry"), variant: "destructive" });
     }
   }
   async function exportTable(table: (typeof EXPORT_TABLES)[number], filename: string) {
     try {
       const rows = await offlineDB.getAll<Record<string, unknown>>(table);
       downloadJson(filename, { exportedAt: new Date().toISOString(), table, rows });
-      toast({ title: "Export downloaded", description: `${rows.length} ${table.replaceAll("_", " ")} row(s).` });
+      toast({ title: t("settings.advanced.exportDownloaded"), description: `${rows.length} ${table.replaceAll("_", " ")} row(s).` });
     } catch {
-      toast({ title: "Export failed", description: "Could not read local data for this export.", variant: "destructive" });
+      toast({ title: t("settings.advanced.exportFailed"), description: t("settings.advanced.exportFailedHelp"), variant: "destructive" });
     }
   }
   async function exportFullBackup() {
@@ -210,9 +211,9 @@ export default function AdvancedSettingsPage() {
         exportedAt: new Date().toISOString(),
         tables: Object.fromEntries(entries),
       });
-      toast({ title: "Backup downloaded", description: "Keep this file private. It contains local shop data." });
+      toast({ title: t("settings.sync.backupDownloaded"), description: t("settings.advanced.backupPrivate") });
     } catch {
-      toast({ title: "Backup failed", description: "Could not read the local database.", variant: "destructive" });
+      toast({ title: t("settings.advanced.backupFailed"), description: t("settings.advanced.backupFailedHelp"), variant: "destructive" });
     }
   }
   async function clearScopedLocalData() {
@@ -243,7 +244,7 @@ export default function AdvancedSettingsPage() {
         applyAppPreferences(DEFAULT_ADV);
         setLandingPagePref(DEFAULT_ADV.landingPage);
         setDanger(null);
-        toast({ title: "Settings reset to defaults" });
+        toast({ title: t("settings.advanced.settingsReset") });
         return;
       }
       if (key === "clearCache") { setDanger(null); await clearCache(); return; }
@@ -253,7 +254,7 @@ export default function AdvancedSettingsPage() {
         const others = (snapshot.devices ?? []).filter((device) => resolveDeviceId(device) !== currentDeviceId);
         if (others.length === 0) {
           setDanger(null);
-          toast({ title: "No other devices", description: "This is the only device signed in to the shop." });
+          toast({ title: t("settings.advanced.noOtherDevices"), description: t("settings.advanced.onlyDevice") });
           return;
         }
         let signedOut = 0;
@@ -275,7 +276,7 @@ export default function AdvancedSettingsPage() {
       if (key === "removeDevice") {
         await removeDevice(currentDeviceId, ownerPin, { removeCurrentDevice: true });
         setDanger(null);
-        toast({ title: "Device removed", description: "Signing out — this device is no longer linked to the shop." });
+        toast({ title: t("settings.advanced.deviceRemoved"), description: t("settings.advanced.signingOut") });
         setTimeout(() => void logout(), 1200);
         return;
       }
@@ -291,7 +292,7 @@ export default function AdvancedSettingsPage() {
           patch({ printer: undefined, taxes: undefined, security: undefined, notifications: undefined, integrations: undefined, advanced: undefined, branding: undefined, hours: undefined, bank: undefined, storeProfile: undefined });
         }
         setDanger(null);
-        toast({ title: "Local data cleared", description: "The app will reload with a fresh local copy synced from the cloud." });
+        toast({ title: t("settings.advanced.localDataCleared"), description: t("settings.advanced.localDataClearedHelp") });
         setTimeout(() => window.location.reload(), 900);
         return;
       }
@@ -311,7 +312,7 @@ export default function AdvancedSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Data Management */}
         <Card>
-          <CardHead icon={<Database size={15} />} title="Data Management" sub="Retention & storage" action={<button type="button" onClick={() => void optimizeDatabase()} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">Optimize</button>} />
+          <CardHead icon={<Database size={15} />} title="Data Management" sub="Retention & storage" action={<button type="button" onClick={() => void optimizeDatabase()} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.advanced.optimize")}</button>} />
           <div className="px-5 pb-5">
             <RowToggle
               label="Auto cleanup temp files"
@@ -321,7 +322,7 @@ export default function AdvancedSettingsPage() {
             />
             <div className="mt-3 space-y-2">
               <div className="flex justify-between text-[11px] font-semibold text-[#64748b]">
-                <span>Storage used on this device</span>
+                <span>{t("settings.advanced.storageUsed")}</span>
                 <span>{storage?.measured ? `${formatBytes(storage.usageBytes)}${storage.quotaBytes ? ` of ${formatBytes(storage.quotaBytes)}` : ""}` : "Not reported by this browser"}</span>
               </div>
               {storage?.measured && storage.quotaBytes ? (
@@ -354,29 +355,29 @@ export default function AdvancedSettingsPage() {
             <Fld label="Language">
               <Select value={language} onValueChange={(v) => setLanguage(v as AppLanguage)}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="en">English</SelectItem><SelectItem value="hi">हिन्दी (Hindi)</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="en">{t("settings.advanced.languageEnglish")}</SelectItem><SelectItem value="hi">{t("settings.advanced.languageHindi")}</SelectItem></SelectContent>
               </Select>
             </Fld>
             <Fld label="Date format">
               <Select value={adv.dateFormat} onValueChange={(v) => update({ dateFormat: v })}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>{DATE_FORMATS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                <SelectContent>{DATE_FORMATS.map((format) => <SelectItem key={format} value={format}>{format}</SelectItem>)}</SelectContent>
               </Select>
             </Fld>
             <Fld label="Default landing page">
               <Select value={adv.landingPage} onValueChange={(v) => { update({ landingPage: v }); setLandingPagePref(v); }}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>{["Dashboard", "Billing", "Inventory", "Reports"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                <SelectContent>{["Dashboard", "Billing", "Inventory", "Reports"].map((page) => <SelectItem key={page} value={page}>{page}</SelectItem>)}</SelectContent>
               </Select>
             </Fld>
             <Fld label="Default payment">
               <Select value={adv.defaultPayment} onValueChange={(v) => update({ defaultPayment: v })}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>{["Cash", "UPI", "Split"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                <SelectContent>{["Cash", "UPI", "Split"].map((mode) => <SelectItem key={mode} value={mode}>{mode}</SelectItem>)}</SelectContent>
               </Select>
             </Fld>
             <div className="sm:col-span-2">
-              <p className="mb-1.5 text-[12px] font-semibold text-[#45577a]">Accent theme</p>
+              <p className="mb-1.5 text-[12px] font-semibold text-[#45577a]">{t("settings.advanced.accentTheme")}</p>
               <div className="flex flex-wrap gap-2">
                 {(Object.entries(ACCENT_COLORS) as [AccentColor, { label: string; swatch: string }][]).map(([key, def]) => (
                   <button key={key} type="button" onClick={() => setAccent(key)} title={def.label}
@@ -418,10 +419,10 @@ export default function AdvancedSettingsPage() {
         <Card>
           <CardHead icon={<Wrench size={15} />} title="Offline Database Tools" sub="Keep local data healthy" />
           <div className="px-5 pb-4">
-            {DB_TOOLS.map((t, i) => (
-              <div key={t.key} className={`flex items-center justify-between py-2.5 ${i < DB_TOOLS.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
-                <span className="text-[13px] font-semibold text-[#344668]">{t.label}</span>
-                <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => void runDbTool(t.key, t.label)}>Run</Button>
+            {DB_TOOLS.map((tool, i) => (
+              <div key={tool.key} className={`flex items-center justify-between py-2.5 ${i < DB_TOOLS.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
+                <span className="text-[13px] font-semibold text-[#344668]">{tool.label}</span>
+                <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => void runDbTool(tool.key, tool.label)}>{t("settings.advanced.run")}</Button>
               </div>
             ))}
           </div>
@@ -431,7 +432,7 @@ export default function AdvancedSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Diagnostics */}
         <Card>
-          <CardHead icon={<FlaskConical size={15} />} title="Developer / Diagnostics" sub="For support" action={<button type="button" onClick={copyDiagnostics} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">Copy</button>} />
+          <CardHead icon={<FlaskConical size={15} />} title="Developer / Diagnostics" sub="For support" action={<button type="button" onClick={copyDiagnostics} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.advanced.copy")}</button>} />
           <div className="grid grid-cols-1 gap-y-3 px-5 pb-5 sm:grid-cols-2">
             {[
               ["App version", appVersion()],
@@ -444,8 +445,8 @@ export default function AdvancedSettingsPage() {
               <div key={k}><p className="text-[11px] font-semibold text-[#64748b]">{k}</p><p className="text-[13px] font-bold text-[var(--brand-ink)]">{v}</p></div>
             ))}
             <div className="mt-1 grid gap-2 sm:col-span-2 sm:grid-cols-2">
-              <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={copyDiagnostics}><HardDrive size={14} /> Copy diagnostics</Button>
-              <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => mailSupport("Artha diagnostics", JSON.stringify(diagnosticsPayload(), null, 2))}>Send to support</Button>
+              <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={copyDiagnostics}><HardDrive size={14} /> {t("settings.advanced.copyDiagnostics")}</Button>
+              <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => mailSupport("Artha diagnostics", JSON.stringify(diagnosticsPayload(), null, 2))}>{t("settings.advanced.sendToSupport")}</Button>
             </div>
           </div>
         </Card>
@@ -461,7 +462,7 @@ export default function AdvancedSettingsPage() {
                     <p className="text-[13px] font-bold text-[#7f1d1d]">{d.label}</p>
                     <p className="text-[11px] text-rose-700/70">{d.desc}</p>
                   </div>
-                  <Button size="sm" variant="outline" className="h-8 shrink-0 rounded-[8px] border-rose-300 text-[12px] font-bold text-rose-700 hover:bg-rose-100" onClick={() => { setDangerError(null); setDanger(d); }}>{d.safe ? "Run" : "Confirm"}</Button>
+                  <Button size="sm" variant="outline" className="h-8 shrink-0 rounded-[8px] border-rose-300 text-[12px] font-bold text-rose-700 hover:bg-rose-100" onClick={() => { setDangerError(null); setDanger(d); }}>{d.safe ? t("settings.advanced.run") : "Confirm"}</Button>
                 </div>
               ))}
             </div>
@@ -487,6 +488,7 @@ function DangerDialog({ item, error, running, onClose, onConfirm }: {
   onClose: () => void;
   onConfirm: (key: string, ownerPin: string) => void;
 }) {
+  const { t } = useAppLanguage();
   const [pin, setPin] = useState("");
   useEffect(() => { setPin(""); }, [item]);
   const needsPin = item ? !item.safe : false;
@@ -503,7 +505,7 @@ function DangerDialog({ item, error, running, onClose, onConfirm }: {
           className="space-y-3"
           onSubmit={(event) => { event.preventDefault(); if (item) onConfirm(item.key, pin.trim()); }}
         >
-          <p className="text-[12px] text-[#52627e]">{item?.desc}. {!item?.safe && <span className="font-bold text-rose-600">This action cannot be undone.</span>}</p>
+          <p className="text-[12px] text-[#52627e]">{item?.desc}. {!item?.safe && <span className="font-bold text-rose-600">{t("settings.advanced.cannotUndo")}</span>}</p>
           {needsPin && (
             <Fld label="Enter your Owner PIN to continue" hint="Checked by the server before anything is changed.">
               <Input type="password" inputMode="numeric" autoComplete="off" className="h-10" value={pin} disabled={running} onChange={(e) => setPin(e.target.value)} placeholder="••••" />
@@ -511,7 +513,7 @@ function DangerDialog({ item, error, running, onClose, onConfirm }: {
           )}
           {error ? <p role="alert" className="rounded-[8px] bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-700">{error}</p> : null}
           <div className="flex gap-2.5 pt-1">
-            <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" disabled={running} onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" disabled={running} onClick={onClose}>{t("settings.advanced.cancel")}</Button>
             <Button type="submit" className="h-11 flex-1 gap-2 rounded-[10px] bg-rose-600 font-black text-white hover:bg-rose-700" disabled={running || (needsPin && pin.trim().length < 4)}>
               {running ? <Loader2 size={15} className="animate-spin" /> : item?.safe ? <RotateCcw size={15} /> : <AlertTriangle size={15} />}
               {running ? "Working…" : item?.safe ? "Run now" : "Confirm"}
