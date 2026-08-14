@@ -59,7 +59,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/customer-order/DineInMenuPage.tsx", // 4
   "features/core/customer-order/ImportOrderPage.tsx", // 6
   "features/core/customer-order/OwnerOrderingCard.tsx", // 5
-  "features/core/customers/pages/CustomersPage.tsx", // 109
   "features/core/demo/DemoModeBanner.tsx", // 4
   "features/core/devices/pages/DeviceRemovedPage.tsx", // 2
   "features/core/devices/pages/DevicesPage.tsx", // 20

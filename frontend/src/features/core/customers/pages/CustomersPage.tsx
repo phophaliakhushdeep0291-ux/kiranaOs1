@@ -66,7 +66,7 @@ import { loadCachedAuthoritativeSummary, resolveAuthoritativeUdharSummary } from
 import { repairLedgerDriftFromServer } from "@/features/core/ledger/ledger-drift-repair";
 import { isManualAdjustmentEntry } from "@/features/core/ledger/accounting";
 import type { CustomerInput } from "@/types/api";
-import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
+import { useAppLanguage, type Translate, type TranslationKey } from "@/features/core/settings/i18n";
 import { offlineDB } from "@/lib/offline/db";
 import {
   addMoney,
@@ -459,7 +459,7 @@ export default function CustomersPage() {
   // The insights range is the same one the top-right dropdown drives. Derive a live
   // label + a cycle so the "This Week" chip on Collection Progress is real, not static.
   const rangeDays = Math.max(0, Math.round((new Date(`${rangeTo}T00:00:00`).getTime() - new Date(`${rangeFrom}T00:00:00`).getTime()) / 86_400_000));
-  const rangeLabel = rangeDays <= 0 ? "Today" : rangeDays <= 6 ? "Last 7 days" : rangeDays <= 29 ? "Last 30 days" : `Last ${rangeDays + 1} days`;
+  const rangeLabel = rangeDays <= 0 ? t("customers.list.today") : rangeDays <= 6 ? t("customers.list.last7") : rangeDays <= 29 ? t("customers.list.last30") : `Last ${rangeDays + 1} days`;
   const cycleRange = () => applyRange(rangeDays <= 0 ? 6 : rangeDays <= 6 ? 29 : 0);
   const averageCollectionDays = useMemo(() => {
     const values = dedupedCustomers.flatMap((customer) => {
@@ -716,7 +716,7 @@ export default function CustomersPage() {
 
   function shareWhatsApp() {
     const digits = mobileDigits();
-    if (!digits) { toast({ title: "No mobile number", description: t("customers.toast.needMobileForWhatsapp"), variant: "destructive" }); return; }
+    if (!digits) { toast({ title: t("customers.detail.noMobile"), description: t("customers.toast.needMobileForWhatsapp"), variant: "destructive" }); return; }
     const balance = Math.max(0, money(selectedCustomer?.ledgerBalance));
     const text = encodeURIComponent(`Namaste ${selectedCustomer?.name} ji, aapka khata balance ${fmtMoney(balance)} hai. Kripya payment kar dein. Dhanyavaad!`);
     window.open(`https://wa.me/91${digits}?text=${text}`, "_blank", "noopener");
@@ -724,14 +724,14 @@ export default function CustomersPage() {
 
   function sendSms() {
     const digits = mobileDigits();
-    if (!digits) { toast({ title: "No mobile number", variant: "destructive" }); return; }
+    if (!digits) { toast({ title: t("customers.detail.noMobile"), variant: "destructive" }); return; }
     const balance = Math.max(0, money(selectedCustomer?.ledgerBalance));
     window.location.href = `sms:+91${digits}?body=${encodeURIComponent(`Namaste ${selectedCustomer?.name} ji, aapka khata balance ${fmtMoney(balance)} hai.`)}`;
   }
 
   function quickCall() {
     const digits = mobileDigits();
-    if (!digits) { toast({ title: "No mobile number", variant: "destructive" }); return; }
+    if (!digits) { toast({ title: t("customers.detail.noMobile"), variant: "destructive" }); return; }
     window.location.href = `tel:+91${digits}`;
   }
 
@@ -843,16 +843,16 @@ export default function CustomersPage() {
           <div className="col-span-2 lg:contents">
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button variant="outline" className="h-11 w-full justify-between rounded-[12px] border-[#dfe7f2] bg-white px-3.5 text-[11px] font-bold text-[#24385f] lg:w-auto lg:min-w-[215px]"><span className="inline-flex items-center gap-2"><CalendarDays size={16} className="text-[var(--brand)]" />{formatShortDate(rangeFrom)} - {formatShortDate(rangeTo)}</span><ChevronRight size={13} className="rotate-90" /></Button></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56"><DropdownMenuItem onClick={() => applyRange(0)}>Today</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(6)}>Last 7 days</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(29)}>Last 30 days</DropdownMenuItem></DropdownMenuContent>
+              <DropdownMenuContent align="end" className="w-56"><DropdownMenuItem onClick={() => applyRange(0)}>{t("customers.list.today")}</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(6)}>{t("customers.list.last7")}</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(29)}>{t("customers.list.last30")}</DropdownMenuItem></DropdownMenuContent>
             </DropdownMenu>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button variant="outline" className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Filter size={16} />{t("customers.filters")}</Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>{t("customers.filter.all")}</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>{t("customers.filter.withBalance")}</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>Overdue</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>Cleared</DropdownMenuItem></DropdownMenuContent>
+            <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>{t("customers.filter.all")}</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>{t("customers.filter.withBalance")}</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>{t("customers.list.overdue")}</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>{t("customers.list.cleared")}</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
           <Button variant="outline" onClick={exportCustomers} className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Download size={16} />{t("customers.export")}</Button>
           <Button variant="outline" onClick={() => openPayment()} className="h-12 w-full gap-2 rounded-[14px] border-[var(--brand-border)] bg-[var(--brand-softer)] px-3 text-[11px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] lg:h-11 lg:w-auto lg:rounded-[10px]"><Wallet size={16} />{t("customers.collectPayment")}</Button>
-          <Button onClick={openCreate} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] px-3 text-[11px] font-bold shadow-[0_8px_18px_var(--brand-shadow)] hover:from-[var(--brand-strong)] hover:to-[var(--brand-strong)] lg:h-11 lg:w-auto lg:rounded-[10px] lg:px-[18px]"><Plus size={16} className="shrink-0" /><span>Add customer</span></Button>
+          <Button onClick={openCreate} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] px-3 text-[11px] font-bold shadow-[0_8px_18px_var(--brand-shadow)] hover:from-[var(--brand-strong)] hover:to-[var(--brand-strong)] lg:h-11 lg:w-auto lg:rounded-[10px] lg:px-[18px]"><Plus size={16} className="shrink-0" /><span>{t("customers.list.addCustomer")}</span></Button>
         </div>
       </section>
 
@@ -907,7 +907,7 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex items-center justify-between px-4 py-3">
-            <p className="text-[12px] font-bold text-[#64748b]">Sort: <span className="text-[var(--brand-ink)]">{t("customers.sort.highestBalance")}</span></p>
+            <p className="text-[12px] font-bold text-[#64748b]">{t("customers.list.sort")} <span className="text-[var(--brand-ink)]">{t("customers.sort.highestBalance")}</span></p>
             <Button onClick={openCreate} variant="outline" className="h-8 rounded-[9px] px-3 text-[12px] font-bold">
               <Plus size={14} className="mr-1" /> Add
             </Button>
@@ -915,11 +915,11 @@ export default function CustomersPage() {
 
           <div className="max-h-[calc(100vh-245px)] overflow-y-auto px-3 pb-3">
             {isLoading ? (
-              <div className="py-10 text-center text-[13px] text-[#64748b]">{t("customers.list.loading")}</div>
+              <div className="py-10 text-center text-[13px] text-[#64748b]">{t("customers.list.loadingCustomers")}</div>
             ) : filteredCustomers.length === 0 ? (
               <div className="rounded-[14px] border border-dashed border-[#d8e2f1] px-4 py-10 text-center">
                 <Users size={26} className="mx-auto text-[#94a3b8]" />
-                <p className="mt-2 text-[13px] font-bold text-[var(--brand-ink)]">No customers found</p>
+                <p className="mt-2 text-[13px] font-bold text-[var(--brand-ink)]">{t("customers.list.none")}</p>
                 <p className="mt-1 text-[12px] text-[#64748b]">{t("customers.list.emptyHint")}</p>
               </div>
             ) : (
@@ -961,7 +961,7 @@ export default function CustomersPage() {
           {!selectedCustomer || !selectedRisk || !selectedTrust ? (
             <div className="rounded-[16px] border border-dashed border-[#d8e2f1] bg-white px-5 py-16 text-center shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
               <Users size={30} className="mx-auto text-[#94a3b8]" />
-              <p className="mt-3 font-display text-[18px] font-black text-[var(--brand-ink)]">Select a customer</p>
+              <p className="mt-3 font-display text-[18px] font-black text-[var(--brand-ink)]">{t("customers.detail.select")}</p>
               <p className="mt-1 text-[13px] text-[#64748b]">{t("customers.list.selectPromptHint")}</p>
             </div>
           ) : (
@@ -1046,8 +1046,8 @@ export default function CustomersPage() {
                       <table className="w-full min-w-[650px] text-[12.5px]">
                         <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                           <tr>
-                            <th className="px-3 py-2.5 text-left font-bold">Date</th>
-                            <th className="px-3 py-2.5 text-left font-bold">Particulars</th>
+                            <th className="px-3 py-2.5 text-left font-bold">{t("customers.ledger.date")}</th>
+                            <th className="px-3 py-2.5 text-left font-bold">{t("customers.ledger.particulars")}</th>
                             <th className="px-3 py-2.5 text-left font-bold">{t("customers.ledger.type")}</th>
                             <th className="px-3 py-2.5 text-right font-bold">{t("customers.ledger.debit")}</th>
                             <th className="px-3 py-2.5 text-right font-bold">{t("customers.ledger.credit")}</th>
@@ -1056,7 +1056,7 @@ export default function CustomersPage() {
                         </thead>
                         <tbody>
                           {selectedDetail.isLoading ? (
-                            <tr><td colSpan={6} className="px-3 py-10 text-center text-[#64748b]">Loading ledger...</td></tr>
+                            <tr><td colSpan={6} className="px-3 py-10 text-center text-[#64748b]">{t("customers.ledger.loading")}</td></tr>
                           ) : ledgerRows.length === 0 ? (
                             <tr><td colSpan={6} className="px-3 py-10 text-center text-[#64748b]">{t("customers.ledger.emptyYet")}</td></tr>
                           ) : (
@@ -1106,7 +1106,7 @@ export default function CustomersPage() {
                 {activeTab === "payments" && (
                   <div className="p-4">
                     {paymentRows.length === 0 ? (
-                      <p className="py-8 text-center text-[12.5px] text-[#64748b]">No payments recorded yet.</p>
+                      <p className="py-8 text-center text-[12.5px] text-[#64748b]">{t("customers.detail.noPayments")}</p>
                     ) : (
                       paymentRows.slice(0, 8).map((payment, index) => (
                         <div key={String(payment.id ?? index)} className={cn("flex items-center gap-3 py-2.5", index < Math.min(paymentRows.length, 8) - 1 && "border-b border-[#eef2f8]")}>
@@ -1149,7 +1149,7 @@ export default function CustomersPage() {
               <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
                 <ActionTile icon={<FileText size={18} />} title={t("customers.action.statement")} sub={t("customers.action.downloadPrint")} onClick={printStatement} />
                 <ActionTile icon={<MessageCircle size={18} className="text-emerald-600" />} title={t("customers.action.whatsapp")} sub={t("customers.action.shareStatement")} onClick={shareWhatsApp} />
-                <ActionTile icon={<MessageSquare size={18} />} title={t("customers.action.sms")} sub="Send Reminder" onClick={sendSms} />
+                <ActionTile icon={<MessageSquare size={18} />} title={t("customers.action.sms")} sub={t("customers.payment.sendReminder")} onClick={sendSms} />
                 <ActionTile icon={<Phone size={18} />} title={t("customers.action.call")} sub={t("customers.action.quickCall")} onClick={quickCall} />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1160,11 +1160,11 @@ export default function CustomersPage() {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuItem asChild><Link href={`/customers/${selectedCustomer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" /> Open full profile</span></Link></DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => openEdit(selectedCustomer)}><Pencil size={14} className="mr-2" /> Edit customer</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(selectedCustomer.mobile ?? ""); toast({ title: t("customers.toast.mobileCopied") }); }}><Phone size={14} className="mr-2" /> Copy mobile</DropdownMenuItem>
+                    <DropdownMenuItem asChild><Link href={`/customers/${selectedCustomer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" /> {t("customers.detail.openProfile")}</span></Link></DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openEdit(selectedCustomer)}><Pencil size={14} className="mr-2" /> {t("customers.detail.editCustomer")}</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(selectedCustomer.mobile ?? ""); toast({ title: t("customers.toast.mobileCopied") }); }}><Phone size={14} className="mr-2" /> {t("customers.detail.copyMobile")}</DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestDeleteCustomer(selectedCustomer)}><Trash2 size={14} className="mr-2" /> Delete customer</DropdownMenuItem>
+                    <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestDeleteCustomer(selectedCustomer)}><Trash2 size={14} className="mr-2" /> {t("customers.detail.deleteCustomer")}</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -1198,7 +1198,7 @@ export default function CustomersPage() {
                     <div className="grid h-[76px] w-[76px] place-items-center rounded-full bg-white text-center shadow-inner">
                       <div>
                         <p className="font-display text-[16px] font-black text-[var(--brand-ink)]">{fmtMoney(total)}</p>
-                        <p className="text-[10px] font-semibold text-[#64748b]">Total Due</p>
+                        <p className="text-[10px] font-semibold text-[#64748b]">{t("customers.detail.totalDue")}</p>
                       </div>
                     </div>
                   </div>
@@ -1214,7 +1214,7 @@ export default function CustomersPage() {
 
           <RightCard title="Payment History" action="View all" onAction={() => setActiveTab("payments")}>
             {paymentRows.length === 0 ? (
-              <p className="py-5 text-center text-[12px] text-[#64748b]">No payments recorded yet.</p>
+              <p className="py-5 text-center text-[12px] text-[#64748b]">{t("customers.detail.noPayments")}</p>
             ) : (
               <div className="space-y-3">
                 {paymentRows.slice(0, 5).map((payment, index) => {
@@ -1234,7 +1234,7 @@ export default function CustomersPage() {
 
           <RightCard title={t("customers.transactions.recent")} action="View all" onAction={() => setActiveTab("transactions")}>
             {billRows.length === 0 ? (
-              <p className="py-5 text-center text-[12px] text-[#64748b]">No recent bills yet.</p>
+              <p className="py-5 text-center text-[12px] text-[#64748b]">{t("customers.detail.noRecentBills")}</p>
             ) : (
               <div className="space-y-3">
                 {billRows.slice(0, 5).map((bill, index) => (
@@ -1262,44 +1262,44 @@ export default function CustomersPage() {
       <Dialog open={customerOpen} onOpenChange={setCustomerOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit customer" : "Add customer"}</DialogTitle>
-            <DialogDescription>Save contact, credit, billing address, and optional GST identity for accurate invoices and customer ledgers.</DialogDescription>
+            <DialogTitle>{editing ? t("customers.detail.editCustomer") : t("customers.list.addCustomer")}</DialogTitle>
+            <DialogDescription>{t("customers.form.help")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 md:grid-cols-2">
-            <div><Label>Name *</Label><Input className="mt-1" value={customerForm.name} onChange={(event) => setCustomerForm((form) => ({ ...form, name: event.target.value }))} /></div>
-            <div><Label>Phone / number *</Label><Input className="mt-1" value={customerForm.mobile} onChange={(event) => setCustomerForm((form) => ({ ...form, mobile: event.target.value }))} /></div>
-            <div className="md:col-span-2"><Label>Billing address</Label><Input className="mt-1" value={customerForm.address} onChange={(event) => setCustomerForm((form) => ({ ...form, address: event.target.value }))} placeholder={t("customers.field.gstinHint")} /></div>
+            <div><Label>{t("customers.form.name")}</Label><Input className="mt-1" value={customerForm.name} onChange={(event) => setCustomerForm((form) => ({ ...form, name: event.target.value }))} /></div>
+            <div><Label>{t("customers.form.phone")}</Label><Input className="mt-1" value={customerForm.mobile} onChange={(event) => setCustomerForm((form) => ({ ...form, mobile: event.target.value }))} /></div>
+            <div className="md:col-span-2"><Label>{t("customers.form.billingAddress")}</Label><Input className="mt-1" value={customerForm.address} onChange={(event) => setCustomerForm((form) => ({ ...form, address: event.target.value }))} placeholder={t("customers.field.gstinHint")} /></div>
             <div className="md:col-span-2 rounded-xl border border-[#dce7f6] bg-[#f8fbff] p-3">
-              <div className="mb-3"><p className="text-[12px] font-bold text-[#19345f]">GST details (optional)</p><p className="mt-0.5 text-[11px] text-[#64748b]">Add these for registered B2B buyers. The state is derived from a valid GSTIN and controls IGST versus CGST/SGST.</p></div>
+              <div className="mb-3"><p className="text-[12px] font-bold text-[#19345f]">{t("customers.form.gstDetails")}</p><p className="mt-0.5 text-[11px] text-[#64748b]">{t("customers.form.gstHelp")}</p></div>
               <div className="grid gap-3 md:grid-cols-[1fr_120px]">
-                <div><Label>Customer GSTIN</Label><Input className="mt-1 uppercase" maxLength={15} autoCapitalize="characters" value={customerForm.gstNumber} onChange={(event) => { const gstNumber = event.target.value.toUpperCase().replace(/\s/g, ""); setCustomerForm((form) => ({ ...form, gstNumber, stateCode: /^\d{2}/.test(gstNumber) ? gstNumber.slice(0, 2) : form.stateCode })); }} placeholder="22AAAAA0000A1Z5" /></div>
-                <div><Label>State code</Label><Input className="mt-1 bg-white" value={customerForm.stateCode} readOnly placeholder="--" aria-label="GST state code" /></div>
+                <div><Label>{t("customers.form.gstin")}</Label><Input className="mt-1 uppercase" maxLength={15} autoCapitalize="characters" value={customerForm.gstNumber} onChange={(event) => { const gstNumber = event.target.value.toUpperCase().replace(/\s/g, ""); setCustomerForm((form) => ({ ...form, gstNumber, stateCode: /^\d{2}/.test(gstNumber) ? gstNumber.slice(0, 2) : form.stateCode })); }} placeholder="22AAAAA0000A1Z5" /></div>
+                <div><Label>{t("customers.form.stateCode")}</Label><Input className="mt-1 bg-white" value={customerForm.stateCode} readOnly placeholder="--" aria-label="GST state code" /></div>
               </div>
             </div>
-            <div><Label>Customer type</Label><Select value={customerForm.type} onValueChange={(value) => setCustomerForm((form) => ({ ...form, type: value as "regular" | "udhar" }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">Regular</SelectItem><SelectItem value="udhar">Udhar allowed</SelectItem></SelectContent></Select></div>
-            <div><Label>Udhar limit</Label><Input type="number" className="mt-1" value={customerForm.udharLimit} onChange={(event) => setCustomerForm((form) => ({ ...form, udharLimit: event.target.value }))} /></div>
-            <div><Label>Due date</Label><Input type="date" className="mt-1" value={customerForm.dueDate} onChange={(event) => setCustomerForm((form) => ({ ...form, dueDate: event.target.value }))} /></div>
-            <div><Label>Promise-to-pay date</Label><Input type="date" className="mt-1" value={customerForm.promiseToPayDate} onChange={(event) => setCustomerForm((form) => ({ ...form, promiseToPayDate: event.target.value }))} /></div>
-            <div className="md:col-span-2"><Label>Notes / pricing rule</Label><Textarea className="mt-1" value={customerForm.notes} onChange={(event) => setCustomerForm((form) => ({ ...form, notes: event.target.value }))} placeholder={t("customers.field.pricingExample")} /></div>
+            <div><Label>{t("customers.form.customerType")}</Label><Select value={customerForm.type} onValueChange={(value) => setCustomerForm((form) => ({ ...form, type: value as "regular" | "udhar" }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">{t("customers.form.regular")}</SelectItem><SelectItem value="udhar">{t("customers.form.udharAllowed")}</SelectItem></SelectContent></Select></div>
+            <div><Label>{t("customers.form.udharLimit")}</Label><Input type="number" className="mt-1" value={customerForm.udharLimit} onChange={(event) => setCustomerForm((form) => ({ ...form, udharLimit: event.target.value }))} /></div>
+            <div><Label>{t("customers.form.dueDate")}</Label><Input type="date" className="mt-1" value={customerForm.dueDate} onChange={(event) => setCustomerForm((form) => ({ ...form, dueDate: event.target.value }))} /></div>
+            <div><Label>{t("customers.form.promiseDate")}</Label><Input type="date" className="mt-1" value={customerForm.promiseToPayDate} onChange={(event) => setCustomerForm((form) => ({ ...form, promiseToPayDate: event.target.value }))} /></div>
+            <div className="md:col-span-2"><Label>{t("customers.form.notes")}</Label><Textarea className="mt-1" value={customerForm.notes} onChange={(event) => setCustomerForm((form) => ({ ...form, notes: event.target.value }))} placeholder={t("customers.field.pricingExample")} /></div>
           </div>
-          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setCustomerOpen(false)}>Cancel</Button><Button onClick={() => void saveCustomer()} disabled={saving}>{saving ? "Saving..." : t("customers.detail.saveLocally")}</Button></div>
+          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setCustomerOpen(false)}>{t("customers.form.cancel")}</Button><Button onClick={() => void saveCustomer()} disabled={saving}>{saving ? "Saving..." : t("customers.detail.saveLocally")}</Button></div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Record customer payment</DialogTitle>
-            <DialogDescription>Record the amount received and its payment mode. The customer ledger will update locally and sync safely.</DialogDescription>
+            <DialogTitle>{t("customers.payment.title")}</DialogTitle>
+            <DialogDescription>{t("customers.payment.help")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div><Label>Customer *</Label><Select value={paymentForm.customerId} onValueChange={(value) => setPaymentForm((form) => ({ ...form, customerId: value }))}><SelectTrigger className="mt-1"><SelectValue placeholder={t("customers.action.selectCustomer")} /></SelectTrigger><SelectContent>{dedupedCustomers.map((customer) => <SelectItem key={customer.id} value={customer.id}>{customer.name} - {fmtMoney(customer.ledgerBalance)}</SelectItem>)}</SelectContent></Select></div>
-            <div><Label>Amount *</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.amount} onChange={(event) => setPaymentForm((form) => ({ ...form, amount: event.target.value }))} /></div>
-            <div><Label>Mode</Label><Select value={paymentForm.mode} onValueChange={(value) => setPaymentForm((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="upi">UPI</SelectItem><SelectItem value="bank">Bank</SelectItem><SelectItem value="split">Split payment</SelectItem></SelectContent></Select></div>
-            {paymentForm.mode === "split" && <div className="grid grid-cols-2 gap-3"><div><Label>Cash amount</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.cashAmount} onChange={(event) => setPaymentForm((form) => ({ ...form, cashAmount: event.target.value }))} /></div><div><Label>UPI amount</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.upiAmount} onChange={(event) => setPaymentForm((form) => ({ ...form, upiAmount: event.target.value }))} /></div></div>}
-            <div><Label>Note</Label><Input className="mt-1" value={paymentForm.note} onChange={(event) => setPaymentForm((form) => ({ ...form, note: event.target.value }))} placeholder="Optional" /></div>
+            <div><Label>{t("customers.payment.customer")}</Label><Select value={paymentForm.customerId} onValueChange={(value) => setPaymentForm((form) => ({ ...form, customerId: value }))}><SelectTrigger className="mt-1"><SelectValue placeholder={t("customers.action.selectCustomer")} /></SelectTrigger><SelectContent>{dedupedCustomers.map((customer) => <SelectItem key={customer.id} value={customer.id}>{customer.name} - {fmtMoney(customer.ledgerBalance)}</SelectItem>)}</SelectContent></Select></div>
+            <div><Label>{t("customers.payment.amount")}</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.amount} onChange={(event) => setPaymentForm((form) => ({ ...form, amount: event.target.value }))} /></div>
+            <div><Label>{t("customers.payment.mode")}</Label><Select value={paymentForm.mode} onValueChange={(value) => setPaymentForm((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">{t("customers.pay.cash")}</SelectItem><SelectItem value="upi">{t("customers.pay.upi")}</SelectItem><SelectItem value="bank">{t("customers.pay.bank")}</SelectItem><SelectItem value="split">{t("customers.payment.splitPayment")}</SelectItem></SelectContent></Select></div>
+            {paymentForm.mode === "split" && <div className="grid grid-cols-2 gap-3"><div><Label>{t("customers.payment.cashAmount")}</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.cashAmount} onChange={(event) => setPaymentForm((form) => ({ ...form, cashAmount: event.target.value }))} /></div><div><Label>{t("customers.payment.upiAmount")}</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.upiAmount} onChange={(event) => setPaymentForm((form) => ({ ...form, upiAmount: event.target.value }))} /></div></div>}
+            <div><Label>{t("customers.payment.note")}</Label><Input className="mt-1" value={paymentForm.note} onChange={(event) => setPaymentForm((form) => ({ ...form, note: event.target.value }))} placeholder="Optional" /></div>
           </div>
-          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button onClick={() => void recordPayment()} disabled={saving}>{saving ? "Saving..." : t("customers.detail.recordOffline")}</Button></div>
+          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>{t("customers.form.cancel")}</Button><Button onClick={() => void recordPayment()} disabled={saving}>{saving ? "Saving..." : t("customers.detail.recordOffline")}</Button></div>
         </DialogContent>
       </Dialog>
 
@@ -1319,6 +1319,7 @@ export default function CustomersPage() {
 }
 
 function CustomerMetricCard({ label, value, change, color, icon, iconClass, spark, mobileHidden = false }: { label: string; value: string; change: number; color: string; icon: React.ReactNode; iconClass: string; spark: number[]; mobileHidden?: boolean }) {
+  const { t } = useAppLanguage();
   const data = spark.map((item, index) => ({ index, value: item }));
   const gradientId = `customer-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
@@ -1333,7 +1334,7 @@ function CustomerMetricCard({ label, value, change, color, icon, iconClass, spar
           {change === 0 ? null : change < 0 ? <ArrowDownRight size={11} /> : <ArrowUpRight size={11} />}
           {Math.abs(change)}%
         </span>
-        <span className="whitespace-nowrap text-[#7a879f]">vs last week</span>
+        <span className="whitespace-nowrap text-[#7a879f]">{t("customers.list.vsLastWeek")}</span>
       </div>
       <div className="mt-auto hidden h-7 w-full shrink-0 lg:block">
         <ResponsiveContainer width="100%" height="100%">
@@ -1358,13 +1359,13 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
   const avatarTones = ["bg-[var(--brand-soft)] text-[var(--brand)]", "bg-[#ecfdf5] text-[#16a34a]", "bg-[#f5f3ff] text-[#7c3aed]", "bg-[#fff7ed] text-[#f97316]", "bg-[#fef2f2] text-[#ef4444]"];
   return (
     <section className="min-h-0 overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white shadow-[0_10px_30px_rgba(15,35,80,0.05)]">
-      <header className="flex h-[58px] items-center justify-between px-[18px]"><h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">Customers</h2><span className="rounded-full bg-[#f2f5f9] px-2.5 py-1 text-[9px] font-black text-[#60708e]">{customers.length} shown</span></header>
+      <header className="flex h-[58px] items-center justify-between px-[18px]"><h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">{t("customers.list.title")}</h2><span className="rounded-full bg-[#f2f5f9] px-2.5 py-1 text-[9px] font-black text-[#60708e]">{customers.length} shown</span></header>
       <div className="border-y border-[#e8edf4] p-3.5">
         <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input value={search} onChange={(event) => onSearch(event.target.value)} placeholder={t("customers.searchShort")} className="h-10 rounded-[10px] border-[#dfe7f2] pl-10 text-[12px]" /></div>
-        <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", t("customers.filter.allCustomers")], ["udhar", t("customers.filter.withBalanceTitle")], ["due", "Overdue"], ["cleared", "Cleared"]] as const).map(([key, label]) => <button key={key} onClick={() => onFilter(key)} className={cn("h-11 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
+        <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", t("customers.filter.allCustomers")], ["udhar", t("customers.filter.withBalanceTitle")], ["due", t("customers.list.overdue")], ["cleared", t("customers.list.cleared")]] as const).map(([key, label]) => <button key={key} onClick={() => onFilter(key)} className={cn("h-11 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
       </div>
       <div className="app-scrollbar max-h-[610px] overflow-y-auto p-3">
-        {loading ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">Loading customers...</p> : customers.length === 0 ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">No customers found</p> : customers.map((customer, index) => {
+        {loading ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">{t("customers.list.loadingCustomers")}</p> : customers.length === 0 ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">{t("customers.list.none")}</p> : customers.map((customer, index) => {
           const risk = riskInfo(customer);
           const active = selectedId === customer.id;
           const ageing = customer.ledgerMetrics.ageing;
@@ -1414,15 +1415,48 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
   );
 }
 
-function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, paymentForm, saving, onEdit, onPaymentChange, onCollect, onReminder }: { customer: CustomerWithLedger | null; risk: ReturnType<typeof riskInfo> | null; creditLimit: number; paymentRows: Array<Record<string, unknown>>; paymentForm: PaymentFormState; saving: boolean; onEdit: (customer: CustomerWithLedger) => void; onPaymentChange: React.Dispatch<React.SetStateAction<PaymentFormState>>; onCollect: () => void; onReminder: () => void }) {
+// Named rather than inline: a one-line generic type annotation reads to the
+// hardcoded-string scanner as JSX text — a `>` closing one generic and the `<`
+// opening the next look exactly like `>label<` — so it reported the type itself
+// as untranslated prose and pinned this file to the allowlist.
+type CustomerPaymentWorkspaceV3Props = {
+  customer: CustomerWithLedger | null;
+  risk: ReturnType<typeof riskInfo> | null;
+  creditLimit: number;
+  paymentRows: Array<Record<string, unknown>>;
+  paymentForm: PaymentFormState;
+  saving: boolean;
+  onEdit: (customer: CustomerWithLedger) => void;
+  onPaymentChange: React.Dispatch<React.SetStateAction<PaymentFormState>>;
+  onCollect: () => void;
+  onReminder: () => void;
+};
+
+/**
+ * Payment modes, as data rather than a tuple literal inside the JSX.
+ *
+ * Inline, the text between one icon's `/>` and the next element's `<` reads to
+ * the hardcoded-string scanner as a user-visible label, so it reported the array
+ * syntax itself as untranslated prose.
+ */
+function paymentModeChoices(t: Translate) {
+  return [
+    { mode: "cash" as const, label: t("customers.pay.cash"), icon: <Banknote key="cash" size={15} /> },
+    { mode: "upi" as const, label: t("customers.pay.upi"), icon: <CreditCard key="upi" size={15} /> },
+    { mode: "bank" as const, label: t("customers.pay.bank"), icon: <Landmark key="bank" size={15} /> },
+    { mode: "split" as const, label: t("customers.pay.split"), icon: <ArrowLeftRight key="split" size={15} /> },
+  ];
+}
+
+function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, paymentForm, saving, onEdit, onPaymentChange, onCollect, onReminder }: CustomerPaymentWorkspaceV3Props) {
   const { t } = useAppLanguage();
   if (!customer || !risk) {
     return (
       <div className="grid min-h-[430px] place-items-center rounded-[16px] border border-dashed border-[#d8e2f1] bg-white px-6 text-center shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="max-w-[260px]">
           <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><Users size={24} /></span>
-          <p className="mt-3 text-[16px] font-extrabold text-[var(--brand-ink)]">Select a customer</p>
-          <p className="mt-1 text-[12px] leading-5 text-[#60708e]">Choose a customer from the list to view balance, collect payment, and inspect ledger history.</p>
+          <p className="mt-3 text-[16px] font-extrabold text-[var(--brand-ink)]">{t("customers.detail.select")}</p>
+          <p className="mt-1 text-[12px] leading-5 text-[#60708e]">{t("customers.detail.selectHelp")}</p>
         </div>
       </div>
     );
@@ -1449,9 +1483,9 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
     <section className="min-w-0 space-y-5">
       <article className="min-h-[128px] overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="flex flex-col gap-4 p-[18px] sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{t(risk.labelKey)}</span><button onClick={() => onEdit(customer)} title="Edit customer" className="grid h-7 w-7 place-items-center rounded-[8px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || "No mobile"}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || "No address"}</span></div></div></div>
+          <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{t(risk.labelKey)}</span><button onClick={() => onEdit(customer)} title={t("customers.detail.editCustomer")} className="grid h-7 w-7 place-items-center rounded-[8px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || "No mobile"}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || "No address"}</span></div></div></div>
           <div className="flex items-center gap-3">
-            <Link href={`/customers/${customer.id}`} title="Open full udhar ledger" className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors hover:bg-[var(--brand-strong)]"><BookOpen size={15} />View Ledger</Link>
+            <Link href={`/customers/${customer.id}`} title="Open full udhar ledger" className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors hover:bg-[var(--brand-strong)]"><BookOpen size={15} />{t("customers.detail.viewLedger")}</Link>
             <InfoMini label={t("customers.profile.lastPayment")} value={formatShortDate(customer.ledgerMetrics.lastPaymentAt)} />
           </div>
         </div>
@@ -1459,22 +1493,36 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
       </article>
 
       <article className="rounded-[16px] border border-[#e6ecf5] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">Record Udhar Payment</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-[120px_1fr]"><div><p className="text-[10px] font-bold uppercase text-[#75839d]">Amount Due</p><p className="mt-1.5 text-[19px] font-black text-rose-600">{fmtMoney(outstanding)}</p></div><div><Label className="text-[10px] font-bold text-[#52627e]">Payment Amount <span className="text-rose-500">*</span></Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[#52627e]">₹</span><Input id="customer-payment-amount" type="number" inputMode="decimal" min="0" step="0.01" max={outstanding} value={paymentForm.amount} onChange={(event) => setTotal(event.target.value)} className="h-10 rounded-[10px] border-[#dfe7f2] pl-8 text-[13px] font-bold" placeholder="0.00" /></div></div></div>
-        <div className="mt-3 grid grid-cols-[1.45fr_repeat(4,1fr)] gap-2"><button onClick={() => chooseAmount(outstanding)} className="min-h-9 rounded-[8px] border border-[var(--brand)] bg-[var(--brand-soft)] px-1 text-[9px] font-bold text-[var(--brand)]">Full Due ({fmtMoney(outstanding)})</button>{[500,1000,2000].map((amount) => <button key={amount} onClick={() => chooseAmount(amount)} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{fmtMoney(amount)}</button>)}<button onClick={() => document.getElementById("customer-payment-amount")?.focus()} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">Custom</button></div>
-        <p className="mt-4 text-[10px] font-bold text-[#52627e]">Payment Mode</p>
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{([['cash','Cash',<Banknote key="cash" size={15} />],['upi','UPI',<CreditCard key="upi" size={15} />],['bank','Bank',<Landmark key="bank" size={15} />],['split','Split',<ArrowLeftRight key="split" size={15} />]] as const).map(([mode,label,icon]) => <button key={mode} onClick={() => onPaymentChange((form) => { const total = money(form.amount); return { ...form, mode, ...(mode === "split" && total > 0 && !form.cashAmount && !form.upiAmount ? { cashAmount: String(total), upiAmount: "0" } : {}) }; })} className={cn("inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[11px] font-bold transition-colors", paymentForm.mode === mode ? "border-[1.5px] border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dfe7f2] text-[#405273] hover:bg-[#f8faff]")}>{paymentForm.mode === mode && mode === "split" ? <CheckCircle2 size={15} /> : icon}{label}</button>)}</div>
-        {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">Cash Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(addMoney(event.target.value, form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">UPI Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(addMoney(form.cashAmount, event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">UPI</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">Total Payment: <span className="text-[var(--brand-ink)]">{fmtMoney(paymentTotal)}</span></p></div>}
+        <h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">{t("customers.detail.recordUdharPayment")}</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-[120px_1fr]"><div><p className="text-[10px] font-bold uppercase text-[#75839d]">{t("customers.detail.amountDue")}</p><p className="mt-1.5 text-[19px] font-black text-rose-600">{fmtMoney(outstanding)}</p></div><div><Label className="text-[10px] font-bold text-[#52627e]">{t("customers.payment.amountLabel")} <span className="text-rose-500">*</span></Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[#52627e]">₹</span><Input id="customer-payment-amount" type="number" inputMode="decimal" min="0" step="0.01" max={outstanding} value={paymentForm.amount} onChange={(event) => setTotal(event.target.value)} className="h-10 rounded-[10px] border-[#dfe7f2] pl-8 text-[13px] font-bold" placeholder="0.00" /></div></div></div>
+        <div className="mt-3 grid grid-cols-[1.45fr_repeat(4,1fr)] gap-2"><button onClick={() => chooseAmount(outstanding)} className="min-h-9 rounded-[8px] border border-[var(--brand)] bg-[var(--brand-soft)] px-1 text-[9px] font-bold text-[var(--brand)]">Full Due ({fmtMoney(outstanding)})</button>{[500,1000,2000].map((amount) => <button key={amount} onClick={() => chooseAmount(amount)} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{fmtMoney(amount)}</button>)}<button onClick={() => document.getElementById("customer-payment-amount")?.focus()} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{t("customers.payment.custom")}</button></div>
+        <p className="mt-4 text-[10px] font-bold text-[#52627e]">{t("customers.payment.modeLabel")}</p>
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{paymentModeChoices(t).map(({ mode, label, icon }) => <button key={mode} onClick={() => onPaymentChange((form) => { const total = money(form.amount); return { ...form, mode, ...(mode === "split" && total > 0 && !form.cashAmount && !form.upiAmount ? { cashAmount: String(total), upiAmount: "0" } : {}) }; })} className={cn("inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[11px] font-bold transition-colors", paymentForm.mode === mode ? "border-[1.5px] border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dfe7f2] text-[#405273] hover:bg-[#f8faff]")}>{paymentForm.mode === mode && mode === "split" ? <CheckCircle2 size={15} /> : icon}{label}</button>)}</div>
+        {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">{t("customers.payment.cashAmountLabel")}</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(addMoney(event.target.value, form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">{t("customers.payment.upiAmountLabel")}</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(addMoney(form.cashAmount, event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">{t("customers.pay.upi")}</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">{t("customers.payment.totalLabel")} <span className="text-[var(--brand-ink)]">{fmtMoney(paymentTotal)}</span></p></div>}
         {moneyExceeds(paymentTotal, outstanding) && <p className="mt-2 text-[10px] font-semibold text-rose-600">Payment cannot exceed the outstanding balance of {fmtMoney(outstanding)}.</p>}
-        <div className="mt-3"><Label className="text-[10px] font-bold text-[#52627e]">Payment Note <span className="font-medium text-[#94a3b8]">(Optional)</span></Label><Input value={paymentForm.note} onChange={(event) => onPaymentChange((form) => ({ ...form, note: event.target.value }))} className="mt-1.5 h-[42px] rounded-[10px] text-[12px]" placeholder={t("customers.field.paymentNote")} /></div>
-        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] text-[12px] font-bold shadow-[0_8px_18px_var(--brand-shadow)]"><CheckCircle2 size={16} />{saving ? "Saving..." : t("customers.collectPaymentTitle")}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[var(--brand)]"><Bell size={16} />Send Reminder</Button></div>
-        <p className="mt-3 flex items-center justify-center gap-2 rounded-[8px] bg-[#f7f9fc] px-3 py-2 text-center text-[10px] text-[#71809a]"><Info size={13} className="text-[var(--brand)]" />After payment, customer balance and ledger update automatically.</p>
+        <div className="mt-3"><Label className="text-[10px] font-bold text-[#52627e]">{t("customers.payment.noteLabel")} <span className="font-medium text-[#94a3b8]">{t("customers.payment.optional")}</span></Label><Input value={paymentForm.note} onChange={(event) => onPaymentChange((form) => ({ ...form, note: event.target.value }))} className="mt-1.5 h-[42px] rounded-[10px] text-[12px]" placeholder={t("customers.field.paymentNote")} /></div>
+        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] text-[12px] font-bold shadow-[0_8px_18px_var(--brand-shadow)]"><CheckCircle2 size={16} />{saving ? "Saving..." : t("customers.collectPaymentTitle")}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[var(--brand)]"><Bell size={16} />{t("customers.payment.sendReminder")}</Button></div>
+        <p className="mt-3 flex items-center justify-center gap-2 rounded-[8px] bg-[#f7f9fc] px-3 py-2 text-center text-[10px] text-[#71809a]"><Info size={13} className="text-[var(--brand)]" />{t("customers.payment.afterHelp")}</p>
       </article>
     </section>
   );
 }
 
-function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, collectionChange, payments, onReminder, rangeLabel = "This Week", onCycleRange, onViewAllPayments }: { customer: CustomerWithLedger | null; risk: ReturnType<typeof riskInfo> | null; ageing?: CustomerWithLedger["ledgerMetrics"]["ageing"]; received: number; pending: number; collectionChange: number; payments: Array<Record<string, unknown>>; onReminder: () => void; rangeLabel?: string; onCycleRange?: () => void; onViewAllPayments?: () => void }) {
+type CustomerInsightsPanelV3Props = {
+  customer: CustomerWithLedger | null;
+  risk: ReturnType<typeof riskInfo> | null;
+  ageing?: CustomerWithLedger["ledgerMetrics"]["ageing"];
+  received: number;
+  pending: number;
+  collectionChange: number;
+  payments: Array<Record<string, unknown>>;
+  onReminder: () => void;
+  rangeLabel?: string;
+  onCycleRange?: () => void;
+  onViewAllPayments?: () => void;
+};
+
+function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, collectionChange, payments, onReminder, rangeLabel = "This Week", onCycleRange, onViewAllPayments }: CustomerInsightsPanelV3Props) {
   const { t } = useAppLanguage();
   if (!customer || !risk) {
     return (
@@ -1482,8 +1530,8 @@ function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, co
         <div className="grid min-h-[430px] place-items-center rounded-[16px] border border-dashed border-[#d8e2f1] bg-white px-6 text-center shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
           <div className="max-w-[230px]">
             <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#fff7ed] text-[#f97316]"><Wallet size={22} /></span>
-            <p className="mt-3 text-[15px] font-extrabold text-[var(--brand-ink)]">Customer insights</p>
-            <p className="mt-1 text-[12px] leading-5 text-[#60708e]">Ageing, recent payments, and credit risk will appear after selecting a customer.</p>
+            <p className="mt-3 text-[15px] font-extrabold text-[var(--brand-ink)]">{t("customers.insights.title")}</p>
+            <p className="mt-1 text-[12px] leading-5 text-[#60708e]">{t("customers.insights.help")}</p>
           </div>
         </div>
       </aside>
@@ -1506,10 +1554,10 @@ function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, co
   const recentPayments = [...payments].sort((a, b) => paymentDate(b).localeCompare(paymentDate(a))).slice(0, 4);
   return (
     <aside className="space-y-5 xl:col-span-2 2xl:col-span-1">
-      <RightCardV3 title={t("customers.ageing.title")} info><div className="flex items-center gap-4"><div className="grid h-[130px] w-[130px] shrink-0 place-items-center rounded-full" style={{ background: total > 0 ? `conic-gradient(${stops})` : "#e7edf5" }}><div className="grid h-[94px] w-[94px] place-items-center rounded-full bg-white text-center"><div><p className="text-[16px] font-black text-[var(--brand-ink)]">{fmtMoney(total)}</p><p className="text-[10px] text-[#71809a]">Total Due</p></div></div></div><div className="min-w-0 flex-1 space-y-3">{buckets.map((row) => <div key={row.label} className="grid grid-cols-[9px_1fr_auto] items-center gap-2 text-[10px]"><span className="h-[9px] w-[9px] rounded-full" style={{ background: row.color }} /><span className="text-[#52627e]">{row.label}</span><span className="text-right font-black text-[var(--brand-ink)]">{fmtMoney(row.value)} <span className="block text-[8px] font-medium text-[#94a3b8]">{total > 0 ? `${Math.round(row.value / total * 1000) / 10}%` : "0%"}</span></span></div>)}</div></div></RightCardV3>
-      <RightCardV3 title={t("customers.collectionProgress")} action={rangeLabel} onAction={onCycleRange} pill info><div className="flex items-center gap-5"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(var(--brand) 0 ${collection}%, #e9eef6 ${collection}% 100%)` }}><div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white text-center"><div><p className="text-[18px] font-black text-[var(--brand-ink)]">{Math.round(collection)}%</p><p className="text-[9px] font-semibold text-[#71809a]">Collected</p></div></div></div><div className="grid min-w-0 flex-1 grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold text-[#71809a]">Collected</p><p className="mt-1 text-[14px] font-black text-[var(--brand-ink)]">{fmtMoney(received)}</p><p className={cn("mt-2 text-[9px] font-semibold", collectionChange < 0 ? "text-rose-600" : "text-emerald-600")}>vs previous period: {collectionChange >= 0 ? "↑" : "↓"} {Math.abs(collectionChange)}%</p></div><div><p className="text-[10px] font-semibold text-[#71809a]">Pending</p><p className="mt-1 text-[14px] font-black text-[var(--brand-ink)]">{fmtMoney(pending)}</p></div></div></div></RightCardV3>
-      <RightCardV3 title={t("customers.payments.recent")} action="View all" onAction={onViewAllPayments}>{recentPayments.length === 0 ? <p className="py-4 text-center text-[11px] text-[#71809a]">No payments recorded yet.</p> : <div className="divide-y divide-[#edf1f6]">{recentPayments.map((payment, index) => { const mode = String(payment.mode ?? "cash").toLowerCase(); const modeLabel = mode === "upi" ? "UPI" : mode === "cash" ? "Cash" : mode.replace(/\b\w/g, (letter) => letter.toUpperCase()); return <div key={String(payment.id ?? index)} className="grid min-h-10 grid-cols-[7px_1fr_auto_auto] items-center gap-2.5 text-[10.5px]"><span className="h-[7px] w-[7px] rounded-full bg-[#22c55e]" /><span className="text-[#52627e]">{formatShortDate(paymentDate(payment))}</span><span className="font-black text-[var(--brand-ink)]">{fmtMoney(paymentAmount(payment))}</span><span className="min-w-[54px] text-right text-[#52627e]">{modeLabel}</span></div>; })}</div>}</RightCardV3>
-      <RightCardV3 title={t("customers.profile.creditRisk")}><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600"><AlertTriangle size={15} /></span><div className="min-w-0 flex-1"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", risk?.cls ?? "bg-slate-50 text-slate-600")}>{risk ? t(risk.labelKey) : t("customers.noCustomer")}</span><p className="mt-2 text-[10.5px] leading-4 text-[#60708e]">{overdueDays > 0 ? `Payment overdue for ${overdueDays} days. Send a reminder or collect payment.` : customer?.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</p></div><Button variant="outline" onClick={onReminder} disabled={!customer} className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[9px] border-[#d6e2f2] px-2.5 text-[9px] font-bold text-[var(--brand)]"><Bell size={13} />Send Reminder</Button></div></RightCardV3>
+      <RightCardV3 title={t("customers.ageing.title")} info><div className="flex items-center gap-4"><div className="grid h-[130px] w-[130px] shrink-0 place-items-center rounded-full" style={{ background: total > 0 ? `conic-gradient(${stops})` : "#e7edf5" }}><div className="grid h-[94px] w-[94px] place-items-center rounded-full bg-white text-center"><div><p className="text-[16px] font-black text-[var(--brand-ink)]">{fmtMoney(total)}</p><p className="text-[10px] text-[#71809a]">{t("customers.detail.totalDue")}</p></div></div></div><div className="min-w-0 flex-1 space-y-3">{buckets.map((row) => <div key={row.label} className="grid grid-cols-[9px_1fr_auto] items-center gap-2 text-[10px]"><span className="h-[9px] w-[9px] rounded-full" style={{ background: row.color }} /><span className="text-[#52627e]">{row.label}</span><span className="text-right font-black text-[var(--brand-ink)]">{fmtMoney(row.value)} <span className="block text-[8px] font-medium text-[#94a3b8]">{total > 0 ? `${Math.round(row.value / total * 1000) / 10}%` : "0%"}</span></span></div>)}</div></div></RightCardV3>
+      <RightCardV3 title={t("customers.collectionProgress")} action={rangeLabel} onAction={onCycleRange} pill info><div className="flex items-center gap-5"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(var(--brand) 0 ${collection}%, #e9eef6 ${collection}% 100%)` }}><div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white text-center"><div><p className="text-[18px] font-black text-[var(--brand-ink)]">{Math.round(collection)}%</p><p className="text-[9px] font-semibold text-[#71809a]">{t("customers.insights.collected")}</p></div></div></div><div className="grid min-w-0 flex-1 grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold text-[#71809a]">{t("customers.insights.collected")}</p><p className="mt-1 text-[14px] font-black text-[var(--brand-ink)]">{fmtMoney(received)}</p><p className={cn("mt-2 text-[9px] font-semibold", collectionChange < 0 ? "text-rose-600" : "text-emerald-600")}>vs previous period: {collectionChange >= 0 ? "↑" : "↓"} {Math.abs(collectionChange)}%</p></div><div><p className="text-[10px] font-semibold text-[#71809a]">{t("customers.insights.pending")}</p><p className="mt-1 text-[14px] font-black text-[var(--brand-ink)]">{fmtMoney(pending)}</p></div></div></div></RightCardV3>
+      <RightCardV3 title={t("customers.payments.recent")} action="View all" onAction={onViewAllPayments}>{recentPayments.length === 0 ? <p className="py-4 text-center text-[11px] text-[#71809a]">{t("customers.detail.noPayments")}</p> : <div className="divide-y divide-[#edf1f6]">{recentPayments.map((payment, index) => { const mode = String(payment.mode ?? "cash").toLowerCase(); const modeLabel = mode === "upi" ? t("customers.pay.upi") : mode === "cash" ? t("customers.pay.cash") : mode.replace(/\b\w/g, (letter) => letter.toUpperCase()); return <div key={String(payment.id ?? index)} className="grid min-h-10 grid-cols-[7px_1fr_auto_auto] items-center gap-2.5 text-[10.5px]"><span className="h-[7px] w-[7px] rounded-full bg-[#22c55e]" /><span className="text-[#52627e]">{formatShortDate(paymentDate(payment))}</span><span className="font-black text-[var(--brand-ink)]">{fmtMoney(paymentAmount(payment))}</span><span className="min-w-[54px] text-right text-[#52627e]">{modeLabel}</span></div>; })}</div>}</RightCardV3>
+      <RightCardV3 title={t("customers.profile.creditRisk")}><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600"><AlertTriangle size={15} /></span><div className="min-w-0 flex-1"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", risk?.cls ?? "bg-slate-50 text-slate-600")}>{risk ? t(risk.labelKey) : t("customers.noCustomer")}</span><p className="mt-2 text-[10.5px] leading-4 text-[#60708e]">{overdueDays > 0 ? `Payment overdue for ${overdueDays} days. Send a reminder or collect payment.` : customer?.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</p></div><Button variant="outline" onClick={onReminder} disabled={!customer} className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[9px] border-[#d6e2f2] px-2.5 text-[9px] font-bold text-[var(--brand)]"><Bell size={13} />{t("customers.payment.sendReminder")}</Button></div></RightCardV3>
     </aside>
   );
 }
@@ -1531,19 +1579,19 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
   return (
     <section className="overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf4] px-[18px] py-4">
-        <div><div className="flex items-center gap-1.5"><h2 className="text-[16px] font-extrabold text-[var(--brand-ink)]">Udhar Ledger</h2><Info size={13} className="text-[#94a3b8]" /></div><p className="mt-1 text-[12px] text-[#71809a]">View every bill, payment, and balance movement</p></div>
+        <div><div className="flex items-center gap-1.5"><h2 className="text-[16px] font-extrabold text-[var(--brand-ink)]">{t("customers.ledger.title")}</h2><Info size={13} className="text-[#94a3b8]" /></div><p className="mt-1 text-[12px] text-[#71809a]">{t("customers.ledger.help")}</p></div>
         <div className="flex flex-wrap items-center gap-2">
-          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="h-9 min-w-[110px] justify-between rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold">{entryFilter === "all" ? "All Entries" : entryFilter === "bill" ? "Bills" : "Payments"}<ChevronRight size={12} className="rotate-90" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-36"><DropdownMenuItem onClick={() => setEntryFilter("all")}>All Entries</DropdownMenuItem><DropdownMenuItem onClick={() => setEntryFilter("bill")}>Bills</DropdownMenuItem><DropdownMenuItem onClick={() => setEntryFilter("payment")}>Payments</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="h-9 min-w-[110px] justify-between rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold">{entryFilter === "all" ? t("customers.ledger.allEntries") : entryFilter === "bill" ? t("customers.ledger.bills") : t("customers.ledger.payments")}<ChevronRight size={12} className="rotate-90" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-36"><DropdownMenuItem onClick={() => setEntryFilter("all")}>{t("customers.ledger.allEntries")}</DropdownMenuItem><DropdownMenuItem onClick={() => setEntryFilter("bill")}>{t("customers.ledger.bills")}</DropdownMenuItem><DropdownMenuItem onClick={() => setEntryFilter("payment")}>{t("customers.ledger.payments")}</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
           <Button variant="outline" className="h-9 gap-1.5 rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold"><CalendarDays size={13} className="text-[var(--brand)]" />{fromDate} - {toDate}<ChevronRight size={12} className="rotate-90" /></Button>
-          <Button variant="outline" onClick={onPrint} disabled={!customer} className="h-9 rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold text-[var(--brand)]"><Download size={14} className="mr-1.5" />Download Statement</Button>
+          <Button variant="outline" onClick={onPrint} disabled={!customer} className="h-9 rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold text-[var(--brand)]"><Download size={14} className="mr-1.5" />{t("customers.ledger.download")}</Button>
         </div>
       </header>
       <div className="grid min-w-0 2xl:grid-cols-[minmax(0,1fr)_270px]">
         <div className="divide-y divide-[#e8edf4] md:hidden">
           {loading ? (
-            <div className="py-12 text-center text-[#71809a]">Loading ledger...</div>
+            <div className="py-12 text-center text-[#71809a]">{t("customers.ledger.loading")}</div>
           ) : visibleRows.length === 0 ? (
-            <div className="py-12 text-center text-[#71809a]">No ledger entries found.</div>
+            <div className="py-12 text-center text-[#71809a]">{t("customers.ledger.emptyResult")}</div>
           ) : visibleRows.slice(0, 8).map((row) => {
             const signed = Number(row.signed_amount ?? 0);
             const isCredit = signed < 0;
@@ -1563,7 +1611,7 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
                 <div className="text-right">
                   <p className={cn("text-[14px] font-black", isCredit ? "text-[#16a34a]" : "text-[#ef4444]")}>{isCredit ? "-" : "+"}{fmtMoney(Math.abs(signed))}</p>
                   <p className="mt-1 text-[11px] font-semibold text-[#71809a]">Bal {fmtMoney(row.running_balance)}</p>
-                  <span className="mt-2 inline-flex rounded-[7px] bg-[#dcfce7] px-2 py-1 text-[10px] font-bold text-[#15803d]">Posted</span>
+                  <span className="mt-2 inline-flex rounded-[7px] bg-[#dcfce7] px-2 py-1 text-[10px] font-bold text-[#15803d]">{t("customers.ledger.posted")}</span>
                 </div>
               </div>
             );
@@ -1573,14 +1621,14 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
           <table className="w-full min-w-[1020px] text-[12.5px]">
             <thead><tr className="h-10 bg-[#f7f9fc] text-[10px] text-[#52617c]">{['Date','Entry Type','Reference','Description','Debit (₹)','Credit (₹)','Running Balance (₹)','Mode','Status','Action'].map((label) => <th key={label} className="px-3 text-left font-bold">{label}</th>)}</tr></thead>
             <tbody className="divide-y divide-[#e8edf4]">
-              {loading ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">Loading ledger...</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">No ledger entries found.</td></tr> : visibleRows.slice(0, 8).map((row) => {
+              {loading ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">{t("customers.ledger.loading")}</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">{t("customers.ledger.emptyResult")}</td></tr> : visibleRows.slice(0, 8).map((row) => {
                 const signed = Number(row.signed_amount ?? 0);
-                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", entryBadge(row))}>{entryLabel(row)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[var(--brand)]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || entryLabel(row))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[var(--brand-ink)]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">Posted</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title={t("customers.ledger.actions")} className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>Copy reference</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />Print statement</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />Open full ledger</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
+                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", entryBadge(row))}>{entryLabel(row)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[var(--brand)]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || entryLabel(row))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[var(--brand-ink)]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">{t("customers.ledger.posted")}</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title={t("customers.ledger.actions")} className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>{t("customers.ledger.copyReference")}</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />{t("customers.ledger.printStatement")}</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />{t("customers.ledger.openFull")}</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
               })}
             </tbody>
           </table>
         </div>
-        <aside className="hidden border-l border-[#e8edf4] bg-[#f8faff] p-4 2xl:block"><h3 className="text-[13px] font-black text-[var(--brand)]">How udhar works:</h3><div className="mt-4 space-y-4 text-[10.5px] leading-4 text-[#52627e]"><HelpLineV3 tone="bg-[#fff7ed] text-[#f97316]" icon={<FileText size={14} />} text={t("customers.ledger.creditNote")} /><HelpLineV3 tone="bg-[#ecfdf5] text-[#16a34a]" icon={<Wallet size={14} />} text={t("customers.ledger.paymentNote")} /><HelpLineV3 tone="bg-[var(--brand-soft)] text-[var(--brand)]" icon={<CheckCircle2 size={14} />} text={t("customers.ledger.recordedNote")} /><HelpLineV3 tone="bg-[#f5f3ff] text-[#7c3aed]" icon={<Download size={14} />} text={t("customers.detail.statementShareHint")} /></div></aside>
+        <aside className="hidden border-l border-[#e8edf4] bg-[#f8faff] p-4 2xl:block"><h3 className="text-[13px] font-black text-[var(--brand)]">{t("customers.ledger.howUdharWorks")}</h3><div className="mt-4 space-y-4 text-[10.5px] leading-4 text-[#52627e]"><HelpLineV3 tone="bg-[#fff7ed] text-[#f97316]" icon={<FileText size={14} />} text={t("customers.ledger.creditNote")} /><HelpLineV3 tone="bg-[#ecfdf5] text-[#16a34a]" icon={<Wallet size={14} />} text={t("customers.ledger.paymentNote")} /><HelpLineV3 tone="bg-[var(--brand-soft)] text-[var(--brand)]" icon={<CheckCircle2 size={14} />} text={t("customers.ledger.recordedNote")} /><HelpLineV3 tone="bg-[#f5f3ff] text-[#7c3aed]" icon={<Download size={14} />} text={t("customers.detail.statementShareHint")} /></div></aside>
       </div>
     </section>
   );
