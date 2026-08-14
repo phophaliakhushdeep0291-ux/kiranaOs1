@@ -25,8 +25,10 @@ describe("mobile settings accessibility contract", () => {
   });
 
   it("keeps printer preview and queue actions touch-safe through tablet widths", () => {
-    expect(printer).toContain('className="settings-text-action px-2 sm:px-0">Test print');
-    expect(printer).toContain('className="settings-text-action px-2 sm:px-0">Clear queue');
+    // The labels moved into the catalogue; the touch-target class is still bound to
+    // the same two actions by pairing it with the key each button renders.
+    expect(printer).toContain('className="settings-text-action px-2 sm:px-0">{t("settings.printer.testPrint")');
+    expect(printer).toContain('className="settings-text-action px-2 sm:px-0">{t("settings.printer.clearQueue")');
     expect(printer).not.toContain("sm:min-h-0");
   });
 
@@ -39,7 +41,7 @@ describe("mobile settings accessibility contract", () => {
 
   it("makes security refresh, navigation, sign-out, and PIN visibility controls touch-safe", () => {
     expect(security).toContain('className="settings-text-action gap-1"');
-    expect(security).toContain('className="settings-text-action">Refresh');
+    expect(security).toContain('className="settings-text-action">{t("settings.security.refresh")');
     expect(security).toContain("flex min-h-11 items-center justify-center");
     expect(security).toContain('aria-label={show ? "Hide current PIN" : "Show current PIN"}');
     expect(security).toContain("grid h-11 w-11");

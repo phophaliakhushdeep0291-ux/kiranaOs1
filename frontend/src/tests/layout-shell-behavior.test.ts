@@ -148,7 +148,7 @@ describe("desktop app shell behavior", () => {
     const desktop = navHrefs(layout, "const NAV: NavItem[] = [");
     const mobile = [
       ...navHrefs(mobileChrome, "const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = ["),
-      ...navHrefs(mobileChrome, "const TOP_LEVEL_TABS: Array<{ href: string; label: string; Icon: NavIcon; matches: string[] }> = ["),
+      ...navHrefs(mobileChrome, "const TOP_LEVEL_TABS: Array<{ href: string; labelKey: TranslationKey; Icon: NavIcon; matches: string[] }> = ["),
     ];
 
     expect(desktop.length).toBeGreaterThan(20);
@@ -160,8 +160,13 @@ describe("desktop app shell behavior", () => {
     expect(layout).toContain("<MobileBottomNav");
     expect(layout).not.toContain("Legacy mobile topbar");
     expect(layout).not.toContain("Legacy mobile navigation");
-    for (const label of ["Home", "Sell", "Stock", "Customers"]) {
-      expect(mobileChrome).toContain(`label: "${label}"`);
+    // The tab bar names its destinations through the catalogue now. The contract is
+    // the same four stable tabs, so each key is checked on the shell and its English
+    // wording where that wording now lives — a renamed tab still fails this.
+    const shellEn = readFileSync("src/features/core/settings/translations/shell.ts", "utf8");
+    for (const [key, label] of [["home", "Home"], ["sell", "Sell"], ["stock", "Stock"], ["customers", "Customers"]]) {
+      expect(mobileChrome).toContain(`labelKey: "chrome.tab.${key}"`);
+      expect(shellEn).toContain(`"chrome.tab.${key}": "${label}"`);
     }
     expect(mobileChrome).toContain("Open all app areas");
     expect(mobileChrome).toContain("Search products, bills, customers");

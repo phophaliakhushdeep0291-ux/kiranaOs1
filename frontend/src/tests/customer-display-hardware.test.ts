@@ -42,7 +42,12 @@ describe("customer-facing display checkout contract", () => {
 
   it("exposes an explicit capability-gated test in hardware settings", () => {
     const settings = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/settings/pages/PrinterSettingsPage.tsx"), "utf8");
-    expect(settings).toContain("Test display");
+    // The button's label moved into the catalogue when this screen was translated.
+    // What matters is that the test action exists and stays gated on the reported
+    // capability, so the label is checked where it lives and paired with its key.
+    const settingsEn = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/settings/translations/settings-pages.ts"), "utf8");
+    expect(settings).toContain("settings.printer.testDisplay");
+    expect(settingsEn).toContain('"settings.printer.testDisplay": "Test display"');
     expect(settings).toContain("bridgeHealth?.capabilities?.customerDisplay");
     expect(settings).toContain("Customer display updates");
   });
