@@ -125,9 +125,24 @@ describe("desktop app shell behavior", () => {
   });
 
   it("inherits a stable section title on record-detail routes", () => {
-    expect(layout).toContain('loc.startsWith(`${path}/`)');
-    expect(layout).toContain('"/bills": "Billing History"');
-    expect(layout).toContain('"/customers": "Customers / Udhar"');
+    // /bills/:id shows "Billing History", not a title derived from the record id.
+    expect(layout).toContain("path.startsWith(`${candidate}/`)");
+    // Titles are keyed rather than baked, so the top bar is not the one piece of
+    // chrome stuck in English on a Hindi shop; the English wording lives in the
+    // dictionary and is asserted there.
+    expect(layout).toContain('"/bills": "page.title.bills"');
+    expect(layout).toContain('"/customers": "page.title.customers"');
+    const shell = readFileSync("src/features/core/settings/translations/shell.ts", "utf8");
+    expect(shell).toContain('"page.title.bills": "Billing History"');
+    expect(shell).toContain('"page.title.customers": "Customers / Udhar"');
+  });
+
+  it("resolves a longer route before its parent", () => {
+    // "/settings/sync" must not be answered by "/settings", so the map is
+    // ordered longest-first and the lookup takes the first match.
+    const keys = [...layout.matchAll(/^ {2}"(\/[^"]*)": "page\.title\./gm)].map((match) => match[1]);
+    expect(keys.length).toBeGreaterThan(40);
+    expect([...keys]).toEqual([...keys].sort((a, b) => b.length - a.length));
   });
 
   it("keeps mobile bottom navigation in its own row so it cannot cover page actions", () => {

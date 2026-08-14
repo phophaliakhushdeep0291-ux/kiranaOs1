@@ -54,10 +54,12 @@ describe("not-found route keeps the app shell", () => {
     // Without the override, getPageTitle titlecases the last URL segment and the
     // shell announces "Also Bogus page loaded" for a screen nobody can open.
     expect(layout).toContain("pageTitle?: string");
-    expect(layout).toContain("const resolvedPageTitle = pageTitle ?? getPageTitle(loc);");
+    // `getPageTitle` takes the translator so the top bar is not the one piece of
+    // chrome left in English; the override still wins ahead of it either way.
+    expect(layout).toContain("const resolvedPageTitle = pageTitle ?? getPageTitle(loc, t);");
     // Both the desktop title and the mobile top bar read the resolved value.
     expect(layout.match(/resolvedPageTitle/g) ?? []).toHaveLength(3);
-    expect(layout).not.toContain("pageTitle={getPageTitle(loc)}");
+    expect(layout).not.toContain("pageTitle={getPageTitle(loc");
   });
 
   it("sizes the card so it fits the shell's scroll area", () => {
