@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { Link } from "wouter";
 import { CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
@@ -40,12 +41,13 @@ export function MobileSyncStrip({
   status = "synced",
   label,
   detail,
-  actionLabel = "Sync Now",
+  actionLabel,
   href = "/sync-status",
   onAction,
   className,
   ...props
 }: MobileSyncStripProps) {
+  const { t } = useAppLanguage();
   const isGood = status === "synced";
   const isBusy = status === "syncing";
   const tone = isGood ? "good" : status === "offline" ? "offline" : "attention";
@@ -53,7 +55,7 @@ export function MobileSyncStrip({
   const content = (
     <button type="button" onClick={onAction} className="kirana-mobile-sync-action">
       <RefreshCw className="h-4 w-4" />
-      {actionLabel}
+      {actionLabel ?? t("chrome.syncNow")}
     </button>
   );
 

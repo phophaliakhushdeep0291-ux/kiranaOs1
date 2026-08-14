@@ -54,12 +54,12 @@ export default function PrinterSettingsPage() {
   const hardwareCapabilities = useMemo(() => {
     const browserNavigator = navigator as Navigator & { bluetooth?: unknown; usb?: unknown; serial?: unknown };
     return [
-      { label: "System receipt printing", detail: "Print dialog and installed drivers", ready: typeof window.print === "function", icon: Printer },
-      { label: "Bluetooth browser API", detail: "Detected only; printing still uses the paired system queue", ready: Boolean(browserNavigator.bluetooth) && window.isSecureContext, icon: Bluetooth },
-      { label: "USB browser API", detail: "Detected only; direct ESC/POS uses the local bridge", ready: Boolean(browserNavigator.usb) && window.isSecureContext, icon: Usb },
-      { label: "Serial weighing scale", detail: "Web Serial capable browser; device protocol still required", ready: Boolean(browserNavigator.serial) && window.isSecureContext, icon: Scale },
-      { label: "Customer display", detail: bridgeHealth?.capabilities?.customerDisplay ? "Paired structured-total adapter" : "Configure a vendor adapter in Hardware Bridge Setup", ready: Boolean(bridgeHealth?.capabilities?.customerDisplay), icon: Monitor },
-      { label: "Local hardware bridge", detail: bridgeHealth?.deviceName || "Direct printer, cutter, drawer, scale and display adapters", ready: Boolean(bridgeHealth?.ok), icon: Cable },
+      { label: t("settings.printer.cap.system"), detail: t("settings.printer.cap.systemHelp"), ready: typeof window.print === "function", icon: Printer },
+      { label: t("settings.printer.cap.bluetooth"), detail: t("settings.printer.cap.bluetoothHelp"), ready: Boolean(browserNavigator.bluetooth) && window.isSecureContext, icon: Bluetooth },
+      { label: t("settings.printer.cap.usb"), detail: t("settings.printer.cap.usbHelp"), ready: Boolean(browserNavigator.usb) && window.isSecureContext, icon: Usb },
+      { label: t("settings.printer.cap.scale"), detail: t("settings.printer.cap.scaleHelp"), ready: Boolean(browserNavigator.serial) && window.isSecureContext, icon: Scale },
+      { label: t("settings.printer.cap.display"), detail: bridgeHealth?.capabilities?.customerDisplay ? "Paired structured-total adapter" : "Configure a vendor adapter in Hardware Bridge Setup", ready: Boolean(bridgeHealth?.capabilities?.customerDisplay), icon: Monitor },
+      { label: t("settings.printer.cap.bridge"), detail: bridgeHealth?.deviceName || "Direct printer, cutter, drawer, scale and display adapters", ready: Boolean(bridgeHealth?.ok), icon: Cable },
     ];
   }, [bridgeHealth]);
 
@@ -114,7 +114,7 @@ export default function PrinterSettingsPage() {
         toast({ title: t("settings.printer.bridgeReady"), description: t("settings.printer.bridgeReadyHelp") });
       } catch (error) {
         setBridgeHealth(null);
-        setScanResult(error instanceof Error ? error.message : "Hardware bridge could not be reached.");
+        setScanResult(error instanceof Error ? error.message : t("settings.printer.bridgeUnreachable"));
       }
       return;
     }
@@ -138,7 +138,7 @@ export default function PrinterSettingsPage() {
       setScanResult(`${PRINTER_CONNECTION_LABELS[cfg.connection]} saved as ${cfg.deviceName || "default printer"}.`);
       toast({ title: t("settings.printer.settingsSaved"), description: t("settings.printer.settingsSavedHelp") });
     } catch (error) {
-      toast({ title: t("settings.printer.connectionNotReady"), description: error instanceof Error ? error.message : "Check this printer setup.", variant: "destructive" });
+      toast({ title: t("settings.printer.connectionNotReady"), description: error instanceof Error ? error.message : t("settings.printer.checkSetup"), variant: "destructive" });
     } finally {
       setConnecting(false);
     }
@@ -153,7 +153,7 @@ export default function PrinterSettingsPage() {
     try {
       await openCashDrawerViaHardwareBridge(cfg.bridgeUrl);
       toast({ title: t("settings.printer.drawerOpened"), description: t("settings.printer.drawerOpenedHelp") });
-    } catch (error) { toast({ title: t("settings.printer.drawerFailed"), description: error instanceof Error ? error.message : "Check the bridge and printer cable.", variant: "destructive" }); }
+    } catch (error) { toast({ title: t("settings.printer.drawerFailed"), description: error instanceof Error ? error.message : t("settings.printer.checkCable"), variant: "destructive" }); }
   }
 
   async function readScale() {
@@ -161,7 +161,7 @@ export default function PrinterSettingsPage() {
       const reading = await readScaleViaHardwareBridge(cfg.bridgeUrl);
       setScaleReading(`${reading.weight} ${reading.unit}`);
       toast({ title: t("settings.printer.scaleReceived"), description: `${reading.weight} ${reading.unit}` });
-    } catch (error) { toast({ title: t("settings.printer.scaleFailed"), description: error instanceof Error ? error.message : "Check the bridge and scale protocol.", variant: "destructive" }); }
+    } catch (error) { toast({ title: t("settings.printer.scaleFailed"), description: error instanceof Error ? error.message : t("settings.printer.checkScale"), variant: "destructive" }); }
   }
 
   async function testCustomerDisplay() {
@@ -173,7 +173,7 @@ export default function PrinterSettingsPage() {
         totalPaise: 12_345,
       });
       toast({ title: t("settings.printer.displayUpdated"), description: t("settings.printer.displayUpdatedHelp") });
-    } catch (error) { toast({ title: t("settings.printer.displayFailed"), description: error instanceof Error ? error.message : "Check the bridge and display adapter.", variant: "destructive" }); }
+    } catch (error) { toast({ title: t("settings.printer.displayFailed"), description: error instanceof Error ? error.message : t("settings.printer.checkDisplay"), variant: "destructive" }); }
   }
 
   function downloadReceiptHtml() {
@@ -203,33 +203,33 @@ export default function PrinterSettingsPage() {
         {/* Default printer setup */}
         <div className="space-y-4">
           <Card>
-            <CardHead icon={<Printer size={15} />} title="Default Printer Setup" sub="Connect your receipt printer" action={connectionStatus === "ready" ? <Badge tone="green"><CheckCircle2 size={11} /> {t("settings.printer.ready")}</Badge> : connectionStatus === "configured" ? <Badge tone="blue">{t("settings.printer.configured")}</Badge> : <Badge tone="amber">{t("settings.security.notSet")}</Badge>} />
+            <CardHead icon={<Printer size={15} />} title={t("settings.printer.setupTitle")} sub={t("settings.printer.setupSub")} action={connectionStatus === "ready" ? <Badge tone="green"><CheckCircle2 size={11} /> {t("settings.printer.ready")}</Badge> : connectionStatus === "configured" ? <Badge tone="blue">{t("settings.printer.configured")}</Badge> : <Badge tone="amber">{t("settings.security.notSet")}</Badge>} />
             <div className="space-y-3 px-5 pb-5">
-              <Fld label="Connection type">
+              <Fld label={t("settings.printer.connectionType")}>
                 <Select value={cfg.connection} onValueChange={(v) => setP("connection", v as PrinterConnection)}>
                   <SelectTrigger className="h-11 sm:mouse:h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>{(Object.entries(PRINTER_CONNECTION_LABELS) as [PrinterConnection, string][]).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
                 </Select>
               </Fld>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Fld label="Printer name / label"><Input className="h-11 sm:mouse:h-10" value={cfg.deviceName} onChange={(e) => setP("deviceName", e.target.value)} /></Fld>
-                <Fld label="Printer model"><Input className="h-11 sm:mouse:h-10" placeholder="e.g. TVS RP3160" value={cfg.model} onChange={(e) => setP("model", e.target.value)} /></Fld>
+                <Fld label={t("settings.printer.printerName")}><Input className="h-11 sm:mouse:h-10" value={cfg.deviceName} onChange={(e) => setP("deviceName", e.target.value)} /></Fld>
+                <Fld label={t("settings.printer.printerModel")}><Input className="h-11 sm:mouse:h-10" placeholder={t("settings.printer.printerModelPlaceholder")} value={cfg.model} onChange={(e) => setP("model", e.target.value)} /></Fld>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Fld label="Paper size">
+                <Fld label={t("settings.printer.paperSize")}>
                   <Select value={cfg.paperSize} onValueChange={(v) => setP("paperSize", v as ReceiptPaperSize)}>
                     <SelectTrigger className="h-11 sm:mouse:h-10"><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="58mm">{t("settings.printer.paper58")}</SelectItem><SelectItem value="80mm">{t("settings.printer.paper80")}</SelectItem><SelectItem value="A4">{t("settings.printer.paperA4")}</SelectItem></SelectContent>
                   </Select>
                 </Fld>
-                <Fld label="Copies per bill">
+                <Fld label={t("settings.printer.copiesPerBill")}>
                   <Select value={String(cfg.copies)} onValueChange={(v) => setP("copies", Number(v))}>
                     <SelectTrigger className="h-11 sm:mouse:h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>{[1, 2, 3, 4].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </Fld>
               </div>
-              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-11 sm:mouse:h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="6-character pairing code" hint="Open Hardware Bridge Setup and type the code shown there. The private device token is exchanged automatically and never synced."><Input className="h-11 font-mono uppercase tracking-[0.3em] sm:mouse:h-10" value={pairingCode} maxLength={6} autoComplete="one-time-code" onChange={(event) => setPairingCode(event.target.value.replace(/[^2-9A-HJ-NP-Z]/gi, "").toUpperCase())} placeholder={bridgePaired ? "PAIRED" : "ABC234"} /></Fld>{bridgeHealth?.update?.available ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">Hardware Bridge v{bridgeHealth.update.latestVersion} is available. Open Hardware Bridge Setup to update.</div> : null}{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Badge tone="green">Paired · v{bridgeHealth.version}</Badge><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>{t("settings.printer.testDrawer")}</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>{t("settings.printer.readScale")}</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void testCustomerDisplay()} disabled={!bridgeHealth.capabilities?.customerDisplay}>{t("settings.printer.testDisplay")}</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
+              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label={t("settings.printer.bridgeUrl")} hint={t("settings.printer.bridgeUrlHelp")}><Input className="h-11 sm:mouse:h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label={t("settings.printer.pairingCode")} hint={t("settings.printer.pairingHelp")}><Input className="h-11 font-mono uppercase tracking-[0.3em] sm:mouse:h-10" value={pairingCode} maxLength={6} autoComplete="one-time-code" onChange={(event) => setPairingCode(event.target.value.replace(/[^2-9A-HJ-NP-Z]/gi, "").toUpperCase())} placeholder={bridgePaired ? t("settings.printer.paired") : "ABC234"} /></Fld>{bridgeHealth?.update?.available ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">Hardware Bridge v{bridgeHealth.update.latestVersion} is available. Open Hardware Bridge Setup to update.</div> : null}{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Badge tone="green">Paired · v{bridgeHealth.version}</Badge><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>{t("settings.printer.testDrawer")}</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>{t("settings.printer.readScale")}</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void testCustomerDisplay()} disabled={!bridgeHealth.capabilities?.customerDisplay}>{t("settings.printer.testDisplay")}</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
               <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
                 <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={() => void scanPrinters()}><Search size={14} /> {t("settings.printer.scan")}</Button>
                 <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={() => void connectPrinter()} disabled={connecting}><Cable size={14} /> {connecting ? "Saving..." : "Connect"}</Button>
@@ -242,27 +242,27 @@ export default function PrinterSettingsPage() {
 
           {/* Print settings */}
           <Card>
-            <CardHead icon={<Printer size={15} />} title="Print Settings" sub="What happens when a bill is saved" />
+            <CardHead icon={<Printer size={15} />} title={t("settings.printer.printTitle")} sub={t("settings.printer.printSub")} />
             <div className="px-5 pb-4">
-              <RowToggle label="Auto-print after billing" desc="Open the receipt as soon as a bill is saved" pill={<Switch checked={cfg.autoPrint} onCheckedChange={(v) => setP("autoPrint", v)} />} />
-              <RowToggle label="Ask before printing" desc="Confirm each print" pill={<Switch checked={cfg.askBeforePrint} onCheckedChange={(v) => setP("askBeforePrint", v)} />} />
-              <RowToggle label="Print customer copy" pill={<Switch checked={cfg.customerCopy} onCheckedChange={(v) => setP("customerCopy", v)} />} />
-              <RowToggle label="Print shop copy" pill={<Switch checked={cfg.shopCopy} onCheckedChange={(v) => setP("shopCopy", v)} />} />
-              <RowToggle label="Auto cut paper" desc="Supported thermal printers" pill={<Switch checked={cfg.autoCut} onCheckedChange={(v) => setP("autoCut", v)} />} />
-              <RowToggle label="Cash drawer pulse" desc="Open the connected drawer after a direct bridge print" pill={cfg.connection === "bridge" ? <Switch checked={cfg.cashDrawer} onCheckedChange={(v) => setP("cashDrawer", v)} /> : <Badge tone="amber">{t("settings.printer.bridgeRequired")}</Badge>} />
-              <RowToggle label="Customer display updates" desc="Show the live item count and payable total through the paired bridge" pill={cfg.connection === "bridge" ? <Switch checked={cfg.customerDisplay} onCheckedChange={(v) => setP("customerDisplay", v)} disabled={!bridgeHealth?.capabilities?.customerDisplay} /> : <Badge tone="amber">{t("settings.printer.bridgeRequired")}</Badge>} />
-              <RowToggle label="Print logo" pill={<Switch checked={cfg.printLogo} onCheckedChange={(v) => setP("printLogo", v)} />} />
-              <RowToggle label="Show dynamic UPI QR at checkout" desc="Uses the verified UPI ID saved in Store Profile" pill={<Switch checked={cfg.printQr} onCheckedChange={(v) => setP("printQr", v)} />} last />
+              <RowToggle label={t("settings.printer.autoPrint")} desc={t("settings.printer.autoPrintHelp")} pill={<Switch checked={cfg.autoPrint} onCheckedChange={(v) => setP("autoPrint", v)} />} />
+              <RowToggle label={t("settings.printer.askBefore")} desc={t("settings.printer.askBeforeHelp")} pill={<Switch checked={cfg.askBeforePrint} onCheckedChange={(v) => setP("askBeforePrint", v)} />} />
+              <RowToggle label={t("settings.printer.customerCopy")} pill={<Switch checked={cfg.customerCopy} onCheckedChange={(v) => setP("customerCopy", v)} />} />
+              <RowToggle label={t("settings.printer.shopCopy")} pill={<Switch checked={cfg.shopCopy} onCheckedChange={(v) => setP("shopCopy", v)} />} />
+              <RowToggle label={t("settings.printer.autoCut")} desc={t("settings.printer.autoCutHelp")} pill={<Switch checked={cfg.autoCut} onCheckedChange={(v) => setP("autoCut", v)} />} />
+              <RowToggle label={t("settings.printer.drawerPulse")} desc={t("settings.printer.drawerPulseHelp")} pill={cfg.connection === "bridge" ? <Switch checked={cfg.cashDrawer} onCheckedChange={(v) => setP("cashDrawer", v)} /> : <Badge tone="amber">{t("settings.printer.bridgeRequired")}</Badge>} />
+              <RowToggle label={t("settings.printer.customerDisplay")} desc={t("settings.printer.customerDisplayHelp")} pill={cfg.connection === "bridge" ? <Switch checked={cfg.customerDisplay} onCheckedChange={(v) => setP("customerDisplay", v)} disabled={!bridgeHealth?.capabilities?.customerDisplay} /> : <Badge tone="amber">{t("settings.printer.bridgeRequired")}</Badge>} />
+              <RowToggle label={t("settings.printer.printLogo")} pill={<Switch checked={cfg.printLogo} onCheckedChange={(v) => setP("printLogo", v)} />} />
+              <RowToggle label={t("settings.printer.upiQr")} desc={t("settings.printer.upiQrHelp")} pill={<Switch checked={cfg.printQr} onCheckedChange={(v) => setP("printQr", v)} />} last />
             </div>
           </Card>
         </div>
 
         {/* Bill template preview */}
         <Card className="flex flex-col">
-          <CardHead icon={<FileText size={15} />} title="Bill Template Preview" sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="settings-text-action px-2 sm:px-0">{t("settings.printer.testPrint")}</button>} />
+          <CardHead icon={<FileText size={15} />} title={t("settings.printer.previewTitle")} sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="settings-text-action px-2 sm:px-0">{t("settings.printer.testPrint")}</button>} />
           <div className="flex-1 px-5 pb-5">
             <div className="app-table-scroll overflow-auto rounded-[12px] border border-[#e3e9f3] bg-[#eef1f6]">
-              <iframe title="Receipt preview" srcDoc={previewHtml} className="h-[560px] w-full border-0" />
+              <iframe title={t("settings.printer.previewAlt")} srcDoc={previewHtml} className="h-[560px] w-full border-0" />
             </div>
           </div>
         </Card>
@@ -271,18 +271,18 @@ export default function PrinterSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Bill content settings */}
         <Card>
-          <CardHead icon={<FileText size={15} />} title="Bill Content Settings" sub="Which details appear on the receipt" />
+          <CardHead icon={<FileText size={15} />} title={t("settings.printer.contentTitle")} sub={t("settings.printer.contentSub")} />
           <div className="px-5 pb-4">
-            <RowToggle label="Show MRP" pill={<Switch checked={cfg.showMrp} onCheckedChange={(v) => setP("showMrp", v)} />} />
-            <RowToggle label="Show discount" pill={<Switch checked={cfg.showDiscount} onCheckedChange={(v) => setP("showDiscount", v)} />} />
-            <RowToggle label="Show GST breakup" pill={<Switch checked={cfg.showGstBreakup} onCheckedChange={(v) => setP("showGstBreakup", v)} />} />
-            <RowToggle label="Show HSN code" pill={<Switch checked={cfg.showHsn} onCheckedChange={(v) => setP("showHsn", v)} />} />
-            <RowToggle label="Show cashier name" pill={<Switch checked={cfg.showCashier} onCheckedChange={(v) => setP("showCashier", v)} />} />
-            <RowToggle label="Show customer phone" pill={<Switch checked={cfg.showCustomerPhone} onCheckedChange={(v) => setP("showCustomerPhone", v)} />} />
-            <RowToggle label="Show previous udhar" pill={<Switch checked={cfg.showPreviousUdhar} onCheckedChange={(v) => setP("showPreviousUdhar", v)} />} />
-            <RowToggle label="Show total savings" pill={<Switch checked={cfg.showSavings} onCheckedChange={(v) => setP("showSavings", v)} />} />
-            <RowToggle label="Show return policy" pill={<Switch checked={cfg.showReturnPolicy} onCheckedChange={(v) => setP("showReturnPolicy", v)} />} last />
-            <Fld label="Footer note">
+            <RowToggle label={t("settings.printer.showMrp")} pill={<Switch checked={cfg.showMrp} onCheckedChange={(v) => setP("showMrp", v)} />} />
+            <RowToggle label={t("settings.printer.showDiscount")} pill={<Switch checked={cfg.showDiscount} onCheckedChange={(v) => setP("showDiscount", v)} />} />
+            <RowToggle label={t("settings.printer.showGstBreakup")} pill={<Switch checked={cfg.showGstBreakup} onCheckedChange={(v) => setP("showGstBreakup", v)} />} />
+            <RowToggle label={t("settings.printer.showHsn")} pill={<Switch checked={cfg.showHsn} onCheckedChange={(v) => setP("showHsn", v)} />} />
+            <RowToggle label={t("settings.printer.showCashier")} pill={<Switch checked={cfg.showCashier} onCheckedChange={(v) => setP("showCashier", v)} />} />
+            <RowToggle label={t("settings.printer.showCustomerPhone")} pill={<Switch checked={cfg.showCustomerPhone} onCheckedChange={(v) => setP("showCustomerPhone", v)} />} />
+            <RowToggle label={t("settings.printer.showPreviousUdhar")} pill={<Switch checked={cfg.showPreviousUdhar} onCheckedChange={(v) => setP("showPreviousUdhar", v)} />} />
+            <RowToggle label={t("settings.printer.showSavings")} pill={<Switch checked={cfg.showSavings} onCheckedChange={(v) => setP("showSavings", v)} />} />
+            <RowToggle label={t("settings.printer.showReturnPolicy")} pill={<Switch checked={cfg.showReturnPolicy} onCheckedChange={(v) => setP("showReturnPolicy", v)} />} last />
+            <Fld label={t("settings.printer.footerNote")}>
               <Input className="h-11 sm:mouse:h-10" value={cfg.footerText} onChange={(e) => setP("footerText", e.target.value)} />
             </Fld>
             <p className="pt-2 text-[11px] text-[#9aa6bb]">{t("settings.printer.scanHelp")}</p>
@@ -291,7 +291,7 @@ export default function PrinterSettingsPage() {
 
         {/* Printer queue / test */}
         <Card>
-          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Print actions from this session" action={<button onClick={() => { setJobs([]); toast({ title: t("settings.printer.queueCleared") }); }} className="settings-text-action px-2 sm:px-0">{t("settings.printer.clearQueue")}</button>} />
+          <CardHead icon={<Printer size={15} />} title={t("settings.printer.queueTitle")} sub={t("settings.printer.queueSub")} action={<button onClick={() => { setJobs([]); toast({ title: t("settings.printer.queueCleared") }); }} className="settings-text-action px-2 sm:px-0">{t("settings.printer.clearQueue")}</button>} />
           <div className="px-5 pb-4">
             {jobs.length === 0 ? (
               <div className="rounded-[12px] border border-dashed border-[#dbe4f0] p-6 text-center text-[12px] font-semibold text-[#64748b]">
@@ -316,7 +316,7 @@ export default function PrinterSettingsPage() {
       </div>
 
       <Card>
-        <CardHead icon={<ShieldCheck size={15} />} title="Hardware compatibility check" sub="Capabilities detected on this device—not marketing claims" />
+        <CardHead icon={<ShieldCheck size={15} />} title={t("settings.printer.compatTitle")} sub={t("settings.printer.compatSub")} />
         <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-6">
           {hardwareCapabilities.map((capability) => {
             const Icon = capability.icon;

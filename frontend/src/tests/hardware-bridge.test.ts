@@ -18,7 +18,11 @@ describe("local hardware bridge security boundary", () => {
 
   it("offers a six-character pairing code instead of exposing a long token field", () => {
     const source = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/settings/pages/PrinterSettingsPage.tsx"), "utf8");
-    expect(source).toContain("6-character pairing code");
+    // The field's label moved into the catalogue; what this test protects is that
+    // the shop is asked for a short code and never for the raw device token.
+    const settingsEn = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/settings/translations/settings-pages.ts"), "utf8");
+    expect(source).toContain("settings.printer.pairingCode");
+    expect(settingsEn).toContain("6-character pairing code");
     expect(source).toContain("pairHardwareBridge");
     expect(source).not.toContain("Per-device pairing token");
     expect(source).not.toContain("setHardwareBridgeToken(bridgeToken)");

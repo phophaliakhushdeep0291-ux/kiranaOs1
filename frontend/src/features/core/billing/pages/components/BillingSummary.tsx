@@ -822,7 +822,7 @@ export function BillingSummary({
             />
           </div>
         ) : hasLastPrintableBill ? (
-          <div className="mt-2 grid grid-cols-2 gap-1.5" aria-label="Saved bill actions">
+          <div className="mt-2 grid grid-cols-2 gap-1.5" aria-label={t("chrome.savedBillActions")}>
             <SecBtn onClick={onPrintBill} icon={<Printer size={13} />} label={t("billing.summary.print")} />
             <SecBtn primary onClick={onSharePdf} icon={<Smartphone size={13} />} label={t("billing.summary.whatsapp")} />
           </div>

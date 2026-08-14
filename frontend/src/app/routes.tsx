@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
 import { Redirect, Route, Switch, useLocation } from "wouter";
 import NotFound from "@/components/shared/NotFound";
@@ -121,11 +122,12 @@ const ROUTE_LOADING_LABELS: Record<string, string> = {
 };
 
 function LoadingScreen() {
+  const { t } = useAppLanguage();
   const [location] = useLocation();
   const path = location.split(/[?#]/)[0].replace(/^\/+/, "");
   const section = path.split("/").filter(Boolean)[0] ?? "dashboard";
   const fallback = path.split("/").filter(Boolean).at(-1)?.replace(/-/g, " ");
-  return <PageLoading label={ROUTE_LOADING_LABELS[path] ?? ROUTE_LOADING_LABELS[section] ?? `Opening ${fallback || "Artha"}…`} />;
+  return <PageLoading label={ROUTE_LOADING_LABELS[path] ?? ROUTE_LOADING_LABELS[section] ?? `Opening ${fallback || t("chrome.brand")}…`} />;
 }
 
 function LazyPage({ component: Component, featureName }: { component: ComponentType; featureName?: FeatureName }) {
@@ -150,16 +152,17 @@ function LazyPage({ component: Component, featureName }: { component: ComponentT
 }
 
 function BusinessProfileRouteGate({ capability, children }: { capability?: string; children: ReactNode }) {
+  const { t } = useAppLanguage();
   const [location] = useLocation();
   const profile = useShopBusinessProfile();
   if (profile.isLoading) return <LoadingScreen />;
   // Preserve offline-first access when bootstrap itself is temporarily unavailable.
   if (!profile.data) return <>{children}</>;
   if (!isPathInBusinessProfile(location, profile.data.navigation)) {
-    return <PermissionDenied title="Not part of this business profile" message="This page is hidden because it is not enabled for the active shop profile." />;
+    return <PermissionDenied title={t("chrome.route.notInProfile")} message={t("chrome.route.notInProfileHelp")} />;
   }
   if (capability && !profileHasCapability(profile.data.capabilities, capability)) {
-    return <PermissionDenied title="Feature not available" message="This capability is not enabled for the active shop profile." />;
+    return <PermissionDenied title={t("chrome.route.featureUnavailable")} message={t("chrome.route.featureUnavailableHelp")} />;
   }
   return <>{children}</>;
 }
@@ -244,6 +247,7 @@ function PublicRoute({ component: Component }: { component: ComponentType }) {
 }
 
 export function AppRoutes() {
+  const { t } = useAppLanguage();
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
   const verticalPack = useActiveVerticalPack();

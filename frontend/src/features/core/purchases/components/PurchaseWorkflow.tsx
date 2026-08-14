@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,11 +7,12 @@ import { cn } from "@/lib/utils";
 const PURCHASE_STEPS = ["1. Order", "2. Receive stock", "3. Record bill", "4. Settle due"];
 
 export function PurchaseWorkflow({ children }: { children: ReactNode }) {
+  const { t } = useAppLanguage();
   const [showPlanning, setShowPlanning] = useState(false);
 
   return (
     <>
-      <section className="rounded-[14px] border border-[#e6ecf4] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,35,80,0.04)]" aria-label="Purchase workflow">
+      <section className="rounded-[14px] border border-[#e6ecf4] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,35,80,0.04)]" aria-label={t("chrome.purchaseWorkflow")}>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
             {PURCHASE_STEPS.map((step) => (

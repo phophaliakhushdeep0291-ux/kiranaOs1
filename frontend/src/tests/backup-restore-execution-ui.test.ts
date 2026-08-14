@@ -15,7 +15,11 @@ describe("transactional backup restore UI", () => {
   it("requires typed artifact confirmation and owner approval", () => {
     expect(page).toContain("RESTORE ${restorePreview.artifact_id.slice(-6)}");
     expect(page).toContain('type: "restore"');
-    expect(page).toContain("Final restore approval");
+    // The approval title is what tells an owner this is the real restore rather
+    // than the dry-run validation next to it, so it is checked in the catalogue
+    // and paired with the key the dialog renders.
+    expect(page).toContain("settings.sync.restoreTitle");
+    expect(settingsEn).toContain("Final restore approval");
     expect(api).toContain("/restore`");
     expect(api).toContain("confirmation");
   });

@@ -78,8 +78,8 @@ export default function ModulesSettingsPage() {
       <Card>
         <CardHead
           icon={<LayoutGrid size={15} />}
-          title="Modules"
-          sub="Switch off what this shop does not use and it disappears from the menus"
+          title={t("chrome.modulesTitle")}
+          sub={t("chrome.modulesHelp")}
           action={
             <div className="flex items-center gap-2">
               <Badge tone={hiddenCount > 0 ? "amber" : "green"}>

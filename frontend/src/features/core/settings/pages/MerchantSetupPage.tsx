@@ -276,7 +276,7 @@ export default function MerchantSetupPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         <Card>
-          <CardHead title="Launch checklist" sub={loading ? "Checking local data..." : "Use this before giving the shop to a real cashier."} />
+          <CardHead title={t("settings.setup.checklistTitle")} sub={loading ? t("settings.setup.checkingLocal") : t("settings.setup.beforeCashier")} />
           <div className="divide-y divide-[#eef2f8] px-4 pb-4">
             {progress.steps.map((step) => {
               const Icon = STEP_ICONS[step.id];
@@ -363,7 +363,7 @@ export default function MerchantSetupPage() {
 
         <div className="space-y-4">
           <Card>
-            <CardHead title="Readiness summary" sub="Actual local counts, not demo numbers." />
+            <CardHead title={t("settings.setup.readinessTitle")} sub={t("settings.setup.realCounts")} />
             <div className="space-y-3 px-5 pb-5">
               {[
                 ["Products", facts.productCount],
@@ -380,7 +380,7 @@ export default function MerchantSetupPage() {
           </Card>
 
           <Card>
-            <CardHead title="Production guardrails" sub="What this setup prevents." />
+            <CardHead title={t("settings.setup.guardrailsTitle")} sub={t("settings.setup.guardrailsSub")} />
             <div className="space-y-2 px-5 pb-5">
               {[
                 "Bills without shop identity or mobile number.",
@@ -399,9 +399,9 @@ export default function MerchantSetupPage() {
       </div>
       <OwnerPinModal
         open={starterCatalogPinOpen}
-        title="Approve starter catalog"
-        description="This creates the selected catalog products and queues them for verified cloud sync."
-        confirmLabel="Approve and load"
+        title={t("settings.setup.approveCatalog")}
+        description={t("settings.setup.approveCatalogHelp")}
+        confirmLabel={t("settings.setup.approveAndLoad")}
         loading={Boolean(starterCatalogRun)}
         onCancel={() => { if (!starterCatalogRun) setStarterCatalogPinOpen(false); }}
         onConfirm={({ ownerPin, reason }) => void runStarterCatalog(ownerPin, reason)}

@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useId, type ReactNode } from "react";
 import {
   Select,
@@ -32,10 +33,11 @@ export interface SelectInputProps {
 }
 
 export function SelectInput({
-  label, hint, error, placeholder = "Select…",
+  label, hint, error, placeholder,
   value, onValueChange, options, disabled, required, id,
   prefix, wrapperClassName, triggerClassName,
 }: SelectInputProps) {
+  const { t } = useAppLanguage();
   const generatedId = useId();
   const inputId = id ?? `select-input-${generatedId.replace(/:/g, "")}`;
   const describedBy = error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined;
@@ -64,7 +66,7 @@ export function SelectInput({
             aria-describedby={describedBy}
             aria-required={required || undefined}
           >
-            <SelectValue placeholder={placeholder} />
+            <SelectValue placeholder={placeholder ?? t("chrome.select")} />
           </SelectTrigger>
           <SelectContent>
             {options.map((opt) => (

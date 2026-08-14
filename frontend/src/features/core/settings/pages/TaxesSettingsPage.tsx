@@ -206,10 +206,10 @@ export default function TaxesSettingsPage() {
       setEwayDraft(EMPTY_EWAY);
       void readinessQ.refetch();
       toast(legalSubmission
-        ? { title: "E-way bill submitted", description: `The request was accepted by ${readinessQ.data?.provider.providerName || "the configured certified GSP"}.` }
-        : { title: "E-way transport record prepared", description: "Saved as a clearly marked draft. Connect a certified GSP to request a legal e-way bill number." });
+        ? { title: t("settings.tax.ewaySubmitted"), description: `The request was accepted by ${readinessQ.data?.provider.providerName || "the configured certified GSP"}.` }
+        : { title: t("settings.tax.ewayDraftPrepared"), description: t("settings.tax.ewayDraftNote") });
     } catch (error) {
-      setEwayError(error instanceof Error ? error.message : "Could not prepare the transport record.");
+      setEwayError(error instanceof Error ? error.message : t("settings.tax.ewayFailed"));
     } finally {
       setSavingEway(false);
     }
@@ -226,10 +226,10 @@ export default function TaxesSettingsPage() {
       setEInvoiceBillId("");
       void readinessQ.refetch();
       toast(legalSubmission
-        ? { title: "E-invoice submitted", description: `The certified provider accepted the request for IRN generation.` }
-        : { title: "E-invoice sandbox record created", description: "Validation evidence was saved, but no legal IRN was created." });
+        ? { title: t("settings.tax.eInvoiceSubmitted"), description: `The certified provider accepted the request for IRN generation.` }
+        : { title: t("settings.tax.eInvoiceSandbox"), description: t("settings.tax.eInvoiceSandboxNote") });
     } catch (error) {
-      setEInvoiceError(error instanceof Error ? error.message : "Could not process the e-invoice.");
+      setEInvoiceError(error instanceof Error ? error.message : t("settings.tax.eInvoiceFailed"));
     } finally {
       setSavingEInvoice(false);
     }
@@ -272,7 +272,7 @@ export default function TaxesSettingsPage() {
       await Promise.all([hsnSummaryQ.refetch(), readinessQ.refetch()]);
       toast({ title: t("settings.tax.hsnUpdated"), description: `${result.updatedProducts} products now use HSN ${pendingHsn.hsn} at ${pendingHsn.gstRate}%.` });
     } catch (error) {
-      setEditorError(error instanceof Error ? error.message : "Could not update the product category.");
+      setEditorError(error instanceof Error ? error.message : t("settings.tax.categoryUpdateFailed"));
     } finally {
       setSavingHsn(false);
     }
@@ -285,7 +285,7 @@ export default function TaxesSettingsPage() {
       downloadText(`artha-gst-register-${sellerGstin}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
       toast({ title: t("settings.tax.registerDownloaded"), description: `${sellerGstin} only · seller snapshots, HSN, and tax values are ready for accountant review.` });
     } catch (error) {
-      toast({ title: t("settings.tax.exportUnavailable"), description: error instanceof Error ? error.message : "Could not export the GST register.", variant: "destructive" });
+      toast({ title: t("settings.tax.exportUnavailable"), description: error instanceof Error ? error.message : t("settings.tax.registerExportFailed"), variant: "destructive" });
     }
   }
   async function exportGstr1Working() {
@@ -296,7 +296,7 @@ export default function TaxesSettingsPage() {
       downloadText(`artha-gstr1-working-${sellerGstin}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
       toast({ title: t("settings.tax.gstr1Downloaded"), description: `${sellerGstin} only · review B2B, B2CS, credit-note, HSN, and place-of-supply treatment with your accountant before filing.` });
     } catch (error) {
-      toast({ title: t("settings.tax.exportUnavailable"), description: error instanceof Error ? error.message : "Could not export GSTR-1 working papers.", variant: "destructive" });
+      toast({ title: t("settings.tax.exportUnavailable"), description: error instanceof Error ? error.message : t("settings.tax.gstr1ExportFailed"), variant: "destructive" });
     }
   }
 
@@ -305,9 +305,9 @@ export default function TaxesSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* GST Configuration */}
         <Card>
-          <CardHead icon={<Receipt size={15} />} title="GST Configuration" sub="How tax applies to your bills" />
+          <CardHead icon={<Receipt size={15} />} title={t("settings.tax.cfgTitle")} sub={t("settings.tax.cfgSub")} />
           <div className="space-y-3 px-5 pb-5">
-            <Fld label="GST Mode" hint={tax.mode !== "none" ? "Changing mode after bills exist needs owner approval." : undefined}>
+            <Fld label={t("settings.tax.modeLabel")} hint={tax.mode !== "none" ? t("settings.tax.modeChangeHelp") : undefined}>
               <Select value={tax.mode} onValueChange={(v) => update({ mode: v as TaxConfig["mode"] })}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -318,23 +318,23 @@ export default function TaxesSettingsPage() {
               </Select>
             </Fld>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Fld label="Default GST Rate">
+              <Fld label={t("settings.tax.defaultRate")}>
                 <Select value={tax.defaultRate} onValueChange={(v) => update({ defaultRate: v })}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>{["0", "5", "12", "18", "28"].map((r) => <SelectItem key={r} value={r}>{r}%</SelectItem>)}</SelectContent>
                 </Select>
               </Fld>
-              <Fld label="Invoice Prefix"><Input className="h-10" value={tax.invoicePrefix} onChange={(e) => setText({ invoicePrefix: e.target.value })} onBlur={flush} /></Fld>
+              <Fld label={t("settings.tax.invoicePrefix")}><Input className="h-10" value={tax.invoicePrefix} onChange={(e) => setText({ invoicePrefix: e.target.value })} onBlur={flush} /></Fld>
             </div>
-            <Fld label="Legal Business GSTIN" hint="Legal identity is managed in Business Profile and validated by the server."><Input className="h-10 bg-slate-50" value={shop?.gstNumber ?? ""} readOnly placeholder="Add GSTIN in Business Profile" /></Fld>
-            <RowToggle label="Enable tax invoice" desc="Print GST invoices with breakup" pill={<Switch checked={tax.taxInvoice} onCheckedChange={(v) => update({ taxInvoice: v })} />} />
-            <RowToggle label="Composition scheme" desc="Flat-rate dealers (no input credit)" pill={<Switch checked={tax.composition} onCheckedChange={(v) => update({ composition: v })} />} last />
+            <Fld label={t("settings.tax.legalGstin")} hint={t("settings.tax.legalGstinHelp")}><Input className="h-10 bg-slate-50" value={shop?.gstNumber ?? ""} readOnly placeholder={t("settings.tax.addGstinPlaceholder")} /></Fld>
+            <RowToggle label={t("settings.tax.enableTaxInvoice")} desc={t("settings.tax.enableTaxInvoiceHelp")} pill={<Switch checked={tax.taxInvoice} onCheckedChange={(v) => update({ taxInvoice: v })} />} />
+            <RowToggle label={t("settings.tax.composition")} desc={t("settings.tax.compositionHelp")} pill={<Switch checked={tax.composition} onCheckedChange={(v) => update({ composition: v })} />} last />
           </div>
         </Card>
 
         {/* GST Rates */}
         <Card>
-          <CardHead icon={<Receipt size={15} />} title="GST Rates" sub="Enable the slabs you sell at" />
+          <CardHead icon={<Receipt size={15} />} title={t("settings.tax.ratesTitle")} sub={t("settings.tax.ratesSub")} />
           <div className="px-5 pb-4">
             {Object.keys(DEFAULT_TAX.rates).map((r, i, arr) => (
               <div key={r} className={`flex items-center gap-3 py-2.5 ${i < arr.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
@@ -355,8 +355,8 @@ export default function TaxesSettingsPage() {
       <Card>
         <CardHead
           icon={<Boxes size={15} />}
-          title="HSN / Product Mapping"
-          sub="Live classifications from the product catalogue"
+          title={t("settings.tax.hsnTitle")}
+          sub={t("settings.tax.hsnSub")}
           action={gstReportsFeature.allowed
             ? <button type="button" onClick={() => void hsnSummaryQ.refetch()} className="text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.tax.refresh")}</button>
             : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">{t("settings.tax.upgradeBusiness")}</Link></Button>}
@@ -401,8 +401,8 @@ export default function TaxesSettingsPage() {
         <Card>
           <CardHead
             icon={<BarChart3 size={15} />}
-            title="GST Reports"
-            sub="This month"
+            title={t("settings.tax.reportsTitle")}
+            sub={t("settings.tax.thisMonth")}
             action={gstReportsFeature.allowed
               ? <span className="flex items-center gap-3"><button onClick={exportGstReport} className="inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> {t("settings.tax.register")}</button><button onClick={exportGstr1Working} className="inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> {t("settings.tax.gstr1Working")}</button></span>
               : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">{t("settings.tax.upgradeBusiness")}</Link></Button>}
@@ -419,7 +419,7 @@ export default function TaxesSettingsPage() {
               <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
                 <Label htmlFor="gst-registration-scope" className="text-xs font-black text-[#17345f]">{t("settings.tax.sellerForExport")}</Label>
                 <Select value={selectedSellerGstin} onValueChange={setSelectedSellerGstin}>
-                  <SelectTrigger id="gst-registration-scope" className="mt-2 h-10 bg-white"><SelectValue placeholder="Choose one seller GSTIN" /></SelectTrigger>
+                  <SelectTrigger id="gst-registration-scope" className="mt-2 h-10 bg-white"><SelectValue placeholder={t("settings.tax.chooseSellerPlaceholder")} /></SelectTrigger>
                   <SelectContent>{uniqueRegistrations.map((registration) => <SelectItem key={registration.gstin} value={registration.gstin || ""}>{registration.gstin} · {registration.name} · State {registration.stateCode}</SelectItem>)}</SelectContent>
                 </Select>
                 <p className="mt-2 text-[11px] leading-4 text-[#64748b]">{t("settings.tax.sellerHelp")}</p>
@@ -427,18 +427,18 @@ export default function TaxesSettingsPage() {
               </div>
             </div>
             <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
-              <Kpi label="GST Collected" value={gstQ.isLoading ? "…" : inr(gstQ.data?.gstCollected)} tone="green" />
-              <Kpi label="Taxable Sales" value={gstQ.isLoading ? "…" : inr(gstQ.data?.taxableSales)} tone="blue" />
-              <Kpi label="GST split" value={gstQ.isLoading ? "…" : gstQ.data ? `C ${inr(gstQ.data.cgst)} · S ${inr(gstQ.data.sgst)} · I ${inr(gstQ.data.igst)}` : "—"} tone="amber" />
-              <Kpi label="Bills with GST" value={gstQ.isLoading ? "…" : gstQ.data ? String(gstQ.data.gstBills) : "—"} tone="violet" />
+              <Kpi label={t("settings.tax.gstCollected")} value={gstQ.isLoading ? "…" : inr(gstQ.data?.gstCollected)} tone="green" />
+              <Kpi label={t("settings.tax.taxableSales")} value={gstQ.isLoading ? "…" : inr(gstQ.data?.taxableSales)} tone="blue" />
+              <Kpi label={t("settings.tax.gstSplit")} value={gstQ.isLoading ? "…" : gstQ.data ? `C ${inr(gstQ.data.cgst)} · S ${inr(gstQ.data.sgst)} · I ${inr(gstQ.data.igst)}` : "—"} tone="amber" />
+              <Kpi label={t("settings.tax.billsWithGst")} value={gstQ.isLoading ? "…" : gstQ.data ? String(gstQ.data.gstBills) : "—"} tone="violet" />
             </div>
-            {gstQ.isError && <p className="px-5 pb-4 text-[11px] font-semibold text-rose-600">Could not load this month's GST report: {gstQ.error instanceof Error ? gstQ.error.message : "Please retry."}</p>}
+            {gstQ.isError && <p className="px-5 pb-4 text-[11px] font-semibold text-rose-600">Could not load this month's GST report: {gstQ.error instanceof Error ? gstQ.error.message : t("settings.tax.pleaseRetry")}</p>}
           </>}
         </Card>
 
         {/* Compliance Settings */}
         <Card>
-          <CardHead icon={<ShieldCheck size={15} />} title="Compliance Settings" sub="Accuracy & legal safeguards" />
+          <CardHead icon={<ShieldCheck size={15} />} title={t("settings.tax.complianceTitle")} sub={t("settings.tax.complianceSub")} />
           <div className="px-5 pb-4">
             <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-3">
@@ -455,21 +455,21 @@ export default function TaxesSettingsPage() {
               </div>
             </div>
             <RowToggle
-              label="E-Invoice / IRN"
+              label={t("settings.tax.eInvoice")}
               desc={readinessQ.data?.provider.legalSubmission
-                ? `${readinessQ.data.provider.providerName || "Certified GSP"} is ready for legal submission`
+                ? `${readinessQ.data.provider.providerName || t("settings.tax.certifiedGsp")} is ready for legal submission`
                 : readinessQ.data?.provider.configured
-                  ? "Sandbox/configuration detected, but legal provider certification is not attested"
-                  : "Blocked until a certified GSTN/GSP provider is connected"}
+                  ? t("settings.tax.gspNotAttested")
+                  : t("settings.tax.gspBlocked")}
               pill={readinessQ.data?.provider.configured && gstReportsFeature.allowed
                 ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => { setEInvoiceError(""); setEInvoiceOpen(true); }}><Receipt size={13} /> {readinessQ.data.provider.legalSubmission ? "Submit" : "Validate"}</Button>
                 : <Badge tone="amber">{t("settings.tax.notConnected")}</Badge>}
             />
-            <RowToggle label="E-Way Bill" desc="Capture transporter, vehicle, document, distance and delivery details; legal generation requires a certified GSP" pill={gstReportsFeature.allowed ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEwayOpen(true)}><Truck size={13} /> {t("settings.tax.prepare")}</Button> : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">{t("settings.tax.upgradeBusiness")}</Link></Button>} />
-            <RowToggle label="Show GST breakup on bill" pill={<Switch checked={tax.showBreakup} onCheckedChange={(v) => update({ showBreakup: v })} />} />
-            <RowToggle label="Round off tax amount" pill={<Switch checked={tax.roundOff} onCheckedChange={(v) => update({ roundOff: v })} />} />
-            <RowToggle label="Lock tax after bill creation" pill={<Switch checked={tax.lockAfterBill} onCheckedChange={(v) => update({ lockAfterBill: v })} />} />
-            <RowToggle label="Warn if GSTIN invalid" pill={<Switch checked={tax.warnInvalidGstin} onCheckedChange={(v) => update({ warnInvalidGstin: v })} />} last />
+            <RowToggle label={t("settings.tax.ewayBill")} desc={t("settings.tax.ewayBillHelp")} pill={gstReportsFeature.allowed ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEwayOpen(true)}><Truck size={13} /> {t("settings.tax.prepare")}</Button> : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">{t("settings.tax.upgradeBusiness")}</Link></Button>} />
+            <RowToggle label={t("settings.tax.showBreakup")} pill={<Switch checked={tax.showBreakup} onCheckedChange={(v) => update({ showBreakup: v })} />} />
+            <RowToggle label={t("settings.tax.roundOff")} pill={<Switch checked={tax.roundOff} onCheckedChange={(v) => update({ roundOff: v })} />} />
+            <RowToggle label={t("settings.tax.lockTax")} pill={<Switch checked={tax.lockAfterBill} onCheckedChange={(v) => update({ lockAfterBill: v })} />} />
+            <RowToggle label={t("settings.tax.warnInvalidGstin")} pill={<Switch checked={tax.warnInvalidGstin} onCheckedChange={(v) => update({ warnInvalidGstin: v })} />} last />
           </div>
         </Card>
       </div>
@@ -479,15 +479,15 @@ export default function TaxesSettingsPage() {
           <DialogHeader><DialogTitle>{t("settings.tax.prepareEway")}</DialogTitle><DialogDescription>{t("settings.tax.prepareEwayHelp")}</DialogDescription></DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <Fld label={t("settings.tax.gstInvoice")}><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={ewayDraft.billId} onChange={(event) => setEwayDraft((value) => ({ ...value, billId: event.target.value }))}><option value="">{t("settings.tax.selectInvoice")}</option>{eligibleBills.map((bill) => <option key={bill.id} value={bill.id}>{bill.billNo} · {bill.customerName || "Walk-in"} · ₹{Number(bill.grandTotal || 0).toLocaleString("en-IN")}</option>)}</select>{recentBillsQ.isSuccess && eligibleBills.length === 0 && <p className="mt-1 text-[11px] text-amber-700">{t("settings.tax.noInvoices")}</p>}</Fld>
-            <Fld label="Transport mode"><Select value={ewayDraft.transportMode} onValueChange={(value: EWayDraft["transportMode"]) => setEwayDraft((draft) => ({ ...draft, transportMode: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="road">{t("settings.tax.road")}</SelectItem><SelectItem value="rail">{t("settings.tax.rail")}</SelectItem><SelectItem value="air">{t("settings.tax.air")}</SelectItem><SelectItem value="ship">{t("settings.tax.ship")}</SelectItem></SelectContent></Select></Fld>
-            <Fld label="Transporter ID"><Input value={ewayDraft.transporterId} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transporterId: event.target.value.toUpperCase() }))} placeholder="GSTIN / TRANSIN" /></Fld>
-            <Fld label="Transporter name"><Input value={ewayDraft.transporterName} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transporterName: event.target.value }))} placeholder="Carrier name" /></Fld>
-            <Fld label="Vehicle number"><Input value={ewayDraft.vehicleNumber} onChange={(event) => setEwayDraft((draft) => ({ ...draft, vehicleNumber: event.target.value.toUpperCase() }))} placeholder="MH12AB1234" /></Fld>
-            <Fld label="Vehicle type"><Select value={ewayDraft.vehicleType} onValueChange={(value: EWayDraft["vehicleType"]) => setEwayDraft((draft) => ({ ...draft, vehicleType: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">{t("settings.tax.regular")}</SelectItem><SelectItem value="over_dimensional">{t("settings.tax.overDimensional")}</SelectItem></SelectContent></Select></Fld>
-            <Fld label="Distance (km)"><Input type="number" min={1} max={4000} value={ewayDraft.distanceKm} onChange={(event) => setEwayDraft((draft) => ({ ...draft, distanceKm: event.target.value }))} /></Fld>
-            <Fld label="Transport document"><Input value={ewayDraft.transportDocumentNumber} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transportDocumentNumber: event.target.value }))} placeholder="LR / RR / airway bill number" /></Fld>
-            <Fld label="Document date"><Input type="date" value={ewayDraft.transportDocumentDate} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transportDocumentDate: event.target.value }))} /></Fld>
-            <Fld label="Delivery address"><Input value={ewayDraft.deliveryAddress} onChange={(event) => setEwayDraft((draft) => ({ ...draft, deliveryAddress: event.target.value }))} placeholder="Destination address" /></Fld>
+            <Fld label={t("settings.tax.transportMode")}><Select value={ewayDraft.transportMode} onValueChange={(value: EWayDraft["transportMode"]) => setEwayDraft((draft) => ({ ...draft, transportMode: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="road">{t("settings.tax.road")}</SelectItem><SelectItem value="rail">{t("settings.tax.rail")}</SelectItem><SelectItem value="air">{t("settings.tax.air")}</SelectItem><SelectItem value="ship">{t("settings.tax.ship")}</SelectItem></SelectContent></Select></Fld>
+            <Fld label={t("settings.tax.transporterId")}><Input value={ewayDraft.transporterId} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transporterId: event.target.value.toUpperCase() }))} placeholder={t("settings.tax.transporterIdPlaceholder")} /></Fld>
+            <Fld label={t("manufacturing.orders.transporter")}><Input value={ewayDraft.transporterName} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transporterName: event.target.value }))} placeholder={t("settings.tax.carrierName")} /></Fld>
+            <Fld label={t("manufacturing.orders.vehicle")}><Input value={ewayDraft.vehicleNumber} onChange={(event) => setEwayDraft((draft) => ({ ...draft, vehicleNumber: event.target.value.toUpperCase() }))} placeholder="MH12AB1234" /></Fld>
+            <Fld label={t("settings.tax.vehicleType")}><Select value={ewayDraft.vehicleType} onValueChange={(value: EWayDraft["vehicleType"]) => setEwayDraft((draft) => ({ ...draft, vehicleType: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">{t("settings.tax.regular")}</SelectItem><SelectItem value="over_dimensional">{t("settings.tax.overDimensional")}</SelectItem></SelectContent></Select></Fld>
+            <Fld label={t("settings.tax.distanceKm")}><Input type="number" min={1} max={4000} value={ewayDraft.distanceKm} onChange={(event) => setEwayDraft((draft) => ({ ...draft, distanceKm: event.target.value }))} /></Fld>
+            <Fld label={t("settings.tax.transportDoc")}><Input value={ewayDraft.transportDocumentNumber} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transportDocumentNumber: event.target.value }))} placeholder={t("settings.tax.transportDocPlaceholder")} /></Fld>
+            <Fld label={t("settings.tax.documentDate")}><Input type="date" value={ewayDraft.transportDocumentDate} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transportDocumentDate: event.target.value }))} /></Fld>
+            <Fld label={t("settings.tax.deliveryAddress")}><Input value={ewayDraft.deliveryAddress} onChange={(event) => setEwayDraft((draft) => ({ ...draft, deliveryAddress: event.target.value }))} placeholder={t("settings.tax.destinationPlaceholder")} /></Fld>
           </div>
           {ewayError && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{ewayError}</p>}
           <DialogFooter><Button variant="outline" onClick={() => setEwayOpen(false)}>{t("settings.tax.cancel")}</Button><Button onClick={requestEwayApproval}>{t("settings.tax.reviewApprove")}</Button></DialogFooter>
@@ -512,11 +512,11 @@ export default function TaxesSettingsPage() {
         </DialogContent>
       </Dialog>
 
-      <OwnerPinModal open={ewayPinOpen} title={readinessQ.data?.provider.legalSubmission ? "Approve legal e-way bill submission" : "Approve e-way transport record"} description={readinessQ.data?.provider.legalSubmission ? "This sends the selected invoice and transport details to the configured certified provider using an idempotent request." : "This protected draft is linked to the selected GST invoice and retained for audit."} confirmLabel={readinessQ.data?.provider.legalSubmission ? "Submit e-way bill" : "Prepare draft"} loading={savingEway} error={ewayError} onCancel={() => { if (!savingEway) { setEwayPinOpen(false); setEwayOpen(true); } }} onConfirm={({ ownerPin }) => saveEwayDraft(ownerPin)} />
+      <OwnerPinModal open={ewayPinOpen} title={readinessQ.data?.provider.legalSubmission ? t("settings.tax.approveEwaySubmit") : t("settings.tax.approveEwayDraft")} description={readinessQ.data?.provider.legalSubmission ? t("settings.tax.ewaySubmitHelp") : t("settings.tax.ewayDraftHelp")} confirmLabel={readinessQ.data?.provider.legalSubmission ? t("settings.tax.submitEway") : t("settings.tax.prepareDraft")} loading={savingEway} error={ewayError} onCancel={() => { if (!savingEway) { setEwayPinOpen(false); setEwayOpen(true); } }} onConfirm={({ ownerPin }) => saveEwayDraft(ownerPin)} />
 
-      <OwnerPinModal open={eInvoicePinOpen} title={readinessQ.data?.provider.legalSubmission ? "Approve legal e-invoice submission" : "Approve sandbox validation"} description={readinessQ.data?.provider.legalSubmission ? "This sends the selected GST invoice to the configured certified provider. A repeated request uses the same idempotency identity." : "This creates validation evidence only and will not claim a legal IRN."} confirmLabel={readinessQ.data?.provider.legalSubmission ? "Submit e-invoice" : "Validate invoice"} loading={savingEInvoice} error={eInvoiceError} onCancel={() => { if (!savingEInvoice) { setEInvoicePinOpen(false); setEInvoiceOpen(true); } }} onConfirm={({ ownerPin }) => submitEInvoice(ownerPin)} />
+      <OwnerPinModal open={eInvoicePinOpen} title={readinessQ.data?.provider.legalSubmission ? t("settings.tax.approveEInvoiceSubmit") : t("settings.tax.approveSandbox")} description={readinessQ.data?.provider.legalSubmission ? t("settings.tax.eInvoiceSubmitHelp") : t("settings.tax.sandboxHelp")} confirmLabel={readinessQ.data?.provider.legalSubmission ? t("settings.tax.submitEInvoice") : t("settings.tax.validateInvoice")} loading={savingEInvoice} error={eInvoiceError} onCancel={() => { if (!savingEInvoice) { setEInvoicePinOpen(false); setEInvoiceOpen(true); } }} onConfirm={({ ownerPin }) => submitEInvoice(ownerPin)} />
 
-      <OwnerPinModal open={hsnPinOpen} title="Approve HSN category update" description={pendingHsn ? `Apply HSN ${pendingHsn.hsn} and ${pendingHsn.gstRate}% GST to every active product in ${pendingHsn.row.cat}.` : "Approve the product tax classification update."} confirmLabel="Update products" loading={savingHsn} error={editorError || null} onCancel={() => { if (!savingHsn) { setHsnPinOpen(false); setPendingHsn(null); setEditorError(""); } }} onConfirm={({ ownerPin }) => confirmHsnAssignment(ownerPin)} />
+      <OwnerPinModal open={hsnPinOpen} title={t("settings.tax.approveHsn")} description={pendingHsn ? `Apply HSN ${pendingHsn.hsn} and ${pendingHsn.gstRate}% GST to every active product in ${pendingHsn.row.cat}.` : t("settings.tax.approveClassification")} confirmLabel={t("settings.tax.updateProducts")} loading={savingHsn} error={editorError || null} onCancel={() => { if (!savingHsn) { setHsnPinOpen(false); setPendingHsn(null); setEditorError(""); } }} onConfirm={({ ownerPin }) => confirmHsnAssignment(ownerPin)} />
 
       <Dialog open={Boolean(hsnEditor)} onOpenChange={(open) => { if (!open) { setHsnEditor(null); setEditorError(""); } }}>
         <DialogContent className="max-w-md">

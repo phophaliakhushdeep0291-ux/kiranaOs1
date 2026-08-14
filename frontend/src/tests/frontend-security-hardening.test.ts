@@ -145,7 +145,7 @@ describe("frontend security hardening", () => {
     const source = readFileSync("src/components/shared/PermissionDenied.tsx", "utf8");
 
     expect(source).toContain('role="alert"');
-    expect(source).toContain("Permission needed");
+    expect(source).toContain("products.bulk.ownerPinRequired");
     expect(source).toContain('variant="destructive"');
   });
 

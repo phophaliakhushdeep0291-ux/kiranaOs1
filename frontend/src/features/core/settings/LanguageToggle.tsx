@@ -1,6 +1,6 @@
 import { Languages } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAppLanguage, type AppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type AppLanguage, type Translate } from "@/features/core/settings/i18n";
 
 /**
  * One tap between Hindi and English, for the screens a shopkeeper reaches before
@@ -11,19 +11,19 @@ import { useAppLanguage, type AppLanguage } from "@/features/core/settings/i18n"
  * labelled in its OWN language: a shopkeeper looking for Hindi looks for "हिन्दी",
  * not for the word "Hindi" written in a language he is trying to leave.
  */
-const OPTIONS: Array<{ value: AppLanguage; label: string }> = [
+const languageOptions = (t: Translate): Array<{ value: AppLanguage; label: string }> => [
   { value: "hi", label: "हिन्दी" },
-  { value: "en", label: "English" },
+  { value: "en", label: t("settings.advanced.languageEnglish") },
 ];
 
 export function LanguageToggle({ className }: { className?: string }) {
-  const { language, setLanguage } = useAppLanguage();
+  const { t, language, setLanguage } = useAppLanguage();
 
   return (
     <div className={cn("mt-4 inline-flex items-center gap-2", className)}>
       <Languages size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" />
       <div className="inline-flex rounded-[10px] border border-[#dce5f2] bg-[#f7f9fc] p-1">
-        {OPTIONS.map((option) => (
+        {languageOptions(t).map((option) => (
           <button
             key={option.value}
             type="button"

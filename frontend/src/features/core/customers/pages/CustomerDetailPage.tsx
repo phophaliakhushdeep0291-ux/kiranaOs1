@@ -89,6 +89,7 @@ const TIMELINE_META: Record<CustomerTimelineEvent["kind"], { icon: typeof Shoppi
 };
 
 function TimelineRow({ event }: { event: CustomerTimelineEvent }) {
+  const { t } = useAppLanguage();
   const meta = TIMELINE_META[event.kind];
   const Icon = meta.icon;
   return (
@@ -228,7 +229,7 @@ export default function CustomerDetailPage() {
       setReverse({ paymentId: "" });
       await refetch();
     } catch (error) {
-      toast({ title: t("customers.toast.reversalFailed"), description: error instanceof Error ? error.message : "Check owner PIN.", variant: "destructive" });
+      toast({ title: t("customers.toast.reversalFailed"), description: error instanceof Error ? error.message : t("customers.toast.checkOwnerPin"), variant: "destructive" });
     } finally { setSaving(false); }
   }
 
@@ -247,7 +248,7 @@ export default function CustomerDetailPage() {
       setAdjust({ amount: "", ownerPin: "", note: "" });
       await refetch();
     } catch (error) {
-      toast({ title: t("customers.toast.adjustmentFailed"), description: error instanceof Error ? error.message : "Check owner PIN.", variant: "destructive" });
+      toast({ title: t("customers.toast.adjustmentFailed"), description: error instanceof Error ? error.message : t("customers.toast.checkOwnerPin"), variant: "destructive" });
     } finally { setSaving(false); }
   }
 
@@ -347,9 +348,9 @@ export default function CustomerDetailPage() {
       <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>{t("customers.account.recordPayment")}</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>{t("customers.account.amountRequired")}</Label><Input type="number" inputMode="decimal" min="0" step="0.01" max={Math.max(0, customer.ledgerBalance)} className="mt-1" value={payment.amount} onChange={(event) => setPayment((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>{t("customers.account.mode")}</Label><Select value={payment.mode} onValueChange={(value) => setPayment((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">{t("customers.account.modeCash")}</SelectItem><SelectItem value="upi">{t("customers.account.modeUpi")}</SelectItem><SelectItem value="bank">{t("customers.account.modeBank")}</SelectItem></SelectContent></Select></div><div><Label>{t("customers.account.note")}</Label><Input className="mt-1" value={payment.note} onChange={(event) => setPayment((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>{t("customers.account.cancel")}</Button><Button disabled={saving} onClick={() => void savePayment()}>{saving ? "Saving..." : t("customers.detail.saveOffline")}</Button></div></DialogContent></Dialog>
       <OwnerPinModal
         open={reverseOpen}
-        title="Reverse payment"
-        description="Owner PIN is required. The old payment is preserved and a correction ledger entry is appended."
-        confirmLabel="Reverse payment"
+        title={t("customers.detail.reversePayment")}
+        description={t("customers.pinReversalPreserved")}
+        confirmLabel={t("customers.detail.reversePayment")}
         reasonRequired
         loading={saving}
         onCancel={() => setReverseOpen(false)}

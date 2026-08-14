@@ -49,6 +49,7 @@ describe("customer-facing display checkout contract", () => {
     expect(settings).toContain("settings.printer.testDisplay");
     expect(settingsEn).toContain('"settings.printer.testDisplay": "Test display"');
     expect(settings).toContain("bridgeHealth?.capabilities?.customerDisplay");
-    expect(settings).toContain("Customer display updates");
+    expect(settings).toContain("settings.printer.customerDisplay");
+    expect(settingsEn).toContain('"settings.printer.customerDisplay": "Customer display updates"');
   });
 });

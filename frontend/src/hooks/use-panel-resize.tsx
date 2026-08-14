@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 interface Options {
@@ -82,10 +83,11 @@ export function usePanelResize(storageKey: string, { defaultWidth = 420, min = 3
 
 /** Drag handle for the left edge of a docked panel. */
 export function PanelResizeHandle({ onResizeStart }: { onResizeStart: (e: ReactMouseEvent) => void }) {
+  const { t } = useAppLanguage();
   return (
     <div
       onMouseDown={onResizeStart}
-      title="Drag to resize"
+      title={t("billing.summary.dragToResize")}
       className="group absolute inset-y-0 left-0 z-10 hidden w-2.5 -translate-x-1/2 cursor-col-resize lg:block"
     >
       <span className="mx-auto block h-full w-1 bg-transparent transition-colors group-hover:bg-[var(--brand)]/30" />

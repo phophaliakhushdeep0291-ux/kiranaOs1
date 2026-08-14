@@ -147,7 +147,10 @@ describe("diagnostics report real runtime facts", () => {
 describe("accent picker repaints the app", () => {
   const css = readFileSync("src/index.css", "utf8");
   const theme = readFileSync("src/features/core/settings/theme.tsx", "utf8");
-  const accents = [...theme.matchAll(/^ {2}(\w+): \{ label:/gm)].map((m) => m[1]);
+  // The accent map holds swatches only now: the labels moved to `accentLabel(t)`
+  // so that `applyAccent`'s colour maths would not need a translator threaded
+  // through it. The picker still offers one entry per swatch.
+  const accents = [...theme.matchAll(/^ {2}(\w+): \{ swatch:/gm)].map((m) => m[1]);
 
   it("finds every swatch the picker offers", () => {
     expect(accents.length).toBeGreaterThanOrEqual(8);

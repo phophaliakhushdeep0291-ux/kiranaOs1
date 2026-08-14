@@ -142,10 +142,10 @@ export default function CategoriesPage() {
   }
 
   const cards = [
-    { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: "Total Categories", value: stats.total, sub: "Active categories" },
-    { icon: <FolderTree size={18} />, cls: "bg-blue-50 text-blue-600", label: "Root Categories", value: stats.root, sub: "Top level categories" },
-    { icon: <FolderTree size={18} />, cls: "bg-amber-50 text-amber-600", label: "Sub Categories", value: stats.sub, sub: "Child categories" },
-    { icon: <Boxes size={18} />, cls: "bg-emerald-50 text-emerald-600", label: "Products", value: stats.products, sub: "Under categories" },
+    { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: t("inventory.categories.total"), value: stats.total, sub: t("products.stats.categoriesHint") },
+    { icon: <FolderTree size={18} />, cls: "bg-blue-50 text-blue-600", label: t("inventory.categories.root"), value: stats.root, sub: t("inventory.categories.rootHelp") },
+    { icon: <FolderTree size={18} />, cls: "bg-amber-50 text-amber-600", label: t("inventory.categories.sub"), value: stats.sub, sub: t("inventory.categories.subHelp") },
+    { icon: <Boxes size={18} />, cls: "bg-emerald-50 text-emerald-600", label: t("billing.search.products"), value: stats.products, sub: t("inventory.categories.under") },
   ];
 
   return (
@@ -173,7 +173,7 @@ export default function CategoriesPage() {
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
           <Input
             className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
-            placeholder="Search categories..."
+            placeholder={t("inventory.categories.search")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -299,7 +299,7 @@ function CategoryDialog({
       style={{ width }}
       className={`app-slide-panel fixed right-0 top-0 z-[80] flex h-[100dvh] w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog"
-      aria-label={editing ? "Edit category" : "Add category"}
+      aria-label={editing ? t("inventory.categories.edit") : t("inventory.categories.add")}
       aria-hidden={!open}
     >
       <PanelResizeHandle onResizeStart={onResizeStart} />
@@ -308,13 +308,13 @@ function CategoryDialog({
           <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{editing ? "Edit Category" : "Add Category"}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{editing ? "Update this category." : "Create a new product category."}</p>
         </div>
-        <button onClick={() => onOpenChange(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+        <button onClick={() => onOpenChange(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label={t("billing.pay.dynamicQr.close")}><X size={18} /></button>
       </div>
 
       <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
         <div>
           <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.categories.name")}<span className="ml-0.5 text-rose-500">*</span></Label>
-          <Input className="h-10" placeholder="e.g. Beverages" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <Input className="h-10" placeholder={t("inventory.categories.namePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </div>
         <div>
           <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.categories.parent")}</Label>
@@ -356,6 +356,7 @@ function CategoryDialog({
 }
 
 function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const { t } = useAppLanguage();
   const pages: (number | "…")[] = [];
   if (totalPages <= 7) for (let i = 1; i <= totalPages; i++) pages.push(i);
   else {
@@ -367,12 +368,12 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
   }
   return (
     <div className="flex items-center gap-1.5 lg:mouse:gap-1">
-      <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="grid h-11 w-11 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40 lg:mouse:h-8 lg:mouse:w-8" aria-label="Previous"><ChevronLeft size={15} /></button>
+      <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="grid h-11 w-11 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40 lg:mouse:h-8 lg:mouse:w-8" aria-label={t("inventory.counts.previous")}><ChevronLeft size={15} /></button>
       {pages.map((p, i) => p === "…" ? <span key={`e${i}`} className="px-1.5 text-[12px] text-[#9aa6bb]">…</span> : (
         <button key={p} onClick={() => onChange(p)} aria-current={p === page ? "page" : undefined}
             className={`grid h-11 min-w-11 place-items-center rounded-lg px-2 text-[12px] font-bold transition-colors lg:mouse:h-8 lg:mouse:min-w-8 ${p === page ? "bg-[var(--brand)] text-white shadow-[0_4px_10px_rgba(0,87,255,0.25)]" : "border border-[#e3eaf3] text-[#45577a] hover:bg-[#f7f9fd]"}`}>{p}</button>
       ))}
-      <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="grid h-11 w-11 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40 lg:mouse:h-8 lg:mouse:w-8" aria-label="Next"><ChevronRight size={15} /></button>
+      <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="grid h-11 w-11 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40 lg:mouse:h-8 lg:mouse:w-8" aria-label={t("inventory.counts.next")}><ChevronRight size={15} /></button>
     </div>
   );
 }

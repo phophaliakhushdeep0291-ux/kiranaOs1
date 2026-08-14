@@ -10,14 +10,14 @@ describe("workflow simplification", () => {
   it("keeps purchase planning secondary to the core receiving workflow", () => {
     const source = read("src/features/core/purchases/components/PurchaseWorkflow.tsx");
 
-    expect(source).toContain('aria-label="Purchase workflow"');
+    expect(source).toContain('aria-label={t("chrome.purchaseWorkflow")}');
     expect(source).toContain('"1. Order", "2. Receive stock", "3. Record bill", "4. Settle due"');
     expect(source).toContain("{showPlanning &&");
   });
 
   it("uses a compact four-metric customer summary", () => {
     const source = read("src/features/core/customers/pages/CustomersPage.tsx");
-    const summary = source.slice(source.indexOf('aria-label="Customer account summary"'), source.indexOf("</section>", source.indexOf('aria-label="Customer account summary"')));
+    const summary = source.slice(source.indexOf('aria-label={t("customers.accountSummary")}'), source.indexOf("</section>", source.indexOf('aria-label={t("customers.accountSummary")}')));
 
     expect(summary.match(/<CustomerMetricCard/g)).toHaveLength(4);
   });

@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useRef, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import { useState } from "react";
 import { Upload, File, X } from "lucide-react";
@@ -20,6 +21,7 @@ export function FileUploadBox({
   label, hint, error, accept, multiple = false,
   maxSizeMB = 5, onFilesChange, icon, className, disabled,
 }: FileUploadBoxProps) {
+  const { t } = useAppLanguage();
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +52,7 @@ export function FileUploadBox({
       <div
         role="button"
         tabIndex={disabled ? -1 : 0}
-        aria-label={label ?? "Upload file"}
+        aria-label={label ?? t("chrome.uploadFile")}
         onClick={() => !disabled && inputRef.current?.click()}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inputRef.current?.click(); } }}
         onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}

@@ -261,7 +261,7 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
             type="password"
             inputMode="numeric"
             autoComplete="off"
-            aria-label="Owner PIN"
+            aria-label={t("inventory.transfers.ownerPin")}
             className="session-lock-input"
             placeholder="••••"
             value={pin}

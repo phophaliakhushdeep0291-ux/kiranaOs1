@@ -42,7 +42,7 @@ describe("premium UX foundations", () => {
     expect(dataTable).toContain('role="region"');
     expect(dataTable).toContain("tabIndex={0}");
     expect(dataTable).toContain("tableLabel");
-    expect(toast).toContain('aria-label="Dismiss notification"');
+    expect(toast).toContain('aria-label={t("chrome.dismissNotification")}');
   });
 
   it("replaces browser-native prompts with validated product dialogs", () => {

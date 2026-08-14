@@ -43,7 +43,7 @@ import { useBusinessType } from "@/features/core/settings/business-types";
 import { useBusinessTypeServerSync } from "@/features/core/settings/business-type-sync";
 import { isPathAllowedByCapabilities, isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { useModuleVisibility } from "@/features/core/settings/modules";
-import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type Translate, type TranslationKey } from "@/features/core/settings/i18n";
 import { useModuleVisibilityServerSync } from "@/features/core/settings/module-visibility-sync";
 import { useActiveVerticalPack } from "@/features/verticals/registry";
 import { VoiceAssistant } from "@/features/core/voice/VoiceAssistant";
@@ -93,30 +93,77 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/sync-status": "Monitor cloud backup and local-first safety",
 };
 
-const PAGE_TITLES: Record<string, string> = {
-  "/bills": "Billing History",
-  "/inventory/batches": "Batch & Expiry",
-  "/loyalty": "Customer Loyalty",
-  "/purchase-bills": "Purchases",
-  "/returns/new": "Return Items",
-  "/customers": "Customers / Udhar",
-  "/reports": "Reports & Analytics",
-  "/activity-insights": "Activity & Insights",
-  "/money-statement": "Cash & Payments",
-  "/assurance": "Financial Assurance",
-  "/assurance/findings": "Assurance Findings",
-  "/assurance/report": "Financial Assurance Report",
-  "/offers": "Offers & Discounts",
-  "/sync-status": "Cloud Backup",
+/**
+ * Route to title key. This is the string a shopkeeper reads on every screen to
+ * know where they are, so it is translated rather than derived from the URL.
+ * Ordered longest-first so "/settings/sync" is not answered by "/settings".
+ */
+const PAGE_TITLE_KEYS: Record<string, TranslationKey> = {
+  "/inventory/stock-transfers": "page.title.inventory.stocktransfers",
+  "/inventory/stock-counts": "page.title.inventory.stockcounts",
+  "/settings/store-profile": "page.title.settings.storeprofile",
+  "/settings/notifications": "page.title.settings.notifications",
+  "/inventory/adjustments": "page.title.inventory.adjustments",
+  "/settings/integrations": "page.title.settings.integrations",
+  "/inventory/stock-out": "page.title.inventory.stockout",
+  "/inventory/stock-in": "page.title.inventory.stockin",
+  "/assurance/findings": "page.title.assurance.findings",
+  "/inventory/batches": "page.title.inventory.batches",
+  "/activity-insights": "page.title.activityinsights",
+  "/settings/security": "page.title.settings.security",
+  "/settings/advanced": "page.title.settings.advanced",
+  "/settings/billing": "page.title.settings.billing",
+  "/settings/printer": "page.title.settings.printer",
+  "/settings/modules": "page.title.settings.modules",
+  "/settings/devices": "page.title.settings.devices",
+  "/assurance/report": "page.title.assurance.report",
+  "/money-statement": "page.title.moneystatement",
+  "/orders-received": "page.title.ordersreceived",
+  "/purchase-bills": "page.title.purchasebills",
+  "/sales-overview": "page.title.salesoverview",
+  "/settings/taxes": "page.title.settings.taxes",
+  "/settings/staff": "page.title.settings.staff",
+  "/settings/setup": "page.title.settings.setup",
+  "/daily-closing": "page.title.dailyclosing",
+  "/settings/sync": "page.title.settings.sync",
+  "/subscription": "page.title.subscription",
+  "/returns/new": "page.title.returns.new",
+  "/recycle-bin": "page.title.recyclebin",
+  "/smart-tools": "page.title.smarttools",
+  "/sync-status": "page.title.syncstatus",
+  "/categories": "page.title.categories",
+  "/gift-cards": "page.title.giftcards",
+  "/audit-logs": "page.title.auditlogs",
+  "/dashboard": "page.title.dashboard",
+  "/inventory": "page.title.inventory",
+  "/customers": "page.title.customers",
+  "/suppliers": "page.title.suppliers",
+  "/assurance": "page.title.assurance",
+  "/products": "page.title.products",
+  "/expenses": "page.title.expenses",
+  "/settings": "page.title.settings",
+  "/billing": "page.title.billing",
+  "/reports": "page.title.reports",
+  "/returns": "page.title.returns",
+  "/loyalty": "page.title.loyalty",
+  "/devices": "page.title.devices",
+  "/offers": "page.title.offers",
+  "/bills": "page.title.bills",
+  "/staff": "page.title.staff",
+  "/plans": "page.title.plans",
+  "/help": "page.title.help",
 };
 
-function getPageTitle(loc: string): string {
-  if (PAGE_TITLES[loc]) return PAGE_TITLES[loc];
-  const parent = Object.keys(PAGE_TITLES).find((path) => loc.startsWith(`${path}/`));
-  if (parent) return PAGE_TITLES[parent];
-  const segment = cleanPath(loc).split("/").filter(Boolean).at(-1);
+function getPageTitle(loc: string, t: Translate): string {
+  const path = cleanPath(loc);
+  if (PAGE_TITLE_KEYS[path]) return t(PAGE_TITLE_KEYS[path]);
+  const parent = Object.keys(PAGE_TITLE_KEYS).find((candidate) => path.startsWith(`${candidate}/`));
+  if (parent) return t(PAGE_TITLE_KEYS[parent]);
+  // An unlisted screen (platform admin, deep assurance links) still needs a
+  // name; title-casing its last segment is the honest fallback.
+  const segment = path.split("/").filter(Boolean).at(-1);
   return segment
-    ? segment.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+    ? segment.replace(/-/g, " ").replace(/\w/g, (letter) => letter.toUpperCase())
     : "Artha";
 }
 
@@ -246,7 +293,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   const { t } = useAppLanguage();
   const { user, logout, shop } = useAuth();
   const [loc] = useLocation();
-  const resolvedPageTitle = pageTitle ?? getPageTitle(loc);
+  const resolvedPageTitle = pageTitle ?? getPageTitle(loc, t);
   const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
   const { snapshot } = useSubscriptionSnapshot();
   const { def: btDef } = useBusinessType();

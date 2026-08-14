@@ -14,7 +14,8 @@ describe("bill history connection badge", () => {
     expect(source).toContain("Backing up");
     expect(source).toContain("Cloud paused");
     expect(source).toContain("Checking backup");
-    expect(source).toContain("Offline ready");
+    expect(source).toContain("chrome.sync.offlineReady");
+    expect(readFileSync("src/features/core/settings/translations/shell.ts", "utf8")).toContain("Offline ready");
     expect(source).not.toContain("Works offline");
   });
 });

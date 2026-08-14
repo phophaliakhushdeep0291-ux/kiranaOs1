@@ -1,17 +1,18 @@
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { CheckCircle2, CloudOff, Loader2, AlertTriangle, Database } from "lucide-react";
 import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 export type SyncBadgeStatus = "synced" | "pending" | "failed" | "offline" | "local" | "estimate";
 
-const statusConfig: Record<SyncBadgeStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
-  synced: { label: "Synced", className: "border-emerald-200 bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
-  pending: { label: "Pending sync", className: "border-amber-200 bg-amber-50 text-amber-700", icon: Loader2 },
-  failed: { label: "Sync failed", className: "border-destructive/20 bg-destructive/10 text-destructive", icon: AlertTriangle },
-  offline: { label: "Offline", className: "border-slate-200 bg-slate-50 text-slate-700", icon: CloudOff },
-  local: { label: "Local data", className: "border-blue-200 bg-blue-50 text-blue-700", icon: Database },
-  estimate: { label: "Local estimate", className: "border-amber-200 bg-amber-50 text-amber-700", icon: AlertTriangle },
-};
+const syncStatuses = (t: Translate): Record<SyncBadgeStatus, { label: string; className: string; icon: typeof CheckCircle2 }> => ({
+  synced: { label: t("dashboard.health.synced"), className: "border-emerald-200 bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
+  pending: { label: t("dashboard.pendingSync"), className: "border-amber-200 bg-amber-50 text-amber-700", icon: Loader2 },
+  failed: { label: t("chrome.sync.failed"), className: "border-destructive/20 bg-destructive/10 text-destructive", icon: AlertTriangle },
+  offline: { label: t("dashboard.health.offline"), className: "border-slate-200 bg-slate-50 text-slate-700", icon: CloudOff },
+  local: { label: t("chrome.sync.localData"), className: "border-blue-200 bg-blue-50 text-blue-700", icon: Database },
+  estimate: { label: t("chrome.sync.localEstimate"), className: "border-amber-200 bg-amber-50 text-amber-700", icon: AlertTriangle },
+});
 
 export interface SyncBadgeProps extends HTMLAttributes<HTMLSpanElement> {
   status: SyncBadgeStatus;
@@ -19,7 +20,8 @@ export interface SyncBadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 export function SyncBadge({ status, label, className, ...props }: SyncBadgeProps) {
-  const config = statusConfig[status];
+  const { t } = useAppLanguage();
+  const config = syncStatuses(t)[status];
   const Icon = config.icon;
   const isSpinner = status === "pending";
   return (
