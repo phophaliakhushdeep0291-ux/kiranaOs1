@@ -63,6 +63,7 @@ export const shellEn = {
   "dashboard.totalSales": "Total Sales",
   "dashboard.vsPreviousPeriod": "vs previous period",
   "dashboard.vsYesterday": "vs yesterday",
+  "dashboard.noChange": "No change",
   "dashboard.recentBills": "Recent Bills",
   "dashboard.noRecentBills": "No recent bills yet",
   "dashboard.billsToday": "Bills today",

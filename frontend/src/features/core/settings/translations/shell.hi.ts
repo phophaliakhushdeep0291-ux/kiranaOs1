@@ -61,6 +61,7 @@ export const shellHi: Record<keyof typeof shellEn, string> = {
   "dashboard.totalSales": "कुल बिक्री",
   "dashboard.vsPreviousPeriod": "पिछली अवधि की तुलना में",
   "dashboard.vsYesterday": "कल की तुलना में",
+  "dashboard.noChange": "कोई बदलाव नहीं",
   "dashboard.recentBills": "हाल के बिल",
   "dashboard.noRecentBills": "अभी कोई बिल नहीं",
   "dashboard.billsToday": "आज के बिल",

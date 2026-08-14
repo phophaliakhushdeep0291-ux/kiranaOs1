@@ -80,6 +80,18 @@ function compactBillNumber(value: unknown): string {
   return String(Number.parseInt(numericSuffix, 10));
 }
 
+/**
+ * Up, down or flat, as one call rather than a nested ternary in the JSX.
+ *
+ * Inline, the branches read to the hardcoded-string scanner as literal text and
+ * it reports a phantom string — one this file could never translate away, which
+ * would keep it stuck on the untranslated allowlist forever.
+ */
+function deltaTrendIcon(delta: number, size: number) {
+  if (delta === 0) return <Minus size={size} />;
+  return delta > 0 ? <ArrowUpRight size={size} /> : <ArrowDownRight size={size} />;
+}
+
 function RecentBillPaymentBadge({ mode }: { mode: string }) {
   const normalized = mode.trim().toLowerCase();
   const style = normalized === "cash"
@@ -874,7 +886,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                 {periodSalesDelta !== null && (
                   <span className="flex items-center gap-1.5 text-[11px] font-semibold">
                     <span className={cn("inline-flex items-center gap-0.5 font-bold", periodSalesDelta === 0 ? "text-[#62708a]" : periodSalesDelta > 0 ? "text-[#16a34a]" : "text-[#ff304f]")}>
-                      {periodSalesDelta === 0 ? <Minus size={11} /> : periodSalesDelta > 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+                      {deltaTrendIcon(periodSalesDelta, 11)}
                       {Math.abs(periodSalesDelta)}%
                     </span>
                     <span className="text-[#7a879b]">{t("dashboard.vsPreviousPeriod")}</span>
@@ -1105,7 +1117,6 @@ interface MobileGeneralDashboardProps {
 }
 
 function MobileGeneralDashboard({
-  const { t } = useAppLanguage();
   businessType,
   dashboard,
   ownerReport,
@@ -1126,6 +1137,7 @@ function MobileGeneralDashboard({
   periodSales,
   periodSalesDelta,
 }: MobileGeneralDashboardProps) {
+  const { t } = useAppLanguage();
   const syncHealthy = failedCount === 0 && pendingCount === 0;
   const topRows = ownerReport?.topProducts.slice(0, 5) ?? [];
   const productsById = new Map(recentProducts.map((product) => [product.id, product]));
@@ -1187,7 +1199,7 @@ function MobileGeneralDashboard({
             <h2 className="font-display text-[19px] font-black text-[#071333]">{t("dashboard.shopHealth")}</h2>
             <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">{t("dashboard.shopHealthHelp")}</p>
           </div>
-          <Link href="/reports" className="inline-flex min-h-11 items-center gap-1 rounded-[12px] px-3 text-[12px] font-black text-[var(--brand)]">All reports <ChevronRight size={15} /></Link>
+          <Link href="/reports" className="inline-flex min-h-11 items-center gap-1 rounded-[12px] px-3 text-[12px] font-black text-[var(--brand)]">{t("dashboard.allReports")} <ChevronRight size={15} /></Link>
         </div>
         <div className="grid grid-cols-2 gap-2.5">
           <MobileHealthCard href="/reports" label="Gross profit" value={fmtCompactRs(dashboard.grossProfit)} detail="Estimated today" delta={profitDelta} icon={<TrendingUp size={18} />} tone="green" />
@@ -1238,7 +1250,7 @@ function MobileGeneralDashboard({
           <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={salesDelta == null ? "No sales yesterday to compare against yet." : `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle="Review the sales trend and payment mix." />
           <MobileInsight tone="orange" icon={<Package size={15} />} title={`${ownerReport?.topProducts[0]?.name ?? "Your top product"} is leading sales.`} subtitle="Keep the best sellers available in stock." />
           <MobileInsight tone="rose" icon={<Users size={15} />} title={`${dashboard.outstandingCustomers.length} customers have outstanding dues.`} subtitle="Follow up to improve cash flow." />
-          <Link href="/reports" className="flex min-h-12 items-center justify-center gap-2 border-t border-[#e7edf5] text-[12px] font-black text-[var(--brand)]">View detailed insights <ArrowUpRight size={14} /></Link>
+          <Link href="/reports" className="flex min-h-12 items-center justify-center gap-2 border-t border-[#e7edf5] text-[12px] font-black text-[var(--brand)]">{t("dashboard.viewDetailedInsights")} <ArrowUpRight size={14} /></Link>
         </div>
       </section>
 
@@ -1310,8 +1322,12 @@ function MobileHealthCard({ href, label, value, detail, delta, positiveIsBad = f
   icon: ReactNode;
   tone: "green" | "red" | "amber" | "violet";
 }) {
+  const { t } = useAppLanguage();
   const iconTone = tone === "green" ? "bg-[#e8f9ee] text-[#159447]" : tone === "red" ? "bg-[#ffedf0] text-[#e63c51]" : tone === "amber" ? "bg-[#fff3e1] text-[#d98200]" : "bg-[#f0ebff] text-[#7047eb]";
-  const bad = delta != null && (positiveIsBad ? delta > 0 : delta < 0);
+  // Math.sign rather than a `> 0 : … < 0` chain: the hardcoded-string scanner
+  // matches `>text<`, so a comparison followed by a comparison reads to it as a
+  // user-visible string and pins the file to the untranslated allowlist.
+  const bad = delta != null && Math.sign(delta) === (positiveIsBad ? 1 : -1);
   const deltaTone = delta == null ? "text-[#7b8799]" : bad ? "text-[#df3347]" : "text-[#159447]";
   return (
     <Link href={href} className="flex min-h-[142px] min-w-0 flex-col rounded-[19px] border border-[#e1e9f3] bg-white p-3.5 shadow-[0_10px_26px_rgba(26,57,112,0.055)] transition-transform active:scale-[0.98]">
@@ -1322,7 +1338,7 @@ function MobileHealthCard({ href, label, value, detail, delta, positiveIsBad = f
       <p className="mt-3 text-[11px] font-bold text-[#62708a]">{label}</p>
       <p className="mt-1 truncate font-display text-[22px] font-black tracking-tight text-[#071333]">{value}</p>
       <div className="mt-auto flex min-w-0 items-center gap-1 pt-2 text-[10.5px] font-bold">
-        {delta != null ? <span className={deltaTone}>{delta === 0 ? "No change" : `${delta > 0 ? "+" : ""}${delta}%`}</span> : null}
+        {delta != null ? <span className={deltaTone}>{delta === 0 ? t("dashboard.noChange") : `${delta > 0 ? "+" : ""}${delta}%`}</span> : null}
         <span className="truncate text-[#7b8799]">{delta != null ? "· " : ""}{detail}</span>
       </div>
     </Link>
@@ -1334,7 +1350,7 @@ function MobileDelta({ delta, inverse = false }: { delta: number | null; inverse
   const color = inverse
     ? delta == null || delta === 0 ? "text-blue-100/70" : delta > 0 ? "text-emerald-300" : "text-rose-300"
     : delta == null ? "text-[#94a3b8]" : delta === 0 ? "text-[#718096]" : delta > 0 ? "text-[#16a34a]" : "text-[#ef3340]";
-  const deltaIcon = delta === 0 ? <Minus size={9} /> : delta != null && delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />;
+  const deltaIcon = delta == null ? null : deltaTrendIcon(delta, 9);
   return (
     <span className="inline-flex items-center gap-1 text-[9px] font-semibold">
       {/* Chosen ahead of the JSX rather than inline: nested ternaries returning
@@ -2158,7 +2174,6 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
 // ─── drilldown dialog ─────────────────────────────────────────────────────────
 
 function DashboardDrilldownDialog({
-  const { t } = useAppLanguage();
   type, snapshot, cashInDrawer, onOpenChange,
 }: {
   type: DrilldownType | null;
@@ -2166,6 +2181,7 @@ function DashboardDrilldownDialog({
   cashInDrawer: number;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useAppLanguage();
   const title = type === "revenue" ? "Revenue Breakdown" : type === "profit" ? "Profit Breakdown" : "Cash Collection";
   const description = type === "revenue" ? "Bills included in today's revenue." : type === "profit" ? "Product-level profit from saved bill items." : "Cash, UPI, and bank collection split for today.";
 

@@ -53,8 +53,12 @@ describe("POS workspace responsive design", () => {
 
   it("does not squeeze seven owner metrics into a standard laptop row", () => {
     expect(dashboard).toContain("xl:grid-cols-4 2xl:grid-cols-7");
-    expect(dashboard).toContain("Open your counter in three simple steps");
-    expect(dashboard).toContain("Get ready for your first customer");
+    // These assert the desktop and mobile quick-start blocks are both present.
+    // They match on translation keys rather than English prose because the
+    // dashboard now reads its copy from the dictionary — pinning the literal
+    // would fail the moment a screen is translated, which is backwards.
+    expect(dashboard).toContain('t("dashboard.quickStartSteps")');
+    expect(dashboard).toContain('t("dashboard.getReady")');
   });
 
   it("keeps product overview compact and avoids a duplicate floating add action", () => {
