@@ -123,4 +123,8 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.counts.countsMustBeZeroOrMore": "हर बदली हुई गिनती शून्य या उससे ज़्यादा होनी चाहिए।",
   "inventory.counts.chooseCount": "पहले कोई गिनती चुनें।",
   "inventory.counts.noActionSelected": "कोई स्टॉक गिनती कार्रवाई नहीं चुनी गई।",
+  "inventory.counts.applied": "स्टॉक अपडेट हो गया",
+  "inventory.counts.appliedHelp": "हर अंतर स्थायी स्टॉक रिकॉर्ड में दर्ज हो गया।",
+  "inventory.counts.cancelled": "स्टॉक गिनती रद्द",
+  "inventory.counts.cancelledHelp": "स्टॉक की कोई मात्रा नहीं बदली गई।",
 };

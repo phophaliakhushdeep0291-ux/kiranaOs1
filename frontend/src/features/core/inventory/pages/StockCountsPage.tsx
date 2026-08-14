@@ -36,7 +36,6 @@ const statusStyle: Record<StockCountSession["status"], string> = {
 const QTY_FORMAT = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
 
 function displayQty(value: number | null | undefined) {
-  const { t } = useAppLanguage();
   return value === null || value === undefined ? "—" : QTY_FORMAT.format(value);
 }
 
@@ -146,7 +145,7 @@ export default function StockCountsPage() {
     },
     onSuccess: (data) => {
       const action = approval; setApproval(null); setApprovalError(null); refresh(data);
-      toast({ title: action === "apply" ? "Inventory updated" : "Stock count cancelled", description: action === "apply" ? "Every variance is posted to the permanent stock ledger." : "No inventory quantities were changed." });
+      toast({ title: action === "apply" ? t("inventory.counts.applied") : t("inventory.counts.cancelled"), description: action === "apply" ? t("inventory.counts.appliedHelp") : t("inventory.counts.cancelledHelp") });
     },
     onError: (error: Error) => setApprovalError(error.message),
   });

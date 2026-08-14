@@ -131,4 +131,8 @@ export const inventoryEn = {
   "inventory.counts.countsMustBeZeroOrMore": "Every changed count must be zero or more.",
   "inventory.counts.chooseCount": "Choose a count first.",
   "inventory.counts.noActionSelected": "No stock count action is selected.",
+  "inventory.counts.applied": "Inventory updated",
+  "inventory.counts.appliedHelp": "Every variance is posted to the permanent stock ledger.",
+  "inventory.counts.cancelled": "Stock count cancelled",
+  "inventory.counts.cancelledHelp": "No inventory quantities were changed.",
 } as const;
