@@ -1,3 +1,4 @@
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   getGetInventoryQueryKey,
@@ -175,17 +176,18 @@ const initialForm: MovementForm = {
 };
 
 function isLowStock(product: InventoryItem) {
+  const { t } = useAppLanguage();
   if ((product.stockTrackingEnabled ?? product.trackStock ?? true) === false) return false;
   // Both sides are base units; no threshold (0) means never "low" — matches the backend filter.
   const threshold = Number(product.lowStockThreshold ?? 0);
   return threshold > 0 && Number(product.stockBaseQty ?? 0) <= threshold;
 }
 
-function movementLabel(type: string) {
-  if (type === "purchase") return "Purchase";
-  if (type === "sale") return "Sale";
-  if (type === "damage") return "Damage/Wastage";
-  if (type === "correction") return "Correction";
+function movementLabel(type: string, t: Translate) {
+  if (type === "purchase") return t("inventory.page.purchase");
+  if (type === "sale") return t("inventory.page.manualSale");
+  if (type === "damage") return t("inventory.page.damage");
+  if (type === "correction") return t("inventory.page.correction");
   return type;
 }
 
@@ -228,12 +230,12 @@ function purchaseDue(row: MovementEntry) {
   return Math.max(0, purchaseTotal(row) - purchasePaid(row));
 }
 
-function purchaseStatus(row: MovementEntry) {
+function purchaseStatus(row: MovementEntry, t: Translate) {
   const status = String(row.purchasePaymentStatus ?? row.purchase_payment_status ?? "").toLowerCase();
-  if (status === "due" || status === "unpaid") return "Due";
-  if (status === "partial") return "Partial";
-  if (purchaseDue(row) > 0) return "Partial";
-  return "Paid";
+  if (status === "due" || status === "unpaid") return t("inventory.page.due");
+  if (status === "partial") return t("inventory.page.partial");
+  if (purchaseDue(row) > 0) return t("inventory.page.partial");
+  return t("inventory.page.paid");
 }
 
 /** §13 INVENTORY_VIEW — one event per visit, not per re-render. */
@@ -247,6 +249,7 @@ function useTrackedInventoryView() {
 }
 
 export default function InventoryPage() {
+  const { t } = useAppLanguage();
   useTrackedInventoryView();
   const { toast } = useToast();
   const manageInventory = usePermission("manage_inventory");
@@ -275,7 +278,7 @@ export default function InventoryPage() {
   const stockCorrection = useStockCorrection({ mutation: { onSuccess: () => afterMovementSaved("Stock correction saved locally"), onError: showError } });
 
   function showError(error: unknown) {
-    toast({ title: "Could not save stock movement", description: (error as { message?: string })?.message ?? "Please check the form.", variant: "destructive" });
+    toast({ title: t("inventory.page.saveFailed"), description: (error as { message?: string })?.message ?? "Please check the form.", variant: "destructive" });
   }
 
   function refreshQueries() {
@@ -289,7 +292,7 @@ export default function InventoryPage() {
     refreshQueries();
     setDialogOpen(false);
     setForm(initialForm);
-    toast({ title, description: "Inventory is updated locally and will sync when internet is available." });
+    toast({ title, description: t("inventory.page.savedLocally") });
   }
 
   useEffect(() => {
@@ -384,7 +387,7 @@ export default function InventoryPage() {
       const draft = detail?.draft;
       if (!draft) return;
       if (!manageInventory.allowed) {
-        toast({ title: "Permission denied", description: manageInventory.reason, variant: "destructive" });
+        toast({ title: t("inventory.page.permissionDenied"), description: manageInventory.reason, variant: "destructive" });
         return;
       }
       const lookupName = String(draft.productName ?? "").trim().toLowerCase();
@@ -489,7 +492,7 @@ export default function InventoryPage() {
 
   function openMovement(type: MovementType, product?: Product | InventoryItem) {
     if (!manageInventory.allowed) {
-      toast({ title: "Permission denied", description: manageInventory.reason, variant: "destructive" });
+      toast({ title: t("inventory.page.permissionDenied"), description: manageInventory.reason, variant: "destructive" });
       return;
     }
     const unit = inventoryMovementUnit(product);
@@ -508,7 +511,7 @@ export default function InventoryPage() {
   }
 
   function exportInventory() {
-    const header = ["Product", "SKU / Barcode", "Category", "Brand", "Unit", "Stock", "Cost Price", "Stock Value", "Status"];
+    const header = [t("inventory.col.product"), t("inventory.col.skuBarcode"), t("inventory.col.category"), "Brand", t("inventory.col.unit"), t("inventory.col.stock"), "Cost Price", "Stock Value", t("inventory.col.status")];
     const lines = inventoryRows.map((item) => {
       const unit = inventoryUnitLabel(item);
       const qty = inventoryDisplayQuantity(item);
@@ -530,25 +533,25 @@ export default function InventoryPage() {
   async function handleSubmit() {
     const quantity = Number(form.quantity);
     if (!form.productId) {
-      toast({ title: "Select product", variant: "destructive" });
+      toast({ title: t("inventory.page.selectProduct"), variant: "destructive" });
       return;
     }
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      toast({ title: "Enter valid quantity", variant: "destructive" });
+      toast({ title: t("inventory.page.enterValidQuantity"), variant: "destructive" });
       return;
     }
     if (form.movementType === "purchase") {
       if (purchaseBillAmount <= 0) {
-        toast({ title: "Enter purchase bill amount", description: "Supplier purchase bill amount is needed for payment/due tracking.", variant: "destructive" });
+        toast({ title: t("inventory.page.enterBillAmount"), description: t("inventory.page.enterBillAmountHelp"), variant: "destructive" });
         return;
       }
       if (purchasePaidAmount < 0 || purchasePaidAmount > purchaseBillAmount) {
-        toast({ title: "Invalid paid amount", description: "Paid amount cannot be negative or greater than purchase bill amount.", variant: "destructive" });
+        toast({ title: t("inventory.page.invalidPaidAmount"), description: t("inventory.page.invalidPaidAmountHelp"), variant: "destructive" });
         return;
       }
     }
     if (!manageInventory.allowed) {
-      toast({ title: "Permission denied", description: manageInventory.reason, variant: "destructive" });
+      toast({ title: t("inventory.page.permissionDenied"), description: manageInventory.reason, variant: "destructive" });
       return;
     }
     // Damage and correction both adjust stock outside a sale — the server sync
@@ -665,14 +668,14 @@ export default function InventoryPage() {
           <DropdownMenuTrigger asChild>
             <button type="button" className="group col-span-2 flex min-h-[82px] w-full items-center gap-3 rounded-[16px] border border-[#e2e8f1] bg-white px-3.5 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)] lg:col-span-1">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#eef4ff] text-[var(--brand)]"><Ellipsis size={20} /></span>
-              <span className="min-w-0"><span className="block text-[13px] font-bold text-[#13223f]">More Actions</span><span className="mt-1 block text-[11px] leading-4 text-[#6d7c98]">History, bills and insights</span></span>
+              <span className="min-w-0"><span className="block text-[13px] font-bold text-[#13223f]">{t("inventory.page.moreActions")}</span><span className="mt-1 block text-[11px] leading-4 text-[#6d7c98]">{t("inventory.page.moreActionsHelp")}</span></span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem onClick={() => setActiveTab("movements")}><History size={15} className="mr-2" />Movement history</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setActiveTab("purchase-bills")}><ClipboardList size={15} className="mr-2" />Purchase bills</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setActiveTab("reports")}><BarChart3 size={15} className="mr-2" />Inventory insights</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setActiveTab("batch")}><CalendarClock size={15} className="mr-2" />Batch and expiry</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setActiveTab("movements")}><History size={15} className="mr-2" />{t("inventory.page.movementHistory")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setActiveTab("purchase-bills")}><ClipboardList size={15} className="mr-2" />{t("inventory.page.purchaseBills")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setActiveTab("reports")}><BarChart3 size={15} className="mr-2" />{t("inventory.page.insights")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setActiveTab("batch")}><CalendarClock size={15} className="mr-2" />{t("inventory.page.batchExpiry")}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -680,23 +683,23 @@ export default function InventoryPage() {
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)} className="space-y-4">
         {activeTab !== "dashboard" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 py-3">
-            <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? "Movement History" : activeTab === "purchase-bills" ? "Purchase Bills" : activeTab === "reports" ? "Inventory Insights" : "Batch & Expiry"}</p><p className="text-[11px] text-[#718096]">Detailed inventory records and controls.</p></div>
-            <Button variant="outline" className="h-9 rounded-[8px] text-[11px]" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />Back to stock</Button>
+            <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? "Movement History" : activeTab === "purchase-bills" ? "Purchase Bills" : activeTab === "reports" ? "Inventory Insights" : "Batch & Expiry"}</p><p className="text-[11px] text-[#718096]">{t("inventory.page.detailRecords")}</p></div>
+            <Button variant="outline" className="h-9 rounded-[8px] text-[11px]" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />{t("inventory.page.backToStock")}</Button>
           </div>
         ) : null}
         <TabsContent value="dashboard" className="mt-0 space-y-4">
           {/* `min-w-0` on the grid child: a grid item defaults to `min-width:auto`,
               so it refuses to shrink below its content's intrinsic width. The
               240px search box below made that 384px, which pushed this card nine
-              pixels past a 375px screen and sliced the "Reorder" buttons off the
+              pixels past a 375px screen and sliced the t("inventory.page.reorder") buttons off the
               right edge of every low-stock row. */}
           <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2.15fr)_minmax(300px,0.95fr)]">
             <section className="min-w-0 overflow-hidden rounded-[12px] border border-[#e2e8f1] bg-white shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
               <div className="border-b border-[#e8edf4] p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <h2 className="text-[15px] font-semibold text-[#13223f]">Product Stock</h2>
-                    <p className="mt-0.5 text-[11px] text-[#6d7c98]">Real-time stock from local data, ready to sync.</p>
+                    <h2 className="text-[15px] font-semibold text-[#13223f]">{t("inventory.page.productStock")}</h2>
+                    <p className="mt-0.5 text-[11px] text-[#6d7c98]">{t("inventory.page.productStockHelp")}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {/* Search takes the whole first line on a phone and shares it
@@ -707,8 +710,8 @@ export default function InventoryPage() {
                       <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7a89a3]" />
                       <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by product, SKU, barcode..." className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
                     </div>
-                    <Button variant="outline" className="h-10 rounded-[8px] px-3 text-[12px]" onClick={() => setStockFilter(stockFilter === "all" ? "low" : "all")}><SlidersHorizontal size={14} className="mr-1.5" />Filters</Button>
-                    <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_var(--brand-shadow)] hover:bg-[var(--brand-strong)]" onClick={exportInventory}><Download size={14} className="mr-1.5" />Export</Button>
+                    <Button variant="outline" className="h-10 rounded-[8px] px-3 text-[12px]" onClick={() => setStockFilter(stockFilter === "all" ? "low" : "all")}><SlidersHorizontal size={14} className="mr-1.5" />{t("inventory.page.filters")}</Button>
+                    <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_var(--brand-shadow)] hover:bg-[var(--brand-strong)]" onClick={exportInventory}><Download size={14} className="mr-1.5" />{t("inventory.page.export")}</Button>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -717,7 +720,7 @@ export default function InventoryPage() {
                   <InventoryFilterSelect value={unitFilter} onChange={setUnitFilter} placeholder="All Units" options={filterOptions.units} />
                   <Select value={stockFilter} onValueChange={setStockFilter}>
                     <SelectTrigger className="h-9 rounded-[8px] border-[#dfe6ef] text-[11px] font-medium"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="all">All Stock Status</SelectItem><SelectItem value="in">In Stock</SelectItem><SelectItem value="low">Low Stock</SelectItem><SelectItem value="out">Out of Stock</SelectItem></SelectContent>
+                    <SelectContent><SelectItem value="all">{t("inventory.page.allStockStatus")}</SelectItem><SelectItem value="in">{t("inventory.stock.inStock")}</SelectItem><SelectItem value="low">{t("inventory.stock.lowStock")}</SelectItem><SelectItem value="out">{t("inventory.stock.outOfStock")}</SelectItem></SelectContent>
                   </Select>
                 </div>
               </div>
@@ -726,7 +729,7 @@ export default function InventoryPage() {
                 {inventory.isLoading ? Array.from({ length: 5 }).map((_, index) => (
                   <div key={index} className="p-4"><Skeleton className="h-20 w-full rounded-[14px]" /></div>
                 )) : pagedInventoryRows.length === 0 ? (
-                  <div className="px-4 py-12 text-center"><Package className="mx-auto text-[#a2aec0]" size={28} /><p className="mt-2 text-sm font-semibold text-[#243653]">No stock matches these filters</p><p className="mt-1 text-xs text-[#718096]">Clear a filter or add stock to continue.</p></div>
+                  <div className="px-4 py-12 text-center"><Package className="mx-auto text-[#a2aec0]" size={28} /><p className="mt-2 text-sm font-semibold text-[#243653]">{t("inventory.page.noMatch")}</p><p className="mt-1 text-xs text-[#718096]">{t("inventory.page.noMatchHelp")}</p></div>
                 ) : pagedInventoryRows.map((item) => {
                   const unit = inventoryUnitLabel(item);
                   const qty = inventoryDisplayQuantity(item);
@@ -770,11 +773,11 @@ export default function InventoryPage() {
               <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[860px] text-left text-[12px]">
                   <thead><tr className="border-b border-[#e4eaf2] bg-[#f8fafc] text-[10px] font-semibold uppercase tracking-[0.02em] text-[#718096]">
-                    <th className="px-4 py-3">Product</th><th className="px-3 py-3">SKU / Barcode</th><th className="px-3 py-3">Category</th><th className="px-3 py-3">Unit</th><th className="px-3 py-3 text-right">Stock</th><th className="px-3 py-3 text-right">Cost</th><th className="px-3 py-3 text-right">Total Value</th><th className="px-4 py-3 text-center">Status</th>
+                    <th className="px-4 py-3">{t("inventory.col.product")}</th><th className="px-3 py-3">{t("inventory.col.skuBarcode")}</th><th className="px-3 py-3">{t("inventory.col.category")}</th><th className="px-3 py-3">{t("inventory.col.unit")}</th><th className="px-3 py-3 text-right">{t("inventory.col.stock")}</th><th className="px-3 py-3 text-right">{t("inventory.page.cost")}</th><th className="px-3 py-3 text-right">{t("inventory.page.totalValue")}</th><th className="px-4 py-3 text-center">{t("inventory.col.status")}</th>
                   </tr></thead>
                   <tbody>
                     {inventory.isLoading ? Array.from({ length: 7 }).map((_, index) => <tr key={index}><td colSpan={8} className="px-4 py-3"><Skeleton className="h-7 w-full" /></td></tr>) : pagedInventoryRows.length === 0 ? (
-                      <tr><td colSpan={8} className="px-4 py-16 text-center"><Package className="mx-auto text-[#a2aec0]" size={28} /><p className="mt-2 text-sm font-semibold text-[#243653]">No stock matches these filters</p><p className="mt-1 text-xs text-[#718096]">Clear a filter or add stock to continue.</p></td></tr>
+                      <tr><td colSpan={8} className="px-4 py-16 text-center"><Package className="mx-auto text-[#a2aec0]" size={28} /><p className="mt-2 text-sm font-semibold text-[#243653]">{t("inventory.page.noMatch")}</p><p className="mt-1 text-xs text-[#718096]">{t("inventory.page.noMatchHelp")}</p></td></tr>
                     ) : pagedInventoryRows.map((item) => {
                       const unit = inventoryUnitLabel(item);
                       const qty = inventoryDisplayQuantity(item);
@@ -801,7 +804,7 @@ export default function InventoryPage() {
                             <td className="py-1.5 pl-12 pr-4"><span className="font-semibold text-[#243653]">{row.label}</span></td>
                             <td className="px-3 py-1.5 font-mono text-[10px]">{row.unit?.barcode ?? "-"}</td>
                             <td className="px-3 py-1.5" />
-                            <td className="px-3 py-1.5">per size</td>
+                            <td className="px-3 py-1.5">{t("inventory.page.perSize")}</td>
                             <td className="px-3 py-1.5 text-right font-semibold">{row.quantity.toLocaleString("en-IN")}</td>
                             <td className="px-3 py-1.5 text-right">{fmtMoney(row.unitCost)}</td>
                             <td className="px-3 py-1.5 text-right font-semibold">{fmtMoney(row.value)}</td>
@@ -819,30 +822,30 @@ export default function InventoryPage() {
             {/* Both panels share one column on a phone, so this aside's own
                 min-content set the width of the card beside it. Left at `auto`
                 it demanded 384px on a 375px screen — which is what pushed the
-                "Reorder" buttons off the edge of the stock list. */}
+                t("inventory.page.reorder") buttons off the edge of the stock list. */}
             <aside className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
               <section className="min-w-0 rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
-                <h2 className="text-[14px] font-semibold text-[#13223f]">Stock Overview by Location</h2><p className="mt-0.5 text-[11px] text-[#718096]">Current stock distribution</p>
+                <h2 className="text-[14px] font-semibold text-[#13223f]">{t("inventory.page.locationOverview")}</h2><p className="mt-0.5 text-[11px] text-[#718096]">{t("inventory.page.locationOverviewHelp")}</p>
                 <div className="mt-2 grid grid-cols-[minmax(0,110px)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[132px_1fr]">
-                  <div className="h-[128px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{ name: "Main Store", value: Math.max(stockStats.stockValue, 1) }]} dataKey="value" innerRadius={36} outerRadius={56} strokeWidth={0}><Cell fill="var(--brand)" /></Pie></PieChart></ResponsiveContainer></div>
-                  <div><div className="flex items-center gap-2 text-[11px]"><span className="h-2 w-2 rounded-full bg-[var(--brand)]" /><span className="font-semibold text-[#243653]">Main Store</span></div><p className="ml-4 mt-1 text-[11px] text-[#718096]">100% of tracked stock</p></div>
+                  <div className="h-[128px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{ name: t("inventory.page.mainStore"), value: Math.max(stockStats.stockValue, 1) }]} dataKey="value" innerRadius={36} outerRadius={56} strokeWidth={0}><Cell fill="var(--brand)" /></Pie></PieChart></ResponsiveContainer></div>
+                  <div><div className="flex items-center gap-2 text-[11px]"><span className="h-2 w-2 rounded-full bg-[var(--brand)]" /><span className="font-semibold text-[#243653]">{t("inventory.page.mainStore")}</span></div><p className="ml-4 mt-1 text-[11px] text-[#718096]">{t("inventory.page.allTrackedStock")}</p></div>
                 </div>
-                <div className="flex items-center justify-between border-t border-[#edf1f6] pt-3 text-[11px]"><span className="text-[#718096]">Total Value</span><span className="font-bold text-[#13223f]">{fmtMoney(stockStats.stockValue)}</span></div>
+                <div className="flex items-center justify-between border-t border-[#edf1f6] pt-3 text-[11px]"><span className="text-[#718096]">{t("inventory.page.totalValue")}</span><span className="font-bold text-[#13223f]">{fmtMoney(stockStats.stockValue)}</span></div>
               </section>
 
               <section className="min-w-0 rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
-                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Low Stock Alerts</h2><p className="mt-0.5 text-[11px] text-[#718096]">Items needing immediate attention</p></div><button type="button" onClick={() => setStockFilter("low")} className="tap-target text-[11px] font-semibold text-[var(--brand)]">View all</button></div>
+                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">{t("inventory.page.lowStockAlerts")}</h2><p className="mt-0.5 text-[11px] text-[#718096]">{t("inventory.page.lowStockAlertsHelp")}</p></div><button type="button" onClick={() => setStockFilter("low")} className="tap-target text-[11px] font-semibold text-[var(--brand)]">{t("inventory.page.viewAll")}</button></div>
                 <div className="mt-2 divide-y divide-[#edf1f6]">
-                  {lowStockRows.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">All tracked products have healthy stock.</p> : lowStockRows.slice(0, 3).map((item) => {
+                  {lowStockRows.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">{t("inventory.page.healthyStock")}</p> : lowStockRows.slice(0, 3).map((item) => {
                     const unit = inventoryUnitLabel(item);
-                    return <div key={item.id} className="flex items-center gap-2.5 py-2.5"><InventoryProductAvatar item={item} compact /><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{item.name}</p><p className="mt-0.5 text-[10px] text-[#ff304f]">{inventoryDisplayQuantity(item)} {unit} left</p></div><Button variant="outline" size="sm" className="h-7 rounded-[7px] border-[#ffd7a6] bg-[#fff9ef] px-2.5 text-[10px] font-semibold text-[#f08a00]" onClick={() => openMovement("purchase", item)}>Reorder</Button></div>;
+                    return <div key={item.id} className="flex items-center gap-2.5 py-2.5"><InventoryProductAvatar item={item} compact /><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{item.name}</p><p className="mt-0.5 text-[10px] text-[#ff304f]">{inventoryDisplayQuantity(item)} {unit} left</p></div><Button variant="outline" size="sm" className="h-7 rounded-[7px] border-[#ffd7a6] bg-[#fff9ef] px-2.5 text-[10px] font-semibold text-[#f08a00]" onClick={() => openMovement("purchase", item)}>{t("inventory.page.reorder")}</Button></div>;
                   })}
                 </div>
               </section>
 
               <section className="min-w-0 rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)] md:col-span-2 xl:col-span-1">
-                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Recent Stock Updates</h2><p className="mt-0.5 text-[11px] text-[#718096]">Latest inventory movements</p></div><button type="button" onClick={() => setActiveTab("movements")} className="tap-target text-[11px] font-semibold text-[var(--brand)]">View all</button></div>
-                <div className="mt-2 divide-y divide-[#edf1f6]">{recentMovements.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">No stock updates recorded yet.</p> : recentMovements.map((entry) => <RecentMovementRow key={entry.id} entry={entry} />)}</div>
+                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">{t("inventory.page.recentUpdates")}</h2><p className="mt-0.5 text-[11px] text-[#718096]">{t("inventory.page.recentUpdatesHelp")}</p></div><button type="button" onClick={() => setActiveTab("movements")} className="tap-target text-[11px] font-semibold text-[var(--brand)]">{t("inventory.page.viewAll")}</button></div>
+                <div className="mt-2 divide-y divide-[#edf1f6]">{recentMovements.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">{t("inventory.page.noUpdates")}</p> : recentMovements.map((entry) => <RecentMovementRow key={entry.id} entry={entry} />)}</div>
               </section>
             </aside>
           </div>
@@ -856,15 +859,15 @@ export default function InventoryPage() {
           </StatsGrid>
           <div className="rounded-lg border bg-card overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-muted/60 border-b"><tr><th className="px-4 py-3 text-left">Product</th><th className="px-4 py-3 text-left">Type</th><th className="px-4 py-3 text-right">Qty delta</th><th className="px-4 py-3 text-left">Supplier / Note</th><th className="px-4 py-3 text-center">Sync</th><th className="px-4 py-3 text-right">Time</th></tr></thead>
+              <thead className="bg-muted/60 border-b"><tr><th className="px-4 py-3 text-left">{t("inventory.col.product")}</th><th className="px-4 py-3 text-left">{t("inventory.page.type")}</th><th className="px-4 py-3 text-right">{t("inventory.page.qtyDelta")}</th><th className="px-4 py-3 text-left">{t("inventory.page.supplierNote")}</th><th className="px-4 py-3 text-center">{t("inventory.page.sync")}</th><th className="px-4 py-3 text-right">{t("inventory.page.time")}</th></tr></thead>
               <tbody>
-                {movementRows.length === 0 ? <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No stock movements yet</td></tr> : movementRows.map((entry) => {
+                {movementRows.length === 0 ? <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">{t("inventory.page.noMovements")}</td></tr> : movementRows.map((entry) => {
                   const type = entry.action ?? entry.type ?? "movement";
                   const qty = Number(entry.quantityDelta ?? entry.quantity_delta ?? 0);
                   return (
                     <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium">{entry.productName ?? "-"}</td>
-                      <td className="px-4 py-3"><Badge variant={movementClass(type)}>{movementLabel(type)}</Badge></td>
+                      <td className="px-4 py-3"><Badge variant={movementClass(type)}>{movementLabel(type, t)}</Badge></td>
                       <td className="px-4 py-3 text-right">{qty > 0 ? "+" : ""}{qty} {entry.unit ?? ""}</td>
                       <td className="px-4 py-3 text-muted-foreground text-xs max-w-[260px] truncate">{entry.supplierName ?? entry.supplier_name ?? entry.note ?? entry.reason ?? "-"}</td>
                       <td className="px-4 py-3 text-center"><Badge variant="outline">{entry.sync_status ?? "local"}</Badge></td>
@@ -881,7 +884,7 @@ export default function InventoryPage() {
 
         <TabsContent value="purchase-bills" className="space-y-4">
           <StatsGrid columns={3}>
-            <StatCard label="Purchase bills" value={movementSummary.purchases} />
+            <StatCard label={t("inventory.page.purchaseBills")} value={movementSummary.purchases} />
             <StatCard label="Supplier paid" value={fmtMoney(movementSummary.purchasePaidTotal)} tone="green" />
             <StatCard label="Supplier due" value={fmtMoney(movementSummary.purchaseDueTotal)} tone="amber" />
           </StatsGrid>
@@ -890,28 +893,28 @@ export default function InventoryPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/60 border-b">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Purchase bill</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Supplier</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Product</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Bill amount</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Paid</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Due</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Date</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("inventory.page.purchaseBill")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("inventory.movement.supplier")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t("inventory.col.product")}</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t("inventory.page.billAmount")}</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t("inventory.page.paid")}</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t("inventory.page.due")}</th>
+                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">{t("inventory.col.status")}</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">{t("inventory.col.date")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {movementRows.filter((entry) => (entry.action ?? entry.type) === "purchase").length === 0 ? (
-                    <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">No purchase bills yet. Click Purchase and save supplier payment status.</td></tr>
+                    <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">{t("inventory.page.noPurchaseBills")}</td></tr>
                   ) : movementRows.filter((entry) => (entry.action ?? entry.type) === "purchase").map((entry) => (
                     <tr key={`purchase-bill-${entry.id}`} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-4 py-3"><p className="font-semibold">{entry.purchaseBillNo ?? entry.purchase_bill_no ?? "Local purchase"}</p><p className="text-xs text-muted-foreground">Supplier bill: {entry.supplierBillNo ?? entry.supplier_bill_no ?? "Not set"}</p></td>
-                      <td className="px-4 py-3">{entry.supplierName ?? entry.supplier_name ?? "No supplier"}</td>
-                      <td className="px-4 py-3">{entry.productName ?? entry.productId ?? entry.product_id ?? "Product"}</td>
+                      <td className="px-4 py-3">{entry.supplierName ?? entry.supplier_name ?? t("inventory.page.noSupplier")}</td>
+                      <td className="px-4 py-3">{entry.productName ?? entry.productId ?? entry.product_id ?? t("inventory.col.product")}</td>
                       <td className="px-4 py-3 text-right font-medium">{fmtMoney(purchaseTotal(entry))}</td>
                       <td className="px-4 py-3 text-right text-emerald-700">{fmtMoney(purchasePaid(entry))}</td>
                       <td className="px-4 py-3 text-right text-orange-700">{fmtMoney(purchaseDue(entry))}</td>
-                      <td className="px-4 py-3 text-center"><Badge variant={purchaseDue(entry) > 0 ? "destructive" : "secondary"}>{purchaseStatus(entry)}</Badge></td>
+                      <td className="px-4 py-3 text-center"><Badge variant={purchaseDue(entry) > 0 ? "destructive" : "secondary"}>{purchaseStatus(entry, t)}</Badge></td>
                       <td className="px-4 py-3 text-right text-xs text-muted-foreground">{format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</td>
                     </tr>
                   ))}
@@ -919,14 +922,14 @@ export default function InventoryPage() {
               </table>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">Purchase bills are saved locally and included in dashboard and daily closing numbers.</p>
+          <p className="text-xs text-muted-foreground">{t("inventory.page.purchaseBillsHelp")}</p>
         </TabsContent>
 
         <TabsContent value="reports" className="space-y-4">
           <div className="grid md:grid-cols-3 gap-3">
-            <div className="rounded-lg border bg-card p-4"><TrendingUp size={18} className="mb-2" /><p className="font-semibold">Fast movers</p><p className="mt-1 text-xs text-muted-foreground">Ranks products after sale history is available.</p></div>
-            <div className="rounded-lg border bg-card p-4"><TrendingDown size={18} className="mb-2" /><p className="font-semibold">Slow movers</p><p className="mt-1 text-xs text-muted-foreground">Compares stock age with sale movement.</p></div>
-            <div className="rounded-lg border bg-card p-4"><BarChart3 size={18} className="mb-2" /><p className="font-semibold">Dead stock</p><p className="mt-1 text-xs text-muted-foreground">Flags stock with no recent movement.</p></div>
+            <div className="rounded-lg border bg-card p-4"><TrendingUp size={18} className="mb-2" /><p className="font-semibold">{t("inventory.page.fastMovers")}</p><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.fastMoversHelp")}</p></div>
+            <div className="rounded-lg border bg-card p-4"><TrendingDown size={18} className="mb-2" /><p className="font-semibold">{t("inventory.page.slowMovers")}</p><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.slowMoversHelp")}</p></div>
+            <div className="rounded-lg border bg-card p-4"><BarChart3 size={18} className="mb-2" /><p className="font-semibold">{t("inventory.page.deadStock")}</p><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.deadStockHelp")}</p></div>
           </div>
         </TabsContent>
 
@@ -934,8 +937,8 @@ export default function InventoryPage() {
           <div className="rounded-lg border bg-card p-4 flex gap-4">
             <CalendarClock className="text-muted-foreground" />
             <div>
-              <div className="flex items-center gap-2"><h3 className="font-semibold">Batch and expiry support</h3><Badge>Higher plan</Badge></div>
-              <p className="mt-1 text-sm text-muted-foreground">Attach batch, expiry, MRP, and lot-wise stock to purchase movements.</p>
+              <div className="flex items-center gap-2"><h3 className="font-semibold">{t("inventory.page.batchSupport")}</h3><Badge>{t("inventory.page.higherPlan")}</Badge></div>
+              <p className="mt-1 text-sm text-muted-foreground">{t("inventory.page.batchSupportHelp")}</p>
             </div>
           </div>
         </TabsContent>
@@ -943,59 +946,59 @@ export default function InventoryPage() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{movementLabel(form.movementType)} entry</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{movementLabel(form.movementType, t)} entry</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="grid md:grid-cols-2 gap-3">
-              <div><Label>Movement type</Label><Select value={form.movementType} onValueChange={(value) => setForm((current) => ({ ...current, movementType: value as MovementType }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="purchase">Purchase</SelectItem><SelectItem value="sale">Manual sale</SelectItem><SelectItem value="damage">Damage / wastage</SelectItem><SelectItem value="correction">Stock correction</SelectItem></SelectContent></Select></div>
-              <div><Label>Product *</Label><Select value={form.productId} onValueChange={(value) => { const product = (products.data ?? []).find((row: Product) => row.id === value); setForm((current) => ({ ...current, productId: value, unit: product ? inventoryMovementUnit(product) : current.unit, costPrice: String(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? current.costPrice), minPrice: String(product?.minimumSellingPrice ?? product?.minPricePerRateUnit ?? current.minPrice), sellingPrice: String(product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? current.sellingPrice) })); }}><SelectTrigger className="mt-1"><SelectValue placeholder="Select product" /></SelectTrigger><SelectContent>{(products.data ?? []).map((product: Product) => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}</SelectContent></Select></div>
+              <div><Label>{t("inventory.page.movementType")}</Label><Select value={form.movementType} onValueChange={(value) => setForm((current) => ({ ...current, movementType: value as MovementType }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="purchase">{t("inventory.page.purchase")}</SelectItem><SelectItem value="sale">{t("inventory.page.manualSale")}</SelectItem><SelectItem value="damage">{t("inventory.page.damage")}</SelectItem><SelectItem value="correction">{t("inventory.page.correction")}</SelectItem></SelectContent></Select></div>
+              <div><Label>{t("inventory.page.productRequired")}</Label><Select value={form.productId} onValueChange={(value) => { const product = (products.data ?? []).find((row: Product) => row.id === value); setForm((current) => ({ ...current, productId: value, unit: product ? inventoryMovementUnit(product) : current.unit, costPrice: String(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? current.costPrice), minPrice: String(product?.minimumSellingPrice ?? product?.minPricePerRateUnit ?? current.minPrice), sellingPrice: String(product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? current.sellingPrice) })); }}><SelectTrigger className="mt-1"><SelectValue placeholder={t("inventory.page.selectProduct")} /></SelectTrigger><SelectContent>{(products.data ?? []).map((product: Product) => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}</SelectContent></Select></div>
             </div>
             <div className="grid md:grid-cols-3 gap-3">
               <div><Label>{form.movementType === "correction" ? "New stock / delta" : "Quantity"}</Label><Input type="number" step="0.01" className="mt-1" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))} /></div>
-              <div><Label>Unit</Label><Select value={form.unit} onValueChange={(value) => setForm((current) => ({ ...current, unit: value }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{movementUnitOptions.map((unit) => <SelectItem key={unit.value} value={unit.value}>{unit.label}</SelectItem>)}</SelectContent></Select>{unitMismatchWarning ? <p className="mt-1 text-xs text-orange-700">{unitMismatchWarning}</p> : null}</div>
-              <div><Label>Total bill amount</Label><Input type="number" step="0.01" className="mt-1" value={form.billAmount} onChange={(event) => setForm((current) => ({ ...current, billAmount: event.target.value }))} disabled={form.movementType !== "purchase"} /></div>
+              <div><Label>{t("inventory.col.unit")}</Label><Select value={form.unit} onValueChange={(value) => setForm((current) => ({ ...current, unit: value }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{movementUnitOptions.map((unit) => <SelectItem key={unit.value} value={unit.value}>{unit.label}</SelectItem>)}</SelectContent></Select>{unitMismatchWarning ? <p className="mt-1 text-xs text-orange-700">{unitMismatchWarning}</p> : null}</div>
+              <div><Label>{t("inventory.page.totalBillAmount")}</Label><Input type="number" step="0.01" className="mt-1" value={form.billAmount} onChange={(event) => setForm((current) => ({ ...current, billAmount: event.target.value }))} disabled={form.movementType !== "purchase"} /></div>
             </div>
             {form.movementType === "purchase" ? (
               <div className="grid md:grid-cols-2 gap-3">
-                <div><Label>Supplier</Label><Select value={form.supplierId} onValueChange={(value) => setForm((current) => ({ ...current, supplierId: value }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No supplier</SelectItem>{(suppliers.data ?? []).map((supplier: Supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}</SelectContent></Select></div>
-                <div><Label>Supplier name if not saved</Label><Input className="mt-1" value={form.supplierName} onChange={(event) => setForm((current) => ({ ...current, supplierName: event.target.value }))} /></div>
+                <div><Label>{t("inventory.movement.supplier")}</Label><Select value={form.supplierId} onValueChange={(value) => setForm((current) => ({ ...current, supplierId: value }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">{t("inventory.page.noSupplier")}</SelectItem>{(suppliers.data ?? []).map((supplier: Supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}</SelectContent></Select></div>
+                <div><Label>{t("inventory.page.supplierNameIfUnsaved")}</Label><Input className="mt-1" value={form.supplierName} onChange={(event) => setForm((current) => ({ ...current, supplierName: event.target.value }))} /></div>
               </div>
             ) : null}
             {form.movementType === "purchase" ? (
               <div className="rounded-xl border bg-muted/40 p-3 space-y-3">
-                <div className="flex items-center gap-2"><Wallet size={16} /><p className="font-medium text-sm">Supplier payment tracking</p></div>
+                <div className="flex items-center gap-2"><Wallet size={16} /><p className="font-medium text-sm">{t("inventory.page.supplierPaymentTracking")}</p></div>
                 <div className="grid md:grid-cols-3 gap-3">
-                  <div><Label>Supplier bill no.</Label><Input className="mt-1" value={form.supplierBillNo} onChange={(event) => setForm((current) => ({ ...current, supplierBillNo: event.target.value }))} placeholder="Optional" /></div>
-                  <div><Label>Payment status</Label><Select value={form.purchasePaymentStatus} onValueChange={(value) => setForm((current) => ({ ...current, purchasePaymentStatus: value as MovementForm["purchasePaymentStatus"], purchasePaidAmount: value === "paid" ? String(purchaseBillAmount || "") : value === "due" ? "0" : current.purchasePaidAmount }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="paid">Paid</SelectItem><SelectItem value="partial">Partial</SelectItem><SelectItem value="due">Due</SelectItem></SelectContent></Select></div>
-                  <div><Label>Payment mode</Label><Select value={form.purchasePaymentMode} onValueChange={(value) => setForm((current) => ({ ...current, purchasePaymentMode: value as MovementForm["purchasePaymentMode"] }))} disabled={form.purchasePaymentStatus === "due"}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="upi">UPI / bank</SelectItem></SelectContent></Select></div>
+                  <div><Label>{t("inventory.page.supplierBillNo")}</Label><Input className="mt-1" value={form.supplierBillNo} onChange={(event) => setForm((current) => ({ ...current, supplierBillNo: event.target.value }))} placeholder="Optional" /></div>
+                  <div><Label>{t("inventory.page.paymentStatus")}</Label><Select value={form.purchasePaymentStatus} onValueChange={(value) => setForm((current) => ({ ...current, purchasePaymentStatus: value as MovementForm["purchasePaymentStatus"], purchasePaidAmount: value === "paid" ? String(purchaseBillAmount || "") : value === "due" ? "0" : current.purchasePaidAmount }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="paid">{t("inventory.page.paid")}</SelectItem><SelectItem value="partial">{t("inventory.page.partial")}</SelectItem><SelectItem value="due">{t("inventory.page.due")}</SelectItem></SelectContent></Select></div>
+                  <div><Label>{t("inventory.page.paymentMode")}</Label><Select value={form.purchasePaymentMode} onValueChange={(value) => setForm((current) => ({ ...current, purchasePaymentMode: value as MovementForm["purchasePaymentMode"] }))} disabled={form.purchasePaymentStatus === "due"}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">{t("inventory.page.cash")}</SelectItem><SelectItem value="upi">{t("inventory.page.upiBank")}</SelectItem></SelectContent></Select></div>
                 </div>
                 <div className="grid md:grid-cols-3 gap-3">
-                  <div><Label>Paid amount</Label><Input type="number" step="0.01" className="mt-1" value={form.purchasePaymentStatus === "paid" ? String(purchaseBillAmount || "") : form.purchasePaidAmount} onChange={(event) => setForm((current) => ({ ...current, purchasePaidAmount: event.target.value, purchasePaymentStatus: current.purchasePaymentStatus === "paid" ? "partial" : current.purchasePaymentStatus }))} disabled={form.purchasePaymentStatus !== "partial"} /></div>
-                  <div><Label>Due amount</Label><Input className="mt-1" value={fmtMoney(purchaseDueAmount)} readOnly /></div>
-                  <div><Label>Due date</Label><Input type="date" className="mt-1" value={form.purchaseDueDate} onChange={(event) => setForm((current) => ({ ...current, purchaseDueDate: event.target.value }))} disabled={purchaseDueAmount <= 0} /></div>
+                  <div><Label>{t("inventory.page.paidAmount")}</Label><Input type="number" step="0.01" className="mt-1" value={form.purchasePaymentStatus === "paid" ? String(purchaseBillAmount || "") : form.purchasePaidAmount} onChange={(event) => setForm((current) => ({ ...current, purchasePaidAmount: event.target.value, purchasePaymentStatus: current.purchasePaymentStatus === "paid" ? "partial" : current.purchasePaymentStatus }))} disabled={form.purchasePaymentStatus !== "partial"} /></div>
+                  <div><Label>{t("inventory.page.dueAmount")}</Label><Input className="mt-1" value={fmtMoney(purchaseDueAmount)} readOnly /></div>
+                  <div><Label>{t("inventory.page.dueDate")}</Label><Input type="date" className="mt-1" value={form.purchaseDueDate} onChange={(event) => setForm((current) => ({ ...current, purchaseDueDate: event.target.value }))} disabled={purchaseDueAmount <= 0} /></div>
                 </div>
-                <p className="text-xs text-muted-foreground">This creates a local purchase bill history row and helps Dashboard/Closing calculate supplier cash out and supplier dues.</p>
+                <p className="text-xs text-muted-foreground">{t("inventory.page.purchaseBillHelp")}</p>
               </div>
             ) : null}
             {form.movementType === "purchase" ? (
               <div className="rounded-xl border bg-muted/40 p-3 space-y-4">
-                <div className="flex items-center gap-2"><ClipboardList size={16} /><p className="font-medium text-sm">Average costing and price suggestion</p></div>
+                <div className="flex items-center gap-2"><ClipboardList size={16} /><p className="font-medium text-sm">{t("inventory.page.costingTitle")}</p></div>
                 <div className="grid gap-2 rounded-lg border bg-background p-3 text-sm sm:grid-cols-3">
-                  <div><p className="text-xs text-muted-foreground">Current avg cost</p><p className="font-bold">{fmtMoney(currentAverageCost)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Purchase unit cost</p><p className="font-bold">{fmtMoney(purchaseUnitCost || 0)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">New avg after save</p><p className="font-bold text-primary">{fmtMoney(projectedAverageCost || 0)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{t("inventory.page.currentAvgCost")}</p><p className="font-bold">{fmtMoney(currentAverageCost)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{t("inventory.page.purchaseUnitCost")}</p><p className="font-bold">{fmtMoney(purchaseUnitCost || 0)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">{t("inventory.page.newAvgAfterSave")}</p><p className="font-bold text-primary">{fmtMoney(projectedAverageCost || 0)}</p></div>
                 </div>
                 <div className="grid md:grid-cols-3 gap-3">
-                  <div><Label>Cost price / unit</Label><Input type="number" step="0.01" value={form.costPrice} onChange={(event) => setForm((current) => ({ ...current, costPrice: event.target.value }))} placeholder="Auto from bill amount" /></div>
-                  <div><Label>Minimum margin %</Label><Input type="number" step="0.01" value={form.minMarginPercent} onChange={(event) => setForm((current) => ({ ...current, minMarginPercent: event.target.value }))} placeholder="e.g. 5" /><p className="mt-1 text-xs text-muted-foreground">Suggestion: {fmtMoney(minMarginSuggestion || 0)}</p></div>
-                  <div><Label>Selling margin %</Label><Input type="number" step="0.01" value={form.sellingMarginPercent} onChange={(event) => setForm((current) => ({ ...current, sellingMarginPercent: event.target.value }))} placeholder="e.g. 12" /><p className="mt-1 text-xs text-muted-foreground">Suggestion: {fmtMoney(sellingMarginSuggestion || 0)}</p></div>
+                  <div><Label>{t("inventory.page.costPricePerUnit")}</Label><Input type="number" step="0.01" value={form.costPrice} onChange={(event) => setForm((current) => ({ ...current, costPrice: event.target.value }))} placeholder="Auto from bill amount" /></div>
+                  <div><Label>{t("inventory.page.minMargin")}</Label><Input type="number" step="0.01" value={form.minMarginPercent} onChange={(event) => setForm((current) => ({ ...current, minMarginPercent: event.target.value }))} placeholder="e.g. 5" /><p className="mt-1 text-xs text-muted-foreground">Suggestion: {fmtMoney(minMarginSuggestion || 0)}</p></div>
+                  <div><Label>{t("inventory.page.sellingMargin")}</Label><Input type="number" step="0.01" value={form.sellingMarginPercent} onChange={(event) => setForm((current) => ({ ...current, sellingMarginPercent: event.target.value }))} placeholder="e.g. 12" /><p className="mt-1 text-xs text-muted-foreground">Suggestion: {fmtMoney(sellingMarginSuggestion || 0)}</p></div>
                 </div>
-                <div className="grid md:grid-cols-[1fr_1fr_auto] gap-3"><div><Label>Minimum price</Label><Input type="number" step="0.01" value={form.minPrice} onChange={(event) => setForm((current) => ({ ...current, minPrice: event.target.value }))} /></div><div><Label>Selling price</Label><Input type="number" step="0.01" value={form.sellingPrice} onChange={(event) => setForm((current) => ({ ...current, sellingPrice: event.target.value }))} /></div><Button type="button" variant="outline" className="self-end" onClick={applyMarginPrices}>Apply margin</Button></div>
+                <div className="grid md:grid-cols-[1fr_1fr_auto] gap-3"><div><Label>{t("inventory.page.minPrice")}</Label><Input type="number" step="0.01" value={form.minPrice} onChange={(event) => setForm((current) => ({ ...current, minPrice: event.target.value }))} /></div><div><Label>{t("inventory.page.sellingPrice")}</Label><Input type="number" step="0.01" value={form.sellingPrice} onChange={(event) => setForm((current) => ({ ...current, sellingPrice: event.target.value }))} /></div><Button type="button" variant="outline" className="self-end" onClick={applyMarginPrices}>{t("inventory.page.applyMargin")}</Button></div>
               </div>
             ) : null}
-            {form.movementType === "correction" || form.movementType === "damage" ? <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900 flex gap-2"><ShieldAlert size={16} /> {form.movementType === "damage" ? "Damage write-off" : "Stock correction"} requires owner PIN and creates a pending sync adjustment.</div> : null}
-            <div><Label>Reason / note</Label><Input className="mt-1" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="e.g. physical count, damaged packet" />{form.movementType === "correction" || form.movementType === "damage" ? <p className="mt-1 text-xs text-orange-700">Owner password/PIN will be asked after you click Save locally.</p> : null}</div>
+            {form.movementType === "correction" || form.movementType === "damage" ? <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900 flex gap-2"><ShieldAlert size={16} /> {form.movementType === "damage" ? "Damage write-off" : t("inventory.page.correction")} requires owner PIN and creates a pending sync adjustment.</div> : null}
+            <div><Label>{t("inventory.page.reasonNote")}</Label><Input className="mt-1" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="e.g. physical count, damaged packet" />{form.movementType === "correction" || form.movementType === "damage" ? <p className="mt-1 text-xs text-orange-700">{t("inventory.page.ownerPinAfterSave")}</p> : null}</div>
             <div className="sticky bottom-0 z-10 -mx-4 flex gap-3 border-t bg-background/95 px-4 py-3 pt-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
-              <Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>{t("inventory.cancel")}</Button>
               <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin" /> : "Save locally"}</Button>
             </div>
           </div>
@@ -1066,8 +1069,9 @@ function InventoryProductAvatar({ item, compact = false }: { item: InventoryItem
 }
 
 function InventoryStatusBadge({ status }: { status: "in" | "low" | "out" }) {
+  const { t } = useAppLanguage();
   const style = status === "in" ? "border-[#c7ecd4] bg-[#eaf9ef] text-[#169447]" : status === "low" ? "border-[#ffddb1] bg-[#fff5e8] text-[#ed8a00]" : "border-[#ffcdd4] bg-[#fff0f2] text-[#f2384f]";
-  return <span className={`inline-flex rounded-[6px] border px-2 py-1 text-[10px] font-semibold ${style}`}>{status === "in" ? "In Stock" : status === "low" ? "Low Stock" : "Out of Stock"}</span>;
+  return <span className={`inline-flex rounded-[6px] border px-2 py-1 text-[10px] font-semibold ${style}`}>{status === "in" ? t("inventory.stock.inStock") : status === "low" ? t("inventory.stock.lowStock") : t("inventory.stock.outOfStock")}</span>;
 }
 
 function InventoryPagination({ page, pages, total, onChange }: { page: number; pages: number; total: number; onChange: (page: number) => void }) {
@@ -1088,6 +1092,7 @@ function InventoryPagination({ page, pages, total, onChange }: { page: number; p
 }
 
 function RecentMovementRow({ entry }: { entry: MovementEntry }) {
+  const { t } = useAppLanguage();
   const type = entry.action ?? entry.type ?? "correction";
   const quantity = Number(entry.quantityDelta ?? entry.quantity_delta ?? 0);
   const positive = quantity > 0;
@@ -1096,7 +1101,7 @@ function RecentMovementRow({ entry }: { entry: MovementEntry }) {
   return (
     <div className="flex items-center gap-2.5 py-2.5">
       <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border ${INVENTORY_TONES[tone]}`}>{icon}</span>
-      <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{movementLabel(type)}</p><p className="truncate text-[10px] text-[#718096]">{entry.productName ?? "Inventory item"} - {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p></div>
+      <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{movementLabel(type, t)}</p><p className="truncate text-[10px] text-[#718096]">{entry.productName ?? "Inventory item"} - {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p></div>
       <span className={`text-[11px] font-semibold ${positive ? "text-[#16a34a]" : "text-[#ff304f]"}`}>{positive ? "+" : ""}{quantity} {entry.unit ?? ""}</span>
     </div>
   );

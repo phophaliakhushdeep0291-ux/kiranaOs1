@@ -70,8 +70,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/gift-cards/GiftCardsPage.tsx", // 38
   "features/core/innovation/components/OfflineConfidenceMeter.tsx", // 8
   "features/core/innovation/pages/SmartToolsPage.tsx", // 4
-  "features/core/inventory/pages/InventoryPage.tsx", // 121
-  "features/core/inventory/pages/StockTransfersPage.tsx", // 88
   "features/core/loyalty/pages/LoyaltyPage.tsx", // 27
   "features/core/money-statement/pages/MoneyStatementPage.tsx", // 20
   "features/core/offers/pages/OffersPage.tsx", // 30
