@@ -24,6 +24,9 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   "GST",
   // Protocol name in the webhook delivery table. Nobody writes it in Devanagari.
   "HTTP",
+  // Two GST registration identifiers, shown as placeholder text on the e-way
+  // transport form. Both are printed in Latin on the documents themselves.
+  "GSTIN / TRANSIN",
   "MRP",
   "MRP (₹)",
   "WhatsApp",
