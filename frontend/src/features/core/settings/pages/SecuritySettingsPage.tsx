@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -100,6 +101,7 @@ async function loadSecurityEvents(): Promise<AuditLogRow[]> {
 }
 
 export default function SecuritySettingsPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { prefs, patch, hydrated } = useSettingsPrefs();
@@ -144,18 +146,18 @@ export default function SecuritySettingsPage() {
     if (!enabled) {
       forgetBiometric();
       update({ biometric: false });
-      toast({ title: "Biometric unlock turned off" });
+      toast({ title: t("settings.security.biometricOff") });
       return;
     }
     setEnrolling(true);
     try {
       await enrolBiometric(user?.id ?? "artha-owner", user?.name ?? "Artha owner");
       update({ biometric: true });
-      toast({ title: "Biometric unlock ready", description: "The lock screen will offer fingerprint / face on this device." });
+      toast({ title: t("settings.security.biometricReady"), description: t("settings.security.biometricReadyHelp") });
     } catch (error) {
       update({ biometric: false });
       toast({
-        title: "Could not set up biometric unlock",
+        title: t("settings.security.biometricFailed"),
         description: (error as { message?: string })?.message || "The device prompt was cancelled.",
         variant: "destructive",
       });
@@ -192,7 +194,7 @@ export default function SecuritySettingsPage() {
       await logoutDevice(deviceId(signOutTarget), ownerPin, currentDeviceId);
       setSignOutTarget(null);
       await queryClient.invalidateQueries({ queryKey: ["devices"] });
-      toast({ title: "Device signed out", description: `${deviceLabel(signOutTarget)} must sign in again.` });
+      toast({ title: t("settings.security.deviceSignedOut"), description: `${deviceLabel(signOutTarget)} must sign in again.` });
     } catch (error) {
       setSignOutError((error as { data?: { message?: string }; message?: string })?.data?.message
         ?? (error as { message?: string })?.message
@@ -212,10 +214,10 @@ export default function SecuritySettingsPage() {
             title="Owner PIN"
             sub="Protects money-sensitive actions"
             action={pinQ.isLoading
-              ? <Badge tone="gray">Checking</Badge>
+              ? <Badge tone="gray">{t("settings.security.checking")}</Badge>
               : pinQ.data?.hasPin
-                ? <Badge tone="green"><ShieldCheck size={11} /> Set</Badge>
-                : <Badge tone="amber">Not set</Badge>}
+                ? <Badge tone="green"><ShieldCheck size={11} /> {t("settings.security.set")}</Badge>
+                : <Badge tone="amber">{t("settings.security.notSet")}</Badge>}
           />
           <div className="space-y-3 px-5 pb-5">
             <div className="flex items-center gap-3 rounded-[10px] border border-[#eef2f8] px-4 py-3">
@@ -230,9 +232,9 @@ export default function SecuritySettingsPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => setPwOpen(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-10 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95"><KeyRound size={15} /> Change PIN</Button>
+              <Button onClick={() => setPwOpen(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-10 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95"><KeyRound size={15} /> {t("settings.security.changePin")}</Button>
             </div>
-            <p className="text-[11px] text-[#9aa6bb]">Forgot your PIN? Recover it from your registered owner email/phone on the login screen.</p>
+            <p className="text-[11px] text-[#9aa6bb]">{t("settings.security.forgotPin")}</p>
           </div>
         </Card>
 
@@ -255,11 +257,11 @@ export default function SecuritySettingsPage() {
                   : "No fingerprint or face sensor is available in this browser"}
               pill={biometricSupported
                 ? <Switch disabled={enrolling} checked={sec.biometric} onCheckedChange={(v) => void toggleBiometric(v)} />
-                : <Badge tone="gray"><Fingerprint size={11} /> Unavailable</Badge>}
+                : <Badge tone="gray"><Fingerprint size={11} /> {t("settings.security.unavailable")}</Badge>}
             />
             <RowToggle label="Require unlock on app start" desc="Ask for the PIN every time the app is opened fresh" pill={<Switch checked={sec.requireLoginOnStart} onCheckedChange={(v) => update({ requireLoginOnStart: v })} />} />
             <RowToggle label="Remember this device" desc="Off means an expired session signs out fully instead of offering a PIN unlock" pill={<Switch checked={sec.rememberDevice} onCheckedChange={(v) => update({ rememberDevice: v })} />} last />
-            <p className="mt-2 text-[11px] text-[#9aa6bb]">Two-factor sign-in needs server-side enrolment and is not offered here yet, so no toggle pretends to switch it on.</p>
+            <p className="mt-2 text-[11px] text-[#9aa6bb]">{t("settings.security.twoFactorHelp")}</p>
           </div>
         </Card>
       </div>
@@ -279,7 +281,7 @@ export default function SecuritySettingsPage() {
                   <div className="flex min-w-0 items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h4 className="break-words text-[13px] font-black leading-5 text-[var(--brand-ink)]">{action.label}</h4>
-                      {locked ? <div className="mt-1"><Badge tone="blue">Server enforced</Badge></div> : null}
+                      {locked ? <div className="mt-1"><Badge tone="blue">{t("settings.security.serverEnforced")}</Badge></div> : null}
                     </div>
                     <Switch
                       aria-label={`Protect ${action.label}`}
@@ -290,18 +292,18 @@ export default function SecuritySettingsPage() {
                     />
                   </div>
                   <div>
-                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">Who can approve</p>
+                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{t("settings.security.whoApproves")}</p>
                     <Select value={rule.approver} onValueChange={(value) => setAction(action.key, { ...rule, approver: value as ActionRule["approver"] })}>
                       <SelectTrigger className="min-h-11 w-full text-[12px]" disabled={locked || !on} aria-label={`Approver for ${action.label}`}><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="owner">Owner only</SelectItem>
-                        <SelectItem value="ownerManager">Owner or Manager</SelectItem>
+                        <SelectItem value="owner">{t("settings.security.ownerOnly")}</SelectItem>
+                        <SelectItem value="ownerManager">{t("settings.security.ownerOrManager")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="flex items-center justify-between gap-3 border-t border-[#e7edf7] pt-3">
-                    <span className="text-[11px] font-semibold text-[#64748b]">Audit trail</span>
-                    <Badge tone={on ? "green" : "gray"}>{on ? "Logged" : "Off"}</Badge>
+                    <span className="text-[11px] font-semibold text-[#64748b]">{t("settings.security.auditTrail")}</span>
+                    <Badge tone={on ? "green" : "gray"}>{on ? t("settings.security.logged") : t("settings.security.off")}</Badge>
                   </div>
                 </section>
               );
@@ -311,10 +313,10 @@ export default function SecuritySettingsPage() {
             <table className="min-w-[720px] w-full text-[12px]">
               <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                 <tr>
-                  <th className="px-3 py-2 text-left font-bold">Action</th>
-                  <th className="px-3 py-2 text-center font-bold">Protected</th>
-                  <th className="px-3 py-2 text-left font-bold">Who can approve</th>
-                  <th className="px-3 py-2 text-right font-bold">Audit</th>
+                  <th className="px-3 py-2 text-left font-bold">{t("settings.security.action")}</th>
+                  <th className="px-3 py-2 text-center font-bold">{t("settings.security.protected")}</th>
+                  <th className="px-3 py-2 text-left font-bold">{t("settings.security.whoApproves")}</th>
+                  <th className="px-3 py-2 text-right font-bold">{t("settings.security.audit")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -327,7 +329,7 @@ export default function SecuritySettingsPage() {
                     <tr key={a.key} className={i < PROTECTED_ACTIONS.length - 1 ? "border-b border-[#eef2f8]" : ""}>
                       <td className="px-3 py-2.5 font-bold text-[var(--brand-ink)]">
                         {a.label}
-                        {locked ? <span className="ml-1.5 align-middle"><Badge tone="blue">Server enforced</Badge></span> : null}
+                        {locked ? <span className="ml-1.5 align-middle"><Badge tone="blue">{t("settings.security.serverEnforced")}</Badge></span> : null}
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <div className="flex justify-center">
@@ -344,19 +346,19 @@ export default function SecuritySettingsPage() {
                         <Select value={rule.approver} onValueChange={(v) => setAction(a.key, { ...rule, approver: v as ActionRule["approver"] })}>
                           <SelectTrigger className="min-h-11 w-[170px] text-[12px]" disabled={locked || !on}><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="owner">Owner only</SelectItem>
-                            <SelectItem value="ownerManager">Owner or Manager</SelectItem>
+                            <SelectItem value="owner">{t("settings.security.ownerOnly")}</SelectItem>
+                            <SelectItem value="ownerManager">{t("settings.security.ownerOrManager")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="px-3 py-2.5 text-right">{on ? <Badge tone="green">Logged</Badge> : <Badge tone="gray">Off</Badge>}</td>
+                      <td className="px-3 py-2.5 text-right">{on ? <Badge tone="green">{t("settings.security.logged")}</Badge> : <Badge tone="gray">{t("settings.security.off")}</Badge>}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-[11px] text-[#9aa6bb]">Protected actions prompt for the owner PIN at the counter and are written to the audit log. Rows marked <strong>Server enforced</strong> are also required by the API, so their prompt cannot be switched off; the rest are decided here and take effect on the next bill.</p>
+          <p className="mt-2 text-[11px] text-[#9aa6bb]">{t("settings.security.protectedHelpBefore")} <strong>{t("settings.security.serverEnforced")}</strong> {t("settings.security.protectedHelpAfter")}</p>
         </div>
       </Card>
 
@@ -367,15 +369,15 @@ export default function SecuritySettingsPage() {
             icon={<MonitorSmartphone size={15} />}
             title="Signed-in Devices"
             sub="Live from your device licence list"
-            action={<button type="button" onClick={() => void devicesQ.refetch()} className="settings-text-action gap-1"><RefreshCcw size={12} className={devicesQ.isFetching ? "animate-spin" : ""} /> Refresh</button>}
+            action={<button type="button" onClick={() => void devicesQ.refetch()} className="settings-text-action gap-1"><RefreshCcw size={12} className={devicesQ.isFetching ? "animate-spin" : ""} /> {t("settings.security.refresh")}</button>}
           />
           <div className="px-5 pb-4">
             {devicesQ.isLoading ? (
-              <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={14} className="animate-spin" /> Loading devices</p>
+              <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={14} className="animate-spin" /> {t("settings.security.loadingDevices")}</p>
             ) : devicesQ.isError ? (
-              <p className="rounded-[10px] bg-amber-50 px-3 py-3 text-[12px] font-semibold text-amber-900">Device list unavailable right now — nothing is being shown as trusted.</p>
+              <p className="rounded-[10px] bg-amber-50 px-3 py-3 text-[12px] font-semibold text-amber-900">{t("settings.security.devicesUnavailable")}</p>
             ) : devices.length === 0 ? (
-              <p className="rounded-[10px] bg-[#f6f8fc] px-3 py-6 text-center text-[12px] text-[#64748b]">No devices registered yet.</p>
+              <p className="rounded-[10px] bg-[#f6f8fc] px-3 py-6 text-center text-[12px] text-[#64748b]">{t("settings.security.noDevices")}</p>
             ) : devices.map((device, i) => {
               const id = deviceId(device);
               const isCurrent = id === currentDeviceId;
@@ -384,17 +386,17 @@ export default function SecuritySettingsPage() {
                 <div key={id} className={`flex flex-wrap items-center gap-3 py-2.5 ${i < devices.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[#f4f7fb] text-[#536583]"><MonitorSmartphone size={15} /></span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-bold text-[var(--brand-ink)]">{deviceLabel(device)}{isCurrent && <span className="ml-1.5"><Badge tone="blue">Current</Badge></span>}</p>
+                    <p className="truncate text-[13px] font-bold text-[var(--brand-ink)]">{deviceLabel(device)}{isCurrent && <span className="ml-1.5"><Badge tone="blue">{t("settings.security.current")}</Badge></span>}</p>
                     <p className="text-[11px] text-[#64748b]">{[device.platform || device.operatingSystem, `last seen ${relativeTime(deviceSeenAt(device))}`].filter(Boolean).join(" · ")}</p>
                   </div>
                   <Badge tone={blocked ? "red" : device.status === "active" ? "green" : "gray"}>{blocked ? "Blocked" : device.status === "active" ? "Active" : device.status || "Idle"}</Badge>
                   {!isCurrent && (
-                    <Button size="sm" variant="outline" className="rounded-[8px] text-[12px] font-bold" onClick={() => { setSignOutError(null); setSignOutTarget(device); }}>Sign out</Button>
+                    <Button size="sm" variant="outline" className="rounded-[8px] text-[12px] font-bold" onClick={() => { setSignOutError(null); setSignOutTarget(device); }}>{t("settings.security.signOut")}</Button>
                   )}
                 </div>
               );
             })}
-            <Link href="/settings/devices" className="mt-2 flex min-h-11 items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">Manage devices <ChevronRight size={13} /></Link>
+            <Link href="/settings/devices" className="mt-2 flex min-h-11 items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.security.manageDevices")} <ChevronRight size={13} /></Link>
           </div>
         </Card>
 
@@ -404,16 +406,16 @@ export default function SecuritySettingsPage() {
             icon={<AlertTriangle size={15} />}
             title="Security Logs"
             sub="Real approvals and sensitive actions on this device"
-            action={<button type="button" onClick={() => void eventsQ.refetch()} className="settings-text-action">Refresh</button>}
+            action={<button type="button" onClick={() => void eventsQ.refetch()} className="settings-text-action">{t("settings.security.refresh")}</button>}
           />
           <div className="px-5 pb-4">
             {eventsQ.isLoading ? (
-              <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={14} className="animate-spin" /> Reading audit trail</p>
+              <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={14} className="animate-spin" /> {t("settings.security.readingAudit")}</p>
             ) : (eventsQ.data ?? []).length === 0 ? (
               <div className="py-8 text-center">
                 <ShieldCheck className="mx-auto text-[#b5c0d2]" size={26} />
-                <p className="mt-2 text-[13px] font-black text-[var(--brand-ink)]">No security events yet</p>
-                <p className="mt-1 text-[11px] text-[#64748b]">Approvals, cancellations and sign-ins will appear here as they happen.</p>
+                <p className="mt-2 text-[13px] font-black text-[var(--brand-ink)]">{t("settings.security.noEvents")}</p>
+                <p className="mt-1 text-[11px] text-[#64748b]">{t("settings.security.noEventsHelp")}</p>
               </div>
             ) : (eventsQ.data ?? []).map((row, i, arr) => {
               const denied = DENIED_ACTIONS.has(String(row.action));
@@ -425,7 +427,7 @@ export default function SecuritySettingsPage() {
                 </div>
               );
             })}
-            <Link href="/audit-logs" className="mt-2 flex min-h-11 items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">Open full audit log <ChevronRight size={13} /></Link>
+            <Link href="/audit-logs" className="mt-2 flex min-h-11 items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.security.openFullAudit")} <ChevronRight size={13} /></Link>
           </div>
         </Card>
       </div>
@@ -454,21 +456,22 @@ const pwSchema = z.object({
 type PwData = z.infer<typeof pwSchema>;
 
 function ChangePinDialog({ open, onOpenChange, onChanged }: { open: boolean; onOpenChange: (o: boolean) => void; onChanged: () => void }) {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const [show, setShow] = useState(false);
   const form = useForm<PwData>({ resolver: zodResolver(pwSchema), defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" } });
   const changePassword = useChangePassword({
     mutation: {
-      onSuccess: () => { form.reset(); toast({ title: "Owner PIN / password updated" }); onChanged(); onOpenChange(false); },
-      onError: (err: unknown) => toast({ title: "Error", description: (err as { data?: { message?: string } })?.data?.message ?? "Incorrect current PIN", variant: "destructive" }),
+      onSuccess: () => { form.reset(); toast({ title: t("settings.security.pinUpdated") }); onChanged(); onOpenChange(false); },
+      onError: (err: unknown) => toast({ title: t("settings.security.error"), description: (err as { data?: { message?: string } })?.data?.message ?? "Incorrect current PIN", variant: "destructive" }),
     },
   });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[400px]">
         <DialogHeader>
-          <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">Update Owner PIN</DialogTitle>
-          <p className="text-[12px] text-[#6d7c98]">Change the owner login PIN / password.</p>
+          <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t("settings.security.updateOwnerPin")}</DialogTitle>
+          <p className="text-[12px] text-[#6d7c98]">{t("settings.security.updateOwnerPinHelp")}</p>
         </DialogHeader>
         <form onSubmit={form.handleSubmit((v) => changePassword.mutate({ data: { currentPassword: v.currentPassword, newPassword: v.newPassword } }))} className="space-y-3.5">
           <Fld label="Current PIN / password" err={form.formState.errors.currentPassword?.message}>
@@ -480,9 +483,9 @@ function ChangePinDialog({ open, onOpenChange, onChanged }: { open: boolean; onO
           <Fld label="New PIN / password" err={form.formState.errors.newPassword?.message}><Input className="h-10" type="password" {...form.register("newPassword")} /></Fld>
           <Fld label="Confirm new PIN" err={form.formState.errors.confirmPassword?.message}><Input className="h-10" type="password" {...form.register("confirmPassword")} /></Fld>
           <div className="flex gap-2.5 pt-1">
-            <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>{t("settings.security.cancel")}</Button>
             <Button type="submit" disabled={changePassword.isPending} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
-              {changePassword.isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : "Update"}
+              {changePassword.isPending ? <><Loader2 size={16} className="animate-spin" /> {t("settings.security.saving")}</> : "Update"}
             </Button>
           </div>
         </form>

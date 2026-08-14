@@ -1396,7 +1396,12 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
               <span className="min-w-0 pr-1">
                 <span className="block truncate text-[12px] font-black leading-4 text-[var(--brand-ink)]">{customer.name}</span>
                 <span className="mt-1 block truncate text-[10px] leading-3 text-[#60708e]">{customer.address || "No address"}</span>
-                <span className="mt-1 block truncate text-[9.5px] leading-3 text-[#7c899f]">{customer.mobile || "No mobile"} - {formatCustomerActivityDateTime(lastActivity)}</span>
+                {/* Mobile and last activity shared one truncated line that needed
+                    196px in a 137px column, so the date was always cut off mid-
+                    word. The number is what gets dialled, so it keeps the line;
+                    the activity sits under it in a form short enough to survive. */}
+                <span className="mt-1 block truncate text-[9.5px] leading-3 text-[#7c899f]">{customer.mobile || "No mobile"}</span>
+                <span className="mt-0.5 block truncate text-[9.5px] leading-3 text-[#7c899f]">{formatCustomerActivityDateTime(lastActivity)}</span>
               </span>
               <span className="flex min-w-[92px] flex-col items-end pr-1 text-right">
                 <span className="block text-[12px] font-black leading-4 text-[var(--brand-ink)]">{fmtMoney(customer.ledgerBalance)}</span>

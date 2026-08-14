@@ -2295,12 +2295,19 @@ html[data-density="compact"] {
   .text-\[\#7a879f\]:not(svg *),
   .text-\[\#7886a0\]:not(svg *),
   .text-\[\#77859d\]:not(svg *),
+  .text-\[\#75839d\]:not(svg *),
   .text-\[\#71809b\]:not(svg *),
   .text-\[\#71809a\]:not(svg *),
   .text-\[\#718096\]:not(svg *),
+  .text-\[\#6f7f9b\]:not(svg *),
   .text-\[\#6d7c98\]:not(svg *),
   .text-\[\#687895\]:not(svg *),
-  .text-\[\#687792\]:not(svg *) {
+  .text-\[\#687792\]:not(svg *),
+  /* The app's dominant muted shade, and the one exception that is not a failure
+     on white (4.76:1). It only misses on the off-white cards, at 4.23:1 — and
+     since every other muted grey now lands on #5b6b85, folding it in costs one
+     small step of darkness and buys a muted palette that is a single token. */
+  .text-\[\#64748b\]:not(svg *) {
     color: #5b6b85 !important;
   }
 
