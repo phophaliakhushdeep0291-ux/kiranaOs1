@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ function nowTime() {
 }
 
 export default function PrinterSettingsPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const shop = useGetShop();
   const { prefs, patch } = useSettingsPrefs();
@@ -80,36 +82,36 @@ export default function PrinterSettingsPage() {
       autoPrint: true,
       onDirectPrintSettled: (result) => {
         if (jobId) updateJob(jobId, result.status === "sent" ? "sent" : "failed");
-        if (result.status === "fallback") toast({ title: "Direct print not confirmed", description: result.message || "Inspect the printer before using the manual fallback.", variant: "destructive" });
+        if (result.status === "fallback") toast({ title: t("settings.printer.directNotConfirmed"), description: result.message || "Inspect the printer before using the manual fallback.", variant: "destructive" });
       },
     });
     jobId = addJob("Sample receipt", ok ? (direct ? "pending" : "opened") : "failed");
-    if (!ok) toast({ title: "Allow pop-ups", description: "Enable pop-ups to print the sample.", variant: "destructive" });
+    if (!ok) toast({ title: t("settings.printer.allowPopups"), description: t("settings.printer.allowPopupsHelp"), variant: "destructive" });
   }
 
   async function scanPrinters() {
     if (cfg.connection === "browser") {
       setScanResult("System print dialog is ready. Choose your printer from the dialog when printing.");
-      toast({ title: "Browser printing ready", description: "The browser will show installed printers when you print." });
+      toast({ title: t("settings.printer.browserReady"), description: t("settings.printer.browserReadyHelp") });
       return;
     }
     if (cfg.connection === "bluetooth") {
       setScanResult("Pair the printer in Windows or Android settings. It will then appear in the system print dialog; Artha does not claim a direct Bluetooth printer protocol.");
-      toast({ title: "Pair in device settings", description: "Then use Test Print to choose the paired queue." });
+      toast({ title: t("settings.printer.pairInSettings"), description: t("settings.printer.pairInSettingsHelp") });
       return;
     }
     if (cfg.connection === "usb") {
       setScanResult("USB printers work through the operating system print dialog. Connect the printer, install the driver if needed, then print a sample.");
-      toast({ title: "USB printer note", description: "Use Browser printing after the printer is installed." });
+      toast({ title: t("settings.printer.usbNote"), description: t("settings.printer.usbNoteHelp") });
       return;
     }
     if (cfg.connection === "bridge") {
       try {
         const health = await checkHardwareBridge(cfg.bridgeUrl);
         setBridgeHealth(health);
-        if (!health.capabilities?.print) throw new Error("The local bridge is online, but no printer transport is configured.");
+        if (!health.capabilities?.print) throw new Error(t("settings.printer.noTransport"));
         setScanResult(`Connected to ${health.deviceName || "local hardware bridge"}${health.version ? ` · v${health.version}` : ""}.`);
-        toast({ title: "Hardware bridge ready", description: "A direct printer transport was verified on this device." });
+        toast({ title: t("settings.printer.bridgeReady"), description: t("settings.printer.bridgeReadyHelp") });
       } catch (error) {
         setBridgeHealth(null);
         setScanResult(error instanceof Error ? error.message : "Hardware bridge could not be reached.");
@@ -117,7 +119,7 @@ export default function PrinterSettingsPage() {
       return;
     }
     setScanResult("Install the network printer as a system queue, then choose it in Test Print. For direct raw TCP printing, configure the local hardware bridge.");
-    toast({ title: "Network printer", description: "Use the system queue or the direct local bridge." });
+    toast({ title: t("settings.printer.networkPrinter"), description: t("settings.printer.networkPrinterHelp") });
   }
 
   async function connectPrinter() {
@@ -130,13 +132,13 @@ export default function PrinterSettingsPage() {
         setBridgeHealth(health);
         setBridgePaired(true);
         setPairingCode("");
-        if (!health.capabilities?.print) throw new Error("The bridge is online, but its printer transport is not configured.");
+        if (!health.capabilities?.print) throw new Error(t("settings.printer.transportNotConfigured"));
       }
       await patch({ printer: cfg }, { immediate: true });
       setScanResult(`${PRINTER_CONNECTION_LABELS[cfg.connection]} saved as ${cfg.deviceName || "default printer"}.`);
-      toast({ title: "Printer settings saved", description: "Bills will use this setup for print preview and printing." });
+      toast({ title: t("settings.printer.settingsSaved"), description: t("settings.printer.settingsSavedHelp") });
     } catch (error) {
-      toast({ title: "Printer connection not ready", description: error instanceof Error ? error.message : "Check this printer setup.", variant: "destructive" });
+      toast({ title: t("settings.printer.connectionNotReady"), description: error instanceof Error ? error.message : "Check this printer setup.", variant: "destructive" });
     } finally {
       setConnecting(false);
     }
@@ -144,22 +146,22 @@ export default function PrinterSettingsPage() {
 
   async function setAsDefault() {
     await patch({ printer: { ...cfg, deviceName: cfg.deviceName.trim() || DEFAULT_PRINTER_CONFIG.deviceName } }, { immediate: true });
-    toast({ title: "Default printer saved", description: `${cfg.deviceName || DEFAULT_PRINTER_CONFIG.deviceName} is now the billing printer.` });
+    toast({ title: t("settings.printer.defaultSaved"), description: `${cfg.deviceName || DEFAULT_PRINTER_CONFIG.deviceName} is now the billing printer.` });
   }
 
   async function testCashDrawer() {
     try {
       await openCashDrawerViaHardwareBridge(cfg.bridgeUrl);
-      toast({ title: "Cash drawer opened", description: "The local bridge confirmed the drawer pulse." });
-    } catch (error) { toast({ title: "Drawer test failed", description: error instanceof Error ? error.message : "Check the bridge and printer cable.", variant: "destructive" }); }
+      toast({ title: t("settings.printer.drawerOpened"), description: t("settings.printer.drawerOpenedHelp") });
+    } catch (error) { toast({ title: t("settings.printer.drawerFailed"), description: error instanceof Error ? error.message : "Check the bridge and printer cable.", variant: "destructive" }); }
   }
 
   async function readScale() {
     try {
       const reading = await readScaleViaHardwareBridge(cfg.bridgeUrl);
       setScaleReading(`${reading.weight} ${reading.unit}`);
-      toast({ title: "Scale reading received", description: `${reading.weight} ${reading.unit}` });
-    } catch (error) { toast({ title: "Scale test failed", description: error instanceof Error ? error.message : "Check the bridge and scale protocol.", variant: "destructive" }); }
+      toast({ title: t("settings.printer.scaleReceived"), description: `${reading.weight} ${reading.unit}` });
+    } catch (error) { toast({ title: t("settings.printer.scaleFailed"), description: error instanceof Error ? error.message : "Check the bridge and scale protocol.", variant: "destructive" }); }
   }
 
   async function testCustomerDisplay() {
@@ -170,8 +172,8 @@ export default function PrinterSettingsPage() {
         itemCount: 2,
         totalPaise: 12_345,
       });
-      toast({ title: "Customer display updated", description: "The bridge confirmed the ₹123.45 test total." });
-    } catch (error) { toast({ title: "Display test failed", description: error instanceof Error ? error.message : "Check the bridge and display adapter.", variant: "destructive" }); }
+      toast({ title: t("settings.printer.displayUpdated"), description: t("settings.printer.displayUpdatedHelp") });
+    } catch (error) { toast({ title: t("settings.printer.displayFailed"), description: error instanceof Error ? error.message : "Check the bridge and display adapter.", variant: "destructive" }); }
   }
 
   function downloadReceiptHtml() {
@@ -186,7 +188,7 @@ export default function PrinterSettingsPage() {
     link.remove();
     URL.revokeObjectURL(url);
     addJob("Sample receipt downloaded", "saved");
-    toast({ title: "Receipt downloaded", description: "Open it and choose Print / Save PDF." });
+    toast({ title: t("settings.printer.receiptDownloaded"), description: t("settings.printer.receiptDownloadedHelp") });
   }
   const systemQueueConnection = ["browser", "bluetooth", "usb", "network"].includes(cfg.connection);
   const connectionStatus = systemQueueConnection || (cfg.connection === "bridge" && bridgeHealth?.ok && bridgeHealth.capabilities?.print)
@@ -201,7 +203,7 @@ export default function PrinterSettingsPage() {
         {/* Default printer setup */}
         <div className="space-y-4">
           <Card>
-            <CardHead icon={<Printer size={15} />} title="Default Printer Setup" sub="Connect your receipt printer" action={connectionStatus === "ready" ? <Badge tone="green"><CheckCircle2 size={11} /> Ready</Badge> : connectionStatus === "configured" ? <Badge tone="blue">Configured</Badge> : <Badge tone="amber">Not set</Badge>} />
+            <CardHead icon={<Printer size={15} />} title="Default Printer Setup" sub="Connect your receipt printer" action={connectionStatus === "ready" ? <Badge tone="green"><CheckCircle2 size={11} /> {t("settings.printer.ready")}</Badge> : connectionStatus === "configured" ? <Badge tone="blue">{t("settings.printer.configured")}</Badge> : <Badge tone="amber">{t("settings.security.notSet")}</Badge>} />
             <div className="space-y-3 px-5 pb-5">
               <Fld label="Connection type">
                 <Select value={cfg.connection} onValueChange={(v) => setP("connection", v as PrinterConnection)}>
@@ -217,7 +219,7 @@ export default function PrinterSettingsPage() {
                 <Fld label="Paper size">
                   <Select value={cfg.paperSize} onValueChange={(v) => setP("paperSize", v as ReceiptPaperSize)}>
                     <SelectTrigger className="h-11 sm:mouse:h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="58mm">58mm thermal</SelectItem><SelectItem value="80mm">80mm thermal</SelectItem><SelectItem value="A4">A4 sheet</SelectItem></SelectContent>
+                    <SelectContent><SelectItem value="58mm">{t("settings.printer.paper58")}</SelectItem><SelectItem value="80mm">{t("settings.printer.paper80")}</SelectItem><SelectItem value="A4">{t("settings.printer.paperA4")}</SelectItem></SelectContent>
                   </Select>
                 </Fld>
                 <Fld label="Copies per bill">
@@ -227,12 +229,12 @@ export default function PrinterSettingsPage() {
                   </Select>
                 </Fld>
               </div>
-              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-11 sm:mouse:h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="6-character pairing code" hint="Open Hardware Bridge Setup and type the code shown there. The private device token is exchanged automatically and never synced."><Input className="h-11 font-mono uppercase tracking-[0.3em] sm:mouse:h-10" value={pairingCode} maxLength={6} autoComplete="one-time-code" onChange={(event) => setPairingCode(event.target.value.replace(/[^2-9A-HJ-NP-Z]/gi, "").toUpperCase())} placeholder={bridgePaired ? "PAIRED" : "ABC234"} /></Fld>{bridgeHealth?.update?.available ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">Hardware Bridge v{bridgeHealth.update.latestVersion} is available. Open Hardware Bridge Setup to update.</div> : null}{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Badge tone="green">Paired · v{bridgeHealth.version}</Badge><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>Test drawer</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>Read scale</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void testCustomerDisplay()} disabled={!bridgeHealth.capabilities?.customerDisplay}>Test display</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
+              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-11 sm:mouse:h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="6-character pairing code" hint="Open Hardware Bridge Setup and type the code shown there. The private device token is exchanged automatically and never synced."><Input className="h-11 font-mono uppercase tracking-[0.3em] sm:mouse:h-10" value={pairingCode} maxLength={6} autoComplete="one-time-code" onChange={(event) => setPairingCode(event.target.value.replace(/[^2-9A-HJ-NP-Z]/gi, "").toUpperCase())} placeholder={bridgePaired ? "PAIRED" : "ABC234"} /></Fld>{bridgeHealth?.update?.available ? <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">Hardware Bridge v{bridgeHealth.update.latestVersion} is available. Open Hardware Bridge Setup to update.</div> : null}{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Badge tone="green">Paired · v{bridgeHealth.version}</Badge><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>{t("settings.printer.testDrawer")}</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>{t("settings.printer.readScale")}</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:mouse:min-h-8" onClick={() => void testCustomerDisplay()} disabled={!bridgeHealth.capabilities?.customerDisplay}>{t("settings.printer.testDisplay")}</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
               <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
-                <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={() => void scanPrinters()}><Search size={14} /> Scan</Button>
+                <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={() => void scanPrinters()}><Search size={14} /> {t("settings.printer.scan")}</Button>
                 <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={() => void connectPrinter()} disabled={connecting}><Cable size={14} /> {connecting ? "Saving..." : "Connect"}</Button>
-                <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={testPrint}><Printer size={14} /> Test Print</Button>
-                <Button className="h-11 gap-1.5 rounded-[9px] text-[12px] font-black text-white sm:mouse:h-9" style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} onClick={() => void setAsDefault()}><CheckCircle2 size={14} /> Set Default</Button>
+                <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={testPrint}><Printer size={14} /> {t("settings.printer.testPrintCap")}</Button>
+                <Button className="h-11 gap-1.5 rounded-[9px] text-[12px] font-black text-white sm:mouse:h-9" style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} onClick={() => void setAsDefault()}><CheckCircle2 size={14} /> {t("settings.printer.setDefault")}</Button>
               </div>
               {scanResult ? <div className="rounded-[10px] border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-semibold text-blue-800">{scanResult}</div> : null}
             </div>
@@ -247,8 +249,8 @@ export default function PrinterSettingsPage() {
               <RowToggle label="Print customer copy" pill={<Switch checked={cfg.customerCopy} onCheckedChange={(v) => setP("customerCopy", v)} />} />
               <RowToggle label="Print shop copy" pill={<Switch checked={cfg.shopCopy} onCheckedChange={(v) => setP("shopCopy", v)} />} />
               <RowToggle label="Auto cut paper" desc="Supported thermal printers" pill={<Switch checked={cfg.autoCut} onCheckedChange={(v) => setP("autoCut", v)} />} />
-              <RowToggle label="Cash drawer pulse" desc="Open the connected drawer after a direct bridge print" pill={cfg.connection === "bridge" ? <Switch checked={cfg.cashDrawer} onCheckedChange={(v) => setP("cashDrawer", v)} /> : <Badge tone="amber">Bridge required</Badge>} />
-              <RowToggle label="Customer display updates" desc="Show the live item count and payable total through the paired bridge" pill={cfg.connection === "bridge" ? <Switch checked={cfg.customerDisplay} onCheckedChange={(v) => setP("customerDisplay", v)} disabled={!bridgeHealth?.capabilities?.customerDisplay} /> : <Badge tone="amber">Bridge required</Badge>} />
+              <RowToggle label="Cash drawer pulse" desc="Open the connected drawer after a direct bridge print" pill={cfg.connection === "bridge" ? <Switch checked={cfg.cashDrawer} onCheckedChange={(v) => setP("cashDrawer", v)} /> : <Badge tone="amber">{t("settings.printer.bridgeRequired")}</Badge>} />
+              <RowToggle label="Customer display updates" desc="Show the live item count and payable total through the paired bridge" pill={cfg.connection === "bridge" ? <Switch checked={cfg.customerDisplay} onCheckedChange={(v) => setP("customerDisplay", v)} disabled={!bridgeHealth?.capabilities?.customerDisplay} /> : <Badge tone="amber">{t("settings.printer.bridgeRequired")}</Badge>} />
               <RowToggle label="Print logo" pill={<Switch checked={cfg.printLogo} onCheckedChange={(v) => setP("printLogo", v)} />} />
               <RowToggle label="Show dynamic UPI QR at checkout" desc="Uses the verified UPI ID saved in Store Profile" pill={<Switch checked={cfg.printQr} onCheckedChange={(v) => setP("printQr", v)} />} last />
             </div>
@@ -257,7 +259,7 @@ export default function PrinterSettingsPage() {
 
         {/* Bill template preview */}
         <Card className="flex flex-col">
-          <CardHead icon={<FileText size={15} />} title="Bill Template Preview" sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="settings-text-action px-2 sm:px-0">Test print</button>} />
+          <CardHead icon={<FileText size={15} />} title="Bill Template Preview" sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="settings-text-action px-2 sm:px-0">{t("settings.printer.testPrint")}</button>} />
           <div className="flex-1 px-5 pb-5">
             <div className="app-table-scroll overflow-auto rounded-[12px] border border-[#e3e9f3] bg-[#eef1f6]">
               <iframe title="Receipt preview" srcDoc={previewHtml} className="h-[560px] w-full border-0" />
@@ -283,13 +285,13 @@ export default function PrinterSettingsPage() {
             <Fld label="Footer note">
               <Input className="h-11 sm:mouse:h-10" value={cfg.footerText} onChange={(e) => setP("footerText", e.target.value)} />
             </Fld>
-            <p className="pt-2 text-[11px] text-[#9aa6bb]">Browser security allows direct printer scanning only for supported Bluetooth devices. For most thermal printers, install or pair the printer in Windows/Android and Artha will print through the system dialog.</p>
+            <p className="pt-2 text-[11px] text-[#9aa6bb]">{t("settings.printer.scanHelp")}</p>
           </div>
         </Card>
 
         {/* Printer queue / test */}
         <Card>
-          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Print actions from this session" action={<button onClick={() => { setJobs([]); toast({ title: "Queue cleared" }); }} className="settings-text-action px-2 sm:px-0">Clear queue</button>} />
+          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Print actions from this session" action={<button onClick={() => { setJobs([]); toast({ title: t("settings.printer.queueCleared") }); }} className="settings-text-action px-2 sm:px-0">{t("settings.printer.clearQueue")}</button>} />
           <div className="px-5 pb-4">
             {jobs.length === 0 ? (
               <div className="rounded-[12px] border border-dashed border-[#dbe4f0] p-6 text-center text-[12px] font-semibold text-[#64748b]">
@@ -302,12 +304,12 @@ export default function PrinterSettingsPage() {
                   <p className="text-[13px] font-bold text-[var(--brand-ink)]">{j.title}</p>
                   <p className="text-[11px] text-[#64748b]">{j.time}</p>
                 </div>
-                {j.status === "failed" ? <Button size="sm" variant="outline" className="h-11 gap-1 rounded-[8px] text-[12px] font-bold sm:mouse:h-8" onClick={testPrint}><RefreshCcw size={12} /> Retry</Button> : <Badge tone={j.status === "pending" ? "blue" : "green"}>{j.status === "saved" ? "Saved" : j.status === "sent" ? "Sent to printer" : j.status === "opened" ? "Dialog opened" : "Sending"}</Badge>}
+                {j.status === "failed" ? <Button size="sm" variant="outline" className="h-11 gap-1 rounded-[8px] text-[12px] font-bold sm:mouse:h-8" onClick={testPrint}><RefreshCcw size={12} /> {t("settings.printer.retry")}</Button> : <Badge tone={j.status === "pending" ? "blue" : "green"}>{j.status === "saved" ? "Saved" : j.status === "sent" ? "Sent to printer" : j.status === "opened" ? "Dialog opened" : "Sending"}</Badge>}
               </div>
             ))}
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={testPrint}><Printer size={14} /> Print sample</Button>
-              <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={downloadReceiptHtml}><Download size={14} /> Download receipt</Button>
+              <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={testPrint}><Printer size={14} /> {t("settings.printer.printSample")}</Button>
+              <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:mouse:h-9" onClick={downloadReceiptHtml}><Download size={14} /> {t("settings.printer.downloadReceipt")}</Button>
             </div>
           </div>
         </Card>
@@ -318,7 +320,7 @@ export default function PrinterSettingsPage() {
         <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-6">
           {hardwareCapabilities.map((capability) => {
             const Icon = capability.icon;
-            return <div key={capability.label} className="rounded-xl border border-[#e5eaf2] bg-[#f8fafc] p-3"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[var(--brand)] shadow-sm"><Icon size={16} /></span><Badge tone={capability.ready ? "green" : "amber"}>{capability.ready ? "Available" : "Unavailable"}</Badge></div><p className="mt-3 text-[12px] font-black text-[var(--brand-ink)]">{capability.label}</p><p className="mt-1 text-[10.5px] leading-4 text-[#64748b]">{capability.detail}</p></div>;
+            return <div key={capability.label} className="rounded-xl border border-[#e5eaf2] bg-[#f8fafc] p-3"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[var(--brand)] shadow-sm"><Icon size={16} /></span><Badge tone={capability.ready ? "green" : "amber"}>{capability.ready ? "Available" : t("settings.security.unavailable")}</Badge></div><p className="mt-3 text-[12px] font-black text-[var(--brand-ink)]">{capability.label}</p><p className="mt-1 text-[10.5px] leading-4 text-[#64748b]">{capability.detail}</p></div>;
           })}
         </div>
       </Card>

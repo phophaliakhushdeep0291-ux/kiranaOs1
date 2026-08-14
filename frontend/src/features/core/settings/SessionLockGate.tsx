@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Fingerprint, Lock, Loader2, LogOut, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -184,6 +185,7 @@ export function SessionLockGate({ children }: { children: ReactNode }) {
 }
 
 function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: string | null; biometric: boolean; onUnlock: () => void; onSignOut: () => void }) {
+  const { t } = useAppLanguage();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -248,7 +250,7 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
     >
       <div className="session-lock-card">
         <span aria-hidden="true" className="session-lock-icon"><Lock size={22} /></span>
-        <h1 id="counter-lock-title" className="session-lock-title">Counter locked</h1>
+        <h1 id="counter-lock-title" className="session-lock-title">{t("settings.lock.locked")}</h1>
         <p id="counter-lock-description" className="session-lock-description">
           {userName ? `${userName}, enter` : "Enter"} the owner PIN to get back to the counter. This lock follows your
           Settings &rarr; Security session rules.
@@ -273,7 +275,7 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
             style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
             className="session-lock-primary"
           >
-            {checking ? <><Loader2 size={16} className="animate-spin" /> Checking…</> : <><ShieldCheck size={16} /> Unlock counter</>}
+            {checking ? <><Loader2 size={16} className="animate-spin" /> {t("settings.lock.checking")}</> : <><ShieldCheck size={16} /> {t("settings.lock.unlock")}</>}
           </Button>
           {biometric ? (
             <Button type="button" variant="outline" disabled={checking} className="session-lock-secondary" onClick={() => void unlockWithBiometric()}>

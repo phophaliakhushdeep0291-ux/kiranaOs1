@@ -14,6 +14,9 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   // Language names, shown in the switcher in their own language.
   "English",
   "Hindi / Hinglish",
+  // Already Devanagari on the English side: a language named in its own script
+  // is the same string in both catalogues, so it can never differ.
+  "हिन्दी (Hindi)",
   // Mode name shopkeepers say in English.
   "Advanced",
   // Payment rails and tax terms used in English on every Indian receipt.

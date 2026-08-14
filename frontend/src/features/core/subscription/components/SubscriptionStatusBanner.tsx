@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { AlertTriangle, ChevronRight, Clock, CloudOff, CreditCard, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TRIAL_WARN_DAYS = 3;
@@ -14,6 +15,7 @@ function trialDaysLeft(trialEndsAt: string | null): number | null {
 }
 
 export function SubscriptionStatusBanner() {
+  const { t } = useAppLanguage();
   const { snapshot, loading } = useSubscriptionSnapshot();
   if (loading || !snapshot) return null;
 
@@ -63,14 +65,14 @@ export function SubscriptionStatusBanner() {
    * phone gets the headline and "Owner details" carries the rest.
    */
   const shortMessage = snapshot.isPaymentFailed
-    ? "Payment failed — sales and exports still work"
+    ? t("chrome.subscription.paymentFailedShort")
     : snapshot.isExpired
-      ? "Subscription expired — you can still bill and export"
+      ? t("chrome.subscription.expiredShort")
       : snapshot.graceActive
-        ? "Offline grace — billing works, sync is limited"
+        ? t("chrome.subscription.graceShort")
         : snapshot.isTrial
-          ? "Trial active — your data is safe on this device"
-          : "Subscription active";
+          ? t("chrome.subscription.trialShort")
+          : t("chrome.subscription.activeShort");
   return (
     <div className={`border-b px-3 py-1.5 sm:px-4 ${isDanger ? "bg-amber-50 text-amber-950" : "bg-amber-50 text-amber-800"}`}>
       <div className="flex min-h-11 items-center gap-2 text-xs sm:text-sm">
@@ -83,8 +85,8 @@ export function SubscriptionStatusBanner() {
           <span className="hidden min-w-0 flex-1 sm:inline">{plainMessage}</span>
         </div>
         <Link href="/subscription" className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-2 font-black text-current hover:bg-black/5">
-          <span className="hidden sm:inline">Owner details</span>
-          <span className="sm:hidden">Details</span>
+          <span className="hidden sm:inline">{t("chrome.subscription.ownerDetails")}</span>
+          <span className="sm:hidden">{t("chrome.subscription.details")}</span>
           <ChevronRight size={14} aria-hidden="true" />
         </Link>
       </div>

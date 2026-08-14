@@ -460,7 +460,7 @@ export default function DailyClosingPage() {
                 type="number"
                 inputMode="decimal"
                 min={0}
-                placeholder="What is physically in the drawer?"
+                placeholder="Cash counted in drawer"
                 value={countedDraft}
                 onChange={(event) => setCountedDraft(event.target.value)}
                 className="h-11 rounded-xl"

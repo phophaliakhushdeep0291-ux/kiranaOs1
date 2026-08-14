@@ -1,3 +1,4 @@
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -87,12 +88,13 @@ function itemTotal(row: AnyRow) {
 }
 
 function BillItemDescription({ item }: { item: AnyRow }) {
+  const { t } = useAppLanguage();
   const addons = billItemAddons(item);
   const variation = String(item.sellingUnitLabel ?? item.selling_unit_label ?? "").trim();
   const note = String(item.note ?? "").trim();
 
   return <div className="min-w-0">
-    <div className="break-words font-semibold text-foreground">{String(item.name ?? item.productName ?? "Item")}</div>
+    <div className="break-words font-semibold text-foreground">{String(item.name ?? item.productName ?? t("billing.bills.item"))}</div>
     {variation ? <div className="mt-1 text-xs font-semibold text-muted-foreground">Portion: {variation}</div> : null}
     {addons.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Selected add-ons">
       {addons.map((addon, addonIndex) => <span className="inline-flex max-w-full flex-wrap items-center gap-x-1 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold leading-4 text-amber-950" key={`${addon.optionId ?? addon.name}-${addonIndex}`}>
@@ -105,15 +107,15 @@ function BillItemDescription({ item }: { item: AnyRow }) {
   </div>;
 }
 
-function paymentStatus(bill: BillRecord, payments: AnyRow[]) {
+function paymentStatus(bill: BillRecord, payments: AnyRow[], t: Translate) {
   if (bill.status === "cancelled") return "Cancelled";
   if (bill.billType === "estimate") return "Rough/Estimate";
   const paidFromRows = payments.reduce((sum, row) => String(row.mode ?? "") === "credit" ? sum : sum + readNumber(row.amount, 0), 0);
   const paid = Math.max(readNumber(bill.paidAmount ?? bill.buyerPaidAmount, 0), paidFromRows);
   const credit = readNumber(bill.creditAmount, Math.max(0, billTotal(bill) - paid));
-  if (credit > 0 && paid > 0) return "Partial";
-  if (credit > 0) return "Udhar";
-  if (paid >= billTotal(bill) && billTotal(bill) > 0) return "Paid";
+  if (credit > 0 && paid > 0) return t("billing.bills.tab.partial");
+  if (credit > 0) return t("billing.bills.tab.udhar");
+  if (paid >= billTotal(bill) && billTotal(bill) > 0) return t("billing.pay.paid");
   return "Pending";
 }
 
@@ -163,6 +165,7 @@ function useBillDetail(id: string) {
 }
 
 export default function BillDetailPage() {
+  const { t } = useAppLanguage();
   const params = useParams<{ id: string }>();
   const id = params.id ?? "";
   const { toast } = useToast();
@@ -202,7 +205,7 @@ export default function BillDetailPage() {
     sellingUnitCode: String(item.sellingUnitCode ?? item.selling_unit_code ?? "") || undefined,
     sellingUnitLabel: String(item.sellingUnitLabel ?? item.selling_unit_label ?? "") || undefined,
     conversionToBase: readNumber(item.conversionToBase ?? item.conversion_to_base, 0) || undefined,
-    name: String(item.name ?? item.productName ?? "Item"),
+    name: String(item.name ?? item.productName ?? t("billing.bills.item")),
     soldQty: Math.abs(readNumber(item.quantity, 0)),
     enteredUnit: String(item.enteredUnit ?? item.entered_unit ?? "piece"),
     ratePerRateUnit: readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0),
@@ -219,7 +222,7 @@ export default function BillDetailPage() {
     const ok = openPrintableBill(buildPrintableBillSnapshot(bill, visibleItems, visiblePayments, {
       name: shop?.name, address: shop?.address, city: shop?.city, phone: shop?.phone, gstNumber: shop?.gstNumber,
     }));
-    if (!ok) toast({ title: "Print blocked", description: "Allow pop-ups to print or save PDF.", variant: "destructive" });
+    if (!ok) toast({ title: t("billing.bills.printBlocked"), description: t("billing.bills.allowPopups"), variant: "destructive" });
   }
 
   async function shareOnWhatsapp() {
@@ -245,14 +248,14 @@ export default function BillDetailPage() {
     setWhatsappState(result.state);
     const targetedCustomer = Boolean(shareInput.customerMobile);
     toast({
-      title: "Opening WhatsApp…",
+      title: t("billing.bills.openingWhatsappEllipsis"),
       description: result.queued ? "Queued until this device reconnects." : result.state === "sent_via_api" ? "Sent via the configured provider." : targetedCustomer ? "Opened for the customer's number." : "Pick a chat to send this bill.",
     });
   }
 
   function requestPinAction(action: PinAction) {
     if (action === "cancel" && !cancelPermission.allowed) {
-      toast({ title: "Permission denied", description: cancelPermission.reason, variant: "destructive" });
+      toast({ title: t("billing.bills.permissionDenied"), description: cancelPermission.reason, variant: "destructive" });
       return;
     }
     setPinAction(action);
@@ -261,7 +264,7 @@ export default function BillDetailPage() {
   // Editing voids the original (cancelBill), so it needs the same permission as cancel.
   function startEdit() {
     if (!cancelPermission.allowed) {
-      toast({ title: "Permission denied", description: cancelPermission.reason, variant: "destructive" });
+      toast({ title: t("billing.bills.permissionDenied"), description: cancelPermission.reason, variant: "destructive" });
       return;
     }
     setEditMode("edit");
@@ -285,11 +288,11 @@ export default function BillDetailPage() {
           productIds: visibleItems.map((item) => item.productId).filter(Boolean),
         });
       }
-      toast({ title: "Saved locally", description: "Data safe locally. Cloud backup will happen automatically when sync is available." });
+      toast({ title: t("billing.bills.savedLocally"), description: t("billing.bills.dataSafeLocally") });
       setPinAction(null);
       await refetch();
     } catch (error) {
-      toast({ title: "Action failed", description: error instanceof Error ? error.message : "Please check owner PIN and try again.", variant: "destructive" });
+      toast({ title: t("billing.bills.actionFailed"), description: error instanceof Error ? error.message : "Please check owner PIN and try again.", variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -307,7 +310,7 @@ export default function BillDetailPage() {
       const serverId = String(bill.server_id ?? bill.serverId ?? bill.id);
       await apiRequest(`/bills/${encodeURIComponent(serverId)}/email`, { method: "POST", body: JSON.stringify({ email: receiptEmail.trim() }) });
       setEmailOpen(false);
-      toast({ title: "Receipt emailed", description: `Delivery was accepted for ${receiptEmail.trim()}.` });
+      toast({ title: t("billing.bills.receiptEmailed"), description: `Delivery was accepted for ${receiptEmail.trim()}.` });
     } catch (error) {
       setEmailError(error instanceof Error ? error.message : "Could not email this receipt.");
     } finally {
@@ -318,8 +321,8 @@ export default function BillDetailPage() {
   if (!bill) {
     return (
       <div className="p-6 space-y-4">
-        <Link href="/bills"><Button variant="outline"><ArrowLeft size={15} className="mr-1" />Back to bills</Button></Link>
-        <Card><CardContent className="py-10 text-center text-muted-foreground">Bill not found in local records.</CardContent></Card>
+        <Link href="/bills"><Button variant="outline"><ArrowLeft size={15} className="mr-1" />{t("billing.bills.backToBills")}</Button></Link>
+        <Card><CardContent className="py-10 text-center text-muted-foreground">{t("billing.bills.notFoundLocal")}</CardContent></Card>
       </div>
     );
   }
@@ -334,30 +337,30 @@ export default function BillDetailPage() {
     <div className="space-y-4 p-4 pb-28 md:space-y-5 md:p-6 md:pb-8">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-2">
-          <Link href="/bills" className="inline-flex"><Button variant="outline" size="sm"><ArrowLeft size={15} className="mr-1" />Back</Button></Link>
+          <Link href="/bills" className="inline-flex"><Button variant="outline" size="sm"><ArrowLeft size={15} className="mr-1" />{t("billing.bills.back")}</Button></Link>
           <div>
             <h1 className="text-2xl font-bold">{billNo(bill)}</h1>
-            <p className="text-sm text-muted-foreground">Duplicate copy, audit trail, ledger impact, and sync status.</p>
+            <p className="text-sm text-muted-foreground">{t("billing.bills.detailSubtitle")}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <Button className="h-11 w-full sm:w-auto" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />WhatsApp</Button>
-          <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={printBill}><Printer size={15} className="mr-1" />Print duplicate</Button>
+          <Button className="h-11 w-full sm:w-auto" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />{t("billing.bills.whatsapp")}</Button>
+          <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={printBill}><Printer size={15} className="mr-1" />{t("billing.bills.printDuplicate")}</Button>
           <span className="self-center text-xs text-muted-foreground">{whatsappState === "sent_via_api" ? "Sent via API" : whatsappState === "opened_share_sheet" ? "Opened in WhatsApp" : whatsappState === "failed" ? "Delivery failed" : "Not sent"}</span>
-          <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={() => { setEmailError(""); setEmailOpen(true); }}><Mail size={15} className="mr-1" />Email receipt</Button>
+          <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={() => { setEmailError(""); setEmailOpen(true); }}><Mail size={15} className="mr-1" />{t("billing.bills.emailReceipt")}</Button>
           {isDeleted(bill) ? (
-            <Button onClick={() => requestPinAction("restore")}><RotateCcw size={15} className="mr-1" />Restore</Button>
+            <Button onClick={() => requestPinAction("restore")}><RotateCcw size={15} className="mr-1" />{t("billing.bills.restore")}</Button>
           ) : (
             <>
               {bill.status !== "cancelled" && (
                 <>
-                  <Button variant="outline" onClick={startEdit}><Pencil size={15} className="mr-1" />Edit bill</Button>
-                  <Button variant="outline" onClick={() => setEditMode("addon")}><Plus size={15} className="mr-1" />Add items</Button>
+                  <Button variant="outline" onClick={startEdit}><Pencil size={15} className="mr-1" />{t("billing.bills.editBill")}</Button>
+                  <Button variant="outline" onClick={() => setEditMode("addon")}><Plus size={15} className="mr-1" />{t("billing.bills.addItems")}</Button>
                 </>
               )}
-              {canReturn && <Button variant="outline" onClick={() => setReturnOpen(true)}><RotateCcw size={15} className="mr-1" />Return items</Button>}
-              {bill.status !== "cancelled" && <Button variant="outline" onClick={() => requestPinAction("cancel")}><ShieldCheck size={15} className="mr-1" />Cancel with PIN</Button>}
-              <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={() => requestPinAction("delete")}><Trash2 size={15} className="mr-1" />Recycle bin</Button>
+              {canReturn && <Button variant="outline" onClick={() => setReturnOpen(true)}><RotateCcw size={15} className="mr-1" />{t("billing.bills.returnItems")}</Button>}
+              {bill.status !== "cancelled" && <Button variant="outline" onClick={() => requestPinAction("cancel")}><ShieldCheck size={15} className="mr-1" />{t("billing.bills.cancelWithPin")}</Button>}
+              <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={() => requestPinAction("delete")}><Trash2 size={15} className="mr-1" />{t("billing.bills.recycleBin")}</Button>
             </>
           )}
         </div>
@@ -367,7 +370,7 @@ export default function BillDetailPage() {
         <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-950 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/25 dark:text-emerald-100">
           <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white"><CheckCircle2 size={18} /></span>
           <div className="min-w-0">
-            <p className="font-bold">Cancellation confirmed</p>
+            <p className="font-bold">{t("billing.bills.cancellationConfirmed")}</p>
             <p className="mt-0.5 text-sm text-emerald-800 dark:text-emerald-200">Stock and customer balance were reversed. {syncState === "synced" ? "Cloud backup is confirmed." : "Cloud backup is still pending."}</p>
             <p className="mt-1 break-words text-xs text-emerald-700 dark:text-emerald-300">Reason: {cancellationReason}</p>
           </div>
@@ -375,52 +378,52 @@ export default function BillDetailPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Total</CardTitle></CardHeader><CardContent className="px-4 pb-4 text-xl font-bold">{money(total)}</CardContent></Card>
-        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Paid</CardTitle></CardHeader><CardContent className="px-4 pb-4 text-xl font-bold text-emerald-600">{money(paid)}</CardContent></Card>
+        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{t("billing.bills.total")}</CardTitle></CardHeader><CardContent className="px-4 pb-4 text-xl font-bold">{money(total)}</CardContent></Card>
+        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{t("billing.pay.paid")}</CardTitle></CardHeader><CardContent className="px-4 pb-4 text-xl font-bold text-emerald-600">{money(paid)}</CardContent></Card>
         <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{isCancelled ? "Reversed Udhar" : "Udhar"}</CardTitle></CardHeader><CardContent className={`px-4 pb-4 text-xl font-bold ${isCancelled ? "text-emerald-600" : "text-orange-600"}`}>{money(credit)}</CardContent></Card>
-        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Status</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-1.5 px-4 pb-4"><Badge>{paymentStatus(bill, visiblePayments)}</Badge><Badge variant="outline">{String(bill.sync_status ?? bill.status ?? "synced").replaceAll("_", " ")}</Badge></CardContent></Card>
+        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{t("billing.bills.status")}</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-1.5 px-4 pb-4"><Badge>{paymentStatus(bill, visiblePayments, t)}</Badge><Badge variant="outline">{String(bill.sync_status ?? bill.status ?? "synced").replaceAll("_", " ")}</Badge></CardContent></Card>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
         <Card>
-          <CardHeader><CardTitle>Bill summary</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("billing.bills.summary")}</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 text-sm">
-            <div><div className="text-muted-foreground">Date</div><div>{billDate(bill) ? new Date(billDate(bill)).toLocaleString("en-IN") : "No date"}</div></div>
-            <div><div className="text-muted-foreground">Bill type</div><div>{String(bill.billType ?? "normal_sale").replaceAll("_", " ")}</div></div>
-            <div><div className="text-muted-foreground">Subtotal</div><div>{money(readNumber(bill.subtotal, total + readNumber(bill.discount, 0)))}</div></div>
-            <div><div className="text-muted-foreground">Discount</div><div>{money(readNumber(bill.discount, 0))}</div></div>
-            <div><div className="text-muted-foreground">Deleted</div><div>{isDeleted(bill) ? "In recycle bin" : "No"}</div></div>
-            <div className="sm:col-span-2"><div className="text-muted-foreground">Record identity</div><div className="mt-1 grid gap-1 text-xs sm:grid-cols-2"><span className="break-all rounded-lg bg-muted/60 px-2 py-1.5">Device: {localRecordId || "Merged after backup"}</span><span className="break-all rounded-lg bg-muted/60 px-2 py-1.5">Cloud: {cloudRecordId || "Waiting for backup"}</span></div></div>
+            <div><div className="text-muted-foreground">{t("billing.bills.date")}</div><div>{billDate(bill) ? new Date(billDate(bill)).toLocaleString("en-IN") : "No date"}</div></div>
+            <div><div className="text-muted-foreground">{t("billing.bills.billType")}</div><div>{String(bill.billType ?? "normal_sale").replaceAll("_", " ")}</div></div>
+            <div><div className="text-muted-foreground">{t("billing.summary.subtotal")}</div><div>{money(readNumber(bill.subtotal, total + readNumber(bill.discount, 0)))}</div></div>
+            <div><div className="text-muted-foreground">{t("billing.summary.discount")}</div><div>{money(readNumber(bill.discount, 0))}</div></div>
+            <div><div className="text-muted-foreground">{t("billing.bills.deleted")}</div><div>{isDeleted(bill) ? "In recycle bin" : "No"}</div></div>
+            <div className="sm:col-span-2"><div className="text-muted-foreground">{t("billing.bills.recordIdentity")}</div><div className="mt-1 grid gap-1 text-xs sm:grid-cols-2"><span className="break-all rounded-lg bg-muted/60 px-2 py-1.5">Device: {localRecordId || "Merged after backup"}</span><span className="break-all rounded-lg bg-muted/60 px-2 py-1.5">Cloud: {cloudRecordId || "Waiting for backup"}</span></div></div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Customer details</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("billing.bills.customerDetails")}</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <div><span className="text-muted-foreground">Name: </span>{bill.customerName || data.customer?.name || "Walk-in"}</div>
-            <div><span className="text-muted-foreground">Mobile: </span>{bill.customerMobile || data.customer?.mobile || "Not available"}</div>
-            <div><span className="text-muted-foreground">Current udhar: </span>{money(data.customerLedgerBalance)}</div>
+            <div><span className="text-muted-foreground">{t("billing.bills.nameLabel")} </span>{bill.customerName || data.customer?.name || t("billing.bills.walkIn")}</div>
+            <div><span className="text-muted-foreground">{t("billing.bills.mobileLabel")} </span>{bill.customerMobile || data.customer?.mobile || t("billing.bills.notAvailable")}</div>
+            <div><span className="text-muted-foreground">{t("billing.bills.currentUdharLabel")} </span>{money(data.customerLedgerBalance)}</div>
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader><CardTitle>Items</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("billing.bills.items")}</CardTitle></CardHeader>
         <CardContent className="p-0">
           <div className="divide-y sm:hidden">
-            {visibleItems.length === 0 ? <div className="px-4 py-8 text-center text-sm text-muted-foreground">No item rows found.</div> : visibleItems.map((item, index) => <article className="space-y-3 p-4" key={String(item.id ?? index)}>
+            {visibleItems.length === 0 ? <div className="px-4 py-8 text-center text-sm text-muted-foreground">{t("billing.bills.noItemRows")}</div> : visibleItems.map((item, index) => <article className="space-y-3 p-4" key={String(item.id ?? index)}>
               <BillItemDescription item={item} />
               <dl className="grid grid-cols-3 gap-2 rounded-xl bg-muted/50 p-3 text-sm">
-                <div className="min-w-0"><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Qty</dt><dd className="mt-0.5 break-words font-bold">{readNumber(item.quantity, 0)} {String(item.enteredUnit ?? item.entered_unit ?? "")}</dd></div>
-                <div className="min-w-0 text-right"><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Rate</dt><dd className="mt-0.5 font-bold">{money(readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0))}</dd></div>
-                <div className="min-w-0 text-right"><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Total</dt><dd className="mt-0.5 font-black">{money(itemTotal(item))}</dd></div>
+                <div className="min-w-0"><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t("billing.bills.qty")}</dt><dd className="mt-0.5 break-words font-bold">{readNumber(item.quantity, 0)} {String(item.enteredUnit ?? item.entered_unit ?? "")}</dd></div>
+                <div className="min-w-0 text-right"><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t("billing.bills.rate")}</dt><dd className="mt-0.5 font-bold">{money(readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0))}</dd></div>
+                <div className="min-w-0 text-right"><dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t("billing.bills.total")}</dt><dd className="mt-0.5 font-black">{money(itemTotal(item))}</dd></div>
               </dl>
             </article>)}
           </div>
           <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-sm">
-              <thead className="bg-muted/60 text-muted-foreground"><tr><th className="px-4 py-3 text-left">Item</th><th className="px-4 py-3 text-right">Qty</th><th className="px-4 py-3 text-right">Rate</th><th className="px-4 py-3 text-right">Total</th></tr></thead>
-              <tbody>{visibleItems.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No item rows found.</td></tr> : visibleItems.map((item, index) => <tr className="border-t align-top" key={String(item.id ?? index)}>
+              <thead className="bg-muted/60 text-muted-foreground"><tr><th className="px-4 py-3 text-left">{t("billing.bills.item")}</th><th className="px-4 py-3 text-right">{t("billing.bills.qty")}</th><th className="px-4 py-3 text-right">{t("billing.bills.rate")}</th><th className="px-4 py-3 text-right">{t("billing.bills.total")}</th></tr></thead>
+              <tbody>{visibleItems.length === 0 ? <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">{t("billing.bills.noItemRows")}</td></tr> : visibleItems.map((item, index) => <tr className="border-t align-top" key={String(item.id ?? index)}>
                 <td className="px-4 py-3"><BillItemDescription item={item} /></td>
                 <td className="px-4 py-3 text-right">{readNumber(item.quantity, 0)} {String(item.enteredUnit ?? item.entered_unit ?? "")}</td>
                 <td className="px-4 py-3 text-right">{money(readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0))}</td>
@@ -433,17 +436,17 @@ export default function BillDetailPage() {
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Card>
-          <CardHeader><CardTitle>Payment details</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("billing.bills.paymentDetails")}</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {visiblePayments.length === 0 ? <div className="text-muted-foreground">No separate payment rows found. Using bill-level paid/udhar values.</div> : visiblePayments.map((payment, index) => <div key={String(payment.id ?? index)} className="flex justify-between border-b pb-2"><span>{String(payment.mode ?? "payment").toUpperCase()}</span><span className="font-semibold">{money(readNumber(payment.amount, 0))}</span></div>)}
-            <div className="pt-2 flex justify-between"><span>Total paid</span><span className="font-bold">{money(paid)}</span></div>
+            {visiblePayments.length === 0 ? <div className="text-muted-foreground">{t("billing.bills.noPaymentRows")}</div> : visiblePayments.map((payment, index) => <div key={String(payment.id ?? index)} className="flex justify-between border-b pb-2"><span>{String(payment.mode ?? "payment").toUpperCase()}</span><span className="font-semibold">{money(readNumber(payment.amount, 0))}</span></div>)}
+            <div className="pt-2 flex justify-between"><span>{t("billing.bills.totalPaid")}</span><span className="font-bold">{money(paid)}</span></div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Customer ledger impact</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("billing.bills.ledgerImpact")}</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {data.ledger.length === 0 ? <div className="text-muted-foreground">No ledger rows found for this bill.</div> : data.ledger.map((entry, index) => <div key={String(entry.id ?? index)} className="border-b pb-2"><div className="flex justify-between"><span>{String(entry.type ?? "entry").replaceAll("_", " ")}</span><span className="font-semibold">{money(readNumber(entry.amount, 0))}</span></div><div className="text-xs text-muted-foreground">{rowDate(entry) ? new Date(rowDate(entry)).toLocaleString("en-IN") : "No date"}</div></div>)}
+            {data.ledger.length === 0 ? <div className="text-muted-foreground">{t("billing.bills.noLedgerRows")}</div> : data.ledger.map((entry, index) => <div key={String(entry.id ?? index)} className="border-b pb-2"><div className="flex justify-between"><span>{String(entry.type ?? "entry").replaceAll("_", " ")}</span><span className="font-semibold">{money(readNumber(entry.amount, 0))}</span></div><div className="text-xs text-muted-foreground">{rowDate(entry) ? new Date(rowDate(entry)).toLocaleString("en-IN") : "No date"}</div></div>)}
             {credit > 0 && (isCancelled
               ? <div className="rounded-md bg-emerald-50 p-2 text-emerald-700">Cancellation reversed this bill&apos;s {money(credit)} Udhar impact.</div>
               : <div className="rounded-md bg-orange-50 p-2 text-orange-700">This bill adds {money(credit)} to customer Udhar.</div>)}
@@ -451,9 +454,9 @@ export default function BillDetailPage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Audit trail</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t("billing.bills.auditTrail")}</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm max-h-72 overflow-y-auto">
-            {data.audit.length === 0 ? <div className="text-muted-foreground">No local audit actions yet.</div> : data.audit.sort((a, b) => rowDate(b).localeCompare(rowDate(a))).map((entry, index) => <div key={String(entry.id ?? index)} className="border-b pb-2"><div className="font-medium">{String(entry.action ?? "audit").replaceAll("_", " ")}</div><div className="text-xs text-muted-foreground">{rowDate(entry) ? new Date(rowDate(entry)).toLocaleString("en-IN") : "No date"}</div><div className="text-xs">{String(entry.reason ?? entry.summary ?? "")}</div></div>)}
+            {data.audit.length === 0 ? <div className="text-muted-foreground">{t("billing.bills.noAuditActions")}</div> : data.audit.sort((a, b) => rowDate(b).localeCompare(rowDate(a))).map((entry, index) => <div key={String(entry.id ?? index)} className="border-b pb-2"><div className="font-medium">{String(entry.action ?? "audit").replaceAll("_", " ")}</div><div className="text-xs text-muted-foreground">{rowDate(entry) ? new Date(rowDate(entry)).toLocaleString("en-IN") : "No date"}</div><div className="text-xs">{String(entry.reason ?? entry.summary ?? "")}</div></div>)}
           </CardContent>
         </Card>
       </div>
@@ -471,22 +474,22 @@ export default function BillDetailPage() {
 
       <Dialog open={emailOpen} onOpenChange={(open) => { if (!emailSending) setEmailOpen(open); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Email receipt</DialogTitle><DialogDescription>Send a server-rendered copy of {billNo(bill)}. This requires internet and a configured email provider.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{t("billing.bills.emailReceipt")}</DialogTitle><DialogDescription>Send a server-rendered copy of {billNo(bill)}. This requires internet and a configured email provider.</DialogDescription></DialogHeader>
           <div className="space-y-2 py-3">
-            <Label htmlFor="receipt-email">Customer email</Label>
+            <Label htmlFor="receipt-email">{t("billing.bills.customerEmail")}</Label>
             <Input id="receipt-email" type="email" inputMode="email" autoComplete="email" value={receiptEmail} onChange={(event) => { setReceiptEmail(event.target.value); setEmailError(""); }} placeholder="customer@example.com" aria-invalid={Boolean(emailError) || undefined} aria-describedby={emailError ? "receipt-email-error" : undefined} />
             {emailError && <p id="receipt-email-error" role="alert" className="text-xs font-semibold text-destructive">{emailError}</p>}
           </div>
-          <DialogFooter><Button className="h-11" variant="outline" disabled={emailSending} onClick={() => setEmailOpen(false)}>Cancel</Button><Button className="h-11" disabled={emailSending || !receiptEmail.trim()} onClick={() => void sendEmailReceipt()}>{emailSending ? "Sending…" : "Send receipt"}</Button></DialogFooter>
+          <DialogFooter><Button className="h-11" variant="outline" disabled={emailSending} onClick={() => setEmailOpen(false)}>{t("billing.bills.cancel")}</Button><Button className="h-11" disabled={emailSending || !receiptEmail.trim()} onClick={() => void sendEmailReceipt()}>{emailSending ? t("billing.bills.sending") : t("billing.bills.sendReceipt")}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <OwnerPinModal
         open={!!pinAction}
         onCancel={() => setPinAction(null)}
-        title={pinAction === "restore" ? "Restore bill" : pinAction === "cancel" ? "Cancel bill" : "Move bill to recycle bin"}
+        title={pinAction === "restore" ? t("billing.bills.restoreBill") : pinAction === "cancel" ? t("billing.bills.cancelBill") : "Move bill to recycle bin"}
         description="Owner PIN is required. Financial records are preserved locally and synced later."
-        confirmLabel={pinAction === "restore" ? "Restore" : pinAction === "cancel" ? "Cancel bill" : "Move to recycle bin"}
+        confirmLabel={pinAction === "restore" ? t("billing.bills.restore") : pinAction === "cancel" ? t("billing.bills.cancelBill") : "Move to recycle bin"}
         reasonRequired={pinAction === "cancel" || pinAction === "delete"}
         loading={isSaving}
         onConfirm={({ ownerPin, reason }) => runPinAction(ownerPin, reason)}

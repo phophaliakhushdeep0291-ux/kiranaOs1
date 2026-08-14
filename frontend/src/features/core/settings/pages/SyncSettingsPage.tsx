@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ function backupTone(status: BackupArtifact["status"]): "green" | "amber" | "red"
 }
 
 export default function SyncSettingsPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const { isOnline, isBrowserOnline, backendStatus, isSyncing, pendingCount, failedCount, conflictCount, syncNow } = useOfflineStatus();
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
@@ -90,11 +92,11 @@ export default function SyncSettingsPage() {
       } else if (backupApproval.type === "download" && backupApproval.artifact) {
         const blob = await downloadShopBackup(backupApproval.artifact.id, ownerPin);
         saveBackupBlob(blob, backupApproval.artifact);
-        toast({ title: "Backup downloaded" });
+        toast({ title: t("settings.sync.backupDownloaded") });
       } else if (backupApproval.type === "restore-preview" && backupApproval.artifact) {
         const result = await previewShopBackupRestore(backupApproval.artifact.id, ownerPin);
         setRestorePreview(result.preview);
-        toast({ title: "Backup verified" });
+        toast({ title: t("settings.sync.backupVerified") });
       } else if (backupApproval.type === "restore" && backupApproval.artifact) {
         await restoreShopBackup(backupApproval.artifact.id, restoreConfirmation, ownerPin);
         await resetDeviceAfterCloudRestore();
@@ -133,7 +135,7 @@ export default function SyncSettingsPage() {
           action={
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="gap-1.5 rounded-[8px] text-[12px] font-bold" onClick={handleSync} disabled={isSyncing}><RefreshCcw size={13} className={isSyncing ? "animate-spin" : ""} /> {isSyncing ? "Syncing…" : "Sync Now"}</Button>
-              <Link href="/sync-status" className="inline-flex min-h-11 items-center rounded-[8px] border border-[#e2e8f0] px-3 text-[12px] font-bold text-[#344668] hover:bg-[#f1f4f8]">View logs</Link>
+              <Link href="/sync-status" className="inline-flex min-h-11 items-center rounded-[8px] border border-[#e2e8f0] px-3 text-[12px] font-bold text-[#344668] hover:bg-[#f1f4f8]">{t("settings.sync.viewLogs")}</Link>
             </div>
           } />
         <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-5">
@@ -167,13 +169,13 @@ export default function SyncSettingsPage() {
 
         {/* Pending Sync Queue */}
         <Card>
-          <CardHead icon={<Upload size={15} />} title="Pending Sync Queue" sub="Changes waiting to reach the cloud" action={(pendingCount + failedCount) > 0 ? <button onClick={handleSync} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Retry all</button> : undefined} />
+          <CardHead icon={<Upload size={15} />} title="Pending Sync Queue" sub="Changes waiting to reach the cloud" action={(pendingCount + failedCount) > 0 ? <button onClick={handleSync} className="text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.sync.retryAll")}</button> : undefined} />
           <div className="px-5 pb-5">
             {(pendingCount + failedCount + conflictCount) === 0 ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
                 <span className="grid h-12 w-12 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 size={22} /></span>
-                <p className="text-[13px] font-bold text-[var(--brand-ink)]">Everything is synced</p>
-                <p className="text-[11px] text-[#64748b]">No changes are waiting to upload.</p>
+                <p className="text-[13px] font-bold text-[var(--brand-ink)]">{t("settings.sync.allSynced")}</p>
+                <p className="text-[11px] text-[#64748b]">{t("settings.sync.nothingWaiting")}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -211,23 +213,23 @@ export default function SyncSettingsPage() {
                 Owner or admin access is required to view portable backups.
               </div>
             ) : (
-              <p className="backup-description">AES-256-GCM · SHA-256 · Sensitive credentials excluded.</p>
+              <p className="backup-description">{t("settings.sync.encryption")}</p>
             )}
           </div>
         </Card>
 
         {/* Backup History */}
         <Card>
-          <CardHead icon={<Cloud size={15} />} title="Backup history" sub="Server-confirmed encrypted artifacts" action={!backupAccessDenied ? <button onClick={() => void loadBackups()} className="settings-text-action">Refresh</button> : undefined} />
+          <CardHead icon={<Cloud size={15} />} title="Backup history" sub="Server-confirmed encrypted artifacts" action={!backupAccessDenied ? <button onClick={() => void loadBackups()} className="settings-text-action">{t("settings.sync.refresh")}</button> : undefined} />
           <div className="backup-history">
             {backupHistoryLoading ? (
-              <div className="backup-loading"><Loader2 size={15} className="animate-spin" /> Loading backup history</div>
+              <div className="backup-loading"><Loader2 size={15} className="animate-spin" /> {t("settings.sync.loadingHistory")}</div>
             ) : backupAccessDenied ? (
-              <div className="backup-hidden">Backup history is hidden for cashier accounts.</div>
+              <div className="backup-hidden">{t("settings.sync.historyHidden")}</div>
             ) : backups.length === 0 ? (
               <div className="backup-empty">
-                <strong>No portable snapshot yet</strong>
-                <p>Create one before major changes.</p>
+                <strong>{t("settings.sync.noSnapshot")}</strong>
+                <p>{t("settings.sync.noSnapshotHelp")}</p>
               </div>
             ) : backups.slice(0, 8).map((artifact) => (
               <div key={artifact.id} className="backup-row">
@@ -238,7 +240,7 @@ export default function SyncSettingsPage() {
                   </div>
                   <p className="backup-row-meta">
                     {artifact.status === "failed"
-                      ? artifact.error_message || "Backup failed"
+                      ? artifact.error_message || t("settings.advanced.backupFailed")
                       : `${artifact.record_count?.toLocaleString("en-IN") ?? "—"} records`}
                   </p>
                 </div>
@@ -254,12 +256,12 @@ export default function SyncSettingsPage() {
             ))}
             {restorePreview && (
               <div className="restore-preview">
-                <strong>Restore verified</strong>
+                <strong>{t("settings.sync.restoreVerified")}</strong>
                 <p>
                   {restorePreview.record_count.toLocaleString("en-IN")} records verified; credentials preserved. A recovery snapshot is created first and every device must sign in again.
                 </p>
                 <div>
-                  <b>Type <code>RESTORE {restorePreview.artifact_id.slice(-6)}</code> to continue.</b>
+                  <b>{t("settings.sync.type")} <code>RESTORE {restorePreview.artifact_id.slice(-6)}</code> {t("settings.sync.toContinue")}</b>
                   <Input value={restoreConfirmation} onChange={(event) => setRestoreConfirmation(event.target.value)} placeholder={`RESTORE ${restorePreview.artifact_id.slice(-6)}`} />
                   <Button
                     type="button"
@@ -270,8 +272,8 @@ export default function SyncSettingsPage() {
                       const artifact = backups.find((row) => row.id === restorePreview.artifact_id);
                       if (artifact) { setBackupActionError(null); setBackupApproval({ type: "restore", artifact }); }
                     }}
-                  >Restore verified snapshot</Button>
-                  {(pendingCount > 0 || failedCount > 0 || conflictCount > 0) && <p className="restore-blocked">Resolve every pending, failed, or conflicting local change before restoring.</p>}
+                  >{t("settings.sync.restoreVerifiedSnapshot")}</Button>
+                  {(pendingCount > 0 || failedCount > 0 || conflictCount > 0) && <p className="restore-blocked">{t("settings.sync.resolveFirst")}</p>}
                 </div>
               </div>
             )}
@@ -300,12 +302,13 @@ export default function SyncSettingsPage() {
 }
 
 function QueueRow({ label, tone, status, onRetry }: { label: string; tone: "amber" | "red"; status: string; onRetry?: () => void }) {
+  const { t } = useAppLanguage();
   return (
     <div className="sync-queue-row">
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone === "red" ? "bg-rose-500" : "bg-amber-500"}`} />
       <p>{label}</p>
       <Badge tone={tone}>{status}</Badge>
-      {onRetry && <button onClick={onRetry}>Retry</button>}
+      {onRetry && <button onClick={onRetry}>{t("settings.sync.retry")}</button>}
     </div>
   );
 }

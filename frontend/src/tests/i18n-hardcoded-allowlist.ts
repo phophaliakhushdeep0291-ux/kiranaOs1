@@ -54,15 +54,11 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/auth/pages/RegisterPage.tsx", // 16
   "features/core/auth/pages/ResetPasswordPage.tsx", // 4
   "features/core/auth/pages/VerifyEmailPage.tsx", // 1
-  "features/core/bills/components/EditBillDialog.tsx", // 13
-  "features/core/bills/pages/BillDetailPage.tsx", // 53
-  "features/core/bills/pages/BillsPage.tsx", // 46
   "features/core/customer-order/BillingOrderQrButton.tsx", // 10
   "features/core/customer-order/CustomerOrderPage.tsx", // 155
   "features/core/customer-order/DineInMenuPage.tsx", // 4
   "features/core/customer-order/ImportOrderPage.tsx", // 6
   "features/core/customer-order/OwnerOrderingCard.tsx", // 5
-  "features/core/customers/pages/CustomersPage.tsx", // 109
   "features/core/demo/DemoModeBanner.tsx", // 4
   "features/core/devices/pages/DeviceRemovedPage.tsx", // 2
   "features/core/devices/pages/DevicesPage.tsx", // 20
@@ -98,17 +94,12 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/returns/components/ReturnDialog.tsx", // 33
   "features/core/returns/pages/NewReturnPage.tsx", // 56
   "features/core/sales/pages/SalesOverviewPage.tsx", // 15
-  "features/core/settings/SessionLockGate.tsx", // 3
+  // Not debt: the one string here is a developer assertion thrown when the hook
+  // is used outside its provider. It never reaches a shopkeeper.
   "features/core/settings/i18n.tsx", // 1
-  "features/core/settings/pages/AdvancedSettingsPage.tsx", // 40
   "features/core/settings/pages/IntegrationsSettingsPage.tsx", // 59
-  "features/core/settings/pages/ModulesSettingsPage.tsx", // 4
-  "features/core/settings/pages/NotificationsSettingsPage.tsx", // 40
   "features/core/settings/pages/PrinterSettingsPage.tsx", // 48
   "features/core/settings/pages/SecuritySettingsPage.tsx", // 42
-  "features/core/settings/pages/SettingsPage.tsx", // 20
-  "features/core/settings/pages/StoreProfilePage.tsx", // 41
-  "features/core/settings/pages/SyncSettingsPage.tsx", // 18
   "features/core/settings/pages/TaxesSettingsPage.tsx", // 66
   "features/core/staff/pages/StaffPage.tsx", // 40
   "features/core/subscription/components/CancelSubscriptionDialog.tsx", // 8

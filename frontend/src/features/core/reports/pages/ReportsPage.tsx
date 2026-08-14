@@ -884,7 +884,21 @@ function KpiCard({ label, value, previous, icon, iconClass, color, spark, positi
 
 function Panel({ title, subtitle, info, action, children }: { title: string; subtitle?: string; info?: boolean; action?: ReactNode; children: ReactNode }) {
   return <article className={PANEL}>
-    <header className="flex min-h-14 min-w-0 items-center justify-between gap-3 border-b border-[#edf1f6] px-4"><div className="flex min-w-0 items-center gap-1.5"><h2 className="truncate text-[13px] font-extrabold text-[var(--brand-ink)]">{title}</h2>{subtitle ? <span className="shrink-0 text-[9px] text-[#72809a]">{subtitle}</span> : null}{info ? <Info size={12} className="shrink-0 text-[#7e8ca4]" /> : null}</div><div className="shrink-0">{action}</div></header>
+    {/* Title, subtitle and the period pill used to share one row, with the
+        subtitle marked `shrink-0` — so a long "Peak 6 pm • ₹4,406 (16 bills)"
+        took its width out of the title, and "Sales by Hour" truncated to 39px
+        of the 88 it needs. The subtitle drops to its own line on a phone and
+        may shrink beside the title once there is room for both. */}
+    <header className="flex min-h-14 min-w-0 items-center justify-between gap-3 border-b border-[#edf1f6] px-4">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 py-2 sm:flex-row sm:items-center sm:gap-1.5 sm:py-0">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h2 className="truncate text-[13px] font-extrabold text-[var(--brand-ink)]">{title}</h2>
+          {info ? <Info size={12} className="shrink-0 text-[#7e8ca4]" /> : null}
+        </div>
+        {subtitle ? <span className="min-w-0 truncate text-[9px] text-[#72809a]">{subtitle}</span> : null}
+      </div>
+      <div className="shrink-0">{action}</div>
+    </header>
     {children}
   </article>;
 }

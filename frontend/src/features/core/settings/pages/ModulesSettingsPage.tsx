@@ -1,3 +1,4 @@
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useMemo } from "react";
 import { EyeOff, LayoutGrid, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,9 @@ import {
   useModuleVisibility,
 } from "@/features/core/settings/modules";
 
-const ALWAYS_ON = ["Billing", "Dashboard", "Cloud Backup", "Settings"];
+// A function, not a constant: prose read at module scope is fixed at import
+// time, before a language is chosen, so the translator can never reach it.
+const alwaysOn = (t: Translate) => ["Billing", "Dashboard", "Cloud Backup", t("settings.hub.title")];
 
 /**
  * Modules tab — the owner picks which parts of the app they actually use, and
@@ -25,6 +28,7 @@ const ALWAYS_ON = ["Billing", "Dashboard", "Cloud Backup", "Settings"];
  * same trimmed-down app appears on every device of this shop.
  */
 export default function ModulesSettingsPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const { patch } = useSettingsPrefs();
   const { isEnabled, setVisibility, patchVisibility } = useModuleVisibility();
@@ -66,7 +70,7 @@ export default function ModulesSettingsPage() {
     }
     setVisibility(everything);
     void patch({ moduleVisibility: everything });
-    toast({ title: "All modules are back on", description: "Every section is visible again in the menus." });
+    toast({ title: t("settings.modules.allBackOn"), description: t("settings.modules.allBackOnHelp") });
   }
 
   return (
@@ -95,7 +99,7 @@ export default function ModulesSettingsPage() {
               <div className="flex gap-3">
                 <EyeOff className="mt-0.5 shrink-0 text-[var(--brand)]" size={17} />
                 <div>
-                  <p className="text-[13px] font-black text-[var(--brand-ink)]">Hides, never deletes</p>
+                  <p className="text-[13px] font-black text-[var(--brand-ink)]">{t("settings.modules.hidesNeverDeletes")}</p>
                   <p className="mt-1 text-[11px] leading-5 text-[#52627e]">
                     A module you switch off is only removed from the sidebar, the mobile menu and the
                     dashboard shortcuts. Its data stays exactly where it is, keeps syncing, and comes
@@ -108,9 +112,9 @@ export default function ModulesSettingsPage() {
               <div className="flex gap-3">
                 <Sparkles className="mt-0.5 shrink-0 text-emerald-700" size={17} />
                 <div>
-                  <p className="text-[13px] font-black text-emerald-950">Always available</p>
+                  <p className="text-[13px] font-black text-emerald-950">{t("settings.modules.alwaysAvailable")}</p>
                   <p className="mt-1 text-[11px] leading-5 text-emerald-800">
-                    {ALWAYS_ON.join(", ")} cannot be hidden — they are how you bill, check the day and
+                    {alwaysOn(t).join(", ")} cannot be hidden — they are how you bill, check the day and
                     keep your data backed up.
                   </p>
                 </div>

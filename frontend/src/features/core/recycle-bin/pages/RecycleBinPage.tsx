@@ -158,7 +158,7 @@ export default function RecycleBinPage() {
       </Card>
 
       <FilterBar actions={<Button variant="outline" onClick={() => void refetch()}><RefreshCcw size={15} className="mr-1" />Refresh</Button>}>
-        <SearchInputWithIcon label="Search recycle bin" placeholder="Search deleted bill, customer, product, supplier..." value={search} onChange={(event) => setSearch(event.target.value)} />
+        <SearchInputWithIcon label="Search recycle bin" placeholder="Search deleted items" value={search} onChange={(event) => setSearch(event.target.value)} />
         <Select value={filter} onValueChange={(value) => setFilter(value as EntityFilter)}>
           <SelectTrigger className="w-full sm:w-56"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>

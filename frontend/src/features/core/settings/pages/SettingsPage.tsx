@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -30,6 +31,7 @@ interface IntegrationOverview {
 }
 
 export default function SettingsPage() {
+  const { t } = useAppLanguage();
   const { user } = useAuth();
   const { snapshot } = useSubscriptionSnapshot();
   const { isOnline, isSyncing } = useOfflineStatus();
@@ -96,9 +98,9 @@ export default function SettingsPage() {
         <div className="rounded-[20px] bg-[linear-gradient(135deg,var(--brand)_0%,var(--brand-strong)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(7,95,255,0.24)]">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-100">Store control centre</p>
-              <h1 className="mt-1 font-display text-[24px] font-black tracking-tight">Settings</h1>
-              <p className="mt-1 max-w-[260px] text-[12px] leading-5 text-blue-100">Billing, hardware, staff and backup controls—built for quick owner access.</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-100">{t("settings.hub.eyebrow")}</p>
+              <h1 className="mt-1 font-display text-[24px] font-black tracking-tight">{t("settings.hub.title")}</h1>
+              <p className="mt-1 max-w-[260px] text-[12px] leading-5 text-blue-100">{t("settings.hub.subtitle")}</p>
             </div>
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/20"><Settings2 size={22} /></span>
           </div>
@@ -133,7 +135,7 @@ export default function SettingsPage() {
 
         <Link href="/settings/advanced" className="flex min-h-14 items-center gap-3 rounded-[16px] border border-[#e2eaf6] bg-white px-4 shadow-[0_8px_22px_rgba(15,35,80,0.045)]">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]"><Sliders size={18} /></span>
-          <span className="flex-1 text-[13px] font-black text-[var(--brand-ink)]">Advanced tools & data</span>
+          <span className="flex-1 text-[13px] font-black text-[var(--brand-ink)]">{t("settings.hub.advancedTools")}</span>
           <ChevronRight size={17} className="text-[#9aa8bd]" />
         </Link>
       </section>
@@ -174,10 +176,10 @@ export default function SettingsPage() {
                 ))}
               </ul>
               <div>
-                <p className="text-[11px] text-[#64748b]">Usage this month</p>
+                <p className="text-[11px] text-[#64748b]">{t("settings.hub.usageThisMonth")}</p>
                 <p className="font-display text-[18px] font-black text-[var(--brand-ink)]">{snapshot?.status === "active" ? "Active" : "—"}</p>
-                <p className="mt-1 text-[11px] text-[#64748b]">Manage billing & invoices in your plan.</p>
-                <Link href="/settings/billing" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">View plan <ChevronRight size={13} /></Link>
+                <p className="mt-1 text-[11px] text-[#64748b]">{t("settings.hub.managePlan")}</p>
+                <Link href="/settings/billing" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.hub.viewPlan")} <ChevronRight size={13} /></Link>
               </div>
             </div>
           </div>
@@ -203,9 +205,9 @@ export default function SettingsPage() {
           <CardHead icon={<MonitorSmartphone size={15} />} title="Device Management" sub={devicesQ.data ? `${devicesQ.data.devicesUsed} of ${devicesQ.data.plan.deviceLimit} device slots used` : "Manage your billing devices"} action={<Manage href="/settings/devices" label="View All" />} />
           <div className="px-5 pb-3">
             {devicesQ.isLoading ? (
-              <p className="py-4 text-center text-[12px] text-[#64748b]">Loading devices…</p>
+              <p className="py-4 text-center text-[12px] text-[#64748b]">{t("settings.hub.loadingDevices")}</p>
             ) : devicesQ.isError ? (
-              <p className="py-4 text-center text-[12px] text-[#64748b]">Device list unavailable right now.</p>
+              <p className="py-4 text-center text-[12px] text-[#64748b]">{t("settings.hub.devicesUnavailable")}</p>
             ) : (devicesQ.data?.devices ?? []).slice(0, 3).map((device) => {
               const id = device.deviceId || device.device_id || device.id;
               const isCurrent = id === currentDeviceId;
@@ -220,7 +222,7 @@ export default function SettingsPage() {
                 </div>
               );
             })}
-            <Link href="/settings/devices" className="mt-1 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">+ Manage Devices</Link>
+            <Link href="/settings/devices" className="mt-1 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.hub.manageDevices")}</Link>
           </div>
         </Card>
       </div>
@@ -253,7 +255,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-1.5 text-[13px] font-bold text-emerald-700">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{isOnline ? (isSyncing ? "Syncing…" : "All synced") : "Offline"}
             </div>
-            <p className="mt-2 text-[11px] text-[#64748b]">Auto-sync & daily cloud backup keep every device in step.</p>
+            <p className="mt-2 text-[11px] text-[#64748b]">{t("settings.hub.syncHelp")}</p>
           </div>
         </Card>
       </div>
@@ -264,10 +266,10 @@ export default function SettingsPage() {
           <CardHead icon={<Shield size={15} />} title="Security & PIN" action={<Manage href="/settings/security" label="Manage" />} />
           <div className="px-5 pb-4">
             <div className="flex items-center justify-between">
-              <Info label="Owner PIN" value={pinQ.isLoading ? "Checking…" : pinQ.data?.hasPin ? "••••• Set" : "Not set"} />
+              <Info label="Owner PIN" value={pinQ.isLoading ? t("settings.lock.checking") : pinQ.data?.hasPin ? "••••• Set" : "Not set"} />
               <Badge tone={pinQ.data?.hasPin ? "green" : "amber"}>{pinQ.data?.hasPin ? "Protected" : "Set a PIN"}</Badge>
             </div>
-            <p className="mt-2 text-[11px] text-[#64748b]">Sensitive actions require the owner PIN.</p>
+            <p className="mt-2 text-[11px] text-[#64748b]">{t("settings.hub.pinHelp")}</p>
           </div>
         </Card>
 
@@ -275,7 +277,7 @@ export default function SettingsPage() {
           <CardHead icon={<Bell size={15} />} title="Notifications" action={<Manage href="/settings/notifications" label="Configure" />} />
           <div className="px-5 pb-4">
             <Info label="Active alerts" value={notifCount == null ? "—" : `${notifCount} of 4 enabled`} />
-            <p className="mt-2 text-[11px] text-[#64748b]">Low stock, udhar reminders, daily summary & more.</p>
+            <p className="mt-2 text-[11px] text-[#64748b]">{t("settings.hub.notificationsHelp")}</p>
           </div>
         </Card>
 
@@ -283,8 +285,8 @@ export default function SettingsPage() {
           <CardHead icon={<Plug size={15} />} title="Integrations" action={<Manage href="/settings/integrations" label="Manage" />} />
           <div className="px-5 pb-4">
             <div className="flex flex-wrap gap-1.5">
-              {integrationsQ.isLoading ? <Badge tone="gray">Checking…</Badge>
-                : integrationsQ.isError ? <Badge tone="gray">Status unavailable</Badge>
+              {integrationsQ.isLoading ? <Badge tone="gray">{t("settings.lock.checking")}</Badge>
+                : integrationsQ.isError ? <Badge tone="gray">{t("settings.hub.statusUnavailable")}</Badge>
                 : (integrationsQ.data?.providers ?? []).slice(0, 4).map((provider) => (
                   <Badge key={provider.id} tone={provider.status === "ready" ? "green" : provider.status === "available" ? "blue" : "amber"}>{provider.name}</Badge>
                 ))}
@@ -328,14 +330,14 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3">
           <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[var(--brand-soft)] text-[var(--brand)]"><Settings2 size={16} /></span>
           <div>
-            <p className="text-[13px] font-extrabold text-[var(--brand-ink)]">About Artha</p>
+            <p className="text-[13px] font-extrabold text-[var(--brand-ink)]">{t("settings.hub.about")}</p>
             <p className="text-[11px] text-[#64748b]">Version {appVersion()} · build {buildId()}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] font-bold text-[var(--brand)]">
-          <Link href="/settings/advanced" className="hover:underline">Diagnostics</Link>
-          <Link href="/settings/setup" className="hover:underline">Setup checklist</Link>
-          <a href={`mailto:${SUPPORT_EMAIL}?subject=Artha%20support`} className="hover:underline">Contact Support</a>
+          <Link href="/settings/advanced" className="hover:underline">{t("settings.hub.diagnostics")}</Link>
+          <Link href="/settings/setup" className="hover:underline">{t("settings.hub.setupChecklist")}</Link>
+          <a href={`mailto:${SUPPORT_EMAIL}?subject=Artha%20support`} className="hover:underline">{t("settings.hub.contactSupport")}</a>
         </div>
       </div>
       </div>
