@@ -95,6 +95,7 @@ const DATE_TIME_FORMAT = new Intl.DateTimeFormat("en-IN", {
 });
 
 function readableDate(value: string | null | undefined, t: Translate) {
+  const { t } = useAppLanguage();
   if (!value) return t("settings.notify.notCompleted");
   return DATE_TIME_FORMAT.format(new Date(value));
 }
@@ -217,8 +218,8 @@ export default function NotificationsSettingsPage() {
       <Card>
         <CardHead
           icon={<MessageCircle size={15} />}
-          title="WhatsApp Automation"
-          sub="Live provider, queue, and worker readiness"
+          title={t("settings.notify.whatsappTitle")}
+          sub={t("settings.notify.whatsappSub")}
           action={automationEnabled ? (
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={refreshAutomation}>
               <RefreshCcw size={13} className={statusQ.isFetching ? "animate-spin" : ""} /> Refresh
@@ -250,10 +251,10 @@ export default function NotificationsSettingsPage() {
                   </Link>
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                  <ReadinessCheck label="Provider API" ready={statusQ.data?.providerSendConfigured === true} value={statusQ.data?.provider || "unknown"} />
-                  <ReadinessCheck label="Signed callbacks" ready={statusQ.data?.webhookConfigured === true} value={statusQ.data?.webhookConfigured ? "configured" : "not ready"} />
-                  <ReadinessCheck label="Redis queue" ready={statusQ.data?.queueEnabled === true} value={statusQ.data?.queueEnabled ? "enabled" : "not ready"} />
-                  <ReadinessCheck label="Reminder worker" ready={statusQ.data?.workerHealthy === true} value={statusQ.data?.workerHealthy ? "healthy" : "no heartbeat"} />
+                  <ReadinessCheck label={t("settings.notify.providerApi")} ready={statusQ.data?.providerSendConfigured === true} value={statusQ.data?.provider || "unknown"} />
+                  <ReadinessCheck label={t("settings.notify.signedCallbacks")} ready={statusQ.data?.webhookConfigured === true} value={statusQ.data?.webhookConfigured ? "configured" : t("settings.notify.notReady")} />
+                  <ReadinessCheck label={t("settings.notify.redisQueue")} ready={statusQ.data?.queueEnabled === true} value={statusQ.data?.queueEnabled ? "enabled" : t("settings.notify.notReady")} />
+                  <ReadinessCheck label={t("settings.notify.worker")} ready={statusQ.data?.workerHealthy === true} value={statusQ.data?.workerHealthy ? "healthy" : t("settings.notify.noHeartbeat")} />
                 </div>
               </div>
               <div className="rounded-[14px] border border-emerald-100 bg-emerald-50/70 p-4">
@@ -275,20 +276,20 @@ export default function NotificationsSettingsPage() {
 
       <div className="grid gap-4 xl:grid-cols-[1fr_1.1fr]">
         <Card>
-          <CardHead icon={<Bell size={15} />} title="Daily Closing Share" sub="Choose what appears in the real closing summary" />
+          <CardHead icon={<Bell size={15} />} title={t("settings.notify.closingTitle")} sub={t("settings.notify.closingSub")} />
           <div className="px-5 pb-4">
             <p className="mb-2 rounded-[10px] bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-800">
               These preferences control the Daily Closing screen and its share text. They do not claim to schedule SMS, email, or push delivery.
             </p>
-            <RowToggle label="Include sales total" pill={<Switch checked={closing.dailySales} onCheckedChange={(value) => updateClosing({ dailySales: value })} />} />
-            <RowToggle label="Include profit" pill={<Switch checked={closing.dailyProfit} onCheckedChange={(value) => updateClosing({ dailyProfit: value })} />} />
-            <RowToggle label="Include udhar collection" pill={<Switch checked={closing.dailyUdhar} onCheckedChange={(value) => updateClosing({ dailyUdhar: value })} />} />
-            <RowToggle label="Include cash / UPI breakup" pill={<Switch checked={closing.dailyCashUpi} onCheckedChange={(value) => updateClosing({ dailyCashUpi: value })} />} last />
+            <RowToggle label={t("settings.notify.includeSales")} pill={<Switch checked={closing.dailySales} onCheckedChange={(value) => updateClosing({ dailySales: value })} />} />
+            <RowToggle label={t("settings.notify.includeProfit")} pill={<Switch checked={closing.dailyProfit} onCheckedChange={(value) => updateClosing({ dailyProfit: value })} />} />
+            <RowToggle label={t("settings.notify.includeUdhar")} pill={<Switch checked={closing.dailyUdhar} onCheckedChange={(value) => updateClosing({ dailyUdhar: value })} />} />
+            <RowToggle label={t("settings.notify.includeCashUpi")} pill={<Switch checked={closing.dailyCashUpi} onCheckedChange={(value) => updateClosing({ dailyCashUpi: value })} />} last />
           </div>
         </Card>
 
         <Card>
-          <CardHead icon={<ServerCog size={15} />} title="Server Reminder Templates" sub="Audited templates used by automated WhatsApp sends" />
+          <CardHead icon={<ServerCog size={15} />} title={t("settings.notify.templatesTitle")} sub={t("settings.notify.templatesSub")} />
           <div className="space-y-2.5 px-5 pb-5">
             {!automationEnabled ? (
               <p className="rounded-[10px] bg-[#f6f8fc] px-3 py-6 text-center text-[12px] text-[#64748b]">{t("settings.notify.withWhatsapp")}</p>
@@ -329,8 +330,8 @@ export default function NotificationsSettingsPage() {
       <Card>
         <CardHead
           icon={<Clock3 size={15} />}
-          title="Actual Delivery History"
-          sub="Latest server records; sample messages never appear here"
+          title={t("settings.notify.historyTitle")}
+          sub={t("settings.notify.historySub")}
           action={logsQ.isFetching ? <Loader2 size={14} className="animate-spin text-[#64748b]" /> : undefined}
         />
         <div className="px-5 pb-5">

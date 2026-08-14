@@ -66,6 +66,7 @@ const DANGER = [
   { key: "factoryReset", label: "Factory reset store", desc: "Permanently wipe local data & settings", safe: false },
 ];
 function downloadJson(filename: string, data: unknown) {
+  const { t } = useAppLanguage();
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -312,11 +313,11 @@ export default function AdvancedSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Data Management */}
         <Card>
-          <CardHead icon={<Database size={15} />} title="Data Management" sub="Retention & storage" action={<button type="button" onClick={() => void optimizeDatabase()} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.advanced.optimize")}</button>} />
+          <CardHead icon={<Database size={15} />} title={t("settings.advanced.dataTitle")} sub={t("settings.advanced.dataSub")} action={<button type="button" onClick={() => void optimizeDatabase()} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.advanced.optimize")}</button>} />
           <div className="px-5 pb-5">
             <RowToggle
-              label="Auto cleanup temp files"
-              desc="Prune expired caches and synced history every 10 minutes"
+              label={t("settings.advanced.autoCleanup")}
+              desc={t("settings.advanced.autoCleanupHelp")}
               pill={<Switch checked={adv.autoCleanup} onCheckedChange={(v) => update({ autoCleanup: v })} />}
               last
             />
@@ -350,27 +351,27 @@ export default function AdvancedSettingsPage() {
 
         {/* App Preferences */}
         <Card>
-          <CardHead icon={<Palette size={15} />} title="App Preferences" sub="Language, theme & defaults" />
+          <CardHead icon={<Palette size={15} />} title={t("settings.advanced.prefsTitle")} sub={t("settings.advanced.prefsSub")} />
           <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
-            <Fld label="Language">
+            <Fld label={t("settings.language")}>
               <Select value={language} onValueChange={(v) => setLanguage(v as AppLanguage)}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="en">{t("settings.advanced.languageEnglish")}</SelectItem><SelectItem value="hi">{t("settings.advanced.languageHindi")}</SelectItem></SelectContent>
               </Select>
             </Fld>
-            <Fld label="Date format">
+            <Fld label={t("settings.advanced.dateFormat")}>
               <Select value={adv.dateFormat} onValueChange={(v) => update({ dateFormat: v })}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>{DATE_FORMATS.map((format) => <SelectItem key={format} value={format}>{format}</SelectItem>)}</SelectContent>
               </Select>
             </Fld>
-            <Fld label="Default landing page">
+            <Fld label={t("settings.advanced.landingPage")}>
               <Select value={adv.landingPage} onValueChange={(v) => { update({ landingPage: v }); setLandingPagePref(v); }}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>{["Dashboard", "Billing", "Inventory", "Reports"].map((page) => <SelectItem key={page} value={page}>{page}</SelectItem>)}</SelectContent>
               </Select>
             </Fld>
-            <Fld label="Default payment">
+            <Fld label={t("settings.advanced.defaultPayment")}>
               <Select value={adv.defaultPayment} onValueChange={(v) => update({ defaultPayment: v })}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>{["Cash", "UPI", "Split"].map((mode) => <SelectItem key={mode} value={mode}>{mode}</SelectItem>)}</SelectContent>
@@ -387,9 +388,9 @@ export default function AdvancedSettingsPage() {
               </div>
             </div>
             <div className="space-y-0.5 sm:col-span-2">
-              <RowToggle label="Compact mode" pill={<Switch checked={adv.compactMode} onCheckedChange={(v) => update({ compactMode: v })} />} />
-              <RowToggle label="Keyboard shortcuts" pill={<Switch checked={adv.shortcuts} onCheckedChange={(v) => update({ shortcuts: v })} />} />
-              <RowToggle label="Sound effects" pill={<Switch checked={adv.sound} onCheckedChange={(v) => update({ sound: v })} />} last />
+              <RowToggle label={t("settings.advanced.compactMode")} pill={<Switch checked={adv.compactMode} onCheckedChange={(v) => update({ compactMode: v })} />} />
+              <RowToggle label={t("settings.advanced.shortcuts")} pill={<Switch checked={adv.shortcuts} onCheckedChange={(v) => update({ shortcuts: v })} />} />
+              <RowToggle label={t("settings.advanced.sounds")} pill={<Switch checked={adv.sound} onCheckedChange={(v) => update({ sound: v })} />} last />
             </div>
           </div>
         </Card>
@@ -398,7 +399,7 @@ export default function AdvancedSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Import / Export */}
         <Card>
-          <CardHead icon={<Upload size={15} />} title="Import / Export" sub="Move your data in & out" />
+          <CardHead icon={<Upload size={15} />} title={t("settings.advanced.importExportTitle")} sub={t("settings.advanced.importExportSub")} />
           <div className="grid grid-cols-1 gap-2 px-5 pb-5 sm:grid-cols-2">
             {[
               { label: "Open product import", icon: Upload, run: () => { window.location.href = "/products?import=1"; } },
@@ -417,7 +418,7 @@ export default function AdvancedSettingsPage() {
 
         {/* Offline Database Tools */}
         <Card>
-          <CardHead icon={<Wrench size={15} />} title="Offline Database Tools" sub="Keep local data healthy" />
+          <CardHead icon={<Wrench size={15} />} title={t("settings.advanced.dbToolsTitle")} sub={t("settings.advanced.dbToolsSub")} />
           <div className="px-5 pb-4">
             {DB_TOOLS.map((tool, i) => (
               <div key={tool.key} className={`flex items-center justify-between py-2.5 ${i < DB_TOOLS.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
@@ -432,7 +433,7 @@ export default function AdvancedSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Diagnostics */}
         <Card>
-          <CardHead icon={<FlaskConical size={15} />} title="Developer / Diagnostics" sub="For support" action={<button type="button" onClick={copyDiagnostics} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.advanced.copy")}</button>} />
+          <CardHead icon={<FlaskConical size={15} />} title={t("settings.advanced.diagnosticsTitle")} sub={t("settings.advanced.diagnosticsSub")} action={<button type="button" onClick={copyDiagnostics} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.advanced.copy")}</button>} />
           <div className="grid grid-cols-1 gap-y-3 px-5 pb-5 sm:grid-cols-2">
             {[
               ["App version", appVersion()],
@@ -453,7 +454,7 @@ export default function AdvancedSettingsPage() {
 
         {/* Danger Zone */}
         <Card className="border-rose-200">
-          <CardHead icon={<AlertTriangle size={15} />} title="Danger Zone" sub="Irreversible — owner PIN required" />
+          <CardHead icon={<AlertTriangle size={15} />} title={t("settings.advanced.dangerTitle")} sub={t("settings.advanced.dangerSub")} />
           <div className="px-5 pb-5">
             <div className="rounded-[12px] border border-rose-200 bg-rose-50/60 p-2">
               {DANGER.map((d, i) => (
@@ -507,7 +508,7 @@ function DangerDialog({ item, error, running, onClose, onConfirm }: {
         >
           <p className="text-[12px] text-[#52627e]">{item?.desc}. {!item?.safe && <span className="font-bold text-rose-600">{t("settings.advanced.cannotUndo")}</span>}</p>
           {needsPin && (
-            <Fld label="Enter your Owner PIN to continue" hint="Checked by the server before anything is changed.">
+            <Fld label={t("settings.advanced.enterPin")} hint={t("settings.advanced.serverChecks")}>
               <Input type="password" inputMode="numeric" autoComplete="off" className="h-10" value={pin} disabled={running} onChange={(e) => setPin(e.target.value)} placeholder="••••" />
             </Fld>
           )}

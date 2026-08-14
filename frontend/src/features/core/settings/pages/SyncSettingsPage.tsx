@@ -131,7 +131,7 @@ export default function SyncSettingsPage() {
     <SettingsShell>
       {/* Sync Health Overview */}
       <Card>
-        <CardHead icon={isOnline ? <Cloud size={15} /> : <CloudOff size={15} />} title="Sync Health Overview" sub="Live status across your devices"
+        <CardHead icon={isOnline ? <Cloud size={15} /> : <CloudOff size={15} />} title={t("settings.sync.healthTitle")} sub={t("settings.sync.healthSub")}
           action={
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="gap-1.5 rounded-[8px] text-[12px] font-bold" onClick={handleSync} disabled={isSyncing}><RefreshCcw size={13} className={isSyncing ? "animate-spin" : ""} /> {isSyncing ? "Syncing…" : "Sync Now"}</Button>
@@ -139,18 +139,18 @@ export default function SyncSettingsPage() {
             </div>
           } />
         <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-5">
-          <Kpi label="Sync Status" value={backupStatusLabel} tone={backupStatusTone} icon={allSynced ? <CheckCircle2 size={15} /> : <Clock size={15} />} />
-          <Kpi label="Last Synced" value={timeAgo(lastSynced)} sub={lastSynced ? "today" : "this session"} tone="blue" />
-          <Kpi label="Pending Uploads" value={pendingCount} tone={pendingCount ? "amber" : "green"} icon={<Upload size={15} />} />
-          <Kpi label="Failed" value={failedCount} tone={failedCount ? "red" : "green"} />
-          <Kpi label="Conflicts" value={conflictCount} tone={conflictCount ? "red" : "green"} />
+          <Kpi label={t("settings.sync.status")} value={backupStatusLabel} tone={backupStatusTone} icon={allSynced ? <CheckCircle2 size={15} /> : <Clock size={15} />} />
+          <Kpi label={t("settings.sync.lastSynced")} value={timeAgo(lastSynced)} sub={lastSynced ? "today" : t("settings.sync.thisSession")} tone="blue" />
+          <Kpi label={t("settings.sync.pendingUploads")} value={pendingCount} tone={pendingCount ? "amber" : "green"} icon={<Upload size={15} />} />
+          <Kpi label={t("settings.notify.failed")} value={failedCount} tone={failedCount ? "red" : "green"} />
+          <Kpi label={t("settings.sync.conflicts")} value={conflictCount} tone={conflictCount ? "red" : "green"} />
         </div>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Sync Activity */}
         <Card>
-          <CardHead icon={<RefreshCcw size={15} />} title="Sync Activity" sub="Recent sync events" />
+          <CardHead icon={<RefreshCcw size={15} />} title={t("settings.sync.activityTitle")} sub={t("settings.sync.activitySub")} />
           <div className="px-5 pb-4">
             {[
               { text: lastSynced ? "Changes synced successfully" : "Waiting for first sync in this session", ok: true, time: timeAgo(lastSynced) },
@@ -169,7 +169,7 @@ export default function SyncSettingsPage() {
 
         {/* Pending Sync Queue */}
         <Card>
-          <CardHead icon={<Upload size={15} />} title="Pending Sync Queue" sub="Changes waiting to reach the cloud" action={(pendingCount + failedCount) > 0 ? <button onClick={handleSync} className="text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.sync.retryAll")}</button> : undefined} />
+          <CardHead icon={<Upload size={15} />} title={t("settings.sync.queueTitle")} sub={t("settings.sync.queueSub")} action={(pendingCount + failedCount) > 0 ? <button onClick={handleSync} className="text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.sync.retryAll")}</button> : undefined} />
           <div className="px-5 pb-5">
             {(pendingCount + failedCount + conflictCount) === 0 ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
@@ -193,8 +193,8 @@ export default function SyncSettingsPage() {
         <Card>
           <CardHead
             icon={<Archive size={15} />}
-            title="Portable shop backup"
-            sub="Encrypted recovery artifact"
+            title={t("settings.sync.portableBackup")}
+            sub={t("settings.sync.encryptedArtifact")}
             action={!backupAccessDenied ? (
               <Button
                 size="sm"
@@ -220,7 +220,7 @@ export default function SyncSettingsPage() {
 
         {/* Backup History */}
         <Card>
-          <CardHead icon={<Cloud size={15} />} title="Backup history" sub="Server-confirmed encrypted artifacts" action={!backupAccessDenied ? <button onClick={() => void loadBackups()} className="settings-text-action">{t("settings.sync.refresh")}</button> : undefined} />
+          <CardHead icon={<Cloud size={15} />} title={t("settings.sync.historyTitle")} sub={t("settings.sync.historySub")} action={!backupAccessDenied ? <button onClick={() => void loadBackups()} className="settings-text-action">{t("settings.sync.refresh")}</button> : undefined} />
           <div className="backup-history">
             {backupHistoryLoading ? (
               <div className="backup-loading"><Loader2 size={15} className="animate-spin" /> {t("settings.sync.loadingHistory")}</div>
@@ -283,15 +283,15 @@ export default function SyncSettingsPage() {
 
       <OwnerPinModal
         open={Boolean(backupApproval)}
-        title={backupApproval?.type === "restore" ? "Final restore approval" : backupApproval?.type === "download" ? "Download encrypted backup" : backupApproval?.type === "restore-preview" ? "Validate restore safety" : "Create encrypted shop backup"}
+        title={backupApproval?.type === "restore" ? t("settings.sync.restoreTitle") : backupApproval?.type === "download" ? t("settings.sync.downloadTitle") : backupApproval?.type === "restore-preview" ? t("settings.sync.validateTitle") : t("settings.sync.createBackupTitle")}
         description={backupApproval?.type === "download"
-          ? "Download the encrypted, audited shop backup."
+          ? t("settings.sync.downloadHelp")
           : backupApproval?.type === "restore"
-            ? "Restore verified business data and rebuild every device cache."
+            ? t("settings.sync.restoreHelp")
           : backupApproval?.type === "restore-preview"
-            ? "Verify compatibility without changing data."
-            : "Create an encrypted snapshot without credentials."}
-        confirmLabel={backupApproval?.type === "restore" ? "Restore shop" : backupApproval?.type === "download" ? "Download backup" : backupApproval?.type === "restore-preview" ? "Validate backup" : "Create backup"}
+            ? t("settings.sync.validateHelp")
+            : t("settings.sync.createBackupHelp")}
+        confirmLabel={backupApproval?.type === "restore" ? t("settings.sync.restore") : backupApproval?.type === "download" ? t("settings.sync.download") : backupApproval?.type === "restore-preview" ? t("settings.sync.validate") : t("settings.sync.createBackup")}
         loading={backupActionLoading}
         error={backupActionError}
         onCancel={() => { if (!backupActionLoading) { setBackupApproval(null); setBackupActionError(null); } }}
