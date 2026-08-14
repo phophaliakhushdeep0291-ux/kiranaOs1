@@ -222,6 +222,24 @@ function previousDashboardRange(range: { from: string; to: string }) {
   return { from: format(previousFrom, "yyyy-MM-dd"), to: format(previousTo, "yyyy-MM-dd") };
 }
 
+/**
+ * The date under the dashboard title, in the language the app is set to.
+ *
+ * `format(date, "EEEE, d MMMM yyyy")` is fixed to English month and weekday
+ * names, so a Hindi shop read "Thursday, 14 August 2026" above a Hindi page.
+ * date-fns has a `hi` locale, but importing it puts the whole table in the
+ * startup chunk for English shops too — and the Hindi catalogue is lazy-loaded
+ * precisely to avoid that. `Intl` already ships with the browser.
+ */
+const LONG_DATE = {
+  en: new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+  hi: new Intl.DateTimeFormat("hi-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+};
+
+function longDate(language: string, value: Date = new Date()) {
+  return (language === "hi" ? LONG_DATE.hi : LONG_DATE.en).format(value);
+}
+
 function billDateKey(bill: Bill): string {
   const record = bill as Bill & { created_at?: string; billDate?: string; date?: string };
   return String(bill.createdAt ?? record.created_at ?? record.billDate ?? record.date ?? "").slice(0, 10);
@@ -769,9 +787,9 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
               <p className="mt-1 text-[13px] font-medium text-[#52627e]">{t("dashboard.quickStartHelp")}</p>
             </div>
             <div className="grid gap-2 sm:grid-cols-3 xl:w-[650px]">
-              <QuickStartLink href="/products?add=1" step="1" icon={<PackagePlus size={17} />} title="Add products" detail="Name, price and stock" />
-              <QuickStartLink href="/billing" step="2" icon={<ShoppingCart size={17} />} title="Create a test bill" detail="Try cash or UPI" />
-              <QuickStartLink href="/settings/printer" step="3" icon={<Wrench size={17} />} title="Test your receipt" detail="Printer and shop details" />
+              <QuickStartLink href="/products?add=1" step="1" icon={<PackagePlus size={17} />} title={t("dashboard.step.addProducts")} detail={t("dashboard.step.addProductsHelp")} />
+              <QuickStartLink href="/billing" step="2" icon={<ShoppingCart size={17} />} title={t("dashboard.step.testBill")} detail={t("dashboard.step.testBillHelp")} />
+              <QuickStartLink href="/settings/printer" step="3" icon={<Wrench size={17} />} title={t("dashboard.step.testReceipt")} detail={t("dashboard.step.testReceiptHelp")} />
             </div>
           </div>
         </section>
@@ -782,7 +800,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
       {/* Counter focus */}
       <div className="grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
         <KpiCard
-          label="Today's Sales"
+          label={t("dashboard.kpi.todaySales")}
           value={fmtRs(dashboard.revenue)}
           delta={salesDelta}
           deltaLabel="vs yesterday"
@@ -794,7 +812,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
           onClick={() => openDrilldown("revenue")}
         />
         <KpiCard
-          label="Cash Collected"
+          label={t("dashboard.cashCollected")}
           value={fmtRs(dashboard.cashCollected)}
           delta={cashDelta}
           deltaLabel="vs yesterday"
@@ -806,7 +824,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
           onClick={() => openDrilldown("collection")}
         />
         <KpiCard
-          label="UPI Collected"
+          label={t("dashboard.kpi.upiCollected")}
           value={fmtRs(dashboard.upiCollected)}
           delta={upiDelta}
           deltaLabel="vs yesterday"
@@ -819,7 +837,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         />
         <Link href="/money-statement?mode=bank" className="block h-full min-w-0">
           <KpiCard
-            label="Bank Collected"
+            label={t("dashboard.kpi.bankCollected")}
             value={fmtRs(dashboard.bankCollected)}
             delta={bankDelta}
             deltaLabel="vs yesterday"
@@ -832,7 +850,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         </Link>
         <Link href="/customers?filter=udhar" className="block h-full min-w-0">
           <KpiCard
-            label="Outstanding Udhar"
+            label={t("dashboard.kpi.outstandingUdhar")}
             value={fmtRs(dashboard.totalOutstanding)}
             delta={outstandingDelta}
             deltaLabel="vs yesterday"
@@ -845,7 +863,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
           />
         </Link>
         <KpiCard
-          label="Profit (Est.)"
+          label={t("dashboard.kpi.profitEst")}
           value={fmtRs(dashboard.grossProfit)}
           delta={profitDelta}
           deltaLabel="vs yesterday"
@@ -858,7 +876,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         />
         <Link href="/inventory" className="block h-full min-w-0">
           <KpiCard
-            label="Low Stock Items"
+            label={t("dashboard.kpi.lowStockItems")}
             value={String(lowStockCount)}
             delta={null}
             footer={<span className="text-xs font-semibold text-primary">{t("dashboard.viewAll")}</span>}
@@ -1059,10 +1077,10 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
               </p>
             </div>
             <div className="mt-2.5 flex min-h-0 flex-1 flex-col justify-evenly gap-2">
-              <HealthRow icon={<Wifi size={13} />} label="Internet Connection" status={isOnline ? "ok" : "warn"} value={isOnline ? "Online" : "Offline"} />
-              <HealthRow icon={<RefreshCw size={13} />} label="Data Sync" status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={syncStatusValue} />
-              <HealthRow icon={<Cloud size={13} />} label="Backup Status" status={pendingCount > 0 || failedCount > 0 ? "warn" : "ok"} value={isSyncing ? "Syncing" : pendingCount > 0 ? "Queued" : "Secure"} />
-              <HealthRow icon={<MonitorSmartphone size={13} />} label="Device Status" status="ok" value="Active" />
+              <HealthRow icon={<Wifi size={13} />} label={t("dashboard.health.internet")} status={isOnline ? "ok" : "warn"} value={isOnline ? t("dashboard.health.online") : t("dashboard.health.offline")} />
+              <HealthRow icon={<RefreshCw size={13} />} label={t("dashboard.health.dataSync")} status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={syncStatusValue} />
+              <HealthRow icon={<Cloud size={13} />} label={t("dashboard.health.backupStatus")} status={pendingCount > 0 || failedCount > 0 ? "warn" : "ok"} value={isSyncing ? t("dashboard.health.syncing") : pendingCount > 0 ? t("settings.notify.queued") : t("dashboard.health.secure")} />
+              <HealthRow icon={<MonitorSmartphone size={13} />} label={t("dashboard.health.deviceStatus")} status="ok" value={t("inventory.status.active")} />
             </div>
             <Link href="/sync-status">
               <button type="button" className="mt-3 flex w-full items-center justify-center gap-2 rounded-[9px] bg-[var(--brand)] py-2.5 text-[12px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors duration-200 hover:bg-[var(--brand-strong)]">
@@ -1163,9 +1181,9 @@ function MobileGeneralDashboard({
         </div>
 
         <div className="relative mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4">
-          <MobileHeroStat label="Cash" value={dashboard.cashCollected} />
-          <MobileHeroStat label="UPI" value={dashboard.upiCollected} />
-          <MobileHeroStat label="Bank" value={dashboard.bankCollected} />
+          <MobileHeroStat label={t("billing.pay.cash")} value={dashboard.cashCollected} />
+          <MobileHeroStat label={t("billing.pay.upi")} value={dashboard.upiCollected} />
+          <MobileHeroStat label={t("billing.pay.bank")} value={dashboard.bankCollected} />
         </div>
 
         <div className="relative mt-4 grid grid-cols-[1.35fr_1fr] gap-2.5">
@@ -1184,9 +1202,9 @@ function MobileGeneralDashboard({
           <h2 className="mt-1 font-display text-[19px] font-black text-[#071333]">{t("dashboard.getReady")}</h2>
           <p className="mt-1 text-[12px] font-medium leading-5 text-[#52627e]">{t("dashboard.getReadyHelp")}</p>
           <div className="mt-3 grid gap-2">
-            <QuickStartLink href="/products?add=1" step="1" icon={<PackagePlus size={17} />} title="Add your first product" detail="Set price and opening stock" />
-            <QuickStartLink href="/billing" step="2" icon={<ShoppingCart size={17} />} title="Create a test bill" detail="Practice checkout without pressure" />
-            <QuickStartLink href="/settings/printer" step="3" icon={<Wrench size={17} />} title="Check your receipt" detail="Store name, GST and printer" />
+            <QuickStartLink href="/products?add=1" step="1" icon={<PackagePlus size={17} />} title={t("dashboard.step.firstProduct")} detail={t("dashboard.step.firstProductHelp")} />
+            <QuickStartLink href="/billing" step="2" icon={<ShoppingCart size={17} />} title={t("dashboard.step.testBill")} detail={t("dashboard.step.practiceHelp")} />
+            <QuickStartLink href="/settings/printer" step="3" icon={<Wrench size={17} />} title={t("dashboard.step.checkReceipt")} detail={t("dashboard.step.checkReceiptHelp")} />
           </div>
         </section>
       )}
@@ -1202,10 +1220,10 @@ function MobileGeneralDashboard({
           <Link href="/reports" className="inline-flex min-h-11 items-center gap-1 rounded-[12px] px-3 text-[12px] font-black text-[var(--brand)]">{t("dashboard.allReports")} <ChevronRight size={15} /></Link>
         </div>
         <div className="grid grid-cols-2 gap-2.5">
-          <MobileHealthCard href="/reports" label="Gross profit" value={fmtCompactRs(dashboard.grossProfit)} detail="Estimated today" delta={profitDelta} icon={<TrendingUp size={18} />} tone="green" />
-          <MobileHealthCard href="/customers" label="Udhar due" value={fmtCompactRs(dashboard.totalOutstanding)} detail={`${dashboard.outstandingCustomers.length} customers`} delta={outstandingDelta} positiveIsBad icon={<AlertTriangle size={18} />} tone="red" />
-          <MobileHealthCard href="/expenses" label="Expenses" value={fmtCompactRs(dashboard.expensesToday)} detail="Recorded today" delta={expenseDelta} positiveIsBad icon={<Wallet size={18} />} tone="amber" />
-          <MobileHealthCard href="/inventory" label="Low stock" value={lowStockCount.toLocaleString("en-IN")} detail={lowStockCount > 0 ? "Items to reorder" : "Stock is healthy"} icon={<Package size={18} />} tone={lowStockCount > 0 ? "violet" : "green"} />
+          <MobileHealthCard href="/reports" label={t("dashboard.kpi.grossProfit")} value={fmtCompactRs(dashboard.grossProfit)} detail={t("dashboard.kpi.estimatedToday")} delta={profitDelta} icon={<TrendingUp size={18} />} tone="green" />
+          <MobileHealthCard href="/customers" label={t("dashboard.kpi.udharDue")} value={fmtCompactRs(dashboard.totalOutstanding)} detail={`${dashboard.outstandingCustomers.length} customers`} delta={outstandingDelta} positiveIsBad icon={<AlertTriangle size={18} />} tone="red" />
+          <MobileHealthCard href="/expenses" label={t("dashboard.kpi.expenses")} value={fmtCompactRs(dashboard.expensesToday)} detail={t("dashboard.kpi.recordedToday")} delta={expenseDelta} positiveIsBad icon={<Wallet size={18} />} tone="amber" />
+          <MobileHealthCard href="/inventory" label={t("dashboard.lowStock")} value={lowStockCount.toLocaleString("en-IN")} detail={lowStockCount > 0 ? t("dashboard.signal.itemsToReorder") : t("dashboard.signal.stockHealthy")} icon={<Package size={18} />} tone={lowStockCount > 0 ? "violet" : "green"} />
         </div>
       </section>
 
@@ -1247,9 +1265,9 @@ function MobileGeneralDashboard({
       <section>
         <h2 className="mb-3 font-display text-[20px] font-black text-[#071333]">{t("dashboard.quickInsights")}</h2>
         <div className="overflow-hidden rounded-[18px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
-          <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={salesDelta == null ? "No sales yesterday to compare against yet." : `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle="Review the sales trend and payment mix." />
-          <MobileInsight tone="orange" icon={<Package size={15} />} title={`${ownerReport?.topProducts[0]?.name ?? "Your top product"} is leading sales.`} subtitle="Keep the best sellers available in stock." />
-          <MobileInsight tone="rose" icon={<Users size={15} />} title={`${dashboard.outstandingCustomers.length} customers have outstanding dues.`} subtitle="Follow up to improve cash flow." />
+          <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={salesDelta == null ? t("dashboard.empty.noYesterday") : `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle={t("dashboard.insight.salesTrend")} />
+          <MobileInsight tone="orange" icon={<Package size={15} />} title={`${ownerReport?.topProducts[0]?.name ?? t("dashboard.topProduct")} is leading sales.`} subtitle={t("dashboard.insight.bestSellers")} />
+          <MobileInsight tone="rose" icon={<Users size={15} />} title={`${dashboard.outstandingCustomers.length} customers have outstanding dues.`} subtitle={t("dashboard.insight.followUp")} />
           <Link href="/reports" className="flex min-h-12 items-center justify-center gap-2 border-t border-[#e7edf5] text-[12px] font-black text-[var(--brand)]">{t("dashboard.viewDetailedInsights")} <ArrowUpRight size={14} /></Link>
         </div>
       </section>
@@ -1788,7 +1806,7 @@ function fmtRs(n: number | undefined | null) {
 // ─── RESTAURANT layout ────────────────────────────────────────────────────────
 
 function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
-  const { t } = useAppLanguage();
+  const { t, language } = useAppLanguage();
   const dbCfg = btDef.dashboard;
   const quickActions = usePersonalizedQuickActions(dbCfg.quickActions);
   const avgOrder = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
@@ -1799,7 +1817,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
     <PageShell>
       <PageHeader
         title={`${btDef.emoji} ${dbCfg.heroTitle}`}
-        description={`${format(new Date(), "EEEE, d MMMM yyyy")} — ${userName}`}
+        description={`${longDate(language)} — ${userName}`}
         eyebrow={(
           <div className="flex flex-wrap items-center gap-2">
             <SyncBadge status="local" label={`Local-first numbers (${dashboard.source})`} />
@@ -1865,7 +1883,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
 
       <StatsGrid className="mb-6">
         <StatCard label={dbCfg.kpi.revenue} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} orders`} icon={<ChefHat size={20} aria-hidden="true" />} loading={isLoading} tone="green" data-testid="metric-revenue" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
-        <StatCard label="Orders Today" value={String(dashboard.billCount)} description={avgOrder > 0 ? `Avg ${fmt(avgOrder)} per order` : "No orders yet"} icon={<ReceiptText size={20} aria-hidden="true" />} loading={isLoading} tone="blue" />
+        <StatCard label={t("dashboard.kpi.ordersToday")} value={String(dashboard.billCount)} description={avgOrder > 0 ? `Avg ${fmt(avgOrder)} per order` : t("dashboard.restaurant.noOrders")} icon={<ReceiptText size={20} aria-hidden="true" />} loading={isLoading} tone="blue" />
         <StatCard label={dbCfg.kpi.profit} value={fmt(dashboard.grossProfit)} description={`${Math.round(dashboard.grossMarginPct)}% margin`} icon={<TrendingUp size={20} aria-hidden="true" />} loading={isLoading} tone="amber" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("profit")} onKeyDown={drilldownKeyHandler("profit")} />
         <StatCard label={dbCfg.kpi.cash} value={fmt(dashboard.cashCollected)} description={`Drawer ${fmt(cashInDrawer)}`} icon={<Wallet size={20} aria-hidden="true" />} loading={isLoading} tone="violet" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("collection")} onKeyDown={drilldownKeyHandler("collection")} />
       </StatsGrid>
@@ -1873,14 +1891,14 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
       <AttentionStrip supplierDue={dashboard.supplierDue} purchaseDue={dashboard.purchaseDue} lowStockCount={lowStockCount} pendingSyncCount={pendingSyncCount} hasUnsyncedOperations={hasUnsyncedOperations} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <DataTableCard title="Cash & UPI Collection" description="Today's payment breakdown by mode." loading={isLoading} actions={(
+        <DataTableCard title={t("dashboard.pay.cashUpiCollection")} description={t("dashboard.pay.breakdownHelp")} loading={isLoading} actions={(
           <button type="button" onClick={() => openDrilldown("collection")} className="inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">{t("dashboard.breakdown")}</button>
         )}>
           <div className="space-y-2">
-            <CollectionRow label="Cash collected" value={fmt(dashboard.cashCollected)} icon={<Wallet size={16} aria-hidden="true" />} />
-            <CollectionRow label="UPI collected" value={fmt(dashboard.upiCollected)} icon={<Smartphone size={16} aria-hidden="true" />} />
+            <CollectionRow label={t("dashboard.pay.cashCollected")} value={fmt(dashboard.cashCollected)} icon={<Wallet size={16} aria-hidden="true" />} />
+            <CollectionRow label={t("dashboard.pay.upiCollected")} value={fmt(dashboard.upiCollected)} icon={<Smartphone size={16} aria-hidden="true" />} />
             {dashboard.credit > 0 && (
-              <CollectionRow label="Pending tabs (credit)" value={fmt(dashboard.credit)} icon={<CreditCard size={16} aria-hidden="true" />} muted />
+              <CollectionRow label={t("dashboard.pay.pendingTabs")} value={fmt(dashboard.credit)} icon={<CreditCard size={16} aria-hidden="true" />} muted />
             )}
             <div className="mt-3 rounded-lg bg-primary/10 p-3 text-sm">
               <div className="flex items-center justify-between gap-3">
@@ -1892,11 +1910,11 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
         </DataTableCard>
 
         <DataTableCard
-          title="Top Menu Items"
-          description="Best-selling dishes by quantity this week."
+          title={t("dashboard.restaurant.topItems")}
+          description={t("dashboard.restaurant.topItemsHelp")}
           loading={isLoading}
           empty={topDishes.length === 0}
-          emptyState={<EmptyState title="No sales data yet" description="Top dishes will appear once orders are saved." icon={<ChefHat size={24} className="text-muted-foreground" />} />}
+          emptyState={<EmptyState title={t("dashboard.restaurant.noSales")} description={t("dashboard.restaurant.noSalesHelp")} icon={<ChefHat size={24} className="text-muted-foreground" />} />}
           actions={<Link href="/reports"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.viewAll")}</span></Link>}
         >
           <div className="space-y-2">
@@ -1919,7 +1937,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
 // ─── TECHNICAL layout (auto_parts) ───────────────────────────────────────────
 
 function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
-  const { t } = useAppLanguage();
+  const { t, language } = useAppLanguage();
   const dbCfg = btDef.dashboard;
   const quickActions = usePersonalizedQuickActions(dbCfg.quickActions);
   const lowStockItems = ownerReport?.lowStock ?? [];
@@ -1928,7 +1946,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
     <PageShell>
       <PageHeader
         title={`${btDef.emoji} ${dbCfg.heroTitle}`}
-        description={`${format(new Date(), "EEEE, d MMMM yyyy")} — ${userName}`}
+        description={`${longDate(language)} — ${userName}`}
         eyebrow={(
           <div className="flex flex-wrap items-center gap-2">
             <SyncBadge status="local" label={`Local-first numbers (${dashboard.source})`} />
@@ -2001,7 +2019,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
 
       <StatsGrid className="mb-6">
         <StatCard label={dbCfg.kpi.revenue} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} bills · tap for details`} icon={<Wrench size={20} aria-hidden="true" />} loading={isLoading} tone="green" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
-        <StatCard label="Supplier Dues" value={dashboard.supplierDue > 0 ? fmt(dashboard.supplierDue) : "Clear"} description={dashboard.purchaseDue > 0 ? `Today due ${fmt(dashboard.purchaseDue)}` : "No urgent due"} icon={<Truck size={20} aria-hidden="true" />} loading={isLoading} tone={dashboard.supplierDue > 0 ? "red" : "green"} />
+        <StatCard label={t("dashboard.supplierDues")} value={dashboard.supplierDue > 0 ? fmt(dashboard.supplierDue) : t("dashboard.signal.clear")} description={dashboard.purchaseDue > 0 ? `Today due ${fmt(dashboard.purchaseDue)}` : t("dashboard.signal.noUrgentDue")} icon={<Truck size={20} aria-hidden="true" />} loading={isLoading} tone={dashboard.supplierDue > 0 ? "red" : "green"} />
         <Link href="/customers?filter=udhar">
           <StatCard label={dbCfg.kpi.credit} value={fmt(dashboard.totalOutstanding)} description={`${dashboard.outstandingCustomers.length} party accounts`} icon={<AlertTriangle size={20} aria-hidden="true" />} loading={isLoading} tone="amber" className="h-full cursor-pointer" />
         </Link>
@@ -2011,7 +2029,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
       <AttentionStrip supplierDue={dashboard.supplierDue} purchaseDue={dashboard.purchaseDue} lowStockCount={lowStockCount} pendingSyncCount={pendingSyncCount} hasUnsyncedOperations={hasUnsyncedOperations} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <DataTableCard title="Party Credit (Khata)" description="Customers with outstanding balance." loading={isLoading} empty={dashboard.outstandingCustomers.length === 0} emptyState={<EmptyState title="No outstanding khata" description="All customer accounts are clear." />} actions={<Link href="/customers?filter=udhar"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.viewAll")}</span></Link>}>
+        <DataTableCard title={t("dashboard.partyCredit")} description={t("dashboard.partyCreditHelp")} loading={isLoading} empty={dashboard.outstandingCustomers.length === 0} emptyState={<EmptyState title={t("dashboard.noKhata")} description={t("dashboard.noKhataHelp")} />} actions={<Link href="/customers?filter=udhar"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.viewAll")}</span></Link>}>
           <div className="space-y-2">
             {dashboard.outstandingCustomers.slice(0, 5).map((c) => (
               <div key={c.customerId} className="flex items-center justify-between gap-3 border-b py-2 last:border-0">
@@ -2025,7 +2043,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
           </div>
         </DataTableCard>
 
-        <DataTableCard title="Low Stock Parts" description="Parts below minimum stock — order soon." loading={isLoading} empty={lowStockItems.length === 0} emptyState={<EmptyState title="Parts stock healthy" description="No parts are below minimum stock level." icon={<Package size={24} className="text-muted-foreground" />} />} actions={<Link href="/inventory"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.godownView")}</span></Link>}>
+        <DataTableCard title={t("dashboard.parts.lowStock")} description={t("dashboard.parts.lowStockHelp")} loading={isLoading} empty={lowStockItems.length === 0} emptyState={<EmptyState title={t("dashboard.parts.healthy")} description={t("dashboard.parts.healthyHelp")} icon={<Package size={24} className="text-muted-foreground" />} />} actions={<Link href="/inventory"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.godownView")}</span></Link>}>
           <div className="space-y-2">
             {lowStockItems.slice(0, 6).map((item, i) => (
               <div key={item.productId ?? i} className="flex items-center justify-between gap-3 border-b py-2 last:border-0">
@@ -2050,7 +2068,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
 // ─── MEDICAL layout (pharmacy) ────────────────────────────────────────────────
 
 function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
-  const { t } = useAppLanguage();
+  const { t, language } = useAppLanguage();
   const dbCfg = btDef.dashboard;
   const quickActions = usePersonalizedQuickActions(dbCfg.quickActions);
   const lowStockItems = ownerReport?.lowStock ?? [];
@@ -2072,7 +2090,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
 
       <PageHeader
         title={`${btDef.emoji} ${dbCfg.heroTitle}`}
-        description={`${format(new Date(), "EEEE, d MMMM yyyy")} — ${userName}`}
+        description={`${longDate(language)} — ${userName}`}
         eyebrow={(
           <div className="flex flex-wrap items-center gap-2">
             <SyncBadge status="local" label={`Local-first numbers (${dashboard.source})`} />
@@ -2124,7 +2142,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
 
       <StatsGrid className="mb-6">
         <StatCard label={dbCfg.kpi.revenue} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} dispensing counters`} icon={<ClipboardList size={20} aria-hidden="true" />} loading={isLoading} tone="green" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
-        <StatCard label="Low Stock" value={lowStockCount > 0 ? `${lowStockCount} items` : "Healthy"} description={lowStockCount > 0 ? "Reorder required" : "All medicines stocked"} icon={<Pill size={20} aria-hidden="true" />} loading={isLoading} tone={lowStockCount > 0 ? "red" : "green"} />
+        <StatCard label={t("products.stats.lowStock")} value={lowStockCount > 0 ? `${lowStockCount} items` : t("dashboard.signal.healthy")} description={lowStockCount > 0 ? t("dashboard.signal.reorderRequired") : t("dashboard.pharmacy.allStocked")} icon={<Pill size={20} aria-hidden="true" />} loading={isLoading} tone={lowStockCount > 0 ? "red" : "green"} />
         <Link href="/customers?filter=udhar">
           <StatCard label={dbCfg.kpi.credit} value={fmt(dashboard.totalOutstanding)} description={`${dashboard.outstandingCustomers.length} patient accounts`} icon={<AlertTriangle size={20} aria-hidden="true" />} loading={isLoading} tone="amber" className="h-full cursor-pointer" />
         </Link>
@@ -2135,7 +2153,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Low stock medicines — LEFT and prominent for pharmacy */}
-        <DataTableCard title="Low Stock Medicines" description="Medicines below minimum level — reorder immediately." loading={isLoading} empty={lowStockItems.length === 0} emptyState={<EmptyState title="All medicines in stock" description="No medicines are below minimum stock level." icon={<Pill size={24} className="text-muted-foreground" />} />} actions={<Link href="/inventory"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.fullStockView")}</span></Link>}>
+        <DataTableCard title={t("dashboard.pharmacy.lowStock")} description={t("dashboard.pharmacy.lowStockHelp")} loading={isLoading} empty={lowStockItems.length === 0} emptyState={<EmptyState title={t("dashboard.pharmacy.healthy")} description={t("dashboard.pharmacy.healthyHelp")} icon={<Pill size={24} className="text-muted-foreground" />} />} actions={<Link href="/inventory"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.fullStockView")}</span></Link>}>
           <div className="space-y-2">
             {lowStockItems.slice(0, 7).map((item, i) => (
               <div key={item.productId ?? i} className="flex items-center justify-between gap-3 rounded-lg border border-rose-100 bg-rose-50/40 px-3 py-2 dark:border-rose-900/40 dark:bg-rose-950/20">
@@ -2153,7 +2171,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
         </DataTableCard>
 
         {/* Patient accounts — RIGHT */}
-        <DataTableCard title="Patient Accounts" description="Outstanding credit by patient." loading={isLoading} empty={dashboard.outstandingCustomers.length === 0} emptyState={<EmptyState title="No outstanding accounts" description="All patient accounts are settled." />} actions={<Link href="/customers?filter=udhar"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.viewAll")}</span></Link>}>
+        <DataTableCard title={t("dashboard.pharmacy.patientAccounts")} description={t("dashboard.pharmacy.patientAccountsHelp")} loading={isLoading} empty={dashboard.outstandingCustomers.length === 0} emptyState={<EmptyState title={t("dashboard.pharmacy.noAccounts")} description={t("dashboard.pharmacy.noAccountsHelp")} />} actions={<Link href="/customers?filter=udhar"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.viewAll")}</span></Link>}>
           <div className="space-y-2">
             {dashboard.outstandingCustomers.slice(0, 5).map((c) => (
               <div key={c.customerId} className="flex items-center justify-between gap-3 border-b py-2 last:border-0">
@@ -2197,7 +2215,7 @@ function DashboardDrilldownDialog({
         ) : type === "revenue" ? (
           <div className="space-y-2">
             {snapshot.revenueBreakdown.length === 0 ? (
-              <EmptyState title="No revenue today" description="No saved sale bills are included yet." />
+              <EmptyState title={t("dashboard.empty.noRevenue")} description={t("dashboard.empty.noRevenueHelp")} />
             ) : snapshot.revenueBreakdown.slice(0, 30).map((row) => (
               <div key={row.billId} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="min-w-0">
@@ -2211,7 +2229,7 @@ function DashboardDrilldownDialog({
         ) : type === "profit" ? (
           <div className="space-y-2">
             {snapshot.profitByProduct.length === 0 ? (
-              <EmptyState title="No product profit yet" description="Saved bill items with cost are needed for product profit." />
+              <EmptyState title={t("dashboard.empty.noProfit")} description={t("dashboard.empty.noProfitHelp")} />
             ) : snapshot.profitByProduct.slice(0, 30).map((row) => (
               <div key={row.productId} className="rounded-lg border p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -2229,12 +2247,12 @@ function DashboardDrilldownDialog({
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            <CollectionTile label="Cash sales"     value={fmt(snapshot.cashSalesToday)}          icon={<Wallet    size={16} aria-hidden="true" />} />
-            <CollectionTile label="Old udhar cash" value={fmt(snapshot.cashUdharRecoveryToday)}  icon={<HandCoins size={16} aria-hidden="true" />} />
-            <CollectionTile label="UPI sales"      value={fmt(snapshot.upiSalesToday)}           icon={<Smartphone size={16} aria-hidden="true" />} />
-            <CollectionTile label="Old udhar UPI"  value={fmt(snapshot.upiUdharRecoveryToday)}   icon={<CreditCard size={16} aria-hidden="true" />} />
-            <CollectionTile label="Bank sales"     value={fmt(snapshot.bankSalesToday)}          icon={<Landmark size={16} aria-hidden="true" />} />
-            <CollectionTile label="Old udhar bank" value={fmt(snapshot.bankUdharRecoveryToday)}  icon={<Landmark size={16} aria-hidden="true" />} />
+            <CollectionTile label={t("dashboard.pay.cashSales")}     value={fmt(snapshot.cashSalesToday)}          icon={<Wallet    size={16} aria-hidden="true" />} />
+            <CollectionTile label={t("dashboard.pay.oldUdharCash")} value={fmt(snapshot.cashUdharRecoveryToday)}  icon={<HandCoins size={16} aria-hidden="true" />} />
+            <CollectionTile label={t("dashboard.pay.upiSales")}      value={fmt(snapshot.upiSalesToday)}           icon={<Smartphone size={16} aria-hidden="true" />} />
+            <CollectionTile label={t("dashboard.pay.oldUdharUpi")}  value={fmt(snapshot.upiUdharRecoveryToday)}   icon={<CreditCard size={16} aria-hidden="true" />} />
+            <CollectionTile label={t("dashboard.pay.bankSales")}     value={fmt(snapshot.bankSalesToday)}          icon={<Landmark size={16} aria-hidden="true" />} />
+            <CollectionTile label={t("dashboard.pay.oldUdharBank")} value={fmt(snapshot.bankUdharRecoveryToday)}  icon={<Landmark size={16} aria-hidden="true" />} />
             <div className="rounded-lg border bg-muted/35 p-3 sm:col-span-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("dashboard.cashDrawer")}</p>
               <div className="mt-2 flex items-center justify-between gap-3">
@@ -2254,20 +2272,21 @@ function DashboardDrilldownDialog({
 function AttentionStrip({ supplierDue, purchaseDue, lowStockCount, pendingSyncCount, hasUnsyncedOperations }: {
   supplierDue: number; purchaseDue: number; lowStockCount: number; pendingSyncCount: number; hasUnsyncedOperations: boolean;
 }) {
+  const { t } = useAppLanguage();
   return (
     <section className="premium-panel-muted mb-5 p-3">
       <div className="grid gap-2 md:grid-cols-4">
         <Link href="/purchase-bills">
-          <CompactSignal label="Supplier" value={supplierDue > 0 ? fmt(supplierDue) : "Clear"} detail={purchaseDue > 0 ? `Today due ${fmt(purchaseDue)}` : "No urgent due"} icon={<Truck size={18} aria-hidden="true" />} tone={supplierDue > 0 ? "danger" : "good"} />
+          <CompactSignal label={t("inventory.movement.supplier")} value={supplierDue > 0 ? fmt(supplierDue) : t("dashboard.signal.clear")} detail={purchaseDue > 0 ? `Today due ${fmt(purchaseDue)}` : t("dashboard.signal.noUrgentDue")} icon={<Truck size={18} aria-hidden="true" />} tone={supplierDue > 0 ? "danger" : "good"} />
         </Link>
         <Link href="/inventory">
-          <CompactSignal label="Stock" value={lowStockCount > 0 ? `${lowStockCount} low` : "Healthy"} detail={lowStockCount > 0 ? "Purchase attention" : "No urgent items"} icon={<ReceiptText size={18} aria-hidden="true" />} tone={lowStockCount > 0 ? "warn" : "good"} />
+          <CompactSignal label={t("inventory.col.stock")} value={lowStockCount > 0 ? `${lowStockCount} low` : t("dashboard.signal.healthy")} detail={lowStockCount > 0 ? t("dashboard.signal.purchaseAttention") : t("dashboard.signal.noUrgentItems")} icon={<ReceiptText size={18} aria-hidden="true" />} tone={lowStockCount > 0 ? "warn" : "good"} />
         </Link>
         <Link href="/sync-status">
-          <CompactSignal label="Backup" value={pendingSyncCount > 0 ? `${pendingSyncCount} pending` : "Synced"} detail={hasUnsyncedOperations ? "Review before close" : "All clear"} icon={<Sparkles size={18} aria-hidden="true" />} tone={hasUnsyncedOperations ? "warn" : "good"} />
+          <CompactSignal label={t("dashboard.signal.backup")} value={pendingSyncCount > 0 ? `${pendingSyncCount} pending` : t("dashboard.health.synced")} detail={hasUnsyncedOperations ? t("dashboard.signal.reviewBeforeClose") : t("dashboard.signal.allClear")} icon={<Sparkles size={18} aria-hidden="true" />} tone={hasUnsyncedOperations ? "warn" : "good"} />
         </Link>
         <Link href="/reports">
-          <CompactSignal label="Reports" value="Owner view" detail="Weekly and monthly" icon={<TrendingUp size={18} aria-hidden="true" />} tone="neutral" />
+          <CompactSignal label={t("nav.reports")} value={t("dashboard.signal.ownerView")} detail={t("dashboard.signal.weeklyMonthly")} icon={<TrendingUp size={18} aria-hidden="true" />} tone="neutral" />
         </Link>
       </div>
     </section>
