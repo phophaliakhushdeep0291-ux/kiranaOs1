@@ -224,7 +224,7 @@ export default function MoneyStatementPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search name, mobile, bill no, supplier..."
+                placeholder="Search name, mobile or bill no"
                 className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-[var(--brand-ink)] outline-none placeholder:text-[#7a879b]"
               />
             </label>

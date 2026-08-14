@@ -2262,6 +2262,48 @@ html[data-density="compact"] {
     font-size: 11.5px !important;
   }
 
+  /* Contrast floor --------------------------------------------------------
+     The muted-text palette drifted into twenty-odd near-identical greys, and
+     most of them fail WCAG AA as body text: the lightest (#9aa7bd) reads 2.43:1
+     where an 11px caption needs 4.5. On a counter phone in daylight that is the
+     difference between a legible hint and a smudge.
+
+     Every one of these was caught by a runtime sweep as text on a *light*
+     surface, which matters — the same greys are used deliberately on the dark
+     dashboard hero and the customer-facing order header, where darkening them
+     would make contrast worse. Colour-by-colour beats a blanket rule for that
+     reason, and only measured offenders are listed.
+
+     They all land on one token rather than a hierarchy because a hierarchy is
+     not available here: no grey lighter than roughly #6a7891 passes AA on
+     white, and the app's cards are slightly off-white (#f7f9fd and friends),
+     which costs another half point — #64748b measures 4.23:1 on those. #5b6b85
+     is 5.40:1 on white and still clears 4.5 on the tinted cards.
+
+     Desktop is untouched: it has the same gap, but flattening the muted palette
+     product-wide is a design decision, not a phone legibility fix. */
+  .text-\[\#9aa7bd\]:not(svg *),
+  .text-\[\#9aa6bb\]:not(svg *),
+  .text-\[\#94a3b8\]:not(svg *),
+  .text-\[\#8a97ab\]:not(svg *),
+  .text-\[\#8492ac\]:not(svg *),
+  .text-\[\#8290a8\]:not(svg *),
+  .text-\[\#7c899f\]:not(svg *),
+  .text-\[\#7b8799\]:not(svg *),
+  .text-\[\#7b879b\]:not(svg *),
+  .text-\[\#7a89a3\]:not(svg *),
+  .text-\[\#7a879f\]:not(svg *),
+  .text-\[\#7886a0\]:not(svg *),
+  .text-\[\#77859d\]:not(svg *),
+  .text-\[\#71809b\]:not(svg *),
+  .text-\[\#71809a\]:not(svg *),
+  .text-\[\#718096\]:not(svg *),
+  .text-\[\#6d7c98\]:not(svg *),
+  .text-\[\#687895\]:not(svg *),
+  .text-\[\#687792\]:not(svg *) {
+    color: #5b6b85 !important;
+  }
+
   /* Tap targets -----------------------------------------------------------
      A control can stay visually small and still be easy to hit: this grows
      the *hit area* around the box instead of the box itself, so dense rows
