@@ -652,18 +652,18 @@ export default function InventoryPage() {
   return (
     <PageShell className="space-y-4 bg-white pb-8">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-        <InventoryMetricCard label="Total Stock Value" value={fmtMoney(stockStats.stockValue)} detail="At current cost" tone="blue" icon={<IndianRupee size={19} />} />
-        <InventoryMetricCard label="Total SKUs" value={stockStats.products.toLocaleString("en-IN")} detail={`${stockStats.totalQuantity.toLocaleString("en-IN")} units tracked`} tone="violet" icon={<Tags size={19} />} />
-        <InventoryMetricCard label="Low Stock Items" value={stockStats.lowStock.toLocaleString("en-IN")} detail="Require attention" tone="amber" icon={<AlertTriangle size={19} />} />
-        <InventoryMetricCard label="Out of Stock Items" value={stockStats.outOfStock.toLocaleString("en-IN")} detail="Take immediate action" tone="rose" icon={<PackageX size={19} />} />
-        <div className="col-span-2 xl:col-span-1"><InventoryMetricCard label="Stock Turnover (30D)" value={`${stockStats.turnover30}x`} detail={stockStats.turnover30 > 0 ? "Based on sold quantity" : "No sales movement yet"} tone="green" icon={<TrendingUp size={19} />} /></div>
+        <InventoryMetricCard label={t("inventory.page.totalStockValue")} value={fmtMoney(stockStats.stockValue)} detail={t("inventory.page.atCurrentCost")} tone="blue" icon={<IndianRupee size={19} />} />
+        <InventoryMetricCard label={t("inventory.page.totalSkus")} value={stockStats.products.toLocaleString("en-IN")} detail={`${stockStats.totalQuantity.toLocaleString("en-IN")} units tracked`} tone="violet" icon={<Tags size={19} />} />
+        <InventoryMetricCard label={t("dashboard.kpi.lowStockItems")} value={stockStats.lowStock.toLocaleString("en-IN")} detail={t("inventory.page.requireAttention")} tone="amber" icon={<AlertTriangle size={19} />} />
+        <InventoryMetricCard label={t("inventory.page.outOfStockItems")} value={stockStats.outOfStock.toLocaleString("en-IN")} detail={t("inventory.page.takeImmediateAction")} tone="rose" icon={<PackageX size={19} />} />
+        <div className="col-span-2 xl:col-span-1"><InventoryMetricCard label={t("inventory.page.stockTurnover")} value={`${stockStats.turnover30}x`} detail={stockStats.turnover30 > 0 ? t("inventory.page.basedOnSold") : t("inventory.page.noSalesMovement")} tone="green" icon={<TrendingUp size={19} />} /></div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <InventoryActionCard label="Add Stock" detail="Increase inventory" tone="blue" icon={<PackagePlus size={20} />} onClick={() => openMovement("purchase")} />
-        <InventoryActionCard label="Stock Correction" detail="Adjust stock levels" tone="green" icon={<Wrench size={20} />} onClick={() => openMovement("correction")} />
-        <InventoryActionCard label="Damage Entry" detail="Record damaged items" tone="orange" icon={<ShieldAlert size={20} />} onClick={() => openMovement("damage")} />
-        <InventoryActionCard label="Supplier Purchase" detail="Create purchase entry" tone="violet" icon={<CircleDollarSign size={20} />} onClick={() => openMovement("purchase")} />
+        <InventoryActionCard label={t("inventory.page.addStock")} detail={t("inventory.page.addStockHelp")} tone="blue" icon={<PackagePlus size={20} />} onClick={() => openMovement("purchase")} />
+        <InventoryActionCard label={t("inventory.page.correctionTile")} detail={t("inventory.page.correctionHelp")} tone="green" icon={<Wrench size={20} />} onClick={() => openMovement("correction")} />
+        <InventoryActionCard label={t("inventory.page.damageTile")} detail={t("inventory.page.damageHelp")} tone="orange" icon={<ShieldAlert size={20} />} onClick={() => openMovement("damage")} />
+        <InventoryActionCard label={t("inventory.page.supplierPurchase")} detail={t("inventory.page.supplierPurchaseHelp")} tone="violet" icon={<CircleDollarSign size={20} />} onClick={() => openMovement("purchase")} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className="group col-span-2 flex min-h-[82px] w-full items-center gap-3 rounded-[16px] border border-[#e2e8f1] bg-white px-3.5 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)] lg:col-span-1">
@@ -708,16 +708,16 @@ export default function InventoryPage() {
                         "Search by". */}
                     <div className="relative min-w-0 flex-1 basis-full sm:basis-0 sm:min-w-[240px] lg:w-[340px]">
                       <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7a89a3]" />
-                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by product, SKU, barcode..." className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
+                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("inventory.page.search")} className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
                     </div>
                     <Button variant="outline" className="h-10 rounded-[8px] px-3 text-[12px]" onClick={() => setStockFilter(stockFilter === "all" ? "low" : "all")}><SlidersHorizontal size={14} className="mr-1.5" />{t("inventory.page.filters")}</Button>
                     <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_var(--brand-shadow)] hover:bg-[var(--brand-strong)]" onClick={exportInventory}><Download size={14} className="mr-1.5" />{t("inventory.page.export")}</Button>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <InventoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} placeholder="All Categories" options={filterOptions.categories} />
-                  <InventoryFilterSelect value={brandFilter} onChange={setBrandFilter} placeholder="All Brands" options={filterOptions.brands} />
-                  <InventoryFilterSelect value={unitFilter} onChange={setUnitFilter} placeholder="All Units" options={filterOptions.units} />
+                  <InventoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} placeholder={t("products.filter.allCategories")} options={filterOptions.categories} />
+                  <InventoryFilterSelect value={brandFilter} onChange={setBrandFilter} placeholder={t("inventory.page.allBrands")} options={filterOptions.brands} />
+                  <InventoryFilterSelect value={unitFilter} onChange={setUnitFilter} placeholder={t("inventory.page.allUnits")} options={filterOptions.units} />
                   <Select value={stockFilter} onValueChange={setStockFilter}>
                     <SelectTrigger className="h-9 rounded-[8px] border-[#dfe6ef] text-[11px] font-medium"><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="all">{t("inventory.page.allStockStatus")}</SelectItem><SelectItem value="in">{t("inventory.stock.inStock")}</SelectItem><SelectItem value="low">{t("inventory.stock.lowStock")}</SelectItem><SelectItem value="out">{t("inventory.stock.outOfStock")}</SelectItem></SelectContent>
@@ -853,9 +853,9 @@ export default function InventoryPage() {
 
         <TabsContent value="movements" className="space-y-4">
           <StatsGrid columns={3}>
-            <StatCard label="Purchases" value={movementSummary.purchases} />
-            <StatCard label="Sales" value={movementSummary.sales} tone="blue" />
-            <StatCard label="Damage" value={movementSummary.damage} tone="amber" />
+            <StatCard label={t("inventory.page.purchases")} value={movementSummary.purchases} />
+            <StatCard label={t("inventory.page.sales")} value={movementSummary.sales} tone="blue" />
+            <StatCard label={t("inventory.page.damageShort")} value={movementSummary.damage} tone="amber" />
           </StatsGrid>
           <div className="rounded-lg border bg-card overflow-hidden">
             <table className="w-full text-sm">
@@ -885,8 +885,8 @@ export default function InventoryPage() {
         <TabsContent value="purchase-bills" className="space-y-4">
           <StatsGrid columns={3}>
             <StatCard label={t("inventory.page.purchaseBills")} value={movementSummary.purchases} />
-            <StatCard label="Supplier paid" value={fmtMoney(movementSummary.purchasePaidTotal)} tone="green" />
-            <StatCard label="Supplier due" value={fmtMoney(movementSummary.purchaseDueTotal)} tone="amber" />
+            <StatCard label={t("inventory.page.supplierPaid")} value={fmtMoney(movementSummary.purchasePaidTotal)} tone="green" />
+            <StatCard label={t("inventory.page.supplierDue")} value={fmtMoney(movementSummary.purchaseDueTotal)} tone="amber" />
           </StatsGrid>
           <div className="rounded-lg border bg-card overflow-hidden">
             <div className="overflow-x-auto">
@@ -967,7 +967,7 @@ export default function InventoryPage() {
               <div className="rounded-xl border bg-muted/40 p-3 space-y-3">
                 <div className="flex items-center gap-2"><Wallet size={16} /><p className="font-medium text-sm">{t("inventory.page.supplierPaymentTracking")}</p></div>
                 <div className="grid md:grid-cols-3 gap-3">
-                  <div><Label>{t("inventory.page.supplierBillNo")}</Label><Input className="mt-1" value={form.supplierBillNo} onChange={(event) => setForm((current) => ({ ...current, supplierBillNo: event.target.value }))} placeholder="Optional" /></div>
+                  <div><Label>{t("inventory.page.supplierBillNo")}</Label><Input className="mt-1" value={form.supplierBillNo} onChange={(event) => setForm((current) => ({ ...current, supplierBillNo: event.target.value }))} placeholder={t("restaurant.addons.optional")} /></div>
                   <div><Label>{t("inventory.page.paymentStatus")}</Label><Select value={form.purchasePaymentStatus} onValueChange={(value) => setForm((current) => ({ ...current, purchasePaymentStatus: value as MovementForm["purchasePaymentStatus"], purchasePaidAmount: value === "paid" ? String(purchaseBillAmount || "") : value === "due" ? "0" : current.purchasePaidAmount }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="paid">{t("inventory.page.paid")}</SelectItem><SelectItem value="partial">{t("inventory.page.partial")}</SelectItem><SelectItem value="due">{t("inventory.page.due")}</SelectItem></SelectContent></Select></div>
                   <div><Label>{t("inventory.page.paymentMode")}</Label><Select value={form.purchasePaymentMode} onValueChange={(value) => setForm((current) => ({ ...current, purchasePaymentMode: value as MovementForm["purchasePaymentMode"] }))} disabled={form.purchasePaymentStatus === "due"}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">{t("inventory.page.cash")}</SelectItem><SelectItem value="upi">{t("inventory.page.upiBank")}</SelectItem></SelectContent></Select></div>
                 </div>
@@ -988,7 +988,7 @@ export default function InventoryPage() {
                   <div><p className="text-xs text-muted-foreground">{t("inventory.page.newAvgAfterSave")}</p><p className="font-bold text-primary">{fmtMoney(projectedAverageCost || 0)}</p></div>
                 </div>
                 <div className="grid md:grid-cols-3 gap-3">
-                  <div><Label>{t("inventory.page.costPricePerUnit")}</Label><Input type="number" step="0.01" value={form.costPrice} onChange={(event) => setForm((current) => ({ ...current, costPrice: event.target.value }))} placeholder="Auto from bill amount" /></div>
+                  <div><Label>{t("inventory.page.costPricePerUnit")}</Label><Input type="number" step="0.01" value={form.costPrice} onChange={(event) => setForm((current) => ({ ...current, costPrice: event.target.value }))} placeholder={t("inventory.page.autoFromBill")} /></div>
                   <div><Label>{t("inventory.page.minMargin")}</Label><Input type="number" step="0.01" value={form.minMarginPercent} onChange={(event) => setForm((current) => ({ ...current, minMarginPercent: event.target.value }))} placeholder="e.g. 5" /><p className="mt-1 text-xs text-muted-foreground">Suggestion: {fmtMoney(minMarginSuggestion || 0)}</p></div>
                   <div><Label>{t("inventory.page.sellingMargin")}</Label><Input type="number" step="0.01" value={form.sellingMarginPercent} onChange={(event) => setForm((current) => ({ ...current, sellingMarginPercent: event.target.value }))} placeholder="e.g. 12" /><p className="mt-1 text-xs text-muted-foreground">Suggestion: {fmtMoney(sellingMarginSuggestion || 0)}</p></div>
                 </div>
@@ -996,7 +996,7 @@ export default function InventoryPage() {
               </div>
             ) : null}
             {form.movementType === "correction" || form.movementType === "damage" ? <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900 flex gap-2"><ShieldAlert size={16} /> {form.movementType === "damage" ? "Damage write-off" : t("inventory.page.correction")} requires owner PIN and creates a pending sync adjustment.</div> : null}
-            <div><Label>{t("inventory.page.reasonNote")}</Label><Input className="mt-1" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="e.g. physical count, damaged packet" />{form.movementType === "correction" || form.movementType === "damage" ? <p className="mt-1 text-xs text-orange-700">{t("inventory.page.ownerPinAfterSave")}</p> : null}</div>
+            <div><Label>{t("inventory.page.reasonNote")}</Label><Input className="mt-1" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder={t("inventory.page.correctionReason")} />{form.movementType === "correction" || form.movementType === "damage" ? <p className="mt-1 text-xs text-orange-700">{t("inventory.page.ownerPinAfterSave")}</p> : null}</div>
             <div className="sticky bottom-0 z-10 -mx-4 flex gap-3 border-t bg-background/95 px-4 py-3 pt-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
               <Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>{t("inventory.cancel")}</Button>
               <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin" /> : "Save locally"}</Button>
@@ -1007,9 +1007,9 @@ export default function InventoryPage() {
       <OwnerPinModal
         open={ownerPinOpen}
         onCancel={() => setOwnerPinOpen(false)}
-        title="Owner approval required"
-        description="Stock correction changes real inventory. Enter owner password/PIN to save locally."
-        confirmLabel="Save correction"
+        title={t("products.toast.ownerApprovalRequired")}
+        description={t("inventory.page.correctionPinHelp")}
+        confirmLabel={t("customers.detail.saveCorrection")}
         loading={isSaving}
         reasonRequired
         onConfirm={({ ownerPin, reason }) => {
@@ -1075,6 +1075,7 @@ function InventoryStatusBadge({ status }: { status: "in" | "low" | "out" }) {
 }
 
 function InventoryPagination({ page, pages, total, onChange }: { page: number; pages: number; total: number; onChange: (page: number) => void }) {
+  const { t } = useAppLanguage();
   const first = total === 0 ? 0 : (page - 1) * STOCK_ROWS_PER_PAGE + 1;
   const last = Math.min(page * STOCK_ROWS_PER_PAGE, total);
   const visible = Array.from({ length: Math.min(pages, 3) }, (_, index) => Math.min(Math.max(1, page - 1) + index, pages)).filter((value, index, rows) => rows.indexOf(value) === index);
@@ -1085,7 +1086,7 @@ function InventoryPagination({ page, pages, total, onChange }: { page: number; p
           4px apart, and at that spacing each overlay would reach across into its
           neighbour's visible box and take the tap. Density comes back for a
           mouse via `lg:mouse:`. */}
-      <div className="flex items-center gap-1.5 lg:mouse:gap-1"><button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => onChange(page - 1)} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35 lg:mouse:h-8 lg:mouse:w-8"><ChevronLeft size={14} /></button>{visible.map((number) => <button type="button" key={number} aria-label={`Page ${number}`} aria-current={number === page ? "page" : undefined} onClick={() => onChange(number)} className={`grid h-11 min-w-11 place-items-center rounded-[7px] px-2 text-[11px] font-semibold lg:mouse:h-8 lg:mouse:min-w-8 ${number === page ? "bg-[var(--brand)] text-white" : "border border-[#dfe6ef] text-[#52627d]"}`}>{number}</button>)}<button type="button" aria-label="Next page" disabled={page === pages} onClick={() => onChange(page + 1)} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35 lg:mouse:h-8 lg:mouse:w-8"><ChevronRight size={14} /></button></div>
+      <div className="flex items-center gap-1.5 lg:mouse:gap-1"><button type="button" aria-label={t("products.previousPage")} disabled={page === 1} onClick={() => onChange(page - 1)} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35 lg:mouse:h-8 lg:mouse:w-8"><ChevronLeft size={14} /></button>{visible.map((number) => <button type="button" key={number} aria-label={`Page ${number}`} aria-current={number === page ? "page" : undefined} onClick={() => onChange(number)} className={`grid h-11 min-w-11 place-items-center rounded-[7px] px-2 text-[11px] font-semibold lg:mouse:h-8 lg:mouse:min-w-8 ${number === page ? "bg-[var(--brand)] text-white" : "border border-[#dfe6ef] text-[#52627d]"}`}>{number}</button>)}<button type="button" aria-label={t("products.nextPage")} disabled={page === pages} onClick={() => onChange(page + 1)} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35 lg:mouse:h-8 lg:mouse:w-8"><ChevronRight size={14} /></button></div>
       <p className="text-[10px] text-[#718096]">{STOCK_ROWS_PER_PAGE} rows per page</p>
     </div>
   );

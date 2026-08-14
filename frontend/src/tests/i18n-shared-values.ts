@@ -32,6 +32,8 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   // Devanagari label would make the field harder to match, not easier.
   "UPI ID",
   "IFSC",
+  // Field label on the webhook form. The scheme is typed in Latin either way.
+  "HTTPS URL",
   "MRP",
   "MRP (₹)",
   "WhatsApp",
