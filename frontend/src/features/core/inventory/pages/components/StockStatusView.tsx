@@ -15,6 +15,7 @@ import {
 } from "@/features/core/inventory/stock-display";
 import { productMatchesSearch } from "@/features/core/products/product-reliability";
 import { StockMovementDialog } from "./StockMovementDialog";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 const ROWS_PER_PAGE = 10;
 
@@ -38,6 +39,7 @@ function categoryBadge(name: string) {
 // and splits a per-pack product into one row per size. Plain unit-family math
 // (fromBaseQty/averageCost) ignores pack sizes and gets packed products wrong.
 export function StockStatusView({ mode }: { mode: "in" | "out" }) {
+  const { t } = useAppLanguage();
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState(() => mode === "out" ? "out" : "all");
   const [extraF, setExtraF] = useState("all"); // suppliers (in) / item types (out)
@@ -176,14 +178,14 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
           <SelectContent>
             {mode === "in" ? (
               <>
-                <SelectItem value="all">All Suppliers</SelectItem>
+                <SelectItem value="all">{t("inventory.filter.allSuppliers")}</SelectItem>
                 {suppliers.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </>
             ) : (
               <>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="packed">Packed</SelectItem>
-                <SelectItem value="loose">Loose</SelectItem>
+                <SelectItem value="all">{t("inventory.filter.allTypes")}</SelectItem>
+                <SelectItem value="packed">{t("inventory.type.packed")}</SelectItem>
+                <SelectItem value="loose">{t("inventory.type.loose")}</SelectItem>
               </>
             )}
           </SelectContent>
@@ -195,14 +197,14 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="all">{t("inventory.filter.allStatus")}</SelectItem>
             {mode === "in" ? (
               <>
-                <SelectItem value="in">In Stock</SelectItem>
-                <SelectItem value="low">Low Stock</SelectItem>
+                <SelectItem value="in">{t("inventory.stock.inStock")}</SelectItem>
+                <SelectItem value="low">{t("inventory.stock.lowStock")}</SelectItem>
               </>
             ) : (
-              <SelectItem value="out">Out of Stock</SelectItem>
+              <SelectItem value="out">{t("inventory.stock.outOfStock")}</SelectItem>
             )}
           </SelectContent>
         </Select>
@@ -222,18 +224,18 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
           <table className="w-full min-w-[880px] text-left text-[13px]">
             <thead>
               <tr className="border-b-2 border-[#e6ecf4] bg-[#f9fbfd] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
-                <th className="px-4 py-3 font-bold">Product</th>
-                <th className="px-3 py-3 font-bold">Category</th>
-                <th className="px-3 py-3 font-bold">SKU / Barcode</th>
-                <th className="px-3 py-3 font-bold">Unit</th>
-                <th className="px-3 py-3 text-center font-bold">Stock</th>
-                <th className="px-3 py-3 text-right font-bold">Stock Value</th>
-                <th className="px-3 py-3 text-center font-bold">Action</th>
+                <th className="px-4 py-3 font-bold">{t("inventory.col.product")}</th>
+                <th className="px-3 py-3 font-bold">{t("inventory.col.category")}</th>
+                <th className="px-3 py-3 font-bold">{t("inventory.col.skuBarcode")}</th>
+                <th className="px-3 py-3 font-bold">{t("inventory.col.unit")}</th>
+                <th className="px-3 py-3 text-center font-bold">{t("inventory.col.stock")}</th>
+                <th className="px-3 py-3 text-right font-bold">{t("inventory.col.stockValue")}</th>
+                <th className="px-3 py-3 text-center font-bold">{t("inventory.col.action")}</th>
               </tr>
             </thead>
             <tbody>
               {(products.isLoading || inventory.isLoading) && rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-16 text-center text-sm text-[#536383]">Loading…</td></tr>
+                <tr><td colSpan={7} className="px-4 py-16 text-center text-sm text-[#536383]">{t("inventory.loading")}</td></tr>
               ) : rows.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-16 text-center">
                   <p className="text-sm font-bold text-[#13274d]">{mode === "in" ? "No items in stock" : "Nothing is out of stock 🎉"}</p>
@@ -268,7 +270,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
                       <td className="px-3 py-3">
                         <div className="flex flex-col items-center gap-1">
                           <span className={`font-bold ${row.isOut ? "text-rose-600" : row.isLow ? "text-amber-600" : "text-[#13274d]"}`}>{row.quantity}</span>
-                          {row.isOut ? <StatusBadge tone="rose">Out of Stock</StatusBadge> : row.isLow ? <StatusBadge tone="amber">Low Stock</StatusBadge> : <StatusBadge tone="emerald">In Stock</StatusBadge>}
+                          {row.isOut ? <StatusBadge tone="rose">{t("inventory.stock.outOfStock")}</StatusBadge> : row.isLow ? <StatusBadge tone="amber">{t("inventory.stock.lowStock")}</StatusBadge> : <StatusBadge tone="emerald">{t("inventory.stock.inStock")}</StatusBadge>}
                         </div>
                       </td>
                       <td className="px-3 py-3 text-right font-extrabold text-[#13274d]">{row.isOut ? "—" : rs(row.value)}</td>
@@ -281,8 +283,8 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40">
-                              <DropdownMenuItem onClick={() => openMove("in", p.id, row.unitCode)}><PlusCircle size={14} className="mr-2 text-emerald-600" /> Stock In</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openMove("out", p.id, row.unitCode)} disabled={row.quantity <= 0}><MinusCircle size={14} className="mr-2 text-rose-600" /> Stock Out</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openMove("in", p.id, row.unitCode)}><PlusCircle size={14} className="mr-2 text-emerald-600" /> {t("inventory.stockIn")}</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openMove("out", p.id, row.unitCode)} disabled={row.quantity <= 0}><MinusCircle size={14} className="mr-2 text-rose-600" /> {t("inventory.stockOut")}</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
