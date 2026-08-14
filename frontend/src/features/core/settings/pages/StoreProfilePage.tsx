@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useEffect, useRef, useState } from "react";
 import { getGetShopQueryKey, useUpdateShop } from "@/lib/api/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -72,6 +73,7 @@ function formatFileSize(bytes: number) {
 }
 
 export default function StoreProfilePage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const { user, updateShop: updateAuthShop } = useAuth();
   const { snapshot } = useSubscriptionSnapshot();
@@ -103,9 +105,9 @@ export default function StoreProfilePage() {
         queryClient.setQueryData(getGetShopQueryKey(), updatedShop);
         void queryClient.invalidateQueries({ queryKey: getGetShopQueryKey() });
         updateAuthShop(updatedShop);
-        toast({ title: "Store details saved" });
+        toast({ title: t("settings.store.saved") });
       },
-      onError: (err: unknown) => toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" }),
+      onError: (err: unknown) => toast({ title: t("settings.store.saveFailed"), description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" }),
     },
   });
 
@@ -138,7 +140,7 @@ export default function StoreProfilePage() {
     try {
       setChangeReport(await getBusinessTypeCompatibility(changeTarget));
     } catch (error) {
-      toast({ title: "Could not review this change", description: (error as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+      toast({ title: t("settings.store.reviewFailed"), description: (error as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
     } finally {
       setChangeReviewLoading(false);
     }
@@ -218,10 +220,10 @@ export default function StoreProfilePage() {
   const setBank = (key: string, val: string) => patch({ bank: { ...bank, [key]: val } });
 
   function useCurrentLocation() {
-    if (!navigator.geolocation) { toast({ title: "Location not supported", variant: "destructive" }); return; }
+    if (!navigator.geolocation) { toast({ title: t("settings.store.locationUnsupported"), variant: "destructive" }); return; }
     navigator.geolocation.getCurrentPosition(
-      (pos) => { patch({ storeProfile: { ...sp, geo: `${pos.coords.latitude.toFixed(5)},${pos.coords.longitude.toFixed(5)}` } }); toast({ title: "Location captured", description: "Saved to your store profile." }); },
-      () => toast({ title: "Couldn't get location", description: "Allow location access and try again.", variant: "destructive" }),
+      (pos) => { patch({ storeProfile: { ...sp, geo: `${pos.coords.latitude.toFixed(5)},${pos.coords.longitude.toFixed(5)}` } }); toast({ title: t("settings.store.locationCaptured"), description: t("settings.store.locationSaved") }); },
+      () => toast({ title: t("settings.store.locationFailed"), description: t("settings.store.locationFailedHelp"), variant: "destructive" }),
     );
   }
   function openInMaps() {
@@ -237,11 +239,11 @@ export default function StoreProfilePage() {
     if (!file) return;
     const isAllowed = file.type.startsWith("image/") || file.type === "application/pdf";
     if (!isAllowed) {
-      toast({ title: "Use a PDF or image", description: "Scans and photos of the document are accepted.", variant: "destructive" });
+      toast({ title: t("settings.store.usePdfOrImage"), description: t("settings.store.usePdfOrImageHelp"), variant: "destructive" });
       return;
     }
     if (file.size > 4 * 1024 * 1024) {
-      toast({ title: "File is too large", description: "Keep each document under 4 MB.", variant: "destructive" });
+      toast({ title: t("settings.store.fileTooLarge"), description: t("settings.store.fileTooLargeHelp"), variant: "destructive" });
       return;
     }
     const reader = new FileReader();
@@ -252,9 +254,9 @@ export default function StoreProfilePage() {
           [key]: { name: file.name, size: file.size, type: file.type, at: new Date().toISOString(), dataUrl: String(reader.result || "") },
         },
       });
-      toast({ title: `${file.name} attached`, description: "Stored on this device. Send it to support when verification opens." });
+      toast({ title: `${file.name} attached`, description: t("settings.store.storedOnDevice") });
     };
-    reader.onerror = () => toast({ title: "Could not read that file", variant: "destructive" });
+    reader.onerror = () => toast({ title: t("settings.store.readFailed"), variant: "destructive" });
     reader.readAsDataURL(file);
   }
 
@@ -262,14 +264,14 @@ export default function StoreProfilePage() {
     const next = { ...docs };
     delete next[key];
     patch({ docs: next });
-    toast({ title: "Document removed" });
+    toast({ title: t("settings.store.documentRemoved") });
   }
 
   function openDocument(doc: StoredDoc) {
     if (!doc.dataUrl) return;
     const win = window.open();
     if (!win) {
-      toast({ title: "Allow pop-ups", description: "Enable pop-ups to preview the document.", variant: "destructive" });
+      toast({ title: t("settings.store.allowPopups"), description: t("settings.store.allowPopupsHelp"), variant: "destructive" });
       return;
     }
     win.document.write(
@@ -281,15 +283,15 @@ export default function StoreProfilePage() {
   function uploadLogo(file?: File | null) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      toast({ title: "Choose an image file", variant: "destructive" });
+      toast({ title: t("settings.store.chooseImage"), variant: "destructive" });
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       patch({ storeProfile: { ...sp, logoDataUrl: String(reader.result || "") } });
-      toast({ title: "Logo saved", description: "It will appear on this device and receipt preview settings." });
+      toast({ title: t("settings.store.logoSaved"), description: t("settings.store.logoSavedHelp") });
     };
-    reader.onerror = () => toast({ title: "Could not read logo", variant: "destructive" });
+    reader.onerror = () => toast({ title: t("settings.store.logoReadFailed"), variant: "destructive" });
     reader.readAsDataURL(file);
   }
 
@@ -310,8 +312,8 @@ export default function StoreProfilePage() {
                 <h2 className="font-display text-[20px] font-black tracking-tight text-[var(--brand-ink)]">{biz.name || shop?.name || "My Store"}</h2>
                 {/* GSTIN is the one identity claim the server actually validates. */}
                 {shop?.gstNumber
-                  ? <Badge tone="green"><BadgeCheck size={12} /> GST registered</Badge>
-                  : <Badge tone="gray">No GSTIN</Badge>}
+                  ? <Badge tone="green"><BadgeCheck size={12} /> {t("settings.store.gstRegistered")}</Badge>
+                  : <Badge tone="gray">{t("settings.store.noGstin")}</Badge>}
                 <Badge tone="amber">{planName} Plan</Badge>
               </div>
               <p className="mt-0.5 text-[12px] text-[#52627e]">{BUSINESS_TYPE_DEFS[biz.businessTypeKey].label} · Store ID {storeId}</p>
@@ -345,14 +347,14 @@ export default function StoreProfilePage() {
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>{BUSINESS_TYPE_OPTIONS.map(([key, def]) => <SelectItem key={key} value={key}>{def.emoji} {def.label}</SelectItem>)}</SelectContent>
               </Select>
-              {businessTypeLocked ? <Button type="button" variant="outline" className="mt-2 h-9 w-full text-xs font-bold" onClick={() => { setChangeTarget(biz.businessTypeKey === "other" ? "kirana" : "other"); setChangeReport(null); setChangeReviewOpen(true); }}>Request Business Type Change</Button> : null}
+              {businessTypeLocked ? <Button type="button" variant="outline" className="mt-2 h-9 w-full text-xs font-bold" onClick={() => { setChangeTarget(biz.businessTypeKey === "other" ? "kirana" : "other"); setChangeReport(null); setChangeReviewOpen(true); }}>{t("settings.store.requestTypeChange")}</Button> : null}
             </Fld>
           </div>
         </Card>
 
         {/* Address & Location */}
         <Card>
-          <CardHead icon={<MapPin size={15} />} title="Address & Location" sub="Shop address & delivery area" action={<button type="button" onClick={openInMaps} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">Open in Maps</button>} />
+          <CardHead icon={<MapPin size={15} />} title="Address & Location" sub="Shop address & delivery area" action={<button type="button" onClick={openInMaps} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.store.openInMaps")}</button>} />
           <div className="space-y-3 px-5 pb-5">
             <Fld label="Shop Address"><Input className="h-10" value={addr.address} onChange={(e) => setAddr({ ...addr, address: e.target.value })} /></Fld>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -364,7 +366,7 @@ export default function StoreProfilePage() {
             <div className="flex flex-col gap-3 rounded-[10px] border border-[var(--brand-border)] bg-[#f3f8ff] px-3 py-3 sm:flex-row sm:items-center">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--brand)] shadow-sm"><MapPin size={16} /></span>
               <p className="min-w-0 flex-1 text-[11px] font-medium text-[#34507f]">{sp.geo ? `Pinned at ${sp.geo}` : "Pin your exact shop location for delivery & maps."}</p>
-              <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[12px] font-bold" onClick={useCurrentLocation}><Navigation size={13} /> Use current</Button>
+              <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[12px] font-bold" onClick={useCurrentLocation}><Navigation size={13} /> {t("settings.store.useCurrent")}</Button>
             </div>
             <Fld label="Delivery Radius (km)" hint="Used for local delivery suggestions"><Input className="h-10" value={addr.deliveryRadius} onChange={(e) => setAddr({ ...addr, deliveryRadius: e.target.value })} placeholder="e.g. 3" /></Fld>
           </div>
@@ -377,10 +379,10 @@ export default function StoreProfilePage() {
           <CardHead icon={<Receipt size={15} />} title="Bill Branding" sub="How your receipt looks" />
           <div className="space-y-3 px-5 pb-5">
             <p className="text-[12.5px] leading-relaxed text-[#52627e]">
-              Receipt branding — footer message, GSTIN/HSN visibility, GST breakup, paper size and number of copies — lives on the <strong>Printer &amp; Receipt</strong> tab, so there's one place that controls how every bill prints and is shared.
+              Receipt branding — footer message, GSTIN/HSN visibility, GST breakup, paper size and number of copies — lives on the <strong>{t("settings.store.printerReceipt")}</strong> tab, so there's one place that controls how every bill prints and is shared.
             </p>
             <Link href="/settings/printer" className="inline-flex">
-              <Button variant="outline" className="h-11 gap-2 rounded-[10px] font-bold lg:mouse:h-10"><Receipt size={15} /> Open Printer &amp; Receipt settings</Button>
+              <Button variant="outline" className="h-11 gap-2 rounded-[10px] font-bold lg:mouse:h-10"><Receipt size={15} /> {t("settings.store.openPrinterSettings")}</Button>
             </Link>
           </div>
         </Card>
@@ -405,7 +407,7 @@ export default function StoreProfilePage() {
                       <span className="text-[11px] text-[#94a3b8]">to</span>
                       <Input aria-label={`${day} closing time`} className="h-8 w-[88px] text-[12px]" type="time" value={h.to} onChange={(e) => setDay(day, { ...h, to: e.target.value })} />
                     </div>
-                  ) : <span className="flex-1 text-[12px] font-semibold text-[#94a3b8] sm:text-right">Closed</span>}
+                  ) : <span className="flex-1 text-[12px] font-semibold text-[#94a3b8] sm:text-right">{t("settings.store.closed")}</span>}
                 </div>
               );
             })}
@@ -440,8 +442,8 @@ export default function StoreProfilePage() {
                     {doc ? <span className="block truncate text-[11px] text-[#64748b]">{doc.name} · {formatFileSize(doc.size)} · {new Date(doc.at).toLocaleDateString("en-IN")}</span> : null}
                   </span>
                   {doc
-                    ? <Badge tone="green"><CheckCircle2 size={11} /> Attached</Badge>
-                    : <Badge tone="amber">Missing</Badge>}
+                    ? <Badge tone="green"><CheckCircle2 size={11} /> {t("settings.store.attached")}</Badge>
+                    : <Badge tone="amber">{t("settings.store.missing")}</Badge>}
                   <input
                     ref={(node) => { docInputRefs.current[d.key] = node; }}
                     type="file"
@@ -473,8 +475,8 @@ export default function StoreProfilePage() {
           if (!updated) {
             await patch({ customerOrdering: { enabled: !v } });
             toast({
-              title: "Could not save QR ordering",
-              description: "Check internet/backend connection and try again.",
+              title: t("settings.store.qrSaveFailed"),
+              description: t("settings.store.checkConnection"),
               variant: "destructive",
             });
             return;
@@ -486,7 +488,7 @@ export default function StoreProfilePage() {
 
       <div className="flex justify-end pb-2">
         <Button onClick={requestSaveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 gap-2 rounded-[10px] px-6 font-black text-white hover:opacity-95">
-          {updateShop.isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><CheckCircle2 size={16} /> Save All Changes</>}
+          {updateShop.isPending ? <><Loader2 size={16} className="animate-spin" /> {t("settings.store.saving")}</> : <><CheckCircle2 size={16} /> {t("settings.store.saveAll")}</>}
         </Button>
       </div>
       <OwnerPinModal
@@ -507,8 +509,8 @@ export default function StoreProfilePage() {
       <Dialog open={changeReviewOpen} onOpenChange={setChangeReviewOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Review business type change</DialogTitle>
-            <DialogDescription>Artha checks existing products, bills, inventory lots, engine compatibility, and capabilities before recommending a next step.</DialogDescription>
+            <DialogTitle>{t("settings.store.reviewTypeChange")}</DialogTitle>
+            <DialogDescription>{t("settings.store.reviewHelp")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <Fld label="Requested business type">
@@ -519,16 +521,16 @@ export default function StoreProfilePage() {
             </Fld>
             {changeReport ? (
               <div className="space-y-3 rounded-xl border bg-muted/30 p-4 text-sm">
-                <div className="flex items-center justify-between gap-3"><span className="font-semibold">Recommendation</span><Badge tone={changeReport.decision === "NEW_SHOP_REQUIRED" ? "amber" : changeReport.decision === "SAFE_BEFORE_TRANSACTIONS" ? "green" : "blue"}>{changeReport.decision.replace(/_/g, " ")}</Badge></div>
+                <div className="flex items-center justify-between gap-3"><span className="font-semibold">{t("settings.store.recommendation")}</span><Badge tone={changeReport.decision === "NEW_SHOP_REQUIRED" ? "amber" : changeReport.decision === "SAFE_BEFORE_TRANSACTIONS" ? "green" : "blue"}>{changeReport.decision.replace(/_/g, " ")}</Badge></div>
                 <p className="text-muted-foreground">Existing data: {changeReport.counts.products} products, {changeReport.counts.bills} bills, {changeReport.counts.inventoryLots} inventory lots.</p>
-                {changeReport.disabledCapabilities.length ? <p><strong>Would disable:</strong> {changeReport.disabledCapabilities.join(", ")}</p> : null}
-                {changeReport.enabledCapabilities.length ? <p><strong>Would enable:</strong> {changeReport.enabledCapabilities.join(", ")}</p> : null}
+                {changeReport.disabledCapabilities.length ? <p><strong>{t("settings.store.wouldDisable")}</strong> {changeReport.disabledCapabilities.join(", ")}</p> : null}
+                {changeReport.enabledCapabilities.length ? <p><strong>{t("settings.store.wouldEnable")}</strong> {changeReport.enabledCapabilities.join(", ")}</p> : null}
                 <p className="text-muted-foreground">{changeReport.decision === "NEW_SHOP_REQUIRED" ? "These engines are incompatible. Create a separate shop profile so historical stock and billing records remain valid." : changeReport.decision === "REVIEWED_MIGRATION_REQUIRED" ? "This change is broadly compatible, but must be run as a reviewed migration; it is not applied automatically." : "This change is safe before meaningful transactions and can be saved from the profile selector."}</p>
               </div>
             ) : null}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setChangeReviewOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setChangeReviewOpen(false)}>{t("settings.store.close")}</Button>
             <Button onClick={() => void reviewBusinessTypeChange()} disabled={changeReviewLoading}>{changeReviewLoading ? <Loader2 className="mr-2 animate-spin" size={15} /> : null}Check compatibility</Button>
           </DialogFooter>
         </DialogContent>

@@ -1,3 +1,4 @@
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -93,8 +94,8 @@ const DATE_TIME_FORMAT = new Intl.DateTimeFormat("en-IN", {
   timeStyle: "short",
 });
 
-function readableDate(value?: string | null) {
-  if (!value) return "Not completed";
+function readableDate(value: string | null | undefined, t: Translate) {
+  if (!value) return t("settings.notify.notCompleted");
   return DATE_TIME_FORMAT.format(new Date(value));
 }
 
@@ -125,6 +126,7 @@ function previewTemplate(template: string) {
 }
 
 export default function NotificationsSettingsPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const feature = useFeature("whatsapp_reminders");
@@ -172,9 +174,9 @@ export default function NotificationsSettingsPage() {
     onSuccess: async () => {
       setEditing(null);
       await queryClient.invalidateQueries({ queryKey: ["reminders", "templates"] });
-      toast({ title: "Reminder template saved", description: "The server will use this version for future sends." });
+      toast({ title: t("settings.notify.templateSaved"), description: t("settings.notify.templateSavedHelp") });
     },
-    onError: (error) => toast({ title: "Could not save template", description: errorMessage(error), variant: "destructive" }),
+    onError: (error) => toast({ title: t("settings.notify.templateSaveFailed"), description: errorMessage(error), variant: "destructive" }),
   });
 
   function updateClosing(partial: Partial<ClosingPreferences>) {
@@ -187,7 +189,7 @@ export default function NotificationsSettingsPage() {
     if (!editing) return;
     const value = draft.trim();
     if (value.length < 5) {
-      toast({ title: "Template is too short", description: "Add a useful customer message.", variant: "destructive" });
+      toast({ title: t("settings.notify.templateTooShort"), description: t("settings.notify.templateTooShortHelp"), variant: "destructive" });
       return;
     }
     updateTemplate.mutate({ id: editing.id, data: { templateText: value } });
@@ -196,15 +198,15 @@ export default function NotificationsSettingsPage() {
   async function copySample(template: ReminderTemplate) {
     try {
       await navigator.clipboard.writeText(previewTemplate(template.templateText));
-      toast({ title: "Rendered sample copied", description: "This is a preview only; no message was marked as sent." });
+      toast({ title: t("settings.notify.sampleCopied"), description: t("settings.notify.sampleCopiedHelp") });
     } catch {
-      toast({ title: "Clipboard unavailable", description: "Select and copy the template text manually.", variant: "destructive" });
+      toast({ title: t("settings.notify.clipboardUnavailable"), description: t("settings.notify.copyManually"), variant: "destructive" });
     }
   }
 
   function refreshAutomation() {
     void queryClient.invalidateQueries({ queryKey: ["reminders"] });
-    toast({ title: "Refreshing live reminder status" });
+    toast({ title: t("settings.notify.refreshing") });
   }
 
   const liveStatus = statusCopy(statusQ.data);
@@ -232,7 +234,7 @@ export default function NotificationsSettingsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-[14px] font-black text-[var(--brand-ink)]">Delivery pipeline</p>
+                      <p className="text-[14px] font-black text-[var(--brand-ink)]">{t("settings.notify.pipeline")}</p>
                       <Badge tone={statusQ.isError ? "red" : liveStatus.tone}>
                         {statusQ.isError ? "Status unavailable" : liveStatus.label}
                       </Badge>
@@ -258,7 +260,7 @@ export default function NotificationsSettingsPage() {
                 <div className="flex gap-3">
                   <ShieldCheck className="mt-0.5 shrink-0 text-emerald-700" size={18} />
                   <div>
-                    <p className="text-[13px] font-black text-emerald-950">Delivery truth, not optimistic UI</p>
+                    <p className="text-[13px] font-black text-emerald-950">{t("settings.notify.deliveryTruth")}</p>
                     <p className="mt-1 text-[11px] leading-5 text-emerald-800">
                       Provider acceptance is shown as Accepted. Sent, Delivered, and Read appear only after a
                       verified provider callback; skipped and failed attempts remain visible below.
@@ -289,13 +291,13 @@ export default function NotificationsSettingsPage() {
           <CardHead icon={<ServerCog size={15} />} title="Server Reminder Templates" sub="Audited templates used by automated WhatsApp sends" />
           <div className="space-y-2.5 px-5 pb-5">
             {!automationEnabled ? (
-              <p className="rounded-[10px] bg-[#f6f8fc] px-3 py-6 text-center text-[12px] text-[#64748b]">Available with WhatsApp reminders.</p>
+              <p className="rounded-[10px] bg-[#f6f8fc] px-3 py-6 text-center text-[12px] text-[#64748b]">{t("settings.notify.withWhatsapp")}</p>
             ) : templatesQ.isLoading ? (
-              <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={14} className="animate-spin" /> Loading server templates</p>
+              <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={14} className="animate-spin" /> {t("settings.notify.loadingTemplates")}</p>
             ) : templatesQ.isError ? (
-              <p className="rounded-[10px] bg-rose-50 px-3 py-3 text-[12px] font-semibold text-rose-700">Templates could not be loaded. No local sample is being substituted.</p>
+              <p className="rounded-[10px] bg-rose-50 px-3 py-3 text-[12px] font-semibold text-rose-700">{t("settings.notify.templatesFailed")}</p>
             ) : (templatesQ.data ?? []).length === 0 ? (
-              <p className="rounded-[10px] bg-[#f6f8fc] px-3 py-6 text-center text-[12px] text-[#64748b]">No active server templates.</p>
+              <p className="rounded-[10px] bg-[#f6f8fc] px-3 py-6 text-center text-[12px] text-[#64748b]">{t("settings.notify.noTemplates")}</p>
             ) : (
               (templatesQ.data ?? []).map((template) => (
                 <div key={template.id} className="rounded-[11px] border border-[#e7edf7] px-3.5 py-3">
@@ -314,8 +316,8 @@ export default function NotificationsSettingsPage() {
                     />
                   </div>
                   <div className="mt-2 flex gap-3">
-                    <button type="button" className="text-[11px] font-black text-[var(--brand)] hover:underline" onClick={() => { setEditing(template); setDraft(template.templateText); }}>Edit server template</button>
-                    <button type="button" className="inline-flex items-center gap-1 text-[11px] font-black text-[var(--brand)] hover:underline" onClick={() => void copySample(template)}><Copy size={11} /> Copy rendered sample</button>
+                    <button type="button" className="text-[11px] font-black text-[var(--brand)] hover:underline" onClick={() => { setEditing(template); setDraft(template.templateText); }}>{t("settings.notify.editTemplate")}</button>
+                    <button type="button" className="inline-flex items-center gap-1 text-[11px] font-black text-[var(--brand)] hover:underline" onClick={() => void copySample(template)}><Copy size={11} /> {t("settings.notify.copySample")}</button>
                   </div>
                 </div>
               ))
@@ -333,31 +335,31 @@ export default function NotificationsSettingsPage() {
         />
         <div className="px-5 pb-5">
           {!automationEnabled ? (
-            <p className="rounded-[10px] bg-[#f6f8fc] px-3 py-6 text-center text-[12px] text-[#64748b]">Delivery history is available with WhatsApp reminders.</p>
+            <p className="rounded-[10px] bg-[#f6f8fc] px-3 py-6 text-center text-[12px] text-[#64748b]">{t("settings.notify.historyWithWhatsapp")}</p>
           ) : logsQ.isError ? (
-            <p className="rounded-[10px] bg-rose-50 px-3 py-3 text-[12px] font-semibold text-rose-700">Live delivery history could not be loaded.</p>
+            <p className="rounded-[10px] bg-rose-50 px-3 py-3 text-[12px] font-semibold text-rose-700">{t("settings.notify.historyFailed")}</p>
           ) : logsQ.isLoading ? (
-            <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={14} className="animate-spin" /> Loading deliveries</p>
+            <p className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={14} className="animate-spin" /> {t("settings.notify.loadingDeliveries")}</p>
           ) : logs.length === 0 ? (
             <div className="py-10 text-center">
               <MessageCircle className="mx-auto text-[#b5c0d2]" size={28} />
-              <p className="mt-2 text-[13px] font-black text-[var(--brand-ink)]">No reminder attempts yet</p>
-              <p className="mt-1 text-[11px] text-[#64748b]">Send from a customer account to create the first auditable record.</p>
+              <p className="mt-2 text-[13px] font-black text-[var(--brand-ink)]">{t("settings.notify.noAttempts")}</p>
+              <p className="mt-1 text-[11px] text-[#64748b]">{t("settings.notify.noAttemptsHelp")}</p>
             </div>
           ) : (
             <div className="app-table-scroll overflow-x-auto rounded-[11px] border border-[#e7edf7]">
               <table className="w-full min-w-[760px] text-left text-[12px]">
                 <thead className="bg-[#f7f9fd] text-[10px] font-black uppercase tracking-wide text-[#64748b]">
-                  <tr><th className="px-4 py-2.5">Customer</th><th className="px-4 py-2.5">Message</th><th className="px-4 py-2.5">Provider</th><th className="px-4 py-2.5">Status</th><th className="px-4 py-2.5">Time</th></tr>
+                  <tr><th className="px-4 py-2.5">{t("settings.notify.customer")}</th><th className="px-4 py-2.5">{t("settings.notify.message")}</th><th className="px-4 py-2.5">{t("settings.notify.provider")}</th><th className="px-4 py-2.5">{t("settings.notify.status")}</th><th className="px-4 py-2.5">{t("settings.notify.time")}</th></tr>
                 </thead>
                 <tbody>
                   {logs.map((log) => (
                     <tr key={log.id} className="border-t border-[#eef2f8]">
-                      <td className="px-4 py-3"><p className="font-black text-[var(--brand-ink)]">{log.customerName || "Customer"}</p><p className="text-[10px] text-[#8290a8]">{log.customerMobileMasked || "No mobile shown"}</p></td>
+                      <td className="px-4 py-3"><p className="font-black text-[var(--brand-ink)]">{log.customerName || t("settings.notify.customer")}</p><p className="text-[10px] text-[#8290a8]">{log.customerMobileMasked || "No mobile shown"}</p></td>
                       <td className="max-w-[340px] px-4 py-3 text-[#52627e]"><p className="line-clamp-2">{log.messagePreview}</p>{log.error ? <p className="mt-1 text-[10px] font-bold text-rose-600">{log.error}</p> : null}</td>
                       <td className="px-4 py-3 font-bold uppercase text-[#52627e]">{log.provider || "disabled"}</td>
                       <td className="px-4 py-3"><DeliveryBadge status={log.status} /></td>
-                      <td className="whitespace-nowrap px-4 py-3 text-[#64748b]">{readableDate(log.readAt || log.deliveredAt || log.sentAt || log.acceptedAt || log.failedAt || log.createdAt)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-[#64748b]">{readableDate(log.readAt || log.deliveredAt || log.sentAt || log.acceptedAt || log.failedAt || log.createdAt, t)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -381,10 +383,10 @@ export default function NotificationsSettingsPage() {
             />
             <p className="text-[11px] leading-5 text-[#64748b]">Allowed variables: {ALLOWED_VARIABLES.map((variable) => "{{" + variable + "}}").join(", ")}</p>
             <div className="rounded-[10px] bg-[#f6f8fc] px-3 py-2 text-[11px] text-[#52627e]">
-              <span className="font-black">Rendered preview:</span> {previewTemplate(draft)}
+              <span className="font-black">{t("settings.notify.renderedPreview")}</span> {previewTemplate(draft)}
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setEditing(null)}>{t("settings.notify.cancel")}</Button>
               <Button disabled={updateTemplate.isPending} onClick={saveTemplate}>
                 {updateTemplate.isPending ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} Save server template
               </Button>
@@ -409,12 +411,13 @@ function ReadinessCheck({ label, ready, value }: { label: string; ready: boolean
 }
 
 function DeliveryBadge({ status }: { status: ReminderLog["status"] }) {
-  if (status === "read") return <Badge tone="green">Read</Badge>;
-  if (status === "delivered") return <Badge tone="green">Delivered</Badge>;
-  if (status === "sent") return <Badge tone="blue">Sent</Badge>;
-  if (status === "accepted") return <Badge tone="blue">Accepted</Badge>;
-  if (status === "queued") return <Badge tone="blue">Queued</Badge>;
-  if (status === "sending") return <Badge tone="amber">Sending</Badge>;
-  if (status === "failed") return <Badge tone="red">Failed</Badge>;
-  return <Badge tone="gray">Skipped</Badge>;
+  const { t } = useAppLanguage();
+  if (status === "read") return <Badge tone="green">{t("settings.notify.read")}</Badge>;
+  if (status === "delivered") return <Badge tone="green">{t("settings.notify.delivered")}</Badge>;
+  if (status === "sent") return <Badge tone="blue">{t("settings.notify.sent")}</Badge>;
+  if (status === "accepted") return <Badge tone="blue">{t("settings.notify.accepted")}</Badge>;
+  if (status === "queued") return <Badge tone="blue">{t("settings.notify.queued")}</Badge>;
+  if (status === "sending") return <Badge tone="amber">{t("settings.notify.sending")}</Badge>;
+  if (status === "failed") return <Badge tone="red">{t("settings.notify.failed")}</Badge>;
+  return <Badge tone="gray">{t("settings.notify.skipped")}</Badge>;
 }

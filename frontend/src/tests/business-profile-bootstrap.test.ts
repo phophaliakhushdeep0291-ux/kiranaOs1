@@ -11,7 +11,11 @@ describe("business profile bootstrap wiring", () => {
     const profile = readFileSync("src/features/core/settings/pages/StoreProfilePage.tsx", "utf8");
     expect(profile).toContain("getShopBootstrap");
     expect(profile).toContain("disabled={businessTypeLocked}");
-    expect(profile).toContain("Request Business Type Change");
+    // Wording lives in the dictionary now; assert it there and assert the
+    // screen renders the matching key, so neither half can drop it.
+    const settingsEn = readFileSync("src/features/core/settings/translations/settings-pages.ts", "utf8");
+    expect(settingsEn).toContain("Request Business Type Change");
+    expect(profile).toContain("settings.store.requestTypeChange");
     expect(profile).toContain("getBusinessTypeCompatibility");
   });
 
