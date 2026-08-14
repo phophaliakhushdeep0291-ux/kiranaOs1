@@ -64,9 +64,10 @@ async function waitForPage(client, expression, timeout = 30_000) {
   throw new Error(`Page condition timed out: ${expression}; ${JSON.stringify(state)}`);
 }
 
-async function navigate(client, route) {
+async function navigate(client, route, expectedPath = route) {
   await client.send("Page.navigate", { url: `${FRONTEND_URL}${route}` });
-  await waitForPage(client, `document.readyState === "complete" && location.pathname === ${JSON.stringify(route)}`);
+  // An alias route settles on its destination, not on the URL we asked for.
+  await waitForPage(client, `document.readyState === "complete" && location.pathname === ${JSON.stringify(expectedPath)}`);
   await waitForPage(client, `document.body && document.body.innerText.trim().length > 30`);
   await sleep(900);
 }
@@ -118,7 +119,7 @@ async function closeChrome(client, chrome) {
 
 async function auditPage(client, qaId, route, width, height, expectedPath = route) {
   await client.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: true });
-  await navigate(client, route);
+  await navigate(client, route, expectedPath);
   const metrics = await client.evaluate(`(()=>{const visible=node=>{const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&rect.width>0&&rect.height>0&&rect.bottom>0&&rect.top<innerHeight};const controls=[...document.querySelectorAll("button,input,select,textarea,[role=button],[role=combobox],a[href]")].filter(visible).map(node=>{const rect=node.getBoundingClientRect();return{tag:node.tagName,type:node.getAttribute("type")||"",label:(node.getAttribute("aria-label")||node.textContent||node.getAttribute("placeholder")||"").trim().replace(/\\s+/g," ").slice(0,70),width:Math.round(rect.width),height:Math.round(rect.height)}}).filter(control=>!(["checkbox","radio","hidden"].includes(control.type))&&!(control.width<=2&&control.height<=2));const undersized=controls.filter(control=>control.width<44||control.height<44),text=document.body.innerText;return{path:location.pathname,viewport:[innerWidth,innerHeight],documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,undersized:undersized.slice(0,30),undersizedCount:undersized.length,visibleControlCount:controls.length,desktopSidebarVisible:[...document.querySelectorAll(".app-desktop-sidebar")].some(visible),genericFailure:/something went wrong|unexpected error|page failed to load/i.test(text),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[]}})()`);
   const image = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
   const filename = `${qaId.toLowerCase()}-${width}x${height}.png`;

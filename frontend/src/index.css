@@ -2309,7 +2309,17 @@ html[data-density="compact"] {
   /* Horizontal rails ------------------------------------------------------
      Filter chips and category strips scroll sideways, but a row that ends
      flush at the screen edge reads as "that is all there is". Fading the last
-     few pixels is the standing cue that the rail continues. */
+     few pixels is the standing cue that the rail continues.
+
+     PUT ONLY CHIPS IN HERE. A rail is the wrong home for anything that opens a
+     dialog, popover or sheet, for two reasons:
+       • it scrolls, so a shop with a few more categories pushes the control
+         hundreds of pixels past the right edge where nobody will find it;
+       • `mask-image` below makes this element the containing block for
+         `position: fixed` descendants, so a modal rendered from inside stops
+         covering the viewport and collapses into the 44px rail — clipped by
+         this very mask. Billing's "Order QR" did exactly that.
+     Pin such controls as a sibling of the rail instead. */
   .scroll-rail {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
