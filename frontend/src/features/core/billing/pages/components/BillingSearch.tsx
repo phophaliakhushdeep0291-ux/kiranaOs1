@@ -182,6 +182,16 @@ export function BillingSearch({
   const { t } = useAppLanguage();
   const [showAll, setShowAll] = useState(false);
   const [showAllCategories, setShowAllCategories] = useState(false);
+  // The search field shares its row with the scan and voice buttons, so on a
+  // phone it has roughly 190px for a placeholder written for 400.
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 639px)");
+    const sync = () => setIsNarrow(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerMessage, setScannerMessage] = useState(t("billing.search.pointCamera"));
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -485,7 +495,7 @@ export function BillingSearch({
                   ref={searchInputRef}
                   data-testid="input-product-search"
                   className="h-full flex-1 border-0 bg-transparent p-0 text-[14px] font-semibold text-[var(--brand-ink)] placeholder:font-medium placeholder:text-[#6b7a9a] focus-visible:ring-0 focus-visible:ring-offset-0"
-                  placeholder={t("billing.search.placeholder")}
+                  placeholder={isNarrow ? t("billing.search.placeholderShort") : t("billing.search.placeholder")}
                   value={search}
                   onChange={(e) => onSearchChange(e.target.value)}
                   onKeyDown={(e) => {
@@ -611,30 +621,39 @@ export function BillingSearch({
             </div>
           )}
 
-          {/* Category chips — rounded-[8px] matching spec. `scroll-rail` fades the
-              right edge on phones so the categories past "Household" read as
-              scrollable rather than as the end of the list. The top margin is
-              tighter on a phone, where every row costs grid. */}
-          <div className="scroll-rail mt-3 flex items-center gap-2.5 overflow-x-auto pb-3 [-ms-overflow-style:none] [scrollbar-width:none] lg:mt-[18px] lg:pb-4">
-            <CategoryChip
-              label={t("billing.search.allCategories")}
-              active={selectedCategory === "all"}
-              onClick={() => onSelectedCategoryChange("all")}
-            />
-            {visibleCategories.map((cat) => (
+          {/* Category chips beside a pinned action.
+              The action deliberately sits OUTSIDE the rail, for two reasons that
+              both bit when it was briefly inside one:
+                • the rail scrolls, and a shop with more than three categories
+                  pushed the action hundreds of pixels past the right edge, so it
+                  could not be found at all;
+                • `.scroll-rail` carries a `mask-image`, and a mask makes its
+                  element the containing block for `position: fixed` descendants —
+                  so the action's dialog stopped covering the viewport and
+                  collapsed into the 44px rail, clipped by the very same mask.
+              Anything with a popover or dialog belongs on this side of the line. */}
+          <div className="mt-3 flex items-stretch gap-2 lg:mt-[18px]">
+            <div className="scroll-rail flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto pb-3 [-ms-overflow-style:none] [scrollbar-width:none] lg:pb-4">
               <CategoryChip
-                key={cat}
-                label={cat}
-                active={selectedCategory === cat}
-                onClick={() => onSelectedCategoryChange(cat)}
+                label={t("billing.search.allCategories")}
+                active={selectedCategory === "all"}
+                onClick={() => onSelectedCategoryChange("all")}
               />
-            ))}
-            {hasMoreCategories && (
-              <button onClick={() => setShowAllCategories((value) => !value)} className="h-11 shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] lg:mouse:h-9">
-                {showAllCategories ? t("billing.search.categoriesLess") : t("billing.search.categoriesMore")} ▾
-              </button>
-            )}
-            {railAction}
+              {visibleCategories.map((cat) => (
+                <CategoryChip
+                  key={cat}
+                  label={cat}
+                  active={selectedCategory === cat}
+                  onClick={() => onSelectedCategoryChange(cat)}
+                />
+              ))}
+              {hasMoreCategories && (
+                <button onClick={() => setShowAllCategories((value) => !value)} className="h-11 shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] lg:mouse:h-9">
+                  {showAllCategories ? t("billing.search.categoriesLess") : t("billing.search.categoriesMore")} ▾
+                </button>
+              )}
+            </div>
+            {railAction ? <div className="shrink-0 pb-3 lg:pb-4">{railAction}</div> : null}
           </div>
         </div>
 

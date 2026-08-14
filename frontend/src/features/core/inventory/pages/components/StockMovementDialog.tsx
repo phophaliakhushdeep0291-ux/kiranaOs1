@@ -13,6 +13,7 @@ import { fromBaseQty, isDeletedProduct, productDisplayUnit, toBaseQty } from "@/
 import { activeInventorySellingUnits, findInventorySellingUnit, inventoryDisplayQuantity } from "@/features/core/inventory/stock-display";
 import { useRecordPurchase, useRecordSale } from "@/features/core/inventory/queries";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 const OUT_REASONS = ["Counter stock out", "Expiry", "Damage", "Theft / Missing", "Other"];
 
@@ -27,6 +28,7 @@ function stockBaseQty(product: Product): number {
 }
 
 export function StockMovementDialog({ mode, open, onOpenChange, initialProductId, initialUnitCode, width, onResizeStart }: { mode: "in" | "out"; open: boolean; onOpenChange: (o: boolean) => void; initialProductId?: string; initialUnitCode?: string; width: number; onResizeStart: (e: ReactMouseEvent) => void }) {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const products = useListProducts({ limit: 1000 }, { query: { staleTime: 60_000 } });
@@ -93,11 +95,11 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
   }
 
   function submit() {
-    if (!productId || !selected) { toast({ title: "Pick a product first", variant: "destructive" }); return; }
+    if (!productId || !selected) { toast({ title: t("inventory.movement.pickProduct"), variant: "destructive" }); return; }
     const quantity = Number(qty);
-    if (!quantity || quantity <= 0) { toast({ title: "Enter a valid quantity", variant: "destructive" }); return; }
+    if (!quantity || quantity <= 0) { toast({ title: t("inventory.movement.invalidQuantity"), variant: "destructive" }); return; }
     if (mode === "in" && cost === "") {
-      toast({ title: "Enter purchase cost", description: "Stock in needs a cost so inventory value and cloud sync stay correct.", variant: "destructive" });
+      toast({ title: t("inventory.movement.enterCost"), description: t("inventory.movement.enterCostHelp"), variant: "destructive" });
       return;
     }
     // The chosen packaging IS the unit of this movement: "12" means 12 of that
@@ -122,16 +124,16 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
     if (mode === "in") {
       recordPurchase.mutate(
         { data: { productId, quantity, enteredUnit, sellingUnitId: selectedPack?.id, costPerRateUnit: cost === "" ? undefined : Number(cost), supplierName: supplier.trim() || undefined, note: note.trim() || undefined } },
-        { onSuccess: () => onDone(`Added ${quantity} ${unitLabelForToast} to ${selected.name}`), onError: (e) => toast({ title: "Could not add stock", description: e instanceof Error ? e.message : "Try again.", variant: "destructive" }) },
+        { onSuccess: () => onDone(`Added ${quantity} ${unitLabelForToast} to ${selected.name}`), onError: (e) => toast({ title: t("inventory.movement.addFailed"), description: e instanceof Error ? e.message : "Try again.", variant: "destructive" }) },
       );
     } else {
       if (quantity > availableInPack) {
-        toast({ title: "Stock out is more than available stock", description: `Available: ${currentStock(selected)}`, variant: "destructive" });
+        toast({ title: t("inventory.movement.outExceedsStock"), description: `Available: ${currentStock(selected)}`, variant: "destructive" });
         return;
       }
       recordSale.mutate(
         { data: { productId, quantity, enteredUnit, sellingUnitId: selectedPack?.id, reason, note: note.trim() || undefined } },
-        { onSuccess: () => onDone(`Removed ${quantity} ${unitLabelForToast} from ${selected.name}`), onError: (e) => toast({ title: "Could not remove stock", description: e instanceof Error ? e.message : "Try again.", variant: "destructive" }) },
+        { onSuccess: () => onDone(`Removed ${quantity} ${unitLabelForToast} from ${selected.name}`), onError: (e) => toast({ title: t("inventory.movement.removeFailed"), description: e instanceof Error ? e.message : "Try again.", variant: "destructive" }) },
       );
     }
   }
@@ -158,7 +160,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
       <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
         {/* Product picker */}
         <div>
-          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Product<span className="ml-0.5 text-rose-500">*</span></Label>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.col.product")}<span className="ml-0.5 text-rose-500">*</span></Label>
           {selected ? (
             <div className="flex items-center gap-3 rounded-[10px] border border-[#e3eaf3] bg-[#f8fafd] px-3 py-2">
               <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-white text-lg">
@@ -198,7 +200,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
         {/* Packaging — only worth asking when the product really has more than one */}
         {selected && packs.length > 1 ? (
           <div>
-            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Packaging<span className="ml-0.5 text-rose-500">*</span></Label>
+            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.movement.packaging")}<span className="ml-0.5 text-rose-500">*</span></Label>
             <Select value={selectedPack?.unitCode ?? ""} onValueChange={setUnitCode}>
               <SelectTrigger className="h-10"><SelectValue placeholder="Select pack size" /></SelectTrigger>
               <SelectContent>
@@ -230,19 +232,19 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
           <>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Cost / unit (₹)</Label>
+                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.movement.costPerUnit")}</Label>
                 <Input className="h-10" type="number" inputMode="decimal" min={0} placeholder="optional" value={cost} onChange={(e) => setCost(e.target.value === "" ? "" : Number(e.target.value))} />
               </div>
               <div>
-                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Supplier</Label>
+                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.movement.supplier")}</Label>
                 <Input className="h-10" placeholder="optional" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
               </div>
             </div>
-            <p className="text-[11px] text-[#9aa6bb]">Cost updates the product's weighted average cost.</p>
+            <p className="text-[11px] text-[#9aa6bb]">{t("inventory.movement.costHelp")}</p>
           </>
         ) : (
           <div>
-            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Reason<span className="ml-0.5 text-rose-500">*</span></Label>
+            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.col.reason")}<span className="ml-0.5 text-rose-500">*</span></Label>
             <Select value={reason} onValueChange={setReason}>
               <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
               <SelectContent>{OUT_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
@@ -251,14 +253,14 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
         )}
 
         <div>
-          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Note</Label>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.col.note")}</Label>
           <Input className="h-10" placeholder="optional" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       </div>
 
       <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
         <div className="grid grid-cols-2 gap-2.5">
-          <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={close}>Cancel</Button>
+          <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={close}>{t("inventory.cancel")}</Button>
           <Button
             type="button"
             onClick={submit}
@@ -266,7 +268,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
             style={{ background: mode === "in" ? "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" : "linear-gradient(180deg,#f43f5e 0%,#e11d48 100%)" }}
             className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95"
           >
-            {pending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : mode === "in" ? "Add Stock" : "Remove Stock"}
+            {pending ? <><Loader2 size={16} className="animate-spin" /> {t("inventory.saving")}</> : mode === "in" ? "Add Stock" : "Remove Stock"}
           </Button>
         </div>
       </div>

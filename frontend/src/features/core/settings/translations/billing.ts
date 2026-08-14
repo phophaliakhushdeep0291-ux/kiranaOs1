@@ -223,6 +223,9 @@ export const billingEn = {
 
   // Product search / left pane
   "billing.search.placeholder": "Search by product name, barcode or SKU",
+  // The phone shares this row with the scan and voice buttons, so the long
+  // form clipped to "Search by product nam". Same instruction, fewer words.
+  "billing.search.placeholderShort": "Search products",
   "billing.search.scanBarcode": "Scan barcode",
   "billing.search.voiceBilling": "Voice billing",
   "billing.search.openVoiceBilling": "Open voice billing",

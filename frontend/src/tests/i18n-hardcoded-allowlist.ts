@@ -63,7 +63,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/customer-order/ImportOrderPage.tsx", // 6
   "features/core/customer-order/OwnerOrderingCard.tsx", // 5
   "features/core/customers/pages/CustomersPage.tsx", // 109
-  "features/core/dashboard/pages/DashboardPage.tsx", // 61
   "features/core/demo/DemoModeBanner.tsx", // 4
   "features/core/devices/pages/DeviceRemovedPage.tsx", // 2
   "features/core/devices/pages/DevicesPage.tsx", // 20
@@ -71,15 +70,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/gift-cards/GiftCardsPage.tsx", // 38
   "features/core/innovation/components/OfflineConfidenceMeter.tsx", // 8
   "features/core/innovation/pages/SmartToolsPage.tsx", // 4
-  "features/core/inventory/components/NearExpiryAlert.tsx", // 2
-  "features/core/inventory/pages/CategoriesPage.tsx", // 21
-  "features/core/inventory/pages/InventoryLotsPage.tsx", // 16
-  "features/core/inventory/pages/InventoryPage.tsx", // 121
-  "features/core/inventory/pages/StockCountsPage.tsx", // 47
-  "features/core/inventory/pages/StockTransfersPage.tsx", // 88
-  "features/core/inventory/pages/components/InventoryRegisterView.tsx", // 8
-  "features/core/inventory/pages/components/StockMovementDialog.tsx", // 16
-  "features/core/inventory/pages/components/StockStatusView.tsx", // 23
   "features/core/loyalty/pages/LoyaltyPage.tsx", // 27
   "features/core/money-statement/pages/MoneyStatementPage.tsx", // 20
   "features/core/offers/pages/OffersPage.tsx", // 30

@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { AlertTriangle, CalendarClock, IndianRupee } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getExpiryAlerts, type ExpiringBatch, type ExpirySeverity } from "@/features/core/inventory/inventory-lots-api";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 export const NEAR_EXPIRY_QUERY_KEY = ["inventory-lots", "expiry-alerts"] as const;
 
@@ -55,6 +56,7 @@ export function ExpiringBatchRow({ batch }: { batch: ExpiringBatch }) {
  * card on the dashboard is noise, and noise is what makes real alerts invisible.
  */
 export function NearExpiryAlert({ limit = 5, className }: { limit?: number; className?: string }) {
+  const { t } = useAppLanguage();
   const query = useQuery({
     queryKey: NEAR_EXPIRY_QUERY_KEY,
     queryFn: () => getExpiryAlerts(),
@@ -77,7 +79,7 @@ export function NearExpiryAlert({ limit = 5, className }: { limit?: number; clas
             <CalendarClock size={17} aria-hidden="true" />
           </span>
           <div>
-            <p className="text-sm font-black text-[var(--brand-ink)]">Stock nearing expiry</p>
+            <p className="text-sm font-black text-[var(--brand-ink)]">{t("inventory.nearExpiry.title")}</p>
             <p className="text-[11px] text-[#64748b]">
               {data.totalCount} {data.totalCount === 1 ? "batch" : "batches"} within {data.thresholds.warningDays} days
             </p>
@@ -88,7 +90,7 @@ export function NearExpiryAlert({ limit = 5, className }: { limit?: number; clas
             <IndianRupee size={14} aria-hidden="true" />
             {Math.round(data.totalValueAtRisk).toLocaleString("en-IN")}
           </p>
-          <p className="text-[10px] font-semibold text-[#64748b]">at risk</p>
+          <p className="text-[10px] font-semibold text-[#64748b]">{t("inventory.nearExpiry.atRisk")}</p>
         </div>
       </div>
 

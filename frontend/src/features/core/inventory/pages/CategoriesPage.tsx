@@ -11,10 +11,12 @@ import { useToast } from "@/hooks/use-toast";
 import { isDeletedProduct } from "@/features/core/products/pages/product-pricing";
 import { descendantIds, loadCategories, mergeCategories, newCategoryId, saveCategories, type ShopCategory } from "@/features/core/inventory/category-store";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 const ROWS_PER_PAGE = 10;
 
 export default function CategoriesPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const { prefs, patch: patchSettings, hydrated: settingsHydrated } = useSettingsPrefs();
   const products = useListProducts({ limit: 1000 }, {
@@ -113,16 +115,16 @@ export default function CategoriesPage() {
 
   function saveCategory(values: { name: string; parentId: string | null; status: "active" | "inactive" }) {
     const name = values.name.trim();
-    if (!name) { toast({ title: "Category name required", variant: "destructive" }); return; }
+    if (!name) { toast({ title: t("inventory.categories.nameRequired"), variant: "destructive" }); return; }
     const dupe = visibleCats.find((c) => c.name.trim().toLowerCase() === name.toLowerCase() && c.id !== editing?.id);
-    if (dupe) { toast({ title: "Category already exists", variant: "destructive" }); return; }
+    if (dupe) { toast({ title: t("inventory.categories.exists"), variant: "destructive" }); return; }
     if (editing) {
       persist(cats.map((c) => (c.id === editing.id ? { ...c, name, parentId: values.parentId, status: values.status, updatedAt: new Date().toISOString() } : c)));
-      toast({ title: "Category updated" });
+      toast({ title: t("inventory.categories.updated") });
     } else {
       const now = new Date().toISOString();
       persist([...cats, { id: newCategoryId(), name, parentId: values.parentId, status: values.status, createdAt: now, updatedAt: now, deletedAt: null }]);
-      toast({ title: "Category added" });
+      toast({ title: t("inventory.categories.added") });
     }
     setDialogOpen(false);
   }
@@ -136,7 +138,7 @@ export default function CategoriesPage() {
     persist(cats.map((x) => x.id === c.id
       ? { ...x, deletedAt: now, updatedAt: now }
       : x.parentId === c.id ? { ...x, parentId: null, updatedAt: now } : x));
-    toast({ title: "Category deleted" });
+    toast({ title: t("inventory.categories.deleted") });
   }
 
   const cards = [
@@ -187,18 +189,18 @@ export default function CategoriesPage() {
         <table className="min-w-[620px] w-full text-left text-[13px]">
           <thead>
             <tr className="border-b-2 border-[#e6ecf4] bg-[#f9fbfd] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
-              <th className="px-4 py-3 font-bold">Category Name</th>
-              <th className="px-3 py-3 font-bold">Parent Category</th>
-              <th className="px-3 py-3 text-right font-bold">Products</th>
-              <th className="px-3 py-3 text-center font-bold">Status</th>
-              <th className="px-3 py-3 text-center font-bold">Action</th>
+              <th className="px-4 py-3 font-bold">{t("inventory.categories.name")}</th>
+              <th className="px-3 py-3 font-bold">{t("inventory.categories.parent")}</th>
+              <th className="px-3 py-3 text-right font-bold">{t("inventory.categories.products")}</th>
+              <th className="px-3 py-3 text-center font-bold">{t("inventory.col.status")}</th>
+              <th className="px-3 py-3 text-center font-bold">{t("inventory.col.action")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr><td colSpan={5} className="px-4 py-16 text-center">
-                <p className="text-sm font-bold text-[#13274d]">No categories yet</p>
-                <p className="mt-1 text-xs text-[#536383]">Click "Add Category" to create your first one.</p>
+                <p className="text-sm font-bold text-[#13274d]">{t("inventory.categories.empty")}</p>
+                <p className="mt-1 text-xs text-[#536383]">{t("inventory.categories.emptyHelp")}</p>
               </td></tr>
             ) : (
               pagedRows.map((c) => (
@@ -234,9 +236,9 @@ export default function CategoriesPage() {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => openEdit(c)}><Pencil size={14} className="mr-2" /> Edit</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openEdit(c)}><Pencil size={14} className="mr-2" /> {t("inventory.edit")}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => toggleStatus(c)}><Power size={14} className="mr-2" /> {c.status === "active" ? "Deactivate" : "Activate"}</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => removeCategory(c)}><Trash2 size={14} className="mr-2" /> Delete</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => removeCategory(c)}><Trash2 size={14} className="mr-2" /> {t("inventory.delete")}</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                     </div>
@@ -275,6 +277,7 @@ function CategoryDialog({
   onOpenChange: (o: boolean) => void;
   onSave: (v: { name: string; parentId: string | null; status: "active" | "inactive" }) => void;
 }) {
+  const { t } = useAppLanguage();
   const [name, setName] = useState("");
   const [parentId, setParentId] = useState<string>("none");
   const [status, setStatus] = useState<"active" | "inactive">("active");
@@ -310,26 +313,26 @@ function CategoryDialog({
 
       <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
         <div>
-          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Category Name<span className="ml-0.5 text-rose-500">*</span></Label>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.categories.name")}<span className="ml-0.5 text-rose-500">*</span></Label>
           <Input className="h-10" placeholder="e.g. Beverages" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </div>
         <div>
-          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Parent Category</Label>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.categories.parent")}</Label>
           <Select value={parentId} onValueChange={setParentId}>
             <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">None (root category)</SelectItem>
+              <SelectItem value="none">{t("inventory.categories.none")}</SelectItem>
               {parentOptions.map((c) => <SelectItem key={c.id} value={c.id} className="capitalize">{c.name.replace(/_/g, " ")}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div>
-          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Status</Label>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.col.status")}</Label>
           <Select value={status} onValueChange={(v) => setStatus(v as "active" | "inactive")}>
             <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="active">{t("inventory.status.active")}</SelectItem>
+              <SelectItem value="inactive">{t("inventory.status.inactive")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -337,7 +340,7 @@ function CategoryDialog({
 
       <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
         <div className="grid grid-cols-2 gap-2.5">
-          <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>{t("inventory.cancel")}</Button>
           <Button
             type="button"
             onClick={() => onSave({ name, parentId: parentId === "none" ? null : parentId, status })}

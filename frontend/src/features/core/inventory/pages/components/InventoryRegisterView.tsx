@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { cn } from "@/lib/utils";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 type RegisterMode = "adjustments" | "transfers";
 
@@ -66,6 +67,7 @@ function exportRows(rows: MovementRow[], mode: RegisterMode) {
 }
 
 export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
+  const { t } = useAppLanguage();
   const [search, setSearch] = useState("");
   const ledger = useGetStockLedger({ limit: 500 });
   // Local movements keep this register offline-first: unsynced corrections show
@@ -167,7 +169,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
 
       <div className="mt-4 overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
         {ledger.isLoading && localMovements.isLoading ? (
-          <div className="py-14 text-center text-[13px] text-[#64748b]">Loading movement history...</div>
+          <div className="py-14 text-center text-[13px] text-[#64748b]">{t("inventory.register.loading")}</div>
         ) : scopedRows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-16 text-center">
             <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]">{icon}</span>
@@ -179,12 +181,12 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
             <table className="w-full min-w-[760px] text-[12.5px]">
               <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                 <tr>
-                  <th className="px-4 py-3 text-left font-bold">Date</th>
-                  <th className="px-4 py-3 text-left font-bold">Reference No.</th>
-                  <th className="px-4 py-3 text-left font-bold">Product</th>
-                  <th className="px-4 py-3 text-right font-bold">Quantity</th>
-                  <th className="px-4 py-3 text-left font-bold">Reason</th>
-                  <th className="px-4 py-3 text-left font-bold">Status</th>
+                  <th className="px-4 py-3 text-left font-bold">{t("inventory.col.date")}</th>
+                  <th className="px-4 py-3 text-left font-bold">{t("inventory.col.reference")}</th>
+                  <th className="px-4 py-3 text-left font-bold">{t("inventory.col.product")}</th>
+                  <th className="px-4 py-3 text-right font-bold">{t("inventory.col.quantity")}</th>
+                  <th className="px-4 py-3 text-left font-bold">{t("inventory.col.reason")}</th>
+                  <th className="px-4 py-3 text-left font-bold">{t("inventory.col.status")}</th>
                 </tr>
               </thead>
               <tbody>
