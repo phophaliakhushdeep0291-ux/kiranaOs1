@@ -127,7 +127,7 @@ function LoadingScreen() {
   const path = location.split(/[?#]/)[0].replace(/^\/+/, "");
   const section = path.split("/").filter(Boolean)[0] ?? "dashboard";
   const fallback = path.split("/").filter(Boolean).at(-1)?.replace(/-/g, " ");
-  return <PageLoading label={ROUTE_LOADING_LABELS[path] ?? ROUTE_LOADING_LABELS[section] ?? `Opening ${fallback || "Artha"}…`} />;
+  return <PageLoading label={ROUTE_LOADING_LABELS[path] ?? ROUTE_LOADING_LABELS[section] ?? `Opening ${fallback || t("chrome.brand")}…`} />;
 }
 
 function LazyPage({ component: Component, featureName }: { component: ComponentType; featureName?: FeatureName }) {

@@ -292,7 +292,7 @@ export default function BillDetailPage() {
       setPinAction(null);
       await refetch();
     } catch (error) {
-      toast({ title: t("billing.bills.actionFailed"), description: error instanceof Error ? error.message : "Please check owner PIN and try again.", variant: "destructive" });
+      toast({ title: t("billing.bills.actionFailed"), description: error instanceof Error ? error.message : t("billing.bills.checkOwnerPin"), variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -312,7 +312,7 @@ export default function BillDetailPage() {
       setEmailOpen(false);
       toast({ title: t("billing.bills.receiptEmailed"), description: `Delivery was accepted for ${receiptEmail.trim()}.` });
     } catch (error) {
-      setEmailError(error instanceof Error ? error.message : "Could not email this receipt.");
+      setEmailError(error instanceof Error ? error.message : t("billing.bills.emailFailed"));
     } finally {
       setEmailSending(false);
     }

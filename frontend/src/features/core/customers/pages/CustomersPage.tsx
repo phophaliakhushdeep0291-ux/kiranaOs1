@@ -112,6 +112,7 @@ function blankCustomerForm(): CustomerFormState {
 
 function useCustomersLedgerList() {
   const queryClient = useQueryClient();
+  const { t } = useAppLanguage();
   const authoritativeAppliedAtRef = useRef(0);
   const listKey = ["customers-ledger-list"] as const;
   useEffect(() => {
@@ -333,8 +334,8 @@ function percentageChange(current: number, previous: number): number {
 }
 
 export default function CustomersPage() {
-  const queryClient = useQueryClient();
   const { t } = useAppLanguage();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const { pendingCount, failedCount } = useOfflineStatus();
   const { data: customers = [], isLoading, refetch } = useCustomersLedgerList();
@@ -702,7 +703,7 @@ export default function CustomersPage() {
       setDeleteTarget(null);
       await refetch();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Try again.";
+      const message = error instanceof Error ? error.message : t("billing.page.tryAgain");
       setDeleteError(message);
       toast({ title: t("customers.toast.deleteFailed"), description: message, variant: "destructive" });
     } finally {
@@ -798,7 +799,7 @@ export default function CustomersPage() {
       void queryClient.refetchQueries({ queryKey: ["customers-authoritative-summary-refresh"], type: "active" });
       setPaymentForm((form) => ({ ...form, amount: "", cashAmount: "", upiAmount: "", note: "" }));
     } catch (error) {
-      toast({ title: t("customers.toast.paymentFailed"), description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
+      toast({ title: t("customers.toast.paymentFailed"), description: error instanceof Error ? error.message : t("billing.page.tryAgain"), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -1546,8 +1547,8 @@ function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, co
   const sevenToThirty = Math.max(0, money(ageing?.sevenToThirty));
   const rawBuckets = [
     { value: Math.max(0, money(ageing?.zeroToSeven)), color: "#22c55e", label: t("customers.ageing.bucket0to7") },
-    { value: overdueDays <= 15 ? sevenToThirty : 0, color: "#f59e0b", label: "8 - 15 Days" },
-    { value: overdueDays > 15 && overdueDays <= 30 ? sevenToThirty : 0, color: "#ef4444", label: "16 - 30 Days" },
+    { value: overdueDays <= 15 ? sevenToThirty : 0, color: "#f59e0b", label: t("customers.ageing.bucket8to15") },
+    { value: overdueDays > 15 && overdueDays <= 30 ? sevenToThirty : 0, color: "#ef4444", label: t("customers.ageing.bucket16to30") },
     { value: Math.max(0, money(ageing?.thirtyPlus)), color: "#8b5cf6", label: t("customers.ageing.bucket30plus") },
   ];
   const rawTotal = rawBuckets.reduce((sum, row) => sum + row.value, 0);

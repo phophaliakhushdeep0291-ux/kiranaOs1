@@ -336,4 +336,6 @@ export const customersHi: Record<keyof typeof customersEn, string> = {
   "customers.thisCustomer": "यह ग्राहक",
   "customers.pinReversalPreserved": "मालिक का PIN ज़रूरी है। पुराना भुगतान मिटता नहीं, उसके साथ एक सुधार की एंट्री जोड़ दी जाती है।",
   "customers.totalOutstanding": "कुल बकाया",
+  "customers.ageing.bucket8to15": "8 - 15 दिन",
+  "customers.ageing.bucket16to30": "16 - 30 दिन",
 };

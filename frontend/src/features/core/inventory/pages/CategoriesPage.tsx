@@ -142,10 +142,10 @@ export default function CategoriesPage() {
   }
 
   const cards = [
-    { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: "Total Categories", value: stats.total, sub: "Active categories" },
-    { icon: <FolderTree size={18} />, cls: "bg-blue-50 text-blue-600", label: "Root Categories", value: stats.root, sub: "Top level categories" },
-    { icon: <FolderTree size={18} />, cls: "bg-amber-50 text-amber-600", label: "Sub Categories", value: stats.sub, sub: "Child categories" },
-    { icon: <Boxes size={18} />, cls: "bg-emerald-50 text-emerald-600", label: "Products", value: stats.products, sub: "Under categories" },
+    { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: t("inventory.categories.total"), value: stats.total, sub: t("products.stats.categoriesHint") },
+    { icon: <FolderTree size={18} />, cls: "bg-blue-50 text-blue-600", label: t("inventory.categories.root"), value: stats.root, sub: t("inventory.categories.rootHelp") },
+    { icon: <FolderTree size={18} />, cls: "bg-amber-50 text-amber-600", label: t("inventory.categories.sub"), value: stats.sub, sub: t("inventory.categories.subHelp") },
+    { icon: <Boxes size={18} />, cls: "bg-emerald-50 text-emerald-600", label: t("billing.search.products"), value: stats.products, sub: t("inventory.categories.under") },
   ];
 
   return (

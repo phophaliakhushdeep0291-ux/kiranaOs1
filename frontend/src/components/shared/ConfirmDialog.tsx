@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import type { ReactNode } from "react";
 import { AlertTriangle, LoaderCircle } from "lucide-react";
 import {
@@ -25,7 +26,8 @@ export interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-export function ConfirmDialog({ open, title, description, confirmLabel = "Confirm", cancelLabel = "Cancel", destructive = false, disabled = false, busy = false, onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, title, description, confirmLabel, cancelLabel, destructive = false, disabled = false, busy = false, onConfirm, onCancel }: ConfirmDialogProps) {
+  const { t } = useAppLanguage();
   const controlsDisabled = disabled || busy;
   return (
     <AlertDialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onCancel(); }}>
@@ -40,7 +42,7 @@ export function ConfirmDialog({ open, title, description, confirmLabel = "Confir
           {description ? <AlertDialogDescription>{description}</AlertDialogDescription> : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={controlsDisabled} onClick={(event) => { event.preventDefault(); onCancel(); }}>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogCancel disabled={controlsDisabled} onClick={(event) => { event.preventDefault(); onCancel(); }}>{cancelLabel ?? t("chrome.confirmCancel")}</AlertDialogCancel>
           <AlertDialogAction
             disabled={controlsDisabled}
             onClick={(event) => { event.preventDefault(); onConfirm(); }}

@@ -3,15 +3,15 @@ import { Link } from "wouter";
 import { AlertTriangle, CalendarClock, IndianRupee } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getExpiryAlerts, type ExpiringBatch, type ExpirySeverity } from "@/features/core/inventory/inventory-lots-api";
-import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 
 export const NEAR_EXPIRY_QUERY_KEY = ["inventory-lots", "expiry-alerts"] as const;
 
-const TONE: Record<ExpirySeverity, { chip: string; label: string }> = {
-  expired: { chip: "bg-rose-50 text-rose-700", label: "Expired" },
-  critical: { chip: "bg-amber-50 text-amber-700", label: "Expiring soon" },
-  warning: { chip: "bg-blue-50 text-blue-700", label: "Watch" },
-};
+const severityTone = (t: Translate): Record<ExpirySeverity, { chip: string; label: string }> => ({
+  expired: { chip: "bg-rose-50 text-rose-700", label: t("inventory.expiry.expired") },
+  critical: { chip: "bg-amber-50 text-amber-700", label: t("inventory.expiry.soon") },
+  warning: { chip: "bg-blue-50 text-blue-700", label: t("inventory.expiry.watch") },
+});
 
 const rupees = (value: number) => `₹${Math.round(value).toLocaleString("en-IN")}`;
 
@@ -23,7 +23,8 @@ export function expiryPhrase(days: number) {
 }
 
 export function ExpiringBatchRow({ batch }: { batch: ExpiringBatch }) {
-  const tone = TONE[batch.severity];
+  const { t } = useAppLanguage();
+  const tone = severityTone(t)[batch.severity];
   return (
     <li className="flex items-center justify-between gap-3 border-b py-2 last:border-b-0">
       <div className="min-w-0">

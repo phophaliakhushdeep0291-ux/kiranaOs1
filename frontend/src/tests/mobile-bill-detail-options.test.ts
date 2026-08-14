@@ -8,7 +8,7 @@ describe("phone bill item detail", () => {
     expect(billDetail).toContain('className="divide-y sm:hidden"');
     expect(billDetail).toContain('className="hidden overflow-x-auto sm:block"');
     expect(billDetail).toContain("<BillItemDescription item={item} />");
-    expect(billDetail).toContain('aria-label="Selected add-ons"');
+    expect(billDetail).toContain('aria-label={t("billing.bills.selectedAddons")}');
     expect(billDetail).toContain('href="/bills" className="inline-flex"');
   });
 });

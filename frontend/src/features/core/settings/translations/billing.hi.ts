@@ -570,4 +570,6 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.bills.edit.confirmHelp": "बदलाव करने पर पुराना बिल रद्द होकर आपके बदलावों के साथ नया बन जाता है। मालिक का PIN ज़रूरी है।",
   "billing.bills.edit.voidRecreate": "रद्द करके नया बनाएं",
   "billing.bills.moveToRecycleShort": "रीसायकल बिन में डालें",
+  "billing.bills.checkOwnerPin": "कृपया मालिक का PIN जांचें और दोबारा कोशिश करें।",
+  "billing.bills.emailFailed": "यह रसीद ईमेल नहीं की जा सकी।",
 };

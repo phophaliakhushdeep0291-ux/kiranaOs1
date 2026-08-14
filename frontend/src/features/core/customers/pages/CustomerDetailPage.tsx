@@ -229,7 +229,7 @@ export default function CustomerDetailPage() {
       setReverse({ paymentId: "" });
       await refetch();
     } catch (error) {
-      toast({ title: t("customers.toast.reversalFailed"), description: error instanceof Error ? error.message : "Check owner PIN.", variant: "destructive" });
+      toast({ title: t("customers.toast.reversalFailed"), description: error instanceof Error ? error.message : t("customers.toast.checkOwnerPin"), variant: "destructive" });
     } finally { setSaving(false); }
   }
 
@@ -248,7 +248,7 @@ export default function CustomerDetailPage() {
       setAdjust({ amount: "", ownerPin: "", note: "" });
       await refetch();
     } catch (error) {
-      toast({ title: t("customers.toast.adjustmentFailed"), description: error instanceof Error ? error.message : "Check owner PIN.", variant: "destructive" });
+      toast({ title: t("customers.toast.adjustmentFailed"), description: error instanceof Error ? error.message : t("customers.toast.checkOwnerPin"), variant: "destructive" });
     } finally { setSaving(false); }
   }
 

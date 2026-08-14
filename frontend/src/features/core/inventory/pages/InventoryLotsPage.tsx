@@ -41,7 +41,7 @@ export default function InventoryLotsPage() {
       await queryClient.invalidateQueries({ queryKey: ["inventory-lots"] });
       toast({ title: `Batch ${action.status}`, description: `${action.lot.product.name} · ${action.lot.batchNumber}` });
       setAction(null);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not update batch."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : t("inventory.lots.updateFailed")); }
     finally { setBusy(false); }
   }
 

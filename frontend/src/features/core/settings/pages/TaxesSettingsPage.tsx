@@ -206,10 +206,10 @@ export default function TaxesSettingsPage() {
       setEwayDraft(EMPTY_EWAY);
       void readinessQ.refetch();
       toast(legalSubmission
-        ? { title: "E-way bill submitted", description: `The request was accepted by ${readinessQ.data?.provider.providerName || "the configured certified GSP"}.` }
-        : { title: "E-way transport record prepared", description: "Saved as a clearly marked draft. Connect a certified GSP to request a legal e-way bill number." });
+        ? { title: t("settings.tax.ewaySubmitted"), description: `The request was accepted by ${readinessQ.data?.provider.providerName || "the configured certified GSP"}.` }
+        : { title: t("settings.tax.ewayDraftPrepared"), description: t("settings.tax.ewayDraftNote") });
     } catch (error) {
-      setEwayError(error instanceof Error ? error.message : "Could not prepare the transport record.");
+      setEwayError(error instanceof Error ? error.message : t("settings.tax.ewayFailed"));
     } finally {
       setSavingEway(false);
     }
@@ -226,10 +226,10 @@ export default function TaxesSettingsPage() {
       setEInvoiceBillId("");
       void readinessQ.refetch();
       toast(legalSubmission
-        ? { title: "E-invoice submitted", description: `The certified provider accepted the request for IRN generation.` }
-        : { title: "E-invoice sandbox record created", description: "Validation evidence was saved, but no legal IRN was created." });
+        ? { title: t("settings.tax.eInvoiceSubmitted"), description: `The certified provider accepted the request for IRN generation.` }
+        : { title: t("settings.tax.eInvoiceSandbox"), description: t("settings.tax.eInvoiceSandboxNote") });
     } catch (error) {
-      setEInvoiceError(error instanceof Error ? error.message : "Could not process the e-invoice.");
+      setEInvoiceError(error instanceof Error ? error.message : t("settings.tax.eInvoiceFailed"));
     } finally {
       setSavingEInvoice(false);
     }
@@ -272,7 +272,7 @@ export default function TaxesSettingsPage() {
       await Promise.all([hsnSummaryQ.refetch(), readinessQ.refetch()]);
       toast({ title: t("settings.tax.hsnUpdated"), description: `${result.updatedProducts} products now use HSN ${pendingHsn.hsn} at ${pendingHsn.gstRate}%.` });
     } catch (error) {
-      setEditorError(error instanceof Error ? error.message : "Could not update the product category.");
+      setEditorError(error instanceof Error ? error.message : t("settings.tax.categoryUpdateFailed"));
     } finally {
       setSavingHsn(false);
     }
@@ -285,7 +285,7 @@ export default function TaxesSettingsPage() {
       downloadText(`artha-gst-register-${sellerGstin}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
       toast({ title: t("settings.tax.registerDownloaded"), description: `${sellerGstin} only · seller snapshots, HSN, and tax values are ready for accountant review.` });
     } catch (error) {
-      toast({ title: t("settings.tax.exportUnavailable"), description: error instanceof Error ? error.message : "Could not export the GST register.", variant: "destructive" });
+      toast({ title: t("settings.tax.exportUnavailable"), description: error instanceof Error ? error.message : t("settings.tax.registerExportFailed"), variant: "destructive" });
     }
   }
   async function exportGstr1Working() {
@@ -296,7 +296,7 @@ export default function TaxesSettingsPage() {
       downloadText(`artha-gstr1-working-${sellerGstin}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
       toast({ title: t("settings.tax.gstr1Downloaded"), description: `${sellerGstin} only · review B2B, B2CS, credit-note, HSN, and place-of-supply treatment with your accountant before filing.` });
     } catch (error) {
-      toast({ title: t("settings.tax.exportUnavailable"), description: error instanceof Error ? error.message : "Could not export GSTR-1 working papers.", variant: "destructive" });
+      toast({ title: t("settings.tax.exportUnavailable"), description: error instanceof Error ? error.message : t("settings.tax.gstr1ExportFailed"), variant: "destructive" });
     }
   }
 
@@ -432,7 +432,7 @@ export default function TaxesSettingsPage() {
               <Kpi label={t("settings.tax.gstSplit")} value={gstQ.isLoading ? "…" : gstQ.data ? `C ${inr(gstQ.data.cgst)} · S ${inr(gstQ.data.sgst)} · I ${inr(gstQ.data.igst)}` : "—"} tone="amber" />
               <Kpi label={t("settings.tax.billsWithGst")} value={gstQ.isLoading ? "…" : gstQ.data ? String(gstQ.data.gstBills) : "—"} tone="violet" />
             </div>
-            {gstQ.isError && <p className="px-5 pb-4 text-[11px] font-semibold text-rose-600">Could not load this month's GST report: {gstQ.error instanceof Error ? gstQ.error.message : "Please retry."}</p>}
+            {gstQ.isError && <p className="px-5 pb-4 text-[11px] font-semibold text-rose-600">Could not load this month's GST report: {gstQ.error instanceof Error ? gstQ.error.message : t("settings.tax.pleaseRetry")}</p>}
           </>}
         </Card>
 

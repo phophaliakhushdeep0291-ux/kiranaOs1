@@ -22,6 +22,8 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   // Payment rails and tax terms used in English on every Indian receipt.
   "UPI",
   "GST",
+  // The product name. A brand is not translated.
+  "Artha",
   // Protocol name in the webhook delivery table. Nobody writes it in Devanagari.
   "HTTP",
   // Two GST registration identifiers, shown as placeholder text on the e-way

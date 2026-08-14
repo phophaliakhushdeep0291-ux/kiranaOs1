@@ -350,4 +350,6 @@ export const customersEn = {
   "customers.thisCustomer": "this customer",
   "customers.pinReversalPreserved": "Owner PIN is required. The old payment is preserved and a correction ledger entry is appended.",
   "customers.totalOutstanding": "Total Outstanding",
+  "customers.ageing.bucket8to15": "8 - 15 Days",
+  "customers.ageing.bucket16to30": "16 - 30 Days",
 } as const;

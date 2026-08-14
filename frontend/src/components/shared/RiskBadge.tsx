@@ -1,14 +1,15 @@
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { cn } from "@/lib/utils";
 import { ShieldCheck, ShieldAlert, AlertTriangle } from "lucide-react";
 
 export type RiskLevel = "low" | "medium" | "high" | "none";
 
-const levelConfig: Record<RiskLevel, { label: string; className: string; icon: typeof ShieldCheck }> = {
-  none:   { label: "No risk",    className: "bg-muted text-muted-foreground border-border",                                                    icon: ShieldCheck  },
-  low:    { label: "Low risk",   className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300", icon: ShieldCheck  },
-  medium: { label: "Medium risk",className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300",           icon: AlertTriangle},
-  high:   { label: "High risk",  className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300",                    icon: ShieldAlert  },
-};
+const riskLevels = (t: Translate): Record<RiskLevel, { label: string; className: string; icon: typeof ShieldCheck }> => ({
+  none:   { label: t("chrome.risk.none"),    className: "bg-muted text-muted-foreground border-border",                                                    icon: ShieldCheck  },
+  low:    { label: t("chrome.risk.low"),   className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300", icon: ShieldCheck  },
+  medium: { label: t("chrome.risk.medium"),className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300",           icon: AlertTriangle},
+  high:   { label: t("chrome.risk.high"),  className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300",                    icon: ShieldAlert  },
+});
 
 export interface RiskBadgeProps {
   level: RiskLevel;
@@ -17,7 +18,8 @@ export interface RiskBadgeProps {
 }
 
 export function RiskBadge({ level, compact = false, className }: RiskBadgeProps) {
-  const config = levelConfig[level] ?? levelConfig.none;
+  const { t } = useAppLanguage();
+  const config = riskLevels(t)[level] ?? riskLevels(t).none;
   const Icon = config.icon;
   return (
     <span

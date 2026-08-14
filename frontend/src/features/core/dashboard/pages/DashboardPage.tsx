@@ -718,11 +718,11 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         ? Math.max(0, roundMoney(periodSales - cash - upi - bank - credit))
         : periodPaymentSummary.other;
     return [
-      { label: "Cash", value: cash, color: "#2fc45a", dot: "bg-[#2fc45a]" },
-      { label: "UPI", value: upi, color: "#316df4", dot: "bg-[#316df4]" },
-      { label: "Bank", value: bank, color: "#06a4d9", dot: "bg-[#06a4d9]" },
-      { label: "Udhar", value: credit, color: "#f2a20b", dot: "bg-[#f2a20b]" },
-      { label: "Other", value: other, color: "#7557e8", dot: "bg-[#7557e8]" },
+      { label: t("billing.pay.cash"), value: cash, color: "#2fc45a", dot: "bg-[#2fc45a]" },
+      { label: t("billing.pay.upi"), value: upi, color: "#316df4", dot: "bg-[#316df4]" },
+      { label: t("billing.pay.bank"), value: bank, color: "#06a4d9", dot: "bg-[#06a4d9]" },
+      { label: t("billing.pay.udhar"), value: credit, color: "#f2a20b", dot: "bg-[#f2a20b]" },
+      { label: t("inventory.transfers.reason.other"), value: other, color: "#7557e8", dot: "bg-[#7557e8]" },
     ].filter((row) => row.value > 0);
   }, [activePeriodReport, dashboard.bank, dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi, period, periodBills.length, periodPaymentSummary, periodSales]);
 
@@ -743,10 +743,10 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
   const avgBillValue = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
   const quickInsightRows = useMemo(() => {
     const rows = [
-      { tone: "emerald" as const, icon: <Package size={16} />, label: "Sales by Category", value: ownerReport?.topProducts[0]?.name ? "View breakdown" : "No sales yet", href: "/reports" },
-      { tone: "blue" as const, icon: <PackagePlus size={16} />, label: "Top Selling Product", value: ownerReport?.topProducts[0]?.name ?? "No product yet", href: "/reports" },
-      { tone: "violet" as const, icon: <CreditCard size={16} />, label: "Average Bill Value", value: avgBillValue > 0 ? fmtRs(avgBillValue) : fmtRs(0), href: "/bills" },
-      { tone: "orange" as const, icon: <Users size={16} />, label: "Active Customers", value: String(ownerReport?.topCustomers.length ?? 0), href: "/customers" },
+      { tone: "emerald" as const, icon: <Package size={16} />, label: t("chrome.dashboard.salesByCategory"), value: ownerReport?.topProducts[0]?.name ? "View breakdown" : "No sales yet", href: "/reports" },
+      { tone: "blue" as const, icon: <PackagePlus size={16} />, label: t("chrome.dashboard.topSellingProduct"), value: ownerReport?.topProducts[0]?.name ?? "No product yet", href: "/reports" },
+      { tone: "violet" as const, icon: <CreditCard size={16} />, label: t("billing.bills.stats.average"), value: avgBillValue > 0 ? fmtRs(avgBillValue) : fmtRs(0), href: "/bills" },
+      { tone: "orange" as const, icon: <Users size={16} />, label: t("chrome.dashboard.activeCustomers"), value: String(ownerReport?.topCustomers.length ?? 0), href: "/customers" },
     ];
     return orderByUsage(rows, (row) => row.href, usageScores(insightsPersonalization.data?.dashboardOrder));
   }, [ownerReport, avgBillValue, insightsPersonalization.data]);
@@ -1557,7 +1557,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
   const { t } = useAppLanguage();
   const realTotal = rows.reduce((sum, row) => sum + row.value, 0);
   const displayTotal = total > 0 ? total : realTotal;
-  const chartRows = rows.length > 0 ? rows : [{ label: "No sales", value: 1, color: "#e5e7eb", dot: "bg-muted" }];
+  const chartRows = rows.length > 0 ? rows : [{ label: t("chrome.dashboard.noSales"), value: 1, color: "#e5e7eb", dot: "bg-muted" }];
   const chartAnimationKey = chartRows.map((row) => `${row.label}:${row.value}`).join("|");
 
   return (

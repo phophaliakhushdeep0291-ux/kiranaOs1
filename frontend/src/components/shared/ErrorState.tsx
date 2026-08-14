@@ -1,3 +1,4 @@
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import type { HTMLAttributes, ReactNode } from "react";
 import { AlertTriangle, RefreshCw, WifiOff, ServerCrash } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -5,12 +6,12 @@ import { cn } from "@/lib/utils";
 
 export type ErrorStateVariant = "generic" | "network" | "server" | "notFound";
 
-const variantConfig: Record<ErrorStateVariant, { icon: typeof AlertTriangle; title: string; description: string }> = {
-  generic:  { icon: AlertTriangle, title: "Something went wrong",  description: "An unexpected error occurred. Please try again." },
-  network:  { icon: WifiOff,       title: "No internet connection", description: "Check your network and try again." },
-  server:   { icon: ServerCrash,   title: "Server error",           description: "Our server couldn't process the request. Try again shortly." },
-  notFound: { icon: AlertTriangle, title: "Not found",              description: "The requested item doesn't exist or was deleted." },
-};
+const variantConfig = (t: Translate): Record<ErrorStateVariant, { icon: typeof AlertTriangle; title: string; description: string }> => ({
+  generic:  { icon: AlertTriangle, title: t("settings.integrations.genericError"),  description: t("chrome.error.unexpected") },
+  network:  { icon: WifiOff,       title: t("chrome.error.offline"), description: t("chrome.error.offlineHelp") },
+  server:   { icon: ServerCrash,   title: t("chrome.error.server"),           description: t("chrome.error.serverHelp") },
+  notFound: { icon: AlertTriangle, title: t("chrome.error.notFound"), description: t("chrome.error.notFoundHelp") },
+});
 
 export interface ErrorStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title?: ReactNode;
@@ -26,7 +27,8 @@ export function ErrorState({
   onRetry, retryLabel = "Try again",
   compact = false, className, ...props
 }: ErrorStateProps) {
-  const cfg = variantConfig[variant];
+  const { t } = useAppLanguage();
+  const cfg = variantConfig(t)[variant];
   const Icon = cfg.icon;
 
   return (

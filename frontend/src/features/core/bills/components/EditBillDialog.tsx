@@ -1,4 +1,4 @@
-import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,8 +36,8 @@ function str(value: unknown): string {
   return typeof value === "string" ? value : value == null ? "" : String(value);
 }
 
-function errMsg(error: unknown): string {
-  return error instanceof Error ? error.message : "Please try again.";
+function errMsg(t: Translate, error: unknown): string {
+  return error instanceof Error ? error.message : t("settings.notify.tryAgain");
 }
 
 function money(value: number): string {
@@ -186,7 +186,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
       onDone();
       onClose();
     } catch (error) {
-      toast({ title: t("billing.bills.edit.addonFailed"), description: errMsg(error), variant: "destructive" });
+      toast({ title: t("billing.bills.edit.addonFailed"), description: errMsg(t, error), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -207,7 +207,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
       onDone();
       onClose();
     } catch (error) {
-      toast({ title: t("billing.bills.edit.editFailed"), description: errMsg(error), variant: "destructive" });
+      toast({ title: t("billing.bills.edit.editFailed"), description: errMsg(t, error), variant: "destructive" });
     } finally {
       setSaving(false);
     }

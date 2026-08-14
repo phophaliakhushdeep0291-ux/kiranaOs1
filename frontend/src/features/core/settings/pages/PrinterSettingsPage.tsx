@@ -54,12 +54,12 @@ export default function PrinterSettingsPage() {
   const hardwareCapabilities = useMemo(() => {
     const browserNavigator = navigator as Navigator & { bluetooth?: unknown; usb?: unknown; serial?: unknown };
     return [
-      { label: "System receipt printing", detail: "Print dialog and installed drivers", ready: typeof window.print === "function", icon: Printer },
-      { label: "Bluetooth browser API", detail: "Detected only; printing still uses the paired system queue", ready: Boolean(browserNavigator.bluetooth) && window.isSecureContext, icon: Bluetooth },
-      { label: "USB browser API", detail: "Detected only; direct ESC/POS uses the local bridge", ready: Boolean(browserNavigator.usb) && window.isSecureContext, icon: Usb },
-      { label: "Serial weighing scale", detail: "Web Serial capable browser; device protocol still required", ready: Boolean(browserNavigator.serial) && window.isSecureContext, icon: Scale },
-      { label: "Customer display", detail: bridgeHealth?.capabilities?.customerDisplay ? "Paired structured-total adapter" : "Configure a vendor adapter in Hardware Bridge Setup", ready: Boolean(bridgeHealth?.capabilities?.customerDisplay), icon: Monitor },
-      { label: "Local hardware bridge", detail: bridgeHealth?.deviceName || "Direct printer, cutter, drawer, scale and display adapters", ready: Boolean(bridgeHealth?.ok), icon: Cable },
+      { label: t("settings.printer.cap.system"), detail: t("settings.printer.cap.systemHelp"), ready: typeof window.print === "function", icon: Printer },
+      { label: t("settings.printer.cap.bluetooth"), detail: t("settings.printer.cap.bluetoothHelp"), ready: Boolean(browserNavigator.bluetooth) && window.isSecureContext, icon: Bluetooth },
+      { label: t("settings.printer.cap.usb"), detail: t("settings.printer.cap.usbHelp"), ready: Boolean(browserNavigator.usb) && window.isSecureContext, icon: Usb },
+      { label: t("settings.printer.cap.scale"), detail: t("settings.printer.cap.scaleHelp"), ready: Boolean(browserNavigator.serial) && window.isSecureContext, icon: Scale },
+      { label: t("settings.printer.cap.display"), detail: bridgeHealth?.capabilities?.customerDisplay ? "Paired structured-total adapter" : "Configure a vendor adapter in Hardware Bridge Setup", ready: Boolean(bridgeHealth?.capabilities?.customerDisplay), icon: Monitor },
+      { label: t("settings.printer.cap.bridge"), detail: bridgeHealth?.deviceName || "Direct printer, cutter, drawer, scale and display adapters", ready: Boolean(bridgeHealth?.ok), icon: Cable },
     ];
   }, [bridgeHealth]);
 
@@ -114,7 +114,7 @@ export default function PrinterSettingsPage() {
         toast({ title: t("settings.printer.bridgeReady"), description: t("settings.printer.bridgeReadyHelp") });
       } catch (error) {
         setBridgeHealth(null);
-        setScanResult(error instanceof Error ? error.message : "Hardware bridge could not be reached.");
+        setScanResult(error instanceof Error ? error.message : t("settings.printer.bridgeUnreachable"));
       }
       return;
     }
@@ -138,7 +138,7 @@ export default function PrinterSettingsPage() {
       setScanResult(`${PRINTER_CONNECTION_LABELS[cfg.connection]} saved as ${cfg.deviceName || "default printer"}.`);
       toast({ title: t("settings.printer.settingsSaved"), description: t("settings.printer.settingsSavedHelp") });
     } catch (error) {
-      toast({ title: t("settings.printer.connectionNotReady"), description: error instanceof Error ? error.message : "Check this printer setup.", variant: "destructive" });
+      toast({ title: t("settings.printer.connectionNotReady"), description: error instanceof Error ? error.message : t("settings.printer.checkSetup"), variant: "destructive" });
     } finally {
       setConnecting(false);
     }
@@ -153,7 +153,7 @@ export default function PrinterSettingsPage() {
     try {
       await openCashDrawerViaHardwareBridge(cfg.bridgeUrl);
       toast({ title: t("settings.printer.drawerOpened"), description: t("settings.printer.drawerOpenedHelp") });
-    } catch (error) { toast({ title: t("settings.printer.drawerFailed"), description: error instanceof Error ? error.message : "Check the bridge and printer cable.", variant: "destructive" }); }
+    } catch (error) { toast({ title: t("settings.printer.drawerFailed"), description: error instanceof Error ? error.message : t("settings.printer.checkCable"), variant: "destructive" }); }
   }
 
   async function readScale() {
@@ -161,7 +161,7 @@ export default function PrinterSettingsPage() {
       const reading = await readScaleViaHardwareBridge(cfg.bridgeUrl);
       setScaleReading(`${reading.weight} ${reading.unit}`);
       toast({ title: t("settings.printer.scaleReceived"), description: `${reading.weight} ${reading.unit}` });
-    } catch (error) { toast({ title: t("settings.printer.scaleFailed"), description: error instanceof Error ? error.message : "Check the bridge and scale protocol.", variant: "destructive" }); }
+    } catch (error) { toast({ title: t("settings.printer.scaleFailed"), description: error instanceof Error ? error.message : t("settings.printer.checkScale"), variant: "destructive" }); }
   }
 
   async function testCustomerDisplay() {
@@ -173,7 +173,7 @@ export default function PrinterSettingsPage() {
         totalPaise: 12_345,
       });
       toast({ title: t("settings.printer.displayUpdated"), description: t("settings.printer.displayUpdatedHelp") });
-    } catch (error) { toast({ title: t("settings.printer.displayFailed"), description: error instanceof Error ? error.message : "Check the bridge and display adapter.", variant: "destructive" }); }
+    } catch (error) { toast({ title: t("settings.printer.displayFailed"), description: error instanceof Error ? error.message : t("settings.printer.checkDisplay"), variant: "destructive" }); }
   }
 
   function downloadReceiptHtml() {

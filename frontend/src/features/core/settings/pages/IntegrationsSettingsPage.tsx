@@ -190,7 +190,7 @@ export default function IntegrationsSettingsPage() {
       const ttlDays = Number(keyTtlDays);
       const expiresAt = ttlDays > 0 ? new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString() : null;
       const result = await apiRequest<ApiKeyRow & { secret: string }>("/integrations/api-keys", { method: "POST", ownerPin, body: JSON.stringify({ name: keyName.trim(), scopes, expiresAt }) });
-      setSecret({ title: t("settings.integrations.keyCreatedTitle"), value: result.secret, note: "Copy this key now. It cannot be viewed again after you close this window." });
+      setSecret({ title: t("settings.integrations.keyCreatedTitle"), value: result.secret, note: t("settings.integrations.copyKeyNow") });
       toast({ title: t("settings.integrations.keyCreated") });
     } });
   }
@@ -200,7 +200,7 @@ export default function IntegrationsSettingsPage() {
     setWebhookOpen(false);
     requestApproval({ title: t("settings.integrations.approveCreateWebhook"), description: t("settings.integrations.approveCreateWebhookHelp"), confirmLabel: t("settings.integrations.createEndpoint"), run: async (ownerPin) => {
       const result = await apiRequest<WebhookRow & { secret: string }>("/integrations/webhooks", { method: "POST", ownerPin, body: JSON.stringify({ name: webhookName.trim(), url: webhookUrl.trim(), events }) });
-      setSecret({ title: t("settings.integrations.webhookSecretTitle"), value: result.secret, note: "Use this secret to verify the x-kiranaos-signature header. It is shown only now." });
+      setSecret({ title: t("settings.integrations.webhookSecretTitle"), value: result.secret, note: t("settings.integrations.verifySignature") });
       setWebhookUrl("");
       toast({ title: t("settings.integrations.webhookCreated") });
     } });

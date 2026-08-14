@@ -1,3 +1,4 @@
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import type { ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
@@ -13,21 +14,21 @@ export interface SettingsMenuItem {
   icon: LucideIcon;
 }
 
-export const SETTINGS_MENU: SettingsMenuItem[] = [
-  { id: "general", label: "General", href: "/settings", icon: Settings2 },
-  { id: "setup", label: "Merchant Setup", href: "/settings/setup", icon: ListChecks },
-  { id: "store", label: "Store Profile", href: "/settings/store-profile", icon: Store },
-  { id: "modules", label: "Modules", href: "/settings/modules", icon: LayoutGrid },
-  { id: "billing", label: "Billing & Subscription", href: "/settings/billing", icon: CreditCard },
-  { id: "staff", label: "Staff & Permissions", href: "/settings/staff", icon: UsersRound },
-  { id: "devices", label: "Device Management", href: "/settings/devices", icon: MonitorSmartphone },
-  { id: "printer", label: "Printer & Billing", href: "/settings/printer", icon: Printer },
-  { id: "taxes", label: "Taxes & GST", href: "/settings/taxes", icon: Receipt },
-  { id: "sync", label: "Sync & Backup", href: "/settings/sync", icon: Cloud },
-  { id: "security", label: "Security & PIN", href: "/settings/security", icon: Shield },
-  { id: "notifications", label: "Notifications", href: "/settings/notifications", icon: Bell },
-  { id: "integrations", label: "Integrations", href: "/settings/integrations", icon: Plug },
-  { id: "advanced", label: "Advanced", href: "/settings/advanced", icon: Sliders },
+export const settingsMenu = (t: Translate): SettingsMenuItem[] => [
+  { id: "general", label: t("products.filter.general"), href: "/settings", icon: Settings2 },
+  { id: "setup", label: t("settings.tab.merchantSetup"), href: "/settings/setup", icon: ListChecks },
+  { id: "store", label: t("settings.hub.storeProfile"), href: "/settings/store-profile", icon: Store },
+  { id: "modules", label: t("chrome.modulesTitle"), href: "/settings/modules", icon: LayoutGrid },
+  { id: "billing", label: t("settings.hub.billingSubscription"), href: "/settings/billing", icon: CreditCard },
+  { id: "staff", label: t("settings.hub.staffPermissions"), href: "/settings/staff", icon: UsersRound },
+  { id: "devices", label: t("settings.hub.deviceManagement"), href: "/settings/devices", icon: MonitorSmartphone },
+  { id: "printer", label: t("settings.hub.printerBilling"), href: "/settings/printer", icon: Printer },
+  { id: "taxes", label: t("settings.hub.taxesGst"), href: "/settings/taxes", icon: Receipt },
+  { id: "sync", label: t("settings.hub.syncBackup"), href: "/settings/sync", icon: Cloud },
+  { id: "security", label: t("settings.hub.securityPin"), href: "/settings/security", icon: Shield },
+  { id: "notifications", label: t("settings.hub.notifications"), href: "/settings/notifications", icon: Bell },
+  { id: "integrations", label: t("settings.hub.integrations"), href: "/settings/integrations", icon: Plug },
+  { id: "advanced", label: t("settings.advanced"), href: "/settings/advanced", icon: Sliders },
 ];
 
 /**
@@ -37,6 +38,7 @@ export const SETTINGS_MENU: SettingsMenuItem[] = [
  * consistent SaaS control centre across tabs.
  */
 export function SettingsShell({ children, className }: { children: ReactNode; className?: string }) {
+  const { t } = useAppLanguage();
   const [location, navigate] = useLocation();
 
   return (
@@ -44,7 +46,7 @@ export function SettingsShell({ children, className }: { children: ReactNode; cl
       <div className="flex min-w-0 gap-4 lg:min-w-[920px] xl:min-w-0">
         <aside className="hidden w-[200px] shrink-0 lg:block">
           <nav className="sticky top-4 space-y-0.5">
-            {SETTINGS_MENU.map((m) => {
+            {settingsMenu(t).map((m) => {
               const isActive = location === m.href;
               return (
                 <button

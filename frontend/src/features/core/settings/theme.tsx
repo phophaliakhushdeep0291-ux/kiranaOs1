@@ -1,23 +1,32 @@
+import { type Translate } from "@/features/core/settings/i18n";
 import { createContext, useContext, useLayoutEffect, useState, type ReactNode } from "react";
 
 export type AccentColor = "emerald" | "teal" | "blue" | "violet" | "rose" | "amber" | "orange" | "slate";
 
 export interface AccentDefinition {
-  label: string;
   swatch: string;
-  description: string;
 }
 
 export const ACCENT_COLORS: Record<AccentColor, AccentDefinition> = {
-  emerald: { label: "Emerald", swatch: "#16a34a", description: "Fresh green" },
-  teal: { label: "Teal", swatch: "#0d9488", description: "Cool blue-green" },
-  blue: { label: "Blue", swatch: "#2563eb", description: "Artha premium default" },
-  violet: { label: "Violet", swatch: "#7c3aed", description: "Bold and modern purple" },
-  rose: { label: "Rose", swatch: "#e11d48", description: "Vibrant and energetic" },
-  amber: { label: "Amber", swatch: "#d97706", description: "Warm and inviting gold" },
-  orange: { label: "Orange", swatch: "#ea580c", description: "Lively and cheerful" },
-  slate: { label: "Slate", swatch: "#475569", description: "Neutral and minimal" },
+  emerald: { swatch: "#16a34a" },
+  teal: { swatch: "#0d9488" },
+  blue: { swatch: "#2563eb" },
+  violet: { swatch: "#7c3aed" },
+  rose: { swatch: "#e11d48" },
+  amber: { swatch: "#d97706" },
+  orange: { swatch: "#ea580c" },
+  slate: { swatch: "#475569" },
 };
+
+/**
+ * Names kept apart from the swatches on purpose. `applyAccent` and `isAccent`
+ * are colour maths, not components, and threading a translator through them to
+ * reach a label nobody reads there would put a hook where one cannot run.
+ */
+export const accentLabel = (t: Translate, accent: AccentColor) => ({
+  label: t(`settings.theme.${accent}` as Parameters<Translate>[0]),
+  description: t(`settings.theme.${accent}Help` as Parameters<Translate>[0]),
+});
 
 const THEME_KEY = "kirana-os:ui-theme:v1";
 

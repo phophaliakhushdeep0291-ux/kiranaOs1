@@ -595,4 +595,6 @@ export const billingEn = {
   "billing.bills.edit.confirmHelp": "Editing voids the original bill and recreates it with your changes. Owner PIN required.",
   "billing.bills.edit.voidRecreate": "Void & recreate",
   "billing.bills.moveToRecycleShort": "Move to recycle bin",
+  "billing.bills.checkOwnerPin": "Please check owner PIN and try again.",
+  "billing.bills.emailFailed": "Could not email this receipt.",
 } as const;

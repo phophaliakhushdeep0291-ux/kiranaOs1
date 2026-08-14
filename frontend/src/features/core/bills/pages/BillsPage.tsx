@@ -122,6 +122,7 @@ const STATUS_CLS: Record<string, string> = {
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
+  const { t } = useAppLanguage();
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
@@ -573,8 +574,8 @@ export default function BillsPage() {
   const backupStatus = isOnline
     ? { icon: Wifi, label: isSyncing ? "Syncing" : "Synced", sub: isSyncing ? "Backing up now" : "Just now", cls: "border-[#c9efd5] bg-[#eaf9ef] text-[#119447]" }
     : isBrowserOnline
-      ? { icon: CloudOff, label: backendStatus.checkedAt ? "Cloud paused" : "Checking backup", sub: "Local data safe", cls: "border-[#dbe9ff] bg-[var(--brand-soft)] text-[var(--brand)]" }
-      : { icon: WifiOff, label: "Offline ready", sub: t("billing.bills.savedLocally"), cls: "border-[#dfe6f0] bg-[#f7f9fc] text-[#64748b]" };
+      ? { icon: CloudOff, label: backendStatus.checkedAt ? "Cloud paused" : "Checking backup", sub: t("chrome.sync.localDataSafe"), cls: "border-[#dbe9ff] bg-[var(--brand-soft)] text-[var(--brand)]" }
+      : { icon: WifiOff, label: t("chrome.sync.offlineReady"), sub: t("billing.bills.savedLocally"), cls: "border-[#dfe6f0] bg-[#f7f9fc] text-[#64748b]" };
   const BackupStatusIcon = backupStatus.icon;
 
   function applyPeriod(nextPeriod: BillPeriod) {
@@ -686,7 +687,7 @@ export default function BillsPage() {
       setPinAction(null);
       await refetch();
     } catch (error) {
-      toast({ title: t("billing.bills.actionFailed"), description: error instanceof Error ? error.message : "Please check owner PIN and try again.", variant: "destructive" });
+      toast({ title: t("billing.bills.actionFailed"), description: error instanceof Error ? error.message : t("billing.bills.checkOwnerPin"), variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -1131,7 +1132,7 @@ function RecentActivityCard({ rows }: { rows: Array<{ id: string; title: string;
 
 function PaymentBreakdownCard({ rows, total, period }: { rows: Array<{ key: string; label: string; value: number; color: string }>; total: number; period: string }) {
   const { t } = useAppLanguage();
-  const chartRows = rows.length > 0 ? rows : [{ key: "empty", label: "No sales", value: 1, color: "#e5eaf2" }];
+  const chartRows = rows.length > 0 ? rows : [{ key: "empty", label: t("chrome.dashboard.noSales"), value: 1, color: "#e5eaf2" }];
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
