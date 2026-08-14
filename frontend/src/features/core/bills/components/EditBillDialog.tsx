@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ interface EditBillDialogProps {
 }
 
 export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: EditBillDialogProps) {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const seed = useMemo(() => billInputFromBill(bill, itemRows), [bill, itemRows]);
   const hasCustomer = Boolean(seed.customerId || (seed.customerName && seed.customerName !== "Walk-in"));
@@ -176,15 +178,15 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
 
   async function saveAddon() {
     const problem = validate();
-    if (problem) { toast({ title: "Cannot save", description: problem, variant: "destructive" }); return; }
+    if (problem) { toast({ title: t("billing.bills.edit.cannotSave"), description: problem, variant: "destructive" }); return; }
     setSaving(true);
     try {
       await addItemsToFinalizedBillLocalFirst({ originalBillId: str(bill.id), addOn: buildBillInput() });
-      toast({ title: "Add-on bill created", description: "Saved locally as a separate bill. It syncs automatically." });
+      toast({ title: t("billing.bills.edit.addonCreated"), description: t("billing.bills.edit.addonCreatedHelp") });
       onDone();
       onClose();
     } catch (error) {
-      toast({ title: "Could not create add-on", description: errMsg(error), variant: "destructive" });
+      toast({ title: t("billing.bills.edit.addonFailed"), description: errMsg(error), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -192,7 +194,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
 
   function requestSaveEdit() {
     const problem = validate();
-    if (problem) { toast({ title: "Cannot save", description: problem, variant: "destructive" }); return; }
+    if (problem) { toast({ title: t("billing.bills.edit.cannotSave"), description: problem, variant: "destructive" }); return; }
     setPinOpen(true);
   }
 
@@ -200,12 +202,12 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
     setSaving(true);
     try {
       await editFinalizedBillLocalFirst({ originalBillId: str(bill.id), ownerPin, reason, replacement: buildBillInput() });
-      toast({ title: "Bill edited", description: "Original voided and the corrected bill created. Both sync automatically." });
+      toast({ title: t("billing.bills.edit.billEdited"), description: t("billing.bills.edit.billEditedHelp") });
       setPinOpen(false);
       onDone();
       onClose();
     } catch (error) {
-      toast({ title: "Edit failed", description: errMsg(error), variant: "destructive" });
+      toast({ title: t("billing.bills.edit.editFailed"), description: errMsg(error), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -216,7 +218,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
       <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{mode === "edit" ? "Edit bill" : "Add items to bill"}</DialogTitle>
+            <DialogTitle>{mode === "edit" ? t("billing.bills.editBill") : "Add items to bill"}</DialogTitle>
             <DialogDescription>
               {mode === "edit"
                 ? "Finalized bills stay immutable. Saving voids this bill and creates a corrected one — owner PIN required."
@@ -285,7 +287,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Payment</span>
+                <span className="text-sm text-muted-foreground">{t("billing.bills.edit.payment")}</span>
                 {(["cash", "upi", "credit"] as PayChoice[]).map((choice) => (
                   <button
                     key={choice}
@@ -303,14 +305,14 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Discount</span>
+                <span className="text-sm text-muted-foreground">{t("billing.summary.discount")}</span>
                 <Input
                   type="number"
                   inputMode="decimal"
                   min={0}
                   {...discountProps}
                   className="h-9 w-24 text-right"
-                  aria-label="Discount"
+                  aria-label={t("billing.summary.discount")}
                 />
               </div>
             </div>
@@ -322,11 +324,11 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button variant="outline" onClick={onClose} disabled={saving}>{t("billing.bills.cancel")}</Button>
             {mode === "edit" ? (
-              <Button onClick={requestSaveEdit} disabled={saving}>Void &amp; save corrected bill</Button>
+              <Button onClick={requestSaveEdit} disabled={saving}>{t("billing.bills.edit.voidAndSave")}</Button>
             ) : (
-              <Button onClick={saveAddon} disabled={saving}>Create add-on bill</Button>
+              <Button onClick={saveAddon} disabled={saving}>{t("billing.bills.edit.createAddon")}</Button>
             )}
           </DialogFooter>
         </DialogContent>
@@ -357,6 +359,7 @@ function BillLineQuantity({ quantity, onChange }: { quantity: number; onChange: 
 
 // A hook cannot run inside the lines.map callback, so each row owns its draft.
 function BillLineRate({ rate, onChange }: { rate: number; onChange: (next: number) => void }) {
+  const { t } = useAppLanguage();
   const props = useMoneyDraft(rate, onChange);
-  return <Input type="number" inputMode="decimal" className="h-9 text-right" aria-label="Rate" {...props} />;
+  return <Input type="number" inputMode="decimal" className="h-9 text-right" aria-label={t("billing.bills.rate")} {...props} />;
 }

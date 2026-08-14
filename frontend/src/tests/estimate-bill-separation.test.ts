@@ -13,7 +13,7 @@ describe("estimate bills work like real bills under their own number series", ()
   it("keeps the EST- number series and estimate views", () => {
     expect(billingPage).toContain('EST-${year}-LOCAL-');
     expect(billsPage).toContain('function activeEstimateRows');
-    expect(billsPage).toContain('value: "estimate", label: "Estimates"');
+    expect(billsPage).toContain('value: "estimate", label: t("billing.bills.tab.estimate")');
     expect(billsPage).toContain('Clear Estimates');
     expect(billsPage).toContain('clear_estimates');
     expect(billsPage).toContain('Move estimate to recycle bin');

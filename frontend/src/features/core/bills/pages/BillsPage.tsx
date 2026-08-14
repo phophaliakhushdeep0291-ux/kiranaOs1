@@ -1,3 +1,4 @@
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -87,24 +88,29 @@ const PERIOD_LABELS: Record<BillPeriod, string> = {
   all: "All Time",
 };
 
-const BILL_TABS: Array<{ value: BillFilter; label: string }> = [
-  { value: "all", label: "All Bills" },
-  { value: "pakka", label: "Pakka Bills" },
-  { value: "estimate", label: "Estimates" },
-  { value: "paid", label: "Paid" },
-  { value: "partial", label: "Partial" },
-  { value: "udhar", label: "Udhar" },
-  { value: "cancelled", label: "Cancelled" },
+// A function, not a constant: these labels are prose, and prose read at module
+// scope is fixed at import time — before a language is even chosen. The same
+// reason merchant-setup-state.ts takes `t` as a parameter.
+const billTabs = (t: Translate): Array<{ value: BillFilter; label: string }> => [
+  { value: "all", label: t("billing.bills.tab.all") },
+  { value: "pakka", label: t("billing.bills.tab.pakka") },
+  { value: "estimate", label: t("billing.bills.tab.estimate") },
+  { value: "paid", label: t("billing.pay.paid") },
+  { value: "partial", label: t("billing.bills.tab.partial") },
+  { value: "udhar", label: t("billing.bills.tab.udhar") },
+  { value: "cancelled", label: t("billing.bills.tab.cancelled") },
 ];
 
-const MODE_META: Record<string, { label: string; chip: string; color: string }> = {
-  cash: { label: "Cash", chip: CHIP_TONES.green, color: "#20b75a" },
-  upi: { label: "UPI", chip: CHIP_TONES.violet, color: "#7c3ff2" },
-  card: { label: "Card", chip: CHIP_TONES.blue, color: "#f6ad14" },
-  split: { label: "Split", chip: CHIP_TONES.blue, color: "var(--brand)" },
-  udhar: { label: "Credit (Udhar)", chip: CHIP_TONES.amber, color: "#ff7a1a" },
-  bank: { label: "Bank Transfer", chip: CHIP_TONES.blue, color: "#0ea5e9" },
-};
+// Also a function, for the same reason as billTabs: the colours and chips are
+// constants, but the labels are prose and cannot be resolved at import time.
+const modeMeta = (t: Translate): Record<string, { label: string; chip: string; color: string }> => ({
+  cash: { label: t("billing.pay.cash"), chip: CHIP_TONES.green, color: "#20b75a" },
+  upi: { label: t("billing.pay.upi"), chip: CHIP_TONES.violet, color: "#7c3ff2" },
+  card: { label: t("billing.bills.card"), chip: CHIP_TONES.blue, color: "#f6ad14" },
+  split: { label: t("billing.pay.split"), chip: CHIP_TONES.blue, color: "var(--brand)" },
+  udhar: { label: t("billing.bills.credit"), chip: CHIP_TONES.amber, color: "#ff7a1a" },
+  bank: { label: t("billing.bills.bankTransfer"), chip: CHIP_TONES.blue, color: "#0ea5e9" },
+});
 
 const STATUS_CLS: Record<string, string> = {
   Paid: CHIP_TONES.green,
@@ -116,6 +122,7 @@ const STATUS_CLS: Record<string, string> = {
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
+  const { t } = useAppLanguage();
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
@@ -179,14 +186,14 @@ function syncStatusOf(bill: BillRecord) {
   return "synced";
 }
 
-function paymentStatusOf(bill: BillRecord) {
+function paymentStatusOf(bill: BillRecord, t: Translate) {
   if (bill.status === "cancelled") return "Cancelled";
   const paid = billPaid(bill);
   const credit = billCredit(bill);
   const total = billTotal(bill);
-  if (credit > 0 && paid > 0) return "Partial";
-  if (credit > 0) return "Udhar";
-  if (paid >= total && total > 0) return "Paid";
+  if (credit > 0 && paid > 0) return t("billing.bills.tab.partial");
+  if (credit > 0) return t("billing.bills.tab.udhar");
+  if (paid >= total && total > 0) return t("billing.pay.paid");
   return "Pending";
 }
 
@@ -214,8 +221,8 @@ function statusLabel(status: string) {
   return status;
 }
 
-function modeLabel(mode: string) {
-  return MODE_META[mode]?.label ?? mode.charAt(0).toUpperCase() + mode.slice(1);
+function modeLabel(mode: string, t: Translate) {
+  return modeMeta(t)[mode]?.label ?? mode.charAt(0).toUpperCase() + mode.slice(1);
 }
 
 function billTypeOf(bill: BillRecord) {
@@ -383,6 +390,7 @@ function useLocalBills() {
 }
 
 export default function BillsPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const { shop } = useAuth();
   const [, navigate] = useLocation();
@@ -419,7 +427,7 @@ export default function BillsPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return bills.filter((bill) => {
-      const status = paymentStatusOf(bill).toLowerCase();
+      const status = paymentStatusOf(bill, t).toLowerCase();
       const sync = syncStatusOf(bill);
       const deleted = isDeleted(bill);
       const staff = staffNameOf(bill, staffFallback);
@@ -472,10 +480,10 @@ export default function BillsPage() {
     const previousSales = sum(previousReal, billTotal);
     const currentAvg = currentReal.length ? currentSales / currentReal.length : 0;
     const previousAvg = previousReal.length ? previousSales / previousReal.length : 0;
-    const currentPaid = currentReal.filter((bill) => paymentStatusOf(bill) === "Paid").length;
-    const previousPaid = previousReal.filter((bill) => paymentStatusOf(bill) === "Paid").length;
-    const currentUdhar = currentReal.filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill))).length;
-    const previousUdhar = previousReal.filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill))).length;
+    const currentPaid = currentReal.filter((bill) => paymentStatusOf(bill, t) === t("billing.pay.paid")).length;
+    const previousPaid = previousReal.filter((bill) => paymentStatusOf(bill, t) === t("billing.pay.paid")).length;
+    const currentUdhar = currentReal.filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill, t))).length;
+    const previousUdhar = previousReal.filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill, t))).length;
     const currentCancelled = periodBills.filter((bill) => bill.status === "cancelled").length;
     const previousCancelled = previousRows.filter((bill) => bill.status === "cancelled").length;
     const sparkEnd = toDate || toDateInputValue(new Date());
@@ -496,8 +504,8 @@ export default function BillsPage() {
       sparks: {
         totalBills: sparkFromRows(periodBills, sparkEnd, (rows) => realSaleRows(rows).length),
         totalSales: sparkFromRows(periodBills, sparkEnd, (rows) => sum(realSaleRows(rows), billTotal)),
-        paidBills: sparkFromRows(periodBills, sparkEnd, (rows) => realSaleRows(rows).filter((bill) => paymentStatusOf(bill) === "Paid").length),
-        udharBills: sparkFromRows(periodBills, sparkEnd, (rows) => realSaleRows(rows).filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill))).length),
+        paidBills: sparkFromRows(periodBills, sparkEnd, (rows) => realSaleRows(rows).filter((bill) => paymentStatusOf(bill, t) === t("billing.pay.paid")).length),
+        udharBills: sparkFromRows(periodBills, sparkEnd, (rows) => realSaleRows(rows).filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill, t))).length),
         avgBill: sparkFromRows(periodBills, sparkEnd, (rows) => {
           const real = realSaleRows(rows);
           const sales = sum(real, billTotal);
@@ -524,12 +532,12 @@ export default function BillsPage() {
     }
     const order = ["cash", "upi", "card", "split", "udhar", "bank"];
     return order
-      .map((key) => ({ key, value: totals.get(key) ?? 0, ...MODE_META[key] }))
+      .map((key) => ({ key, value: totals.get(key) ?? 0, ...modeMeta(t)[key] }))
       .filter((row) => row.value > 0);
   }, [periodBills]);
 
   const recentActivities = useMemo(() => filtered.filter((bill) => !isDeleted(bill)).slice(0, 4).map((bill) => {
-    const status = paymentStatusOf(bill);
+    const status = paymentStatusOf(bill, t);
     const mode = paymentModeOf(bill);
     const customer = String(bill.customerName || "Walk-in customer");
     const title = isEstimateBill(bill)
@@ -567,7 +575,7 @@ export default function BillsPage() {
     ? { icon: Wifi, label: isSyncing ? "Syncing" : "Synced", sub: isSyncing ? "Backing up now" : "Just now", cls: "border-[#c9efd5] bg-[#eaf9ef] text-[#119447]" }
     : isBrowserOnline
       ? { icon: CloudOff, label: backendStatus.checkedAt ? "Cloud paused" : "Checking backup", sub: "Local data safe", cls: "border-[#dbe9ff] bg-[var(--brand-soft)] text-[var(--brand)]" }
-      : { icon: WifiOff, label: "Offline ready", sub: "Saved locally", cls: "border-[#dfe6f0] bg-[#f7f9fc] text-[#64748b]" };
+      : { icon: WifiOff, label: "Offline ready", sub: t("billing.bills.savedLocally"), cls: "border-[#dfe6f0] bg-[#f7f9fc] text-[#64748b]" };
   const BackupStatusIcon = backupStatus.icon;
 
   function applyPeriod(nextPeriod: BillPeriod) {
@@ -581,7 +589,7 @@ export default function BillsPage() {
     const ok = openPrintableBill(buildPrintableBillSnapshot(bill, [], [], {
       name: shop?.name, address: shop?.address, city: shop?.city, phone: shop?.phone, gstNumber: shop?.gstNumber,
     }));
-    if (!ok) toast({ title: "Print blocked", description: "Allow pop-ups to print or save PDF.", variant: "destructive" });
+    if (!ok) toast({ title: t("billing.bills.printBlocked"), description: t("billing.bills.allowPopups"), variant: "destructive" });
   }
 
   async function shareOnWhatsapp(bill: BillRecord) {
@@ -593,7 +601,7 @@ export default function BillsPage() {
     });
     const { targetedCustomer } = shareBillOnWhatsapp(shareInput);
     toast({
-      title: "Opening WhatsApp",
+      title: t("billing.bills.openingWhatsapp"),
       description: targetedCustomer ? "Ready to send to the customer's number." : "Pick a chat to send this bill.",
     });
   }
@@ -604,11 +612,11 @@ export default function BillsPage() {
 
   function exportCsv() {
     const rows = checked.size > 0 ? filtered.filter((bill) => checked.has(bill.id)) : filtered;
-    const header = ["Bill No", "Date", "Customer", "Mobile", "Items", "Total", "Paid", "Due", "Mode", "Status", "Sync"];
+    const header = ["Bill No", t("billing.bills.date"), "Customer", "Mobile", t("billing.bills.items"), t("billing.bills.total"), t("billing.pay.paid"), "Due", "Mode", t("billing.bills.status"), "Sync"];
     const lines = rows.map((bill) => [
       billNo(bill), billDate(bill) ? new Date(billDate(bill)).toLocaleString("en-IN") : "", String(bill.customerName ?? "Walk-in"),
       String(bill.customerMobile ?? ""), itemsCount(bill) || "", billTotal(bill), billPaid(bill), billCredit(bill),
-      modeLabel(paymentModeOf(bill)), statusLabel(paymentStatusOf(bill)), syncStatusOf(bill),
+      modeLabel(paymentModeOf(bill), t), statusLabel(paymentStatusOf(bill, t)), syncStatusOf(bill),
     ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
     const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -637,7 +645,7 @@ export default function BillsPage() {
   function requestPinAction(action: PinAction, bill: BillRecord) {
     if (action === "clear_estimates") return;
     if (action === "cancel" && !cancelPermission.allowed) {
-      toast({ title: "Permission denied", description: cancelPermission.reason, variant: "destructive" });
+      toast({ title: t("billing.bills.permissionDenied"), description: cancelPermission.reason, variant: "destructive" });
       return;
     }
     setPinAction({ action, bill });
@@ -646,7 +654,7 @@ export default function BillsPage() {
   function requestEstimateCleanup() {
     const rows = filter === "estimate" ? estimatesInView : activeEstimateRows(bills);
     if (rows.length === 0) {
-      toast({ title: "No estimates to clear", description: "Estimate bills are already clean." });
+      toast({ title: t("billing.bills.noEstimatesToClear"), description: t("billing.bills.estimatesClean") });
       return;
     }
     setPinAction({ action: "clear_estimates", bills: rows });
@@ -667,19 +675,19 @@ export default function BillsPage() {
           return next;
         });
         toast({
-          title: "Estimates moved to recycle bin",
+          title: t("billing.bills.estimatesMoved"),
           description: `${rows.length} estimate bill${rows.length === 1 ? "" : "s"} cleared from active bill history.`,
         });
       } else {
         if (pinAction.action === "cancel") await cancelBillWithOwnerPinLocalFirst(pinAction.bill.id, ownerPin, reason);
         if (pinAction.action === "delete") await softDeleteBillWithOwnerPinLocalFirst(pinAction.bill.id, ownerPin, reason);
         if (pinAction.action === "restore") await restoreBillWithOwnerPinLocalFirst(pinAction.bill.id, ownerPin, reason);
-        toast({ title: "Saved locally", description: "Data is safe locally. Cloud backup will run automatically." });
+        toast({ title: t("billing.bills.savedLocally"), description: t("billing.bills.savedLocallyHelp") });
       }
       setPinAction(null);
       await refetch();
     } catch (error) {
-      toast({ title: "Action failed", description: error instanceof Error ? error.message : "Please check owner PIN and try again.", variant: "destructive" });
+      toast({ title: t("billing.bills.actionFailed"), description: error instanceof Error ? error.message : "Please check owner PIN and try again.", variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -724,17 +732,17 @@ export default function BillsPage() {
             <Trash2 size={15} /> Clear Estimates
           </Button>
           <Button asChild variant="outline" className="h-12 w-full rounded-[14px] border-[#dfe7f2] bg-white px-3 text-[11px] font-bold text-[var(--brand)] lg:mouse:h-10 lg:w-auto lg:rounded-[8px] lg:px-4 lg:text-[12px]">
-            <Link href="/billing?billType=estimate"><FileText size={15} />New estimate</Link>
+            <Link href="/billing?billType=estimate"><FileText size={15} />{t("billing.bills.newEstimate")}</Link>
           </Button>
           <Button asChild className="h-12 w-full rounded-[14px] bg-[var(--brand)] px-3 text-[11px] font-bold text-white shadow-[0_9px_20px_var(--brand-shadow)] hover:bg-[var(--brand-strong)] lg:mouse:h-10 lg:w-auto lg:rounded-[8px] lg:px-5 lg:text-[12px]">
-            <Link href="/billing?billType=normal_sale"><Plus size={15} />New pakka bill</Link>
+            <Link href="/billing?billType=normal_sale"><Plus size={15} />{t("billing.bills.newPakka")}</Link>
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 items-stretch gap-2.5 lg:grid-cols-3 lg:gap-3 xl:grid-cols-6">
-        <BillKpiCard label="Total Bills" value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
-        <BillKpiCard label="Total Sales" value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard label={t("billing.bills.totalBills")} value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard label={t("billing.bills.totalSales")} value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard mobileHidden label="Paid Bills" value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label="Udhar Bills" value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
         <BillKpiCard mobileHidden label="Average Bill Value" value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
@@ -749,7 +757,7 @@ export default function BillsPage() {
                 more", and the taller chip is the thumb-sized version of the
                 36px one the desktop keeps. */}
             <div className="scroll-rail -mx-1 flex min-w-0 gap-1 overflow-x-auto px-1" role="tablist" aria-label="Filter bills">
-              {BILL_TABS.map((tab) => (
+              {billTabs(t).map((tab) => (
                 <button
                   key={tab.value}
                   type="button"
@@ -775,19 +783,19 @@ export default function BillsPage() {
               <Select value={modeFilter} onValueChange={(value) => setModeFilter(value as ModeFilter)}>
                 <SelectTrigger className="h-10 rounded-[8px] border-[#dfe7f2] bg-white text-[12px] font-bold text-[#24385f]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Payment Modes</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="upi">UPI</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="split">Split</SelectItem>
-                  <SelectItem value="udhar">Credit (Udhar)</SelectItem>
-                  <SelectItem value="bank">Bank Transfer</SelectItem>
+                  <SelectItem value="all">{t("billing.bills.allModes")}</SelectItem>
+                  <SelectItem value="cash">{t("billing.pay.cash")}</SelectItem>
+                  <SelectItem value="upi">{t("billing.pay.upi")}</SelectItem>
+                  <SelectItem value="card">{t("billing.bills.card")}</SelectItem>
+                  <SelectItem value="split">{t("billing.pay.split")}</SelectItem>
+                  <SelectItem value="udhar">{t("billing.bills.credit")}</SelectItem>
+                  <SelectItem value="bank">{t("billing.bills.bankTransfer")}</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={staffFilter} onValueChange={setStaffFilter}>
                 <SelectTrigger className="h-10 rounded-[8px] border-[#dfe7f2] bg-white text-[12px] font-bold text-[#24385f]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Staff</SelectItem>
+                  <SelectItem value="all">{t("billing.bills.allStaff")}</SelectItem>
                   {staffOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -806,13 +814,13 @@ export default function BillsPage() {
         </div>
 
         {isLoading ? (
-          <div className="grid h-52 place-items-center text-[13px] font-semibold text-[#7a879f]">Loading bill history...</div>
+          <div className="grid h-52 place-items-center text-[13px] font-semibold text-[#7a879f]">{t("billing.bills.loading")}</div>
         ) : filtered.length === 0 ? (
           <div className="grid h-56 place-items-center px-4 text-center">
             <div>
               <ReceiptText size={28} className="mx-auto text-[#9aa8bc]" />
-              <p className="mt-2 text-[14px] font-bold text-[var(--brand-ink)]">No bills found</p>
-              <p className="mt-1 text-[12px] text-[#7a879f]">Try a different filter or create a new bill.</p>
+              <p className="mt-2 text-[14px] font-bold text-[var(--brand-ink)]">{t("billing.bills.notFound")}</p>
+              <p className="mt-1 text-[12px] text-[#7a879f]">{t("billing.bills.notFoundHelp")}</p>
             </div>
           </div>
         ) : (
@@ -820,7 +828,7 @@ export default function BillsPage() {
             <div className="space-y-2.5 p-3 md:hidden">
               {pageRows.map((bill) => {
                 const date = formatBillDateParts(billDate(bill));
-                const status = paymentStatusOf(bill);
+                const status = paymentStatusOf(bill, t);
                 const mode = paymentModeOf(bill);
                 const sync = syncStatusOf(bill);
                 const deleted = isDeleted(bill);
@@ -854,14 +862,14 @@ export default function BillsPage() {
                           <button className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[#405273] active:scale-95" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={16} className="mx-auto" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> Open bill page</span></Link></DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => refundReverse(bill)}><RotateCcw size={14} className="mr-2" /> Return / refund</DropdownMenuItem>
+                          <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> {t("billing.bills.openBill")}</span></Link></DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => refundReverse(bill)}><RotateCcw size={14} className="mr-2" /> {t("billing.bills.returnRefund")}</DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {deleted ? (
-                            <DropdownMenuItem onClick={() => requestPinAction("restore", bill)}><RotateCcw size={14} className="mr-2" /> Restore bill</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => requestPinAction("restore", bill)}><RotateCcw size={14} className="mr-2" /> {t("billing.bills.restoreBill")}</DropdownMenuItem>
                           ) : (
                             <>
-                              {bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> Cancel bill</DropdownMenuItem>}
+                              {bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> {t("billing.bills.cancelBill")}</DropdownMenuItem>}
                               <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> {estimate ? "Move estimate to recycle bin" : "Move to recycle bin"}</DropdownMenuItem>
                             </>
                           )}
@@ -879,15 +887,15 @@ export default function BillsPage() {
                     <th className="w-9 px-4 py-2.5 text-left">
                       <input type="checkbox" className="h-3.5 w-3.5 rounded border-[#cbd5e1] accent-[var(--brand)]" aria-label="Select all bills on page" checked={pageRows.length > 0 && pageRows.every((bill) => checked.has(bill.id))} onChange={toggleAllOnPage} />
                     </th>
-                    {["Bill No", "Customer", "Date & Time", "Items", "Payment Mode", "Bill Type", "Amount", "Status", "Staff", "Sync", "Action"].map((header) => (
-                      <th key={header} className={cn("px-4 py-2.5 font-bold", ["Items", "Amount"].includes(header) ? "text-right" : "text-left")}>{header}</th>
+                    {["Bill No", "Customer", "Date & Time", t("billing.bills.items"), "Payment Mode", "Bill Type", "Amount", t("billing.bills.status"), "Staff", "Sync", "Action"].map((header) => (
+                      <th key={header} className={cn("px-4 py-2.5 font-bold", [t("billing.bills.items"), "Amount"].includes(header) ? "text-right" : "text-left")}>{header}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e8edf4]">
                   {pageRows.map((bill) => {
                     const date = formatBillDateParts(billDate(bill));
-                    const status = paymentStatusOf(bill);
+                    const status = paymentStatusOf(bill, t);
                     const mode = paymentModeOf(bill);
                     const sync = syncStatusOf(bill);
                     const deleted = isDeleted(bill);
@@ -933,14 +941,14 @@ export default function BillsPage() {
                                 <button className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[#405273] transition-colors hover:border-[#c7d8ef] hover:bg-[var(--brand-softer)]" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={14} /></button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
-                                <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> Open bill page</span></Link></DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => refundReverse(bill)}><RotateCcw size={14} className="mr-2" /> Return / refund</DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> {t("billing.bills.openBill")}</span></Link></DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => refundReverse(bill)}><RotateCcw size={14} className="mr-2" /> {t("billing.bills.returnRefund")}</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {deleted ? (
-                                  <DropdownMenuItem onClick={() => requestPinAction("restore", bill)}><RotateCcw size={14} className="mr-2" /> Restore bill</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => requestPinAction("restore", bill)}><RotateCcw size={14} className="mr-2" /> {t("billing.bills.restoreBill")}</DropdownMenuItem>
                                 ) : (
                                   <>
-                                    {bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> Cancel bill</DropdownMenuItem>}
+                                    {bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> {t("billing.bills.cancelBill")}</DropdownMenuItem>}
                                     <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> {estimate ? "Move estimate to recycle bin" : "Move to recycle bin"}</DropdownMenuItem>
                                   </>
                                 )}
@@ -990,9 +998,9 @@ export default function BillsPage() {
       <OwnerPinModal
         open={!!pinAction}
         onCancel={() => setPinAction(null)}
-        title={pinAction?.action === "clear_estimates" ? "Clear estimate bills" : pinAction?.action === "restore" ? "Restore bill" : pinAction?.action === "cancel" ? "Cancel bill" : deletingEstimate ? "Delete estimate" : "Move bill to recycle bin"}
+        title={pinAction?.action === "clear_estimates" ? "Clear estimate bills" : pinAction?.action === "restore" ? t("billing.bills.restoreBill") : pinAction?.action === "cancel" ? t("billing.bills.cancelBill") : deletingEstimate ? "Delete estimate" : "Move bill to recycle bin"}
         description={pinAction?.action === "clear_estimates" ? `Owner PIN is required. ${pinAction.bills.length} estimate bill${pinAction.bills.length === 1 ? "" : "s"} will move to recycle bin. Estimates count as sales — cancel a bill first if you need its stock and udhar reversed.` : deletingEstimate ? "Enter your owner PIN to delete this estimate. It moves to the recycle bin like any bill — cancel it instead if you need stock and udhar reversed." : "Owner PIN is required. Financial records are never hard deleted and this action is saved locally first."}
-        confirmLabel={pinAction?.action === "clear_estimates" ? "Clear estimates" : pinAction?.action === "restore" ? "Restore" : pinAction?.action === "cancel" ? "Cancel bill" : deletingEstimate ? "Delete estimate" : "Move to recycle bin"}
+        confirmLabel={pinAction?.action === "clear_estimates" ? "Clear estimates" : pinAction?.action === "restore" ? t("billing.bills.restore") : pinAction?.action === "cancel" ? t("billing.bills.cancelBill") : deletingEstimate ? "Delete estimate" : "Move to recycle bin"}
         reasonRequired={pinAction?.action === "cancel" || pinAction?.action === "delete" || pinAction?.action === "clear_estimates"}
         loading={isSaving}
         onConfirm={({ ownerPin, reason }) => runPinAction(ownerPin, reason)}
@@ -1050,7 +1058,8 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
 }
 
 function ModeBadge({ mode }: { mode: string }) {
-  const meta = MODE_META[mode] ?? MODE_META.cash;
+  const { t } = useAppLanguage();
+  const meta = modeMeta(t)[mode] ?? modeMeta(t).cash;
   return <span className={cn("inline-flex items-center gap-2 whitespace-nowrap rounded-[6px] px-2 py-1 text-[10px] font-black", meta.chip)}><span className="h-2 w-2 rounded-full" style={{ background: meta.color }} />{meta.label}</span>;
 }
 
@@ -1095,16 +1104,17 @@ function PageBtn({ children, active, disabled, ariaLabel, onClick }: { children:
 }
 
 function RecentActivityCard({ rows }: { rows: Array<{ id: string; title: string; sub: string; time: string; tone: string; bill: BillRecord }> }) {
+  const { t } = useAppLanguage();
   const toneClass = (tone: string) => tone === "emerald" ? "bg-[#eaf9ef] text-[#119447]" : tone === "orange" ? "bg-[#fff3df] text-[#f28a00]" : "bg-[#ffecef] text-[#ff314f]";
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
-        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Recent Billing Activity</h2>
-        <Link href="/bills" className="tap-target text-[11px] font-bold text-[var(--brand)]">View all</Link>
+        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">{t("billing.bills.recentActivity")}</h2>
+        <Link href="/bills" className="tap-target text-[11px] font-bold text-[var(--brand)]">{t("billing.bills.viewAll")}</Link>
       </header>
       <div className="divide-y divide-[#edf2f8]">
         {rows.length === 0 ? (
-          <div className="grid h-44 place-items-center text-[12px] font-semibold text-[#8290a8]">No bill activity in this period</div>
+          <div className="grid h-44 place-items-center text-[12px] font-semibold text-[#8290a8]">{t("billing.bills.noActivity")}</div>
         ) : rows.map((row) => (
           <Link key={row.id} href={`/bills/${row.bill.id}`} className="grid grid-cols-[34px_1fr_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-[#fbfcfe]">
             <span className={cn("grid h-8 w-8 place-items-center rounded-full", toneClass(row.tone))}><IndianRupee size={14} /></span>
@@ -1121,11 +1131,12 @@ function RecentActivityCard({ rows }: { rows: Array<{ id: string; title: string;
 }
 
 function PaymentBreakdownCard({ rows, total, period }: { rows: Array<{ key: string; label: string; value: number; color: string }>; total: number; period: string }) {
+  const { t } = useAppLanguage();
   const chartRows = rows.length > 0 ? rows : [{ key: "empty", label: "No sales", value: 1, color: "#e5eaf2" }];
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
-        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Payment Mode Breakdown</h2>
+        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">{t("billing.bills.paymentBreakdown")}</h2>
         <span className="rounded-[6px] border border-[#dfe7f2] bg-[#fbfcfe] px-2.5 py-1 text-[10px] font-bold text-[#405273]">{period}</span>
       </header>
       <div className="grid min-h-[220px] items-center gap-3 px-4 py-4 sm:grid-cols-[184px_1fr]">
@@ -1140,12 +1151,12 @@ function PaymentBreakdownCard({ rows, total, period }: { rows: Array<{ key: stri
           <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
             <div>
               <p className="text-[16px] font-black text-[#13244a]">{money(total)}</p>
-              <p className="mt-1 text-[10px] text-[#7886a0]">Total Sales</p>
+              <p className="mt-1 text-[10px] text-[#7886a0]">{t("billing.bills.totalSales")}</p>
             </div>
           </div>
         </div>
         <div className="space-y-3">
-          {rows.length === 0 ? <p className="text-center text-[12px] font-semibold text-[#8290a8]">No payment activity</p> : rows.map((row) => {
+          {rows.length === 0 ? <p className="text-center text-[12px] font-semibold text-[#8290a8]">{t("billing.bills.noPaymentActivity")}</p> : rows.map((row) => {
             const pct = total > 0 ? (row.value / total) * 100 : 0;
             return (
               <div key={row.key} className="grid grid-cols-[10px_1fr_auto] items-center gap-2 text-[11px]">
@@ -1162,23 +1173,24 @@ function PaymentBreakdownCard({ rows, total, period }: { rows: Array<{ key: stri
 }
 
 function TopCustomersCard({ rows }: { rows: Array<{ name: string; bills: number; total: number }> }) {
+  const { t } = useAppLanguage();
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
-        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Top Customers</h2>
-        <Link href="/customers" className="tap-target text-[11px] font-bold text-[var(--brand)]">View all</Link>
+        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">{t("billing.bills.topCustomers")}</h2>
+        <Link href="/customers" className="tap-target text-[11px] font-bold text-[var(--brand)]">{t("billing.bills.viewAll")}</Link>
       </header>
       {rows.length === 0 ? (
-        <div className="grid h-44 place-items-center text-[12px] font-semibold text-[#8290a8]">No customer sales in this period</div>
+        <div className="grid h-44 place-items-center text-[12px] font-semibold text-[#8290a8]">{t("billing.bills.noCustomerSales")}</div>
       ) : (
         <div className="overflow-x-auto px-3 pb-3">
           <table className="w-full text-[10.5px]">
             <thead>
               <tr className="border-y border-[#e6ecf4] bg-[#f7f9fc] text-[#52617c]">
-                <th className="px-2 py-2 text-left font-bold">Customer</th>
-                <th className="px-2 py-2 text-right font-bold">Total Bills</th>
-                <th className="px-2 py-2 text-right font-bold">Total Spent</th>
-                <th className="px-2 py-2 text-right font-bold">Avg. Bill Value</th>
+                <th className="px-2 py-2 text-left font-bold">{t("billing.summary.customerFallback")}</th>
+                <th className="px-2 py-2 text-right font-bold">{t("billing.bills.totalBills")}</th>
+                <th className="px-2 py-2 text-right font-bold">{t("billing.bills.totalSpent")}</th>
+                <th className="px-2 py-2 text-right font-bold">{t("billing.bills.avgBillValue")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e8edf4]">

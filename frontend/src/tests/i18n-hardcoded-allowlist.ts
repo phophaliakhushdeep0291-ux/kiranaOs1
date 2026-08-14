@@ -54,9 +54,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/auth/pages/RegisterPage.tsx", // 16
   "features/core/auth/pages/ResetPasswordPage.tsx", // 4
   "features/core/auth/pages/VerifyEmailPage.tsx", // 1
-  "features/core/bills/components/EditBillDialog.tsx", // 13
-  "features/core/bills/pages/BillDetailPage.tsx", // 53
-  "features/core/bills/pages/BillsPage.tsx", // 46
   "features/core/customer-order/BillingOrderQrButton.tsx", // 10
   "features/core/customer-order/CustomerOrderPage.tsx", // 155
   "features/core/customer-order/DineInMenuPage.tsx", // 4
