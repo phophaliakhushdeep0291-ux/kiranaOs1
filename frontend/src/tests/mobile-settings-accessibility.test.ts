@@ -48,7 +48,9 @@ describe("mobile settings accessibility contract", () => {
     expect(security).toContain('className="settings-text-action gap-1"');
     expect(security).toContain('className="settings-text-action">{t("settings.security.refresh")');
     expect(security).toContain("flex min-h-11 items-center justify-center");
-    expect(security).toContain('aria-label={show ? "Hide current PIN" : "Show current PIN"}');
+    // The toggle must still say which state it will move to, not just "toggle".
+    expect(security).toContain('aria-label={show ? t("settings.security.hidePin") : t("settings.security.showPin")}');
+    expect(read("../features/core/settings/translations/settings-pages.ts")).toContain('"settings.security.hidePin": "Hide current PIN"');
     expect(security).toContain("grid h-11 w-11");
   });
 });

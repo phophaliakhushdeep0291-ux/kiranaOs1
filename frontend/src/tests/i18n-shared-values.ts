@@ -27,6 +27,11 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   // Two GST registration identifiers, shown as placeholder text on the e-way
   // transport form. Both are printed in Latin on the documents themselves.
   "GSTIN / TRANSIN",
+  // Bank and payment identifiers on the store profile. A shopkeeper is copying
+  // these off a passbook or a UPI app, where they are printed in Latin — a
+  // Devanagari label would make the field harder to match, not easier.
+  "UPI ID",
+  "IFSC",
   "MRP",
   "MRP (₹)",
   "WhatsApp",

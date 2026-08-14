@@ -1,4 +1,4 @@
-import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -211,8 +211,8 @@ export default function SecuritySettingsPage() {
         <Card>
           <CardHead
             icon={<KeyRound size={15} />}
-            title="Owner PIN"
-            sub="Protects money-sensitive actions"
+            title={t("inventory.transfers.ownerPin")}
+            sub={t("settings.security.protectsMoney")}
             action={pinQ.isLoading
               ? <Badge tone="gray">{t("settings.security.checking")}</Badge>
               : pinQ.data?.hasPin
@@ -240,27 +240,27 @@ export default function SecuritySettingsPage() {
 
         {/* Session & Login Security */}
         <Card>
-          <CardHead icon={<Lock size={15} />} title="Session & Login Security" sub="Enforced on this device by the counter lock" />
+          <CardHead icon={<Lock size={15} />} title={t("settings.security.sessionTitle")} sub={t("settings.security.sessionSub")} />
           <div className="px-5 pb-4">
-            <RowToggle label="Session timeout" desc={sec.autoLock ? "Lock the counter when idle this long" : "Sign out when idle this long"} pill={
+            <RowToggle label={t("settings.security.sessionTimeout")} desc={sec.autoLock ? t("settings.security.lockIdle") : t("settings.security.signOutIdle")} pill={
               <Select value={sec.sessionTimeout} onValueChange={(v) => update({ sessionTimeout: v })}>
                 <SelectTrigger className="min-h-11 w-[140px] text-[12px]"><SelectValue /></SelectTrigger>
                 <SelectContent>{SESSION_TIMEOUT_OPTIONS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>} />
-            <RowToggle label="Auto-lock after inactivity" desc="Lock to a PIN screen instead of signing out" pill={<Switch checked={sec.autoLock} onCheckedChange={(v) => update({ autoLock: v })} />} />
+            <RowToggle label={t("settings.security.autoLock")} desc={t("settings.security.autoLockHelp")} pill={<Switch checked={sec.autoLock} onCheckedChange={(v) => update({ autoLock: v })} />} />
             <RowToggle
-              label="Biometric unlock"
+              label={t("settings.security.biometric")}
               desc={biometricSupported === null
-                ? "Checking this device…"
+                ? t("settings.security.checkingDevice")
                 : biometricSupported
-                  ? "Use the device fingerprint / face prompt on the lock screen"
-                  : "No fingerprint or face sensor is available in this browser"}
+                  ? t("settings.security.biometricHelp")
+                  : t("settings.security.biometricUnavailable")}
               pill={biometricSupported
                 ? <Switch disabled={enrolling} checked={sec.biometric} onCheckedChange={(v) => void toggleBiometric(v)} />
                 : <Badge tone="gray"><Fingerprint size={11} /> {t("settings.security.unavailable")}</Badge>}
             />
-            <RowToggle label="Require unlock on app start" desc="Ask for the PIN every time the app is opened fresh" pill={<Switch checked={sec.requireLoginOnStart} onCheckedChange={(v) => update({ requireLoginOnStart: v })} />} />
-            <RowToggle label="Remember this device" desc="Off means an expired session signs out fully instead of offering a PIN unlock" pill={<Switch checked={sec.rememberDevice} onCheckedChange={(v) => update({ rememberDevice: v })} />} last />
+            <RowToggle label={t("settings.security.unlockOnStart")} desc={t("settings.security.unlockOnStartHelp")} pill={<Switch checked={sec.requireLoginOnStart} onCheckedChange={(v) => update({ requireLoginOnStart: v })} />} />
+            <RowToggle label={t("settings.security.rememberDevice")} desc={t("settings.security.rememberDeviceHelp")} pill={<Switch checked={sec.rememberDevice} onCheckedChange={(v) => update({ rememberDevice: v })} />} last />
             <p className="mt-2 text-[11px] text-[#9aa6bb]">{t("settings.security.twoFactorHelp")}</p>
           </div>
         </Card>
@@ -268,7 +268,7 @@ export default function SecuritySettingsPage() {
 
       {/* Sensitive Action Protection */}
       <Card>
-        <CardHead icon={<ShieldCheck size={15} />} title="Sensitive Action Protection" sub="Which actions require approval & who can approve" action={<Badge tone={protectedCount ? "green" : "amber"}>{protectedCount} of {PROTECTED_ACTIONS.length} protected</Badge>} />
+        <CardHead icon={<ShieldCheck size={15} />} title={t("billing.page.sensitiveActionProtection")} sub={t("settings.security.approvalScope")} action={<Badge tone={protectedCount ? "green" : "amber"}>{protectedCount} of {PROTECTED_ACTIONS.length} protected</Badge>} />
         <div className="px-5 pb-5">
           <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
             {PROTECTED_ACTIONS.map((action) => {
@@ -287,7 +287,7 @@ export default function SecuritySettingsPage() {
                       aria-label={`Protect ${action.label}`}
                       checked={on}
                       disabled={locked}
-                      title={locked ? "The server rejects this action without an owner PIN, so the prompt cannot be turned off." : undefined}
+                      title={locked ? t("settings.security.serverRequiresPin") : undefined}
                       onCheckedChange={(value) => setAction(action.key, { ...rule, on: value })}
                     />
                   </div>
@@ -337,7 +337,7 @@ export default function SecuritySettingsPage() {
                             aria-label={`Protect ${a.label}`}
                             checked={on}
                             disabled={locked}
-                            title={locked ? "The server rejects this action without an owner PIN, so the prompt cannot be turned off." : undefined}
+                            title={locked ? t("settings.security.serverRequiresPin") : undefined}
                             onCheckedChange={(v) => setAction(a.key, { ...rule, on: v })}
                           />
                         </div>
@@ -367,8 +367,8 @@ export default function SecuritySettingsPage() {
         <Card>
           <CardHead
             icon={<MonitorSmartphone size={15} />}
-            title="Signed-in Devices"
-            sub="Live from your device licence list"
+            title={t("settings.security.devicesTitle")}
+            sub={t("settings.security.devicesSub")}
             action={<button type="button" onClick={() => void devicesQ.refetch()} className="settings-text-action gap-1"><RefreshCcw size={12} className={devicesQ.isFetching ? "animate-spin" : ""} /> {t("settings.security.refresh")}</button>}
           />
           <div className="px-5 pb-4">
@@ -404,8 +404,8 @@ export default function SecuritySettingsPage() {
         <Card>
           <CardHead
             icon={<AlertTriangle size={15} />}
-            title="Security Logs"
-            sub="Real approvals and sensitive actions on this device"
+            title={t("settings.security.logsTitle")}
+            sub={t("settings.security.logsSub")}
             action={<button type="button" onClick={() => void eventsQ.refetch()} className="settings-text-action">{t("settings.security.refresh")}</button>}
           />
           <div className="px-5 pb-4">
@@ -436,9 +436,9 @@ export default function SecuritySettingsPage() {
 
       <OwnerPinModal
         open={signOutTarget !== null}
-        title="Sign out this device"
+        title={t("settings.security.signOutThisDevice")}
         description={signOutTarget ? `${deviceLabel(signOutTarget)} will need to sign in again. Unsynced work on that device stays on it.` : undefined}
-        confirmLabel="Sign out device"
+        confirmLabel={t("settings.security.signOutDevice")}
         loading={signingOut}
         error={signOutError}
         onCancel={() => { if (!signingOut) { setSignOutTarget(null); setSignOutError(null); } }}
@@ -448,18 +448,18 @@ export default function SecuritySettingsPage() {
   );
 }
 
-const pwSchema = z.object({
-  currentPassword: z.string().min(1, "Required"),
-  newPassword: z.string().min(6, "Min 6 characters"),
+const passwordSchema = (t: Translate) => z.object({
+  currentPassword: z.string().min(1, t("settings.security.pwRequired")),
+  newPassword: z.string().min(6, t("settings.security.pwMinLength")),
   confirmPassword: z.string(),
-}).refine((d) => d.newPassword === d.confirmPassword, { message: "Passwords don't match", path: ["confirmPassword"] });
-type PwData = z.infer<typeof pwSchema>;
+}).refine((d) => d.newPassword === d.confirmPassword, { message: t("settings.security.pwMismatch"), path: ["confirmPassword"] });
+type PwData = z.infer<ReturnType<typeof passwordSchema>>;
 
 function ChangePinDialog({ open, onOpenChange, onChanged }: { open: boolean; onOpenChange: (o: boolean) => void; onChanged: () => void }) {
   const { t } = useAppLanguage();
   const { toast } = useToast();
   const [show, setShow] = useState(false);
-  const form = useForm<PwData>({ resolver: zodResolver(pwSchema), defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" } });
+  const form = useForm<PwData>({ resolver: zodResolver(passwordSchema(t)), defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" } });
   const changePassword = useChangePassword({
     mutation: {
       onSuccess: () => { form.reset(); toast({ title: t("settings.security.pinUpdated") }); onChanged(); onOpenChange(false); },
@@ -474,14 +474,14 @@ function ChangePinDialog({ open, onOpenChange, onChanged }: { open: boolean; onO
           <p className="text-[12px] text-[#6d7c98]">{t("settings.security.updateOwnerPinHelp")}</p>
         </DialogHeader>
         <form onSubmit={form.handleSubmit((v) => changePassword.mutate({ data: { currentPassword: v.currentPassword, newPassword: v.newPassword } }))} className="space-y-3.5">
-          <Fld label="Current PIN / password" err={form.formState.errors.currentPassword?.message}>
+          <Fld label={t("settings.security.currentPin")} err={form.formState.errors.currentPassword?.message}>
             <div className="relative">
               <Input className="pr-12" type={show ? "text" : "password"} {...form.register("currentPassword")} />
-              <button type="button" aria-label={show ? "Hide current PIN" : "Show current PIN"} onClick={() => setShow((s) => !s)} className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-xl text-[#6b7a9a] hover:bg-[#f1f5fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+              <button type="button" aria-label={show ? t("settings.security.hidePin") : t("settings.security.showPin")} onClick={() => setShow((s) => !s)} className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-xl text-[#6b7a9a] hover:bg-[#f1f5fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
             </div>
           </Fld>
-          <Fld label="New PIN / password" err={form.formState.errors.newPassword?.message}><Input className="h-10" type="password" {...form.register("newPassword")} /></Fld>
-          <Fld label="Confirm new PIN" err={form.formState.errors.confirmPassword?.message}><Input className="h-10" type="password" {...form.register("confirmPassword")} /></Fld>
+          <Fld label={t("settings.security.newPin")} err={form.formState.errors.newPassword?.message}><Input className="h-10" type="password" {...form.register("newPassword")} /></Fld>
+          <Fld label={t("settings.security.confirmPin")} err={form.formState.errors.confirmPassword?.message}><Input className="h-10" type="password" {...form.register("confirmPassword")} /></Fld>
           <div className="flex gap-2.5 pt-1">
             <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>{t("settings.security.cancel")}</Button>
             <Button type="submit" disabled={changePassword.isPending} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">

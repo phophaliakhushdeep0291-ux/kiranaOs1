@@ -1,4 +1,4 @@
-import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useEffect, useRef, useState } from "react";
 import { getGetShopQueryKey, useUpdateShop } from "@/lib/api/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,15 +34,21 @@ import {
 const BUSINESS_TYPE_OPTIONS = offeredBusinessTypes().map((key) => [key, BUSINESS_TYPE_DEFS[key]] as const);
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+// The stored schedule is keyed by the English name, so that stays put and only
+// the label a shopkeeper reads is translated.
+const dayLabel = (t: Translate, day: (typeof DAYS)[number]) => t(`settings.store.day.${day.toLowerCase()}` as Parameters<Translate>[0]);
 type DayHours = { open: boolean; from: string; to: string };
 const DEFAULT_DAY: DayHours = { open: true, from: "09:00", to: "21:00" };
 
-const DOCS = [
-  { key: "gst", label: "GST Certificate" },
-  { key: "license", label: "Shop License" },
-  { key: "pan", label: "PAN Card" },
-  { key: "ownerId", label: "Owner ID Proof" },
-  { key: "address", label: "Address Proof" },
+// Takes `t` rather than reading it: a module-level constant is evaluated at
+// import, long before any hook can run, so prose that lives in one can never be
+// translated by the screen that renders it.
+const docTypes = (t: Translate) => [
+  { key: "gst", label: t("settings.store.doc.gst") },
+  { key: "license", label: t("settings.store.doc.license") },
+  { key: "pan", label: t("settings.store.doc.pan") },
+  { key: "ownerId", label: t("settings.store.doc.ownerId") },
+  { key: "address", label: t("settings.store.doc.address") },
 ] as const;
 
 function clean(value: string) {
@@ -333,16 +339,16 @@ export default function StoreProfilePage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Business Details */}
         <Card>
-          <CardHead icon={<Building2 size={15} />} title="Business Details" sub="Legal & contact information" />
+          <CardHead icon={<Building2 size={15} />} title={t("settings.store.detailsTitle")} sub={t("settings.store.detailsSub")} />
           <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
-            <Fld label="Business Name"><Input className="h-10" value={biz.name} onChange={(e) => setBiz({ ...biz, name: e.target.value })} /></Fld>
-            <Fld label="Owner Name"><Input className="h-10" value={biz.ownerName} onChange={(e) => setBiz({ ...biz, ownerName: e.target.value })} /></Fld>
-            <Fld label="Phone Number"><Input className="h-10" value={biz.phone} onChange={(e) => setBiz({ ...biz, phone: e.target.value })} /></Fld>
-            <Fld label="Alternate Phone"><Input className="h-10" value={biz.altPhone} onChange={(e) => setBiz({ ...biz, altPhone: e.target.value })} /></Fld>
-            <Fld label="Email"><Input className="h-10" value={biz.email} onChange={(e) => setBiz({ ...biz, email: e.target.value })} /></Fld>
-            <Fld label="GSTIN"><Input className="h-10" value={biz.gstNumber} onChange={(e) => setBiz({ ...biz, gstNumber: e.target.value })} /></Fld>
-            <Fld label="PAN Number"><Input className="h-10" value={biz.pan} onChange={(e) => setBiz({ ...biz, pan: e.target.value })} /></Fld>
-            <Fld label="Business Type" hint={businessTypeLocked ? "Locked because products or bills exist" : "Adapts navigation, dashboard, categories & units to your trade"}>
+            <Fld label={t("settings.store.businessName")}><Input className="h-10" value={biz.name} onChange={(e) => setBiz({ ...biz, name: e.target.value })} /></Fld>
+            <Fld label={t("settings.store.ownerName")}><Input className="h-10" value={biz.ownerName} onChange={(e) => setBiz({ ...biz, ownerName: e.target.value })} /></Fld>
+            <Fld label={t("settings.store.phoneNumber")}><Input className="h-10" value={biz.phone} onChange={(e) => setBiz({ ...biz, phone: e.target.value })} /></Fld>
+            <Fld label={t("settings.store.altPhone")}><Input className="h-10" value={biz.altPhone} onChange={(e) => setBiz({ ...biz, altPhone: e.target.value })} /></Fld>
+            <Fld label={t("settings.hub.email")}><Input className="h-10" value={biz.email} onChange={(e) => setBiz({ ...biz, email: e.target.value })} /></Fld>
+            <Fld label={t("inventory.transfers.gstin")}><Input className="h-10" value={biz.gstNumber} onChange={(e) => setBiz({ ...biz, gstNumber: e.target.value })} /></Fld>
+            <Fld label={t("settings.store.pan")}><Input className="h-10" value={biz.pan} onChange={(e) => setBiz({ ...biz, pan: e.target.value })} /></Fld>
+            <Fld label={t("settings.store.businessType")} hint={businessTypeLocked ? t("settings.store.typeLocked") : t("settings.store.typeHelp")}>
               <Select disabled={businessTypeLocked} value={biz.businessTypeKey} onValueChange={(v) => setBiz({ ...biz, businessTypeKey: v as BusinessType })}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>{BUSINESS_TYPE_OPTIONS.map(([key, def]) => <SelectItem key={key} value={key}>{def.emoji} {def.label}</SelectItem>)}</SelectContent>
@@ -354,21 +360,21 @@ export default function StoreProfilePage() {
 
         {/* Address & Location */}
         <Card>
-          <CardHead icon={<MapPin size={15} />} title="Address & Location" sub="Shop address & delivery area" action={<button type="button" onClick={openInMaps} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.store.openInMaps")}</button>} />
+          <CardHead icon={<MapPin size={15} />} title={t("settings.store.addressTitle")} sub={t("settings.store.addressSub")} action={<button type="button" onClick={openInMaps} className="tap-target text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.store.openInMaps")}</button>} />
           <div className="space-y-3 px-5 pb-5">
-            <Fld label="Shop Address"><Input className="h-10" value={addr.address} onChange={(e) => setAddr({ ...addr, address: e.target.value })} /></Fld>
+            <Fld label={t("settings.store.shopAddress")}><Input className="h-10" value={addr.address} onChange={(e) => setAddr({ ...addr, address: e.target.value })} /></Fld>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Fld label="City"><Input className="h-10" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} /></Fld>
-              <Fld label="State"><Input className="h-10" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} /></Fld>
-              <Fld label="Pincode"><Input className="h-10" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} /></Fld>
-              <Fld label="Country"><Input className="h-10" value={addr.country} onChange={(e) => setAddr({ ...addr, country: e.target.value })} /></Fld>
+              <Fld label={t("inventory.transfers.city")}><Input className="h-10" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} /></Fld>
+              <Fld label={t("settings.store.state")}><Input className="h-10" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} /></Fld>
+              <Fld label={t("settings.store.pincode")}><Input className="h-10" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} /></Fld>
+              <Fld label={t("settings.store.country")}><Input className="h-10" value={addr.country} onChange={(e) => setAddr({ ...addr, country: e.target.value })} /></Fld>
             </div>
             <div className="flex flex-col gap-3 rounded-[10px] border border-[var(--brand-border)] bg-[#f3f8ff] px-3 py-3 sm:flex-row sm:items-center">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--brand)] shadow-sm"><MapPin size={16} /></span>
               <p className="min-w-0 flex-1 text-[11px] font-medium text-[#34507f]">{sp.geo ? `Pinned at ${sp.geo}` : "Pin your exact shop location for delivery & maps."}</p>
               <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[12px] font-bold" onClick={useCurrentLocation}><Navigation size={13} /> {t("settings.store.useCurrent")}</Button>
             </div>
-            <Fld label="Delivery Radius (km)" hint="Used for local delivery suggestions"><Input className="h-10" value={addr.deliveryRadius} onChange={(e) => setAddr({ ...addr, deliveryRadius: e.target.value })} placeholder="e.g. 3" /></Fld>
+            <Fld label={t("settings.store.deliveryRadius")} hint={t("settings.store.deliveryRadiusHelp")}><Input className="h-10" value={addr.deliveryRadius} onChange={(e) => setAddr({ ...addr, deliveryRadius: e.target.value })} placeholder="e.g. 3" /></Fld>
           </div>
         </Card>
       </div>
@@ -376,7 +382,7 @@ export default function StoreProfilePage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Bill Branding — configured on the Printer & Receipt tab (single source of truth) */}
         <Card>
-          <CardHead icon={<Receipt size={15} />} title="Bill Branding" sub="How your receipt looks" />
+          <CardHead icon={<Receipt size={15} />} title={t("settings.store.brandingTitle")} sub={t("settings.store.brandingSub")} />
           <div className="space-y-3 px-5 pb-5">
             <p className="text-[12.5px] leading-relaxed text-[#52627e]">
               Receipt branding — footer message, GSTIN/HSN visibility, GST breakup, paper size and number of copies — lives on the <strong>{t("settings.store.printerReceipt")}</strong> tab, so there's one place that controls how every bill prints and is shared.
@@ -389,7 +395,7 @@ export default function StoreProfilePage() {
 
         {/* Operating Hours */}
         <Card>
-          <CardHead icon={<Clock size={15} />} title="Operating Hours" sub="Set open & close times" />
+          <CardHead icon={<Clock size={15} />} title={t("settings.store.hoursTitle")} sub={t("settings.store.hoursSub")} />
           <div className="px-5 pb-5">
             {DAYS.map((day) => {
               const h = hours[day] ?? DEFAULT_DAY;
@@ -399,13 +405,13 @@ export default function StoreProfilePage() {
                       day in each control's name they reach a screen reader as
                       "switch, time, time" seven times over, with nothing to say
                       which day is being closed. */}
-                  <span className="w-[84px] shrink-0 text-[12px] font-bold text-[var(--brand-ink)]">{day}</span>
-                  <Switch aria-label={`${day} — open for business`} checked={h.open} onCheckedChange={(v) => setDay(day, { ...h, open: v })} />
+                  <span className="w-[84px] shrink-0 text-[12px] font-bold text-[var(--brand-ink)]">{dayLabel(t, day)}</span>
+                  <Switch aria-label={t("settings.store.dayOpenAria", { day: dayLabel(t, day) })} checked={h.open} onCheckedChange={(v) => setDay(day, { ...h, open: v })} />
                   {h.open ? (
                     <div className="flex flex-1 items-center gap-1.5 sm:justify-end">
-                      <Input aria-label={`${day} opening time`} className="h-8 w-[88px] text-[12px]" type="time" value={h.from} onChange={(e) => setDay(day, { ...h, from: e.target.value })} />
-                      <span className="text-[11px] text-[#94a3b8]">to</span>
-                      <Input aria-label={`${day} closing time`} className="h-8 w-[88px] text-[12px]" type="time" value={h.to} onChange={(e) => setDay(day, { ...h, to: e.target.value })} />
+                      <Input aria-label={t("settings.store.dayFromAria", { day: dayLabel(t, day) })} className="h-8 w-[88px] text-[12px]" type="time" value={h.from} onChange={(e) => setDay(day, { ...h, from: e.target.value })} />
+                      <span className="text-[11px] text-[#94a3b8]">{t("settings.store.timeTo")}</span>
+                      <Input aria-label={t("settings.store.dayToAria", { day: dayLabel(t, day) })} className="h-8 w-[88px] text-[12px]" type="time" value={h.to} onChange={(e) => setDay(day, { ...h, to: e.target.value })} />
                     </div>
                   ) : <span className="flex-1 text-[12px] font-semibold text-[#94a3b8] sm:text-right">{t("settings.store.closed")}</span>}
                 </div>
@@ -418,21 +424,21 @@ export default function StoreProfilePage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Bank / UPI */}
         <Card>
-          <CardHead icon={<Landmark size={15} />} title="Bank / UPI Details" sub="For bill QR & payment reminders" />
+          <CardHead icon={<Landmark size={15} />} title={t("settings.store.bankTitle")} sub={t("settings.store.bankSub")} />
           <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
-            <div className="sm:col-span-2"><Fld label="UPI ID"><Input className="h-10" value={bank.upi ?? ""} placeholder="store@upi" onChange={(e) => setBank("upi", e.target.value)} /></Fld></div>
-            <Fld label="Bank Name"><Input className="h-10" value={bank.bankName ?? ""} onChange={(e) => setBank("bankName", e.target.value)} /></Fld>
-            <Fld label="Account Holder"><Input className="h-10" value={bank.holder ?? ""} onChange={(e) => setBank("holder", e.target.value)} /></Fld>
-            <Fld label="Account Number"><Input className="h-10" value={bank.account ?? ""} onChange={(e) => setBank("account", e.target.value)} /></Fld>
-            <Fld label="IFSC"><Input className="h-10" value={bank.ifsc ?? ""} onChange={(e) => setBank("ifsc", e.target.value)} /></Fld>
+            <div className="sm:col-span-2"><Fld label={t("settings.store.upiId")}><Input className="h-10" value={bank.upi ?? ""} placeholder="store@upi" onChange={(e) => setBank("upi", e.target.value)} /></Fld></div>
+            <Fld label={t("settings.store.bankName")}><Input className="h-10" value={bank.bankName ?? ""} onChange={(e) => setBank("bankName", e.target.value)} /></Fld>
+            <Fld label={t("settings.store.accountHolder")}><Input className="h-10" value={bank.holder ?? ""} onChange={(e) => setBank("holder", e.target.value)} /></Fld>
+            <Fld label={t("settings.store.accountNumber")}><Input className="h-10" value={bank.account ?? ""} onChange={(e) => setBank("account", e.target.value)} /></Fld>
+            <Fld label={t("settings.store.ifsc")}><Input className="h-10" value={bank.ifsc ?? ""} onChange={(e) => setBank("ifsc", e.target.value)} /></Fld>
           </div>
         </Card>
 
         {/* Verification Documents */}
         <Card>
-          <CardHead icon={<FileText size={15} />} title="Verification Documents" sub="Upload for a verified badge" />
+          <CardHead icon={<FileText size={15} />} title={t("settings.store.docsTitle")} sub={t("settings.store.docsSub")} />
           <div className="px-5 pb-5">
-            {DOCS.map((d) => {
+            {docTypes(t).map((d) => {
               const doc = normaliseDoc(docs[d.key]);
               return (
                 <div key={d.key} className="flex flex-wrap items-center gap-3 border-b border-[#eef2f8] py-2.5 last:border-0">
@@ -493,9 +499,9 @@ export default function StoreProfilePage() {
       </div>
       <OwnerPinModal
         open={pinOpen}
-        title="Approve store profile update"
-        description="Store name, owner, GST, address and phone are protected fields. Enter the owner PIN to save this change."
-        confirmLabel="Save profile"
+        title={t("settings.store.approveTitle")}
+        description={t("settings.store.approveHelp")}
+        confirmLabel={t("settings.store.save")}
         loading={updateShop.isPending}
         error={pinError}
         onCancel={() => {
@@ -513,7 +519,7 @@ export default function StoreProfilePage() {
             <DialogDescription>{t("settings.store.reviewHelp")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <Fld label="Requested business type">
+            <Fld label={t("settings.store.requestedType")}>
               <Select value={changeTarget} onValueChange={(value) => { setChangeTarget(value as BusinessType); setChangeReport(null); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{BUSINESS_TYPE_OPTIONS.filter(([key]) => key !== biz.businessTypeKey).map(([key, def]) => <SelectItem key={key} value={key}>{def.emoji} {def.label}</SelectItem>)}</SelectContent>
