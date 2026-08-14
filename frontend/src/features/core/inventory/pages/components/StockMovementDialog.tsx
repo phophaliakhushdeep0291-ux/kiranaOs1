@@ -124,7 +124,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
     if (mode === "in") {
       recordPurchase.mutate(
         { data: { productId, quantity, enteredUnit, sellingUnitId: selectedPack?.id, costPerRateUnit: cost === "" ? undefined : Number(cost), supplierName: supplier.trim() || undefined, note: note.trim() || undefined } },
-        { onSuccess: () => onDone(`Added ${quantity} ${unitLabelForToast} to ${selected.name}`), onError: (e) => toast({ title: t("inventory.movement.addFailed"), description: e instanceof Error ? e.message : "Try again.", variant: "destructive" }) },
+        { onSuccess: () => onDone(`Added ${quantity} ${unitLabelForToast} to ${selected.name}`), onError: (e) => toast({ title: t("inventory.movement.addFailed"), description: e instanceof Error ? e.message : t("inventory.movement.tryAgain"), variant: "destructive" }) },
       );
     } else {
       if (quantity > availableInPack) {
@@ -133,7 +133,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
       }
       recordSale.mutate(
         { data: { productId, quantity, enteredUnit, sellingUnitId: selectedPack?.id, reason, note: note.trim() || undefined } },
-        { onSuccess: () => onDone(`Removed ${quantity} ${unitLabelForToast} from ${selected.name}`), onError: (e) => toast({ title: t("inventory.movement.removeFailed"), description: e instanceof Error ? e.message : "Try again.", variant: "destructive" }) },
+        { onSuccess: () => onDone(`Removed ${quantity} ${unitLabelForToast} from ${selected.name}`), onError: (e) => toast({ title: t("inventory.movement.removeFailed"), description: e instanceof Error ? e.message : t("inventory.movement.tryAgain"), variant: "destructive" }) },
       );
     }
   }
@@ -145,7 +145,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
       style={{ width }}
       className={`app-slide-panel fixed right-0 top-0 z-[80] flex h-[100dvh] w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog"
-      aria-label={mode === "in" ? "New stock in" : "New stock out"}
+      aria-label={mode === "in" ? t("inventory.movement.newStockIn") : t("inventory.movement.newStockOut")}
       aria-hidden={!open}
     >
       <PanelResizeHandle onResizeStart={onResizeStart} />
@@ -154,7 +154,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
           <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{mode === "in" ? "New Stock In" : "New Stock Out"}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{mode === "in" ? "Add incoming stock to a product." : "Record stock leaving inventory."}</p>
         </div>
-        <button onClick={close} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+        <button onClick={close} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label={t("billing.pay.dynamicQr.close")}><X size={18} /></button>
       </div>
 
       <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
@@ -170,13 +170,13 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
                 <p className="truncate text-[13px] font-extrabold text-[#14284e]">{selected.name}</p>
                 <p className="text-[11px] text-[#6d7c98]">In stock: {currentStock(selected)}</p>
               </div>
-              <button onClick={() => { setProductId(""); setSearch(""); }} className="grid h-7 w-7 place-items-center rounded-lg text-[#536383] hover:bg-[#eef1f6]" aria-label="Change product"><X size={15} /></button>
+              <button onClick={() => { setProductId(""); setSearch(""); }} className="grid h-7 w-7 place-items-center rounded-lg text-[#536383] hover:bg-[#eef1f6]" aria-label={t("inventory.movement.changeProduct")}><X size={15} /></button>
             </div>
           ) : (
             <div className="relative">
               <div className="relative">
                 <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
-                <Input className="h-10 pl-9" placeholder="Search product by name or barcode" value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
+                <Input className="h-10 pl-9" placeholder={t("inventory.movement.searchProduct")} value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
               </div>
               {matches.length > 0 && (
                 <div className="mt-1 max-h-56 overflow-y-auto rounded-[10px] border border-[#e6ecf4] bg-white shadow-sm">
@@ -202,7 +202,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
           <div>
             <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("inventory.movement.packaging")}<span className="ml-0.5 text-rose-500">*</span></Label>
             <Select value={selectedPack?.unitCode ?? ""} onValueChange={setUnitCode}>
-              <SelectTrigger className="h-10"><SelectValue placeholder="Select pack size" /></SelectTrigger>
+              <SelectTrigger className="h-10"><SelectValue placeholder={t("inventory.movement.selectPack")} /></SelectTrigger>
               <SelectContent>
                 {packs.map((pack) => (
                   <SelectItem key={pack.unitCode} value={pack.unitCode}>

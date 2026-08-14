@@ -127,16 +127,16 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
 
   const cards = mode === "in"
     ? [
-        { icon: <Boxes size={18} />, cls: "bg-blue-50 text-blue-600", label: "Items In Stock", value: stats.inStockCount.toLocaleString("en-IN"), sub: "Available to sell" },
-        { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: "Total Quantity", value: stats.totalQty.toLocaleString("en-IN"), sub: "Units on hand" },
-        { icon: <IndianRupee size={18} />, cls: "bg-emerald-50 text-emerald-600", label: "Stock Value", value: rs(stats.totalValue), sub: "At cost price" },
-        { icon: <AlertTriangle size={18} />, cls: "bg-amber-50 text-amber-600", label: "Low Stock", value: stats.lowCount.toLocaleString("en-IN"), sub: "Needs attention" },
+        { icon: <Boxes size={18} />, cls: "bg-blue-50 text-blue-600", label: t("inventory.status.itemsInStock"), value: stats.inStockCount.toLocaleString("en-IN"), sub: t("inventory.status.availableToSell") },
+        { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: t("inventory.status.totalQuantity"), value: stats.totalQty.toLocaleString("en-IN"), sub: t("inventory.status.unitsOnHand") },
+        { icon: <IndianRupee size={18} />, cls: "bg-emerald-50 text-emerald-600", label: t("inventory.status.stockValue"), value: rs(stats.totalValue), sub: t("inventory.status.atCostPrice") },
+        { icon: <AlertTriangle size={18} />, cls: "bg-amber-50 text-amber-600", label: t("inventory.status.lowStockTile"), value: stats.lowCount.toLocaleString("en-IN"), sub: t("inventory.status.needsAttention") },
       ]
     : [
-        { icon: <PackageX size={18} />, cls: "bg-rose-50 text-rose-600", label: "Out of Stock", value: stats.outOfStockCount.toLocaleString("en-IN"), sub: "Unavailable" },
-        { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: "Categories Affected", value: stats.cats.toLocaleString("en-IN"), sub: "Across catalogue" },
-        { icon: <AlertTriangle size={18} />, cls: "bg-amber-50 text-amber-600", label: "Low Stock", value: stats.lowCount.toLocaleString("en-IN"), sub: "Running low" },
-        { icon: <Boxes size={18} />, cls: "bg-blue-50 text-blue-600", label: "Total Products", value: all.length.toLocaleString("en-IN"), sub: "In catalogue" },
+        { icon: <PackageX size={18} />, cls: "bg-rose-50 text-rose-600", label: t("inventory.status.outOfStockTile"), value: stats.outOfStockCount.toLocaleString("en-IN"), sub: t("inventory.status.unavailable") },
+        { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: t("inventory.status.categoriesAffected"), value: stats.cats.toLocaleString("en-IN"), sub: t("inventory.status.acrossCatalogue") },
+        { icon: <AlertTriangle size={18} />, cls: "bg-amber-50 text-amber-600", label: t("inventory.status.lowStockTile"), value: stats.lowCount.toLocaleString("en-IN"), sub: t("inventory.status.runningLow") },
+        { icon: <Boxes size={18} />, cls: "bg-blue-50 text-blue-600", label: t("inventory.status.totalProducts"), value: all.length.toLocaleString("en-IN"), sub: t("inventory.status.inCatalogue") },
       ];
 
   return (
@@ -164,7 +164,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" aria-hidden="true" />
           <Input
             className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
-            placeholder="Search by product name, barcode or SKU"
+            placeholder={t("billing.search.placeholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -173,7 +173,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
         {/* extra filter: suppliers (in) / types (out) */}
         <Select value={extraF} onValueChange={setExtraF}>
           <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold md:w-44">
-            <SelectValue placeholder={mode === "in" ? "All Suppliers" : "All Types"} />
+            <SelectValue placeholder={mode === "in" ? t("inventory.filter.allSuppliers") : t("inventory.filter.allTypes")} />
           </SelectTrigger>
           <SelectContent>
             {mode === "in" ? (
@@ -194,7 +194,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
         {/* status filter */}
         <Select value={statusF} onValueChange={setStatusF}>
           <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold md:w-40">
-            <SelectValue placeholder="All Status" />
+            <SelectValue placeholder={t("inventory.filter.allStatus")} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("inventory.filter.allStatus")}</SelectItem>
@@ -329,6 +329,7 @@ function StatusBadge({ tone, children }: { tone: "emerald" | "amber" | "rose"; c
 }
 
 function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const { t } = useAppLanguage();
   const pages: (number | "…")[] = [];
   if (totalPages <= 7) for (let i = 1; i <= totalPages; i++) pages.push(i);
   else {
@@ -340,12 +341,12 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
   }
   return (
     <div className="flex items-center gap-1.5 lg:mouse:gap-1">
-      <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="grid h-11 w-11 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40 lg:mouse:h-8 lg:mouse:w-8" aria-label="Previous"><ChevronLeft size={15} /></button>
+      <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="grid h-11 w-11 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40 lg:mouse:h-8 lg:mouse:w-8" aria-label={t("inventory.counts.previous")}><ChevronLeft size={15} /></button>
       {pages.map((p, i) => p === "…" ? <span key={`e${i}`} className="px-1.5 text-[12px] text-[#9aa6bb]">…</span> : (
         <button key={p} onClick={() => onChange(p)} aria-current={p === page ? "page" : undefined}
             className={`grid h-11 min-w-11 place-items-center rounded-lg px-2 text-[12px] font-bold transition-colors lg:mouse:h-8 lg:mouse:min-w-8 ${p === page ? "bg-[var(--brand)] text-white shadow-[0_4px_10px_rgba(0,87,255,0.25)]" : "border border-[#e3eaf3] text-[#45577a] hover:bg-[#f7f9fd]"}`}>{p}</button>
       ))}
-      <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="grid h-11 w-11 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40 lg:mouse:h-8 lg:mouse:w-8" aria-label="Next"><ChevronRight size={15} /></button>
+      <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="grid h-11 w-11 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40 lg:mouse:h-8 lg:mouse:w-8" aria-label={t("inventory.counts.next")}><ChevronRight size={15} /></button>
     </div>
   );
 }
