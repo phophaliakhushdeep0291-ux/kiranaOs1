@@ -97,10 +97,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   // Not debt: the one string here is a developer assertion thrown when the hook
   // is used outside its provider. It never reaches a shopkeeper.
   "features/core/settings/i18n.tsx", // 1
-  "features/core/settings/pages/IntegrationsSettingsPage.tsx", // 59
-  "features/core/settings/pages/PrinterSettingsPage.tsx", // 48
-  "features/core/settings/pages/SecuritySettingsPage.tsx", // 42
-  "features/core/settings/pages/TaxesSettingsPage.tsx", // 66
   "features/core/staff/pages/StaffPage.tsx", // 40
   "features/core/subscription/components/CancelSubscriptionDialog.tsx", // 8
   "features/core/subscription/components/SubscriptionStatusBanner.tsx", // 3
