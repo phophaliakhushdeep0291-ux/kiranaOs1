@@ -1011,7 +1011,7 @@ function ProductCard({ product, onAdd, trending = false, t }: { product: Product
         ) : trending ? (
           /* §13: this product is being viewed a lot in online sessions right
              now. A marker, not a reordering — the grid stays predictable. */
-          <span title="Trending in online orders" className="absolute left-1.5 top-1.5 rounded-md border border-[#f6d9a8] bg-[#fff8ec]/95 px-1.5 py-0.5 text-[8.5px] font-black text-[#b45309] shadow-sm">
+          <span title={t("chrome.trendingOnline")} className="absolute left-1.5 top-1.5 rounded-md border border-[#f6d9a8] bg-[#fff8ec]/95 px-1.5 py-0.5 text-[8.5px] font-black text-[#b45309] shadow-sm">
             Trending
           </span>
         ) : null}

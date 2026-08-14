@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -71,7 +72,9 @@ ToastAction.displayName = ToastPrimitives.Action.displayName
 const ToastClose = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Close>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Close>
->(({ className, ...props }, ref) => (
+>(({ className, ...props }, ref) => {
+  const { t } = useAppLanguage();
+  return (
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
@@ -79,12 +82,13 @@ const ToastClose = React.forwardRef<
       className
     )}
     toast-close=""
-    aria-label="Dismiss notification"
+    aria-label={t("chrome.dismissNotification")}
     {...props}
   >
     <X className="h-4 w-4" aria-hidden="true" />
   </ToastPrimitives.Close>
-))
+  );
+})
 ToastClose.displayName = ToastPrimitives.Close.displayName
 
 const ToastTitle = React.forwardRef<

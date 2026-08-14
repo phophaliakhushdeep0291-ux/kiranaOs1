@@ -856,9 +856,9 @@ export default function CustomersPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" aria-label="Customer account summary">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" aria-label={t("customers.accountSummary")}>
         <CustomerMetricCard label={t("customers.stat.total")} value={String(totals.customers)} change={metricChanges.customers} color="var(--brand)" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[var(--brand)]" spark={metricSparks.customers} />
-        <CustomerMetricCard label="Total Outstanding" value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
+        <CustomerMetricCard label={t("customers.totalOutstanding")} value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
         <CustomerMetricCard label={t("customers.stat.overdueAmount")} value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={18} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
         <CustomerMetricCard label={t("customers.stat.udharCollected")} value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
       </section>
@@ -993,8 +993,8 @@ export default function CustomersPage() {
                 </div>
 
                 <div className="mt-5 grid gap-3 rounded-[14px] border border-[#e8eef7] bg-[#fbfdff] p-4 md:grid-cols-3">
-                  <SummaryCell label="Total Outstanding" value={fmtMoney(selectedCustomer.ledgerBalance)} valueClass={selectedCustomer.ledgerBalance > 0 ? "text-rose-600" : "text-emerald-600"} />
-                  <SummaryCell label="Credit Limit" value={creditLimit > 0 ? fmtMoney(creditLimit) : "Not set"} />
+                  <SummaryCell label={t("customers.totalOutstanding")} value={fmtMoney(selectedCustomer.ledgerBalance)} valueClass={selectedCustomer.ledgerBalance > 0 ? "text-rose-600" : "text-emerald-600"} />
+                  <SummaryCell label={t("customers.profile.creditLimit")} value={creditLimit > 0 ? fmtMoney(creditLimit) : t("products.import.notSet")} />
                   <SummaryCell
                     label={t("customers.profile.availableCredit")}
                     value={creditLimit > 0
@@ -1203,16 +1203,16 @@ export default function CustomersPage() {
                     </div>
                   </div>
                   <div className="min-w-0 flex-1 space-y-2 text-[12px]">
-                    <Legend color="bg-emerald-500" label="0 - 7 Days" value={fmtMoney(ageing?.zeroToSeven ?? 0)} />
+                    <Legend color="bg-emerald-500" label={t("customers.ageing.bucket0to7")} value={fmtMoney(ageing?.zeroToSeven ?? 0)} />
                     <Legend color="bg-amber-500" label={t("customers.ageing.bucket7to30")} value={fmtMoney(ageing?.sevenToThirty ?? 0)} />
-                    <Legend color="bg-rose-500" label="30+ Days" value={fmtMoney(ageing?.thirtyPlus ?? 0)} />
+                    <Legend color="bg-rose-500" label={t("customers.ageing.bucket30plus")} value={fmtMoney(ageing?.thirtyPlus ?? 0)} />
                   </div>
                 </div>
               );
             })()}
           </RightCard>
 
-          <RightCard title="Payment History" action="View all" onAction={() => setActiveTab("payments")}>
+          <RightCard title={t("customers.paymentHistory")} action="View all" onAction={() => setActiveTab("payments")}>
             {paymentRows.length === 0 ? (
               <p className="py-5 text-center text-[12px] text-[#64748b]">{t("customers.detail.noPayments")}</p>
             ) : (
@@ -1273,7 +1273,7 @@ export default function CustomersPage() {
               <div className="mb-3"><p className="text-[12px] font-bold text-[#19345f]">{t("customers.form.gstDetails")}</p><p className="mt-0.5 text-[11px] text-[#64748b]">{t("customers.form.gstHelp")}</p></div>
               <div className="grid gap-3 md:grid-cols-[1fr_120px]">
                 <div><Label>{t("customers.form.gstin")}</Label><Input className="mt-1 uppercase" maxLength={15} autoCapitalize="characters" value={customerForm.gstNumber} onChange={(event) => { const gstNumber = event.target.value.toUpperCase().replace(/\s/g, ""); setCustomerForm((form) => ({ ...form, gstNumber, stateCode: /^\d{2}/.test(gstNumber) ? gstNumber.slice(0, 2) : form.stateCode })); }} placeholder="22AAAAA0000A1Z5" /></div>
-                <div><Label>{t("customers.form.stateCode")}</Label><Input className="mt-1 bg-white" value={customerForm.stateCode} readOnly placeholder="--" aria-label="GST state code" /></div>
+                <div><Label>{t("customers.form.stateCode")}</Label><Input className="mt-1 bg-white" value={customerForm.stateCode} readOnly placeholder="--" aria-label={t("customers.gstStateCode")} /></div>
               </div>
             </div>
             <div><Label>{t("customers.form.customerType")}</Label><Select value={customerForm.type} onValueChange={(value) => setCustomerForm((form) => ({ ...form, type: value as "regular" | "udhar" }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">{t("customers.form.regular")}</SelectItem><SelectItem value="udhar">{t("customers.form.udharAllowed")}</SelectItem></SelectContent></Select></div>
@@ -1297,7 +1297,7 @@ export default function CustomersPage() {
             <div><Label>{t("customers.payment.amount")}</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.amount} onChange={(event) => setPaymentForm((form) => ({ ...form, amount: event.target.value }))} /></div>
             <div><Label>{t("customers.payment.mode")}</Label><Select value={paymentForm.mode} onValueChange={(value) => setPaymentForm((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">{t("customers.pay.cash")}</SelectItem><SelectItem value="upi">{t("customers.pay.upi")}</SelectItem><SelectItem value="bank">{t("customers.pay.bank")}</SelectItem><SelectItem value="split">{t("customers.payment.splitPayment")}</SelectItem></SelectContent></Select></div>
             {paymentForm.mode === "split" && <div className="grid grid-cols-2 gap-3"><div><Label>{t("customers.payment.cashAmount")}</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.cashAmount} onChange={(event) => setPaymentForm((form) => ({ ...form, cashAmount: event.target.value }))} /></div><div><Label>{t("customers.payment.upiAmount")}</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.upiAmount} onChange={(event) => setPaymentForm((form) => ({ ...form, upiAmount: event.target.value }))} /></div></div>}
-            <div><Label>{t("customers.payment.note")}</Label><Input className="mt-1" value={paymentForm.note} onChange={(event) => setPaymentForm((form) => ({ ...form, note: event.target.value }))} placeholder="Optional" /></div>
+            <div><Label>{t("customers.payment.note")}</Label><Input className="mt-1" value={paymentForm.note} onChange={(event) => setPaymentForm((form) => ({ ...form, note: event.target.value }))} placeholder={t("restaurant.addons.optional")} /></div>
           </div>
           <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>{t("customers.form.cancel")}</Button><Button onClick={() => void recordPayment()} disabled={saving}>{saving ? "Saving..." : t("customers.detail.recordOffline")}</Button></div>
         </DialogContent>
@@ -1305,8 +1305,8 @@ export default function CustomersPage() {
 
       <OwnerPinModal
         open={Boolean(deleteTarget)}
-        title="Owner PIN required"
-        description={`Delete ${deleteTarget?.name ?? "this customer"}? This only moves the customer to recycle bin. Bills, ledger, and payments stay safe.`}
+        title={t("products.bulk.ownerPinRequired")}
+        description={`Delete ${deleteTarget?.name ?? t("customers.thisCustomer")}? This only moves the customer to recycle bin. Bills, ledger, and payments stay safe.`}
         confirmLabel={t("customers.action.moveToRecycleBin")}
         reasonRequired
         loading={saving}
@@ -1490,11 +1490,11 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
         <div className="flex flex-col gap-4 p-[18px] sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{t(risk.labelKey)}</span><button onClick={() => onEdit(customer)} title={t("customers.detail.editCustomer")} className="grid h-7 w-7 place-items-center rounded-[8px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || "No mobile"}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || "No address"}</span></div></div></div>
           <div className="flex items-center gap-3">
-            <Link href={`/customers/${customer.id}`} title="Open full udhar ledger" className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors hover:bg-[var(--brand-strong)]"><BookOpen size={15} />{t("customers.detail.viewLedger")}</Link>
+            <Link href={`/customers/${customer.id}`} title={t("customers.openLedger")} className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors hover:bg-[var(--brand-strong)]"><BookOpen size={15} />{t("customers.detail.viewLedger")}</Link>
             <InfoMini label={t("customers.profile.lastPayment")} value={formatShortDate(customer.ledgerMetrics.lastPaymentAt)} />
           </div>
         </div>
-        <div className="grid grid-cols-2 border-t border-[#e8edf4] sm:grid-cols-5"><CompactSummaryV3 label="Credit Limit" value={creditLimit > 0 ? fmtMoney(creditLimit) : "Not set"} /><CompactSummaryV3 label={t("customers.stat.totalPurchases")} value={fmtMoney(outstanding + paid)} /><CompactSummaryV3 label={t("customers.stat.totalPaid")} value={fmtMoney(paid)} /><CompactSummaryV3 label="Outstanding" value={fmtMoney(outstanding)} danger /><CompactSummaryV3 label="Overdue Days" value={`${overdueDays} Days`} danger={overdueDays > 0} /></div>
+        <div className="grid grid-cols-2 border-t border-[#e8edf4] sm:grid-cols-5"><CompactSummaryV3 label={t("customers.profile.creditLimit")} value={creditLimit > 0 ? fmtMoney(creditLimit) : t("products.import.notSet")} /><CompactSummaryV3 label={t("customers.stat.totalPurchases")} value={fmtMoney(outstanding + paid)} /><CompactSummaryV3 label={t("customers.stat.totalPaid")} value={fmtMoney(paid)} /><CompactSummaryV3 label={t("customers.outstanding")} value={fmtMoney(outstanding)} danger /><CompactSummaryV3 label={t("customers.overdueDays")} value={`${overdueDays} Days`} danger={overdueDays > 0} /></div>
       </article>
 
       <article className="rounded-[16px] border border-[#e6ecf5] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -1545,10 +1545,10 @@ function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, co
   const overdueDays = customer ? customerOverdueDays(customer) : 0;
   const sevenToThirty = Math.max(0, money(ageing?.sevenToThirty));
   const rawBuckets = [
-    { value: Math.max(0, money(ageing?.zeroToSeven)), color: "#22c55e", label: "0 - 7 Days" },
+    { value: Math.max(0, money(ageing?.zeroToSeven)), color: "#22c55e", label: t("customers.ageing.bucket0to7") },
     { value: overdueDays <= 15 ? sevenToThirty : 0, color: "#f59e0b", label: "8 - 15 Days" },
     { value: overdueDays > 15 && overdueDays <= 30 ? sevenToThirty : 0, color: "#ef4444", label: "16 - 30 Days" },
-    { value: Math.max(0, money(ageing?.thirtyPlus)), color: "#8b5cf6", label: "30+ Days" },
+    { value: Math.max(0, money(ageing?.thirtyPlus)), color: "#8b5cf6", label: t("customers.ageing.bucket30plus") },
   ];
   const rawTotal = rawBuckets.reduce((sum, row) => sum + row.value, 0);
   const buckets = rawBuckets.map((row, index) => index === 0 && pending > rawTotal ? { ...row, value: row.value + pending - rawTotal } : row);

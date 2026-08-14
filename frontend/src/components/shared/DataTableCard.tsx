@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useId, type HTMLAttributes, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +19,7 @@ export interface DataTableCardProps extends Omit<HTMLAttributes<HTMLDivElement>,
 }
 
 export function DataTableCard({ title, description, actions, children, loading = false, error, empty = false, emptyState, loadingRows = 3, tableLabel, className, ...props }: DataTableCardProps) {
+  const { t } = useAppLanguage();
   const id = useId();
   const titleId = `data-table-title-${id.replace(/:/g, "")}`;
 
@@ -31,25 +33,25 @@ export function DataTableCard({ title, description, actions, children, loading =
         {actions ? <div className="responsive-action-row shrink-0 md:justify-end">{actions}</div> : null}
       </div>
       {loading ? (
-        <div className="data-table-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading table data">
+        <div className="data-table-loading" role="status" aria-live="polite" aria-busy="true" aria-label={t("chrome.table.loading")}>
           <Skeleton className="data-table-loading-head" />
           {Array.from({ length: loadingRows }).map((_, index) => <Skeleton key={index} />)}
         </div>
       ) : error ? (
         <EmptyState
           icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
-          title="Unable to load data"
+          title={t("chrome.table.failed")}
           description={error}
           className="m-4 border-destructive/30 bg-destructive/5"
           role="alert"
         />
       ) : empty ? (
-        emptyState ?? <EmptyState className="m-4" title="No data found" description="There is nothing to show right now." />
+        emptyState ?? <EmptyState className="m-4" title={t("chrome.table.empty")} description={t("chrome.table.emptyHelp")} />
       ) : (
         <div
           className="app-table-scroll data-table-scroll"
           role="region"
-          aria-label={tableLabel ?? "Scrollable data table"}
+          aria-label={tableLabel ?? t("chrome.table.scrollable")}
           tabIndex={0}
         >
           {children}

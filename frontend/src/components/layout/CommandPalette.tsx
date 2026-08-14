@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { CornerDownLeft, Package, ReceiptText, Search, Users, X } from "lucide-react";
@@ -62,6 +63,7 @@ function money(value: unknown): string {
  * Enter or a click navigates to the record via the existing wouter router.
  */
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useAppLanguage();
   const [, setLocation] = useLocation();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -163,7 +165,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Search"
+        aria-label={t("billing.summary.shortcutSearch")}
       >
         <div className="flex items-center gap-2 border-b border-[#eef2f8] px-4">
           <Search size={17} className="text-[#64748b]" aria-hidden="true" />
@@ -177,11 +179,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               else if (event.key === "Enter") { event.preventDefault(); go(items[active]); }
               else if (event.key === "Escape") { event.preventDefault(); onClose(); }
             }}
-            placeholder="Search products, customers, bills…"
+            placeholder={t("chrome.search.placeholder")}
             className="h-12 flex-1 bg-transparent text-[14px] text-[var(--brand-ink)] outline-none placeholder:text-[#94a3b8]"
-            aria-label="Search products, customers and bills"
+            aria-label={t("chrome.search.label")}
           />
-          <button onClick={onClose} className="rounded-md p-1 text-[#94a3b8] hover:bg-[#f1f4f8] hover:text-[var(--brand-ink)]" aria-label="Close search">
+          <button onClick={onClose} className="rounded-md p-1 text-[#94a3b8] hover:bg-[#f1f4f8] hover:text-[var(--brand-ink)]" aria-label={t("chrome.search.close")}>
             <X size={16} />
           </button>
         </div>

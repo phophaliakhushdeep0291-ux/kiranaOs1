@@ -424,4 +424,11 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.status.categoriesAffected": "प्रभावित श्रेणियां",
   "inventory.status.acrossCatalogue": "पूरी सूची में",
   "inventory.movement.tryAgain": "दोबारा कोशिश करें।",
+  "inventory.lots.search": "सामान, बैच या ब्रांच खोजें",
+  "inventory.lots.saleabilityHelp": "इससे चुनी हुई ब्रांच के हर काउंटर पर यह बैच बिकने लायक है या नहीं, यह बदल जाएगा।",
+  "inventory.lots.confirmControl": "बैच नियंत्रण पक्का करें",
+  "inventory.register.itemsTouched": "जिन सामानों में बदलाव हुआ",
+  "inventory.register.completed": "पूरा हुआ",
+  "inventory.register.totalAdjustments": "कुल सुधार",
+  "inventory.register.totalTransfers": "कुल ट्रांसफर",
 };

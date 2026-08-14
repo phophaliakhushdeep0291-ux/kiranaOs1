@@ -342,4 +342,12 @@ export const customersEn = {
   "customers.ledger.printStatement": "Print statement",
   "customers.ledger.openFull": "Open full ledger",
   "customers.ledger.howUdharWorks": "How udhar works:",
+  "customers.accountSummary": "Customer account summary",
+  "customers.gstStateCode": "GST state code",
+  "customers.openLedger": "Open full udhar ledger",
+  "customers.outstanding": "Outstanding",
+  "customers.overdueDays": "Overdue Days",
+  "customers.thisCustomer": "this customer",
+  "customers.pinReversalPreserved": "Owner PIN is required. The old payment is preserved and a correction ledger entry is appended.",
+  "customers.totalOutstanding": "Total Outstanding",
 } as const;

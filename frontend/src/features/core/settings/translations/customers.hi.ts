@@ -328,4 +328,12 @@ export const customersHi: Record<keyof typeof customersEn, string> = {
   "customers.ledger.printStatement": "विवरण प्रिंट करें",
   "customers.ledger.openFull": "पूरा खाता खोलें",
   "customers.ledger.howUdharWorks": "उधार कैसे काम करता है:",
+  "customers.accountSummary": "ग्राहक के खाते का सार",
+  "customers.gstStateCode": "GST राज्य कोड",
+  "customers.openLedger": "पूरा उधार खाता खोलें",
+  "customers.outstanding": "बकाया",
+  "customers.overdueDays": "कितने दिन से बकाया",
+  "customers.thisCustomer": "यह ग्राहक",
+  "customers.pinReversalPreserved": "मालिक का PIN ज़रूरी है। पुराना भुगतान मिटता नहीं, उसके साथ एक सुधार की एंट्री जोड़ दी जाती है।",
+  "customers.totalOutstanding": "कुल बकाया",
 };

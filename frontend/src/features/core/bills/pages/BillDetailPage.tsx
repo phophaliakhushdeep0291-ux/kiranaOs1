@@ -96,7 +96,7 @@ function BillItemDescription({ item }: { item: AnyRow }) {
   return <div className="min-w-0">
     <div className="break-words font-semibold text-foreground">{String(item.name ?? item.productName ?? t("billing.bills.item"))}</div>
     {variation ? <div className="mt-1 text-xs font-semibold text-muted-foreground">Portion: {variation}</div> : null}
-    {addons.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Selected add-ons">
+    {addons.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5" aria-label={t("billing.bills.selectedAddons")}>
       {addons.map((addon, addonIndex) => <span className="inline-flex max-w-full flex-wrap items-center gap-x-1 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold leading-4 text-amber-950" key={`${addon.optionId ?? addon.name}-${addonIndex}`}>
         {addon.groupName ? <span className="text-amber-700">{addon.groupName}:</span> : null}
         <span>{addon.quantity > 1 ? `${addon.quantity}× ` : ""}{addon.name}</span>
@@ -487,9 +487,9 @@ export default function BillDetailPage() {
       <OwnerPinModal
         open={!!pinAction}
         onCancel={() => setPinAction(null)}
-        title={pinAction === "restore" ? t("billing.bills.restoreBill") : pinAction === "cancel" ? t("billing.bills.cancelBill") : "Move bill to recycle bin"}
-        description="Owner PIN is required. Financial records are preserved locally and synced later."
-        confirmLabel={pinAction === "restore" ? t("billing.bills.restore") : pinAction === "cancel" ? t("billing.bills.cancelBill") : "Move to recycle bin"}
+        title={pinAction === "restore" ? t("billing.bills.restoreBill") : pinAction === "cancel" ? t("billing.bills.cancelBill") : t("billing.bills.moveToRecycle")}
+        description={t("billing.bills.pinPreservedLocally")}
+        confirmLabel={pinAction === "restore" ? t("billing.bills.restore") : pinAction === "cancel" ? t("billing.bills.cancelBill") : t("billing.bills.moveToRecycleShort")}
         reasonRequired={pinAction === "cancel" || pinAction === "delete"}
         loading={isSaving}
         onConfirm={({ ownerPin, reason }) => runPinAction(ownerPin, reason)}

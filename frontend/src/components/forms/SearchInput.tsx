@@ -1,3 +1,4 @@
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { forwardRef, type InputHTMLAttributes } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ export interface SearchInputProps extends InputHTMLAttributes<HTMLInputElement> 
 
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
   ({ onClear, containerClassName, className, value, ...props }, ref) => {
+    const { t } = useAppLanguage();
     const hasValue = Boolean(value);
     return (
       <div className={cn("relative flex items-center", containerClassName)}>
@@ -29,7 +31,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
           <button
             type="button"
             onClick={onClear}
-            aria-label="Clear search"
+            aria-label={t("chrome.search.clear")}
             className="absolute right-3 rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X size={14} aria-hidden="true" />

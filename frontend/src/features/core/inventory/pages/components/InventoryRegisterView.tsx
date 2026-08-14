@@ -149,10 +149,10 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
       </div>
 
       <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
-        <Kpi icon={icon} label={isAdjustments ? "Total Adjustments" : "Total Transfers"} value={stats.total.toLocaleString("en-IN")} tone="blue" />
-        <Kpi icon={<Package size={18} />} label="Items Touched" value={stats.items.toLocaleString("en-IN")} tone="green" />
-        <Kpi icon={<ClipboardList size={18} />} label="Total Quantity" value={stats.quantity.toLocaleString("en-IN")} tone="violet" />
-        <Kpi icon={<CheckCircle2 size={18} />} label="Completed" value={stats.completed.toLocaleString("en-IN")} tone="amber" />
+        <Kpi icon={icon} label={isAdjustments ? t("inventory.register.totalAdjustments") : t("inventory.register.totalTransfers")} value={stats.total.toLocaleString("en-IN")} tone="blue" />
+        <Kpi icon={<Package size={18} />} label={t("inventory.register.itemsTouched")} value={stats.items.toLocaleString("en-IN")} tone="green" />
+        <Kpi icon={<ClipboardList size={18} />} label={t("inventory.status.totalQuantity")} value={stats.quantity.toLocaleString("en-IN")} tone="violet" />
+        <Kpi icon={<CheckCircle2 size={18} />} label={t("inventory.register.completed")} value={stats.completed.toLocaleString("en-IN")} tone="amber" />
       </div>
 
       <div className="mt-4 rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">

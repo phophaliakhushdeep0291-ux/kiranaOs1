@@ -72,7 +72,7 @@ export function NearExpiryAlert({ limit = 5, className }: { limit?: number; clas
   const { expired, critical, warning } = data.buckets;
 
   return (
-    <section className={cn("rounded-2xl border bg-white p-4 shadow-sm", className)} aria-label="Stock nearing expiry">
+    <section className={cn("rounded-2xl border bg-white p-4 shadow-sm", className)} aria-label={t("inventory.nearExpiry.title")}>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-700">

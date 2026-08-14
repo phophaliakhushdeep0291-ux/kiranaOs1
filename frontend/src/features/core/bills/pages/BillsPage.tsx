@@ -122,7 +122,6 @@ const STATUS_CLS: Record<string, string> = {
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
-  const { t } = useAppLanguage();
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
@@ -743,10 +742,10 @@ export default function BillsPage() {
       <div className="grid grid-cols-2 items-stretch gap-2.5 lg:grid-cols-3 lg:gap-3 xl:grid-cols-6">
         <BillKpiCard label={t("billing.bills.totalBills")} value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label={t("billing.bills.totalSales")} value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
-        <BillKpiCard mobileHidden label="Paid Bills" value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
-        <BillKpiCard label="Udhar Bills" value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
-        <BillKpiCard mobileHidden label="Average Bill Value" value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
-        <BillKpiCard label="Cancelled Bills" value={String(analytics.cancelledBills)} delta={analytics.cancelledBillsDelta} data={analytics.sparks.cancelledBills} color={RED} icon={<Ban size={17} />} iconClass="border-[#ffcfd8] bg-[#ffecef] text-[#ff314f] shadow-[0_10px_22px_rgba(255,49,79,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
+        <BillKpiCard mobileHidden label={t("billing.bills.stats.paid")} value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard label={t("billing.bills.stats.udhar")} value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
+        <BillKpiCard mobileHidden label={t("billing.bills.stats.average")} value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard label={t("billing.bills.stats.cancelled")} value={String(analytics.cancelledBills)} delta={analytics.cancelledBillsDelta} data={analytics.sparks.cancelledBills} color={RED} icon={<Ban size={17} />} iconClass="border-[#ffcfd8] bg-[#ffecef] text-[#ff314f] shadow-[0_10px_22px_rgba(255,49,79,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
       </div>
 
       <section id="billing-history-table" className={cn(CARD, "overflow-hidden")}>
@@ -756,7 +755,7 @@ export default function BillsPage() {
                 fades the last few pixels on phones so it reads as "there is
                 more", and the taller chip is the thumb-sized version of the
                 36px one the desktop keeps. */}
-            <div className="scroll-rail -mx-1 flex min-w-0 gap-1 overflow-x-auto px-1" role="tablist" aria-label="Filter bills">
+            <div className="scroll-rail -mx-1 flex min-w-0 gap-1 overflow-x-auto px-1" role="tablist" aria-label={t("billing.bills.filter.label")}>
               {billTabs(t).map((tab) => (
                 <button
                   key={tab.value}
@@ -778,7 +777,7 @@ export default function BillsPage() {
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_190px_150px_40px] xl:w-[760px]">
               <div className="relative min-w-0">
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7f8da5]" />
-                <Input className="h-10 rounded-[8px] border-[#dfe7f2] bg-white pl-9 text-[12px] font-medium shadow-none placeholder:text-[#71809b] focus-visible:ring-0" placeholder="Search by bill no, customer, mobile..." value={search} onChange={(event) => setSearch(event.target.value)} />
+                <Input className="h-10 rounded-[8px] border-[#dfe7f2] bg-white pl-9 text-[12px] font-medium shadow-none placeholder:text-[#71809b] focus-visible:ring-0" placeholder={t("billing.bills.search")} value={search} onChange={(event) => setSearch(event.target.value)} />
               </div>
               <Select value={modeFilter} onValueChange={(value) => setModeFilter(value as ModeFilter)}>
                 <SelectTrigger className="h-10 rounded-[8px] border-[#dfe7f2] bg-white text-[12px] font-bold text-[#24385f]"><SelectValue /></SelectTrigger>
@@ -799,7 +798,7 @@ export default function BillsPage() {
                   {staffOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="icon" className="h-10 w-10 rounded-[8px] border-[#dfe7f2] bg-white text-[var(--brand)]" onClick={() => { setSearch(""); setModeFilter("all"); setStaffFilter("all"); setFilter("all"); applyPeriod("all"); void refetch(); }} aria-label="Clear filters">
+              <Button variant="outline" size="icon" className="h-10 w-10 rounded-[8px] border-[#dfe7f2] bg-white text-[var(--brand)]" onClick={() => { setSearch(""); setModeFilter("all"); setStaffFilter("all"); setFilter("all"); applyPeriod("all"); void refetch(); }} aria-label={t("billing.bills.clearFilters")}>
                 <SlidersHorizontal size={15} />
               </Button>
             </div>
@@ -854,9 +853,9 @@ export default function BillsPage() {
                     {/* This is the phone card's whole action set, so each button
                         gets the full 44px rather than the desktop row's 36px. */}
                     <div className="mt-3 grid grid-cols-4 gap-2">
-                      <button type="button" className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)] active:scale-95" onClick={() => navigate(`/bills/${bill.id}`)} aria-label="View bill"><Eye size={16} className="mx-auto" /></button>
-                      <button type="button" className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)] active:scale-95" onClick={() => printBill(bill)} aria-label="Print bill"><Printer size={16} className="mx-auto" /></button>
-                      <button type="button" className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)] active:scale-95" onClick={() => void shareOnWhatsapp(bill)} aria-label="Share bill"><Share2 size={16} className="mx-auto" /></button>
+                      <button type="button" className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)] active:scale-95" onClick={() => navigate(`/bills/${bill.id}`)} aria-label={t("billing.bills.view")}><Eye size={16} className="mx-auto" /></button>
+                      <button type="button" className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)] active:scale-95" onClick={() => printBill(bill)} aria-label={t("billing.bills.print")}><Printer size={16} className="mx-auto" /></button>
+                      <button type="button" className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)] active:scale-95" onClick={() => void shareOnWhatsapp(bill)} aria-label={t("billing.bills.share")}><Share2 size={16} className="mx-auto" /></button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button className="h-11 rounded-[10px] border border-[#dfe7f2] bg-white text-[#405273] active:scale-95" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={16} className="mx-auto" /></button>
@@ -885,7 +884,7 @@ export default function BillsPage() {
                 <thead>
                   <tr className={TABLE_HEAD}>
                     <th className="w-9 px-4 py-2.5 text-left">
-                      <input type="checkbox" className="h-3.5 w-3.5 rounded border-[#cbd5e1] accent-[var(--brand)]" aria-label="Select all bills on page" checked={pageRows.length > 0 && pageRows.every((bill) => checked.has(bill.id))} onChange={toggleAllOnPage} />
+                      <input type="checkbox" className="h-3.5 w-3.5 rounded border-[#cbd5e1] accent-[var(--brand)]" aria-label={t("billing.bills.selectAll")} checked={pageRows.length > 0 && pageRows.every((bill) => checked.has(bill.id))} onChange={toggleAllOnPage} />
                     </th>
                     {["Bill No", "Customer", "Date & Time", t("billing.bills.items"), "Payment Mode", "Bill Type", "Amount", t("billing.bills.status"), "Staff", "Sync", "Action"].map((header) => (
                       <th key={header} className={cn("px-4 py-2.5 font-bold", [t("billing.bills.items"), "Amount"].includes(header) ? "text-right" : "text-left")}>{header}</th>
@@ -923,13 +922,13 @@ export default function BillsPage() {
                         <td className="px-4 py-2.5"><SyncBadgeMini sync={sync} /></td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center justify-end gap-1">
-                            <ActionIcon title="View bill" onClick={() => navigate(`/bills/${bill.id}`)}><Eye size={13} /></ActionIcon>
-                            <ActionIcon title="Print bill" onClick={() => printBill(bill)}><Printer size={13} /></ActionIcon>
-                            <ActionIcon title="Share bill" onClick={() => void shareOnWhatsapp(bill)}><Share2 size={13} /></ActionIcon>
+                            <ActionIcon title={t("billing.bills.view")} onClick={() => navigate(`/bills/${bill.id}`)}><Eye size={13} /></ActionIcon>
+                            <ActionIcon title={t("billing.bills.print")} onClick={() => printBill(bill)}><Printer size={13} /></ActionIcon>
+                            <ActionIcon title={t("billing.bills.share")} onClick={() => void shareOnWhatsapp(bill)}><Share2 size={13} /></ActionIcon>
                             {estimate && !deleted && (
                               <button
                                 type="button"
-                                title="Delete estimate"
+                                title={t("billing.bills.deleteEstimate")}
                                 onClick={() => requestPinAction("delete", bill)}
                                 className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-[7px] border border-rose-200 bg-rose-50 px-2.5 text-[11px] font-bold text-rose-600 transition-colors hover:border-rose-300 hover:bg-rose-100"
                               >
@@ -980,7 +979,7 @@ export default function BillsPage() {
                   <PageBtn ariaLabel="Next page" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}><ChevronRight size={14} aria-hidden="true" /></PageBtn>
                 </div>
                 <Select value={String(perPage)} onValueChange={(value) => setPerPage(Number(value))}>
-                  <SelectTrigger aria-label="Bills per page" className="h-8 w-[70px] rounded-[7px] border-[#dfe7f2] text-[11px] font-bold"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label={t("billing.bills.perPage")} className="h-8 w-[70px] rounded-[7px] border-[#dfe7f2] text-[11px] font-bold"><SelectValue /></SelectTrigger>
                   <SelectContent>{[10, 20, 50].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -998,9 +997,9 @@ export default function BillsPage() {
       <OwnerPinModal
         open={!!pinAction}
         onCancel={() => setPinAction(null)}
-        title={pinAction?.action === "clear_estimates" ? "Clear estimate bills" : pinAction?.action === "restore" ? t("billing.bills.restoreBill") : pinAction?.action === "cancel" ? t("billing.bills.cancelBill") : deletingEstimate ? "Delete estimate" : "Move bill to recycle bin"}
-        description={pinAction?.action === "clear_estimates" ? `Owner PIN is required. ${pinAction.bills.length} estimate bill${pinAction.bills.length === 1 ? "" : "s"} will move to recycle bin. Estimates count as sales — cancel a bill first if you need its stock and udhar reversed.` : deletingEstimate ? "Enter your owner PIN to delete this estimate. It moves to the recycle bin like any bill — cancel it instead if you need stock and udhar reversed." : "Owner PIN is required. Financial records are never hard deleted and this action is saved locally first."}
-        confirmLabel={pinAction?.action === "clear_estimates" ? "Clear estimates" : pinAction?.action === "restore" ? t("billing.bills.restore") : pinAction?.action === "cancel" ? t("billing.bills.cancelBill") : deletingEstimate ? "Delete estimate" : "Move to recycle bin"}
+        title={pinAction?.action === "clear_estimates" ? t("billing.bills.clearEstimates") : pinAction?.action === "restore" ? t("billing.bills.restoreBill") : pinAction?.action === "cancel" ? t("billing.bills.cancelBill") : deletingEstimate ? t("billing.bills.deleteEstimate") : t("billing.bills.moveToRecycle")}
+        description={pinAction?.action === "clear_estimates" ? `Owner PIN is required. ${pinAction.bills.length} estimate bill${pinAction.bills.length === 1 ? "" : "s"} will move to recycle bin. Estimates count as sales — cancel a bill first if you need its stock and udhar reversed.` : deletingEstimate ? t("billing.bills.deleteEstimateHelp") : t("billing.bills.pinNeverHardDeleted")}
+        confirmLabel={pinAction?.action === "clear_estimates" ? t("billing.bills.clearEstimatesShort") : pinAction?.action === "restore" ? t("billing.bills.restore") : pinAction?.action === "cancel" ? t("billing.bills.cancelBill") : deletingEstimate ? t("billing.bills.deleteEstimate") : t("billing.bills.moveToRecycleShort")}
         reasonRequired={pinAction?.action === "cancel" || pinAction?.action === "delete" || pinAction?.action === "clear_estimates"}
         loading={isSaving}
         onConfirm={({ ownerPin, reason }) => runPinAction(ownerPin, reason)}

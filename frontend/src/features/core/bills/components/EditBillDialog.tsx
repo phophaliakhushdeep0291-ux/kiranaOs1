@@ -232,7 +232,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search a product to add…"
+                placeholder={t("billing.bills.edit.searchProduct")}
                 className="pl-9"
               />
               {matches.length > 0 && (
@@ -263,7 +263,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
                     <Input
                       value={line.name}
                       onChange={(event) => updateLine(line.key, { name: event.target.value })}
-                      placeholder="Item name"
+                      placeholder={t("billing.bills.edit.itemName")}
                       className="h-9"
                     />
                     <BillLineQuantity
@@ -274,7 +274,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
                       rate={line.ratePerRateUnit}
                       onChange={(ratePerRateUnit) => updateLine(line.key, { ratePerRateUnit })}
                     />
-                    <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-red-600" onClick={() => removeLine(line.key)} aria-label="Remove item">
+                    <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-red-600" onClick={() => removeLine(line.key)} aria-label={t("billing.bills.edit.removeItem")}>
                       <Trash2 size={15} />
                     </Button>
                   </div>
@@ -337,9 +337,9 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
       <OwnerPinModal
         open={pinOpen}
         onCancel={() => setPinOpen(false)}
-        title="Confirm bill edit"
-        description="Editing voids the original bill and recreates it with your changes. Owner PIN required."
-        confirmLabel="Void & recreate"
+        title={t("billing.bills.edit.confirm")}
+        description={t("billing.bills.edit.confirmHelp")}
+        confirmLabel={t("billing.bills.edit.voidRecreate")}
         reasonRequired
         loading={saving}
         onConfirm={({ ownerPin, reason }) => confirmEdit(ownerPin, reason)}
@@ -353,8 +353,9 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
 // bill line at zero drops out of the total while still sitting on screen, which
 // reads as the bill quietly under-counting. Removing a line is the Trash button.
 function BillLineQuantity({ quantity, onChange }: { quantity: number; onChange: (next: number) => void }) {
+  const { t } = useAppLanguage();
   const props = useQuantityDraft(quantity, onChange);
-  return <Input type="number" inputMode="decimal" className="h-9 text-right" aria-label="Quantity" {...props} />;
+  return <Input type="number" inputMode="decimal" className="h-9 text-right" aria-label={t("inventory.col.quantity")} {...props} />;
 }
 
 // A hook cannot run inside the lines.map callback, so each row owns its draft.

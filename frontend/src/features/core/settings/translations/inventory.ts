@@ -442,4 +442,11 @@ export const inventoryEn = {
   "inventory.status.categoriesAffected": "Categories Affected",
   "inventory.status.acrossCatalogue": "Across catalogue",
   "inventory.movement.tryAgain": "Try again.",
+  "inventory.lots.search": "Search product, batch, or branch",
+  "inventory.lots.saleabilityHelp": "This changes saleability across every counter in the selected branch.",
+  "inventory.lots.confirmControl": "Confirm batch control",
+  "inventory.register.itemsTouched": "Items Touched",
+  "inventory.register.completed": "Completed",
+  "inventory.register.totalAdjustments": "Total Adjustments",
+  "inventory.register.totalTransfers": "Total Transfers",
 } as const;
