@@ -17,6 +17,7 @@ const taxes = readFileSync("src/features/core/settings/pages/TaxesSettingsPage.t
  * sit correct-but-unused in the catalogue either.
  */
 const stockEn = readFileSync("src/features/core/settings/translations/inventory.ts", "utf8");
+const settingsEn = readFileSync("src/features/core/settings/translations/settings-pages.ts", "utf8");
 
 describe("multi-GSTIN transfer and reporting UI", () => {
   it("collects a registration identity without claiming GST portal verification", () => {
@@ -102,8 +103,9 @@ describe("multi-GSTIN transfer and reporting UI", () => {
     expect(taxes).toContain("selectedSellerGstin");
     expect(taxes).toContain("requireSellerRegistration");
     expect(taxes).toContain("sellerGstin=${encodeURIComponent(sellerGstin)}");
-    expect(taxes).toContain("GST returns and working papers are registration-specific");
-    expect(taxes).toContain("immutable bill seller snapshots");
-    expect(taxes).toContain("portal status is not verified");
+    expect(settingsEn).toContain("GST returns and working papers are registration-specific");
+    expect(settingsEn).toContain("immutable bill seller snapshots");
+    expect(settingsEn).toContain("portal status is not verified");
+    for (const key of ["settings.tax.chooseSellerHelp", "settings.tax.sellerHelp"]) expect(taxes).toContain(key);
   });
 });
