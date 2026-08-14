@@ -14,7 +14,12 @@ describe("mobile settings accessibility contract", () => {
     for (const href of ["/settings/billing", "/settings/taxes", "/settings/printer", "/settings/security", "/settings/sync"]) {
       expect(settings).toContain(`href: "${href}"`);
     }
-    expect(settings).toContain('label: "Taxes & GST"');
+    // The shortcut tiles name themselves through the catalogue now. Checking the
+    // key on the hub and the wording where it lives keeps the guarantee that this
+    // area is reachable *and* still called Taxes & GST.
+    const settingsEn = read("../features/core/settings/translations/settings-pages.ts");
+    expect(settings).toContain('label: t("settings.hub.taxesGst")');
+    expect(settingsEn).toContain('"settings.hub.taxesGst": "Taxes & GST"');
   });
 
   it("keeps backup and sync actions at least 44px high", () => {

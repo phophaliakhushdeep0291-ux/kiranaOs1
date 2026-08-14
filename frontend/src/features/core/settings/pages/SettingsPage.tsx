@@ -94,7 +94,7 @@ export default function SettingsPage() {
 
   return (
     <SettingsShell>
-      <section className="space-y-4 lg:hidden" aria-label="Settings shortcuts">
+      <section className="space-y-4 lg:hidden" aria-label={t("settings.hub.shortcuts")}>
         <div className="rounded-[20px] bg-[linear-gradient(135deg,var(--brand)_0%,var(--brand-strong)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(7,95,255,0.24)]">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -106,21 +106,21 @@ export default function SettingsPage() {
           </div>
           <div className="mt-4 flex items-center justify-between rounded-xl bg-white/10 px-3 py-2.5 text-[11px] font-bold ring-1 ring-white/15">
             <span>{shopName}</span>
-            <span className="inline-flex items-center gap-1.5 text-emerald-100"><span className="h-2 w-2 rounded-full bg-emerald-300" />{isOnline ? (isSyncing ? "Syncing" : "Protected") : "Offline safe"}</span>
+            <span className="inline-flex items-center gap-1.5 text-emerald-100"><span className="h-2 w-2 rounded-full bg-emerald-300" />{isOnline ? (isSyncing ? t("dashboard.health.syncing") : t("settings.hub.protected")) : t("settings.hub.offlineSafe")}</span>
           </div>
         </div>
 
         <div className="overflow-hidden rounded-[18px] border border-[#e2eaf6] bg-white shadow-[0_12px_30px_rgba(15,35,80,0.06)]">
           {[
-            { href: "/settings/store-profile", label: "Store profile", desc: "Business identity and GSTIN", icon: Store, tone: "bg-blue-50 text-blue-600" },
-            { href: "/settings/billing", label: "Billing & receipts", desc: "Invoice, payment and bill defaults", icon: CreditCard, tone: "bg-violet-50 text-violet-600" },
-            { href: "/settings/taxes", label: "Taxes & GST", desc: "Rates, invoice mode and compliance", icon: Receipt, tone: "bg-lime-50 text-lime-700" },
-            { href: "/settings/printer", label: "Printer & hardware", desc: "Thermal printer and receipt setup", icon: Printer, tone: "bg-amber-50 text-amber-600" },
-            { href: "/settings/staff", label: "Staff & permissions", desc: "Roles and counter access", icon: UsersRound, tone: "bg-cyan-50 text-cyan-600" },
-            { href: "/settings/security", label: "Security & owner PIN", desc: "Approvals, sessions and protection", icon: Shield, tone: "bg-rose-50 text-rose-600" },
-            { href: "/settings/sync", label: "Backup & sync", desc: isOnline ? "Cloud backup is available" : "Working safely offline", icon: Cloud, tone: "bg-emerald-50 text-emerald-600" },
-            { href: "/settings/notifications", label: "Notifications", desc: "Stock, udhar and closing alerts", icon: Bell, tone: "bg-fuchsia-50 text-fuchsia-600" },
-            { href: "/settings/integrations", label: "Integrations", desc: "WhatsApp, payments and accounting", icon: Plug, tone: "bg-indigo-50 text-indigo-600" },
+            { href: "/settings/store-profile", label: t("settings.hub.tile.storeProfile"), desc: t("settings.hub.tile.storeProfileDesc"), icon: Store, tone: "bg-blue-50 text-blue-600" },
+            { href: "/settings/billing", label: t("settings.hub.tile.billing"), desc: t("settings.hub.tile.billingDesc"), icon: CreditCard, tone: "bg-violet-50 text-violet-600" },
+            { href: "/settings/taxes", label: t("settings.hub.taxesGst"), desc: t("settings.hub.tile.taxesDesc"), icon: Receipt, tone: "bg-lime-50 text-lime-700" },
+            { href: "/settings/printer", label: t("settings.hub.tile.printer"), desc: t("settings.hub.tile.printerDesc"), icon: Printer, tone: "bg-amber-50 text-amber-600" },
+            { href: "/settings/staff", label: t("settings.hub.tile.staff"), desc: t("settings.hub.tile.staffDesc"), icon: UsersRound, tone: "bg-cyan-50 text-cyan-600" },
+            { href: "/settings/security", label: t("settings.hub.tile.security"), desc: t("settings.hub.tile.securityDesc"), icon: Shield, tone: "bg-rose-50 text-rose-600" },
+            { href: "/settings/sync", label: t("settings.hub.tile.sync"), desc: isOnline ? t("settings.hub.tile.syncOnline") : t("settings.hub.tile.syncOffline"), icon: Cloud, tone: "bg-emerald-50 text-emerald-600" },
+            { href: "/settings/notifications", label: t("settings.hub.notifications"), desc: t("settings.hub.tile.notificationsDesc"), icon: Bell, tone: "bg-fuchsia-50 text-fuchsia-600" },
+            { href: "/settings/integrations", label: t("settings.hub.integrations"), desc: t("settings.hub.tile.integrationsDesc"), icon: Plug, tone: "bg-indigo-50 text-indigo-600" },
           ].map((item, index, rows) => (
             <Link key={item.href} href={item.href} className={`flex min-h-[68px] items-center gap-3 px-4 py-3 transition-colors active:bg-[#f4f7fc] ${index < rows.length - 1 ? "border-b border-[#edf1f7]" : ""}`}>
               <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[13px] ${item.tone}`}><item.icon size={19} /></span>
@@ -144,7 +144,7 @@ export default function SettingsPage() {
       {/* Row 1: Store Profile + Billing */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHead icon={<Store size={15} />} title="Store Profile" action={<Manage href="/settings/store-profile" />} />
+          <CardHead icon={<Store size={15} />} title={t("settings.hub.storeProfile")} action={<Manage href="/settings/store-profile" />} />
           <div className="flex items-center gap-3.5 border-b border-[#eef2f8] px-5 pb-4">
             <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-2xl">🏪</span>
             <div className="min-w-0">
@@ -153,15 +153,15 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="grid grid-cols-1 gap-y-4 px-5 py-4 sm:grid-cols-2">
-            <Info label="Phone" value={shopPhone} />
-            <Info label="Email" value={shopEmail} />
-            <Info label="GSTIN" value={shop.data?.gstNumber || "Not set"} />
-            <Info label="Currency" value={shopCurrency} />
+            <Info label={t("settings.hub.phone")} value={shopPhone} />
+            <Info label={t("settings.hub.email")} value={shopEmail} />
+            <Info label={t("inventory.transfers.gstin")} value={shop.data?.gstNumber || t("settings.security.notSet")} />
+            <Info label={t("manufacturing.orders.currency")} value={shopCurrency} />
           </div>
         </Card>
 
         <Card>
-          <CardHead icon={<CreditCard size={15} />} title="Billing & Subscription" action={<Manage href="/settings/billing" label="Manage Plan" />} />
+          <CardHead icon={<CreditCard size={15} />} title={t("settings.hub.billingSubscription")} action={<Manage href="/settings/billing" label={t("settings.hub.managePlanAction")} />} />
           <div className="px-5 pb-4">
             <div className="mb-4 flex items-center gap-2">
               <Badge tone="amber">{planName} Plan</Badge>
@@ -178,7 +178,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-[11px] text-[#64748b]">{t("settings.hub.usageThisMonth")}</p>
                 <p className="font-display text-[18px] font-black text-[var(--brand-ink)]">{snapshot?.status === "active" ? "Active" : "—"}</p>
-                <p className="mt-1 text-[11px] text-[#64748b]">{t("settings.hub.managePlan")}</p>
+                <p className="mt-1 text-[11px] text-[#64748b]">{t("settings.hub.managePlanAction")}</p>
                 <Link href="/settings/billing" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.hub.viewPlan")} <ChevronRight size={13} /></Link>
               </div>
             </div>
@@ -189,12 +189,12 @@ export default function SettingsPage() {
       {/* Row 2: Staff + Devices */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHead icon={<UsersRound size={15} />} title="Staff & Permissions" action={<Manage href="/settings/staff" label="Manage Staff" />} />
+          <CardHead icon={<UsersRound size={15} />} title={t("settings.hub.staffPermissions")} action={<Manage href="/settings/staff" label={t("settings.hub.manageStaff")} />} />
           <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
-            <OverviewStat label="Total Staff" value={staffCounts.total} sub="Active users" />
-            <OverviewStat label="Cashiers" value={staffCounts.staff} sub="Can create bills" />
-            <OverviewStat label="Owners" value={staffCounts.owner} sub="Full access" />
-            <OverviewStat label="Admins" value={staffCounts.admin} sub="Manage & approve" />
+            <OverviewStat label={t("settings.hub.totalStaff")} value={staffCounts.total} sub={t("settings.hub.activeUsers")} />
+            <OverviewStat label={t("settings.hub.cashiers")} value={staffCounts.staff} sub={t("settings.hub.canCreateBills")} />
+            <OverviewStat label={t("settings.hub.owners")} value={staffCounts.owner} sub={t("settings.hub.fullAccess")} />
+            <OverviewStat label={t("settings.hub.admins")} value={staffCounts.admin} sub={t("settings.hub.manageApprove")} />
           </div>
           <p className="px-5 pb-4 text-[11px] text-[#9aa6bb]">
             {staffQ.isError ? "Staff list needs the Growth plan or an owner account — open the Staff page for details." : "Manage users, roles & permissions on the Staff page."}
@@ -202,7 +202,7 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <CardHead icon={<MonitorSmartphone size={15} />} title="Device Management" sub={devicesQ.data ? `${devicesQ.data.devicesUsed} of ${devicesQ.data.plan.deviceLimit} device slots used` : "Manage your billing devices"} action={<Manage href="/settings/devices" label="View All" />} />
+          <CardHead icon={<MonitorSmartphone size={15} />} title={t("settings.hub.deviceManagement")} sub={devicesQ.data ? `${devicesQ.data.devicesUsed} of ${devicesQ.data.plan.deviceLimit} device slots used` : t("settings.hub.devicesSub")} action={<Manage href="/settings/devices" label={t("settings.hub.viewAll")} />} />
           <div className="px-5 pb-3">
             {devicesQ.isLoading ? (
               <p className="py-4 text-center text-[12px] text-[#64748b]">{t("settings.hub.loadingDevices")}</p>
@@ -230,9 +230,9 @@ export default function SettingsPage() {
       {/* Row 3: Printer + Taxes + Sync */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
-          <CardHead icon={<Printer size={15} />} title="Printer & Billing" action={<Manage href="/settings/printer" label="Configure" />} />
+          <CardHead icon={<Printer size={15} />} title={t("settings.hub.printerBilling")} action={<Manage href="/settings/printer" label={t("settings.hub.configure")} />} />
           <div className="px-5 pb-4">
-            <Info label="Default printer" value={printer.deviceName || "Browser / system printer"} />
+            <Info label={t("settings.hub.defaultPrinter")} value={printer.deviceName || t("settings.hub.browserPrinter")} />
             <div className="mt-3 flex flex-wrap gap-1.5">
               <Badge tone="blue">{PRINTER_CONNECTION_LABELS[printer.connection]}</Badge>
               <Badge tone="gray">{printer.paperSize}</Badge>
@@ -242,15 +242,15 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <CardHead icon={<Receipt size={15} />} title="Taxes & GST" action={<Manage href="/settings/taxes" label="Configure" />} />
+          <CardHead icon={<Receipt size={15} />} title={t("settings.hub.taxesGst")} action={<Manage href="/settings/taxes" label={t("settings.hub.configure")} />} />
           <div className="px-5 pb-4">
-            <Info label="GST mode" value={gst.mode} />
-            <div className="mt-3"><Info label="Default rate" value={gst.rate} /></div>
+            <Info label={t("settings.hub.gstMode")} value={gst.mode} />
+            <div className="mt-3"><Info label={t("settings.hub.defaultRate")} value={gst.rate} /></div>
           </div>
         </Card>
 
         <Card>
-          <CardHead icon={<Cloud size={15} />} title="Sync & Backup" action={<Manage href="/settings/sync" label="View Logs" />} />
+          <CardHead icon={<Cloud size={15} />} title={t("settings.hub.syncBackup")} action={<Manage href="/settings/sync" label={t("settings.hub.viewLogs")} />} />
           <div className="px-5 pb-4">
             <div className="flex items-center gap-1.5 text-[13px] font-bold text-emerald-700">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{isOnline ? (isSyncing ? "Syncing…" : "All synced") : "Offline"}
@@ -263,10 +263,10 @@ export default function SettingsPage() {
       {/* Row 4: Security + Notifications + Integrations */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
-          <CardHead icon={<Shield size={15} />} title="Security & PIN" action={<Manage href="/settings/security" label="Manage" />} />
+          <CardHead icon={<Shield size={15} />} title={t("settings.hub.securityPin")} action={<Manage href="/settings/security" label={t("settings.hub.manage")} />} />
           <div className="px-5 pb-4">
             <div className="flex items-center justify-between">
-              <Info label="Owner PIN" value={pinQ.isLoading ? t("settings.lock.checking") : pinQ.data?.hasPin ? "••••• Set" : "Not set"} />
+              <Info label={t("inventory.transfers.ownerPin")} value={pinQ.isLoading ? t("settings.lock.checking") : pinQ.data?.hasPin ? t("settings.hub.pinSet") : t("settings.security.notSet")} />
               <Badge tone={pinQ.data?.hasPin ? "green" : "amber"}>{pinQ.data?.hasPin ? "Protected" : "Set a PIN"}</Badge>
             </div>
             <p className="mt-2 text-[11px] text-[#64748b]">{t("settings.hub.pinHelp")}</p>
@@ -274,15 +274,15 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <CardHead icon={<Bell size={15} />} title="Notifications" action={<Manage href="/settings/notifications" label="Configure" />} />
+          <CardHead icon={<Bell size={15} />} title={t("settings.hub.notifications")} action={<Manage href="/settings/notifications" label={t("settings.hub.configure")} />} />
           <div className="px-5 pb-4">
-            <Info label="Active alerts" value={notifCount == null ? "—" : `${notifCount} of 4 enabled`} />
+            <Info label={t("settings.hub.activeAlerts")} value={notifCount == null ? "—" : `${notifCount} of 4 enabled`} />
             <p className="mt-2 text-[11px] text-[#64748b]">{t("settings.hub.notificationsHelp")}</p>
           </div>
         </Card>
 
         <Card>
-          <CardHead icon={<Plug size={15} />} title="Integrations" action={<Manage href="/settings/integrations" label="Manage" />} />
+          <CardHead icon={<Plug size={15} />} title={t("settings.hub.integrations")} action={<Manage href="/settings/integrations" label={t("settings.hub.manage")} />} />
           <div className="px-5 pb-4">
             <div className="flex flex-wrap gap-1.5">
               {integrationsQ.isLoading ? <Badge tone="gray">{t("settings.lock.checking")}</Badge>
@@ -300,18 +300,18 @@ export default function SettingsPage() {
 
       {/* Advanced */}
       <Card>
-        <CardHead icon={<Sliders size={15} />} title="Advanced" sub="Tools, data and account management" action={<Manage href="/settings/advanced" label="Open" />} />
+        <CardHead icon={<Sliders size={15} />} title={t("settings.advanced")} sub={t("settings.hub.toolsSub")} action={<Manage href="/settings/advanced" label={t("reports.settlement.filterOpen")} />} />
         <div className="grid grid-cols-1 gap-2 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { href: "/suppliers", label: "Suppliers", desc: "Purchase parties", icon: Truck },
-            { href: "/settings/staff", label: "Staff & Roles", desc: "Users and permissions", icon: UsersRound },
-            { href: "/settings/devices", label: "Devices", desc: "Licensed devices", icon: MonitorSmartphone },
-            { href: "/settings/sync", label: "Cloud Backup", desc: "Backup health & logs", icon: Cloud },
-            { href: "/smart-tools", label: "Smart Tools", desc: "Voice & automation", icon: Sparkles },
-            { href: "/recovery-mode", label: "Recovery Mode", desc: "Recover local drafts", icon: LifeBuoy },
-            { href: "/audit-logs", label: "Audit Logs", desc: "Owner approvals", icon: Receipt },
-            { href: "/recycle-bin", label: "Recycle Bin", desc: "Restore deleted records", icon: Recycle },
-            { href: "/plans", label: "Plans", desc: "Compare & upgrade", icon: CreditCard },
+            { href: "/suppliers", label: t("settings.hub.tool.suppliers"), desc: t("settings.hub.tool.suppliersDesc"), icon: Truck },
+            { href: "/settings/staff", label: t("settings.hub.tool.staffRoles"), desc: t("settings.hub.tool.staffRolesDesc"), icon: UsersRound },
+            { href: "/settings/devices", label: t("settings.hub.tool.devices"), desc: t("settings.hub.tool.devicesDesc"), icon: MonitorSmartphone },
+            { href: "/settings/sync", label: t("settings.hub.tool.cloudBackup"), desc: t("settings.hub.tool.cloudBackupDesc"), icon: Cloud },
+            { href: "/smart-tools", label: t("settings.hub.tool.smartTools"), desc: t("settings.hub.tool.smartToolsDesc"), icon: Sparkles },
+            { href: "/recovery-mode", label: t("settings.hub.tool.recoveryMode"), desc: t("settings.hub.tool.recoveryModeDesc"), icon: LifeBuoy },
+            { href: "/audit-logs", label: t("settings.hub.tool.auditLogs"), desc: t("settings.hub.tool.auditLogsDesc"), icon: Receipt },
+            { href: "/recycle-bin", label: t("settings.hub.tool.recycleBin"), desc: t("settings.hub.tool.recycleBinDesc"), icon: Recycle },
+            { href: "/plans", label: t("settings.hub.tool.plans"), desc: t("settings.hub.tool.plansDesc"), icon: CreditCard },
           ].map((l) => (
             <Link key={l.href} href={l.href} className="flex items-center gap-3 rounded-[10px] border border-[#e7edf7] bg-white px-3 py-2.5 transition-colors hover:border-[var(--brand-border)] hover:bg-[var(--brand-softer)]">
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><l.icon size={16} /></span>
@@ -345,8 +345,11 @@ export default function SettingsPage() {
   );
 }
 
-function Manage({ href, label = "Manage" }: { href: string; label?: string }) {
-  return <Link href={href} className="flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{label} <ChevronRight size={13} /></Link>;
+function Manage({ href, label }: { href: string; label?: string }) {
+  // The fallback cannot be a default parameter: `t` comes from a hook, and a
+  // default is evaluated in the parameter list, before any hook has run.
+  const { t } = useAppLanguage();
+  return <Link href={href} className="flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{label ?? t("settings.hub.manage")} <ChevronRight size={13} /></Link>;
 }
 
 function OverviewStat({ label, value, sub }: { label: string; value: string; sub: string }) {
