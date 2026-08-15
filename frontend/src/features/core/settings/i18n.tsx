@@ -138,10 +138,39 @@ export function AppLanguageProvider({ children }: { children: ReactNode }) {
   return <AppLanguageContext.Provider value={value}>{children}</AppLanguageContext.Provider>;
 }
 
+/**
+ * English with no provider behind it, for the one case that used to be fatal.
+ *
+ * Built once at module scope: a new object per call would give every consumer a
+ * fresh `t` on every render.
+ */
+const DETACHED: AppLanguageContextValue = {
+  language: "en",
+  setLanguage: () => {},
+  t: (key, vars) => interpolate(en[key], vars),
+};
+
 export function useAppLanguage() {
   const context = useContext(AppLanguageContext);
-  if (!context) throw new Error("useAppLanguage must be used inside AppLanguageProvider");
-  return context;
+  if (context) return context;
+
+  // Loud in development, survivable in a shop.
+  //
+  // This threw in every environment until a translated `ToastClose` turned out
+  // to be mounted beside the provider instead of inside it. The throw is correct
+  // as a developer signal and was catastrophic as production behaviour: React
+  // unmounted the root, so the counter went white mid-bill AND the sync timer —
+  // which lives in a `useEffect` — was torn down with it, silently stopping
+  // backup until someone reloaded.
+  //
+  // The fallback is the same trade main.tsx already makes when the Hindi chunk
+  // is slow: English is the complete catalogue, and a screen in the wrong
+  // language beats no screen at all. The provider nesting is enforced by test
+  // instead, which is where that belongs.
+  if (import.meta.env.DEV) {
+    throw new Error("useAppLanguage must be used inside AppLanguageProvider");
+  }
+  return DETACHED;
 }
 
 /**
