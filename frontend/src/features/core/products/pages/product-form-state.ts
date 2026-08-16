@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Product, ProductInput, ProductSellingUnit } from "@/lib/api/client";
 import { getStoredBusinessType } from "@/features/core/settings/business-type-store";
+import { defaultCategoryFor } from "@/features/core/settings/business-types";
 import { mergeProductAliasSuggestions, splitProductAliases } from "@/features/core/products/product-reliability";
 import { normalizeProductAttributes, productAttributesForSave } from "@/features/core/products/product-attributes";
 import { averageCost, baseUnitFor, fromBaseQty, sellingUnitCode, sellingUnitConversion, sellingUnitName, toBaseQty } from "./product-pricing";
@@ -187,7 +188,10 @@ export function productToForm(product?: Product): ProductFormData {
   const sellingPrice = product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? 0;
   return {
     name: product?.name ?? "",
-    category: product?.category ?? "general",
+    // A new product starts in one of THIS trade's categories. "general" is not on
+    // eleven of the twelve lists, so it left the picker looking empty while the
+    // form quietly held a value no filter would ever show.
+    category: product?.category ?? defaultCategoryFor(getStoredBusinessType()),
     brand: product?.brand ?? "",
     unit,
     packSizeValue: defaultUnit?.packSizeValue ?? 1,

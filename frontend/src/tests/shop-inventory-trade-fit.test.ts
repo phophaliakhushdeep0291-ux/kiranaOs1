@@ -7,6 +7,7 @@ import { SHOP_INVENTORY, getShopInventoryProfile, tradeFirstUnits } from "@/feat
 import { capabilitiesForBusinessType, packForBusinessType, verticalForPath } from "@/features/verticals/registry";
 
 const inventoryPage = readFileSync(join(process.cwd(), "src/features/core/inventory/pages/InventoryPage.tsx"), "utf8");
+const tradeLinks = readFileSync(join(process.cwd(), "src/features/core/settings/shop-trade-links.ts"), "utf8");
 
 const BUSINESS_TYPES = Object.keys(BUSINESS_TYPE_DEFS) as BusinessType[];
 const BATCH_CAPABILITIES = ["BATCH_TRACKING", "EXPIRY_TRACKING"] as const;
@@ -92,7 +93,7 @@ describe("inventory page trade fit", () => {
 
   it("wires the map into the page instead of hardcoding one trade's words", () => {
     expect(inventoryPage).toContain("getShopInventoryProfile(businessType)");
-    expect(inventoryPage).toContain('data-testid="shop-inventory-trade-strip"');
+    expect(inventoryPage).toContain("<TradeFocusStrip");
     expect(inventoryPage).toContain("t(tradeProfile.itemsLabelKey)");
     expect(inventoryPage).toContain("t(tradeProfile.receiveLabelKey)");
     expect(inventoryPage).toContain("t(tradeProfile.wastageLabelKey)");
@@ -115,8 +116,13 @@ describe("inventory page trade fit", () => {
     // The strip is a second door onto routes the sidebar already decides about.
     // If it asked a smaller question, it would become the one place in the app
     // that hands a shop a link the sidebar knows it does not have.
-    expect(inventoryPage).toContain("useIsShopPathVisible");
-    expect(inventoryPage).toContain("isShopPathVisible(link.href)");
-    expect(inventoryPage).toContain("link.capabilities.some(hasCapability)");
+    //
+    // Asserted on the shared filter rather than on this page: every screen that
+    // offers a trade shortcut now routes through the one function, so a gate
+    // dropped here would be dropped for all of them at once.
+    expect(tradeLinks).toContain("useIsShopPathVisible");
+    expect(tradeLinks).toContain("isShopPathVisible(link.href)");
+    expect(tradeLinks).toContain("link.capabilities.some(hasCapability)");
+    expect(inventoryPage).not.toContain("isShopPathVisible(link.href)");
   });
 });

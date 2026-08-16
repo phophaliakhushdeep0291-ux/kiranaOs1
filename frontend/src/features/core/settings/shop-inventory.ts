@@ -1,6 +1,19 @@
 import type { BusinessType } from "./business-types";
 import type { TranslationKey } from "./i18n";
-import { BATCH_EXPIRY_LINK, type ShopTradeLink } from "./shop-trade-links";
+import {
+  BATCH_EXPIRY_LINK,
+  BOOK_LISTS_LINK,
+  KITCHEN_STOCK_LINK,
+  ORDER_BOOK_LINK,
+  PART_FINDER_LINK,
+  PRESCRIPTIONS_LINK,
+  PRODUCTION_LINK,
+  SERIAL_UNITS_LINK,
+  SIZE_RUNS_LINK,
+  STOCK_COUNTS_LINK,
+  TESTERS_LINK,
+  type ShopTradeLink,
+} from "./shop-trade-links";
 
 /**
  * What the stock screen is called in each trade, and which stock screens that
@@ -43,12 +56,7 @@ export interface ShopInventoryProfile {
 // Mirrors the route's own gate in app/routes.tsx and the sidebar's, so a trade
 // that sells nothing dated is not sent to a screen it cannot open.
 const BATCHES = BATCH_EXPIRY_LINK;
-
-/** Every trade ends up counting the shelf by hand at some point. */
-const STOCK_COUNTS: ShopInventoryLink = {
-  labelKey: "page.title.inventory.stockcounts",
-  href: "/inventory/stock-counts",
-};
+const STOCK_COUNTS = STOCK_COUNTS_LINK;
 
 export const SHOP_INVENTORY: Record<BusinessType, ShopInventoryProfile> = {
   kirana: {
@@ -73,7 +81,7 @@ export const SHOP_INVENTORY: Record<BusinessType, ShopInventoryProfile> = {
     receiveLabelKey: "inventory.trade.footwear.receive",
     wastageLabelKey: "inventory.trade.footwear.wastage",
     focusKey: "inventory.trade.footwear.focus",
-    links: [{ labelKey: "inventory.trade.link.sizeRuns", href: "/size-runs" }, STOCK_COUNTS],
+    links: [SIZE_RUNS_LINK, STOCK_COUNTS],
   },
   auto_parts: {
     stockTitleKey: "inventory.trade.autoParts.stock",
@@ -81,7 +89,7 @@ export const SHOP_INVENTORY: Record<BusinessType, ShopInventoryProfile> = {
     receiveLabelKey: "inventory.trade.autoParts.receive",
     wastageLabelKey: "inventory.trade.autoParts.wastage",
     focusKey: "inventory.trade.autoParts.focus",
-    links: [{ labelKey: "inventory.trade.link.partFinder", href: "/fitment" }, STOCK_COUNTS],
+    links: [PART_FINDER_LINK, STOCK_COUNTS],
   },
   electronics: {
     stockTitleKey: "inventory.trade.electronics.stock",
@@ -89,7 +97,7 @@ export const SHOP_INVENTORY: Record<BusinessType, ShopInventoryProfile> = {
     receiveLabelKey: "inventory.trade.electronics.receive",
     wastageLabelKey: "inventory.trade.electronics.wastage",
     focusKey: "inventory.trade.electronics.focus",
-    links: [{ labelKey: "inventory.trade.link.serialUnits", href: "/serial-units" }, STOCK_COUNTS],
+    links: [SERIAL_UNITS_LINK, STOCK_COUNTS],
   },
   pharmacy: {
     stockTitleKey: "inventory.trade.pharmacy.stock",
@@ -97,7 +105,7 @@ export const SHOP_INVENTORY: Record<BusinessType, ShopInventoryProfile> = {
     receiveLabelKey: "inventory.trade.pharmacy.receive",
     wastageLabelKey: "inventory.trade.pharmacy.wastage",
     focusKey: "inventory.trade.pharmacy.focus",
-    links: [BATCHES, { labelKey: "inventory.trade.link.prescriptions", href: "/prescriptions" }, STOCK_COUNTS],
+    links: [BATCHES, PRESCRIPTIONS_LINK, STOCK_COUNTS],
   },
   stationery: {
     stockTitleKey: "inventory.trade.stationery.stock",
@@ -105,7 +113,7 @@ export const SHOP_INVENTORY: Record<BusinessType, ShopInventoryProfile> = {
     receiveLabelKey: "inventory.page.addStock",
     wastageLabelKey: "inventory.trade.stationery.wastage",
     focusKey: "inventory.trade.stationery.focus",
-    links: [{ labelKey: "inventory.trade.link.bookLists", href: "/book-lists" }, STOCK_COUNTS],
+    links: [BOOK_LISTS_LINK, STOCK_COUNTS],
   },
   furniture: {
     stockTitleKey: "inventory.trade.furniture.stock",
@@ -113,7 +121,7 @@ export const SHOP_INVENTORY: Record<BusinessType, ShopInventoryProfile> = {
     receiveLabelKey: "inventory.trade.furniture.receive",
     wastageLabelKey: "inventory.trade.furniture.wastage",
     focusKey: "inventory.trade.furniture.focus",
-    links: [{ labelKey: "inventory.trade.link.orderBook", href: "/orders" }, STOCK_COUNTS],
+    links: [ORDER_BOOK_LINK, STOCK_COUNTS],
   },
   cosmetics: {
     stockTitleKey: "inventory.trade.cosmetics.stock",
@@ -121,7 +129,7 @@ export const SHOP_INVENTORY: Record<BusinessType, ShopInventoryProfile> = {
     receiveLabelKey: "inventory.trade.cosmetics.receive",
     wastageLabelKey: "inventory.trade.cosmetics.wastage",
     focusKey: "inventory.trade.cosmetics.focus",
-    links: [BATCHES, { labelKey: "inventory.trade.link.testers", href: "/testers" }, STOCK_COUNTS],
+    links: [BATCHES, TESTERS_LINK, STOCK_COUNTS],
   },
   restaurant: {
     stockTitleKey: "inventory.trade.restaurant.stock",
@@ -131,7 +139,7 @@ export const SHOP_INVENTORY: Record<BusinessType, ShopInventoryProfile> = {
     focusKey: "inventory.trade.restaurant.focus",
     // A kitchen holds dated stock too — the pack carries BATCH_TRACKING for the
     // packaged and perishable ingredients behind the dishes, not for the dishes.
-    links: [{ labelKey: "inventory.trade.link.kitchenStock", href: "/kitchen-stock" }, BATCHES, STOCK_COUNTS],
+    links: [KITCHEN_STOCK_LINK, BATCHES, STOCK_COUNTS],
   },
   manufacturing: {
     stockTitleKey: "inventory.trade.manufacturing.stock",
@@ -139,7 +147,7 @@ export const SHOP_INVENTORY: Record<BusinessType, ShopInventoryProfile> = {
     receiveLabelKey: "inventory.trade.manufacturing.receive",
     wastageLabelKey: "inventory.trade.manufacturing.wastage",
     focusKey: "inventory.trade.manufacturing.focus",
-    links: [{ labelKey: "inventory.trade.link.production", href: "/manufacturing" }, BATCHES, STOCK_COUNTS],
+    links: [PRODUCTION_LINK, BATCHES, STOCK_COUNTS],
   },
   other: {
     stockTitleKey: "inventory.page.productStock",

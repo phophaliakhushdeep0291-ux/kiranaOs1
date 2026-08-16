@@ -78,19 +78,11 @@ import {
   inventoryUnitLabel,
   mergeInventoryRows,
 } from "@/features/core/inventory/stock-display";
-import { PageShell, StatCard, StatsGrid } from "@/components/shared";
+import { PageShell, StatCard, StatsGrid, TradeFocusStrip } from "@/components/shared";
 import { offlineDB } from "@/lib/offline/db";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
-import { Link } from "wouter";
-import { useBusinessType, type BusinessTypeDefinition } from "@/features/core/settings/business-types";
-import { useShopCapability } from "@/features/core/settings/capabilities";
-import { useIsShopPathVisible } from "@/features/core/settings/business-profile-bootstrap";
-import {
-  getShopInventoryProfile,
-  tradeFirstUnits,
-  type ShopInventoryLink,
-  type ShopInventoryProfile,
-} from "@/features/core/settings/shop-inventory";
+import { useBusinessType } from "@/features/core/settings/business-types";
+import { getShopInventoryProfile, tradeFirstUnits } from "@/features/core/settings/shop-inventory";
 
 const UNITS = [
   "piece", "dozen", "set", "pair", "bundle", "roll", "sheet",
@@ -265,20 +257,6 @@ export default function InventoryPage() {
   // called, what bringing stock in is called, and where this trade goes next.
   const { businessType, def: businessTypeDef } = useBusinessType();
   const tradeProfile = getShopInventoryProfile(businessType);
-  const hasCapability = useShopCapability();
-  const isShopPathVisible = useIsShopPathVisible();
-  const tradeLinks = useMemo(
-    () =>
-      tradeProfile.links.filter(
-        (link) =>
-          // The capability is asked first because it is answered from the pack,
-          // which is correct offline; the path gate then applies the module
-          // switches and the server's own navigation list.
-          (!link.capabilities || link.capabilities.some(hasCapability))
-          && isShopPathVisible(link.href),
-      ),
-    [hasCapability, isShopPathVisible, tradeProfile],
-  );
   const manageInventory = usePermission("manage_inventory");
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -680,7 +658,7 @@ export default function InventoryPage() {
 
   return (
     <PageShell className="space-y-4 bg-white pb-8">
-      <InventoryTradeStrip def={businessTypeDef} profile={tradeProfile} links={tradeLinks} />
+      <TradeFocusStrip titleKey="inventory.trade.title" focusKey={tradeProfile.focusKey} links={tradeProfile.links} />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         <InventoryMetricCard label={t("inventory.page.totalStockValue")} value={fmtMoney(stockStats.stockValue)} detail={t("inventory.page.atCurrentCost")} tone="blue" icon={<IndianRupee size={19} />} />
@@ -1057,50 +1035,6 @@ const INVENTORY_TONES: Record<InventoryTone, string> = {
   green: "border-[#c8f1d5] bg-[#e7faee] text-[#11a84b]",
   orange: "border-[#ffd7ae] bg-[#fff3e7] text-[#ff7a00]",
 };
-
-/**
- * Which trade this stock screen is set up for, and where that trade goes next.
- *
- * The strip is the only place on the page that says out loud what the changed
- * wording below it comes from, so it also carries the way back to the setting —
- * an owner who sees "Kitchen stock" and did not expect it can fix the cause
- * rather than the symptom.
- */
-function InventoryTradeStrip({
-  def,
-  profile,
-  links,
-}: {
-  def: BusinessTypeDefinition;
-  profile: ShopInventoryProfile;
-  links: readonly ShopInventoryLink[];
-}) {
-  const { t } = useAppLanguage();
-  return (
-    <section data-testid="shop-inventory-trade-strip" className="flex flex-col gap-3 rounded-[12px] border border-[var(--brand-border)] bg-[linear-gradient(135deg,#f7faff_0%,#ffffff_62%)] px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-      <div className="min-w-0">
-        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand)]">{t("inventory.trade.title")}</p>
-        <p className="mt-1 truncate text-[14px] font-bold text-[#13223f]">{def.emoji} {def.label}</p>
-        <p className="mt-0.5 text-[11px] leading-4 text-[#6d7c98]">{t(profile.focusKey)}</p>
-      </div>
-      {/* `min-w-0` and wrapping: three chips plus the settings link overflow a
-          375px screen, and this shell clips horizontal overflow rather than
-          scrolling it, so an unwrapped row would be silently cut off.
-          44px boxes on touch, dense only for a mouse — these sit 8px apart, so
-          a `.tap-target` overlay would reach into its neighbour and steal taps. */}
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        {links.map((link) => (
-          <Link key={link.href} href={link.href} className="inline-flex min-h-11 items-center gap-1 rounded-[8px] border border-[#dfe6ef] bg-white px-2.5 text-[11px] font-semibold text-[#243653] hover:border-[var(--brand-border)] hover:text-[var(--brand)] mouse:min-h-9">
-            {t(link.labelKey)}<ChevronRight size={13} />
-          </Link>
-        ))}
-        <Link href="/settings/store-profile" className="inline-flex min-h-11 items-center px-1 text-[11px] font-semibold text-[var(--brand)] hover:underline mouse:min-h-9">
-          {t("inventory.trade.changeShopType")}
-        </Link>
-      </div>
-    </section>
-  );
-}
 
 function InventoryMetricCard({ label, value, detail, tone, icon }: { label: string; value: string; detail: string; tone: InventoryTone; icon: ReactNode }) {
   return (

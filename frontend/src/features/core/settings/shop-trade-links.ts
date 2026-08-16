@@ -45,9 +45,35 @@ export function useVisibleTradeLinks(links: readonly ShopTradeLink[]): ShopTrade
   );
 }
 
+/**
+ * The screens a trade shortcut can point at, written once.
+ *
+ * Every screen that offers shortcuts — stock, catalogue, reports, receiving —
+ * reaches for the same entries, so one name per screen is enough. Declared here
+ * rather than inline per profile because a second copy of "Size runs" is a
+ * second place for it to be renamed, and the two would then disagree depending
+ * on which page an owner happened to be standing on.
+ */
+
 /** Batch & expiry, gated exactly as its route and the sidebar gate it. */
 export const BATCH_EXPIRY_LINK: ShopTradeLink = {
   labelKey: "inventory.page.batchExpiry",
   href: "/inventory/batches",
   capabilities: ["BATCH_TRACKING", "EXPIRY_TRACKING"],
 };
+
+/** Every trade ends up counting the shelf by hand at some point. */
+export const STOCK_COUNTS_LINK: ShopTradeLink = { labelKey: "page.title.inventory.stockcounts", href: "/inventory/stock-counts" };
+/** How every trade groups its catalogue, whatever the rows are called. */
+export const CATEGORIES_LINK: ShopTradeLink = { labelKey: "products.trade.link.categories", href: "/categories" };
+
+export const SIZE_RUNS_LINK: ShopTradeLink = { labelKey: "inventory.trade.link.sizeRuns", href: "/size-runs" };
+export const PART_FINDER_LINK: ShopTradeLink = { labelKey: "inventory.trade.link.partFinder", href: "/fitment" };
+export const SERIAL_UNITS_LINK: ShopTradeLink = { labelKey: "inventory.trade.link.serialUnits", href: "/serial-units" };
+export const PRESCRIPTIONS_LINK: ShopTradeLink = { labelKey: "inventory.trade.link.prescriptions", href: "/prescriptions" };
+export const BOOK_LISTS_LINK: ShopTradeLink = { labelKey: "inventory.trade.link.bookLists", href: "/book-lists" };
+export const ORDER_BOOK_LINK: ShopTradeLink = { labelKey: "inventory.trade.link.orderBook", href: "/orders" };
+export const TESTERS_LINK: ShopTradeLink = { labelKey: "inventory.trade.link.testers", href: "/testers" };
+export const KITCHEN_STOCK_LINK: ShopTradeLink = { labelKey: "inventory.trade.link.kitchenStock", href: "/kitchen-stock" };
+export const PRODUCTION_LINK: ShopTradeLink = { labelKey: "inventory.trade.link.production", href: "/manufacturing" };
+export const MENU_LINK: ShopTradeLink = { labelKey: "products.trade.link.menu", href: "/menu" };

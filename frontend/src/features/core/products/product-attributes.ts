@@ -224,7 +224,11 @@ export const PRODUCT_ATTRIBUTES: Record<BusinessType, readonly ProductAttributeG
       fields: [
         { key: "modelNumber", label: "Model number", type: "text", placeholder: "e.g. SM-A166P", maxLength: 80 },
         { key: "colour", label: "Colour", type: "text", placeholder: "e.g. Awesome Blue", maxLength: 40 },
-        { key: "serialTracked", label: "Track every piece by serial or IMEI", type: "boolean", help: "Turn on for anything that comes back for warranty. Register the units on the Serial units screen." },
+        // Descriptive, like everything else in this file — it records that the
+        // model carries a serial, it does not switch tracking on. The label used
+        // to read "Track every piece by serial or IMEI", which promised a
+        // behaviour no screen implements: the units are registered by hand.
+        { key: "serialTracked", label: "Carries a serial or IMEI", type: "boolean", help: "Mark anything that comes back for warranty, then register each piece on the Serial units screen." },
         { key: "countryOfOrigin", label: "Country of origin", type: "text", placeholder: "e.g. India", maxLength: 60 },
       ],
     },

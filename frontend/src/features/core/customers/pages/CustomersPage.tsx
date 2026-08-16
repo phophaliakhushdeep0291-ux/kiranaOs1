@@ -44,7 +44,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
-import { SyncBadge } from "@/components/shared";
+import { SyncBadge, TradeFocusStrip } from "@/components/shared";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useToast } from "@/hooks/use-toast";
@@ -67,6 +67,8 @@ import { repairLedgerDriftFromServer } from "@/features/core/ledger/ledger-drift
 import { isManualAdjustmentEntry } from "@/features/core/ledger/accounting";
 import type { CustomerInput } from "@/types/api";
 import { useAppLanguage, type Translate, type TranslationKey } from "@/features/core/settings/i18n";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { getShopCustomersProfile } from "@/features/core/settings/shop-customers";
 import { offlineDB } from "@/lib/offline/db";
 import {
   addMoney,
@@ -335,6 +337,11 @@ function percentageChange(current: number, previous: number): number {
 
 export default function CustomersPage() {
   const { t } = useAppLanguage();
+  // Who the person on the other side of the counter is here — the sidebar
+  // already reached this screen as "Khata", "Accounts" or "Tabs", and the
+  // credit word comes from the same map the report reads.
+  const tradeProfile = getShopCustomersProfile(useBusinessTypeKey());
+  const creditWord = t(tradeProfile.creditWordKey);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { pendingCount, failedCount } = useOfflineStatus();
@@ -837,7 +844,7 @@ export default function CustomersPage() {
     <div className="app-docked-page space-y-4 bg-transparent lg:space-y-5">
       <section className="rounded-[18px] border border-[#e2e8f2] bg-white p-4 shadow-[0_10px_30px_rgba(15,35,80,0.05)] lg:flex lg:items-center lg:justify-between lg:gap-6 lg:p-5">
         <div className="min-w-0">
-          <div className="hidden items-center gap-3 lg:flex"><span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><Users size={19} /></span><div><h2 className="text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t("customers.title")}</h2><p className="mt-0.5 text-[11px] font-medium text-[#718099]">{t("customers.subtitle")}</p></div></div>
+          <div className="hidden items-center gap-3 lg:flex"><span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><Users size={19} /></span><div><h2 className="text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t(tradeProfile.headingKey)}</h2><p className="mt-0.5 text-[11px] font-medium text-[#718099]">{t(tradeProfile.subtitleKey)}</p></div></div>
           <SyncBadge className="hidden lg:mt-3 lg:inline-flex" status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? t("customers.detail.reviewSync") : pendingCount > 0 ? `${pendingCount} pending` : t("customers.detail.syncedJustNow")} />
         </div>
         <div className="grid grid-cols-2 items-center gap-2 lg:flex lg:flex-wrap">
@@ -857,9 +864,11 @@ export default function CustomersPage() {
         </div>
       </section>
 
+      <TradeFocusStrip titleKey="customers.trade.title" focusKey={tradeProfile.focusKey} links={tradeProfile.links} />
+
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" aria-label={t("customers.accountSummary")}>
         <CustomerMetricCard label={t("customers.stat.total")} value={String(totals.customers)} change={metricChanges.customers} color="var(--brand)" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[var(--brand)]" spark={metricSparks.customers} />
-        <CustomerMetricCard label={t("customers.totalOutstanding")} value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
+        <CustomerMetricCard label={t("customers.trade.outstanding", { credit: creditWord })} value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
         <CustomerMetricCard label={t("customers.stat.overdueAmount")} value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={18} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
         <CustomerMetricCard label={t("customers.stat.udharCollected")} value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
       </section>
