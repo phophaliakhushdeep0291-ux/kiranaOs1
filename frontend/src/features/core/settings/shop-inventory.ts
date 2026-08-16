@@ -1,6 +1,6 @@
 import type { BusinessType } from "./business-types";
-import type { Capability } from "./capabilities";
 import type { TranslationKey } from "./i18n";
+import { BATCH_EXPIRY_LINK, type ShopTradeLink } from "./shop-trade-links";
 
 /**
  * What the stock screen is called in each trade, and which stock screens that
@@ -22,15 +22,8 @@ import type { TranslationKey } from "./i18n";
  * Every path is filtered through the same gate the sidebar uses before it is
  * shown, so a trade route that this shop does not run is never offered.
  */
-export interface ShopInventoryLink {
-  labelKey: TranslationKey;
-  href: string;
-  /**
-   * Offered only to a shop holding one of these. Absent means "any shop" — the
-   * path gate still has the last word.
-   */
-  capabilities?: readonly Capability[];
-}
+/** The shape is shared with every other screen that offers a trade shortcut. */
+export type ShopInventoryLink = ShopTradeLink;
 
 export interface ShopInventoryProfile {
   /** Heading over the stock list. */
@@ -47,13 +40,9 @@ export interface ShopInventoryProfile {
   links: readonly ShopInventoryLink[];
 }
 
-const BATCHES: ShopInventoryLink = {
-  labelKey: "inventory.page.batchExpiry",
-  href: "/inventory/batches",
-  // Mirrors the route's own gate in app/routes.tsx and the sidebar's, so a trade
-  // that sells nothing dated is not sent to a screen it cannot open.
-  capabilities: ["BATCH_TRACKING", "EXPIRY_TRACKING"],
-};
+// Mirrors the route's own gate in app/routes.tsx and the sidebar's, so a trade
+// that sells nothing dated is not sent to a screen it cannot open.
+const BATCHES = BATCH_EXPIRY_LINK;
 
 /** Every trade ends up counting the shelf by hand at some point. */
 const STOCK_COUNTS: ShopInventoryLink = {

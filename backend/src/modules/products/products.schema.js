@@ -94,10 +94,18 @@ export const createProductSchema = z.object({
   // See product-attributes.js for why the catalogue is deliberately not mirrored
   // here, and why a write MERGES rather than replaces.
   //
+  // Deliberately permissive about the VALUES, and strict about them afterwards.
+  // A typed union here rejects the whole product when a single value is not a
+  // scalar — one stray field from an older or third-party client turns into
+  // "Validation failed: attributes" on a save that was otherwise perfect, and on
+  // the sync path into an event that can never be applied. sanitizeProductAttributes
+  // drops the unusable value and keeps the product, which is the right trade for a
+  // bag whose vocabulary lives on the client.
+  //
   // Nullish rather than optional: a whole-record payload from conflict resolution
   // or a sync echo states an untouched field as null, and .optional() alone
   // rejects that.
-  attributes: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).nullish(),
+  attributes: z.record(z.unknown()).nullish(),
   // Optimistic-concurrency guard: the server updatedAt the client based this edit on.
   baseUpdatedAt: z.string().optional(),
 });

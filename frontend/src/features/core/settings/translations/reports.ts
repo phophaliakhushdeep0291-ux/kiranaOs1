@@ -133,4 +133,64 @@ export const reportsEn = {
   "reports.settlement.mismatch.unpaid_order": "Unpaid order",
   "reports.settlement.mismatch.gross_mismatch": "Gross mismatch",
   "reports.settlement.mismatch.status_mismatch": "Status mismatch",
+
+  // The report in this shop's own trade words — see `settings/shop-reports.ts`,
+  // which maps each business type to the keys it uses. Only the words that
+  // change by trade are here; cash, UPI, bank and expenses mean the same thing
+  // in every shop and keep the shared strings.
+  "reports.trade.title": "Reports for your shop type",
+  "reports.trade.heading.general": "Business overview",
+  "reports.trade.heading.clothing": "Fashion retail overview",
+  "reports.trade.heading.footwear": "Footwear retail overview",
+  "reports.trade.heading.autoParts": "Parts counter overview",
+  "reports.trade.heading.electronics": "Electronics retail overview",
+  "reports.trade.heading.pharmacy": "Pharmacy overview",
+  "reports.trade.heading.stationery": "Stationery and books overview",
+  "reports.trade.heading.furniture": "Showroom overview",
+  "reports.trade.heading.cosmetics": "Beauty retail overview",
+  "reports.trade.heading.restaurant": "Service overview",
+  "reports.trade.heading.manufacturing": "Factory and dispatch overview",
+
+  // Top-line money metric.
+  "reports.kpi.totalSales": "Total Sales",
+  "reports.kpi.totalRevenue": "Total Revenue",
+  "reports.kpi.dispatchValue": "Dispatch Value",
+
+  // What money a customer owes is called. Interpolated so the phrases around it
+  // stay one string each rather than one per trade.
+  "reports.credit.udhar": "Udhar",
+  "reports.credit.credit": "Credit",
+  "reports.credit.dues": "Dues",
+  "reports.credit.partyCredit": "Party Credit",
+  "reports.credit.patientAccounts": "Patient Accounts",
+  "reports.credit.tabs": "Tabs",
+  "reports.credit.receivables": "Receivables",
+  "reports.kpi.outstandingCredit": "Outstanding {credit}",
+  "reports.table.topCustomers": "Top Customers ({credit})",
+  "reports.mobile.creditDue": "{credit} Due",
+
+  // Best-seller table, named after what the trade actually sells.
+  "reports.table.topProducts": "Top Products",
+  "reports.table.topStyles": "Top Styles",
+  "reports.table.topModels": "Top Models",
+  "reports.table.topParts": "Top Parts",
+  "reports.table.topMedicines": "Top Medicines",
+  "reports.table.topTitles": "Top Titles",
+  "reports.table.topShades": "Top Shades",
+  "reports.table.topDishes": "Top Dishes",
+  "reports.table.topDispatched": "Top Items Dispatched",
+
+  // What this trade should actually watch in the numbers above.
+  "reports.trade.watch.kirana": "Read the fast movers against stock cover: a shelf that empties mid-week costs more than the stock it saved.",
+  "reports.trade.watch.clothing": "Size and colour decide sell-through — a style is only selling while its middle sizes are still on the rack.",
+  "reports.trade.watch.footwear": "Read a model by its size run: a broken run stops selling long before the model does.",
+  "reports.trade.watch.autoParts": "Fast-moving part numbers and party credit are the two numbers this counter lives on.",
+  "reports.trade.watch.electronics": "Margin per model matters more than volume here; watch high-value stock and warranty-linked returns.",
+  "reports.trade.watch.pharmacy": "Compare movement against expiry: a slow medicine with a near date is a write-off, not stock.",
+  "reports.trade.watch.stationery": "This trade is seasonal — compare the period with the same weeks of last year's term, not with last week.",
+  "reports.trade.watch.furniture": "Quotations and advances lead the sale by weeks, so today's billing reflects last month's floor work.",
+  "reports.trade.watch.cosmetics": "Shades move at very different speeds; a slow shade with a near expiry needs an offer, not a reorder.",
+  "reports.trade.watch.restaurant": "Read revenue by hour: staffing and prep are decided by the peak, not by the daily total.",
+  "reports.trade.watch.manufacturing": "Dispatch value against material cost is the real margin; receivables decide whether the next run can start.",
+  "reports.trade.watch.other": "Read sales, collection and profit together — a strong sales line with weak collection is a cash problem.",
 } as const;
