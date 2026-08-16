@@ -305,6 +305,7 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.page.manualSale": "हाथ से बिक्री",
   "inventory.page.damage": "नुकसान / बर्बादी",
   "inventory.page.correction": "स्टॉक सुधार",
+  "inventory.page.movementEntryTitle": "{movement} की एंट्री",
   "inventory.page.productRequired": "सामान *",
   "inventory.page.totalBillAmount": "कुल बिल राशि",
   "inventory.page.noSupplier": "कोई सप्लायर नहीं",

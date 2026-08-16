@@ -946,7 +946,7 @@ export default function InventoryPage() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{movementLabel(form.movementType, t)} entry</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t("inventory.page.movementEntryTitle", { movement: movementLabel(form.movementType, t) })}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="grid md:grid-cols-2 gap-3">
               <div><Label>{t("inventory.page.movementType")}</Label><Select value={form.movementType} onValueChange={(value) => setForm((current) => ({ ...current, movementType: value as MovementType }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="purchase">{t("inventory.page.purchase")}</SelectItem><SelectItem value="sale">{t("inventory.page.manualSale")}</SelectItem><SelectItem value="damage">{t("inventory.page.damage")}</SelectItem><SelectItem value="correction">{t("inventory.page.correction")}</SelectItem></SelectContent></Select></div>
