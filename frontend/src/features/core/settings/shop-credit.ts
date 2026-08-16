@@ -33,3 +33,41 @@ export const SHOP_CREDIT_WORD: Record<BusinessType, TranslationKey> = {
 export function creditWordKeyFor(businessType: BusinessType): TranslationKey {
   return SHOP_CREDIT_WORD[businessType];
 }
+
+/**
+ * The same idea as a tender button on the till, in the singular.
+ *
+ * A second map rather than a second use of the one above, because the two are
+ * different grammatical roles and one word cannot fill both. The report reads
+ * "Outstanding Patient Accounts" and "Top Customers (Tabs)" — collective, and
+ * plural where the trade's word is plural. The till writes the destination of
+ * one sale: "Full amount ₹500 goes to Patient Accounts." does not read, and
+ * neither does a tender button labelled "Tabs" under a single bill.
+ *
+ * Where the collective word already works in the singular the two entries are
+ * deliberately identical, so most trades still have exactly one word. Only
+ * pharmacy, restaurant and manufacturing genuinely need the other form, and
+ * `Dues` softens to the plain `Credit` a counter would say out loud.
+ *
+ * A parts counter reads "Party Credit" on its report and "Khata" here on
+ * purpose: `navConfig` already labels its customers screen "Khata", so the till
+ * agrees with the button that opens it.
+ */
+export const SHOP_TENDER_WORD: Record<BusinessType, TranslationKey> = {
+  kirana: "reports.credit.udhar",
+  clothing: "reports.credit.credit",
+  footwear: "reports.credit.credit",
+  auto_parts: "billing.tender.khata",
+  electronics: "reports.credit.credit",
+  pharmacy: "billing.tender.patientAccount",
+  stationery: "reports.credit.credit",
+  furniture: "reports.credit.credit",
+  cosmetics: "reports.credit.credit",
+  restaurant: "billing.tender.tab",
+  manufacturing: "billing.tender.receivable",
+  other: "reports.credit.credit",
+};
+
+export function tenderWordKeyFor(businessType: BusinessType): TranslationKey {
+  return SHOP_TENDER_WORD[businessType];
+}

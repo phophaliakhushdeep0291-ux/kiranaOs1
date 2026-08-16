@@ -25,6 +25,7 @@ interface BillingCartProps {
 
 export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onUpdateLineDiscount, onUpdateLineNote, onUpdateLineBatch, onReadScale, scaleReadingLineKey, onRemoveItem }: BillingCartProps) {
   const { t } = useAppLanguage();
+  const words = useShopBillingWords();
 
   if (cart.length === 0) {
     return (
@@ -34,7 +35,7 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onU
         </span>
         <div>
           <p className="text-sm font-bold text-[#13274d]">{t("billing.cart.empty")}</p>
-          <p className="mt-0.5 text-xs text-[#536383]">{t("billing.cart.emptyHint")}</p>
+          <p className="mt-0.5 text-xs text-[#536383]">{t("billing.cart.emptyHint", { items: words.items })}</p>
         </div>
       </div>
     );
