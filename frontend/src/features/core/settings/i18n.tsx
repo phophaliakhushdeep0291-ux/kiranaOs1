@@ -42,27 +42,70 @@ export const EN_MODULES = {
 export type TranslationKey = keyof typeof en;
 
 type Dictionary = Record<TranslationKey, string>;
+/** Hindi arrives in two stages, so the boot half is usable on its own. */
+type PartialDictionary = Partial<Record<TranslationKey, string>>;
 
-// Only English is in the startup download. Hindi is ~40 kB of Devanagari (3 bytes
+// Only English is in the startup download. Hindi is ~290 kB of Devanagari (3 bytes
 // per character) that an English counter never reads, so it is fetched on demand
 // and cached here for the rest of the session. The load is kicked off at module
 // scope — before the first render — whenever the stored preference is already
 // Hindi, so a Hindi shop does not watch its billing screen swap languages.
-let hindiDictionary: Dictionary | null = null;
-let hindiRequest: Promise<Dictionary | null> | null = null;
+//
+// It is fetched in TWO stages, because main.tsx blocks the mount on the first of
+// them and Hindi is the default language: a brand-new shop with a cold cache was
+// waiting on settings, inventory, reports and two trade tables before it could
+// see a screen it had not asked for. Stage one is the shell and billing — the
+// same pair routes.tsx warms as "the two highest-frequency workspaces". Stage two
+// is everything else, merged in after mount.
+//
+// Both stages accumulate into one object. A key whose table has not landed yet
+// falls back to English, which is complete and already in the shell.
+let hindiDictionary: PartialDictionary | null = null;
+let hindiCriticalRequest: Promise<PartialDictionary | null> | null = null;
+let hindiFullRequest: Promise<PartialDictionary | null> | null = null;
 
-function loadHindiDictionary(): Promise<Dictionary | null> {
-  if (!hindiRequest) {
-    hindiRequest = import("./translations/hindi")
-      .then((module) => {
-        hindiDictionary = module.hindiTranslations;
-        return hindiDictionary;
-      })
+/** Merge a stage into the session dictionary without dropping an earlier one. */
+function absorbHindiStage(table: PartialDictionary): PartialDictionary {
+  hindiDictionary = { ...(hindiDictionary ?? {}), ...table };
+  return hindiDictionary;
+}
+
+/**
+ * Stage one: the strings the first paint needs. This is what main.tsx waits on.
+ */
+function loadCriticalHindiDictionary(): Promise<PartialDictionary | null> {
+  if (!hindiCriticalRequest) {
+    hindiCriticalRequest = import("./translations/hindi-critical")
+      .then((module) => absorbHindiStage(module.hindiCriticalTranslations))
       // A failed chunk fetch must not blank the counter: English is a complete
       // dictionary, so falling back to it keeps every screen readable.
       .catch(() => null);
   }
-  return hindiRequest;
+  return hindiCriticalRequest;
+}
+
+/**
+ * Stage two, and the whole dictionary once it resolves. Requests both halves so
+ * this is still "the complete Hindi table" for any caller that awaits it —
+ * the provider after mount, and the completeness test.
+ */
+function loadHindiDictionary(): Promise<PartialDictionary | null> {
+  if (!hindiFullRequest) {
+    hindiFullRequest = Promise.all([
+      loadCriticalHindiDictionary(),
+      import("./translations/hindi-deferred")
+        .then((module) => module.hindiDeferredTranslations)
+        .catch(() => null),
+    ])
+      .then(([critical, deferred]) => {
+        if (deferred) absorbHindiStage(deferred);
+        // Null only when BOTH halves failed; a half-loaded dictionary is still
+        // better than none, because the gaps fall through to English.
+        return critical || deferred ? hindiDictionary : null;
+      })
+      .catch(() => null);
+  }
+  return hindiFullRequest;
 }
 
 /** Values substituted into `{placeholder}` slots in a translated string. */
@@ -104,26 +147,37 @@ export function getInitialLanguage(): AppLanguage {
 
 // Start the fetch before the first render when the shop is already on Hindi, so a
 // Hindi counter does not watch its billing screen render in English and then swap.
-// main.tsx additionally waits on this before mounting React — see the note there.
+// main.tsx additionally waits on the CRITICAL half before mounting React — see the
+// note there. The rest is requested in the same breath but nothing waits on it.
 if (getInitialLanguage() === "hi") void loadHindiDictionary();
 
 export function AppLanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<AppLanguage>(getInitialLanguage);
-  const [hindi, setHindi] = useState<Dictionary | null>(hindiDictionary);
+  const [hindi, setHindi] = useState<PartialDictionary | null>(hindiDictionary);
 
   useEffect(() => {
     if (typeof document !== "undefined") document.documentElement.lang = language === "hi" ? "hi" : "en";
     if (typeof window !== "undefined") window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
   }, [language]);
 
+  // Both stages are applied, in the order they land. The guard is the language
+  // and NOT "do we already have a dictionary": the critical half satisfies that
+  // test on its own, and an effect that stopped there would leave a Hindi shop
+  // permanently reading English on every screen outside billing.
+  //
+  // Each stage resolves to a freshly built object, so React sees a new identity
+  // and re-renders; a stage that fails resolves null and is skipped, leaving
+  // whatever did arrive in place.
   useEffect(() => {
-    if (language !== "hi" || hindi) return;
+    if (language !== "hi") return;
     let cancelled = false;
-    void loadHindiDictionary().then((dictionary) => {
+    const apply = (dictionary: PartialDictionary | null) => {
       if (!cancelled && dictionary) setHindi(dictionary);
-    });
+    };
+    void loadCriticalHindiDictionary().then(apply);
+    void loadHindiDictionary().then(apply);
     return () => { cancelled = true; };
-  }, [language, hindi]);
+  }, [language]);
 
   const setLanguage = useCallback((nextLanguage: AppLanguage) => setLanguageState(nextLanguage), []);
   // English is the complete catalogue and the fallback in every gap: before the
@@ -138,10 +192,39 @@ export function AppLanguageProvider({ children }: { children: ReactNode }) {
   return <AppLanguageContext.Provider value={value}>{children}</AppLanguageContext.Provider>;
 }
 
+/**
+ * English with no provider behind it, for the one case that used to be fatal.
+ *
+ * Built once at module scope: a new object per call would give every consumer a
+ * fresh `t` on every render.
+ */
+const DETACHED: AppLanguageContextValue = {
+  language: "en",
+  setLanguage: () => {},
+  t: (key, vars) => interpolate(en[key], vars),
+};
+
 export function useAppLanguage() {
   const context = useContext(AppLanguageContext);
-  if (!context) throw new Error("useAppLanguage must be used inside AppLanguageProvider");
-  return context;
+  if (context) return context;
+
+  // Loud in development, survivable in a shop.
+  //
+  // This threw in every environment until a translated `ToastClose` turned out
+  // to be mounted beside the provider instead of inside it. The throw is correct
+  // as a developer signal and was catastrophic as production behaviour: React
+  // unmounted the root, so the counter went white mid-bill AND the sync timer —
+  // which lives in a `useEffect` — was torn down with it, silently stopping
+  // backup until someone reloaded.
+  //
+  // The fallback is the same trade main.tsx already makes when the Hindi chunk
+  // is slow: English is the complete catalogue, and a screen in the wrong
+  // language beats no screen at all. The provider nesting is enforced by test
+  // instead, which is where that belongs.
+  if (import.meta.env.DEV) {
+    throw new Error("useAppLanguage must be used inside AppLanguageProvider");
+  }
+  return DETACHED;
 }
 
 /**
@@ -153,5 +236,10 @@ export type Translate = AppLanguageContextValue["t"];
 /** English catalogue, exposed for the dictionary-completeness test. */
 export const englishTranslations = en;
 
-/** Loads and returns the Hindi table. For tests and preloading, not render paths. */
-export { loadHindiDictionary };
+/**
+ * Loads and returns the Hindi tables. For tests and preloading, not render paths.
+ *
+ * `loadCriticalHindiDictionary` is the boot half (shell + billing) and is what the
+ * entry blocks on; `loadHindiDictionary` resolves the complete dictionary.
+ */
+export { loadCriticalHindiDictionary, loadHindiDictionary };

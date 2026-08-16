@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { Product, ProductInput, ProductSellingUnit } from "@/lib/api/client";
+import { getStoredBusinessType } from "@/features/core/settings/business-type-store";
 import { mergeProductAliasSuggestions, splitProductAliases } from "@/features/core/products/product-reliability";
+import { normalizeProductAttributes, productAttributesForSave } from "@/features/core/products/product-attributes";
 import { averageCost, baseUnitFor, fromBaseQty, sellingUnitCode, sellingUnitConversion, sellingUnitName, toBaseQty } from "./product-pricing";
 import { roundMoney } from "@/lib/money";
 
@@ -70,6 +72,12 @@ export const productFormSchema = z.object({
   // is every product until a pharmacy classifies it. Setting h/h1/x is what
   // makes billing demand a prescription for this medicine.
   drugSchedule: z.enum(["h", "h1", "x", "otc"]).nullable().default(null),
+  // Trade details — the facts this shop type needs and no other does. Held as a
+  // bag rather than as named fields because the set changes with the business
+  // type; product-attributes.ts is the catalogue that says which keys are real.
+  // Values a previous trade left behind ride along here untouched, so re-saving
+  // a product after switching shop type cannot silently drop them.
+  attributes: z.record(z.union([z.string(), z.number(), z.boolean()])).default({}),
   reorderLevel: z.coerce.number().min(0).default(0),
   description: z.string().trim().max(500).optional(),
   imageUrl: z.string().optional(),
@@ -207,6 +215,7 @@ export function productToForm(product?: Product): ProductFormData {
       : fromBaseQty(product?.lowStockThreshold, unit),
     batchTrackingEnabled: product?.batchTrackingEnabled ?? false,
     drugSchedule: product?.drugSchedule ?? null,
+    attributes: normalizeProductAttributes(product?.attributes),
     reorderLevel: product?.reorderLevel ?? 0,
     description: product?.description ?? "",
     imageUrl: product?.imageUrl ?? "",
@@ -340,6 +349,13 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     isLooseItem: values.isLooseItem,
     lowStockThreshold: roundMoney(values.lowStockAlert * conversionToBase),
     batchTrackingEnabled: values.batchTrackingEnabled,
+    // The trade whose fields the form just rendered, read from the store rather
+    // than passed in: this function is also called by the CSV importer and the
+    // voice-draft path, neither of which has a business type to hand, and the
+    // store is the same one the form panel itself reads. Naming the trade matters
+    // because a field left blank has to be sent as an explicit clear — see
+    // productAttributesForSave.
+    attributes: productAttributesForSave(getStoredBusinessType(), normalizeProductAttributes(values.attributes)),
     lowStockAlert: values.lowStockAlert,
     isActive: values.isActive,
     status: values.isActive ? "active" : "inactive",

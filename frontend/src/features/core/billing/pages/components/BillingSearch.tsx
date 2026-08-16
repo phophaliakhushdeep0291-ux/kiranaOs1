@@ -275,13 +275,32 @@ export function BillingSearch({
     window.setTimeout(() => searchInputRef.current?.focus(), 0);
   }
 
+  // Search text is derived once per catalogue, not once per keystroke.
+  //
+  // `productSearchText` runs four regex passes including a Unicode-property one,
+  // and the bind sheet re-filtered the WHOLE catalogue through it on every letter
+  // typed — which is the moment a scanner has just met an unknown barcode and the
+  // counter is waiting. The main search box already works off a precomputed index
+  // (BillingPage's `productSearchIndex`); this is the same idea, kept local so the
+  // sheet does not need a new prop threaded through.
+  const bindSearchIndex = useMemo(
+    () => allProducts.map((product) => ({ product, searchText: productSearchText(product) })),
+    [allProducts],
+  );
+
   const bindCandidates = useMemo(() => {
     const query = normalizeSearchText(bindQuery);
-    const pool = query
-      ? allProducts.filter((product) => productSearchText(product).includes(query))
-      : allProducts;
-    return pool.slice(0, 8);
-  }, [bindQuery, allProducts]);
+    if (!query) return allProducts.slice(0, 8);
+    const matches: Product[] = [];
+    for (const entry of bindSearchIndex) {
+      if (!entry.searchText.includes(query)) continue;
+      matches.push(entry.product);
+      // The sheet only ever shows eight; scanning the rest of a large catalogue
+      // to throw the results away is the other half of the same waste.
+      if (matches.length === 8) break;
+    }
+    return matches;
+  }, [bindQuery, allProducts, bindSearchIndex]);
 
   async function pickForBind(product: Product) {
     const code = bindCode;

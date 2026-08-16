@@ -168,6 +168,10 @@ export interface Product {
   /** h | h1 | x | otc, or null for anything that is not a scheduled drug.
    *  Setting h/h1/x is what makes billing demand a prescription for it. */
   drugSchedule?: "h" | "h1" | "x" | "otc" | null;
+  /** Trade details: the facts this shop type needs and no other does, keyed by
+   *  the catalogue in features/core/products/product-attributes.ts. Descriptive
+   *  only — anything the app branches on is a field of its own. */
+  attributes?: Record<string, string | number | boolean>;
   lowStockAlert?: number;
   isActive?: boolean;
   status?: "active" | "inactive" | string;
@@ -226,6 +230,10 @@ export interface ProductInput {
   /** h | h1 | x | otc, or null for anything that is not a scheduled drug.
    *  Setting h/h1/x is what makes billing demand a prescription for it. */
   drugSchedule?: "h" | "h1" | "x" | "otc" | null;
+  /** Trade details. Merged onto what is stored rather than replacing it, so a
+   *  payload that names only the current trade's fields cannot drop what an
+   *  earlier trade recorded. A key sent empty is a deliberate clear. */
+  attributes?: Record<string, string | number | boolean>;
   lowStockAlert?: number;
   isActive?: boolean;
   status?: "active" | "inactive" | string;

@@ -518,6 +518,12 @@ model Product {
   // simply run out of it now. Distinct from stock and from isActive.
   menuAvailable                Boolean   @default(true)
   menuSortOrder                Int       @default(0)
+  // ── Trade details ──────────────────────────────────────────────────────────
+  // The facts one trade needs on a product and no other trade has any use for —
+  // a chemist's salt, a garment shop's fabric, a parts shop's OEM number. One bag
+  // of scalars rather than a hundred and thirty mostly-empty columns. Descriptive
+  // only: anything the app branches on stays a real column. See the SQLite twin.
+  attributesJson               String    @default("{}")
   clientProductId              String? // stable client-generated id, for offline-create idempotency
   idempotencyKey               String? // durable create idempotency key (survives retries/pull echoes)
   sourceDeviceId               String? // device that created the product offline

@@ -30,7 +30,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import {
   AlertTriangle,
   BarChart3,
-  CalendarClock,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
@@ -82,6 +81,16 @@ import {
 import { PageShell, StatCard, StatsGrid } from "@/components/shared";
 import { offlineDB } from "@/lib/offline/db";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
+import { Link } from "wouter";
+import { useBusinessType, type BusinessTypeDefinition } from "@/features/core/settings/business-types";
+import { useShopCapability } from "@/features/core/settings/capabilities";
+import { useIsShopPathVisible } from "@/features/core/settings/business-profile-bootstrap";
+import {
+  getShopInventoryProfile,
+  tradeFirstUnits,
+  type ShopInventoryLink,
+  type ShopInventoryProfile,
+} from "@/features/core/settings/shop-inventory";
 
 const UNITS = [
   "piece", "dozen", "set", "pair", "bundle", "roll", "sheet",
@@ -94,7 +103,7 @@ const UNITS = [
 ];
 
 type MovementType = "purchase" | "sale" | "damage" | "correction";
-type InventoryTab = "dashboard" | "movements" | "purchase-bills" | "reports" | "batch";
+type InventoryTab = "dashboard" | "movements" | "purchase-bills" | "reports";
 
 const STOCK_ROWS_PER_PAGE = 8;
 
@@ -252,6 +261,24 @@ export default function InventoryPage() {
   const { t } = useAppLanguage();
   useTrackedInventoryView();
   const { toast } = useToast();
+  // The same stock screen, in the words of this shop's trade: what a row is
+  // called, what bringing stock in is called, and where this trade goes next.
+  const { businessType, def: businessTypeDef } = useBusinessType();
+  const tradeProfile = getShopInventoryProfile(businessType);
+  const hasCapability = useShopCapability();
+  const isShopPathVisible = useIsShopPathVisible();
+  const tradeLinks = useMemo(
+    () =>
+      tradeProfile.links.filter(
+        (link) =>
+          // The capability is asked first because it is answered from the pack,
+          // which is correct offline; the path gate then applies the module
+          // switches and the server's own navigation list.
+          (!link.capabilities || link.capabilities.some(hasCapability))
+          && isShopPathVisible(link.href),
+      ),
+    [hasCapability, isShopPathVisible, tradeProfile],
+  );
   const manageInventory = usePermission("manage_inventory");
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -465,13 +492,15 @@ export default function InventoryPage() {
     for (const unit of activeInventorySellingUnits(selectedProduct)) {
       options.set(unit.unitCode, unit.name);
     }
-    for (const unit of UNITS) {
+    // The product's own selling units first, then this trade's units, then the
+    // rest — a pharmacy should reach "strip" without scrolling past "yard".
+    for (const unit of tradeFirstUnits(businessTypeDef.primaryUnits, UNITS)) {
       if (![...options.values()].some((label) => label.toLowerCase() === unit.toLowerCase())) {
         options.set(unit, unit);
       }
     }
     return [...options.entries()].map(([value, label]) => ({ value, label }));
-  }, [selectedProduct]);
+  }, [businessTypeDef.primaryUnits, selectedProduct]);
   const purchaseBillAmount = form.billAmount ? roundInventoryValue(Number(form.billAmount)) : roundInventoryValue(purchaseQuantity * (purchaseUnitCost || 0));
   const purchasePaidAmount = form.movementType === "purchase"
     ? form.purchasePaymentStatus === "due"
@@ -651,18 +680,20 @@ export default function InventoryPage() {
 
   return (
     <PageShell className="space-y-4 bg-white pb-8">
+      <InventoryTradeStrip def={businessTypeDef} profile={tradeProfile} links={tradeLinks} />
+
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         <InventoryMetricCard label={t("inventory.page.totalStockValue")} value={fmtMoney(stockStats.stockValue)} detail={t("inventory.page.atCurrentCost")} tone="blue" icon={<IndianRupee size={19} />} />
-        <InventoryMetricCard label={t("inventory.page.totalSkus")} value={stockStats.products.toLocaleString("en-IN")} detail={`${stockStats.totalQuantity.toLocaleString("en-IN")} units tracked`} tone="violet" icon={<Tags size={19} />} />
+        <InventoryMetricCard label={t(tradeProfile.itemsLabelKey)} value={stockStats.products.toLocaleString("en-IN")} detail={`${stockStats.totalQuantity.toLocaleString("en-IN")} units tracked`} tone="violet" icon={<Tags size={19} />} />
         <InventoryMetricCard label={t("dashboard.kpi.lowStockItems")} value={stockStats.lowStock.toLocaleString("en-IN")} detail={t("inventory.page.requireAttention")} tone="amber" icon={<AlertTriangle size={19} />} />
         <InventoryMetricCard label={t("inventory.page.outOfStockItems")} value={stockStats.outOfStock.toLocaleString("en-IN")} detail={t("inventory.page.takeImmediateAction")} tone="rose" icon={<PackageX size={19} />} />
         <div className="col-span-2 xl:col-span-1"><InventoryMetricCard label={t("inventory.page.stockTurnover")} value={`${stockStats.turnover30}x`} detail={stockStats.turnover30 > 0 ? t("inventory.page.basedOnSold") : t("inventory.page.noSalesMovement")} tone="green" icon={<TrendingUp size={19} />} /></div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <InventoryActionCard label={t("inventory.page.addStock")} detail={t("inventory.page.addStockHelp")} tone="blue" icon={<PackagePlus size={20} />} onClick={() => openMovement("purchase")} />
+        <InventoryActionCard label={t(tradeProfile.receiveLabelKey)} detail={t("inventory.page.addStockHelp")} tone="blue" icon={<PackagePlus size={20} />} onClick={() => openMovement("purchase")} />
         <InventoryActionCard label={t("inventory.page.correctionTile")} detail={t("inventory.page.correctionHelp")} tone="green" icon={<Wrench size={20} />} onClick={() => openMovement("correction")} />
-        <InventoryActionCard label={t("inventory.page.damageTile")} detail={t("inventory.page.damageHelp")} tone="orange" icon={<ShieldAlert size={20} />} onClick={() => openMovement("damage")} />
+        <InventoryActionCard label={t(tradeProfile.wastageLabelKey)} detail={t("inventory.page.damageHelp")} tone="orange" icon={<ShieldAlert size={20} />} onClick={() => openMovement("damage")} />
         <InventoryActionCard label={t("inventory.page.supplierPurchase")} detail={t("inventory.page.supplierPurchaseHelp")} tone="violet" icon={<CircleDollarSign size={20} />} onClick={() => openMovement("purchase")} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -675,7 +706,11 @@ export default function InventoryPage() {
             <DropdownMenuItem onClick={() => setActiveTab("movements")}><History size={15} className="mr-2" />{t("inventory.page.movementHistory")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setActiveTab("purchase-bills")}><ClipboardList size={15} className="mr-2" />{t("inventory.page.purchaseBills")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setActiveTab("reports")}><BarChart3 size={15} className="mr-2" />{t("inventory.page.insights")}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setActiveTab("batch")}><CalendarClock size={15} className="mr-2" />{t("inventory.page.batchExpiry")}</DropdownMenuItem>
+            {/* Batch & Expiry used to sit here as a "higher plan" teaser shown to
+                every trade, including the ones that sell nothing dated. It is now
+                a link in the trade strip above, offered only to a shop holding
+                BATCH_TRACKING or EXPIRY_TRACKING — the same gate the route and
+                the sidebar already apply. */}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -683,7 +718,7 @@ export default function InventoryPage() {
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)} className="space-y-4">
         {activeTab !== "dashboard" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 py-3">
-            <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? "Movement History" : activeTab === "purchase-bills" ? "Purchase Bills" : activeTab === "reports" ? "Inventory Insights" : "Batch & Expiry"}</p><p className="text-[11px] text-[#718096]">{t("inventory.page.detailRecords")}</p></div>
+            <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? t("inventory.page.movementHistory") : activeTab === "purchase-bills" ? t("inventory.page.purchaseBills") : t("inventory.page.insights")}</p><p className="text-[11px] text-[#718096]">{t("inventory.page.detailRecords")}</p></div>
             <Button variant="outline" className="h-9 rounded-[8px] text-[11px]" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />{t("inventory.page.backToStock")}</Button>
           </div>
         ) : null}
@@ -698,7 +733,7 @@ export default function InventoryPage() {
               <div className="border-b border-[#e8edf4] p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <h2 className="text-[15px] font-semibold text-[#13223f]">{t("inventory.page.productStock")}</h2>
+                    <h2 className="text-[15px] font-semibold text-[#13223f]">{t(tradeProfile.stockTitleKey)}</h2>
                     <p className="mt-0.5 text-[11px] text-[#6d7c98]">{t("inventory.page.productStockHelp")}</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -933,15 +968,6 @@ export default function InventoryPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="batch" className="space-y-4">
-          <div className="rounded-lg border bg-card p-4 flex gap-4">
-            <CalendarClock className="text-muted-foreground" />
-            <div>
-              <div className="flex items-center gap-2"><h3 className="font-semibold">{t("inventory.page.batchSupport")}</h3><Badge>{t("inventory.page.higherPlan")}</Badge></div>
-              <p className="mt-1 text-sm text-muted-foreground">{t("inventory.page.batchSupportHelp")}</p>
-            </div>
-          </div>
-        </TabsContent>
       </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -1031,6 +1057,48 @@ const INVENTORY_TONES: Record<InventoryTone, string> = {
   green: "border-[#c8f1d5] bg-[#e7faee] text-[#11a84b]",
   orange: "border-[#ffd7ae] bg-[#fff3e7] text-[#ff7a00]",
 };
+
+/**
+ * Which trade this stock screen is set up for, and where that trade goes next.
+ *
+ * The strip is the only place on the page that says out loud what the changed
+ * wording below it comes from, so it also carries the way back to the setting —
+ * an owner who sees "Kitchen stock" and did not expect it can fix the cause
+ * rather than the symptom.
+ */
+function InventoryTradeStrip({
+  def,
+  profile,
+  links,
+}: {
+  def: BusinessTypeDefinition;
+  profile: ShopInventoryProfile;
+  links: readonly ShopInventoryLink[];
+}) {
+  const { t } = useAppLanguage();
+  return (
+    <section data-testid="shop-inventory-trade-strip" className="flex flex-col gap-3 rounded-[12px] border border-[var(--brand-border)] bg-[linear-gradient(135deg,#f7faff_0%,#ffffff_62%)] px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="min-w-0">
+        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand)]">{t("inventory.trade.title")}</p>
+        <p className="mt-1 truncate text-[14px] font-bold text-[#13223f]">{def.emoji} {def.label}</p>
+        <p className="mt-0.5 text-[11px] leading-4 text-[#6d7c98]">{t(profile.focusKey)}</p>
+      </div>
+      {/* `min-w-0` and wrapping: three chips plus the settings link overflow a
+          375px screen, and this shell clips horizontal overflow rather than
+          scrolling it, so an unwrapped row would be silently cut off. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        {links.map((link) => (
+          <Link key={link.href} href={link.href} className="inline-flex min-h-9 items-center gap-1 rounded-[8px] border border-[#dfe6ef] bg-white px-2.5 text-[11px] font-semibold text-[#243653] hover:border-[var(--brand-border)] hover:text-[var(--brand)]">
+            {t(link.labelKey)}<ChevronRight size={13} />
+          </Link>
+        ))}
+        <Link href="/settings/store-profile" className="inline-flex min-h-9 items-center text-[11px] font-semibold text-[var(--brand)] hover:underline">
+          {t("inventory.trade.changeShopType")}
+        </Link>
+      </div>
+    </section>
+  );
+}
 
 function InventoryMetricCard({ label, value, detail, tone, icon }: { label: string; value: string; detail: string; tone: InventoryTone; icon: ReactNode }) {
   return (

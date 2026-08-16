@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { getShopBootstrap } from "./api";
 import { getStoredBusinessType, saveBusinessType } from "./business-type-store";
+import { useModuleVisibility } from "./modules";
 
 export const SHOP_BOOTSTRAP_QUERY_KEY = ["shop-bootstrap"] as const;
 
@@ -103,4 +104,27 @@ export function isPathAllowedByCapabilities(path: string, capabilities?: string[
   if (!capabilities) return true;
   const rule = PATH_CAPABILITIES.find(([pattern]) => pattern.test(path));
   return !rule || rule[1].some((capability) => capabilities.includes(capability));
+}
+
+/**
+ * All three gates at once — the module switches and the client's vertical gate,
+ * the server's navigation list, and the server's capability list.
+ *
+ * The sidebar composes exactly these to decide what to show. Any screen that
+ * offers its own shortcut to another route has to ask the same question, or it
+ * becomes the one place in the app that hands a shop a link to a screen the
+ * sidebar knows it does not have.
+ */
+export function useIsShopPathVisible(): (href: string) => boolean {
+  const { isHrefEnabled } = useModuleVisibility();
+  const profile = useShopBusinessProfile();
+  const navigation = profile.data?.navigation;
+  const capabilities = profile.data?.capabilities;
+  return useCallback(
+    (href: string) =>
+      isHrefEnabled(href)
+      && isPathInBusinessProfile(href, navigation)
+      && isPathAllowedByCapabilities(href, capabilities),
+    [capabilities, isHrefEnabled, navigation],
+  );
 }
