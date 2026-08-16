@@ -464,12 +464,21 @@ export function ProductFormPanel({
     }
   }
 
+  // A product saved under another trade — or before the owner switched this
+  // shop's type — carries a category no longer on the list. A select cannot
+  // display a value it does not list, so it rendered an EMPTY box beside a
+  // required star while still holding the old value. Listing it keeps the box
+  // readable without silently rewriting what the shop chose.
+  const currentCategory = form.watch("category");
+  const categoryOptions = currentCategory && !categories.includes(currentCategory)
+    ? [...categories, currentCategory]
+    : categories;
   const CategoryField = (
     <Field label={t("products.col.category")} required>
-      <Select value={form.watch("category")} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
+      <Select value={currentCategory} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
         <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
-          {categories.map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
+          {categoryOptions.map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
         </SelectContent>
       </Select>
     </Field>

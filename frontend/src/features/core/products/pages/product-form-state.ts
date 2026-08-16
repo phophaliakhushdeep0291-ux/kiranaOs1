@@ -1,10 +1,10 @@
 import { z } from "zod";
 import type { Product, ProductInput, ProductSellingUnit } from "@/lib/api/client";
 import { getStoredBusinessType } from "@/features/core/settings/business-type-store";
-import { defaultCategoryFor } from "@/features/core/settings/business-types";
+import { BUSINESS_TYPE_DEFS, defaultCategoryFor } from "@/features/core/settings/business-types";
 import { mergeProductAliasSuggestions, splitProductAliases } from "@/features/core/products/product-reliability";
 import { normalizeProductAttributes, productAttributesForSave } from "@/features/core/products/product-attributes";
-import { averageCost, baseUnitFor, fromBaseQty, sellingUnitCode, sellingUnitConversion, sellingUnitName, toBaseQty } from "./product-pricing";
+import { averageCost, baseUnitFor, fromBaseQty, isScaleUnit, sellingUnitCode, sellingUnitConversion, sellingUnitName, toBaseQty } from "./product-pricing";
 import { roundMoney } from "@/lib/money";
 
 const sellingUnitFormSchema = z.object({
@@ -182,16 +182,31 @@ export function readProductDraftEventDetail(detail: unknown): ProductDraftEventD
   };
 }
 
+/**
+ * What a new product is sold as, before the shop says otherwise.
+ *
+ * The trade's own first unit, skipping weight and volume — those belong to loose
+ * selling, and a manufacturer would otherwise start every finished good in
+ * kilograms. In practice this only moves two trades off "piece", and both were
+ * plainly wrong there: a shoe shop sells pairs and a chemist sells strips.
+ */
+function defaultSellingUnitFor(businessType: BusinessType): string {
+  const primaryUnits = BUSINESS_TYPE_DEFS[businessType]?.primaryUnits ?? [];
+  return primaryUnits.find((unit) => !isScaleUnit(unit)) ?? "piece";
+}
+
 export function productToForm(product?: Product): ProductFormData {
   const defaultUnit = product?.sellingUnits?.find((row) => row.isDefault) ?? product?.sellingUnits?.[0];
-  const unit = defaultUnit?.unitType ?? product?.unit ?? product?.rateUnit ?? product?.displayUnit ?? "piece";
+  const businessType = getStoredBusinessType();
+  const unit = defaultUnit?.unitType ?? product?.unit ?? product?.rateUnit ?? product?.displayUnit
+    ?? defaultSellingUnitFor(businessType);
   const sellingPrice = product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? 0;
   return {
     name: product?.name ?? "",
     // A new product starts in one of THIS trade's categories. "general" is not on
     // eleven of the twelve lists, so it left the picker looking empty while the
     // form quietly held a value no filter would ever show.
-    category: product?.category ?? defaultCategoryFor(getStoredBusinessType()),
+    category: product?.category ?? defaultCategoryFor(businessType),
     brand: product?.brand ?? "",
     unit,
     packSizeValue: defaultUnit?.packSizeValue ?? 1,
