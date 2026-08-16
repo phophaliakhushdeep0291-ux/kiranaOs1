@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Product, ProductInput, ProductSellingUnit } from "@/lib/api/client";
-import { getStoredBusinessType } from "@/features/core/settings/business-type-store";
+import { getStoredBusinessType, type BusinessType } from "@/features/core/settings/business-type-store";
 import { BUSINESS_TYPE_DEFS, defaultCategoryFor } from "@/features/core/settings/business-types";
 import { mergeProductAliasSuggestions, splitProductAliases } from "@/features/core/products/product-reliability";
 import { normalizeProductAttributes, productAttributesForSave } from "@/features/core/products/product-attributes";
@@ -368,6 +368,22 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     isLooseItem: values.isLooseItem,
     lowStockThreshold: roundMoney(values.lowStockAlert * conversionToBase),
     batchTrackingEnabled: values.batchTrackingEnabled,
+    /**
+     * The schedule that makes billing demand a prescription.
+     *
+     * It was missing from this payload entirely: the form held it, the schema
+     * validated it, the product screen offered the selector — and the value was
+     * dropped on the way out, so no medicine a chemist classified as Schedule H
+     * ever asked for a prescription. Nothing caught it because the write path
+     * falls back to the product's existing value when the key is absent, so a
+     * schedule was never LOST, it simply could never be SET.
+     *
+     * Always named, including as null, because that is how the shop takes a
+     * schedule back off a product it classified by mistake. The importer is
+     * unaffected: a new row has no schedule to state, and an updated row builds
+     * from productToForm(existing), which carries the saved one through.
+     */
+    drugSchedule: values.drugSchedule ?? null,
     // The trade whose fields the form just rendered, read from the store rather
     // than passed in: this function is also called by the CSV importer and the
     // voice-draft path, neither of which has a business type to hand, and the

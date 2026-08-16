@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { BUSINESS_TYPE_DEFS, defaultCategoryFor, type BusinessType } from "@/features/core/settings/business-types";
 import { isScaleUnit } from "@/features/core/products/pages/product-pricing";
 import { packMeasureUnitsFor, packSellingUnitsFor } from "@/features/core/products/pages/components/ProductFormPanel";
-import { productFormSchema } from "@/features/core/products/pages/product-form-state";
+import { formToInput, productFormSchema, productToForm } from "@/features/core/products/pages/product-form-state";
 import { packForBusinessType } from "@/features/verticals/registry";
 
 const ALL_TRADES = Object.keys(BUSINESS_TYPE_DEFS) as BusinessType[];
@@ -173,6 +173,19 @@ describe("the form asks each trade only what it can answer", () => {
     expect(source).not.toContain('getStoredBusinessType() === "pharmacy"');
     expect(source).toContain('hasCapability("PRESCRIPTION_TRACKING")');
     expect(packForBusinessType("pharmacy").capabilities).toContain("PRESCRIPTION_TRACKING");
+  });
+
+  it("actually saves the drug schedule the chemist picks", () => {
+    // It was held by the form, validated by the schema, offered by the selector
+    // — and never put in the payload, so no medicine classified as Schedule H
+    // ever demanded a prescription at the counter. Nothing lost a schedule,
+    // which is why it went unnoticed: one could simply never be set.
+    const values = { ...productToForm(), name: "Alprazolam 0.5 mg", sellingPrice: 40, drugSchedule: "h" as const };
+    expect(formToInput(values).drugSchedule).toBe("h");
+    // Named even when empty, or a schedule set by mistake could never be taken
+    // back off: the write path keeps the product's existing value for a key the
+    // payload does not mention.
+    expect(formToInput({ ...values, drugSchedule: null }).drugSchedule).toBeNull();
   });
 
   it("shows a size grid's own total instead of a stock box it would discard", () => {

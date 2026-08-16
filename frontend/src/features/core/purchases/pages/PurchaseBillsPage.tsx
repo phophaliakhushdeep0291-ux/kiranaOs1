@@ -25,6 +25,9 @@ import { offlineDB } from "@/lib/offline/db";
 import { useToast } from "@/hooks/use-toast";
 import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { CHIP_TONES } from "@/lib/chip-tones";
+import { TradeFocusStrip } from "@/components/shared";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { getShopPurchasesProfile } from "@/features/core/settings/shop-purchases";
 import { cn } from "@/lib/utils";
 import { fromBaseQty, productDisplayUnit } from "@/features/core/products/pages/product-pricing";
 import type { Product, Supplier } from "@/types/api";
@@ -110,6 +113,9 @@ interface PurchaseLine {
 }
 
 export default function PurchaseBillsPage() {
+  // Receiving is where a trade's second record gets made — the lot, the serial,
+  // the size run — and this screen is the last moment the delivery is in hand.
+  const tradeProfile = getShopPurchasesProfile(useBusinessTypeKey());
   const [snapshot, setSnapshot] = useState<FinancialAggregationSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -564,6 +570,8 @@ export default function PurchaseBillsPage() {
       style={panelOpen && isDesktop ? { paddingRight: panelWidth + 24 } : undefined}
     >
       <div className="space-y-4">
+        <TradeFocusStrip titleKey="purchases.trade.title" focusKey={tradeProfile.focusKey} links={tradeProfile.links} />
+
         {/* KPI row — label left, icon top-right per reference */}
         <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
           <Kpi label="Total Purchase Value" value={fmt(totals.amount)} icon={<ShoppingBag size={16} />} iconBg="bg-[#e8f0fe] text-[var(--brand)]"

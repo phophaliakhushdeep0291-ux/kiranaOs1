@@ -1003,7 +1003,7 @@ export default function CustomersPage() {
                 </div>
 
                 <div className="mt-5 grid gap-3 rounded-[14px] border border-[#e8eef7] bg-[#fbfdff] p-4 md:grid-cols-3">
-                  <SummaryCell label={t("customers.totalOutstanding")} value={fmtMoney(selectedCustomer.ledgerBalance)} valueClass={selectedCustomer.ledgerBalance > 0 ? "text-rose-600" : "text-emerald-600"} />
+                  <SummaryCell label={t("customers.trade.outstanding", { credit: creditWord })} value={fmtMoney(selectedCustomer.ledgerBalance)} valueClass={selectedCustomer.ledgerBalance > 0 ? "text-rose-600" : "text-emerald-600"} />
                   <SummaryCell label={t("customers.profile.creditLimit")} value={creditLimit > 0 ? fmtMoney(creditLimit) : t("products.import.notSet")} />
                   <SummaryCell
                     label={t("customers.profile.availableCredit")}
