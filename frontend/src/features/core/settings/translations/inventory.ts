@@ -319,6 +319,10 @@ export const inventoryEn = {
   "inventory.page.manualSale": "Manual sale",
   "inventory.page.damage": "Damage / wastage",
   "inventory.page.correction": "Stock correction",
+  // The dialog title is one of the four labels above with a noun after it. Hindi puts
+  // the noun the other way round ("<movement> की एंट्री"), so the join has to live in
+  // the dictionary rather than as a word appended in JSX.
+  "inventory.page.movementEntryTitle": "{movement} entry",
   "inventory.page.productRequired": "Product *",
   "inventory.page.totalBillAmount": "Total bill amount",
   "inventory.page.noSupplier": "No supplier",
