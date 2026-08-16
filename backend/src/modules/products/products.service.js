@@ -9,6 +9,11 @@ import {
 } from "../../utils/productRecycleRules.js";
 import { moneyShadows, round2 } from "../../utils/money.js";
 import {
+  mergeProductAttributes,
+  parseProductAttributes,
+  sanitizeProductAttributes,
+} from "./product-attributes.js";
+import {
   getLocationQuantity,
   resolveOperationalLocation,
   setLocationInventory,
@@ -262,7 +267,7 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
 
   await assertNoActiveProductNameConflict(shopId, data.name);
 
-  const { aliases, variantAxes, sellingUnits, baseUpdatedAt: _baseUpdatedAt, ...rawRest } = data;
+  const { aliases, variantAxes, sellingUnits, attributes, baseUpdatedAt: _baseUpdatedAt, ...rawRest } = data;
   const normalizedUnits = normalizeSellingUnits(rawRest, sellingUnits);
   const rest = applyDefaultSellingUnitToProduct(rawRest, normalizedUnits);
   const resolvedPackagingMode = packagingModeForAxes(variantAxes, rest.packagingMode);
@@ -291,6 +296,7 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
           shopId,
           aliasesJson: JSON.stringify(aliases ?? []),
           variantAxesJson: JSON.stringify(variantAxes ?? []),
+          attributesJson: JSON.stringify(sanitizeProductAttributes(attributes)),
           // After ...rest on purpose: a variant grid overrides whatever packaging
           // mode was asked for, because pooled variants share one stock number.
           packagingMode: resolvedPackagingMode,
@@ -509,7 +515,7 @@ export async function updateProduct(shopId, id, data, { actor = {}, locationId =
   // concurrent sale cannot be silently overwritten. See docs/STABILIZATION_AUDIT.md
   // P0-3. Bulk edit legitimately sets stock here, so the field is honoured — it is
   // just no longer applied blindly.
-  const { aliases, variantAxes, sellingUnits, baseUpdatedAt, stockBaseQty: requestedStockBaseQty, ...rawRest } = data;
+  const { aliases, variantAxes, sellingUnits, attributes, baseUpdatedAt, stockBaseQty: requestedStockBaseQty, ...rawRest } = data;
   const reconciledUnits = sellingUnits === undefined
     ? undefined
     : carryPriceEditIntoUntouchedDefaultUnit(sellingUnits, rawRest, existing);
@@ -537,6 +543,13 @@ export async function updateProduct(shopId, id, data, { actor = {}, locationId =
     }),
   };
   if (aliases !== undefined) updateData.aliasesJson = JSON.stringify(aliases);
+  // Merged onto what is stored, never substituted for it. The form only sends the
+  // fields of the shop's CURRENT trade, so a replace would wipe every detail a
+  // previous trade had recorded the first time anyone re-saved the product. A key
+  // set to null or "" is a deliberate clear — see mergeProductAttributes.
+  if (attributes != null) {
+    updateData.attributesJson = JSON.stringify(mergeProductAttributes(existing.attributesJson, attributes));
+  }
   if (variantAxes !== undefined) {
     updateData.variantAxesJson = JSON.stringify(variantAxes);
     // Turning a product into a variant grid must take its packaging mode with it,
@@ -1085,6 +1098,7 @@ export function deserializeProduct(p) {
     ...p,
     aliases: JSON.parse(p.aliasesJson ?? "[]"),
     variantAxes: parseVariantAxes(p.variantAxesJson),
+    attributes: parseProductAttributes(p.attributesJson),
     sellingUnits: Array.isArray(p.sellingUnits) ? p.sellingUnits : undefined,
   };
 }

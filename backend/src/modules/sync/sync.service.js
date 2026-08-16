@@ -297,6 +297,14 @@ function conflictProductUpdate(selected) {
     aliases: Array.isArray(selected.aliases)
       ? selected.aliases.filter((alias) => typeof alias === "string" && alias.trim().length > 0)
       : undefined,
+    // Trade details ride the snapshot so choosing a version restores the fabric,
+    // the salt or the OEM number along with everything else on the row. The
+    // service merges rather than replaces, so this can only add or overwrite the
+    // keys the chosen version actually carried — a detail the other version had
+    // and this one never mentioned survives the resolution.
+    attributes: selected.attributes && typeof selected.attributes === "object" && !Array.isArray(selected.attributes)
+      ? selected.attributes
+      : undefined,
   });
 }
 

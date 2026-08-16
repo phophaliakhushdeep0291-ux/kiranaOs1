@@ -127,6 +127,13 @@ export const productCreationSchema = z.object({
   status: z.enum(["active", "inactive"]).default("active"),
   batchTrackingEnabled: z.boolean().default(false),
   drugSchedule: z.enum(["h", "h1", "x", "otc"]).nullish(),
+  // Trade details — the fields one shop type needs on a product. Named here
+  // because a Zod object strips what it does not know, and this schema runs on
+  // the local-first write path: leaving it out would have dropped every fabric,
+  // salt and OEM number between the form and IndexedDB, on a form that had just
+  // shown them being typed. The vocabulary itself is not validated here — see
+  // features/core/products/product-attributes.ts for why it lives in one place.
+  attributes: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
   ownerPin: optionalText,
   ownerPinReason: optionalText,
 }).superRefine((product, ctx) => {

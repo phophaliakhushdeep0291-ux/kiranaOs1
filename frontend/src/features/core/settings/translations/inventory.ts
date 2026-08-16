@@ -311,9 +311,6 @@ export const inventoryEn = {
   "inventory.page.slowMoversHelp": "Compares stock age with sale movement.",
   "inventory.page.deadStock": "Dead stock",
   "inventory.page.deadStockHelp": "Flags stock with no recent movement.",
-  "inventory.page.batchSupport": "Batch and expiry support",
-  "inventory.page.higherPlan": "Higher plan",
-  "inventory.page.batchSupportHelp": "Attach batch, expiry, MRP, and lot-wise stock to purchase movements.",
   "inventory.page.movementType": "Movement type",
   "inventory.page.purchase": "Purchase",
   "inventory.page.manualSale": "Manual sale",
@@ -459,4 +456,90 @@ export const inventoryEn = {
   "inventory.categories.subHelp": "Child categories",
   "inventory.categories.under": "Under categories",
   "inventory.lots.updateFailed": "Could not update batch.",
+
+  // What THIS shop's trade calls its stock.
+  //
+  // The generic strings above still carry the page; only the words that change
+  // from trade to trade live here, and a trade that is happy with the generic
+  // wording points straight back at it — see `settings/shop-inventory.ts`, which
+  // maps each business type to the keys it uses. Kept as dictionary keys rather
+  // than English literals in that map because Hindi is the DEFAULT language, so
+  // per-trade copy written in English would be English for most shops.
+  "inventory.trade.title": "Stock tools for your shop type",
+  "inventory.trade.changeShopType": "Change shop type",
+
+  "inventory.trade.kirana.focus": "Keep loose and packed stock in the unit you actually sell in, and refill before the shelf runs empty.",
+
+  "inventory.trade.clothing.stock": "Catalogue stock",
+  "inventory.trade.clothing.items": "Total styles",
+  "inventory.trade.clothing.wastage": "Damaged pieces",
+  "inventory.trade.clothing.focus": "Count every size and colour as its own SKU — that is what keeps availability and exchanges exact.",
+
+  "inventory.trade.footwear.stock": "Size-wise stock",
+  "inventory.trade.footwear.items": "Total models",
+  "inventory.trade.footwear.receive": "Add Pairs",
+  "inventory.trade.footwear.wastage": "Damaged Pairs",
+  "inventory.trade.footwear.focus": "Stock moves in pairs: a sale is lost to a missing size far more often than to a missing model.",
+
+  "inventory.trade.autoParts.stock": "Godown and rack stock",
+  "inventory.trade.autoParts.items": "Total parts",
+  "inventory.trade.autoParts.receive": "Receive Parts",
+  "inventory.trade.autoParts.wastage": "Damaged Parts",
+  "inventory.trade.autoParts.focus": "Record the part number and the rack, so the counter finds a part without opening every box.",
+
+  "inventory.trade.electronics.stock": "Model-wise stock",
+  "inventory.trade.electronics.items": "Total models",
+  "inventory.trade.electronics.receive": "Receive Stock",
+  "inventory.trade.electronics.wastage": "Damaged Units",
+  "inventory.trade.electronics.focus": "High-value stock is worth counting often; a serial ties each unit to its bill and its warranty.",
+
+  "inventory.trade.pharmacy.stock": "Medicine stock",
+  "inventory.trade.pharmacy.items": "Total medicines",
+  "inventory.trade.pharmacy.receive": "Receive Medicines",
+  "inventory.trade.pharmacy.wastage": "Expired and Damaged",
+  "inventory.trade.pharmacy.focus": "Receive by batch, dispense the earliest expiry first, and pull an expired lot off the shelf the day it turns.",
+
+  "inventory.trade.stationery.stock": "Shelf and bulk stock",
+  "inventory.trade.stationery.items": "Total titles and items",
+  "inventory.trade.stationery.wastage": "Damaged Stock",
+  "inventory.trade.stationery.focus": "The season decides this shelf: build depth before the school term and clear slow titles after it.",
+
+  "inventory.trade.furniture.stock": "Showroom and warehouse stock",
+  "inventory.trade.furniture.items": "Total models",
+  "inventory.trade.furniture.receive": "Receive Stock",
+  "inventory.trade.furniture.wastage": "Damaged Pieces",
+  "inventory.trade.furniture.focus": "A display piece is not saleable stock — keep sold and delivery-pending items apart from what is on offer.",
+
+  "inventory.trade.cosmetics.stock": "Shade-wise stock",
+  "inventory.trade.cosmetics.items": "Total shades",
+  "inventory.trade.cosmetics.receive": "Receive Stock",
+  "inventory.trade.cosmetics.wastage": "Expired and Damaged",
+  "inventory.trade.cosmetics.focus": "Shades sell at very different speeds and the stock is dated: watch expiry, and keep testers out of saleable stock.",
+
+  "inventory.trade.restaurant.stock": "Kitchen stock",
+  "inventory.trade.restaurant.items": "Total items",
+  "inventory.trade.restaurant.receive": "Receive Supplies",
+  "inventory.trade.restaurant.wastage": "Wastage Entry",
+  "inventory.trade.restaurant.focus": "Ingredients deplete as dishes sell — count perishables daily and post wastage in the same shift.",
+
+  "inventory.trade.manufacturing.stock": "Materials and finished stock",
+  "inventory.trade.manufacturing.items": "Total materials and SKUs",
+  "inventory.trade.manufacturing.receive": "Receive Materials",
+  "inventory.trade.manufacturing.wastage": "Wastage and Rejects",
+  "inventory.trade.manufacturing.focus": "Keep raw material, work in progress and finished packs apart, so every dispatch traces back to its batch.",
+
+  "inventory.trade.other.focus": "Keep the selling unit, cost and reorder level right, and every other number in the app follows.",
+
+  // Labels for the trade screens the strip links to. The core inventory page may
+  // not import a vertical pack, so it cannot read the label off the pack's nav
+  // entry — these are the same names, held on the core side.
+  "inventory.trade.link.sizeRuns": "Size runs",
+  "inventory.trade.link.partFinder": "Part finder",
+  "inventory.trade.link.serialUnits": "IMEI and serials",
+  "inventory.trade.link.prescriptions": "Prescriptions",
+  "inventory.trade.link.bookLists": "Book lists",
+  "inventory.trade.link.orderBook": "Order book",
+  "inventory.trade.link.testers": "Tester stock",
+  "inventory.trade.link.kitchenStock": "Kitchen stock",
+  "inventory.trade.link.production": "Production runs",
 } as const;

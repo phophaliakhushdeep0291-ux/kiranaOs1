@@ -18,6 +18,8 @@ import { fetchGroqAliasSuggestions } from "../product-aliases";
 import { baseUnitFor, isScaleUnit, sellingUnitCode, sellingUnitConversion, sellingUnitName, UNITS } from "../product-pricing";
 import { roundMoney } from "@/lib/money";
 import { useShopCapability } from "@/features/core/settings/capabilities";
+import { PRODUCT_ATTRIBUTE_SECTION_TITLE } from "@/features/core/products/product-attributes";
+import { ProductAttributesSection } from "./ProductAttributesSection";
 import { VariantGridEditor } from "./VariantGridEditor";
 import { VariantLocationSplit } from "./VariantLocationSplit";
 import type { ProductFormData } from "../product-form-state";
@@ -879,6 +881,16 @@ export function ProductFormPanel({
               </select>
             </div>
             ) : null}
+          </Section>
+
+          {/* What this trade needs on a product and no other trade does — the
+              chemist's salt, the garment shop's fabric, the parts shop's bin.
+              Rendered from one catalogue keyed by business type, so switching
+              shop type switches the whole section rather than hiding a fixed
+              form. Sits after stock and before the image because it is reference
+              detail: nothing above it depends on what is entered here. */}
+          <Section title={PRODUCT_ATTRIBUTE_SECTION_TITLE[businessType]}>
+            <ProductAttributesSection businessType={businessType} form={form} />
           </Section>
 
           {/* Product Image */}

@@ -1,0 +1,20 @@
+-- Trade details on a product: the facts one shop type needs and no other has any
+-- use for. A chemist records the salt and the dosage form, a garment shop the
+-- fabric and the fit, a parts shop the OEM number and the bin, a book shop the
+-- ISBN and the class.
+--
+-- Eleven trades times a dozen facts is roughly a hundred and thirty columns, of
+-- which any one shop would ever fill a tenth. So they are stored as one bag of
+-- scalars keyed by the field catalogue the product form renders from, rather
+-- than as a column each.
+--
+-- The line between this and a real column is whether code branches on the value.
+-- Stock, price, tax, the drug schedule that refuses a sale without a slip, the
+-- variant axes that split stock per size -- all of those stay columns because
+-- they drive behaviour. What lands here is descriptive: read by a human at the
+-- counter, searched, and printed.
+--
+-- Defaulted to an empty object rather than nullable, so every existing product
+-- reads back as "no trade details" without a backfill and nothing downstream has
+-- to handle a null before parsing.
+ALTER TABLE "Product" ADD COLUMN "attributesJson" TEXT NOT NULL DEFAULT '{}';

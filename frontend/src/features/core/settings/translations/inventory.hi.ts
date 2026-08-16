@@ -297,9 +297,6 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.page.slowMoversHelp": "स्टॉक की उम्र और बिक्री की तुलना करता है।",
   "inventory.page.deadStock": "रुका हुआ स्टॉक",
   "inventory.page.deadStockHelp": "जिस स्टॉक की हाल में कोई आवाजाही नहीं, उसे दिखाता है।",
-  "inventory.page.batchSupport": "बैच और एक्सपायरी सुविधा",
-  "inventory.page.higherPlan": "बड़ा प्लान",
-  "inventory.page.batchSupportHelp": "खरीद के साथ बैच, एक्सपायरी, MRP और लॉट-वार स्टॉक जोड़ें।",
   "inventory.page.movementType": "आवाजाही का प्रकार",
   "inventory.page.purchase": "खरीद",
   "inventory.page.manualSale": "हाथ से बिक्री",
@@ -441,4 +438,80 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.categories.subHelp": "छोटी श्रेणियां",
   "inventory.categories.under": "श्रेणियों के अंदर",
   "inventory.lots.updateFailed": "बैच अपडेट नहीं हो सका।",
+
+  // दुकान के प्रकार के हिसाब से स्टॉक के शब्द।
+  "inventory.trade.title": "आपकी दुकान के हिसाब से स्टॉक टूल्स",
+  "inventory.trade.changeShopType": "दुकान का प्रकार बदलें",
+
+  "inventory.trade.kirana.focus": "खुला और पैक दोनों स्टॉक उसी यूनिट में रखें जिसमें बेचते हैं, और शेल्फ खाली होने से पहले भर लें।",
+
+  "inventory.trade.clothing.stock": "कैटलॉग का स्टॉक",
+  "inventory.trade.clothing.items": "कुल स्टाइल",
+  "inventory.trade.clothing.wastage": "खराब पीस",
+  "inventory.trade.clothing.focus": "हर साइज़ और रंग को अलग SKU रखें — इसी से उपलब्धता और बदली दोनों सही रहती हैं।",
+
+  "inventory.trade.footwear.stock": "साइज़ के हिसाब से स्टॉक",
+  "inventory.trade.footwear.items": "कुल मॉडल",
+  "inventory.trade.footwear.receive": "जोड़ी जोड़ें",
+  "inventory.trade.footwear.wastage": "खराब जोड़ी",
+  "inventory.trade.footwear.focus": "स्टॉक जोड़ी में चलता है: बिक्री मॉडल की कमी से नहीं, साइज़ की कमी से ज़्यादा रुकती है।",
+
+  "inventory.trade.autoParts.stock": "गोदाम और रैक का स्टॉक",
+  "inventory.trade.autoParts.items": "कुल पार्ट्स",
+  "inventory.trade.autoParts.receive": "पार्ट्स लें",
+  "inventory.trade.autoParts.wastage": "खराब पार्ट्स",
+  "inventory.trade.autoParts.focus": "पार्ट नंबर और रैक दोनों लिखें, तभी काउंटर पर हर डिब्बा खोले बिना पार्ट मिल जाता है।",
+
+  "inventory.trade.electronics.stock": "मॉडल के हिसाब से स्टॉक",
+  "inventory.trade.electronics.items": "कुल मॉडल",
+  "inventory.trade.electronics.receive": "स्टॉक लें",
+  "inventory.trade.electronics.wastage": "खराब यूनिट",
+  "inventory.trade.electronics.focus": "महंगा स्टॉक बार-बार गिनें; सीरियल नंबर हर यूनिट को उसके बिल और वारंटी से जोड़ देता है।",
+
+  "inventory.trade.pharmacy.stock": "दवा का स्टॉक",
+  "inventory.trade.pharmacy.items": "कुल दवाइयाँ",
+  "inventory.trade.pharmacy.receive": "दवा लें",
+  "inventory.trade.pharmacy.wastage": "एक्सपायर और खराब",
+  "inventory.trade.pharmacy.focus": "बैच के साथ माल लें, पहले नज़दीकी एक्सपायरी वाला दें, और एक्सपायर बैच उसी दिन शेल्फ से हटाएँ।",
+
+  "inventory.trade.stationery.stock": "शेल्फ और थोक स्टॉक",
+  "inventory.trade.stationery.items": "कुल किताबें और सामान",
+  "inventory.trade.stationery.wastage": "खराब स्टॉक",
+  "inventory.trade.stationery.focus": "यह दुकान सीज़न पर चलती है: सत्र शुरू होने से पहले स्टॉक भरें और बाद में धीमा माल निकालें।",
+
+  "inventory.trade.furniture.stock": "शोरूम और गोदाम का स्टॉक",
+  "inventory.trade.furniture.items": "कुल मॉडल",
+  "inventory.trade.furniture.receive": "स्टॉक लें",
+  "inventory.trade.furniture.wastage": "खराब पीस",
+  "inventory.trade.furniture.focus": "शोरूम में लगा पीस बिकने लायक स्टॉक नहीं है — बिका हुआ और डिलीवरी बाकी माल अलग रखें।",
+
+  "inventory.trade.cosmetics.stock": "शेड के हिसाब से स्टॉक",
+  "inventory.trade.cosmetics.items": "कुल शेड",
+  "inventory.trade.cosmetics.receive": "स्टॉक लें",
+  "inventory.trade.cosmetics.wastage": "एक्सपायर और खराब",
+  "inventory.trade.cosmetics.focus": "हर शेड की बिक्री की रफ़्तार अलग होती है और माल तारीख वाला है: एक्सपायरी देखें और टेस्टर बिक्री के स्टॉक से अलग रखें।",
+
+  "inventory.trade.restaurant.stock": "किचन का स्टॉक",
+  "inventory.trade.restaurant.items": "कुल आइटम",
+  "inventory.trade.restaurant.receive": "सामान लें",
+  "inventory.trade.restaurant.wastage": "बर्बादी की एंट्री",
+  "inventory.trade.restaurant.focus": "डिश बिकते ही सामान घटता है — जल्दी खराब होने वाला माल रोज़ गिनें और बर्बादी उसी शिफ्ट में दर्ज करें।",
+
+  "inventory.trade.manufacturing.stock": "कच्चा माल और तैयार स्टॉक",
+  "inventory.trade.manufacturing.items": "कुल सामग्री और SKU",
+  "inventory.trade.manufacturing.receive": "कच्चा माल लें",
+  "inventory.trade.manufacturing.wastage": "बर्बादी और रिजेक्ट",
+  "inventory.trade.manufacturing.focus": "कच्चा माल, बनते हुए माल और तैयार पैक अलग-अलग रखें, तभी हर डिस्पैच अपने बैच तक पहुँचता है।",
+
+  "inventory.trade.other.focus": "बेचने की यूनिट, लागत और रीऑर्डर लेवल सही रखें — बाकी हर हिसाब अपने आप सही रहता है।",
+
+  "inventory.trade.link.sizeRuns": "साइज़ रन",
+  "inventory.trade.link.partFinder": "पार्ट खोजें",
+  "inventory.trade.link.serialUnits": "IMEI और सीरियल",
+  "inventory.trade.link.prescriptions": "पर्चे",
+  "inventory.trade.link.bookLists": "बुक लिस्ट",
+  "inventory.trade.link.orderBook": "ऑर्डर बुक",
+  "inventory.trade.link.testers": "टेस्टर स्टॉक",
+  "inventory.trade.link.kitchenStock": "किचन स्टॉक",
+  "inventory.trade.link.production": "प्रोडक्शन रन",
 };

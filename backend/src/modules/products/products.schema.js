@@ -87,6 +87,17 @@ export const createProductSchema = z.object({
   // real limit on push size, not decoration; 100 covers any grid a counter can
   // physically stock.
   sellingUnits: z.array(sellingUnitSchema).max(100).optional(),
+  // Trade details: the facts one shop type needs on a product and no other has
+  // any use for — a chemist's salt, a garment shop's fabric, a parts shop's OEM
+  // number. Validated as a shape, not as a vocabulary: which keys a trade uses is
+  // the product form's business, and the server bounds size and scalar-ness only.
+  // See product-attributes.js for why the catalogue is deliberately not mirrored
+  // here, and why a write MERGES rather than replaces.
+  //
+  // Nullish rather than optional: a whole-record payload from conflict resolution
+  // or a sync echo states an untouched field as null, and .optional() alone
+  // rejects that.
+  attributes: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).nullish(),
   // Optimistic-concurrency guard: the server updatedAt the client based this edit on.
   baseUpdatedAt: z.string().optional(),
 });
