@@ -315,15 +315,15 @@ export default function StoreProfilePage() {
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-display text-[20px] font-black tracking-tight text-[var(--brand-ink)]">{biz.name || shop?.name || "My Store"}</h2>
+                <h2 className="font-display text-[20px] font-black tracking-tight text-[var(--brand-ink)]">{biz.name || shop?.name || t("settings.store.myStore")}</h2>
                 {/* GSTIN is the one identity claim the server actually validates. */}
                 {shop?.gstNumber
                   ? <Badge tone="green"><BadgeCheck size={12} /> {t("settings.store.gstRegistered")}</Badge>
                   : <Badge tone="gray">{t("settings.store.noGstin")}</Badge>}
-                <Badge tone="amber">{planName} Plan</Badge>
+                <Badge tone="amber">{t("settings.store.planBadge", { plan: planName })}</Badge>
               </div>
-              <p className="mt-0.5 text-[12px] text-[#52627e]">{t(BUSINESS_TYPE_DEFS[biz.businessTypeKey].labelKey)} · Store ID {storeId}</p>
-              <p className="text-[12px] text-[#52627e]">{[addr.address, addr.city].filter(Boolean).join(", ") || "Add your store address"}</p>
+              <p className="mt-0.5 text-[12px] text-[#52627e]">{t(BUSINESS_TYPE_DEFS[biz.businessTypeKey].labelKey)} {t("settings.store.storeIdLine", { id: storeId })}</p>
+              <p className="text-[12px] text-[#52627e]">{[addr.address, addr.city].filter(Boolean).join(", ") || t("settings.store.addAddress")}</p>
             </div>
           </div>
           <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
@@ -528,10 +528,10 @@ export default function StoreProfilePage() {
             {changeReport ? (
               <div className="space-y-3 rounded-xl border bg-muted/30 p-4 text-sm">
                 <div className="flex items-center justify-between gap-3"><span className="font-semibold">{t("settings.store.recommendation")}</span><Badge tone={changeReport.decision === "NEW_SHOP_REQUIRED" ? "amber" : changeReport.decision === "SAFE_BEFORE_TRANSACTIONS" ? "green" : "blue"}>{changeReport.decision.replace(/_/g, " ")}</Badge></div>
-                <p className="text-muted-foreground">Existing data: {changeReport.counts.products} products, {changeReport.counts.bills} bills, {changeReport.counts.inventoryLots} inventory lots.</p>
+                <p className="text-muted-foreground">{t("settings.store.existingData", { products: changeReport.counts.products, bills: changeReport.counts.bills, lots: changeReport.counts.inventoryLots })}</p>
                 {changeReport.disabledCapabilities.length ? <p><strong>{t("settings.store.wouldDisable")}</strong> {changeReport.disabledCapabilities.join(", ")}</p> : null}
                 {changeReport.enabledCapabilities.length ? <p><strong>{t("settings.store.wouldEnable")}</strong> {changeReport.enabledCapabilities.join(", ")}</p> : null}
-                <p className="text-muted-foreground">{changeReport.decision === "NEW_SHOP_REQUIRED" ? "These engines are incompatible. Create a separate shop profile so historical stock and billing records remain valid." : changeReport.decision === "REVIEWED_MIGRATION_REQUIRED" ? "This change is broadly compatible, but must be run as a reviewed migration; it is not applied automatically." : "This change is safe before meaningful transactions and can be saved from the profile selector."}</p>
+                <p className="text-muted-foreground">{changeReport.decision === "NEW_SHOP_REQUIRED" ? t("settings.store.engineIncompatible") : changeReport.decision === "REVIEWED_MIGRATION_REQUIRED" ? t("settings.store.engineReviewed") : t("settings.store.engineSafe")}</p>
               </div>
             ) : null}
           </div>

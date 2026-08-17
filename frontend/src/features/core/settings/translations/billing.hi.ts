@@ -438,6 +438,10 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.search.searchedBefore": "पहले खोजा",
   "billing.search.packSizes": "{count} पैक साइज़",
 
+  "billing.batch.mrp": "MRP ₹{amount}",
+  "billing.bills.addItemsToBill": "बिल में सामान जोड़ें",
+  "billing.edit.goesToUdhar": "उधार में जाएगा",
+  "billing.edit.customerPays": "ग्राहक अभी देगा",
   "billing.batch.loading": "बैच आ रहे हैं…",
   "billing.batch.empty": "इस ब्रांच में बेचने लायक कोई बैच नहीं है।",
   "billing.batch.chooseFor": "{name} का बैच चुनें",

@@ -38,6 +38,9 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   "HTTPS URL",
   "MRP",
   "MRP (₹)",
+  // Per-batch ceiling in the batch picker. Abbreviation, rupee sign and a number
+  // — there is no word in it to translate.
+  "MRP ₹{amount}",
   // Stock-row prefix on the inventory register. The code itself is printed in Latin
   // on the shelf label a shopkeeper is matching against, so the abbreviation stays.
   "SKU: {value}",

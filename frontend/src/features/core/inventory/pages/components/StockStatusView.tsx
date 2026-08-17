@@ -238,8 +238,8 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
                 <tr><td colSpan={7} className="px-4 py-16 text-center text-sm text-[#536383]">{t("inventory.loading")}</td></tr>
               ) : rows.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-16 text-center">
-                  <p className="text-sm font-bold text-[#13274d]">{mode === "in" ? "No items in stock" : "Nothing is out of stock 🎉"}</p>
-                  <p className="mt-1 text-xs text-[#536383]">{mode === "in" ? "Add stock to your products to see them here." : "All your products currently have stock."}</p>
+                  <p className="text-sm font-bold text-[#13274d]">{mode === "in" ? t("inventory.stock.noItems") : t("inventory.stock.nothingOut")}</p>
+                  <p className="mt-1 text-xs text-[#536383]">{mode === "in" ? t("inventory.stock.addToSee") : t("inventory.stock.allHaveStock")}</p>
                 </td></tr>
               ) : (
                 pagedRows.map((row) => {
@@ -303,7 +303,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
               Showing <span className="font-bold text-[#13274d]">{firstRow}</span> to <span className="font-bold text-[#13274d]">{lastRow}</span> of <span className="font-bold text-[#13274d]">{rows.length.toLocaleString("en-IN")}</span> {mode === "in" ? "items" : "out-of-stock items"}
             </p>
             <div className="sm:justify-self-center"><Pagination page={safePage} totalPages={totalPages} onChange={setPage} /></div>
-            <span className="text-[11px] text-[#9aa6bb] sm:justify-self-end">{ROWS_PER_PAGE} per page</span>
+            <span className="text-[11px] text-[#9aa6bb] sm:justify-self-end">{t("inventory.stock.perPage", { count: ROWS_PER_PAGE })}</span>
           </div>
         )}
       </div>

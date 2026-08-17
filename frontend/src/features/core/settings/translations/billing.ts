@@ -461,6 +461,10 @@ export const billingEn = {
   // The aria-label and the two duration strings are invisible to the hardcoded-string
   // check (it skips attributes and template literals), so they are translated here by
   // reading the component rather than by trusting the checker.
+  "billing.batch.mrp": "MRP ₹{amount}",
+  "billing.bills.addItemsToBill": "Add items to bill",
+  "billing.edit.goesToUdhar": "Goes to udhar",
+  "billing.edit.customerPays": "Customer pays",
   "billing.batch.loading": "Loading batches…",
   "billing.batch.empty": "No saleable batches at this branch.",
   "billing.batch.chooseFor": "Choose batch for {name}",

@@ -223,7 +223,7 @@ export default function SecuritySettingsPage() {
             <div className="flex items-center gap-3 rounded-[10px] border border-[#eef2f8] px-4 py-3">
               <span className="font-mono text-[18px] tracking-[0.3em] text-[var(--brand-ink)]">{pinQ.data?.hasPin ? "•••••" : "—"}</span>
               <div className="flex-1">
-                <p className="text-[12px] font-bold text-[var(--brand-ink)]">{pinQ.data?.hasPin ? "PIN active" : pinQ.isError ? "Status unavailable offline" : "No owner PIN yet"}</p>
+                <p className="text-[12px] font-bold text-[var(--brand-ink)]">{pinQ.data?.hasPin ? t("settings.security.pinActive") : pinQ.isError ? t("settings.security.statusOffline") : t("settings.security.noPinYet")}</p>
                 <p className="text-[11px] text-[#64748b]">
                   {pinQ.data?.hasPin
                     ? `${protectedCount} of ${PROTECTED_ACTIONS.length} actions ask for it`
@@ -268,7 +268,7 @@ export default function SecuritySettingsPage() {
 
       {/* Sensitive Action Protection */}
       <Card>
-        <CardHead icon={<ShieldCheck size={15} />} title={t("billing.page.sensitiveActionProtection")} sub={t("settings.security.approvalScope")} action={<Badge tone={protectedCount ? "green" : "amber"}>{protectedCount} of {PROTECTED_ACTIONS.length} protected</Badge>} />
+        <CardHead icon={<ShieldCheck size={15} />} title={t("billing.page.sensitiveActionProtection")} sub={t("settings.security.approvalScope")} action={<Badge tone={protectedCount ? "green" : "amber"}>{t("settings.security.protectedCount", { count: protectedCount, total: PROTECTED_ACTIONS.length })}</Badge>} />
         <div className="px-5 pb-5">
           <div className="grid gap-3 sm:grid-cols-2 lg:hidden">
             {PROTECTED_ACTIONS.map((action) => {
@@ -389,7 +389,7 @@ export default function SecuritySettingsPage() {
                     <p className="truncate text-[13px] font-bold text-[var(--brand-ink)]">{deviceLabel(device)}{isCurrent && <span className="ml-1.5"><Badge tone="blue">{t("settings.security.current")}</Badge></span>}</p>
                     <p className="text-[11px] text-[#64748b]">{[device.platform || device.operatingSystem, `last seen ${relativeTime(deviceSeenAt(device))}`].filter(Boolean).join(" · ")}</p>
                   </div>
-                  <Badge tone={blocked ? "red" : device.status === "active" ? "green" : "gray"}>{blocked ? "Blocked" : device.status === "active" ? "Active" : device.status || "Idle"}</Badge>
+                  <Badge tone={blocked ? "red" : device.status === "active" ? "green" : "gray"}>{blocked ? t("settings.security.deviceBlocked") : device.status === "active" ? t("settings.security.deviceActive") : device.status || t("settings.security.deviceIdle")}</Badge>
                   {!isCurrent && (
                     <Button size="sm" variant="outline" className="rounded-[8px] text-[12px] font-bold" onClick={() => { setSignOutError(null); setSignOutTarget(device); }}>{t("settings.security.signOut")}</Button>
                   )}

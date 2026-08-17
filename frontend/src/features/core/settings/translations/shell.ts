@@ -344,6 +344,15 @@ export const shellEn = {
   "chrome.select": "Select…",
   "chrome.confirm": "Confirm",
   "chrome.confirmCancel": "Cancel",
+  // Mobile sync strip: the chip under the thumb on every phone screen.
+  "chrome.sync.syncing": "Syncing",
+  "chrome.sync.synced": "Synced",
+  "chrome.sync.offlineSafe2": "Offline safe",
+  "chrome.sync.review": "Review sync",
+  "chrome.sync.justNow": "Just now",
+  "chrome.sync.savedOnDevice": "Saved on this device",
+  "chrome.sync.needRetry": "Some changes need retry",
+  "forms.upload.maxSize": "Max {size}MB per file",
   "chrome.syncNow": "Sync Now",
   "chrome.loadingApp": "Loading app...",
   // The top bar title — the one string a shopkeeper reads on every screen to

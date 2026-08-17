@@ -63,8 +63,8 @@ export function MobileSyncStrip({
     <section className={cn("kirana-mobile-sync-strip", `kirana-mobile-sync-${tone}`, className)} {...props}>
       <div className="kirana-mobile-sync-icon">{icon}</div>
       <div className="min-w-0 flex-1">
-        <p className="kirana-mobile-sync-label">{label ?? (isBusy ? "Syncing" : isGood ? "Synced" : status === "offline" ? "Offline safe" : "Review sync")}</p>
-        <p className="kirana-mobile-sync-detail">{detail ?? (isGood ? "Just now" : status === "offline" ? "Saved on this device" : "Some changes need retry")}</p>
+        <p className="kirana-mobile-sync-label">{label ?? (isBusy ? t("chrome.sync.syncing") : isGood ? t("chrome.sync.synced") : status === "offline" ? t("chrome.sync.offlineSafe2") : t("chrome.sync.review"))}</p>
+        <p className="kirana-mobile-sync-detail">{detail ?? (isGood ? t("chrome.sync.justNow") : status === "offline" ? t("chrome.sync.savedOnDevice") : t("chrome.sync.needRetry"))}</p>
       </div>
       {onAction ? content : <Link href={href}>{content}</Link>}
     </section>

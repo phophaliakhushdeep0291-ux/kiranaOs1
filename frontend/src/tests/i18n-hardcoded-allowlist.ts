@@ -23,13 +23,11 @@
  */
 export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "app/providers.tsx": 3,
-  "components/forms/FileUploadBox.tsx": 1,
   "components/layout/Layout.tsx": 53,
   "components/layout/MobileAppChrome.tsx": 50,
   "components/security/OwnerPinModal.tsx": 7,
   "components/shared/ErrorBoundary.tsx": 4,
   "components/shared/MetricCard.tsx": 1,
-  "components/shared/MobilePrimitives.tsx": 7,
   "components/shared/NotFound.tsx": 1,
   "components/ui/alert.tsx": 1,
   "components/ui/breadcrumb.tsx": 1,
@@ -62,8 +60,6 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/auth/pages/RegisterPage.tsx": 23,
   "features/core/auth/pages/ResetPasswordPage.tsx": 5,
   "features/core/auth/pages/VerifyEmailPage.tsx": 1,
-  "features/core/billing/pages/components/BatchPicker.tsx": 1,
-  "features/core/bills/components/EditBillDialog.tsx": 3,
   "features/core/bills/pages/BillDetailPage.tsx": 22,
   "features/core/bills/pages/BillsPage.tsx": 13,
   "features/core/customer-order/BillingOrderQrButton.tsx": 12,
@@ -71,7 +67,6 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/customer-order/DineInMenuPage.tsx": 25,
   "features/core/customer-order/ImportOrderPage.tsx": 8,
   "features/core/customer-order/OwnerOrderingCard.tsx": 9,
-  "features/core/customers/pages/CustomerDetailPage.tsx": 4,
   "features/core/customers/pages/CustomersPage.tsx": 26,
   "features/core/dashboard/pages/DashboardPage.tsx": 14,
   "features/core/demo/DemoModeBanner.tsx": 4,
@@ -81,11 +76,7 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/gift-cards/GiftCardsPage.tsx": 46,
   "features/core/innovation/components/OfflineConfidenceMeter.tsx": 16,
   "features/core/innovation/pages/SmartToolsPage.tsx": 6,
-  "features/core/inventory/pages/CategoriesPage.tsx": 7,
-  "features/core/inventory/pages/StockCountsPage.tsx": 9,
   "features/core/inventory/pages/StockTransfersPage.tsx": 35,
-  "features/core/inventory/pages/components/StockMovementDialog.tsx": 7,
-  "features/core/inventory/pages/components/StockStatusView.tsx": 5,
   "features/core/loyalty/pages/LoyaltyPage.tsx": 34,
   "features/core/money-statement/pages/MoneyStatementPage.tsx": 37,
   "features/core/offers/pages/OffersPage.tsx": 73,
@@ -117,15 +108,13 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   // Not debt: the one string here is a developer assertion thrown when the hook
   // is used outside its provider. It never reaches a shopkeeper.
   "features/core/settings/i18n.tsx": 1,
-  "features/core/settings/pages/AdvancedSettingsPage.tsx": 1,
   "features/core/settings/pages/IntegrationsSettingsPage.tsx": 19,
-  "features/core/settings/pages/MerchantSetupPage.tsx": 4,
-  "features/core/settings/pages/NotificationsSettingsPage.tsx": 3,
   "features/core/settings/pages/PrinterSettingsPage.tsx": 10,
-  "features/core/settings/pages/SecuritySettingsPage.tsx": 7,
   "features/core/settings/pages/SettingsPage.tsx": 14,
-  "features/core/settings/pages/StoreProfilePage.tsx": 8,
-  "features/core/settings/pages/SyncSettingsPage.tsx": 3,
+  // Not debt: the one string left is the literal RESTORE the owner must TYPE to
+  // confirm a restore, compared against `RESTORE <id>` in the page. Translating
+  // it would make the confirmation impossible to satisfy.
+  "features/core/settings/pages/SyncSettingsPage.tsx": 1,
   "features/core/settings/pages/TaxesSettingsPage.tsx": 10,
   "features/core/staff/pages/StaffPage.tsx": 70,
   "features/core/subscription/components/CancelSubscriptionDialog.tsx": 10,

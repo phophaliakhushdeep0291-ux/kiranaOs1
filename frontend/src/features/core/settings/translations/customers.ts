@@ -197,6 +197,7 @@ export const customersEn = {
   "customers.detail.adjustmentHint": "Use positive amount to increase udhar, negative to reduce.",
   "customers.detail.saveCorrection": "Save correction",
   "customers.detail.reversePayment": "Reverse payment",
+  "customers.detail.overpaymentNote": "Old overpayment data was detected in this ledger. Current udhar never goes below {floor}; affected historical balances are marked for reconciliation.",
   "customers.detail.reversed": "Reversed",
   "customers.detail.received": "Received",
   "customers.detail.adjustment": "Adjustment",
