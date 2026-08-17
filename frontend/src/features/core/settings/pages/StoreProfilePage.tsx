@@ -322,7 +322,7 @@ export default function StoreProfilePage() {
                   : <Badge tone="gray">{t("settings.store.noGstin")}</Badge>}
                 <Badge tone="amber">{planName} Plan</Badge>
               </div>
-              <p className="mt-0.5 text-[12px] text-[#52627e]">{BUSINESS_TYPE_DEFS[biz.businessTypeKey].label} · Store ID {storeId}</p>
+              <p className="mt-0.5 text-[12px] text-[#52627e]">{t(BUSINESS_TYPE_DEFS[biz.businessTypeKey].labelKey)} · Store ID {storeId}</p>
               <p className="text-[12px] text-[#52627e]">{[addr.address, addr.city].filter(Boolean).join(", ") || "Add your store address"}</p>
             </div>
           </div>
@@ -351,7 +351,7 @@ export default function StoreProfilePage() {
             <Fld label={t("settings.store.businessType")} hint={businessTypeLocked ? t("settings.store.typeLocked") : t("settings.store.typeHelp")}>
               <Select disabled={businessTypeLocked} value={biz.businessTypeKey} onValueChange={(v) => setBiz({ ...biz, businessTypeKey: v as BusinessType })}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>{BUSINESS_TYPE_OPTIONS.map(([key, def]) => <SelectItem key={key} value={key}>{def.emoji} {def.label}</SelectItem>)}</SelectContent>
+                <SelectContent>{BUSINESS_TYPE_OPTIONS.map(([key, def]) => <SelectItem key={key} value={key}>{def.emoji} {t(def.labelKey)}</SelectItem>)}</SelectContent>
               </Select>
               {businessTypeLocked ? <Button type="button" variant="outline" className="mt-2 h-9 w-full text-xs font-bold" onClick={() => { setChangeTarget(biz.businessTypeKey === "other" ? "kirana" : "other"); setChangeReport(null); setChangeReviewOpen(true); }}>{t("settings.store.requestTypeChange")}</Button> : null}
             </Fld>
@@ -522,7 +522,7 @@ export default function StoreProfilePage() {
             <Fld label={t("settings.store.requestedType")}>
               <Select value={changeTarget} onValueChange={(value) => { setChangeTarget(value as BusinessType); setChangeReport(null); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{BUSINESS_TYPE_OPTIONS.filter(([key]) => key !== biz.businessTypeKey).map(([key, def]) => <SelectItem key={key} value={key}>{def.emoji} {def.label}</SelectItem>)}</SelectContent>
+                <SelectContent>{BUSINESS_TYPE_OPTIONS.filter(([key]) => key !== biz.businessTypeKey).map(([key, def]) => <SelectItem key={key} value={key}>{def.emoji} {t(def.labelKey)}</SelectItem>)}</SelectContent>
               </Select>
             </Fld>
             {changeReport ? (

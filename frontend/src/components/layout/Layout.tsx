@@ -45,7 +45,7 @@ import { isPathAllowedByCapabilities, isPathInBusinessProfile, useShopBusinessPr
 import { useModuleVisibility } from "@/features/core/settings/modules";
 import { useAppLanguage, type Translate, type TranslationKey } from "@/features/core/settings/i18n";
 import { useModuleVisibilityServerSync } from "@/features/core/settings/module-visibility-sync";
-import { useActiveVerticalPack } from "@/features/verticals/registry";
+import { useActiveVerticalPack, type VerticalNavEntry } from "@/features/verticals/registry";
 import { VoiceAssistant } from "@/features/core/voice/VoiceAssistant";
 import { ReportIssueButton } from "@/features/core/support";
 import { DemoModeBanner } from "@/features/core/demo/DemoModeBanner";
@@ -200,7 +200,15 @@ type NavItem = LinkItem | GroupItem;
 type StoreLocationOption = { id: string; code: string; name: string; city?: string | null; isPrimary: boolean; active: boolean };
 type StoreLocationsResponse = { locations: StoreLocationOption[] };
 
-const NAV: NavItem[] = [
+/**
+ * The shared spine every shop gets, before its trade adds anything.
+ *
+ * Exported so `vertical-navigation-fit.test.ts` can build each of the twelve
+ * sidebars as data and check them. A pack anchoring itself to an href that is
+ * not here, or naming an entry the core spine already uses, is not visible by
+ * reading either file alone — it only shows up when the two are merged.
+ */
+export const NAV: NavItem[] = [
   { kind: "link", href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { kind: "link", href: "/billing", label: "Billing", Icon: ShoppingCart, badge: "F2", emphasis: true },
   {
@@ -245,6 +253,73 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/expenses", label: "Expenses", Icon: Wallet },
   { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
 ];
+
+/**
+ * The core spine with one trade's entries merged into it.
+ *
+ * `insertAfter` promises an entry lands next to a named href. That used to be
+ * honoured only for TOP-LEVEL links, and half the anchors in use are not: a
+ * group's own href (`/inventory`) and a group's child (`/products`) both looked
+ * like typos to the splice and quietly fell through to the tail. Five trades were
+ * affected — Testers, Size Runs, Manufacturing, Menu and Kitchen stock all sat
+ * above Settings, nowhere near the screens they belong to.
+ *
+ * An anchor inside a group places the entry directly after that whole group,
+ * which keeps the trade's screen a first-class link with its own icon rather
+ * than demoting it to a child row.
+ *
+ * Pure, and exported, so `vertical-navigation-fit.test.ts` can assemble all
+ * twelve sidebars without a browser.
+ */
+export function buildSidebarNav(
+  packNav: readonly VerticalNavEntry[],
+  pathEnabled: (href: string) => boolean,
+  t: Translate,
+): NavItem[] {
+  const items: NavItem[] = [];
+  const pending = new Set(packNav.filter((entry) => pathEnabled(entry.href)));
+  const spliceAfter = (hrefs: string[]) => {
+    for (const entry of pending) {
+      if (!entry.insertAfter || !hrefs.includes(entry.insertAfter)) continue;
+      items.push({ kind: "link", href: entry.href, label: t(entry.label), Icon: entry.Icon });
+      pending.delete(entry);
+    }
+  };
+
+  for (const item of NAV) {
+    if (item.kind === "link") {
+      if (pathEnabled(item.href)) items.push(item);
+      spliceAfter([item.href]);
+      continue;
+    }
+    // `pathEnabled`, not the module switch alone: a child like Batch & Expiry
+    // is gated on a capability, and filtering only by nav key would let it
+    // back into the group after being kept out of the top level. It already
+    // subsumes the module switch, so one pass over the children is enough.
+    const profileChildren = item.children.filter((child) => pathEnabled(child.href));
+    if (profileChildren.length === 0) continue;
+    items.push({
+      ...item,
+      children: profileChildren,
+      triggerPaths: item.triggerPaths.filter((path) => pathEnabled(path)),
+      overviewHref: item.overviewHref && pathEnabled(item.overviewHref) ? item.overviewHref : undefined,
+    });
+    // Anchored to the group itself or to anything under it: the entry follows the
+    // whole group. Every child is offered, not just the surviving ones, so an
+    // anchor still works when the owner has switched that particular child off.
+    spliceAfter([...(item.overviewHref ? [item.overviewHref] : []), ...item.children.map((child) => child.href)]);
+  }
+
+  // Entries with no `insertAfter`, or whose anchor is switched off, still have
+  // to land somewhere — above Settings, so Settings stays the last item.
+  if (pending.size > 0) {
+    const tail = items.findIndex((item) => item.kind === "link" && item.href === "/settings");
+    const extras: NavItem[] = [...pending].map((entry) =>
+      ({ kind: "link", href: entry.href, label: t(entry.label), Icon: entry.Icon }));
+    items.splice(tail === -1 ? items.length : tail, 0, ...extras);
+  }
+  return items;
+}
 
 // The counter is a task surface, not the owner's ERP index. Staff retain direct
 // access to the five things they use during a shift; every owner-only control
@@ -404,7 +479,6 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   // The shop's own trade adds its entries on top: only the active pack's nav is
   // read, so another vertical's screens never appear here to begin with.
   const nav = useMemo(() => {
-    const items: NavItem[] = [];
     const profileNavigation = businessProfile.data?.navigation;
     const profileCapabilities = businessProfile.data?.capabilities;
     const pathEnabled = (href: string) =>
@@ -413,44 +487,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
       // Dated-stock tooling belongs to shops that hold the capability, not to
       // every shop that happens to carry the "inventory" nav key.
       && isPathAllowedByCapabilities(href, profileCapabilities);
-    const pending = new Set(verticalPack.nav.filter((entry) => pathEnabled(entry.href)));
-    const spliceAfter = (href: string) => {
-      for (const entry of pending) {
-        if (entry.insertAfter !== href) continue;
-        items.push({ kind: "link", href: entry.href, label: entry.label, Icon: entry.Icon });
-        pending.delete(entry);
-      }
-    };
-
-    for (const item of NAV) {
-      if (item.kind === "link") {
-        if (pathEnabled(item.href)) items.push(item);
-        spliceAfter(item.href);
-        continue;
-      }
-      const children = item.children.filter((child) => isHrefEnabled(child.href));
-      if (children.length === 0) continue;
-      // `pathEnabled`, not the profile check alone: a child like Batch & Expiry
-      // is gated on a capability, and filtering only by nav key would let it
-      // back into the group after being kept out of the top level.
-      const profileChildren = children.filter((child) => pathEnabled(child.href));
-      if (profileChildren.length === 0) continue;
-      items.push({
-        ...item,
-        children: profileChildren,
-        triggerPaths: item.triggerPaths.filter((path) => pathEnabled(path)),
-        overviewHref: item.overviewHref && pathEnabled(item.overviewHref) ? item.overviewHref : undefined,
-      });
-    }
-
-    // Entries with no `insertAfter`, or whose anchor is switched off, still have
-    // to land somewhere — above Settings, so Settings stays the last item.
-    if (pending.size > 0) {
-      const tail = items.findIndex((item) => item.kind === "link" && item.href === "/settings");
-      const extras: NavItem[] = [...pending].map((entry) =>
-        ({ kind: "link", href: entry.href, label: entry.label, Icon: entry.Icon }));
-      items.splice(tail === -1 ? items.length : tail, 0, ...extras);
-    }
+    const items = buildSidebarNav(verticalPack.nav, pathEnabled, t);
     if (user?.role !== "staff") return items;
 
     return items.flatMap((item): NavItem[] => {
@@ -536,10 +573,10 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
 
   // apply business-type nav label overrides
   const labelOverrides: Record<string, string> = {
-    "/billing": btDef.navConfig.billing,
-    "/products": btDef.navConfig.products,
-    "/inventory": btDef.navConfig.inventory,
-    "/customers": btDef.navConfig.udhar,
+    "/billing": t(btDef.navConfig.billing),
+    "/products": t(btDef.navConfig.products),
+    "/inventory": t(btDef.navConfig.inventory),
+    "/customers": t(btDef.navConfig.udhar),
   };
 
   return (
@@ -575,7 +612,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
                 <div className="font-display text-[28px] font-black leading-none tracking-tight text-white">
                   Ar<span className="text-[var(--brand)]">tha</span>
                 </div>
-                <div className="mt-1 truncate text-[11px] font-medium leading-none text-white/68">{btDef.navConfig.tagline}</div>
+                <div className="mt-1 truncate text-[11px] font-medium leading-none text-white/68">{t(btDef.navConfig.tagline)}</div>
               </div>
             )}
           </Link>
@@ -871,12 +908,18 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
   item: GroupItem; loc: string; collapsed: boolean; expanded: boolean; onToggle: () => void; labelOverrides: Record<string, string>;
 }) {
   const groupActive = item.triggerPaths.some(p => isActive(loc, p)) || item.children.some(c => isActive(loc, c.href));
+  // The trade's own word for this section. `navConfig.inventory` is set for all
+  // twelve trades and was read by nobody: the override is keyed on `/inventory`,
+  // which exists only as this group's overview href, and the heading rendered the
+  // hardcoded label instead. A chemist's sidebar said "Inventory" where the shop
+  // had asked for "Stock", and a parts shop never saw "Godown" at all.
+  const label = (item.overviewHref && labelOverrides[item.overviewHref]) || item.label;
 
   if (collapsed) {
     const firstHref = item.overviewHref ?? item.triggerPaths[0] ?? item.children[0]?.href ?? "#";
     return (
       <Link href={firstHref}>
-        <div title={item.label}
+        <div title={label}
           className={cn("flex h-[44px] items-center justify-center rounded-[10px] transition-all duration-150",
             groupActive ? "bg-[var(--brand)] text-white shadow-[0_10px_22px_var(--brand-shadow)]" : "text-white/76 hover:bg-white/8 hover:text-white")}>
           <item.Icon size={18} aria-hidden="true" />
@@ -893,10 +936,10 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
           groupActive ? "bg-white/10 text-white" : "text-white/76 hover:bg-white/8 hover:text-white")}>
           <Link href={item.overviewHref} className="flex min-h-[44px] min-w-0 flex-1 items-center gap-3 rounded-l-[10px] px-3">
             <item.Icon size={18} aria-hidden="true" />
-            <span className="flex-1 truncate text-left text-[14px] font-semibold">{item.label}</span>
+            <span className="flex-1 truncate text-left text-[14px] font-semibold">{label}</span>
             {overviewActive ? <span className="sr-only">Current page</span> : null}
           </Link>
-          <button type="button" onClick={onToggle} aria-label={`${expanded ? "Collapse" : "Expand"} ${item.label} menu`} aria-expanded={expanded}
+          <button type="button" onClick={onToggle} aria-label={`${expanded ? "Collapse" : "Expand"} ${label} menu`} aria-expanded={expanded}
             className="grid min-h-[44px] w-10 shrink-0 place-items-center rounded-r-[10px] text-sidebar-foreground/50 transition-colors hover:bg-white/10 hover:text-white">
             <ChevronDown size={13} aria-hidden="true" className={cn("transition-transform duration-200", expanded && "rotate-180")} />
           </button>
@@ -930,7 +973,7 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
         className={cn("group flex min-h-[44px] w-full items-center gap-3 rounded-[10px] px-3 text-[14px] font-semibold transition-all duration-150",
           groupActive ? "bg-white/10 text-white" : "text-white/76 hover:bg-white/8 hover:text-white")}>
         <item.Icon size={18} aria-hidden="true" />
-        <span className="flex-1 truncate text-left">{item.label}</span>
+        <span className="flex-1 truncate text-left">{label}</span>
         <ChevronDown size={13} aria-hidden="true"
           className={cn("shrink-0 text-sidebar-foreground/35 transition-transform duration-200", expanded && "rotate-180")} />
       </button>

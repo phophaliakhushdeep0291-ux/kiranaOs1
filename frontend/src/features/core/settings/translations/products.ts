@@ -96,6 +96,8 @@ export const productsEn = {
   "products.form.editSubtitle": "Update the details of this product",
   "products.form.close": "Close",
   "products.form.basicInfo": "Basic Information",
+  // The trade the form has shaped itself around, shown above the fields.
+  "products.form.optimizedFor": "Optimized for {trade}",
   "products.form.packedItem": "Packed Item",
   "products.form.looseItem": "Loose Item",
   "products.form.category": "Category",

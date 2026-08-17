@@ -11,8 +11,10 @@ import { shellHi } from "./shell.hi";
 import { manufacturingHi } from "./manufacturing.hi";
 import { inventoryHi } from "./inventory.hi";
 import { settingsPagesHi } from "./settings-pages.hi";
+import { shopTypesHi } from "./shop-types.hi";
+import { workflowsHi } from "./workflows.hi";
 
-export const hindiTranslations = { ...shellHi, ...billingHi, ...productsHi, ...customersHi, ...restaurantHi, ...reportsHi, ...manufacturingHi, ...inventoryHi, ...settingsPagesHi };
+export const hindiTranslations = { ...shellHi, ...billingHi, ...productsHi, ...customersHi, ...restaurantHi, ...reportsHi, ...manufacturingHi, ...inventoryHi, ...settingsPagesHi, ...shopTypesHi, ...workflowsHi };
 
 /**
  * The same modules as EN_MODULES in i18n.tsx, keyed identically. The completeness
@@ -29,4 +31,6 @@ export const HI_MODULES = {
   manufacturing: manufacturingHi,
   inventory: inventoryHi,
   settingsPages: settingsPagesHi,
+  shopTypes: shopTypesHi,
+  workflows: workflowsHi,
 } as const;

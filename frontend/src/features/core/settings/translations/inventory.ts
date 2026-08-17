@@ -386,6 +386,51 @@ export const inventoryEn = {
   "inventory.page.correctionReason": "e.g. physical count, damaged packet",
   "inventory.page.correctionPinHelp": "Stock correction changes real inventory. Enter owner password/PIN to save locally.",
 
+  // Inventory page text the scanner used to walk past. A ternary picking between
+  // two literals — between tags, or inside a prop — is invisible to a rule that
+  // only reads brace-free JSX text and a bare quoted attribute, and so is a
+  // literal handed to a helper that toasts it. Every string below rendered in
+  // English on a Hindi counter while the check stayed green, which is why the
+  // rules were widened alongside this.
+  //
+  // Note for whoever adds the next key: check-translation-placeholders.mjs reads
+  // this file as TEXT, so a colon between two quoted words in a COMMENT parses
+  // as an entry. Keep examples out of quotes.
+  "inventory.page.checkForm": "Please check the form.",
+  "inventory.page.purchaseSaved": "Purchase saved locally",
+  "inventory.page.damageSaved": "Damage saved locally",
+  "inventory.page.correctionSaved": "Stock correction saved locally",
+  "inventory.page.saleSaved": "Sale movement saved locally",
+  // Reasons are stored on the movement and read back in Movement History, so a
+  // Hindi shop should find its own words there rather than the app's.
+  "inventory.page.voiceCorrectionReason": "Voice stock correction",
+  "inventory.page.voiceEntryReason": "Voice inventory entry",
+  "inventory.page.physicalCountReason": "Physical stock count correction",
+  "inventory.page.voiceDraftReady": "Inventory entry prepared",
+  "inventory.page.voiceDraftReadyHelp": "Voice assistant filled the movement form. Review and save locally.",
+  "inventory.page.voiceProductNotMatched": "Product not matched",
+  "inventory.page.voiceProductNotMatchedHelp": "Select the product manually, then save locally.",
+  "inventory.page.brand": "Brand",
+  "inventory.page.unbranded": "Unbranded",
+  "inventory.page.notTracked": "Not tracked",
+  "inventory.page.localPurchase": "Local purchase",
+  "inventory.page.newStockDelta": "New stock / delta",
+  "inventory.page.damageWriteOff": "Damage write-off",
+  "inventory.page.inventoryItem": "Inventory item",
+  "inventory.page.movementEntryTitle": "{movement} entry",
+  "inventory.page.pinRequiredNote": "{movement} requires owner PIN and creates a pending sync adjustment.",
+  "inventory.page.unitsTracked": "{count} units tracked",
+  "inventory.page.skuLabel": "SKU: {value}",
+  "inventory.page.categoryLabel": "Category: {value}",
+  "inventory.page.valueLabel": "Value: {value}",
+  "inventory.page.supplierBillLabel": "Supplier bill: {value}",
+  "inventory.page.sizesCount": "{count} sizes",
+  "inventory.page.quantityLeft": "{quantity} {unit} left",
+  "inventory.page.suggestion": "Suggestion: {value}",
+  "inventory.page.showingRange": "Showing {first} to {last} of {total} products",
+  "inventory.page.rowsPerPage": "{count} rows per page",
+  "inventory.page.pageNumber": "Page {number}",
+
   // Transfers, counts, categories and the stock dialogs: prose passed as props.
   "inventory.transfers.locationsFailed": "Store locations could not be loaded",
   "inventory.transfers.noLocations": "No store locations yet",

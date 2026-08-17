@@ -89,6 +89,7 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.form.editSubtitle": "इस माल की जानकारी बदलें",
   "products.form.close": "बंद करें",
   "products.form.basicInfo": "जरूरी जानकारी",
+  "products.form.optimizedFor": "{trade} के हिसाब से बनाया गया",
   "products.form.packedItem": "पैक किया माल",
   "products.form.looseItem": "खुला माल",
   "products.form.category": "कैटेगरी",

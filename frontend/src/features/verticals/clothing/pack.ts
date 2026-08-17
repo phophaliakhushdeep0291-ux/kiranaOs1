@@ -22,10 +22,10 @@ export const clothingPack: VerticalPack = {
   nav: [
     {
       href: "/rentals",
-      label: "Rentals",
+      label: "shopType.nav.rentals",
       Icon: Shirt,
       insertAfter: "/returns",
-      mobile: { group: "Sell", helper: "Book outfits out by date" },
+      mobile: { group: "Sell", helper: "shopType.nav.rentals.helper" },
     },
   ],
   capabilities: [

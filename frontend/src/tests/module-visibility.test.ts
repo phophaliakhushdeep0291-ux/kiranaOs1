@@ -178,8 +178,14 @@ describe("module visibility wiring", () => {
   it("filters the desktop sidebar and keeps a group alive on its remaining children", () => {
     expect(layout).toContain("useModuleVisibility");
     expect(layout).toContain("useModuleVisibilityServerSync");
-    expect(layout).toContain("const children = item.children.filter((child) => isHrefEnabled(child.href));");
-    expect(layout).toContain("if (children.length === 0) continue;");
+    // The sidebar is now assembled by `buildSidebarNav`, which takes the combined
+    // gate as `pathEnabled` — and that already subsumes the module switch, so the
+    // children are filtered once rather than twice. A group still survives on
+    // whichever children are left and drops out when none are.
+    expect(layout).toContain("const items = buildSidebarNav(verticalPack.nav, pathEnabled, t);");
+    expect(layout).toContain("const profileChildren = item.children.filter((child) => pathEnabled(child.href));");
+    expect(layout).toContain("if (profileChildren.length === 0) continue;");
+    expect(layout).toContain("isHrefEnabled(href)");
     expect(layout).toContain("{nav.map(item =>");
   });
 

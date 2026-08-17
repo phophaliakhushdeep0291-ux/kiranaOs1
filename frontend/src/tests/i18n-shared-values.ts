@@ -38,6 +38,9 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   "HTTPS URL",
   "MRP",
   "MRP (₹)",
+  // Stock-row prefix on the inventory register. The code itself is printed in Latin
+  // on the shelf label a shopkeeper is matching against, so the abbreviation stays.
+  "SKU: {value}",
   "WhatsApp",
   "SMS",
   // Numeric and format-only values: nothing in them is a word.

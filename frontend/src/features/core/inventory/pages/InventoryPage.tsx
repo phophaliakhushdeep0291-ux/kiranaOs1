@@ -175,8 +175,11 @@ const initialForm: MovementForm = {
   sellingMarginPercent: "",
 };
 
+// Not a component and not a hook: it is called from `.filter()` and from the
+// Export click handler. The `useAppLanguage()` an earlier i18n pass left here
+// read nothing, and a hook called outside render throws — which took the Export
+// button down with it.
 function isLowStock(product: InventoryItem) {
-  const { t } = useAppLanguage();
   if ((product.stockTrackingEnabled ?? product.trackStock ?? true) === false) return false;
   // Both sides are base units; no threshold (0) means never "low" — matches the backend filter.
   const threshold = Number(product.lowStockThreshold ?? 0);
@@ -273,12 +276,12 @@ export default function InventoryPage() {
   const products = useListProducts({ limit: 1000 });
   const suppliers = useListSuppliers();
 
-  const recordPurchase = useRecordPurchase({ mutation: { onSuccess: () => afterMovementSaved("Purchase saved locally"), onError: showError } });
-  const recordDamage = useRecordDamage({ mutation: { onSuccess: () => afterMovementSaved("Damage saved locally"), onError: showError } });
-  const stockCorrection = useStockCorrection({ mutation: { onSuccess: () => afterMovementSaved("Stock correction saved locally"), onError: showError } });
+  const recordPurchase = useRecordPurchase({ mutation: { onSuccess: () => afterMovementSaved(t("inventory.page.purchaseSaved")), onError: showError } });
+  const recordDamage = useRecordDamage({ mutation: { onSuccess: () => afterMovementSaved(t("inventory.page.damageSaved")), onError: showError } });
+  const stockCorrection = useStockCorrection({ mutation: { onSuccess: () => afterMovementSaved(t("inventory.page.correctionSaved")), onError: showError } });
 
   function showError(error: unknown) {
-    toast({ title: t("inventory.page.saveFailed"), description: (error as { message?: string })?.message ?? "Please check the form.", variant: "destructive" });
+    toast({ title: t("inventory.page.saveFailed"), description: (error as { message?: string })?.message ?? t("inventory.page.checkForm"), variant: "destructive" });
   }
 
   function refreshQueries() {
@@ -418,18 +421,18 @@ export default function InventoryPage() {
         sellingPrice: draft.sellingPrice !== undefined ? String(draft.sellingPrice) : matchedProduct ? String(matchedProduct.sellingPrice ?? matchedProduct.defaultPricePerRateUnit ?? "") : "",
         minMarginPercent: draft.minMarginPercent !== undefined ? String(draft.minMarginPercent) : "",
         sellingMarginPercent: draft.sellingMarginPercent !== undefined ? String(draft.sellingMarginPercent) : "",
-        reason: draft.reason ?? (draft.movementType === "correction" ? "Voice stock correction" : "Voice inventory entry"),
+        reason: draft.reason ?? (draft.movementType === "correction" ? t("inventory.page.voiceCorrectionReason") : t("inventory.page.voiceEntryReason")),
       });
       setDialogOpen(true);
       toast({
-        title: matchedProduct ? "Inventory entry prepared" : "Product not matched",
-        description: matchedProduct ? "Voice assistant filled the movement form. Review and save locally." : "Select the product manually, then save locally.",
+        title: matchedProduct ? t("inventory.page.voiceDraftReady") : t("inventory.page.voiceProductNotMatched"),
+        description: matchedProduct ? t("inventory.page.voiceDraftReadyHelp") : t("inventory.page.voiceProductNotMatchedHelp"),
         variant: matchedProduct ? "default" : "destructive",
       });
     };
     window.addEventListener("kirana:voice-inventory-draft", handler);
     return () => window.removeEventListener("kirana:voice-inventory-draft", handler);
-  }, [manageInventory.allowed, manageInventory.reason, products.data, toast]);
+  }, [manageInventory.allowed, manageInventory.reason, products.data, t, toast]);
 
   const selectedProduct = (products.data ?? []).find((product: Product) => product.id === form.productId);
   const selectedSupplier = (suppliers.data ?? []).find((supplier: Supplier) => supplier.id === form.supplierId);
@@ -505,18 +508,18 @@ export default function InventoryPage() {
       costPrice: product ? String(product.costPrice ?? product.costPerRateUnit ?? "") : "",
       minPrice: product ? String(product.minimumSellingPrice ?? product.minPricePerRateUnit ?? "") : "",
       sellingPrice: product ? String(product.sellingPrice ?? product.defaultPricePerRateUnit ?? "") : "",
-      reason: type === "correction" ? "Physical stock count correction" : "",
+      reason: type === "correction" ? t("inventory.page.physicalCountReason") : "",
     });
     setDialogOpen(true);
   }
 
   function exportInventory() {
-    const header = [t("inventory.col.product"), t("inventory.col.skuBarcode"), t("inventory.col.category"), "Brand", t("inventory.col.unit"), t("inventory.col.stock"), "Cost Price", "Stock Value", t("inventory.col.status")];
+    const header = [t("inventory.col.product"), t("inventory.col.skuBarcode"), t("inventory.col.category"), t("inventory.page.brand"), t("inventory.col.unit"), t("inventory.col.stock"), t("products.col.costPrice"), t("inventory.col.stockValue"), t("inventory.col.status")];
     const lines = inventoryRows.map((item) => {
       const unit = inventoryUnitLabel(item);
       const qty = inventoryDisplayQuantity(item);
       const cost = inventoryAverageUnitCost(item);
-      const status = Number(item.stockBaseQty ?? 0) <= 0 ? "Out of stock" : isLowStock(item) ? "Low stock" : "In stock";
+      const status = Number(item.stockBaseQty ?? 0) <= 0 ? t("inventory.stock.outOfStock") : isLowStock(item) ? t("inventory.stock.lowStock") : t("inventory.stock.inStock");
       return [item.name, item.sku ?? item.barcode ?? "", item.category ?? "", item.brand ?? "", unit, qty, cost, roundInventoryValue(qty * cost), status];
     });
     const csv = [header, ...lines]
@@ -618,7 +621,7 @@ export default function InventoryPage() {
     setSavingManualSale(true);
     try {
       await recordSaleLocalFirst(payload);
-      afterMovementSaved("Sale movement saved locally");
+      afterMovementSaved(t("inventory.page.saleSaved"));
     } catch (error) {
       showError(error);
     } finally {
@@ -653,7 +656,7 @@ export default function InventoryPage() {
     <PageShell className="space-y-4 bg-white pb-8">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         <InventoryMetricCard label={t("inventory.page.totalStockValue")} value={fmtMoney(stockStats.stockValue)} detail={t("inventory.page.atCurrentCost")} tone="blue" icon={<IndianRupee size={19} />} />
-        <InventoryMetricCard label={t("inventory.page.totalSkus")} value={stockStats.products.toLocaleString("en-IN")} detail={`${stockStats.totalQuantity.toLocaleString("en-IN")} units tracked`} tone="violet" icon={<Tags size={19} />} />
+        <InventoryMetricCard label={t("inventory.page.totalSkus")} value={stockStats.products.toLocaleString("en-IN")} detail={t("inventory.page.unitsTracked", { count: stockStats.totalQuantity.toLocaleString("en-IN") })} tone="violet" icon={<Tags size={19} />} />
         <InventoryMetricCard label={t("dashboard.kpi.lowStockItems")} value={stockStats.lowStock.toLocaleString("en-IN")} detail={t("inventory.page.requireAttention")} tone="amber" icon={<AlertTriangle size={19} />} />
         <InventoryMetricCard label={t("inventory.page.outOfStockItems")} value={stockStats.outOfStock.toLocaleString("en-IN")} detail={t("inventory.page.takeImmediateAction")} tone="rose" icon={<PackageX size={19} />} />
         <div className="col-span-2 xl:col-span-1"><InventoryMetricCard label={t("inventory.page.stockTurnover")} value={`${stockStats.turnover30}x`} detail={stockStats.turnover30 > 0 ? t("inventory.page.basedOnSold") : t("inventory.page.noSalesMovement")} tone="green" icon={<TrendingUp size={19} />} /></div>
@@ -683,7 +686,7 @@ export default function InventoryPage() {
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)} className="space-y-4">
         {activeTab !== "dashboard" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 py-3">
-            <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? "Movement History" : activeTab === "purchase-bills" ? "Purchase Bills" : activeTab === "reports" ? "Inventory Insights" : "Batch & Expiry"}</p><p className="text-[11px] text-[#718096]">{t("inventory.page.detailRecords")}</p></div>
+            <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? t("inventory.page.movementHistory") : activeTab === "purchase-bills" ? t("inventory.page.purchaseBills") : activeTab === "reports" ? t("inventory.page.insights") : t("inventory.page.batchExpiry")}</p><p className="text-[11px] text-[#718096]">{t("inventory.page.detailRecords")}</p></div>
             <Button variant="outline" className="h-9 rounded-[8px] text-[11px]" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />{t("inventory.page.backToStock")}</Button>
           </div>
         ) : null}
@@ -746,12 +749,12 @@ export default function InventoryPage() {
                         <InventoryProductAvatar item={item} />
                         <span className="min-w-0">
                           <span className="block truncate text-[14px] font-extrabold text-[var(--brand-ink)]">{item.name}</span>
-                          <span className="mt-1 block truncate text-[12px] font-medium text-[#52627d]">SKU: {item.sku ?? item.barcode ?? "-"}</span>
-                          <span className="mt-1 block truncate text-[12px] text-[#718096]">Category: {item.category ?? "General"}</span>
+                          <span className="mt-1 block truncate text-[12px] font-medium text-[#52627d]">{t("inventory.page.skuLabel", { value: item.sku ?? item.barcode ?? "-" })}</span>
+                          <span className="mt-1 block truncate text-[12px] text-[#718096]">{t("inventory.page.categoryLabel", { value: item.category ?? t("products.filter.general") })}</span>
                         </span>
                         <span className="min-w-[88px] text-right">
-                          <span className={cn("block text-[16px] font-black", out ? "text-[#ff304f]" : low ? "text-[#f08a00]" : "text-[#10a948]")}>{tracked ? `${qty.toLocaleString("en-IN")} ${unit}` : "Not tracked"}</span>
-                          <span className="mt-1 block text-[12px] text-[#718096]">Value: {fmtMoney(qty * cost)}</span>
+                          <span className={cn("block text-[16px] font-black", out ? "text-[#ff304f]" : low ? "text-[#f08a00]" : "text-[#10a948]")}>{tracked ? `${qty.toLocaleString("en-IN")} ${unit}` : t("inventory.page.notTracked")}</span>
+                          <span className="mt-1 block text-[12px] text-[#718096]">{t("inventory.page.valueLabel", { value: fmtMoney(qty * cost) })}</span>
                           <span className="mt-2 inline-block"><InventoryStatusBadge status={out ? "out" : low ? "low" : "in"} /></span>
                         </span>
                       </span>
@@ -790,11 +793,11 @@ export default function InventoryPage() {
                       const packRows = item.packagingMode === "per_pack" ? inventoryStockRows(item) : [];
                       return <Fragment key={item.id}>
                         <tr onClick={() => openMovement("purchase", item)} className="cursor-pointer border-b border-[#eef2f6] text-[#243653] transition-colors last:border-0 hover:bg-[#f8fbff]">
-                        <td className="px-4 py-2.5"><div className="flex min-w-[160px] items-center gap-2.5"><InventoryProductAvatar item={item} /><div className="min-w-0"><p className="truncate font-semibold text-[#13223f]">{item.name}</p><p className="truncate text-[10px] text-[#7a89a3]">{item.brand ?? "Unbranded"}</p></div></div></td>
+                        <td className="px-4 py-2.5"><div className="flex min-w-[160px] items-center gap-2.5"><InventoryProductAvatar item={item} /><div className="min-w-0"><p className="truncate font-semibold text-[#13223f]">{item.name}</p><p className="truncate text-[10px] text-[#7a89a3]">{item.brand ?? t("inventory.page.unbranded")}</p></div></div></td>
                         <td className="px-3 py-2.5 font-mono text-[10px] text-[#52627d]">{item.sku ?? item.barcode ?? "-"}</td>
-                        <td className="px-3 py-2.5 text-[#52627d]">{item.category ?? "General"}</td>
-                        <td className="px-3 py-2.5 capitalize text-[#52627d]">{packRows.length > 0 ? `${packRows.length} sizes` : unit}</td>
-                        <td className="px-3 py-2.5 text-right font-semibold">{tracked ? qty.toLocaleString("en-IN") : "Not tracked"}</td>
+                        <td className="px-3 py-2.5 text-[#52627d]">{item.category ?? t("products.filter.general")}</td>
+                        <td className="px-3 py-2.5 capitalize text-[#52627d]">{packRows.length > 0 ? t("inventory.page.sizesCount", { count: packRows.length }) : unit}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold">{tracked ? qty.toLocaleString("en-IN") : t("inventory.page.notTracked")}</td>
                         <td className="px-3 py-2.5 text-right text-[#52627d]">{fmtMoney(cost)}</td>
                         <td className="px-3 py-2.5 text-right font-semibold">{fmtMoney(qty * cost)}</td>
                         <td className="px-4 py-2.5 text-center"><InventoryStatusBadge status={out ? "out" : low ? "low" : "in"} /></td>
@@ -838,7 +841,7 @@ export default function InventoryPage() {
                 <div className="mt-2 divide-y divide-[#edf1f6]">
                   {lowStockRows.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">{t("inventory.page.healthyStock")}</p> : lowStockRows.slice(0, 3).map((item) => {
                     const unit = inventoryUnitLabel(item);
-                    return <div key={item.id} className="flex items-center gap-2.5 py-2.5"><InventoryProductAvatar item={item} compact /><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{item.name}</p><p className="mt-0.5 text-[10px] text-[#ff304f]">{inventoryDisplayQuantity(item)} {unit} left</p></div><Button variant="outline" size="sm" className="h-7 rounded-[7px] border-[#ffd7a6] bg-[#fff9ef] px-2.5 text-[10px] font-semibold text-[#f08a00]" onClick={() => openMovement("purchase", item)}>{t("inventory.page.reorder")}</Button></div>;
+                    return <div key={item.id} className="flex items-center gap-2.5 py-2.5"><InventoryProductAvatar item={item} compact /><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{item.name}</p><p className="mt-0.5 text-[10px] text-[#ff304f]">{t("inventory.page.quantityLeft", { quantity: inventoryDisplayQuantity(item), unit })}</p></div><Button variant="outline" size="sm" className="h-7 rounded-[7px] border-[#ffd7a6] bg-[#fff9ef] px-2.5 text-[10px] font-semibold text-[#f08a00]" onClick={() => openMovement("purchase", item)}>{t("inventory.page.reorder")}</Button></div>;
                   })}
                 </div>
               </section>
@@ -908,7 +911,7 @@ export default function InventoryPage() {
                     <tr><td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">{t("inventory.page.noPurchaseBills")}</td></tr>
                   ) : movementRows.filter((entry) => (entry.action ?? entry.type) === "purchase").map((entry) => (
                     <tr key={`purchase-bill-${entry.id}`} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="px-4 py-3"><p className="font-semibold">{entry.purchaseBillNo ?? entry.purchase_bill_no ?? "Local purchase"}</p><p className="text-xs text-muted-foreground">Supplier bill: {entry.supplierBillNo ?? entry.supplier_bill_no ?? "Not set"}</p></td>
+                      <td className="px-4 py-3"><p className="font-semibold">{entry.purchaseBillNo ?? entry.purchase_bill_no ?? t("inventory.page.localPurchase")}</p><p className="text-xs text-muted-foreground">{t("inventory.page.supplierBillLabel", { value: entry.supplierBillNo ?? entry.supplier_bill_no ?? t("products.import.notSet") })}</p></td>
                       <td className="px-4 py-3">{entry.supplierName ?? entry.supplier_name ?? t("inventory.page.noSupplier")}</td>
                       <td className="px-4 py-3">{entry.productName ?? entry.productId ?? entry.product_id ?? t("inventory.col.product")}</td>
                       <td className="px-4 py-3 text-right font-medium">{fmtMoney(purchaseTotal(entry))}</td>
@@ -946,14 +949,14 @@ export default function InventoryPage() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{movementLabel(form.movementType, t)} entry</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t("inventory.page.movementEntryTitle", { movement: movementLabel(form.movementType, t) })}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="grid md:grid-cols-2 gap-3">
               <div><Label>{t("inventory.page.movementType")}</Label><Select value={form.movementType} onValueChange={(value) => setForm((current) => ({ ...current, movementType: value as MovementType }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="purchase">{t("inventory.page.purchase")}</SelectItem><SelectItem value="sale">{t("inventory.page.manualSale")}</SelectItem><SelectItem value="damage">{t("inventory.page.damage")}</SelectItem><SelectItem value="correction">{t("inventory.page.correction")}</SelectItem></SelectContent></Select></div>
               <div><Label>{t("inventory.page.productRequired")}</Label><Select value={form.productId} onValueChange={(value) => { const product = (products.data ?? []).find((row: Product) => row.id === value); setForm((current) => ({ ...current, productId: value, unit: product ? inventoryMovementUnit(product) : current.unit, costPrice: String(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? current.costPrice), minPrice: String(product?.minimumSellingPrice ?? product?.minPricePerRateUnit ?? current.minPrice), sellingPrice: String(product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? current.sellingPrice) })); }}><SelectTrigger className="mt-1"><SelectValue placeholder={t("inventory.page.selectProduct")} /></SelectTrigger><SelectContent>{(products.data ?? []).map((product: Product) => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}</SelectContent></Select></div>
             </div>
             <div className="grid md:grid-cols-3 gap-3">
-              <div><Label>{form.movementType === "correction" ? "New stock / delta" : "Quantity"}</Label><Input type="number" step="0.01" className="mt-1" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))} /></div>
+              <div><Label>{form.movementType === "correction" ? t("inventory.page.newStockDelta") : t("inventory.col.quantity")}</Label><Input type="number" step="0.01" className="mt-1" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))} /></div>
               <div><Label>{t("inventory.col.unit")}</Label><Select value={form.unit} onValueChange={(value) => setForm((current) => ({ ...current, unit: value }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{movementUnitOptions.map((unit) => <SelectItem key={unit.value} value={unit.value}>{unit.label}</SelectItem>)}</SelectContent></Select>{unitMismatchWarning ? <p className="mt-1 text-xs text-orange-700">{unitMismatchWarning}</p> : null}</div>
               <div><Label>{t("inventory.page.totalBillAmount")}</Label><Input type="number" step="0.01" className="mt-1" value={form.billAmount} onChange={(event) => setForm((current) => ({ ...current, billAmount: event.target.value }))} disabled={form.movementType !== "purchase"} /></div>
             </div>
@@ -989,17 +992,17 @@ export default function InventoryPage() {
                 </div>
                 <div className="grid md:grid-cols-3 gap-3">
                   <div><Label>{t("inventory.page.costPricePerUnit")}</Label><Input type="number" step="0.01" value={form.costPrice} onChange={(event) => setForm((current) => ({ ...current, costPrice: event.target.value }))} placeholder={t("inventory.page.autoFromBill")} /></div>
-                  <div><Label>{t("inventory.page.minMargin")}</Label><Input type="number" step="0.01" value={form.minMarginPercent} onChange={(event) => setForm((current) => ({ ...current, minMarginPercent: event.target.value }))} placeholder="e.g. 5" /><p className="mt-1 text-xs text-muted-foreground">Suggestion: {fmtMoney(minMarginSuggestion || 0)}</p></div>
-                  <div><Label>{t("inventory.page.sellingMargin")}</Label><Input type="number" step="0.01" value={form.sellingMarginPercent} onChange={(event) => setForm((current) => ({ ...current, sellingMarginPercent: event.target.value }))} placeholder="e.g. 12" /><p className="mt-1 text-xs text-muted-foreground">Suggestion: {fmtMoney(sellingMarginSuggestion || 0)}</p></div>
+                  <div><Label>{t("inventory.page.minMargin")}</Label><Input type="number" step="0.01" value={form.minMarginPercent} onChange={(event) => setForm((current) => ({ ...current, minMarginPercent: event.target.value }))} placeholder="e.g. 5" /><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.suggestion", { value: fmtMoney(minMarginSuggestion || 0) })}</p></div>
+                  <div><Label>{t("inventory.page.sellingMargin")}</Label><Input type="number" step="0.01" value={form.sellingMarginPercent} onChange={(event) => setForm((current) => ({ ...current, sellingMarginPercent: event.target.value }))} placeholder="e.g. 12" /><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.suggestion", { value: fmtMoney(sellingMarginSuggestion || 0) })}</p></div>
                 </div>
                 <div className="grid md:grid-cols-[1fr_1fr_auto] gap-3"><div><Label>{t("inventory.page.minPrice")}</Label><Input type="number" step="0.01" value={form.minPrice} onChange={(event) => setForm((current) => ({ ...current, minPrice: event.target.value }))} /></div><div><Label>{t("inventory.page.sellingPrice")}</Label><Input type="number" step="0.01" value={form.sellingPrice} onChange={(event) => setForm((current) => ({ ...current, sellingPrice: event.target.value }))} /></div><Button type="button" variant="outline" className="self-end" onClick={applyMarginPrices}>{t("inventory.page.applyMargin")}</Button></div>
               </div>
             ) : null}
-            {form.movementType === "correction" || form.movementType === "damage" ? <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900 flex gap-2"><ShieldAlert size={16} /> {form.movementType === "damage" ? "Damage write-off" : t("inventory.page.correction")} requires owner PIN and creates a pending sync adjustment.</div> : null}
+            {form.movementType === "correction" || form.movementType === "damage" ? <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900 flex gap-2"><ShieldAlert size={16} /> {t("inventory.page.pinRequiredNote", { movement: form.movementType === "damage" ? t("inventory.page.damageWriteOff") : t("inventory.page.correction") })}</div> : null}
             <div><Label>{t("inventory.page.reasonNote")}</Label><Input className="mt-1" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder={t("inventory.page.correctionReason")} />{form.movementType === "correction" || form.movementType === "damage" ? <p className="mt-1 text-xs text-orange-700">{t("inventory.page.ownerPinAfterSave")}</p> : null}</div>
             <div className="sticky bottom-0 z-10 -mx-4 flex gap-3 border-t bg-background/95 px-4 py-3 pt-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
               <Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>{t("inventory.cancel")}</Button>
-              <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin" /> : "Save locally"}</Button>
+              <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin" /> : t("customers.detail.saveLocally")}</Button>
             </div>
           </div>
         </DialogContent>
@@ -1081,13 +1084,13 @@ function InventoryPagination({ page, pages, total, onChange }: { page: number; p
   const visible = Array.from({ length: Math.min(pages, 3) }, (_, index) => Math.min(Math.max(1, page - 1) + index, pages)).filter((value, index, rows) => rows.indexOf(value) === index);
   return (
     <div className="flex flex-col items-center justify-between gap-3 border-t border-[#e8edf4] px-4 py-3 sm:flex-row">
-      <p className="text-[10px] text-[#718096]">Showing {first} to {last} of {total.toLocaleString("en-IN")} products</p>
+      <p className="text-[10px] text-[#718096]">{t("inventory.page.showingRange", { first, last, total: total.toLocaleString("en-IN") })}</p>
       {/* Real 44px boxes rather than `.tap-target` overlays: these buttons sit
           4px apart, and at that spacing each overlay would reach across into its
           neighbour's visible box and take the tap. Density comes back for a
           mouse via `lg:mouse:`. */}
-      <div className="flex items-center gap-1.5 lg:mouse:gap-1"><button type="button" aria-label={t("products.previousPage")} disabled={page === 1} onClick={() => onChange(page - 1)} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35 lg:mouse:h-8 lg:mouse:w-8"><ChevronLeft size={14} /></button>{visible.map((number) => <button type="button" key={number} aria-label={`Page ${number}`} aria-current={number === page ? "page" : undefined} onClick={() => onChange(number)} className={`grid h-11 min-w-11 place-items-center rounded-[7px] px-2 text-[11px] font-semibold lg:mouse:h-8 lg:mouse:min-w-8 ${number === page ? "bg-[var(--brand)] text-white" : "border border-[#dfe6ef] text-[#52627d]"}`}>{number}</button>)}<button type="button" aria-label={t("products.nextPage")} disabled={page === pages} onClick={() => onChange(page + 1)} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35 lg:mouse:h-8 lg:mouse:w-8"><ChevronRight size={14} /></button></div>
-      <p className="text-[10px] text-[#718096]">{STOCK_ROWS_PER_PAGE} rows per page</p>
+      <div className="flex items-center gap-1.5 lg:mouse:gap-1"><button type="button" aria-label={t("products.previousPage")} disabled={page === 1} onClick={() => onChange(page - 1)} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35 lg:mouse:h-8 lg:mouse:w-8"><ChevronLeft size={14} /></button>{visible.map((number) => <button type="button" key={number} aria-label={t("inventory.page.pageNumber", { number })} aria-current={number === page ? "page" : undefined} onClick={() => onChange(number)} className={`grid h-11 min-w-11 place-items-center rounded-[7px] px-2 text-[11px] font-semibold lg:mouse:h-8 lg:mouse:min-w-8 ${number === page ? "bg-[var(--brand)] text-white" : "border border-[#dfe6ef] text-[#52627d]"}`}>{number}</button>)}<button type="button" aria-label={t("products.nextPage")} disabled={page === pages} onClick={() => onChange(page + 1)} className="grid h-11 w-11 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35 lg:mouse:h-8 lg:mouse:w-8"><ChevronRight size={14} /></button></div>
+      <p className="text-[10px] text-[#718096]">{t("inventory.page.rowsPerPage", { count: STOCK_ROWS_PER_PAGE })}</p>
     </div>
   );
 }
@@ -1102,7 +1105,7 @@ function RecentMovementRow({ entry }: { entry: MovementEntry }) {
   return (
     <div className="flex items-center gap-2.5 py-2.5">
       <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border ${INVENTORY_TONES[tone]}`}>{icon}</span>
-      <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{movementLabel(type, t)}</p><p className="truncate text-[10px] text-[#718096]">{entry.productName ?? "Inventory item"} - {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p></div>
+      <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{movementLabel(type, t)}</p><p className="truncate text-[10px] text-[#718096]">{entry.productName ?? t("inventory.page.inventoryItem")} - {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p></div>
       <span className={`text-[11px] font-semibold ${positive ? "text-[#16a34a]" : "text-[#ff304f]"}`}>{positive ? "+" : ""}{quantity} {entry.unit ?? ""}</span>
     </div>
   );

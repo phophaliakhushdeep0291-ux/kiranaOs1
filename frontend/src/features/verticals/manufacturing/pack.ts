@@ -9,10 +9,12 @@ export const manufacturingPack: VerticalPack = {
   routes: [{ path: "/manufacturing", page: "manufacturing/operations" }],
   nav: [{
     href: "/manufacturing",
-    label: "Manufacturing",
+    label: "shopType.nav.manufacturing",
     Icon: Factory,
     insertAfter: "/inventory",
-    mobile: { group: "Operations", helper: "BOMs, production, packaging, batches and export dispatch" },
+    // Must name a section the drawer actually has. "Operations" was not one, so
+    // this — the only screen a factory has — was dropped from the phone entirely.
+    mobile: { group: "Stock & buying", helper: "shopType.nav.manufacturing.helper" },
   }],
   capabilities: [
     "BASIC_INVENTORY", "PACK_CONVERSION", "BATCH_TRACKING", "EXPIRY_TRACKING",
