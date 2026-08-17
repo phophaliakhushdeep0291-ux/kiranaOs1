@@ -109,7 +109,6 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   // is used outside its provider. It never reaches a shopkeeper.
   "features/core/settings/i18n.tsx": 1,
   "features/core/settings/pages/IntegrationsSettingsPage.tsx": 19,
-  "features/core/settings/pages/SettingsPage.tsx": 14,
   // Not debt: the one string left is the literal RESTORE the owner must TYPE to
   // confirm a restore, compared against `RESTORE <id>` in the page. Translating
   // it would make the confirmation impossible to satisfy.

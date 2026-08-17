@@ -164,7 +164,7 @@ export default function SettingsPage() {
           <CardHead icon={<CreditCard size={15} />} title={t("settings.hub.billingSubscription")} action={<Manage href="/settings/billing" label={t("settings.hub.managePlanAction")} />} />
           <div className="px-5 pb-4">
             <div className="mb-4 flex items-center gap-2">
-              <Badge tone="amber">{planName} Plan</Badge>
+              <Badge tone="amber">{t("settings.store.planBadge", { plan: planName })}</Badge>
               <Badge tone="gray"><span className="capitalize">{snapshot?.status ?? "active"}</span></Badge>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -177,7 +177,7 @@ export default function SettingsPage() {
               </ul>
               <div>
                 <p className="text-[11px] text-[#64748b]">{t("settings.hub.usageThisMonth")}</p>
-                <p className="font-display text-[18px] font-black text-[var(--brand-ink)]">{snapshot?.status === "active" ? "Active" : "—"}</p>
+                <p className="font-display text-[18px] font-black text-[var(--brand-ink)]">{snapshot?.status === "active" ? t("settings.hub.subscriptionActive") : "—"}</p>
                 <p className="mt-1 text-[11px] text-[#64748b]">{t("settings.hub.managePlanAction")}</p>
                 <Link href="/settings/billing" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.hub.viewPlan")} <ChevronRight size={13} /></Link>
               </div>
@@ -215,10 +215,10 @@ export default function SettingsPage() {
                 <div key={id} className="flex items-center gap-3 py-2.5">
                   <MonitorSmartphone size={16} className="text-[#536583]" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-bold text-[var(--brand-ink)]">{device.deviceName || device.device_name || "Unnamed device"}{isCurrent ? " · This device" : ""}</p>
-                    <p className="text-[11px] text-[#64748b]">{device.platform || device.operatingSystem || "web"} · {device.status === "active" ? "Active" : device.status || "Idle"}</p>
+                    <p className="truncate text-[13px] font-bold text-[var(--brand-ink)]">{device.deviceName || device.device_name || t("settings.hub.unnamedDevice")}{isCurrent ? t("settings.hub.thisDevice") : ""}</p>
+                    <p className="text-[11px] text-[#64748b]">{device.platform || device.operatingSystem || "web"} · {device.status === "active" ? t("settings.security.deviceActive") : device.status || t("settings.security.deviceIdle")}</p>
                   </div>
-                  <Badge tone={device.status === "blocked" ? "red" : device.status === "active" ? "green" : "gray"}>{device.status === "blocked" ? "Blocked" : device.status === "active" ? "Active" : "Idle"}</Badge>
+                  <Badge tone={device.status === "blocked" ? "red" : device.status === "active" ? "green" : "gray"}>{device.status === "blocked" ? t("settings.security.deviceBlocked") : device.status === "active" ? t("settings.security.deviceActive") : t("settings.security.deviceIdle")}</Badge>
                 </div>
               );
             })}
@@ -236,7 +236,7 @@ export default function SettingsPage() {
             <div className="mt-3 flex flex-wrap gap-1.5">
               <Badge tone="blue">{PRINTER_CONNECTION_LABELS[printer.connection]}</Badge>
               <Badge tone="gray">{printer.paperSize}</Badge>
-              <Badge tone={printer.autoPrint ? "green" : "gray"}>{printer.autoPrint ? "Auto-print on" : "Manual print"}</Badge>
+              <Badge tone={printer.autoPrint ? "green" : "gray"}>{printer.autoPrint ? t("settings.hub.autoPrintOn") : t("settings.hub.manualPrint")}</Badge>
             </div>
           </div>
         </Card>
@@ -267,7 +267,7 @@ export default function SettingsPage() {
           <div className="px-5 pb-4">
             <div className="flex items-center justify-between">
               <Info label={t("inventory.transfers.ownerPin")} value={pinQ.isLoading ? t("settings.lock.checking") : pinQ.data?.hasPin ? t("settings.hub.pinSet") : t("settings.security.notSet")} />
-              <Badge tone={pinQ.data?.hasPin ? "green" : "amber"}>{pinQ.data?.hasPin ? "Protected" : "Set a PIN"}</Badge>
+              <Badge tone={pinQ.data?.hasPin ? "green" : "amber"}>{pinQ.data?.hasPin ? t("settings.hub.pinProtected") : t("settings.hub.setPinCta")}</Badge>
             </div>
             <p className="mt-2 text-[11px] text-[#64748b]">{t("settings.hub.pinHelp")}</p>
           </div>
@@ -331,7 +331,7 @@ export default function SettingsPage() {
           <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[var(--brand-soft)] text-[var(--brand)]"><Settings2 size={16} /></span>
           <div>
             <p className="text-[13px] font-extrabold text-[var(--brand-ink)]">{t("settings.hub.about")}</p>
-            <p className="text-[11px] text-[#64748b]">Version {appVersion()} · build {buildId()}</p>
+            <p className="text-[11px] text-[#64748b]">{t("settings.hub.versionLine", { version: appVersion(), build: buildId() })}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] font-bold text-[var(--brand)]">
