@@ -546,4 +546,21 @@ export const inventoryEn = {
   "inventory.trade.link.testers": "Tester stock",
   "inventory.trade.link.kitchenStock": "Kitchen stock",
   "inventory.trade.link.production": "Production runs",
+
+  // ── Receiving, per trade (see settings/shop-purchases.ts) ──
+  // Kept in the stock dictionary rather than a new one: booking a purchase bill
+  // is the stock side of the app, and the link labels above are the same ones.
+  "purchases.trade.title": "After receiving, for your shop type",
+  "purchases.trade.focus.kirana": "Check the printed dates on dated stock as it comes off the vehicle — a short-dated case accepted today is a write-off next month.",
+  "purchases.trade.focus.clothing": "Count the delivery against the bill size by size. A short delivery found at the counter is argued about; one found today is credited.",
+  "purchases.trade.focus.footwear": "Receive by size, not by carton count: the run you enter now is what tells you which size to reorder.",
+  "purchases.trade.focus.autoParts": "Put the new part on its rack and record the bin while the box is still in your hand — an unbinned part is a part nobody can find.",
+  "purchases.trade.focus.electronics": "Register the serials and IMEIs now, off the boxes. Once the stock is on the shelf, nobody matches a returned piece to this bill.",
+  "purchases.trade.focus.pharmacy": "Enter the lot number and expiry from the strip as you receive it. This is the only moment the printed date is in front of you.",
+  "purchases.trade.focus.stationery": "Match the delivery against the class lists you buy for, so a title that is short is reordered before the term starts.",
+  "purchases.trade.focus.furniture": "Tie the delivery to the orders waiting on it, then call those customers — a piece that arrives unannounced sits on the floor.",
+  "purchases.trade.focus.cosmetics": "Record the batch and the use-before date on receipt; beauty stock is bought months ahead of when it will sell.",
+  "purchases.trade.focus.restaurant": "Receive against tonight's needs, not the invoice total. Perishables booked in without dates become tomorrow's wastage entry.",
+  "purchases.trade.focus.manufacturing": "Record the supplier lot on every incoming material — batch genealogy on a finished dispatch is only as good as what was written here.",
+  "purchases.trade.focus.other": "Check the delivery against the bill before you book it: a quantity corrected now costs a phone call, later it costs the stock.",
 } as const;

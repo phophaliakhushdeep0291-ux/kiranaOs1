@@ -47,7 +47,10 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
-import { PageShell, SyncBadge } from "@/components/shared";
+import { PageShell, SyncBadge, TradeFocusStrip } from "@/components/shared";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { getShopReportsProfile } from "@/features/core/settings/shop-reports";
 import { getExpenseSummary, listExpenses } from "@/features/core/expenses/api";
 import {
   buildLocalReportSnapshot,
@@ -190,6 +193,13 @@ async function listExpensesOrEmpty(params: ExpenseDateParams): Promise<Expense[]
 export default function ReportsPage() {
   useReportView("overview", "Business overview");
   const { toast } = useToast();
+  const { t } = useAppLanguage();
+  // The same numbers in this trade's words: what the top line is called, what
+  // money owed is called, and what the best-seller table is a table of.
+  const businessType = useBusinessTypeKey();
+  const tradeProfile = getShopReportsProfile(businessType);
+  const creditWord = t(tradeProfile.creditWordKey);
+  const salesLabel = t(tradeProfile.salesLabelKey);
   const isPhoneLayout = usePhoneReportLayout();
   const [from, setFrom] = useState(daysAgoInput(6));
   const [to, setTo] = useState(todayInput());
@@ -296,9 +306,11 @@ export default function ReportsPage() {
       { name: "Cash", value: payment.cash, color: "#20b75a" },
       { name: "UPI", value: payment.upi, color: "var(--brand)" },
       { name: "Bank", value: payment.bank, color: "#0ea5e9" },
-      { name: "Udhar", value: payment.udhar, color: "#f5a30a" },
+      // The credit slice is named by the trade — a café reads "Tabs" here, a
+      // pharmacy "Patient Accounts". Cash, UPI and bank mean one thing everywhere.
+      { name: creditWord, value: payment.udhar, color: "#f5a30a" },
     ].filter((item) => item.value > 0);
-  }, [snapshot]);
+  }, [creditWord, snapshot]);
 
   const paymentTotal = paymentModes.reduce((sum, item) => sum + item.value, 0);
   const expenseByDay = useMemo(() => {
@@ -384,9 +396,15 @@ export default function ReportsPage() {
     if (withSales.length < 2) return null;
     return withSales.reduce((worst, row) => (row.sales < worst.sales ? row : worst));
   }, [snapshot?.hourlySales]);
+  // `id` rather than the label: the label is translated and trade-specific, and
+  // it used to be what the sparkline gradient id was derived from — two cards
+  // whose Hindi labels reduce to the same slug would then have shared one
+  // gradient, and "does this card wait for expenses?" would have depended on the
+  // English word "Expense" appearing in it.
   const kpis = [
     {
-      label: "Total Sales",
+      id: "sales",
+      label: salesLabel,
       value: selected?.sales ?? 0,
       previous: previous?.sales ?? 0,
       icon: <ShoppingBag size={16} />,
@@ -395,6 +413,7 @@ export default function ReportsPage() {
       spark: trend.map((point) => point.sales),
     },
     {
+      id: "cash",
       label: "Cash Collection",
       value: snapshot?.paymentBreakdown.cashIn ?? 0,
       previous: previous?.cashSales ?? 0,
@@ -404,6 +423,7 @@ export default function ReportsPage() {
       spark: trend.map((point) => point.cash),
     },
     {
+      id: "upi",
       label: "UPI Collection",
       value: snapshot?.paymentBreakdown.upiIn ?? 0,
       previous: previous?.upiSales ?? 0,
@@ -413,6 +433,7 @@ export default function ReportsPage() {
       spark: trend.map((point) => point.upi),
     },
     {
+      id: "bank",
       label: "Bank Collection",
       value: snapshot?.paymentBreakdown.bankIn ?? 0,
       previous: previous?.bankSales ?? 0,
@@ -422,6 +443,7 @@ export default function ReportsPage() {
       spark: trend.map((point) => point.bank),
     },
     {
+      id: "profit",
       label: "Profit (Est.)",
       value: selected?.profitEstimate ?? 0,
       previous: previous?.profitEstimate ?? 0,
@@ -431,7 +453,8 @@ export default function ReportsPage() {
       spark: trend.map((point) => point.profit),
     },
     {
-      label: "Outstanding Udhar",
+      id: "credit",
+      label: t("reports.kpi.outstandingCredit", { credit: creditWord }),
       value: snapshot?.pendingUdhar ?? 0,
       previous: previous?.udharSales ?? 0,
       icon: <ReceiptIndianRupee size={16} />,
@@ -441,6 +464,7 @@ export default function ReportsPage() {
       positiveIsBad: true,
     },
     {
+      id: "expense",
       label: "Expense Total",
       value: expenseTotal,
       previous: previousExpenseTotal,
@@ -451,6 +475,7 @@ export default function ReportsPage() {
       positiveIsBad: true,
     },
     {
+      id: "net",
       label: "Net Profit",
       value: netProfit,
       previous: previousNetProfit,
@@ -467,7 +492,7 @@ export default function ReportsPage() {
         <div className="min-w-0">
           <div className="hidden items-center gap-3 lg:flex">
             <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><BarChart3 size={19} /></span>
-            <div><h2 className="text-[17px] font-black tracking-tight text-[var(--brand-ink)]">Business overview</h2><p className="mt-0.5 text-[11px] font-medium text-[#718099]">Sales, collections, profit and stock performance in one clear view</p></div>
+            <div><h2 className="text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t(tradeProfile.headingKey)}</h2><p className="mt-0.5 text-[11px] font-medium text-[#718099]">Sales, collections, profit and stock performance in one clear view</p></div>
           </div>
           <div className="flex min-w-0 items-center gap-2 text-[11px] text-[#6c7c98] lg:mt-3">
             {snapshot?.hasUnsyncedOperations ? (
@@ -508,10 +533,14 @@ export default function ReportsPage() {
         </div>
       </section>
 
+      <TradeFocusStrip titleKey="reports.trade.title" focusKey={tradeProfile.watchKey} links={tradeProfile.links} />
+
       {isPhoneLayout ? (
         <MobileReportsOverview
           loading={loading || expenseSummary.isLoading}
           periodLabel={rangeLabel(range.from, range.to)}
+          salesLabel={salesLabel}
+          creditLabel={t("reports.mobile.creditDue", { credit: creditWord })}
           sales={selected?.sales ?? 0}
           previousSales={previous?.sales ?? 0}
           cash={snapshot?.paymentBreakdown.cashIn ?? 0}
@@ -527,7 +556,7 @@ export default function ReportsPage() {
       {!isPhoneLayout ? (
         <section className="hidden min-w-0 grid-cols-2 gap-2 md:grid lg:grid-cols-4">
           {kpis.map((kpi) => (
-            <KpiCard key={kpi.label} {...kpi} loading={loading || (kpi.label.includes("Expense") && expenseSummary.isLoading)} />
+            <KpiCard key={kpi.id} {...kpi} loading={loading || (kpi.id === "expense" && expenseSummary.isLoading)} />
           ))}
         </section>
       ) : null}
@@ -535,7 +564,7 @@ export default function ReportsPage() {
       <section className="grid items-stretch gap-4 xl:grid-cols-3 2xl:grid-cols-[1.05fr_1.05fr_1.12fr]">
         <Panel title="Sales Trend" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <div className="flex items-baseline gap-4 px-3.5 pt-1 text-[11px]">
-            <span className="text-[#60708e]">Total Sales</span>
+            <span className="text-[#60708e]">{salesLabel}</span>
             <strong className="text-[16px] text-[var(--brand-ink)]">{fmt(selected?.sales)}</strong>
             <TrendLabel current={selected?.sales ?? 0} previous={previous?.sales ?? 0} />
           </div>
@@ -573,7 +602,7 @@ export default function ReportsPage() {
             <div className="grid min-h-[218px] items-center gap-3 px-3 pb-2 sm:grid-cols-[minmax(170px,0.9fr)_minmax(0,1.1fr)]">
               <div className="relative mx-auto h-[176px] w-[176px]">
                 <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={paymentModes} dataKey="value" nameKey="name" innerRadius={56} outerRadius={84} paddingAngle={1} stroke="#fff" strokeWidth={2}>{paymentModes.map((mode) => <Cell key={mode.name} fill={mode.color} />)}</Pie><Tooltip content={<MoneyTooltip />} /></PieChart></ResponsiveContainer>
-                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center"><div><strong className="block text-[15px] text-[#13244a]">{fmt(paymentTotal)}</strong><span className="text-[10px] text-[#7886a0]">Total Sales</span></div></div>
+                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center"><div><strong className="block text-[15px] text-[#13244a]">{fmt(paymentTotal)}</strong><span className="text-[10px] text-[#7886a0]">{salesLabel}</span></div></div>
               </div>
               <div className="space-y-3 pr-2">
                 {paymentModes.map((mode) => <div key={mode.name} className="grid grid-cols-[10px_1fr_auto] items-center gap-2 text-[11px]"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} /><span className="font-semibold text-[#2c3f64]">{mode.name}</span><span className="font-bold text-[#15264b]">{fmt(mode.value)} <em className="font-normal not-italic text-[#75839d]">({paymentTotal ? ((mode.value / paymentTotal) * 100).toFixed(1) : 0}%)</em></span></div>)}
@@ -584,7 +613,7 @@ export default function ReportsPage() {
       </section>
 
       <section className="space-y-3 md:hidden">
-        <MobileReportList title="Top Products" actionHref="/products">
+        <MobileReportList title={t(tradeProfile.topItemsKey)} actionHref="/products">
           {(snapshot?.topProducts ?? []).slice(0, 5).map((row) => (
             <MobileReportRow
               key={row.productId}
@@ -596,7 +625,7 @@ export default function ReportsPage() {
           ))}
         </MobileReportList>
 
-        <MobileReportList title="Top Customers (Udhar)" actionHref="/customers">
+        <MobileReportList title={t("reports.table.topCustomers", { credit: creditWord })} actionHref="/customers">
           {(snapshot?.topCustomers ?? []).slice(0, 5).map((row) => (
             <MobileReportRow
               key={row.customerId}
@@ -645,12 +674,12 @@ export default function ReportsPage() {
       </section>
 
       <section className="hidden items-start gap-4 md:grid xl:grid-cols-3">
-        <DenseTable title="Top Products" action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", "Margin (%)"]} loading={loading} empty={!snapshot?.topProducts.length}>
+        <DenseTable title={t(tradeProfile.topItemsKey)} action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", "Margin (%)"]} loading={loading} empty={!snapshot?.topProducts.length}>
           {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{row.category}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
           {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>{snapshot.topProducts.reduce((sum, row) => sum + row.quantitySold, 0)}</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td><Td /></tr> : null}
         </DenseTable>
 
-        <DenseTable title="Top Customers (Udhar)" action="View all" actionHref="/customers" headers={["Customer", "Total Due (₹)", "Last Purchase", "Risk"]} loading={loading} empty={!snapshot?.topCustomers.length}>
+        <DenseTable title={t("reports.table.topCustomers", { credit: creditWord })} action="View all" actionHref="/customers" headers={["Customer", "Total Due (₹)", "Last Purchase", "Risk"]} loading={loading} empty={!snapshot?.topCustomers.length}>
           {snapshot?.topCustomers.slice(0, 5).map((row) => <tr key={row.customerId}><Td strong>{row.name}</Td><Td right strong>{fmt(row.balance)}</Td><Td right>{row.lastPurchase ? dateLabel(row.lastPurchase.slice(0, 10)) : "—"}</Td><Td right><RiskChip balance={row.balance} /></Td></tr>)}
           {snapshot?.topCustomers.length ? <tr className="font-bold"><Td>Total Outstanding</Td><Td right>{fmt(snapshot.topCustomers.reduce((sum, row) => sum + row.balance, 0))}</Td><Td /><Td /></tr> : null}
         </DenseTable>
@@ -777,6 +806,8 @@ function MobileReportRow({ title, subtitle, value, meta }: { title: ReactNode; s
 function MobileReportsOverview({
   loading,
   periodLabel,
+  salesLabel,
+  creditLabel,
   sales,
   previousSales,
   cash,
@@ -789,6 +820,8 @@ function MobileReportsOverview({
 }: {
   loading: boolean;
   periodLabel: string;
+  salesLabel: string;
+  creditLabel: string;
   sales: number;
   previousSales: number;
   cash: number;
@@ -813,7 +846,7 @@ function MobileReportsOverview({
         <div className="relative">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/65">Net sales</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/65">{salesLabel}</p>
               <p className="mt-2 break-words text-[36px] font-black leading-none tracking-[-0.04em] tabular-nums">{fmt(sales)}</p>
             </div>
             <span className="max-w-[148px] rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-right text-[10px] font-bold leading-4 text-white/85 backdrop-blur-sm">{periodLabel}</span>
@@ -836,7 +869,7 @@ function MobileReportsOverview({
         <MobilePulseTile label="Profit (Est.)" value={profit} detail="Before expenses" icon={<CircleDollarSign size={17} />} tone="emerald" />
         <MobilePulseTile label="Net Profit" value={netProfit} detail="After expenses" icon={<TrendingUp size={17} />} tone="blue" />
         <MobilePulseTile label="Expenses" value={expenses} detail="Selected period" icon={<Box size={17} />} tone="amber" />
-        <MobilePulseTile label="Udhar Due" value={udhar} detail="Needs collection" icon={<ReceiptIndianRupee size={17} />} tone="rose" />
+        <MobilePulseTile label={creditLabel} value={udhar} detail="Needs collection" icon={<ReceiptIndianRupee size={17} />} tone="rose" />
       </div>
     </section>
   );
@@ -867,11 +900,14 @@ function MobilePulseTile({ label, value, detail, icon, tone }: { label: string; 
   );
 }
 
-function KpiCard({ label, value, previous, icon, iconClass, color, spark, positiveIsBad, loading }: { label: string; value: number | undefined; previous: number; icon: ReactNode; iconClass: string; color: string; spark: number[]; positiveIsBad?: boolean; loading: boolean }) {
+function KpiCard({ id, label, value, previous, icon, iconClass, color, spark, positiveIsBad, loading }: { id: string; label: string; value: number | undefined; previous: number; icon: ReactNode; iconClass: string; color: string; spark: number[]; positiveIsBad?: boolean; loading: boolean }) {
   const change = delta(value ?? 0, previous);
   const favorable = positiveIsBad ? change <= 0 : change >= 0;
   const points = spark.length > 1 ? spark.map((item, index) => ({ index, value: item })) : [{ index: 0, value: 0 }, { index: 1, value: value ?? 0 }];
-  const gradientId = `report-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  // Keyed on the card's id, not its label: a translated label can slug down to
+  // the same string for two cards (Devanagari leaves nothing behind), and two
+  // <linearGradient> elements sharing an id paint one card with the other's fill.
+  const gradientId = `report-kpi-${id}`;
   return <article className={cn(PANEL, "h-full min-h-[148px] p-4")}>
     {loading ? <Skeleton className="h-full min-h-[98px]" /> : <>
       <div className="flex min-w-0 items-center gap-2.5"><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[10px]", iconClass)}>{icon}</span><p className="min-w-0 truncate text-[11px] font-bold leading-tight text-[#52617c]">{label}</p></div>

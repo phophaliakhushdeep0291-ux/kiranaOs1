@@ -52,7 +52,9 @@ describe("the field is wired safely", () => {
     const body = source.slice(at, at + 3200);
     expect(body).toContain('packagingMode === "per_pack"');
     // The pooled branch is skipped entirely by zeroing the quantity it works from.
-    expect(body).toContain('const openingQty = packagingMode === "per_pack" ? 0 : Number(extraPack.openingQty)');
+    // Read off the DRAFT, which is the row clamped to units this trade actually
+    // packs in — see the extra-pack measure guard in product-form-trade-fit.
+    expect(body).toContain('const openingQty = packagingMode === "per_pack" ? 0 : Number(extraPackDraft.openingQty)');
   });
 
   it("only applies a positive quantity", () => {

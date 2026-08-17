@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { getStoredBusinessType } from "@/features/core/settings/business-type-store";
 import type { UseFormReturn } from "react-hook-form";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import type { Product } from "@/lib/api/client";
@@ -40,21 +39,64 @@ const PACK_MEASURE_UNITS = ["piece", "tablet", "gram", "kg", "ml", "litre"];
 export function packMeasureUnitsFor(primaryUnits: string[]) {
   return PACK_MEASURE_UNITS.filter((unit) => unit === "piece" || primaryUnits.includes(unit));
 }
-const PACK_SELLING_UNITS = ["piece", "packet", "pouch", "bottle", "box", "carton"];
 
-const EMPTY_EXTRA_PACK = {
-  unitType: "packet",
-  packSizeValue: "500",
-  packSizeUnit: "gram",
-  price: "",
-  // Each pack carries its own ceiling. Without one, a bigger pack was priced
-  // against the DEFAULT pack's MRP and every honest price was rejected at billing
-  // ("exceeds the configured maximum"). Left blank, the product MRP is scaled to
-  // this pack's size instead — see sellingUnitMaxPrice.
-  mrp: "",
-  barcode: "",
-  openingQty: "",
-};
+/**
+ * What a shop can tap to say how this product leaves the counter.
+ *
+ * Taken from the trade's own vocabulary rather than one fixed list, because
+ * these chips write the SAME `unit` the picker above controls. A fixed list let
+ * a shoe shop set "carton" while never offering "pair", and a chemist "pouch"
+ * while never offering "strip" — the one unit each of them actually sells in.
+ * Weight and volume are left out: those are how loose goods are measured, not
+ * how a pack is counted. "piece" is always offered, because anything can be
+ * sold singly.
+ */
+export function packSellingUnitsFor(primaryUnits: string[]) {
+  const counted = primaryUnits.filter((unit) => !isScaleUnit(unit));
+  return Array.from(new Set(counted.includes("piece") ? counted : [...counted, "piece"]));
+}
+
+/**
+ * Units that name a container, and so hold a quantity worth asking about.
+ *
+ * A packet holds 500 g and a dozen holds 12; a piece holds nothing, and a pair
+ * of shoes is the thing itself rather than a wrapper around two of something.
+ * Only a unit on this list makes "one X contains…" a question with an answer.
+ */
+const CONTAINER_UNITS = [
+  "packet", "pack", "pouch", "bottle", "box", "carton", "strip", "tube", "jar",
+  "sachet", "case", "bundle", "dozen", "pallet", "roll", "bag", "tin", "can", "set",
+];
+function isContainerUnit(unit: string) {
+  return CONTAINER_UNITS.includes(String(unit || "").trim().toLowerCase());
+}
+
+/**
+ * A blank "other pack size" row, in units this trade actually has.
+ *
+ * Never a fixed `500 gram`: the measure select only lists what the trade can
+ * pack in, so a garment shop was shown a BLANK measure sitting on a hidden
+ * "gram". Leaving it alone and typing a price built a pack whose conversion was
+ * 500 grams against a product counted in pieces — one sale of it took 500 pieces
+ * off the shelf.
+ */
+function emptyExtraPack(unitType: string, packSizeUnit: string) {
+  return {
+    unitType,
+    // A counted pack starts at one of something; a measured one at the size a
+    // grocer types most often.
+    packSizeValue: packSizeUnit === "piece" ? "1" : "500",
+    packSizeUnit,
+    price: "",
+    // Each pack carries its own ceiling. Without one, a bigger pack was priced
+    // against the DEFAULT pack's MRP and every honest price was rejected at billing
+    // ("exceeds the configured maximum"). Left blank, the product MRP is scaled to
+    // this pack's size instead — see sellingUnitMaxPrice.
+    mrp: "",
+    barcode: "",
+    openingQty: "",
+  };
+}
 
 interface ProductFormPanelProps {
   open: boolean;
@@ -118,7 +160,7 @@ export function ProductFormPanel({
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [extraPackOpen, setExtraPackOpen] = useState(false);
-  const [extraPack, setExtraPack] = useState(EMPTY_EXTRA_PACK);
+  const [extraPack, setExtraPack] = useState(() => emptyExtraPack("packet", "piece"));
   const categories = def.categories.filter((c) => c !== "all");
   const imageUrl = form.watch("imageUrl");
   const description = form.watch("description") ?? "";
@@ -126,10 +168,14 @@ export function ProductFormPanel({
   const isLoose = !!form.watch("isLooseItem");
   const selectedUnit = form.watch("unit");
   const sellsLoose = hasCapability("LOOSE_ITEMS");
-  // Drug schedules exist only in a pharmacy. Showing the selector to a kirana
-  // shop would invite classifying biscuits as Schedule H.
-  const isPharmacy = getStoredBusinessType() === "pharmacy";
+  // Drug schedules belong to a trade that dispenses against a prescription, not
+  // to one named "pharmacy" — the same rule every other control here follows.
+  // Showing the selector to a kirana shop would invite classifying biscuits as
+  // Schedule H; hiding it from a product already classified would strand one.
+  const drugSchedule = form.watch("drugSchedule");
+  const showDrugSchedule = hasCapability("PRESCRIPTION_TRACKING") || drugSchedule != null;
   const packMeasureUnits = packMeasureUnitsFor(def.primaryUnits);
+  const packSellingUnits = packSellingUnitsFor(def.primaryUnits);
   // An existing loose product keeps its controls even where the trade has since
   // stopped selling loose, so nothing already saved becomes uneditable.
   const showLooseChoice = sellsLoose || isLoose;
@@ -143,7 +189,22 @@ export function ProductFormPanel({
   );
   const packSizeValue = Number(form.watch("packSizeValue") || 0);
   const packSizeUnit = form.watch("packSizeUnit");
-  const showPackContent = !isLoose;
+  /**
+   * Whether "one X contains…" is a question this shop can answer.
+   *
+   * A trade that converts packs into loose stock lives on it, and so does any
+   * unit that names a container. A garment shop has neither: it was shown a
+   * required "one piece contains 1 piece", which says nothing and refused to
+   * save the moment the box was cleared. A pack already sized to something other
+   * than one keeps the box on screen whatever the trade, so a conversion cannot
+   * go on quietly multiplying stock behind a hidden field.
+   */
+  const showPackContent = !isLoose && (
+    hasCapability("PACK_CONVERSION")
+    || packMeasureUnits.length > 1
+    || isContainerUnit(selectedUnit)
+    || packSizeValue !== 1
+  );
   const packBaseQuantity = sellingUnitConversion(packSizeValue, packSizeUnit);
   const packBaseUnit = baseUnitFor(packSizeUnit);
   const currentSellingUnitName = isLoose
@@ -155,6 +216,13 @@ export function ProductFormPanel({
   // A garment sold by size has no separate pack rows: its selling units ARE the
   // size × colour cells, so the two editors must never both be writing them.
   const hasVariantGrid = variantAxes.length > 0;
+  // The same sum formToInput saves as the product's stock, so the form shows the
+  // number it is actually going to store.
+  const variantGridStock = roundMoney(
+    sellingUnits
+      .filter((row) => row.variantValue1 || row.variantValue2)
+      .reduce((sum, row) => sum + (Number(row.onHandQty) || 0), 0),
+  );
   // Shown to any trade that sells the same thing in more than one size or
   // shade — clothing, footwear, cosmetics, furniture — and to a product that
   // already has a grid, so switching business type cannot strand one.
@@ -162,6 +230,24 @@ export function ProductFormPanel({
   const alternateSellingUnits = sellingUnits.filter((row) => !row.isDefault && !row.variantValue1 && !row.variantValue2);
   const err = form.formState.errors;
   const productMrp = Number(form.watch("mrp") || 0);
+  /**
+   * The extra-pack row as it will actually be added.
+   *
+   * A select can only display a value it lists, so a unit or measure this trade
+   * does not pack in would show an empty box while quietly keeping its old
+   * value — which is how a 500 *gram* conversion got onto a product counted in
+   * pieces. Correcting it here means what the shop reads is what gets saved,
+   * including after the owner changes business type with the panel open.
+   */
+  const extraPackDraft = {
+    ...extraPack,
+    unitType: packSellingUnits.includes(extraPack.unitType)
+      ? extraPack.unitType
+      : (packSellingUnits[0] ?? "piece"),
+    packSizeUnit: packMeasureUnits.includes(extraPack.packSizeUnit)
+      ? extraPack.packSizeUnit
+      : (packMeasureUnits[0] ?? "piece"),
+  };
 
   // What actually caps a pack's price at the counter: its own MRP, or — while it
   // has none — the product MRP scaled from the default pack to this pack's size.
@@ -176,14 +262,23 @@ export function ProductFormPanel({
     return roundMoney((productMrp / packBaseQuantity) * conversion);
   }
   const suggestedExtraPackMrp = packCeiling(
-    sellingUnitConversion(Number(extraPack.packSizeValue) || 0, extraPack.packSizeUnit),
+    sellingUnitConversion(Number(extraPackDraft.packSizeValue) || 0, extraPackDraft.packSizeUnit),
   );
 
   useEffect(() => {
     if (!open) return;
     setExtraPackOpen(false);
-    setExtraPack(EMPTY_EXTRA_PACK);
-  }, [editing?.id, open]);
+    const selling = packSellingUnitsFor(def.primaryUnits);
+    const measures = packMeasureUnitsFor(def.primaryUnits);
+    // A second size is nearly always measured the way the product's own pack is
+    // — a grocer adding to a 1 kg packet is thinking in grams, a chemist adding
+    // to a strip is thinking in tablets.
+    const productMeasure = form.getValues("packSizeUnit");
+    setExtraPack(emptyExtraPack(
+      selling.includes("packet") ? "packet" : (selling[0] ?? "piece"),
+      measures.includes(productMeasure) ? productMeasure : (measures[0] ?? "piece"),
+    ));
+  }, [editing?.id, open, def, form]);
 
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
@@ -197,9 +292,9 @@ export function ProductFormPanel({
   }, [open]);
 
   function addAlternatePack() {
-    const size = Number(extraPack.packSizeValue);
-    const price = Number(extraPack.price);
-    const packMrp = Number(extraPack.mrp);
+    const size = Number(extraPackDraft.packSizeValue);
+    const price = Number(extraPackDraft.price);
+    const packMrp = Number(extraPackDraft.mrp);
     if (!(size > 0) || !(price > 0)) {
       toast({
         title: t("products.form.packSizeRequired"),
@@ -212,7 +307,7 @@ export function ProductFormPanel({
     // simply unsellable, and the bill screen is a bad place to discover that.
     // With no MRP of its own the ceiling is the product MRP scaled to this size,
     // which is exactly what billing will enforce.
-    const ceiling = packMrp > 0 ? packMrp : packCeiling(sellingUnitConversion(size, extraPack.packSizeUnit));
+    const ceiling = packMrp > 0 ? packMrp : packCeiling(sellingUnitConversion(size, extraPackDraft.packSizeUnit));
     if (ceiling > 0 && price > ceiling + 0.005) {
       toast({
         title: `${t("products.form.packPriceAboveMrp")} (Rs ${ceiling.toLocaleString("en-IN")})`,
@@ -221,7 +316,7 @@ export function ProductFormPanel({
       });
       return;
     }
-    const code = sellingUnitCode(extraPack.unitType, size, extraPack.packSizeUnit);
+    const code = sellingUnitCode(extraPackDraft.unitType, size, extraPackDraft.packSizeUnit);
     const defaultCode = sellingUnitCode(selectedUnit, packSizeValue, packSizeUnit);
     if (code === defaultCode || sellingUnits.some((row) => row.unitCode === code)) {
       toast({ title: t("products.form.packAlreadyAdded"), description: t("products.form.chooseDifferentPack"), variant: "destructive" });
@@ -230,13 +325,13 @@ export function ProductFormPanel({
     form.setValue("sellingUnits", [
       ...sellingUnits,
       {
-        name: sellingUnitName(extraPack.unitType, size, extraPack.packSizeUnit),
-        unitType: extraPack.unitType,
+        name: sellingUnitName(extraPackDraft.unitType, size, extraPackDraft.packSizeUnit),
+        unitType: extraPackDraft.unitType,
         unitCode: code,
         packSizeValue: size,
-        packSizeUnit: extraPack.packSizeUnit,
-        conversionToBase: sellingUnitConversion(size, extraPack.packSizeUnit),
-        barcode: extraPack.barcode.trim() || null,
+        packSizeUnit: extraPackDraft.packSizeUnit,
+        conversionToBase: sellingUnitConversion(size, extraPackDraft.packSizeUnit),
+        barcode: extraPackDraft.barcode.trim() || null,
         defaultPrice: price,
         minimumPrice: null,
         maximumPrice: packMrp > 0 ? packMrp : null,
@@ -245,7 +340,7 @@ export function ProductFormPanel({
         // also be folded into the shared pool below, or the same goods would be
         // counted twice.
         ...(packagingMode === "per_pack"
-          ? { onHandQty: Number(extraPack.openingQty) || 0, lowStockThreshold: null }
+          ? { onHandQty: Number(extraPackDraft.openingQty) || 0, lowStockThreshold: null }
           : {}),
         isDefault: false,
         isActive: true,
@@ -256,9 +351,9 @@ export function ProductFormPanel({
     // count for it. Every pack size draws on one base-unit pool, so "20 x 500 g packets"
     // is 10,000 g added to that pool. Storing it per pack instead would create a number
     // nothing decrements on sale, which drifts from the real stock the moment you sell one.
-    const openingQty = packagingMode === "per_pack" ? 0 : Number(extraPack.openingQty);
+    const openingQty = packagingMode === "per_pack" ? 0 : Number(extraPackDraft.openingQty);
     if (openingQty > 0) {
-      const packConversion = sellingUnitConversion(size, extraPack.packSizeUnit);
+      const packConversion = sellingUnitConversion(size, extraPackDraft.packSizeUnit);
       const addedInDefaultUnits = packBaseQuantity > 0
         ? (openingQty * packConversion) / packBaseQuantity
         : 0;
@@ -267,13 +362,13 @@ export function ProductFormPanel({
         const next = Math.round((current + addedInDefaultUnits) * 1000) / 1000;
         form.setValue("stockQuantity", next, { shouldDirty: true, shouldValidate: true });
         toast({
-          title: `Added ${openingQty} x ${sellingUnitName(extraPack.unitType, size, extraPack.packSizeUnit)}`,
+          title: `Added ${openingQty} x ${sellingUnitName(extraPackDraft.unitType, size, extraPackDraft.packSizeUnit)}`,
           description: `Opening stock is now ${next} ${currentSellingUnitName}. All pack sizes share this one stock.`,
         });
       }
     }
 
-    setExtraPack(EMPTY_EXTRA_PACK);
+    setExtraPack(emptyExtraPack(extraPackDraft.unitType, extraPackDraft.packSizeUnit));
     setExtraPackOpen(false);
   }
 
@@ -369,12 +464,21 @@ export function ProductFormPanel({
     }
   }
 
+  // A product saved under another trade — or before the owner switched this
+  // shop's type — carries a category no longer on the list. A select cannot
+  // display a value it does not list, so it rendered an EMPTY box beside a
+  // required star while still holding the old value. Listing it keeps the box
+  // readable without silently rewriting what the shop chose.
+  const currentCategory = form.watch("category");
+  const categoryOptions = currentCategory && !categories.includes(currentCategory)
+    ? [...categories, currentCategory]
+    : categories;
   const CategoryField = (
     <Field label={t("products.col.category")} required>
-      <Select value={form.watch("category")} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
+      <Select value={currentCategory} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
         <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
-          {categories.map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
+          {categoryOptions.map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
         </SelectContent>
       </Select>
     </Field>
@@ -486,7 +590,7 @@ export function ProductFormPanel({
 
                 <p className="mb-1.5 text-[11px] font-bold text-[#45577a]">{t("products.form.quickSellingUnit")}</p>
                 <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
-                  {PACK_SELLING_UNITS.map((unit) => (
+                  {packSellingUnits.map((unit) => (
                     <button
                       key={unit}
                       type="button"
@@ -574,10 +678,18 @@ export function ProductFormPanel({
           {/* Pricing */}
           <Section title={t("products.form.pricing")}>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label={t("products.form.mrp")} required>
+              {/* Not starred, because nothing rejects a product without them —
+                  and a star a literal zero satisfies teaches the shop to ignore
+                  every other star on the form. MRP earns a warning instead: zero
+                  is not "no MRP", it is "no ceiling", and the counter will then
+                  take any price at all. */}
+              <Field label={t("products.form.mrp")}>
                 <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("mrp")} />
+                {!(productMrp > 0) ? (
+                  <p className="mt-1 text-[10px] font-semibold leading-4 text-amber-700">{t("products.form.mrpZeroHint")}</p>
+                ) : null}
               </Field>
-              <Field label={t("products.form.costPrice")} required>
+              <Field label={t("products.form.costPrice")}>
                 <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("costPrice")} />
               </Field>
             </div>
@@ -758,21 +870,21 @@ export function ProductFormPanel({
                   <div className="mt-3 space-y-2.5 rounded-[10px] border border-[var(--brand-border)] bg-white p-3">
                     <div className="grid grid-cols-2 gap-2">
                       <Field label={t("products.form.soldAs")} required>
-                        <Select value={extraPack.unitType} onValueChange={(value) => setExtraPack((current) => ({ ...current, unitType: value }))}>
+                        <Select value={extraPackDraft.unitType} onValueChange={(value) => setExtraPack((current) => ({ ...current, unitType: value }))}>
                           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                          <SelectContent>{PACK_SELLING_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
+                          <SelectContent>{packSellingUnits.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
                         </Select>
                       </Field>
                       <Field label={t("products.form.sellingPriceRs")} required>
-                        <Input className="h-9" type="number" min="0.01" step="0.01" value={extraPack.price} onChange={(event) => setExtraPack((current) => ({ ...current, price: event.target.value }))} placeholder="0.00" />
+                        <Input className="h-9" type="number" min="0.01" step="0.01" value={extraPackDraft.price} onChange={(event) => setExtraPack((current) => ({ ...current, price: event.target.value }))} placeholder="0.00" />
                       </Field>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <Field label={`One ${extraPack.unitType} contains`} required>
-                        <Input className="h-9" type="number" min="0.001" step="0.001" value={extraPack.packSizeValue} onChange={(event) => setExtraPack((current) => ({ ...current, packSizeValue: event.target.value }))} placeholder="500" />
+                      <Field label={`One ${extraPackDraft.unitType} contains`} required>
+                        <Input className="h-9" type="number" min="0.001" step="0.001" value={extraPackDraft.packSizeValue} onChange={(event) => setExtraPack((current) => ({ ...current, packSizeValue: event.target.value }))} placeholder="500" />
                       </Field>
                       <Field label={t("products.form.measure")} required>
-                        <Select value={extraPack.packSizeUnit} onValueChange={(value) => setExtraPack((current) => ({ ...current, packSizeUnit: value }))}>
+                        <Select value={extraPackDraft.packSizeUnit} onValueChange={(value) => setExtraPack((current) => ({ ...current, packSizeUnit: value }))}>
                           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                           <SelectContent>{packMeasureUnits.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
                         </Select>
@@ -786,7 +898,7 @@ export function ProductFormPanel({
                           min="0"
                           step="0.01"
                           data-testid="input-extra-pack-mrp"
-                          value={extraPack.mrp}
+                          value={extraPackDraft.mrp}
                           onChange={(event) => setExtraPack((current) => ({ ...current, mrp: event.target.value }))}
                           placeholder={suggestedExtraPackMrp > 0 ? String(suggestedExtraPackMrp) : "0.00"}
                         />
@@ -798,7 +910,7 @@ export function ProductFormPanel({
                           min="0"
                           step="1"
                           data-testid="input-extra-pack-opening-qty"
-                          value={extraPack.openingQty}
+                          value={extraPackDraft.openingQty}
                           onChange={(event) => setExtraPack((current) => ({ ...current, openingQty: event.target.value }))}
                           placeholder="0"
                         />
@@ -807,7 +919,7 @@ export function ProductFormPanel({
                     <p className="text-[10px] font-semibold leading-4 text-[#6d7c98]">{t("products.form.packMrpHint")}</p>
                     <div className="grid grid-cols-2 gap-2">
                       <Field label={t("products.form.packBarcode")}>
-                        <Input className="h-9" value={extraPack.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder={t("products.form.packBarcodePlaceholder")} />
+                        <Input className="h-9" value={extraPackDraft.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder={t("products.form.packBarcodePlaceholder")} />
                       </Field>
                     </div>
                     <p className="text-[10px] font-semibold leading-4 text-[#6d7c98]">
@@ -824,9 +936,26 @@ export function ProductFormPanel({
           {/* Stock & Inventory */}
           <Section title={t("products.form.stockInventory")}>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Field label={`Opening Stock (${currentSellingUnitName || selectedUnit})`} required>
-                <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("stockQuantity")} />
-              </Field>
+              {/* With a size grid the product's stock IS the sum of its cells —
+                  formToInput overwrites whatever is typed here. An editable box
+                  that is thrown away on save is worse than no box, so the total
+                  is shown instead, and the grid above stays the one place stock
+                  is entered. */}
+              {hasVariantGrid ? (
+                <Field label={`Opening Stock (${currentSellingUnitName || selectedUnit})`}>
+                  <div
+                    data-testid="variant-grid-stock-total"
+                    className="flex h-10 items-center rounded-md border border-[#e6ecf4] bg-[#f8fafd] px-3 text-[13px] font-black text-[#13274d]"
+                  >
+                    {variantGridStock}
+                  </div>
+                  <p className="mt-1 text-[10px] font-semibold leading-4 text-[#9aa6bb]">{t("products.form.gridStockHint")}</p>
+                </Field>
+              ) : (
+                <Field label={`Opening Stock (${currentSellingUnitName || selectedUnit})`}>
+                  <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("stockQuantity")} />
+                </Field>
+              )}
               <Field label={`Low Stock Alert (${selectedUnit})`}>
                 <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("lowStockAlert")} />
               </Field>
@@ -857,10 +986,11 @@ export function ProductFormPanel({
             </div>
             ) : null}
 
-            {/* Drug schedule. Only meaningful for a pharmacy, and only ever
-                restrictive once set: leaving it "Not scheduled" is what every
-                product already is, and what every non-medicine stays. */}
-            {isPharmacy ? (
+            {/* Drug schedule. Only meaningful where the trade dispenses against
+                a prescription, and only ever restrictive once set: leaving it
+                "Not scheduled" is what every product already is, and what every
+                non-medicine stays. */}
+            {showDrugSchedule ? (
             <div className="mt-3 rounded-[12px] border border-[#e6ecf4] bg-white p-3">
               <p className="text-[12px] font-black text-[#13274d]">Drug schedule</p>
               <p className="mt-1 text-[10.5px] font-semibold leading-4 text-[#65748f]">
@@ -868,7 +998,7 @@ export function ProductFormPanel({
               </p>
               <select
                 data-testid="product-drug-schedule"
-                value={form.watch("drugSchedule") ?? ""}
+                value={drugSchedule ?? ""}
                 onChange={(event) => form.setValue("drugSchedule", (event.target.value || null) as ProductFormData["drugSchedule"], { shouldDirty: true })}
                 aria-label="Drug schedule"
                 className="mt-2 h-9 w-full rounded-md border border-[#e6ecf4] bg-white px-2 text-[12px] font-semibold text-[#13274d]"
@@ -990,7 +1120,11 @@ function Field({ label, required, error, children }: { label: string; required?:
     if (error) control.setAttribute("aria-describedby", errorId);
     else if (control.getAttribute("aria-describedby") === errorId) control.removeAttribute("aria-describedby");
     control.setAttribute("aria-invalid", error ? "true" : "false");
-  }, [error, errorId, labelId]);
+    // The asterisk is aria-hidden decoration, so without this a screen reader is
+    // told nothing about which fields the form will refuse to save empty.
+    if (required) control.setAttribute("aria-required", "true");
+    else control.removeAttribute("aria-required");
+  }, [error, errorId, labelId, required]);
 
   return (
     <div ref={fieldRef} role="group" aria-labelledby={labelId}>

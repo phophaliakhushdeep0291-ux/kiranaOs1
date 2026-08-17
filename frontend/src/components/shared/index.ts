@@ -15,6 +15,7 @@ export { DataTableCard, type DataTableCardProps } from "./DataTableCard";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { MoneyBadge, type MoneyBadgeProps, type MoneyBadgeTone } from "./MoneyBadge";
 export { SyncBadge, type SyncBadgeProps, type SyncBadgeStatus } from "./SyncBadge";
+export { TradeFocusStrip, type TradeFocusStripProps } from "./TradeFocusStrip";
 export { PermissionDenied, type PermissionDeniedProps } from "./PermissionDenied";
 export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
 export { OwnerPinModal, type OwnerPinConfirmPayload, type OwnerPinModalProps } from "./OwnerPinModal";

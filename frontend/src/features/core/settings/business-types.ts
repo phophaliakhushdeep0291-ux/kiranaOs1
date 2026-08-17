@@ -73,6 +73,20 @@ export function offeredBusinessTypes(): BusinessType[] {
   return [...BUSINESS_TYPE_IDS];
 }
 
+/**
+ * The category a new product starts in, for this trade.
+ *
+ * Every form used to start on the literal string "general", which only the
+ * custom trade actually lists: the other eleven opened their category picker
+ * showing its placeholder, beside a red required star that nothing enforced, and
+ * saved a category the shop can neither see in its own list nor filter by. A
+ * trade's first category is a real answer, and the shop can change it in one tap.
+ */
+export function defaultCategoryFor(businessType: BusinessType): string {
+  const categories = BUSINESS_TYPE_DEFS[businessType]?.categories ?? [];
+  return categories.find((category) => category !== "all") ?? "general";
+}
+
 export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = {
   kirana: {
     label: "Kirana / General Store",

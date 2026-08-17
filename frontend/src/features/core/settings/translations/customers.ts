@@ -352,4 +352,40 @@ export const customersEn = {
   "customers.totalOutstanding": "Total Outstanding",
   "customers.ageing.bucket8to15": "8 - 15 Days",
   "customers.ageing.bucket16to30": "16 - 30 Days",
+
+  // ── The account in each trade's own words (see settings/shop-customers.ts) ──
+  // The sidebar already reaches this screen as "Khata", "Accounts" or "Tabs".
+  "customers.trade.title": "Accounts for your shop type",
+  // The credit word is interpolated so one phrase covers every trade in both
+  // languages; the word itself comes from settings/shop-credit.ts.
+  "customers.trade.outstanding": "Total {credit} Outstanding",
+
+  "customers.trade.heading.kirana": "Customers and udhar",
+  "customers.trade.heading.autoParts": "Parties and khata",
+  "customers.trade.heading.pharmacy": "Patient accounts",
+  "customers.trade.heading.stationery": "Customers and institutions",
+  "customers.trade.heading.furniture": "Buyers and pending dues",
+  "customers.trade.heading.restaurant": "Guests and running tabs",
+  "customers.trade.heading.manufacturing": "Trade buyers and receivables",
+
+  "customers.trade.subtitle.autoParts": "Workshop, mechanic and fleet balances in one khata",
+  "customers.trade.subtitle.electronics": "Buyer history, warranty context and pending balances",
+  "customers.trade.subtitle.pharmacy": "Patient balances, refill history and collections",
+  "customers.trade.subtitle.stationery": "Parents, schools and offices, retail and bulk together",
+  "customers.trade.subtitle.furniture": "Advances taken, balance pending and order status",
+  "customers.trade.subtitle.restaurant": "Open tabs, regulars and what is still to be settled",
+  "customers.trade.subtitle.manufacturing": "Buyer-wise receivables, ageing and collection follow-up",
+
+  "customers.trade.focus.kirana": "Most udhar here is small and old rather than large and recent — work the ageing list from the oldest end, not the biggest.",
+  "customers.trade.focus.clothing": "Credit follows the exchange window: a balance still open after the return period is unlikely to be settled at the counter.",
+  "customers.trade.focus.footwear": "Dues in this trade are usually one pair deep. Chase them while the customer still remembers the purchase.",
+  "customers.trade.focus.autoParts": "A workshop's khata runs continuously, so watch the trend rather than the balance — a party whose total only grows is the one to call.",
+  "customers.trade.focus.electronics": "Balances here are few but large. Tie each one to the piece it bought, because the serial is what a warranty dispute turns on.",
+  "customers.trade.focus.pharmacy": "Patient accounts are refilled monthly. A balance that has not moved in two cycles has stopped being credit and become a bad debt.",
+  "customers.trade.focus.stationery": "School and office accounts settle on their own cycle — send the statement before their month closes, not after yours does.",
+  "customers.trade.focus.furniture": "Every order carries an advance and a balance. Collect the balance before delivery, because after it leaves the floor you have no hold.",
+  "customers.trade.focus.cosmetics": "Credit is rare in this trade. Where it exists it is a regular worth keeping — a reminder, not a demand.",
+  "customers.trade.focus.restaurant": "A tab is meant to close the same day. One that is still open tomorrow needs a phone call, not another entry.",
+  "customers.trade.focus.manufacturing": "Receivables here are on agreed terms, so ageing beyond those terms is the number that matters, not the total outstanding.",
+  "customers.trade.focus.other": "Work the oldest balances first: money owed gets harder to collect with every week it stays on the books.",
 } as const;

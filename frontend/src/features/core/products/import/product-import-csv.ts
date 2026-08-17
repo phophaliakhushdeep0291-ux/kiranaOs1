@@ -1,5 +1,6 @@
 import type { Product, ProductInput } from "@/types/api";
 import { getStoredBusinessType, type BusinessType } from "@/features/core/settings/business-type-store";
+import { defaultCategoryFor } from "@/features/core/settings/business-types";
 import {
   productAttributeFieldsFor,
   type ProductAttributeField,
@@ -307,7 +308,7 @@ function rowToFormData(values: Record<string, string>, businessType: BusinessTyp
     // A spreadsheet row is one plain product. A size × colour grid is entered on
     // the product screen, where the shop can see the combinations it is creating.
     variantAxes: [],
-    category: (values.category ?? "").trim() || "general",
+    category: (values.category ?? "").trim() || defaultCategoryFor(businessType),
     brand: (values.brand ?? "").trim() || undefined,
     unit: ((values.unit ?? "").trim() || "piece").toLowerCase(),
     packSizeValue: numberValue("packSizeValue") || 1,

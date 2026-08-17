@@ -14,15 +14,16 @@ import { useToast } from "@/hooks/use-toast";
 import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
 import {
-  ArrowDown, ArrowUp, CalendarDays, Clock3, Download, Home, Loader2, Megaphone, MoreHorizontal,
-  Package, Pencil, PieChart as PieIcon, Plus, Receipt, Search, Smartphone, Trash2, Truck, Users, Wallet, Wrench, X, Zap,
+  ArrowDown, ArrowUp, CalendarDays, Clock3, Download, Flame, Home, Loader2, Megaphone, MoreHorizontal,
+  Package, Pencil, Percent, PieChart as PieIcon, Plus, Receipt, Scissors, ScrollText, Search, Smartphone,
+  Sparkles, Store, Thermometer, Trash2, Truck, Users, Utensils, Wallet, Wrench, X, Zap,
 } from "lucide-react";
 import { listExpenses, getExpenseOverview } from "@/features/core/expenses/api";
 import { cacheServerExpenses, createExpenseLocalFirst, deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots, updateExpenseLocalFirst } from "@/features/core/expenses/local-actions";
 import { CHIP_TONES } from "@/lib/chip-tones";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { expenseCategoryOptions } from "@/features/core/settings/shop-expenses";
 import type { Expense, ExpenseInput } from "@/types/api";
-
-const CATEGORIES = ["Rent", "Salaries", "Utilities", "Stock Purchase", "Transport", "Maintenance", "Marketing", "Office Supplies", "Mobile & Internet", "Misc"];
 const MODES: { value: string; label: string }[] = [
   { value: "cash", label: "Cash" }, { value: "upi", label: "UPI" }, { value: "bank", label: "Bank Transfer" }, { value: "card", label: "Card" }, { value: "other", label: "Other" },
 ];
@@ -30,9 +31,22 @@ const MODE_BADGE: Record<string, string> = {
   cash: CHIP_TONES.green, upi: CHIP_TONES.violet, bank: CHIP_TONES.blue, card: CHIP_TONES.blue, other: CHIP_TONES.gray,
 };
 const PALETTE = ["var(--brand)", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#64748b"];
+// Keyed by the stored category text. Anything unmapped — a trade category
+// without an obvious glyph, or one left behind by a previous business type —
+// falls through to MoreHorizontal at the call sites below.
 const CATEGORY_ICON: Record<string, typeof Home> = {
   Rent: Home, Salaries: Users, Utilities: Zap, "Stock Purchase": Package, Transport: Truck,
   Maintenance: Wrench, Marketing: Megaphone, "Office Supplies": Receipt, "Mobile & Internet": Smartphone, Misc: MoreHorizontal,
+  "Raw Material": Package, "Packaging Material": Package, "Packing Material": Package,
+  "Power & Fuel": Zap, "Labour Wages": Users, "Factory Consumables": Wrench, "Freight & Export": Truck,
+  "Vegetables & Provisions": Package, "Kitchen Gas & LPG": Flame, "Crockery & Utensils": Utensils,
+  "Aggregator Commission": Percent, "Kitchen Cleaning": Sparkles,
+  "Cold Chain & Fridge": Thermometer, "Drug Licence & Fees": ScrollText, "Biomedical Waste": Trash2,
+  "Tools & Equipment": Wrench, "Godown Rent": Home, "Loading & Unloading": Truck,
+  "Service & Repairs": Wrench, "Demo Units": Package,
+  "Delivery & Installation": Truck, "Polishing & Finishing": Sparkles, "Showroom Display": Store,
+  "Display & Mannequins": Store, "Display & Racks": Store, "Display & Shelving": Store,
+  "Alterations & Tailoring": Scissors, "Testers & Samples": Sparkles, "Printing & Photocopy": Receipt,
 };
 
 function inr(n: number | undefined) { return `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`; }
@@ -67,6 +81,7 @@ type ExpenseFormData = z.infer<typeof expenseFormSchema>;
 
 export default function ExpensesPage() {
   const { toast } = useToast();
+  const businessType = useBusinessTypeKey();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
@@ -134,6 +149,19 @@ export default function ExpensesPage() {
     if (!ov) return [];
     return Object.entries(ov.byCategory).sort((a, b) => b[1] - a[1]).map(([name, value], i) => ({ name, value, color: PALETTE[i % PALETTE.length] }));
   }, [ov]);
+  // This trade's own spending rows first — a restaurant has to be able to file
+  // a gas cylinder somewhere other than "Misc". Categories already used by the
+  // shop are appended even when they belong to a business type it has left, so
+  // changing the shop type never hides an expense from the filter.
+  const categoryOptions = useMemo(
+    () => expenseCategoryOptions(businessType, [
+      ...Object.keys(ov?.byCategory ?? {}),
+      ...(expensesQ.data ?? []).map((expense) => expense.category),
+      ...localExpenses.map((expense) => expense.category),
+    ]),
+    [businessType, ov, expensesQ.data, localExpenses],
+  );
+
   const trendData = useMemo(() => (ov?.trend ?? []).map((t) => ({ ...t, label: monthLabel(t.month) })), [ov]);
   const trendDelta = useMemo(() => {
     const t = ov?.trend ?? [];
@@ -196,7 +224,7 @@ export default function ExpensesPage() {
             <SelectTrigger className="h-10 w-full lg:w-[170px]"><SelectValue placeholder="All Categories" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Categories</SelectItem>
-              {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {categoryOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
           <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={exportCsv} disabled={rows.length === 0}><Download size={15} /> Export</Button>
@@ -398,6 +426,7 @@ export default function ExpensesPage() {
       <ExpensePanel
         open={panelOpen}
         editing={editing}
+        categories={categoryOptions}
         saving={saveMut.isPending}
         width={panelWidth}
         onResizeStart={onResizeStart}
@@ -454,8 +483,8 @@ function PageBtn({ children, active, disabled, ariaLabel, onClick }: { children:
 }
 
 /* ── Add / Edit docked panel ── */
-function ExpensePanel({ open, editing, saving, width, onResizeStart, onClose, onSubmit }: {
-  open: boolean; editing: Expense | null; saving: boolean; width: number;
+function ExpensePanel({ open, editing, categories, saving, width, onResizeStart, onClose, onSubmit }: {
+  open: boolean; editing: Expense | null; categories: string[]; saving: boolean; width: number;
   onResizeStart: (e: React.MouseEvent) => void; onClose: () => void; onSubmit: (data: ExpenseInput) => void;
 }) {
   const form = useForm<ExpenseFormData>({
@@ -463,7 +492,10 @@ function ExpensePanel({ open, editing, saving, width, onResizeStart, onClose, on
     values: {
       title: editing?.title ?? "",
       amount: editing?.amount ?? ("" as unknown as number),
-      category: editing?.category ?? "Rent",
+      // The trade's first row rather than a hardcoded "Rent": a restaurant
+      // records vegetables far more often than it records rent, and the list is
+      // already ordered with this trade's own categories at the top.
+      category: editing?.category ?? categories[0],
       paymentMode: (editing?.paymentMode as ExpenseFormData["paymentMode"]) ?? "cash",
       status: (editing?.status as ExpenseFormData["status"]) ?? "paid",
       spentAt: (editing?.spentAt ?? new Date().toISOString()).slice(0, 10),
@@ -511,7 +543,7 @@ function ExpensePanel({ open, editing, saving, width, onResizeStart, onClose, on
           <Fld label="Category *">
             <Select value={form.watch("category")} onValueChange={(v) => form.setValue("category", v)}>
               <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              <SelectContent>{categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
           </Fld>
           <Fld label="Vendor / Payee"><Input className="h-10" placeholder="Shree Ganesh Properties" {...form.register("vendor")} /></Fld>

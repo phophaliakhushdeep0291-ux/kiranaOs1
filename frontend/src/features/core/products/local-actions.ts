@@ -13,7 +13,11 @@ import { makeLocalEntity, parseOrThrow, touchLocalEntity } from "@/lib/offline/a
 import type { Product, ProductInput } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/features/core/audit-logs/local-actions";
 import { uniqueProductAliases } from "@/features/core/products/product-reliability";
-import { normalizeProductAttributes, type ProductAttributes } from "@/features/core/products/product-attributes";
+// The value helpers only, never the catalogue: this module is reachable from the
+// app entry, so importing product-attributes.ts here puts all twelve trades'
+// field labels in front of every shop's first paint. See the note in
+// product-attribute-values.ts.
+import { normalizeProductAttributes, type ProductAttributes } from "@/features/core/products/product-attribute-values";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 
 const CACHE_KEY = "products";

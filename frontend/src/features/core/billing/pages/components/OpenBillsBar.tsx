@@ -63,10 +63,10 @@ export function OpenBillsBar({ bills, onSwitch, onNew, busy = false }: {
         type="button"
         onClick={() => { void onNew(); }}
         disabled={busy}
-        title={t("billing.openBills.startNew")}
+        title={t("billing.openBills.startNew", { bill: words.bill })}
         className="ml-auto flex h-11 shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[var(--brand)] px-2.5 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] disabled:pointer-events-none disabled:opacity-60 lg:mouse:h-auto lg:mouse:py-1"
       >
-        {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {t("billing.openBills.new")}
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {t("billing.openBills.new", { bill: words.bill })}
       </button>
     </div>
   );

@@ -1,4 +1,14 @@
 import type { BusinessType } from "@/features/core/settings/business-type-store";
+import {
+  isProductAttributeScalar,
+  normalizeProductAttributes,
+  type ProductAttributes,
+} from "@/features/core/products/product-attribute-values";
+
+// Re-exported so a product screen that wants both the catalogue and the value
+// helpers keeps one import. The split itself is a bundling boundary the startup
+// shell depends on — see product-attribute-values.ts before collapsing it back.
+export { normalizeProductAttributes, type ProductAttributes };
 
 /**
  * What a product has to carry, trade by trade.
@@ -62,9 +72,6 @@ export interface ProductAttributeGroup {
   help?: string;
   fields: readonly ProductAttributeField[];
 }
-
-/** A stored bag: scalars only, empty values omitted rather than stored blank. */
-export type ProductAttributes = Record<string, string | number | boolean>;
 
 const YES_NO_HELP = "Off unless you say otherwise.";
 
@@ -217,7 +224,11 @@ export const PRODUCT_ATTRIBUTES: Record<BusinessType, readonly ProductAttributeG
       fields: [
         { key: "modelNumber", label: "Model number", type: "text", placeholder: "e.g. SM-A166P", maxLength: 80 },
         { key: "colour", label: "Colour", type: "text", placeholder: "e.g. Awesome Blue", maxLength: 40 },
-        { key: "serialTracked", label: "Track every piece by serial or IMEI", type: "boolean", help: "Turn on for anything that comes back for warranty. Register the units on the Serial units screen." },
+        // Descriptive, like everything else in this file — it records that the
+        // model carries a serial, it does not switch tracking on. The label used
+        // to read "Track every piece by serial or IMEI", which promised a
+        // behaviour no screen implements: the units are registered by hand.
+        { key: "serialTracked", label: "Carries a serial or IMEI", type: "boolean", help: "Mark anything that comes back for warranty, then register each piece on the Serial units screen." },
         { key: "countryOfOrigin", label: "Country of origin", type: "text", placeholder: "e.g. India", maxLength: 60 },
       ],
     },
@@ -535,35 +546,6 @@ export function foreignProductAttributeKeys(
   return Object.keys(attributes).filter((key) => !known.has(key)).sort();
 }
 
-function isScalar(value: unknown): value is string | number | boolean {
-  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
-}
-
-/**
- * Coerce anything that arrived from the API, IndexedDB or a CSV row into the bag.
- *
- * Blank strings are dropped rather than kept: "cleared" and "never filled in" are
- * the same fact about a product, and storing both spellings would make every
- * comparison — the dirty check, a conflict diff — report a change where the
- * shopkeeper made none.
- */
-export function normalizeProductAttributes(input: unknown): ProductAttributes {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
-  const result: ProductAttributes = {};
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (!isScalar(value)) continue;
-    if (typeof value === "number" && !Number.isFinite(value)) continue;
-    if (typeof value === "string") {
-      const text = value.trim();
-      if (!text) continue;
-      result[key] = text;
-      continue;
-    }
-    result[key] = value;
-  }
-  return result;
-}
-
 /**
  * The payload the product form saves.
  *
@@ -578,7 +560,7 @@ export function productAttributesForSave(
 ): Record<string, string | number | boolean> {
   const payload: Record<string, string | number | boolean> = {};
   for (const [key, value] of Object.entries(edited)) {
-    if (!isScalar(value)) continue;
+    if (!isProductAttributeScalar(value)) continue;
     payload[key] = value;
   }
   for (const field of productAttributeFieldsFor(businessType)) {

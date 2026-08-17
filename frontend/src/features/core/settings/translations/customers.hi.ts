@@ -338,4 +338,37 @@ export const customersHi: Record<keyof typeof customersEn, string> = {
   "customers.totalOutstanding": "कुल बकाया",
   "customers.ageing.bucket8to15": "8 - 15 दिन",
   "customers.ageing.bucket16to30": "16 - 30 दिन",
+
+  // ── दुकान के हिसाब से खाता ──
+  "customers.trade.title": "आपकी दुकान के हिसाब से खाता",
+  "customers.trade.outstanding": "कुल बकाया {credit}",
+
+  "customers.trade.heading.kirana": "ग्राहक और उधार",
+  "customers.trade.heading.autoParts": "पार्टी और खाता",
+  "customers.trade.heading.pharmacy": "मरीज़ के खाते",
+  "customers.trade.heading.stationery": "ग्राहक और संस्थान",
+  "customers.trade.heading.furniture": "खरीदार और बाकी रकम",
+  "customers.trade.heading.restaurant": "मेहमान और चालू टैब",
+  "customers.trade.heading.manufacturing": "व्यापारी खरीदार और वसूली",
+
+  "customers.trade.subtitle.autoParts": "वर्कशॉप, मैकेनिक और फ्लीट का हिसाब एक ही खाते में",
+  "customers.trade.subtitle.electronics": "खरीदार का रिकॉर्ड, वारंटी और बाकी रकम",
+  "customers.trade.subtitle.pharmacy": "मरीज़ का बकाया, दोबारा दवा और वसूली",
+  "customers.trade.subtitle.stationery": "अभिभावक, स्कूल और ऑफिस — रिटेल और थोक साथ में",
+  "customers.trade.subtitle.furniture": "मिला एडवांस, बाकी रकम और ऑर्डर की हालत",
+  "customers.trade.subtitle.restaurant": "चालू टैब, नियमित मेहमान और बाकी हिसाब",
+  "customers.trade.subtitle.manufacturing": "खरीदार के हिसाब से वसूली, पुरानापन और फॉलो-अप",
+
+  "customers.trade.focus.kirana": "यहाँ उधार बड़ा कम और पुराना ज़्यादा होता है — सबसे पुरानी रकम से शुरू करें, सबसे बड़ी से नहीं।",
+  "customers.trade.focus.clothing": "उधार बदली की तारीख तक ही चलता है: वापसी का समय निकलने के बाद बाकी रकम काउंटर पर कम ही मिलती है।",
+  "customers.trade.focus.footwear": "यहाँ बाकी रकम आमतौर पर एक जोड़ी जितनी होती है। जब तक ग्राहक को खरीद याद है, तभी माँग लें।",
+  "customers.trade.focus.autoParts": "वर्कशॉप का खाता चलता ही रहता है, इसलिए रकम नहीं रुझान देखें — जिस पार्टी का हिसाब सिर्फ बढ़ रहा है, फोन उसी को करें।",
+  "customers.trade.focus.electronics": "यहाँ खाते कम पर बड़े होते हैं। हर खाते को उसी पीस से जोड़ें, क्योंकि वारंटी का झगड़ा सीरियल नंबर पर ही टिकता है।",
+  "customers.trade.focus.pharmacy": "मरीज़ के खाते हर महीने भरते हैं। दो महीने से न हिला बकाया अब उधार नहीं, डूबी रकम है।",
+  "customers.trade.focus.stationery": "स्कूल और ऑफिस अपने चक्र पर भुगतान करते हैं — उनका महीना बंद होने से पहले हिसाब भेजें, अपना बंद होने के बाद नहीं।",
+  "customers.trade.focus.furniture": "हर ऑर्डर में एडवांस और बाकी रकम होती है। डिलीवरी से पहले बाकी वसूल लें, माल निकलने के बाद कोई पकड़ नहीं रहती।",
+  "customers.trade.focus.cosmetics": "इस काम में उधार कम चलता है। जहाँ है वहाँ ग्राहक नियमित है — याद दिलाएँ, तकाज़ा न करें।",
+  "customers.trade.focus.restaurant": "टैब उसी दिन बंद होना चाहिए। अगले दिन तक खुला टैब नई एंट्री नहीं, एक फोन माँगता है।",
+  "customers.trade.focus.manufacturing": "यहाँ वसूली तय शर्तों पर होती है, इसलिए कुल बकाया नहीं — शर्तों से आगे निकली रकम असली नंबर है।",
+  "customers.trade.focus.other": "सबसे पुरानी रकम पहले वसूलें: हर बीते हफ्ते के साथ उधार वापस आना और मुश्किल होता जाता है।",
 };
