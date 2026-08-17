@@ -378,7 +378,7 @@ export function BillingPaymentPanel({
           </div>
           {creditAmount > 0 && (
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">{t("billing.pay.udhar")}</span>
+              <span className="text-muted-foreground">{t("billing.pay.udhar", { credit: words.credit })}</span>
               <span className="font-semibold text-amber-600">{fmtRs(creditAmount)}</span>
             </div>
           )}

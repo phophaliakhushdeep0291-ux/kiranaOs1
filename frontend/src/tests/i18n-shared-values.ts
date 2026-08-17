@@ -45,6 +45,13 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   "₹ 0",
   "{tier} · ",
   "{action} · {amount}",
+  // The till's credit tender, which is a bare slot in both catalogues. The word
+  // that fills it is the shop's own — "Udhar", "Tab", "मरीज़ का खाता" — and it is
+  // translated where it is defined (`reports.credit.*`, `billing.tender.*`),
+  // picked per business type by settings/shop-credit.ts. There is nothing left
+  // in these three to translate.
+  "{credit}",
+  "{credit}: {amount}",
   // Already Devanagari/Hinglish in the English catalogue, because that is what the
   // screen says in both languages.
   "namak, salt, साल्ट",

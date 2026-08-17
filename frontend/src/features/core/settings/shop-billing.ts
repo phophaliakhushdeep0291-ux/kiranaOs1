@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { useBusinessTypeKey, type BusinessType } from "./business-types";
-import { useAppLanguage, type TranslationKey } from "./i18n";
+import { getStoredBusinessType, useBusinessTypeKey, type BusinessType } from "./business-types";
+import { englishTranslations, useAppLanguage, type TranslationKey } from "./i18n";
 import { SHOP_TENDER_WORD } from "./shop-credit";
 
 /**
@@ -124,6 +124,24 @@ export interface ShopBillingWords {
  * each one self-contained and makes it impossible to hand a component the wrong
  * one of three strings.
  */
+/**
+ * The credit tender word for the printed receipt, in English.
+ *
+ * The receipt is built by plain functions during a print call — no React, so no
+ * `t()` — and it is English throughout today: "Estimate", "Sale receipt",
+ * "Cash", "UPI" are all literals in `billing-print.ts`. This resolves the one
+ * word that is trade-specific out of the same map the screen uses, and takes the
+ * English side of the dictionary deliberately rather than pretending the rest of
+ * the slip is translated.
+ *
+ * It matters more here than on screen: the receipt is the copy the customer
+ * carries out of the shop, so a café's slip reading "Udhar" is the version of
+ * this bug that leaves the building.
+ */
+export function receiptCreditWordEnglish(): string {
+  return englishTranslations[SHOP_TENDER_WORD[getStoredBusinessType()]];
+}
+
 export function useShopBillingWords(): ShopBillingWords {
   const { t } = useAppLanguage();
   const businessType = useBusinessTypeKey();
