@@ -89,6 +89,28 @@ export const settingsPagesEn = {
   "settings.advanced.localDataClearedHelp": "The app will reload with a fresh local copy synced from the cloud.",
 
   // Reminder templates, delivery history and the store profile.
+  // Printer & hardware bridge.
+  "settings.printer.bridgeUpdate": "Hardware Bridge v{version} is available. Open Hardware Bridge Setup to update.",
+  "settings.printer.pairedVersion": "Paired · v{version}",
+  "settings.printer.scaleReading": "Scale {reading}",
+  "settings.printer.connecting": "Saving...",
+  "settings.printer.connect": "Connect",
+  "settings.printer.jobSaved": "Saved",
+  "settings.printer.jobSent": "Sent to printer",
+  "settings.printer.jobOpened": "Dialog opened",
+  "settings.printer.jobSending": "Sending",
+  "settings.printer.capabilityAvailable": "Available",
+  // Taxes and GST.
+  "settings.tax.defaultRatePill": "Default rate",
+  "settings.tax.tapToUse": "Tap to use on products",
+  "settings.tax.productCount": "{count} products",
+  "settings.tax.gstNotInPlan": "GST reporting is not in the {plan} plan",
+  "settings.tax.registrationLine": "{gstin} · {name} · State {state}",
+  "settings.tax.reportFailed": "Could not load this month's GST report: {reason}",
+  "settings.tax.submit": "Submit",
+  "settings.tax.validate": "Validate",
+  "settings.tax.submitEInvoiceTitle": "Submit GST e-invoice",
+  "settings.tax.validateEInvoiceTitle": "Validate e-invoice in sandbox",
   "settings.security.pinActive": "PIN active",
   "settings.security.statusOffline": "Status unavailable offline",
   "settings.security.noPinYet": "No owner PIN yet",

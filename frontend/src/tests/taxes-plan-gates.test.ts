@@ -16,7 +16,9 @@ describe("taxes plan gates", () => {
   });
 
   it("shows an honest upgrade state instead of blaming connectivity", () => {
-    expect(taxes).toContain("GST reporting is not in the {gstReportsFeature.plan.name} plan");
+    // Wording now lives in the dictionary, with the plan name interpolated.
+    expect(taxes).toContain('t("settings.tax.gstNotInPlan", { plan: gstReportsFeature.plan.name })');
+    expect(settingsEn).toContain('"settings.tax.gstNotInPlan": "GST reporting is not in the {plan} plan"');
     expect(taxes).toContain('<Link href="/plans">{t("settings.tax.upgradeBusiness")}</Link>');
     expect(settingsEn).toContain('"settings.tax.upgradeBusiness": "Upgrade to Business"');
     expect(taxes).not.toContain("Connect to the cloud to load this month's GST report");

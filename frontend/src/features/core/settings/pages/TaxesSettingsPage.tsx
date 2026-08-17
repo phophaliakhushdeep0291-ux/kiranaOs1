@@ -341,7 +341,7 @@ export default function TaxesSettingsPage() {
                 <span className="grid h-8 w-12 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[13px] font-black text-[var(--brand)]">{r}%</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-bold text-[var(--brand-ink)]">{RATE_INFO[r]}</p>
-                  <p className="text-[11px] text-[#64748b]">{tax.defaultRate === r ? "Default rate" : "Tap to use on products"}</p>
+                  <p className="text-[11px] text-[#64748b]">{tax.defaultRate === r ? t("settings.tax.defaultRatePill") : t("settings.tax.tapToUse")}</p>
                 </div>
                 {tax.defaultRate === r && <Badge tone="blue">{t("settings.tax.default")}</Badge>}
                 <Switch aria-label={`Enable ${r}% GST rate`} checked={tax.rates[r] ?? false} onCheckedChange={(v) => update({ rates: { ...tax.rates, [r]: v } })} />
@@ -386,7 +386,7 @@ export default function TaxesSettingsPage() {
                     <td className="px-3 py-2.5 font-bold text-[var(--brand-ink)]">{row.cat}</td>
                     <td className="px-3 py-2.5"><Badge tone={row.rate === "Mixed" ? "amber" : "gray"}>{row.rate}</Badge></td>
                     <td className="px-3 py-2.5 font-mono text-[#344668]"><span className="inline-flex items-center gap-2">{row.hsn}{!row.consistent ? <Badge tone="amber">{t("settings.tax.review")}</Badge> : <Badge tone="green">{t("settings.tax.valid")}</Badge>}</span></td>
-                    <td className="px-3 py-2.5 text-[#64748b]">{row.count} products</td>
+                    <td className="px-3 py-2.5 text-[#64748b]">{t("settings.tax.productCount", { count: row.count })}</td>
                     <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => editHsn(row)} aria-label={`Edit GST mapping for ${row.cat}`} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={12} aria-hidden="true" /> {t("settings.tax.edit")}</button></td>
                   </tr>
                 ))}
@@ -410,7 +410,7 @@ export default function TaxesSettingsPage() {
           {!gstReportsFeature.loading && !gstReportsFeature.allowed ? (
             <div className="px-5 pb-5">
               <div className="rounded-[10px] border border-dashed border-[#cbd9ed] bg-[#f8fbff] px-4 py-6 text-center">
-                <p className="text-[13px] font-black text-[#17345f]">GST reporting is not in the {gstReportsFeature.plan.name} plan</p>
+                <p className="text-[13px] font-black text-[#17345f]">{t("settings.tax.gstNotInPlan", { plan: gstReportsFeature.plan.name })}</p>
                 <p className="mx-auto mt-1 max-w-md text-[12px] leading-5 text-[#64748b]">{t("settings.tax.registersHelp")}</p>
               </div>
             </div>
@@ -420,7 +420,7 @@ export default function TaxesSettingsPage() {
                 <Label htmlFor="gst-registration-scope" className="text-xs font-black text-[#17345f]">{t("settings.tax.sellerForExport")}</Label>
                 <Select value={selectedSellerGstin} onValueChange={setSelectedSellerGstin}>
                   <SelectTrigger id="gst-registration-scope" className="mt-2 h-10 bg-white"><SelectValue placeholder={t("settings.tax.chooseSellerPlaceholder")} /></SelectTrigger>
-                  <SelectContent>{uniqueRegistrations.map((registration) => <SelectItem key={registration.gstin} value={registration.gstin || ""}>{registration.gstin} · {registration.name} · State {registration.stateCode}</SelectItem>)}</SelectContent>
+                  <SelectContent>{uniqueRegistrations.map((registration) => <SelectItem key={registration.gstin} value={registration.gstin || ""}>{t("settings.tax.registrationLine", { gstin: registration.gstin ?? "", name: registration.name, state: registration.stateCode ?? "" })}</SelectItem>)}</SelectContent>
                 </Select>
                 <p className="mt-2 text-[11px] leading-4 text-[#64748b]">{t("settings.tax.sellerHelp")}</p>
                 {!readinessQ.isLoading && uniqueRegistrations.length === 0 && <p className="mt-2 text-[11px] font-bold text-rose-700">{t("settings.tax.noValidSeller")}</p>}
@@ -432,7 +432,7 @@ export default function TaxesSettingsPage() {
               <Kpi label={t("settings.tax.gstSplit")} value={gstQ.isLoading ? "…" : gstQ.data ? `C ${inr(gstQ.data.cgst)} · S ${inr(gstQ.data.sgst)} · I ${inr(gstQ.data.igst)}` : "—"} tone="amber" />
               <Kpi label={t("settings.tax.billsWithGst")} value={gstQ.isLoading ? "…" : gstQ.data ? String(gstQ.data.gstBills) : "—"} tone="violet" />
             </div>
-            {gstQ.isError && <p className="px-5 pb-4 text-[11px] font-semibold text-rose-600">Could not load this month's GST report: {gstQ.error instanceof Error ? gstQ.error.message : t("settings.tax.pleaseRetry")}</p>}
+            {gstQ.isError && <p className="px-5 pb-4 text-[11px] font-semibold text-rose-600">{t("settings.tax.reportFailed", { reason: gstQ.error instanceof Error ? gstQ.error.message : t("settings.tax.pleaseRetry") })}</p>}
           </>}
         </Card>
 
@@ -462,7 +462,7 @@ export default function TaxesSettingsPage() {
                   ? t("settings.tax.gspNotAttested")
                   : t("settings.tax.gspBlocked")}
               pill={readinessQ.data?.provider.configured && gstReportsFeature.allowed
-                ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => { setEInvoiceError(""); setEInvoiceOpen(true); }}><Receipt size={13} /> {readinessQ.data.provider.legalSubmission ? "Submit" : "Validate"}</Button>
+                ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => { setEInvoiceError(""); setEInvoiceOpen(true); }}><Receipt size={13} /> {readinessQ.data.provider.legalSubmission ? t("settings.tax.submit") : t("settings.tax.validate")}</Button>
                 : <Badge tone="amber">{t("settings.tax.notConnected")}</Badge>}
             />
             <RowToggle label={t("settings.tax.ewayBill")} desc={t("settings.tax.ewayBillHelp")} pill={gstReportsFeature.allowed ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEwayOpen(true)}><Truck size={13} /> {t("settings.tax.prepare")}</Button> : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">{t("settings.tax.upgradeBusiness")}</Link></Button>} />
@@ -497,7 +497,7 @@ export default function TaxesSettingsPage() {
       <Dialog open={eInvoiceOpen} onOpenChange={setEInvoiceOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{readinessQ.data?.provider.legalSubmission ? "Submit GST e-invoice" : "Validate e-invoice in sandbox"}</DialogTitle>
+            <DialogTitle>{readinessQ.data?.provider.legalSubmission ? t("settings.tax.submitEInvoiceTitle") : t("settings.tax.validateEInvoiceTitle")}</DialogTitle>
             <DialogDescription>{readinessQ.data?.provider.legalSubmission ? `Send one GST invoice to ${readinessQ.data.provider.providerName || "the configured certified GSP"} for legal IRN generation.` : "Validate the invoice payload and retain audit evidence. Sandbox validation does not create a legal IRN."}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-2">

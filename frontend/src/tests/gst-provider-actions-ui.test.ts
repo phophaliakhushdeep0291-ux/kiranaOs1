@@ -19,7 +19,10 @@ describe("GST provider actions", () => {
 
   it("exposes legal e-invoice submission and clearly separated sandbox validation", () => {
     expect(taxes).toContain('legalSubmission ? "submit" : "sandbox"');
-    expect(taxes).toContain("Submit GST e-invoice");
+    // The wording moved into the dictionary; assert the key the dialog reads
+    // and the English behind it, so the distinction is still pinned.
+    expect(taxes).toContain('t("settings.tax.submitEInvoiceTitle")');
+    expect(settingsEn).toContain('"settings.tax.submitEInvoiceTitle": "Submit GST e-invoice"');
     expect(taxes).toContain("Sandbox validation does not create a legal IRN");
     expect(taxes).toContain("settings.tax.approveEInvoiceSubmit");
     expect(settingsEn).toContain("Approve legal e-invoice submission");
