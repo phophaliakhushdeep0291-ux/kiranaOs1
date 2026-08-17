@@ -14,7 +14,7 @@
  * fails if a listed file no longer exists, is already clean, or has dropped below its
  * recorded count — so the list cannot rot, be padded, or drift out of date.
  *
- * Counted at 3522 strings across 137 files. The jump from the previous 2662 is not new
+ * Counted at 3290 strings across 114 files. The jump from the previous 2662 is not new
  * debt: the checker used to require JSX text to be brace-free and a prop's quote to sit
  * directly after the `=`, so `{out ? "Out of stock" : "In stock"}` and
  * `label={cond ? … }` were invisible to it. Widening those two rules found strings that
@@ -60,15 +60,11 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/auth/pages/RegisterPage.tsx": 23,
   "features/core/auth/pages/ResetPasswordPage.tsx": 5,
   "features/core/auth/pages/VerifyEmailPage.tsx": 1,
-  "features/core/bills/pages/BillDetailPage.tsx": 22,
-  "features/core/bills/pages/BillsPage.tsx": 13,
   "features/core/customer-order/BillingOrderQrButton.tsx": 12,
   "features/core/customer-order/CustomerOrderPage.tsx": 259,
   "features/core/customer-order/DineInMenuPage.tsx": 25,
   "features/core/customer-order/ImportOrderPage.tsx": 8,
   "features/core/customer-order/OwnerOrderingCard.tsx": 9,
-  "features/core/customers/pages/CustomersPage.tsx": 26,
-  "features/core/dashboard/pages/DashboardPage.tsx": 14,
   "features/core/demo/DemoModeBanner.tsx": 4,
   "features/core/devices/pages/DeviceRemovedPage.tsx": 3,
   "features/core/devices/pages/DevicesPage.tsx": 66,
@@ -76,7 +72,6 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/gift-cards/GiftCardsPage.tsx": 46,
   "features/core/innovation/components/OfflineConfidenceMeter.tsx": 16,
   "features/core/innovation/pages/SmartToolsPage.tsx": 6,
-  "features/core/inventory/pages/StockTransfersPage.tsx": 35,
   "features/core/loyalty/pages/LoyaltyPage.tsx": 34,
   "features/core/money-statement/pages/MoneyStatementPage.tsx": 37,
   "features/core/offers/pages/OffersPage.tsx": 73,
@@ -108,7 +103,6 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   // Not debt: the one string here is a developer assertion thrown when the hook
   // is used outside its provider. It never reaches a shopkeeper.
   "features/core/settings/i18n.tsx": 1,
-  "features/core/settings/pages/IntegrationsSettingsPage.tsx": 19,
   // Not debt: the one string left is the literal RESTORE the owner must TYPE to
   // confirm a restore, compared against `RESTORE <id>` in the page. Translating
   // it would make the confirmation impossible to satisfy.

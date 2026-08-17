@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const billsPage = readFileSync("src/features/core/bills/pages/BillsPage.tsx", "utf8");
+const billingEn = readFileSync("src/features/core/settings/translations/billing.ts", "utf8");
 const billDetailPage = readFileSync("src/features/core/bills/pages/BillDetailPage.tsx", "utf8");
 const billingPage = readFileSync("src/features/core/billing/pages/BillingPage.tsx", "utf8");
 const billingSummary = readFileSync("src/features/core/billing/pages/components/BillingSummary.tsx", "utf8");
@@ -16,7 +17,9 @@ describe("estimate bills work like real bills under their own number series", ()
     expect(billsPage).toContain('value: "estimate", label: t("billing.bills.tab.estimate")');
     expect(billsPage).toContain('Clear Estimates');
     expect(billsPage).toContain('clear_estimates');
-    expect(billsPage).toContain('Move estimate to recycle bin');
+    // Wording moved into the dictionary; the estimate/real split is still pinned.
+    expect(billsPage).toContain('billing.bills.moveEstimateToBin');
+    expect(billingEn).toContain('"billing.bills.moveEstimateToBin": "Move estimate to recycle bin"');
   });
 
   it("counts estimates in the bill-history stats like real sales", () => {

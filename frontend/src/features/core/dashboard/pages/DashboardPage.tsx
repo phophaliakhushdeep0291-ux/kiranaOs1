@@ -1171,7 +1171,7 @@ function MobileGeneralDashboard({
             <div className="mt-2 flex items-center gap-2 text-[12px] font-semibold text-blue-100/75">
               <MobileDelta delta={salesDelta} inverse />
               <span>·</span>
-              <span>{dashboard.billCount.toLocaleString("en-IN")} bills</span>
+              <span>{t("dashboard.tile.billsCount", { count: dashboard.billCount.toLocaleString("en-IN") })}</span>
             </div>
           </div>
           <Link href="/sync-status" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur">
@@ -1284,7 +1284,7 @@ function MobileGeneralDashboard({
                 <ProductAvatar product={productsById.get(row.productId) ?? ({ id: row.productId, name: row.name } as Product)} compact />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-black text-[var(--brand-ink)]">{row.name}</p>
-                  <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">{row.quantitySold.toLocaleString("en-IN")} sold</p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">{t("dashboard.tile.soldCount", { count: row.quantitySold.toLocaleString("en-IN") })}</p>
                 </div>
                 <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmtCompactRs(row.revenue)}</span>
                 <ChevronRight size={16} className="text-[#a2adbd]" />
@@ -1304,10 +1304,10 @@ function MobileGeneralDashboard({
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[#eef4ff] text-[var(--brand)]"><ReceiptText size={18} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-[13px] font-black text-[var(--brand-ink)]">Bill #{compactBillNumber(bill.billNo ?? bill.billNumber)}</span>
+                    <span className="truncate text-[13px] font-black text-[var(--brand-ink)]">{t("dashboard.tile.billNo", { number: compactBillNumber(bill.billNo ?? bill.billNumber) })}</span>
                     <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
                   </div>
-                  <span className="mt-1 block truncate text-[11px] font-semibold text-[#718096]">{bill.customerName ?? "Walk-in customer"}</span>
+                  <span className="mt-1 block truncate text-[11px] font-semibold text-[#718096]">{bill.customerName ?? t("dashboard.tile.walkIn")}</span>
                 </div>
                 <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
                 <ChevronRight size={16} className="text-[#a2adbd]" />
@@ -1661,7 +1661,7 @@ function LowStockAlerts({ items, packs = [], productsById }: { items: LocalRepor
                   <ProductAvatar product={product ?? { id: item.productId, name: item.name } as Product} compact />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black leading-tight text-[var(--brand-ink)] dark:text-card-foreground">{item.name}</p>
-                    <p className={cn("text-xs font-semibold", DASH_MUTED)}>Stock: {item.stock} {item.unit ?? "pcs"}</p>
+                    <p className={cn("text-xs font-semibold", DASH_MUTED)}>{t("dashboard.tile.stockLine", { qty: item.stock, unit: item.unit ?? "pcs" })}</p>
                   </div>
                   <span className={cn("shrink-0 rounded-[7px] px-2 py-1 text-[11px] font-black", isCritical ? "bg-[#fff0f2] text-[#ff304f]" : "bg-[#fff4e6] text-[#ff8a00]")}>
                     {isCritical ? "Critical" : "Low"}
@@ -1854,7 +1854,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
               <p className="mt-2 text-sm text-muted-foreground">{t(dbCfg.heroSubtitle)}</p>
               <div className="mt-4 flex items-center gap-2 text-xs font-semibold">
                 <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">
-                  Drawer {fmt(cashInDrawer)}
+                  {t("dashboard.tile.drawer", { amount: fmt(cashInDrawer) })}
                 </span>
                 {!dashboard.hasBusinessData && (
                   <button type="button" onClick={onLoadDemo} disabled={seedingDemo} className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
@@ -1924,7 +1924,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-black text-primary">{i + 1}</span>
                   <p className="truncate text-sm font-medium">{dish.name}</p>
                 </div>
-                <span className="shrink-0 text-xs font-bold text-muted-foreground">{dish.quantitySold} sold</span>
+                <span className="shrink-0 text-xs font-bold text-muted-foreground">{t("dashboard.tile.soldCount", { count: dish.quantitySold })}</span>
               </div>
             ))}
           </div>
@@ -1974,7 +1974,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t("dashboard.salesToday")}</p>
                 <p className="mt-1 font-display text-4xl font-black tracking-tight text-foreground">{fmt(dashboard.revenue)}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{Math.round(dashboard.grossMarginPct)}% gross margin</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.tile.grossMargin", { percent: Math.round(dashboard.grossMarginPct) })}</p>
               </div>
               <div className={`rounded-xl p-4 ring-1 ${dashboard.supplierDue > 0 ? "bg-rose-50 ring-rose-200/60 dark:bg-rose-950/30 dark:ring-rose-900" : "bg-muted/40 ring-black/[0.06]"}`}>
                 <p className={`text-xs font-bold uppercase tracking-widest ${dashboard.supplierDue > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}>{t("dashboard.supplierDue")}</p>
@@ -1982,7 +1982,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
                   {dashboard.supplierDue > 0 ? fmt(dashboard.supplierDue) : "Clear"}
                 </p>
                 {dashboard.purchaseDue > 0 && (
-                  <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">Today due: {fmt(dashboard.purchaseDue)}</p>
+                  <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{t("dashboard.tile.todayDue", { amount: fmt(dashboard.purchaseDue) })}</p>
                 )}
                 {dashboard.supplierDue === 0 && (
                   <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.noSupplierDue")}</p>
@@ -1991,7 +1991,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold">
-              <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">Drawer {fmt(cashInDrawer)}</span>
+              <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">{t("dashboard.tile.drawer", { amount: fmt(cashInDrawer) })}</span>
               {!dashboard.hasBusinessData && (
                 <button type="button" onClick={onLoadDemo} disabled={seedingDemo} className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
                   <Sparkles size={13} aria-hidden="true" /> {seedingDemo ? "Loading..." : "Load demo"}
@@ -2114,7 +2114,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
             <h2 className="mt-5 max-w-2xl font-display text-3xl font-black tracking-tight text-foreground sm:text-4xl">{t(dbCfg.heroTitle)}</h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{t("dashboard.dispensingHelp")}</p>
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-semibold">
-              <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">Drawer {fmt(cashInDrawer)}</span>
+              <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">{t("dashboard.tile.drawer", { amount: fmt(cashInDrawer) })}</span>
               {!dashboard.hasBusinessData && (
                 <button type="button" onClick={onLoadDemo} disabled={seedingDemo} className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
                   <Sparkles size={13} aria-hidden="true" /> {seedingDemo ? "Loading..." : "Load demo"}
@@ -2163,7 +2163,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-black text-rose-600 dark:text-rose-400">{item.stock} {item.unit ?? "pc"}</p>
-                  <p className="text-[10px] text-muted-foreground">min: {item.threshold}</p>
+                  <p className="text-[10px] text-muted-foreground">{t("dashboard.tile.minThreshold", { threshold: item.threshold })}</p>
                 </div>
               </div>
             ))}
@@ -2220,7 +2220,7 @@ function DashboardDrilldownDialog({
               <div key={row.billId} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{row.billNo} - {row.customerName}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Cash {fmt(row.cash)} - UPI {fmt(row.upi)} - Bank {fmt(row.bank)} - Udhar {fmt(row.udhar)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.tile.tenderBreakdown", { cash: fmt(row.cash), upi: fmt(row.upi), bank: fmt(row.bank), udhar: fmt(row.udhar) })}</p>
                 </div>
                 <MoneyBadge amount={row.amount} tone="success" compact />
               </div>
@@ -2235,11 +2235,11 @@ function DashboardDrilldownDialog({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{row.productName}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Qty {row.quantity.toLocaleString("en-IN")} - Revenue {fmt(row.revenue)} - Cost {fmt(row.cost)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.tile.productBreakdown", { qty: row.quantity.toLocaleString("en-IN"), revenue: fmt(row.revenue), cost: fmt(row.cost) })}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-emerald-700">{fmt(row.profit)}</p>
-                    <p className="text-xs text-muted-foreground">{row.marginPct}% margin</p>
+                    <p className="text-xs text-muted-foreground">{t("dashboard.tile.marginPct", { percent: row.marginPct })}</p>
                   </div>
                 </div>
               </div>
