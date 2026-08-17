@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   inventoryAverageUnitCost,
@@ -5,6 +6,7 @@ import {
   inventoryQuantityToBase,
   inventoryStockValue,
   inventoryUnitLabel,
+  enrichInventoryRows,
   mergeInventoryRows,
   normalizeInventoryItem,
 } from "@/features/core/inventory/stock-display";
@@ -91,5 +93,48 @@ describe("inventory stock display", () => {
     expect(merged.sellingUnits).toEqual([oneKgPacket]);
     expect(inventoryDisplayQuantity(merged)).toBe(15);
     expect(inventoryUnitLabel(merged)).toBe("packet 1 kg");
+  });
+
+  /**
+   * The Low Stock Alerts panel listed products that were not low.
+   *
+   * It enriched the server's low-stock list by merging the whole catalogue into
+   * it — but `mergeInventoryRows` is a UNION, so the result was the whole
+   * catalogue, sorted ascending by quantity. The panel then showed the three
+   * smallest products in the shop whether or not any of them was below its
+   * reorder level, while the metric card beside it counted only the real ones.
+   */
+  describe("narrowing a merge to the rows that were asked about", () => {
+    const catalogue = [
+      { id: "p1", name: "Rice", stockBaseQty: 900, lowStockThreshold: 0, imageUrl: "rice.png" } as InventoryItem,
+      { id: "p2", name: "Salt", stockBaseQty: 4, lowStockThreshold: 0 } as InventoryItem,
+      { id: "p3", name: "Atta", stockBaseQty: 2_000, lowStockThreshold: 5_000, imageUrl: "atta.png" } as InventoryItem,
+    ];
+    // Only Atta is under its threshold; Salt is simply a small number.
+    const serverLowStock = [{ id: "p3", name: "Atta", stockBaseQty: 2_000, lowStockThreshold: 5_000 } as InventoryItem];
+
+    it("keeps only the subject rows", () => {
+      expect(mergeInventoryRows(catalogue, serverLowStock)).toHaveLength(3);
+      expect(enrichInventoryRows(serverLowStock, catalogue).map((row) => row.id)).toEqual(["p3"]);
+    });
+
+    it("still fills them in from the catalogue", () => {
+      // The server's low-stock row carries no image; the catalogue's does, and
+      // the panel renders it. Narrowing must not cost the enrichment.
+      const [row] = enrichInventoryRows(serverLowStock, catalogue);
+      expect(row.imageUrl).toBe("atta.png");
+      expect(row.stockBaseQty).toBe(2_000);
+    });
+
+    it("returns nothing when the subject is empty, rather than everything", () => {
+      expect(enrichInventoryRows([], catalogue)).toEqual([]);
+    });
+
+    it("is what the Low Stock Alerts panel actually calls", () => {
+      // The bug was at the call site, not in the merge, so pin the call site.
+      const page = readFileSync("src/features/core/inventory/pages/InventoryPage.tsx", "utf8");
+      expect(page).toContain("enrichInventoryRows(lowStock.data, allInventoryRows)");
+      expect(page).not.toContain("mergeInventoryRows(allInventoryRows, lowStock.data");
+    });
   });
 });

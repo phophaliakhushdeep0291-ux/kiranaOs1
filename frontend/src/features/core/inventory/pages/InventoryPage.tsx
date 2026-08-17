@@ -77,6 +77,7 @@ import {
   inventoryStockRows,
   inventoryStockValue,
   inventoryUnitLabel,
+  enrichInventoryRows,
   mergeInventoryRows,
 } from "@/features/core/inventory/stock-display";
 import { PageShell, StatCard, StatsGrid } from "@/components/shared";
@@ -645,7 +646,12 @@ export default function InventoryPage() {
 
   const isSaving = recordPurchase.isPending || recordDamage.isPending || stockCorrection.isPending || savingManualSale;
 
-  const lowStockRows = ((lowStock.data?.length ?? 0) > 0 ? mergeInventoryRows(allInventoryRows, lowStock.data ?? []) : allInventoryRows.filter(isLowStock))
+  // `enrichInventoryRows`, not `mergeInventoryRows`: the merge is a union, so
+  // pairing the server's shortlist with the whole catalogue to pick up names and
+  // photos returned the whole catalogue — and the sort below then surfaced the
+  // three smallest products in the shop instead of the three below their
+  // reorder level.
+  const lowStockRows = ((lowStock.data?.length ?? 0) > 0 ? enrichInventoryRows(lowStock.data, allInventoryRows) : allInventoryRows.filter(isLowStock))
     .filter((item) => Number(item.stockBaseQty ?? 0) > 0)
     .sort((a, b) => Number(a.stockBaseQty ?? 0) - Number(b.stockBaseQty ?? 0));
   const recentMovements = [...movementRows]
