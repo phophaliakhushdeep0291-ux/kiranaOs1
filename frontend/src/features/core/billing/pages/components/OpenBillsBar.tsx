@@ -1,6 +1,7 @@
 import { Loader2, Plus, ReceiptText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useShopBillingWords } from "@/features/core/settings/shop-billing";
 
 export interface OpenBillChip {
   id: string;
@@ -26,6 +27,7 @@ export function OpenBillsBar({ bills, onSwitch, onNew, busy = false }: {
   busy?: boolean;
 }) {
   const { t } = useAppLanguage();
+  const words = useShopBillingWords();
 
   return (
     <div aria-busy={busy} className="app-scrollbar mb-2 flex shrink-0 items-center gap-2 overflow-x-auto rounded-[10px] border border-[#e6ecf4] bg-[#f7f9fd] px-2 py-1.5">

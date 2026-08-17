@@ -9,6 +9,7 @@ import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api
 import { getProductEmoji, productPlaceholderColor } from "./BillingSearch";
 import { isScaleBillingUnit } from "@/features/core/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useShopBillingWords } from "@/features/core/settings/shop-billing";
 
 interface BillingCartProps {
   cart: CartItem[];
