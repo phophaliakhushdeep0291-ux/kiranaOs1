@@ -8,6 +8,7 @@ import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildUpiPaymentUri, getPaymentConfigSync } from "@/features/core/settings/payment-config";
 import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useShopBillingWords } from "@/features/core/settings/shop-billing";
 
 interface BillingPaymentPanelProps {
   billType: BillTypeSelection;
@@ -93,6 +94,7 @@ export function BillingPaymentPanel({
   onLookupGiftCard,
 }: BillingPaymentPanelProps) {
   const { t } = useAppLanguage();
+  const words = useShopBillingWords();
   const [showReceivedAmount, setShowReceivedAmount] = useState(false);
   const [showMorePaymentMethods, setShowMorePaymentMethods] = useState(false);
   // Cash-tendered → change-due calculator. Panel-local and informational only:
@@ -140,7 +142,7 @@ export function BillingPaymentPanel({
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.credit}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#fff3e4] text-[#f97316]"><UserRound size={17} /></span>}
-            label={t("billing.pay.udhar")}
+            label={t("billing.pay.udhar", { credit: words.credit })}
             selected={paymentMode === BillPaymentMode.credit}
             activeClass="border-[#fed7aa] bg-[#fff7ed] text-[#f97316]"
             onClick={() => setPaymentMode(BillPaymentMode.credit)}
@@ -247,7 +249,7 @@ export function BillingPaymentPanel({
           {typeof paidAmount === "number" && paidAmount >= 0 && grandTotal > 0 && (
             <p className="mt-1 text-xs text-muted-foreground">
               {effectivePaidAmount < grandTotal
-                ? t("billing.pay.udharLine", { amount: fmtRs(grandTotal - effectivePaidAmount) })
+                ? t("billing.pay.udharLine", { credit: words.credit, amount: fmtRs(grandTotal - effectivePaidAmount) })
                 : t("billing.pay.paidOk")}
             </p>
           )}
@@ -297,7 +299,7 @@ export function BillingPaymentPanel({
       {/* Udhar full alert */}
       {paymentMode === BillPaymentMode.credit && showPaymentMode ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-300">
-          {t("billing.pay.fullToUdhar", { amount: fmtRs(grandTotal) })}
+          {t("billing.pay.fullToUdhar", { credit: words.credit, amount: fmtRs(grandTotal) })}
         </div>
       ) : null}
 
@@ -347,7 +349,7 @@ export function BillingPaymentPanel({
             </div>
           </div>
           <div className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm">
-            <span className="text-muted-foreground">{t("billing.pay.udharRemaining")}</span>
+            <span className="text-muted-foreground">{t("billing.pay.udharRemaining", { credit: words.credit })}</span>
             <span
               data-testid="text-split-udhar"
               className={
@@ -363,7 +365,7 @@ export function BillingPaymentPanel({
       {/* Udhar bill type */}
       {billType === BillInputBillType.udhar_entry ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-300">
-          {t("billing.pay.fullWillGoToUdhar", { amount: fmtRs(grandTotal) })}
+          {t("billing.pay.fullWillGoToUdhar", { credit: words.credit, amount: fmtRs(grandTotal) })}
         </div>
       ) : null}
 
@@ -376,7 +378,7 @@ export function BillingPaymentPanel({
           </div>
           {creditAmount > 0 && (
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">{t("billing.pay.udhar")}</span>
+              <span className="text-muted-foreground">{t("billing.pay.udhar", { credit: words.credit })}</span>
               <span className="font-semibold text-amber-600">{fmtRs(creditAmount)}</span>
             </div>
           )}

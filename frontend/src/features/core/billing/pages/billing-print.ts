@@ -9,6 +9,7 @@ import {
   type ReceiptWindowOptions,
 } from "@/features/core/receipts/receipt-print";
 import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
+import { receiptCreditWordEnglish } from "@/features/core/settings/shop-billing";
 import { getTaxConfigSync } from "@/features/core/settings/tax-config";
 import { computeGstBreakdown } from "@/lib/gst";
 import { gstStateCode } from "@/lib/gstin";
@@ -17,7 +18,7 @@ import { addonSummary, type PrintableBill } from "./billing-types";
 
 function billTypeLabel(type: PrintableBill["billType"]) {
   if (type === BillInputBillType.estimate) return "Estimate";
-  if (type === BillInputBillType.udhar_entry) return "Udhar receipt";
+  if (type === BillInputBillType.udhar_entry) return `${receiptCreditWordEnglish()} receipt`;
   if (type === BillInputBillType.gst_invoice) return "GST invoice";
   return "Sale receipt";
 }
@@ -25,14 +26,14 @@ function billTypeLabel(type: PrintableBill["billType"]) {
 function paymentModeLabel(mode: string) {
   if (mode === BillPaymentMode.cash) return "Cash";
   if (mode === BillPaymentMode.upi) return "UPI";
-  if (mode === BillPaymentMode.credit) return "Udhar";
+  if (mode === BillPaymentMode.credit) return receiptCreditWordEnglish();
   return mode;
 }
 
 function fallbackPaymentLines(bill: PrintableBill): ReceiptPaymentLine[] {
   return [
     ...(bill.paid > 0 ? [{ mode: String(bill.paymentMode), label: paymentModeLabel(String(bill.paymentMode)), amount: bill.paid }] : []),
-    ...(bill.credit > 0 ? [{ mode: BillPaymentMode.credit, label: "Udhar", amount: bill.credit }] : []),
+    ...(bill.credit > 0 ? [{ mode: BillPaymentMode.credit, label: receiptCreditWordEnglish(), amount: bill.credit }] : []),
   ];
 }
 
@@ -90,7 +91,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
     // Udhar bills keep their record-keeping note; everything else uses the
     // shop's configured receipt footer (falling back to the friendly default).
     footerNote: [
-      bill.credit > 0 ? "Please keep this receipt for udhar records." : (printer.footerText || "Thank you for shopping with us."),
+      bill.credit > 0 ? `Please keep this receipt for ${receiptCreditWordEnglish().toLowerCase()} records.` : (printer.footerText || "Thank you for shopping with us."),
       printer.showReturnPolicy ? "Returns accepted as per shop policy with original bill." : "",
     ].filter(Boolean).join(" "),
   };
