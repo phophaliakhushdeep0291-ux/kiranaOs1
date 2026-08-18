@@ -41,9 +41,26 @@ const MAX_INITIAL_GZIP_BYTES = 300 * 1024;
 //
 // Audited the closure before moving it, per the note above: no duplicated
 // dependency, no lazy library pulled into the shell, and the Hindi tables are
-// pinned to their own `i18n-hindi` chunk (see vite.config.ts manualChunks) that
-// only a Hindi shop ever fetches. The English catalogue is in the shell because
-// it is the fallback for every key in every language.
+// pinned to their own chunks (see vite.config.ts manualChunks) that only a Hindi
+// shop ever fetches. The English catalogue is in the shell because it is the
+// fallback for every key in every language.
+//
+// ── 2026-08-15: Hindi is now TWO chunks, and neither ceiling saw the problem ──
+// Hindi is the default language and main.tsx blocks the mount on its chunk, so a
+// new shop's real first paint was startup + the whole Devanagari dictionary —
+// and only the startup half of that was ever measured here. A dynamic import is
+// invisible to `initialAssetNames`, so 54.5 kB gzip of blocking payload sat
+// outside both startup budgets by construction.
+//
+// Split at the boot path: shell + billing (the pair routes.tsx warms) block
+// paint, everything else is merged in after mount and falls back to English in
+// the gap. Measured: blocking Hindi 54.5 -> 17.3 kB gzip (-37.3), for +1.1 kB on
+// the shell and +1.0 kB on the Hindi total from having two chunks instead of one.
+//
+// The lesson for this file is the measurement, not the bytes: these ceilings
+// describe the STATIC closure, so any future paint-blocking dynamic import will
+// be just as invisible. Check main.tsx before trusting "Initial JS" as the
+// startup number.
 //
 // This is a one-off payment for a language, NOT slack for route growth. A new
 // language belongs in its own lazy chunk and should be argued on gzip.

@@ -22,7 +22,7 @@ interface ErrorBoundaryState {
 // A failed lazy-chunk import means this tab's cached index.html points at asset files from an
 // older deploy. React caches the rejected import forever, so the only recovery is a full reload
 // that fetches the new build; on a PWA that reload must bust the service-worker cache first.
-function isChunkLoadError(message?: string): boolean {
+export function isChunkLoadError(message?: string): boolean {
   if (!message) return false;
   // The first group is Chromium/Firefox wording. WebKit says something different for
   // the same failure — a rejected module fetch on iOS Safari surfaces as the bare

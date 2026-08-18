@@ -70,6 +70,9 @@ import { ProductFormPanel } from "./components/ProductFormPanel";
 import { ImportProductsDialog } from "./components/ImportProductsDialog";
 import { offlineDB } from "@/lib/offline/db";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { TradeFocusStrip } from "@/components/shared";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { getShopProductsProfile } from "@/features/core/settings/shop-products";
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 
@@ -96,6 +99,10 @@ function categoryBadge(name: string) {
 
 export default function ProductsPage() {
   const { t } = useAppLanguage();
+  // The sidebar already reached this screen under this trade's own word for it
+  // ("Menu", "Medicines", "Parts"). What the page counts and what it says the
+  // search box takes have to agree with that link.
+  const tradeProfile = getShopProductsProfile(useBusinessTypeKey());
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const manageProducts = usePermission("manage_products");
@@ -442,9 +449,16 @@ export default function ProductsPage() {
       className={`app-docked-page ${isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
       style={open && isDesktop ? { paddingRight: panelWidth + 24 } : undefined}
     >
+      <TradeFocusStrip
+        titleKey="products.trade.title"
+        focusKey={tradeProfile.focusKey}
+        links={tradeProfile.links}
+        className="mb-3.5"
+      />
+
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 xl:grid-cols-4">
-        <StatCard icon={<Package size={18} />} iconClass="bg-blue-50 text-blue-600" label={t("products.stats.total")} value={stats.total.toLocaleString("en-IN")} sub={t("products.stats.totalHint")} />
+        <StatCard icon={<Package size={18} />} iconClass="bg-blue-50 text-blue-600" label={t(tradeProfile.totalLabelKey)} value={stats.total.toLocaleString("en-IN")} sub={t(tradeProfile.totalHintKey)} />
         <StatCard icon={<AlertTriangle size={18} />} iconClass="bg-amber-50 text-amber-600" label={t("products.stats.lowStock")} value={stats.lowStock.toLocaleString("en-IN")} sub={t("products.stats.lowStockHint")} />
         <StatCard icon={<XCircle size={18} />} iconClass="bg-rose-50 text-rose-600" label={t("products.stats.outOfStock")} value={stats.outOfStock.toLocaleString("en-IN")} sub={t("products.stats.outOfStockHint")} />
         <StatCard icon={<Layers size={18} />} iconClass="bg-violet-50 text-violet-600" label={t("products.stats.categories")} value={stats.categories.toLocaleString("en-IN")} sub={t("products.stats.categoriesHint")} />
@@ -477,7 +491,7 @@ export default function ProductsPage() {
           <Input
             data-testid="input-search"
             className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
-            placeholder={t("products.search.placeholder")}
+            placeholder={t(tradeProfile.searchPlaceholderKey)}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />

@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BUSINESS_TYPE_DEFS, type BusinessType } from "@/features/core/settings/business-types";
 import { SHOP_WORKFLOWS } from "@/features/core/settings/shop-workflows";
-import { englishTranslations, loadHindiDictionary, type TranslationKey } from "@/features/core/settings/i18n";
+import { loadHindiDictionary, type TranslationKey } from "@/features/core/settings/i18n";
+import { englishTranslations } from "@/features/core/settings/translations/english";
 import { VERTICAL_PACKS } from "@/features/verticals/registry";
 
 /**

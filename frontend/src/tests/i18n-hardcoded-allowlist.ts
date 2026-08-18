@@ -14,12 +14,10 @@
  * fails if a listed file no longer exists, is already clean, or has dropped below its
  * recorded count — so the list cannot rot, be padded, or drift out of date.
  *
- * Counted at 3290 strings across 114 files. The jump from the previous 2662 is not new
- * debt: the checker used to require JSX text to be brace-free and a prop's quote to sit
- * directly after the `=`, so `{out ? "Out of stock" : "In stock"}` and
- * `label={cond ? … }` were invisible to it. Widening those two rules found strings that
- * had been rendering in English on Hindi counters the whole time — including on 24
- * pages this list had never needed to name, which is why they appear here now.
+ * Counted at 3160 strings across 112 files, rebuilt when this branch merged main. Both
+ * sides had been translating at once, so neither side's numbers described the merged
+ * tree; these are measured from it. The scanner is the widened one — it reads a
+ * ternary's arms and a prop's expression, which the counts on main predate.
  */
 export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "app/providers.tsx": 3,
@@ -75,7 +73,6 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/loyalty/pages/LoyaltyPage.tsx": 34,
   "features/core/money-statement/pages/MoneyStatementPage.tsx": 37,
   "features/core/offers/pages/OffersPage.tsx": 73,
-  "features/core/orders/pages/OrdersReceivedPage.tsx": 103,
   "features/core/platform-admin/pages/PlatformAdminPage.tsx": 28,
   "features/core/pricing/pages/ProductPricingPage.tsx": 50,
   "features/core/products/pages/ProductsPage.tsx": 5,
@@ -96,16 +93,11 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/reports/components/AccountingControlPanel.tsx": 26,
   "features/core/reports/components/BankReconciliationPanel.tsx": 90,
   "features/core/reports/pages/DailyClosingPage.tsx": 72,
-  "features/core/reports/pages/ReportsPage.tsx": 80,
+  "features/core/reports/pages/ReportsPage.tsx": 72,
   "features/core/returns/components/ReturnDialog.tsx": 50,
   "features/core/returns/pages/NewReturnPage.tsx": 72,
   "features/core/sales/pages/SalesOverviewPage.tsx": 49,
-  // Not debt: the one string here is a developer assertion thrown when the hook
-  // is used outside its provider. It never reaches a shopkeeper.
   "features/core/settings/i18n.tsx": 1,
-  // Not debt: the one string left is the literal RESTORE the owner must TYPE to
-  // confirm a restore, compared against `RESTORE <id>` in the page. Translating
-  // it would make the confirmation impossible to satisfy.
   "features/core/settings/pages/SyncSettingsPage.tsx": 1,
   "features/core/staff/pages/StaffPage.tsx": 70,
   "features/core/subscription/components/CancelSubscriptionDialog.tsx": 10,
@@ -114,7 +106,6 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/subscription/components/UpgradePrompt.tsx": 2,
   "features/core/subscription/pages/PlansPage.tsx": 19,
   "features/core/subscription/pages/SubscriptionPage.tsx": 22,
-  "features/core/suppliers/pages/SuppliersPage.tsx": 19,
   "features/core/support/ReportIssueButton.tsx": 6,
   "features/core/support/pages/AskArthaPage.tsx": 5,
   "features/core/sync/SyncAlertBanner.tsx": 3,

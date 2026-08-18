@@ -87,6 +87,25 @@ export const createProductSchema = z.object({
   // real limit on push size, not decoration; 100 covers any grid a counter can
   // physically stock.
   sellingUnits: z.array(sellingUnitSchema).max(100).optional(),
+  // Trade details: the facts one shop type needs on a product and no other has
+  // any use for — a chemist's salt, a garment shop's fabric, a parts shop's OEM
+  // number. Validated as a shape, not as a vocabulary: which keys a trade uses is
+  // the product form's business, and the server bounds size and scalar-ness only.
+  // See product-attributes.js for why the catalogue is deliberately not mirrored
+  // here, and why a write MERGES rather than replaces.
+  //
+  // Deliberately permissive about the VALUES, and strict about them afterwards.
+  // A typed union here rejects the whole product when a single value is not a
+  // scalar — one stray field from an older or third-party client turns into
+  // "Validation failed: attributes" on a save that was otherwise perfect, and on
+  // the sync path into an event that can never be applied. sanitizeProductAttributes
+  // drops the unusable value and keeps the product, which is the right trade for a
+  // bag whose vocabulary lives on the client.
+  //
+  // Nullish rather than optional: a whole-record payload from conflict resolution
+  // or a sync echo states an untouched field as null, and .optional() alone
+  // rejects that.
+  attributes: z.record(z.unknown()).nullish(),
   // Optimistic-concurrency guard: the server updatedAt the client based this edit on.
   baseUpdatedAt: z.string().optional(),
 });

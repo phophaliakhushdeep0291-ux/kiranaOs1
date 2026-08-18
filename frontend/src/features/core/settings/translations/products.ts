@@ -113,6 +113,7 @@ export const productsEn = {
   "products.form.aliasesPlaceholder": "namak, salt, साल्ट",
   "products.form.pricing": "Pricing",
   "products.form.mrp": "MRP (₹)",
+  "products.form.mrpZeroHint": "No MRP means no price ceiling — billing will accept any price for this item.",
   "products.form.costPrice": "Cost Price (₹)",
   "products.form.sellingPrice": "Selling Price (₹)",
   "products.form.amountPlaceholder": "0.00",
@@ -143,6 +144,7 @@ export const productsEn = {
   "products.form.addSize": "Add size",
   "products.form.packDetailsHint": "Enter what the pack contains and its selling price.",
   "products.form.stockInventory": "Stock & Inventory",
+  "products.form.gridStockHint": "Counted from the size grid above.",
   "products.form.reorderLevel": "Reorder Level",
   "products.form.rateStockUnit": "Rate / Stock Unit",
   "products.form.batchExpiry": "Enable batch and expiry tracking",
@@ -208,4 +210,55 @@ export const productsEn = {
   "products.variantSplit.main": "(main)",
   "products.variantSplit.total": "Total",
   "products.variantSplit.hint": "Counted per size, not in base units. Move stock between branches with a transfer so both sides stay in step.",
+
+  // ── The catalogue in each trade's own words (see settings/shop-products.ts) ──
+  // The sidebar already calls this screen "Menu", "Medicines" or "Parts"; these
+  // are what the screen itself then has to say back.
+  "products.trade.title": "Catalogue for your shop type",
+  "products.trade.link.categories": "Categories",
+  "products.trade.link.menu": "Menu",
+
+  "products.trade.total.styles": "Total Styles",
+  "products.trade.total.models": "Total Models",
+  "products.trade.total.parts": "Total Parts",
+  "products.trade.total.medicines": "Total Medicines",
+  "products.trade.total.titles": "Total Titles",
+  "products.trade.total.shades": "Total Shades",
+  "products.trade.total.dishes": "Total Dishes",
+  "products.trade.total.materials": "Items and Materials",
+
+  "products.trade.hint.styles": "Sizes and colours counted separately",
+  "products.trade.hint.models": "Active models",
+  "products.trade.hint.parts": "Part numbers on the shelf",
+  "products.trade.hint.medicines": "Medicines you stock",
+  "products.trade.hint.titles": "Books and supplies",
+  "products.trade.hint.shades": "Every shade counted on its own",
+  "products.trade.hint.dishes": "Dishes on the menu",
+  "products.trade.hint.materials": "Materials, packs and finished goods",
+
+  // What a counter actually types into the box. Naming the wrong identifier
+  // tells a shop its catalogue is not searchable that way, when it is.
+  "products.trade.search.clothing": "Search by style, size, colour or barcode",
+  "products.trade.search.footwear": "Search by model, size or barcode",
+  "products.trade.search.autoParts": "Search by part name, OEM number or SKU",
+  "products.trade.search.electronics": "Search by model number, brand or barcode",
+  "products.trade.search.pharmacy": "Search by medicine, salt or barcode",
+  "products.trade.search.stationery": "Search by title, ISBN, class or barcode",
+  "products.trade.search.furniture": "Search by model, material or code",
+  "products.trade.search.cosmetics": "Search by product, shade or barcode",
+  "products.trade.search.restaurant": "Search by dish or menu code",
+  "products.trade.search.manufacturing": "Search by material, code or HS code",
+
+  "products.trade.focus.kirana": "One row per pack size. A single row shared by the 500 g and the 1 kg packet will bill one of them at the other's rate.",
+  "products.trade.focus.clothing": "A style is not a row: every size and colour is its own row, or availability and returns both stop being exact.",
+  "products.trade.focus.footwear": "One row per model and size. A model row holding pooled pairs cannot tell you which size has gone missing.",
+  "products.trade.focus.autoParts": "Put the OEM number on the row and the bin beside it — those two fields are most of what makes a parts counter fast.",
+  "products.trade.focus.electronics": "Turn on serial tracking for anything that comes back under warranty, then register the pieces on the Serial units screen.",
+  "products.trade.focus.pharmacy": "Record the salt, not only the brand. It is what a customer asks for when the brand is out of stock, and what a substitute is found by.",
+  "products.trade.focus.stationery": "Books are asked for by class and board far more often than by title — fill those in before you reach for the ISBN.",
+  "products.trade.focus.furniture": "Dimensions belong on the row rather than in someone's head: every quotation on the floor is built out of them.",
+  "products.trade.focus.cosmetics": "One row per shade, and record the open-jar months — beauty stock expires on the shelf, not in the godown.",
+  "products.trade.focus.restaurant": "The menu is the catalogue. Keep the allergen and onion-garlic answers on the dish so a server never has to walk back to the kitchen.",
+  "products.trade.focus.manufacturing": "Classify every item as raw, packaging or finished good — that is what decides how it is counted, costed and traced.",
+  "products.trade.focus.other": "Give every sellable item a unique code, its real selling unit and a reorder level; most of the rest of the app reads those three.",
 } as const;

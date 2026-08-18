@@ -1,9 +1,11 @@
 import { useCallback } from "react";
 import type { AccentColor } from "./theme";
-// Type-only for the key union, plus the English catalogue itself so a category
-// value can be checked against the keys that exist. `i18n` imports the
-// translation MODULES, never this file, so there is no cycle.
-import { englishTranslations, type Translate, type TranslationKey } from "./i18n";
+// Type-only. It used to import the English catalogue as a VALUE to check a
+// category against the keys that exist, which no longer works: the catalogue is
+// split, and `translations/english` statically pulls the deferred half — a value
+// import here would drag nine secondary-screen tables back into the startup
+// chunk. The shipped categories are already listed below, so ask them instead.
+import type { Translate, TranslationKey } from "./i18n";
 import {
   BUSINESS_TYPE_IDS,
   getStoredBusinessType,
@@ -101,9 +103,18 @@ export interface BusinessTypeDefinition {
  * as they wrote it — so this returns null rather than guessing, and the caller
  * falls back to the raw value.
  */
+let shippedCategories: Set<string> | null = null;
+
 export function categoryLabelKey(category: string): TranslationKey | null {
-  const key = `shopType.category.${category}` as TranslationKey;
-  return key in englishTranslations ? key : null;
+  // Built on first call, not at module scope: `BUSINESS_TYPE_DEFS` is declared
+  // further down this file, so a module-level `new Set(...)` over it throws
+  // before initialization and takes the whole app down at import.
+  //
+  // Derived from the table rather than restated, so a trade that gains a
+  // category cannot be forgotten here. Whether the DICTIONARY has the matching
+  // key is a separate question, asked by vertical-navigation-fit.test.ts.
+  shippedCategories ??= new Set(Object.values(BUSINESS_TYPE_DEFS).flatMap((definition) => definition.categories));
+  return shippedCategories.has(category) ? (`shopType.category.${category}` as TranslationKey) : null;
 }
 
 /** A category in the reader's language, or as typed if the shop invented it. */
@@ -115,6 +126,20 @@ export function translateCategory(category: string, t: Translate): string {
 /** Choices that may create/change a shop — mirrors OFFERED_BUSINESS_TYPES on the server. */
 export function offeredBusinessTypes(): BusinessType[] {
   return [...BUSINESS_TYPE_IDS];
+}
+
+/**
+ * The category a new product starts in, for this trade.
+ *
+ * Every form used to start on the literal string "general", which only the
+ * custom trade actually lists: the other eleven opened their category picker
+ * showing its placeholder, beside a red required star that nothing enforced, and
+ * saved a category the shop can neither see in its own list nor filter by. A
+ * trade's first category is a real answer, and the shop can change it in one tap.
+ */
+export function defaultCategoryFor(businessType: BusinessType): string {
+  const categories = BUSINESS_TYPE_DEFS[businessType]?.categories ?? [];
+  return categories.find((category) => category !== "all") ?? "general";
 }
 
 /**

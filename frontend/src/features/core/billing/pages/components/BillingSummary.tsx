@@ -24,6 +24,7 @@ import type { BillTypeSelection, CartItem, PaymentSelection } from "../billing-t
 import { BillingCart } from "./BillingCart";
 import { BillingPaymentPanel } from "./BillingPaymentPanel";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useShopBillingWords } from "@/features/core/settings/shop-billing";
 import { ACTIVITY_EVENTS, trackEvent, usePersonalization } from "@/lib/activity";
 
 interface BillingSummaryProps {
@@ -271,6 +272,7 @@ export function BillingSummary({
   negativeStockWarnings = [],
 }: BillingSummaryProps) {
   const { t } = useAppLanguage();
+  const words = useShopBillingWords();
   // §13 "Highlighting frequently selected customers": the people this user picks
   // most float to the top of the list. Ordering only — every customer is still
   // in the list, in the same alphabetical order underneath.
@@ -449,7 +451,7 @@ export function BillingSummary({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={BillInputBillType.normal_sale}>{t("billing.summary.pakkaBill")}</SelectItem>
-                    <SelectItem value={BillInputBillType.udhar_entry}>{t("billing.summary.udhar")}</SelectItem>
+                    <SelectItem value={BillInputBillType.udhar_entry}>{t("billing.summary.udhar", { credit: words.credit })}</SelectItem>
                     <SelectItem value={BillInputBillType.gst_invoice}>{t("billing.summary.gstInvoice")}</SelectItem>
                     <SelectItem value={BillInputBillType.estimate}>{t("billing.summary.estimateBill")}</SelectItem>
                   </SelectContent>
@@ -493,7 +495,7 @@ export function BillingSummary({
                       ref={customerNameInputRef}
                       data-testid="input-customer-name"
                       className="h-9 text-sm"
-                      placeholder={t("billing.summary.namePlaceholder")}
+                      placeholder={t("billing.summary.namePlaceholder", { credit: words.credit })}
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                     />
@@ -513,7 +515,7 @@ export function BillingSummary({
                   )}
                   {(creditAmount > 0 || billType === BillInputBillType.udhar_entry) &&
                     !hasCreditCustomerIdentity && (
-                      <p className="text-xs text-amber-600">{t("billing.summary.udharNeedsIdentity")}</p>
+                      <p className="text-xs text-amber-600">{t("billing.summary.udharNeedsIdentity", { credit: words.credit })}</p>
                     )}
                 </>
               )}

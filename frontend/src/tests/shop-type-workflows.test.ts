@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BUSINESS_TYPE_DEFS, type BusinessType } from "@/features/core/settings/business-types";
 import { SHOP_WORKFLOWS } from "@/features/core/settings/shop-workflows";
-import { englishTranslations, type TranslationKey } from "@/features/core/settings/i18n";
+import type { TranslationKey } from "@/features/core/settings/i18n";
+import { englishTranslations } from "@/features/core/settings/translations/english";
 
 /**
  * The workflow table holds dictionary keys now, so a length or substring check on

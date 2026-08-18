@@ -35,9 +35,24 @@ async function main() {
   const englishModules = files
     .filter((name) => name.endsWith(".ts") && !name.endsWith(".hi.ts"))
     .map((name) => name.replace(/\.ts$/, ""))
-    // hindi.ts is the loader that stitches the per-module Hindi tables together,
-    // not a catalogue of its own.
-    .filter((name) => name !== "hindi")
+    // hindi.ts and its hindi-*.ts halves are the loaders that stitch the
+    // per-module Hindi tables together, not catalogues of their own — they hold
+    // no English strings, so there is nothing here to compare and no
+    // `<name>.hi.ts` counterpart to demand.
+    //
+    // Matched by prefix rather than by name so splitting the Hindi load again
+    // (it is already split into a critical and a deferred half, so that the
+    // first paint does not block on the whole dictionary) does not fail this
+    // gate with a complaint about a missing `hindi-something.hi.ts`. Nothing
+    // English can collide with the prefix.
+    //
+    // The ENGLISH aggregators need the same exemption, and did not get it when
+    // the English catalogue was split the same way. `english.ts`,
+    // `english-critical.ts` and `english-deferred.ts` re-export the per-module
+    // tables; they hold no strings of their own and there is no
+    // `english-critical.hi.ts` for them to be compared against. Without this the
+    // gate reported three missing counterparts that were never meant to exist.
+    .filter((name) => !["hindi", "english"].includes(name) && !name.startsWith("hindi-") && !name.startsWith("english-"))
     .sort();
 
   const problems = [];

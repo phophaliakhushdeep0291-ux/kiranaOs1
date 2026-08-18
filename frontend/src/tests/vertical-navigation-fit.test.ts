@@ -3,7 +3,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { NAV, buildSidebarNav } from "@/components/layout/Layout";
 import { MORE_GROUPS } from "@/components/layout/MobileAppChrome";
 import { BUSINESS_TYPE_DEFS, categoryLabelKey, saveBusinessType, type BusinessType } from "@/features/core/settings/business-types";
-import { englishTranslations, loadHindiDictionary, type TranslationKey } from "@/features/core/settings/i18n";
+import { loadHindiDictionary, type TranslationKey } from "@/features/core/settings/i18n";
+// The full catalogue lives here now: i18n.tsx only holds the boot half as a value,
+// and a test may pull the deferred one because it is not in the startup bundle.
+import { englishTranslations } from "@/features/core/settings/translations/english";
 import { SHARED_NAVIGATION, isPathInBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { isPathEnabled, setModulePathGate } from "@/features/core/settings/modules";
 import { VERTICAL_PACKS, isVerticalPathActive, packForBusinessType } from "@/features/verticals/registry";

@@ -81,15 +81,36 @@ describe("Hindi arrives before the first paint", () => {
     // shop wifi from holding the till hostage — English is a complete dictionary.
     const entry = readFileSync("src/main.tsx", "utf8");
     expect(entry).toContain("getInitialLanguage() === \"hi\"");
-    expect(entry).toContain("loadHindiDictionary()");
     expect(entry).toContain("Promise.race");
   });
 
+  it("blocks first paint on the critical half only", () => {
+    // Hindi is the DEFAULT, so this wait is on the first-ever load of every new shop
+    // with a cold cache. Blocking it on the whole dictionary meant holding a blank
+    // screen for settings, inventory, reports and the trade tables — none of which
+    // the boot path renders. Waiting on the full loader here would silently restore
+    // that; the deferred half must never be on the critical path.
+    const entry = readFileSync("src/main.tsx", "utf8");
+    expect(entry).toContain("loadCriticalHindiDictionary()");
+    expect(entry).not.toMatch(/\bloadHindiDictionary\(\)/);
+  });
+
   it("keeps Hindi out of the startup download", () => {
-    // The whole point of the lazy table: an English counter never pays for ~40 kB of
+    // The whole point of the lazy table: an English counter never pays for ~290 kB of
     // Devanagari. A static import here would silently undo that.
     const i18n = readFileSync("src/features/core/settings/i18n.tsx", "utf8");
-    expect(i18n).toContain('import("./translations/hindi")');
-    expect(i18n).not.toMatch(/^import .*translations\/hindi";$/m);
+    expect(i18n).toContain('import("./translations/hindi-critical")');
+    expect(i18n).toContain('import("./translations/hindi-deferred")');
+    expect(i18n).not.toMatch(/^import .*translations\/hindi(-critical|-deferred)?";$/m);
+  });
+
+  it("pins the two halves to separate chunks", () => {
+    // The split only exists in the bundle if Rollup keeps the halves apart. The
+    // object form of manualChunks assigns the named module AND its imports, so a
+    // single pin on translations/hindi would merge them back and quietly undo the
+    // whole change while every other test still passed.
+    const viteConfig = readFileSync("vite.config.ts", "utf8");
+    expect(viteConfig).toContain('"i18n-hindi-critical": ["./src/features/core/settings/translations/hindi-critical"]');
+    expect(viteConfig).toContain('"i18n-hindi": ["./src/features/core/settings/translations/hindi-deferred"]');
   });
 });

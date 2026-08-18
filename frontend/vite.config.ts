@@ -174,7 +174,18 @@ export default defineConfig({
           // ~45 kB of Devanagari it never renders, and a Hindi shop had to fetch
           // an unrelated route to get its own language. Pinning them to a named
           // chunk keeps the language payload independent of routing.
-          "i18n-hindi": ["./src/features/core/settings/translations/hindi"],
+          //
+          // TWO pins, not one, and pinned at the halves rather than at
+          // translations/hindi. The object form assigns the named module AND
+          // everything it imports, so naming the full dictionary would pull both
+          // halves back into a single chunk and undo the split — the same trap
+          // the vertical-pages note below describes. hindi.ts itself composes the
+          // two halves and is reachable only from the completeness test.
+          //
+          // The split is what lets main.tsx block first paint on the shell and
+          // billing tables alone; see hindi-critical.ts.
+          "i18n-hindi-critical": ["./src/features/core/settings/translations/hindi-critical"],
+          "i18n-hindi": ["./src/features/core/settings/translations/hindi-deferred"],
           // Do NOT add a per-vertical entry here in the object form. Naming a
           // trade's page assigns that module AND everything it imports, so the
           // shared UI kit lands in the trade's chunk and every core page then has

@@ -541,6 +541,27 @@ model Product {
   // is priced and returns tomorrow — the kitchen has simply run out of it now.
   menuAvailable                Boolean   @default(true)
   menuSortOrder                Int       @default(0)
+  // ── Trade details ──────────────────────────────────────────────────────────
+  // The facts one trade needs on a product and no other trade has any use for:
+  //   {"composition":"Paracetamol 500 mg","dosageForm":"Tablet","coldChain":false}
+  //
+  // A chemist must record the salt, a garment shop the fabric, a parts shop the
+  // OEM number, a book shop the ISBN. Eleven trades × a dozen facts is a hundred
+  // and thirty columns, of which any one shop would use a tenth — so they are one
+  // bag of scalars instead, keyed by the field catalogue the product form renders
+  // from (frontend/src/features/core/products/product-attributes.ts).
+  //
+  // What does NOT belong here: anything the app computes with. Stock, price, tax,
+  // the drug schedule that blocks a sale and the variant axes that split stock are
+  // real columns precisely because code branches on them. These are descriptive —
+  // read by a human at the counter, searched, and printed — so a JSON bag costs
+  // nothing and a migration per trade would cost a lot.
+  //
+  // Keys a shop's current trade does not know about are KEPT, not pruned: a shop
+  // that switches type and switches back must not silently lose what it typed.
+  // The server bounds size and value types (products/product-attributes.js) and
+  // stays out of the trade vocabulary, which lives with the form that renders it.
+  attributesJson               String    @default("{}")
   clientProductId              String? // stable client-generated id, for offline-create idempotency
   idempotencyKey               String? // durable create idempotency key (survives retries/pull echoes)
   sourceDeviceId               String? // device that created the product offline

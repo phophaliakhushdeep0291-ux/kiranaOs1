@@ -1,0 +1,68 @@
+// Hindi half of the suppliers dictionary. Kept in its own module so the app
+// shell ships only the English catalogue and this table is fetched on demand.
+import type { suppliersEn } from "./suppliers";
+
+export const suppliersHi: Record<keyof typeof suppliersEn, string> = {
+  "suppliers.count.one": "1 {supplier}",
+  "suppliers.count.many": "{count} {supplier}",
+  "suppliers.add": "नया {supplier} जोड़ें",
+  "suppliers.search.placeholder": "नाम या मोबाइल से खोजें...",
+  "suppliers.empty.noMatch": "खोज से कोई {supplier} नहीं मिला",
+  "suppliers.empty.none": "अभी कोई {supplier} नहीं — पहला जोड़ें",
+  "suppliers.row.edit": "{name} बदलें",
+  "suppliers.row.delete": "{name} हटाएं",
+
+  "suppliers.form.addTitle": "नया {supplier} जोड़ें",
+  "suppliers.form.editTitle": "{supplier} बदलें",
+  "suppliers.form.name": "नाम *",
+  "suppliers.form.namePlaceholder": "फर्म या आदमी का नाम",
+  "suppliers.form.nameRequired": "नाम जरूरी है",
+  "suppliers.form.mobile": "मोबाइल",
+  "suppliers.form.address": "पता",
+  "suppliers.form.gstin": "GSTIN",
+  "suppliers.form.gstinInvalid": "सही 15 अंकों का GSTIN भरें",
+  "suppliers.form.gstinHelp": "इस फर्म के बिलों पर इनपुट GST लेने के लिए जरूरी है। इसके पहले दो अंक तय करते हैं कि टैक्स CGST+SGST लगेगा या IGST।",
+  "suppliers.form.cancel": "रहने दें",
+  "suppliers.form.save": "सेव करें",
+  "suppliers.form.addAction": "जोड़ें",
+
+  "suppliers.toast.added": "{supplier} जुड़ गया",
+  "suppliers.toast.updated": "{supplier} बदल गया",
+  "suppliers.toast.recycled": "{supplier} यहीं रीस्टोर बिन में डाल दिया",
+  "suppliers.toast.error": "गड़बड़",
+  "suppliers.toast.failed": "नहीं हो सका",
+  "suppliers.toast.deleteBlocked": "हटाया नहीं जा सका",
+  "suppliers.toast.ownerPinRequired": "मालिक का PIN जरूरी है।",
+  "suppliers.delete.title": "रीस्टोर बिन में डालें",
+  "suppliers.delete.description": "{name} को हटाएं? यह सिर्फ छिपेगा और सिंक के लिए कतार में जाएगा।",
+  "suppliers.delete.thisOne": "इसे",
+  "suppliers.delete.confirm": "रीस्टोर बिन में डालें",
+
+  "suppliers.trade.title": "खरीद, आपकी दुकान के हिसाब से",
+  "suppliers.word.suppliers": "सप्लायर",
+  "suppliers.word.supplier": "सप्लायर",
+  "suppliers.word.distributors": "डिस्ट्रीब्यूटर",
+  "suppliers.word.distributor": "डिस्ट्रीब्यूटर",
+  "suppliers.word.vendors": "वेंडर",
+  "suppliers.word.vendor": "वेंडर",
+
+  "suppliers.trade.heading.kirana": "सप्लायर और थोक व्यापारी",
+  "suppliers.trade.heading.distributors": "डिस्ट्रीब्यूटर और स्टॉकिस्ट",
+  "suppliers.trade.heading.vendors": "वेंडर और कच्चे माल के सप्लायर",
+  "suppliers.trade.heading.general": "सप्लायर",
+
+  "suppliers.trade.link.purchases": "खरीद बिल",
+
+  "suppliers.trade.focus.kirana": "किराने का ज़्यादातर माल दो-तीन डिस्ट्रीब्यूटर से तय दिनों पर आता है — किसका कौन-सा दिन है यह लिख लें, शेल्फ बीच हफ्ते खाली होना बंद हो जाएगा।",
+  "suppliers.trade.focus.clothing": "सीज़न की खरीद महीनों पहले तय होती है, इसलिए हर लेबल का एजेंट या थोक व्यापारी फोन की कॉन्टैक्ट लिस्ट में नहीं, यहाँ रखें।",
+  "suppliers.trade.focus.footwear": "जो सप्लायर टूटा हुआ साइज़ रन एक हफ्ते में पूरा कर दे, वह सबसे सस्ते वाले से ज़्यादा काम का है। लिख कर रखें कौन कैसा है।",
+  "suppliers.trade.focus.autoParts": "हर डिस्ट्रीब्यूटर का GSTIN दर्ज करें: पार्ट्स पर असली इनपुट GST लगता है, और नंबर न हो तो वह क्रेडिट आपने चुकाया पर ले नहीं सकते।",
+  "suppliers.trade.focus.electronics": "महँगा माल यानी महँगे क्रेडिट नोट — डिस्ट्रीब्यूटर की जानकारी सही रखें ताकि वारंटी या रेट-प्रोटेक्शन का दावा कहीं जा सके।",
+  "suppliers.trade.focus.pharmacy": "दवाइयाँ अपने लाइसेंस वाले स्टॉकिस्ट से आती हैं। उनका GSTIN और जानकारी ही इंस्पेक्शन और रिकॉल दोनों में खंगाली जाती है।",
+  "suppliers.trade.focus.stationery": "इस काम की सारी खरीद सत्र से पहले एक बार में होती है। कौन-सा डिस्ट्रीब्यूटर किस बोर्ड की किताबें रखता है, यह अभी लिखें — जून में नहीं।",
+  "suppliers.trade.focus.furniture": "ऑर्डर पर बना पीस उतना ही भरोसेमंद है जितनी उसके पीछे की वर्कशॉप — कारीगर का नंबर उस समय के साथ रखें जो आप ग्राहक को बताते हैं।",
+  "suppliers.trade.focus.cosmetics": "ब्यूटी डिस्ट्रीब्यूटर के पास माल भी है और टेस्टर भी। GSTIN दर्ज करें ताकि ऊँचे MRP वाले माल का इनपुट क्रेडिट सच में मिल सके।",
+  "suppliers.trade.focus.restaurant": "रसोई रोज़ मंडी से और महीने में डिस्ट्रीब्यूटर से खरीदती है। दोनों यहाँ रखें — सर्विस के लिए सब्ज़ी वाला गैस एजेंसी से ज़्यादा मायने रखता है।",
+  "suppliers.trade.focus.manufacturing": "हर माल का लॉट उसी वेंडर तक खंगाला जाता है जिसने दिया था, इसलिए बिना GSTIN वाला वेंडर रिकॉर्ड इनपुट क्रेडिट और ऑडिट दोनों तोड़ देता है।",
+  "suppliers.trade.focus.other": "जिससे भी नियमित खरीदते हैं उसका GSTIN दर्ज करें — यही खरीद बिल को मिलने लायक इनपुट क्रेडिट बनाता है।",
+};

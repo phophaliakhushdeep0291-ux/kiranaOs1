@@ -8,14 +8,15 @@ import {
   productImportSessionSettingKey,
   type ProductImportSession,
 } from "@/features/core/products/local-actions";
+import { useBusinessTypeKey } from "@/features/core/settings/business-type-store";
 import {
-  PRODUCT_IMPORT_COLUMNS,
   downloadProductImportErrors,
   downloadProductTemplate,
   fingerprintProductImport,
   inspectProductImportCsv,
   parseProductsCsv,
   planProductImport,
+  productImportColumns,
   type ProductImportField,
   type ProductImportMapping,
   type ProductImportPlan,
@@ -97,9 +98,16 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
   const [completedSession, setCompletedSession] = useState<ProductImportSession | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
 
+  // The mappable columns are the fixed ones plus this trade's own detail fields,
+  // so a chemist's sheet can bring composition and dosage form across in the same
+  // pass as price and stock. Keyed off the live business type: changing the shop
+  // type re-derives the tail without a reload.
+  const businessType = useBusinessTypeKey();
+  const importColumns = useMemo(() => productImportColumns(businessType), [businessType]);
+
   const result = useMemo(
-    () => rawText ? parseProductsCsv(rawText, mapping) : null,
-    [mapping, rawText],
+    () => rawText ? parseProductsCsv(rawText, mapping, businessType) : null,
+    [businessType, mapping, rawText],
   );
   const plan = useMemo<ProductImportPlan | null>(
     () => result && !result.headerError ? planProductImport(result, existingProducts, strategy) : null,
@@ -159,7 +167,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
       delete next[field];
       if (sourceIndex === "") return next;
       const index = Number(sourceIndex);
-      for (const column of PRODUCT_IMPORT_COLUMNS) {
+      for (const column of importColumns) {
         if (column.field !== field && next[column.field] === index) delete next[column.field];
       }
       next[field] = index;
@@ -216,7 +224,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
   const renderMappingFields = (fields: ProductImportField[]) => (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
       {fields.map((field) => {
-        const column = PRODUCT_IMPORT_COLUMNS.find((item) => item.field === field);
+        const column = importColumns.find((item) => item.field === field);
         if (!column) return null;
         return (
           <label key={field} className="space-y-1 text-[11px] font-bold text-[#43516b]">
@@ -237,7 +245,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
     </div>
   );
 
-  const optionalFields = PRODUCT_IMPORT_COLUMNS
+  const optionalFields = importColumns
     .map((column) => column.field)
     .filter((field) => !PRIORITY_MAPPING_FIELDS.includes(field));
   const previewRows = plan?.rows.slice(0, 200) ?? [];

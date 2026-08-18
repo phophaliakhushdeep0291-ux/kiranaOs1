@@ -13,6 +13,11 @@ import { makeLocalEntity, parseOrThrow, touchLocalEntity } from "@/lib/offline/a
 import type { Product, ProductInput } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/features/core/audit-logs/local-actions";
 import { uniqueProductAliases } from "@/features/core/products/product-reliability";
+// The value helpers only, never the catalogue: this module is reachable from the
+// app entry, so importing product-attributes.ts here puts all twelve trades'
+// field labels in front of every shop's first paint. See the note in
+// product-attribute-values.ts.
+import { normalizeProductAttributes, type ProductAttributes } from "@/features/core/products/product-attribute-values";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 
 const CACHE_KEY = "products";
@@ -116,6 +121,31 @@ async function commitProductWrite(input: {
   });
 }
 
+/**
+ * The offline twin of the server's attribute merge (product-attributes.js).
+ *
+ * It has to be a merge here for the same reason it is one there, and the local
+ * copy has to agree with the server's or the device would show a different
+ * product than the one it just saved: the form sends only the current trade's
+ * fields, so replacing the bag locally would blank whatever an earlier trade
+ * recorded until the next pull put it back. A key named with no value is a
+ * deliberate clear, which is how the form deletes a detail.
+ */
+function mergeLocalProductAttributes(
+  existing: ProductAttributes | undefined,
+  incoming: ProductAttributes | undefined,
+): ProductAttributes {
+  const base = normalizeProductAttributes(existing);
+  if (!incoming || typeof incoming !== "object") return base;
+  const merged: ProductAttributes = { ...base };
+  for (const [key, value] of Object.entries(incoming)) {
+    const cleared = value === null || value === undefined || (typeof value === "string" && !value.trim());
+    if (cleared) delete merged[key];
+    else merged[key] = typeof value === "string" ? value.trim() : value;
+  }
+  return normalizeProductAttributes(merged);
+}
+
 function toProduct(data: ProductInput, id = createLocalId("product"), existing?: Product): Product {
   const now = new Date().toISOString();
   const normalized = normaliseProductInput(data);
@@ -167,6 +197,7 @@ function toProduct(data: ProductInput, id = createLocalId("product"), existing?:
     drugSchedule: Object.prototype.hasOwnProperty.call(normalized, "drugSchedule")
       ? normalized.drugSchedule ?? null
       : existing?.drugSchedule ?? null,
+    attributes: mergeLocalProductAttributes(existing?.attributes, normalized.attributes),
     lowStockAlert: normalized.lowStockAlert ?? normalized.lowStockThreshold,
     isActive: normalized.isActive,
     status: normalized.status,

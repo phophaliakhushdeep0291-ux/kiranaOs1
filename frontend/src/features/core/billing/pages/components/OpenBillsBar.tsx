@@ -1,6 +1,7 @@
 import { Loader2, Plus, ReceiptText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useShopBillingWords } from "@/features/core/settings/shop-billing";
 
 export interface OpenBillChip {
   id: string;
@@ -26,6 +27,7 @@ export function OpenBillsBar({ bills, onSwitch, onNew, busy = false }: {
   busy?: boolean;
 }) {
   const { t } = useAppLanguage();
+  const words = useShopBillingWords();
 
   return (
     <div aria-busy={busy} className="app-scrollbar mb-2 flex shrink-0 items-center gap-2 overflow-x-auto rounded-[10px] border border-[#e6ecf4] bg-[#f7f9fd] px-2 py-1.5">
@@ -63,10 +65,10 @@ export function OpenBillsBar({ bills, onSwitch, onNew, busy = false }: {
         type="button"
         onClick={() => { void onNew(); }}
         disabled={busy}
-        title={t("billing.openBills.startNew")}
+        title={t("billing.openBills.startNew", { bill: words.bill })}
         className="ml-auto flex h-11 shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[var(--brand)] px-2.5 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] disabled:pointer-events-none disabled:opacity-60 lg:mouse:h-auto lg:mouse:py-1"
       >
-        {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {t("billing.openBills.new")}
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {t("billing.openBills.new", { bill: words.bill })}
       </button>
     </div>
   );

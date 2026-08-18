@@ -9,7 +9,10 @@ describe("premium mobile reports hierarchy", () => {
     expect(reports).toContain('aria-label="Mobile report overview"');
     expect(reports).toContain('className="hidden min-w-0 grid-cols-2 gap-2 md:grid lg:grid-cols-4"');
     expect(reports).toContain("<MobileTenderStat label=\"Cash\"");
-    expect(reports).toContain("<MobilePulseTile label=\"Udhar Due\"");
+    // The credit tile is named by the trade — "Udhar Due" in a kirana store,
+    // "Tabs Due" in a café — so the phone summary is pinned on the prop being
+    // passed rather than on one trade's wording.
+    expect(reports).toContain("<MobilePulseTile label={creditLabel}");
   });
 
   it("keeps primary mobile report actions at least 44px tall", () => {

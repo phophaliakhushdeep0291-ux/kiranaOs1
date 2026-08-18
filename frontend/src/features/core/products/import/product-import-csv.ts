@@ -1,4 +1,11 @@
 import type { Product, ProductInput } from "@/types/api";
+import { getStoredBusinessType, type BusinessType } from "@/features/core/settings/business-type-store";
+import { defaultCategoryFor } from "@/features/core/settings/business-types";
+import {
+  productAttributeFieldsFor,
+  type ProductAttributeField,
+  type ProductAttributes,
+} from "@/features/core/products/product-attributes";
 import {
   formToInput,
   productFormSchema,
@@ -10,9 +17,18 @@ import {
 // Sheets, Vyapar, myBillBook, and Tally-compatible exports can all produce CSV without
 // adding a vulnerable spreadsheet parser to the billing application.
 
+/**
+ * A trade-details column, tagged so it cannot be confused with a form field.
+ *
+ * The prefix is what lets one mapping object hold both kinds: `attr:composition`
+ * is a key on the product's attribute bag, `brand` is a column on the product
+ * itself, and nothing downstream has to keep a second list to tell them apart.
+ */
+export type ProductImportAttributeField = `attr:${string}`;
+
 export interface ImportColumn {
   header: string;
-  field: keyof ProductFormData | "skuBarcode";
+  field: keyof ProductFormData | "skuBarcode" | ProductImportAttributeField;
   example: string;
   required?: boolean;
 }
@@ -86,9 +102,39 @@ function csvEscape(value: string): string {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
-export function buildProductTemplateCsv(): string {
-  const headers = PRODUCT_IMPORT_COLUMNS.map((column) => csvEscape(column.header)).join(",");
-  const example = PRODUCT_IMPORT_COLUMNS.map((column) => csvEscape(column.example)).join(",");
+function attributeExample(field: ProductAttributeField): string {
+  if (field.type === "boolean") return "no";
+  if (field.type === "select") return field.options?.[0] ?? "";
+  // The placeholder already reads "e.g. 100% cotton", which is exactly what an
+  // example cell should say — minus the prefix, which is form copy, not data.
+  return (field.placeholder ?? "").replace(/^e\.g\.\s*/i, "");
+}
+
+/**
+ * The trade's own columns, appended after the fixed ones.
+ *
+ * Appended rather than interleaved, and never replacing a base column: an older
+ * template must still import into the same fields, and the starter catalogue
+ * writes the base list directly. A shop that changes business type gets a
+ * different tail on its next template download and can still import the old one
+ * — the unmatched columns simply map to nothing.
+ */
+export function productImportAttributeColumns(businessType: BusinessType): ImportColumn[] {
+  return productAttributeFieldsFor(businessType).map((field) => ({
+    header: field.label,
+    field: `attr:${field.key}` as ProductImportAttributeField,
+    example: attributeExample(field),
+  }));
+}
+
+export function productImportColumns(businessType: BusinessType = getStoredBusinessType()): ImportColumn[] {
+  return [...PRODUCT_IMPORT_COLUMNS, ...productImportAttributeColumns(businessType)];
+}
+
+export function buildProductTemplateCsv(businessType: BusinessType = getStoredBusinessType()): string {
+  const columns = productImportColumns(businessType);
+  const headers = columns.map((column) => csvEscape(column.header)).join(",");
+  const example = columns.map((column) => csvEscape(column.example)).join(",");
   return `${headers}\n${example}\n`;
 }
 
@@ -150,12 +196,18 @@ function aliasesFor(column: ImportColumn): string[] {
   return Array.from(new Set([column.header, ...(COLUMN_ALIASES[column.field] ?? [])].map(normaliseHeader)));
 }
 
-export function autoMapProductHeaders(headers: string[]): ProductImportMapping {
+export function autoMapProductHeaders(
+  headers: string[],
+  businessType: BusinessType = getStoredBusinessType(),
+): ProductImportMapping {
   const normalisedHeaders = headers.map(normaliseHeader);
   const mapping: ProductImportMapping = {};
   const used = new Set<number>();
 
-  for (const column of PRODUCT_IMPORT_COLUMNS) {
+  // Base columns first, so a trade field that happens to share a label with one
+  // of them ("Brand", "Colour") can never steal the column the product itself
+  // needs — the fixed fields are the ones billing and stock read.
+  for (const column of productImportColumns(businessType)) {
     const aliases = aliasesFor(column);
     const index = normalisedHeaders.findIndex((header, sourceIndex) => !used.has(sourceIndex) && aliases.includes(header));
     if (index >= 0) {
@@ -217,9 +269,38 @@ function parseImportBoolean(value: string, defaultValue: boolean): boolean {
   return defaultValue;
 }
 
-function rowToFormData(values: Record<string, string>): ProductFormData {
+/**
+ * The trade columns of one row, turned into the product's attribute bag.
+ *
+ * Blank cells are skipped rather than stored empty — a spreadsheet is mostly
+ * blanks, and writing every one of them would fill the bag with nothing and make
+ * "this product has no fabric recorded" indistinguishable from "someone typed a
+ * space". A number that will not parse is skipped for the same reason a bad
+ * price row is rejected: a wrong figure is worse than a missing one.
+ */
+function rowToAttributes(values: Record<string, string>, businessType: BusinessType): ProductAttributes {
+  const attributes: ProductAttributes = {};
+  for (const field of productAttributeFieldsFor(businessType)) {
+    const raw = (values[`attr:${field.key}`] ?? "").trim();
+    if (!raw) continue;
+    if (field.type === "number") {
+      const parsed = parseImportNumber(raw);
+      if (Number.isFinite(parsed)) attributes[field.key] = parsed;
+      continue;
+    }
+    if (field.type === "boolean") {
+      attributes[field.key] = parseImportBoolean(raw, false);
+      continue;
+    }
+    attributes[field.key] = field.maxLength ? raw.slice(0, field.maxLength) : raw;
+  }
+  return attributes;
+}
+
+function rowToFormData(values: Record<string, string>, businessType: BusinessType): ProductFormData {
   const numberValue = (field: ProductImportField) => parseImportNumber(values[field] ?? "");
   return {
+    attributes: rowToAttributes(values, businessType),
     name: (values.name ?? "").trim(),
     // Bulk import has no column for per-pack counts, and inventing one pack layout
     // for every imported row would be worse than the shared pool it already assumes.
@@ -227,7 +308,7 @@ function rowToFormData(values: Record<string, string>): ProductFormData {
     // A spreadsheet row is one plain product. A size × colour grid is entered on
     // the product screen, where the shop can see the combinations it is creating.
     variantAxes: [],
-    category: (values.category ?? "").trim() || "general",
+    category: (values.category ?? "").trim() || defaultCategoryFor(businessType),
     brand: (values.brand ?? "").trim() || undefined,
     unit: ((values.unit ?? "").trim() || "piece").toLowerCase(),
     packSizeValue: numberValue("packSizeValue") || 1,
@@ -293,7 +374,11 @@ function emptyParseResult(message: string): ParseProductsResult {
 }
 
 /** Parse and validate an uploaded CSV without changing any local or cloud data. */
-export function parseProductsCsv(text: string, selectedMapping?: ProductImportMapping): ParseProductsResult {
+export function parseProductsCsv(
+  text: string,
+  selectedMapping?: ProductImportMapping,
+  businessType: BusinessType = getStoredBusinessType(),
+): ParseProductsResult {
   let grid: string[][];
   try {
     grid = parseCsv(text).filter((row) => row.some((cell) => cell.trim() !== ""));
@@ -303,7 +388,8 @@ export function parseProductsCsv(text: string, selectedMapping?: ProductImportMa
   if (grid.length === 0) return emptyParseResult("The file is empty.");
 
   const headers = grid[0].map((header, index) => index === 0 ? header.replace(/^\uFEFF/, "").trim() : header.trim());
-  const mapping = selectedMapping ?? autoMapProductHeaders(headers);
+  const columns = productImportColumns(businessType);
+  const mapping = selectedMapping ?? autoMapProductHeaders(headers, businessType);
   const source = detectProductImportSource(headers);
   const missingColumns = PRODUCT_IMPORT_COLUMNS
     .filter((column) => column.required && mapping[column.field] === undefined)
@@ -323,7 +409,7 @@ export function parseProductsCsv(text: string, selectedMapping?: ProductImportMa
     const values: Record<string, string> = {};
     const providedFields: ProductImportField[] = [];
 
-    for (const column of PRODUCT_IMPORT_COLUMNS) {
+    for (const column of columns) {
       const sourceColumnIndex = mapping[column.field];
       const value = sourceColumnIndex === undefined ? "" : (cells[sourceColumnIndex] ?? "");
       values[column.field] = value;
@@ -342,7 +428,7 @@ export function parseProductsCsv(text: string, selectedMapping?: ProductImportMa
       }
     }
 
-    const formData = rowToFormData(values);
+    const formData = rowToFormData(values, businessType);
     if (!formData.isLooseItem && PACKET_UNITS.has(formData.unit.toLowerCase())) {
       if (!providedFields.includes("packSizeValue") || !providedFields.includes("packSizeUnit")) {
         errors.push("Packed items require Pack Size and Pack Unit (for example 500 g or 1 kg)");

@@ -26,9 +26,16 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   "Artha",
   // Protocol name in the webhook delivery table. Nobody writes it in Devanagari.
   "HTTP",
+  // Order-channel badges. Both are read as Latin acronyms at a counter, the same
+  // way UPI and GST above are.
+  "POS",
+  "API",
   // Two GST registration identifiers, shown as placeholder text on the e-way
   // transport form. Both are printed in Latin on the documents themselves.
   "GSTIN / TRANSIN",
+  // The same identifier on its own, labelling the field on the supplier form. A
+  // shopkeeper is copying it off a printed bill, where it is in Latin.
+  "GSTIN",
   // Bank and payment identifiers on the store profile. A shopkeeper is copying
   // these off a passbook or a UPI app, where they are printed in Latin — a
   // Devanagari label would make the field harder to match, not easier.
@@ -51,6 +58,18 @@ export const SHARED_TRANSLATION_VALUES = new Set<string>([
   "₹ 0",
   "{tier} · ",
   "{action} · {amount}",
+  // The till's credit tender, which is a bare slot in both catalogues. The word
+  // that fills it is the shop's own — "Udhar", "Tab", "मरीज़ का खाता" — and it is
+  // translated where it is defined (`billing.credit.*`, `billing.tender.*`),
+  // picked per business type by settings/shop-credit.ts. There is nothing left
+  // in these three to translate.
+  "{credit}",
+  "{credit}: {amount}",
+  // The supplier count, which is a number and the trade's own word for who it
+  // buys from — "12 distributors", "12 डिस्ट्रीब्यूटर". The word is translated
+  // where it is defined (`suppliers.word.*`); nothing else is left in these.
+  "1 {supplier}",
+  "{count} {supplier}",
   // Already Devanagari/Hinglish in the English catalogue, because that is what the
   // screen says in both languages.
   "namak, salt, साल्ट",

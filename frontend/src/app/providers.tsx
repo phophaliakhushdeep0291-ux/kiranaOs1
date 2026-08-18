@@ -137,10 +137,15 @@ export function AppProviders({ children }: { children: ReactNode }) {
               <CloudDataBootstrap />
               {children}
             </AuthProvider>
+            {/* Inside the language provider, not beside it. The toast close
+                button is translated, and `useAppLanguage` throws when it cannot
+                find its provider — so a Toaster mounted outside took the whole
+                app down to a white screen the first time anything raised a
+                toast, which on a counter means the first time a bill saved. */}
+            <Toaster />
           </AppLanguageProvider>
           </AppThemeProvider>
         </WouterRouter>
-        <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
   );

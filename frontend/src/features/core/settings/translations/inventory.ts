@@ -317,14 +317,15 @@ export const inventoryEn = {
   "inventory.page.slowMoversHelp": "Compares stock age with sale movement.",
   "inventory.page.deadStock": "Dead stock",
   "inventory.page.deadStockHelp": "Flags stock with no recent movement.",
-  "inventory.page.batchSupport": "Batch and expiry support",
-  "inventory.page.higherPlan": "Higher plan",
-  "inventory.page.batchSupportHelp": "Attach batch, expiry, MRP, and lot-wise stock to purchase movements.",
   "inventory.page.movementType": "Movement type",
   "inventory.page.purchase": "Purchase",
   "inventory.page.manualSale": "Manual sale",
   "inventory.page.damage": "Damage / wastage",
   "inventory.page.correction": "Stock correction",
+  // The dialog title is one of the four labels above with a noun after it. Hindi puts
+  // the noun the other way round ("<movement> की एंट्री"), so the join has to live in
+  // the dictionary rather than as a word appended in JSX.
+  "inventory.page.movementEntryTitle": "{movement} entry",
   "inventory.page.productRequired": "Product *",
   "inventory.page.totalBillAmount": "Total bill amount",
   "inventory.page.noSupplier": "No supplier",
@@ -423,7 +424,6 @@ export const inventoryEn = {
   "inventory.page.newStockDelta": "New stock / delta",
   "inventory.page.damageWriteOff": "Damage write-off",
   "inventory.page.inventoryItem": "Inventory item",
-  "inventory.page.movementEntryTitle": "{movement} entry",
   "inventory.page.pinRequiredNote": "{movement} requires owner PIN and creates a pending sync adjustment.",
   "inventory.page.unitsTracked": "{count} units tracked",
   "inventory.page.skuLabel": "SKU: {value}",
@@ -572,4 +572,107 @@ export const inventoryEn = {
   "inventory.categories.subHelp": "Child categories",
   "inventory.categories.under": "Under categories",
   "inventory.lots.updateFailed": "Could not update batch.",
+
+  // What THIS shop's trade calls its stock.
+  //
+  // The generic strings above still carry the page; only the words that change
+  // from trade to trade live here, and a trade that is happy with the generic
+  // wording points straight back at it — see `settings/shop-inventory.ts`, which
+  // maps each business type to the keys it uses. Kept as dictionary keys rather
+  // than English literals in that map because Hindi is the DEFAULT language, so
+  // per-trade copy written in English would be English for most shops.
+  "inventory.trade.title": "Stock tools for your shop type",
+  "inventory.trade.changeShopType": "Change shop type",
+
+  "inventory.trade.kirana.focus": "Keep loose and packed stock in the unit you actually sell in, and refill before the shelf runs empty.",
+
+  "inventory.trade.clothing.stock": "Catalogue stock",
+  "inventory.trade.clothing.items": "Total styles",
+  "inventory.trade.clothing.wastage": "Damaged pieces",
+  "inventory.trade.clothing.focus": "Count every size and colour as its own SKU — that is what keeps availability and exchanges exact.",
+
+  "inventory.trade.footwear.stock": "Size-wise stock",
+  "inventory.trade.footwear.items": "Total models",
+  "inventory.trade.footwear.receive": "Add Pairs",
+  "inventory.trade.footwear.wastage": "Damaged Pairs",
+  "inventory.trade.footwear.focus": "Stock moves in pairs: a sale is lost to a missing size far more often than to a missing model.",
+
+  "inventory.trade.autoParts.stock": "Godown and rack stock",
+  "inventory.trade.autoParts.items": "Total parts",
+  "inventory.trade.autoParts.receive": "Receive Parts",
+  "inventory.trade.autoParts.wastage": "Damaged Parts",
+  "inventory.trade.autoParts.focus": "Record the part number and the rack, so the counter finds a part without opening every box.",
+
+  "inventory.trade.electronics.stock": "Model-wise stock",
+  "inventory.trade.electronics.items": "Total models",
+  "inventory.trade.electronics.receive": "Receive Stock",
+  "inventory.trade.electronics.wastage": "Damaged Units",
+  "inventory.trade.electronics.focus": "High-value stock is worth counting often; a serial ties each unit to its bill and its warranty.",
+
+  "inventory.trade.pharmacy.stock": "Medicine stock",
+  "inventory.trade.pharmacy.items": "Total medicines",
+  "inventory.trade.pharmacy.receive": "Receive Medicines",
+  "inventory.trade.pharmacy.wastage": "Expired and Damaged",
+  "inventory.trade.pharmacy.focus": "Receive by batch, dispense the earliest expiry first, and pull an expired lot off the shelf the day it turns.",
+
+  "inventory.trade.stationery.stock": "Shelf and bulk stock",
+  "inventory.trade.stationery.items": "Total titles and items",
+  "inventory.trade.stationery.wastage": "Damaged Stock",
+  "inventory.trade.stationery.focus": "The season decides this shelf: build depth before the school term and clear slow titles after it.",
+
+  "inventory.trade.furniture.stock": "Showroom and warehouse stock",
+  "inventory.trade.furniture.items": "Total models",
+  "inventory.trade.furniture.receive": "Receive Stock",
+  "inventory.trade.furniture.wastage": "Damaged Pieces",
+  "inventory.trade.furniture.focus": "A display piece is not saleable stock — keep sold and delivery-pending items apart from what is on offer.",
+
+  "inventory.trade.cosmetics.stock": "Shade-wise stock",
+  "inventory.trade.cosmetics.items": "Total shades",
+  "inventory.trade.cosmetics.receive": "Receive Stock",
+  "inventory.trade.cosmetics.wastage": "Expired and Damaged",
+  "inventory.trade.cosmetics.focus": "Shades sell at very different speeds and the stock is dated: watch expiry, and keep testers out of saleable stock.",
+
+  "inventory.trade.restaurant.stock": "Kitchen stock",
+  "inventory.trade.restaurant.items": "Total items",
+  "inventory.trade.restaurant.receive": "Receive Supplies",
+  "inventory.trade.restaurant.wastage": "Wastage Entry",
+  "inventory.trade.restaurant.focus": "Ingredients deplete as dishes sell — count perishables daily and post wastage in the same shift.",
+
+  "inventory.trade.manufacturing.stock": "Materials and finished stock",
+  "inventory.trade.manufacturing.items": "Total materials and SKUs",
+  "inventory.trade.manufacturing.receive": "Receive Materials",
+  "inventory.trade.manufacturing.wastage": "Wastage and Rejects",
+  "inventory.trade.manufacturing.focus": "Keep raw material, work in progress and finished packs apart, so every dispatch traces back to its batch.",
+
+  "inventory.trade.other.focus": "Keep the selling unit, cost and reorder level right, and every other number in the app follows.",
+
+  // Labels for the trade screens the strip links to. The core inventory page may
+  // not import a vertical pack, so it cannot read the label off the pack's nav
+  // entry — these are the same names, held on the core side.
+  "inventory.trade.link.sizeRuns": "Size runs",
+  "inventory.trade.link.partFinder": "Part finder",
+  "inventory.trade.link.serialUnits": "IMEI and serials",
+  "inventory.trade.link.prescriptions": "Prescriptions",
+  "inventory.trade.link.bookLists": "Book lists",
+  "inventory.trade.link.orderBook": "Order book",
+  "inventory.trade.link.testers": "Tester stock",
+  "inventory.trade.link.kitchenStock": "Kitchen stock",
+  "inventory.trade.link.production": "Production runs",
+
+  // ── Receiving, per trade (see settings/shop-purchases.ts) ──
+  // Kept in the stock dictionary rather than a new one: booking a purchase bill
+  // is the stock side of the app, and the link labels above are the same ones.
+  "purchases.trade.title": "After receiving, for your shop type",
+  "purchases.trade.focus.kirana": "Check the printed dates on dated stock as it comes off the vehicle — a short-dated case accepted today is a write-off next month.",
+  "purchases.trade.focus.clothing": "Count the delivery against the bill size by size. A short delivery found at the counter is argued about; one found today is credited.",
+  "purchases.trade.focus.footwear": "Receive by size, not by carton count: the run you enter now is what tells you which size to reorder.",
+  "purchases.trade.focus.autoParts": "Put the new part on its rack and record the bin while the box is still in your hand — an unbinned part is a part nobody can find.",
+  "purchases.trade.focus.electronics": "Register the serials and IMEIs now, off the boxes. Once the stock is on the shelf, nobody matches a returned piece to this bill.",
+  "purchases.trade.focus.pharmacy": "Enter the lot number and expiry from the strip as you receive it. This is the only moment the printed date is in front of you.",
+  "purchases.trade.focus.stationery": "Match the delivery against the class lists you buy for, so a title that is short is reordered before the term starts.",
+  "purchases.trade.focus.furniture": "Tie the delivery to the orders waiting on it, then call those customers — a piece that arrives unannounced sits on the floor.",
+  "purchases.trade.focus.cosmetics": "Record the batch and the use-before date on receipt; beauty stock is bought months ahead of when it will sell.",
+  "purchases.trade.focus.restaurant": "Receive against tonight's needs, not the invoice total. Perishables booked in without dates become tomorrow's wastage entry.",
+  "purchases.trade.focus.manufacturing": "Record the supplier lot on every incoming material — batch genealogy on a finished dispatch is only as good as what was written here.",
+  "purchases.trade.focus.other": "Check the delivery against the bill before you book it: a quantity corrected now costs a phone call, later it costs the stock.",
 } as const;

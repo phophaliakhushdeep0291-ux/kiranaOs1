@@ -9,12 +9,12 @@ export const billingEn = {
   "billing.openBills.current": "Current bill",
   "billing.openBills.switchTo": "Switch to {name}",
   "billing.openBills.switchToParked": "Switch to {name} · parked {age}",
-  "billing.openBills.startNew": "Start a new bill",
-  "billing.openBills.new": "New bill",
+  "billing.openBills.startNew": "Start a new {bill}",
+  "billing.openBills.new": "New {bill}",
 
   // Cart
   "billing.cart.empty": "Cart is empty",
-  "billing.cart.emptyHint": "Click products on the left to add",
+  "billing.cart.emptyHint": "Click {items} on the left to add",
   "billing.cart.sellingUnitFor": "Selling unit for {name}",
   "billing.cart.unitOption": "{name} · Rs {price}",
   "billing.cart.pack": "Pack: {name}",
@@ -55,7 +55,7 @@ export const billingEn = {
   "billing.pay.upi": "UPI",
   "billing.pay.bank": "Bank",
   "billing.pay.split": "Split",
-  "billing.pay.udhar": "Udhar",
+  "billing.pay.udhar": "{credit}",
   "billing.pay.giftCard": "Gift card",
   "billing.pay.moreOptions": "More payment options",
   "billing.pay.moreOptionsHint": "Bank, split, gift card",
@@ -123,15 +123,15 @@ export const billingEn = {
   "billing.pay.amountReceived": "Amount Received",
   "billing.pay.extraIsAdvance": "Extra is advance",
   "billing.pay.advanceLine": "Advance: {amount}",
-  "billing.pay.udharLine": "Udhar: {amount}",
+  "billing.pay.udharLine": "{credit}: {amount}",
   "billing.pay.paidOk": "Paid amount OK",
   "billing.pay.cashFromCustomer": "Cash from customer (for change)",
   "billing.pay.shortBy": "Short by {amount}",
   "billing.pay.changeToReturn": "Change to return: {amount}",
   "billing.pay.exactCash": "Exact cash — no change",
-  "billing.pay.fullToUdhar": "Full amount {amount} goes to Udhar.",
-  "billing.pay.fullWillGoToUdhar": "Full amount {amount} will go to Udhar.",
-  "billing.pay.udharRemaining": "Udhar remaining",
+  "billing.pay.fullToUdhar": "Full amount {amount} goes to {credit}.",
+  "billing.pay.fullWillGoToUdhar": "Full amount {amount} will go to {credit}.",
+  "billing.pay.udharRemaining": "{credit} remaining",
   "billing.pay.paid": "Paid",
   "billing.pay.advance": "Advance",
 
@@ -146,13 +146,13 @@ export const billingEn = {
   "billing.summary.estimateBill": "Estimate Bill",
   "billing.summary.estimateBillHint": "Not a final bill",
   "billing.summary.billType": "Bill type",
-  "billing.summary.udhar": "Udhar",
+  "billing.summary.udhar": "{credit}",
   "billing.summary.gstInvoice": "GST Invoice",
   "billing.summary.walkInOption": "Walk-in customer",
-  "billing.summary.namePlaceholder": "Name (udhar)",
+  "billing.summary.namePlaceholder": "Name ({credit})",
   "billing.summary.mobilePlaceholder": "Mobile",
   "billing.summary.mobileMatches": "Matches {name}",
-  "billing.summary.udharNeedsIdentity": "Name + mobile required for udhar billing.",
+  "billing.summary.udharNeedsIdentity": "Name + mobile required for {credit} billing.",
   "billing.summary.addMoreItems": "+ Add more items",
   "billing.summary.itemCount": "{count} Item",
   "billing.summary.itemCountPlural": "{count} Items",
@@ -635,4 +635,39 @@ export const billingEn = {
   "billing.bills.moveToRecycleShort": "Move to recycle bin",
   "billing.bills.checkOwnerPin": "Please check owner PIN and try again.",
   "billing.bills.emailFailed": "Could not email this receipt.",
+
+  // ── The till in each trade's own words (see settings/shop-credit.ts) ──
+  // Interpolated into the strings above rather than written out per trade, so
+  // one phrase covers twelve trades in both languages and a reworded sentence
+  // cannot drift out of step with eleven copies of itself.
+  //
+  // Only the singular tender forms live here; the collective words a report
+  // uses are the `reports.credit.*` entries, and most trades share one string
+  // between the two.
+  // What money a customer owes is called, per trade. These live in the
+  // CRITICAL half because the till renders them: a deferred credit word
+  // would leave the tender button with no noun at first paint.
+  "billing.credit.udhar": "Udhar",
+  "billing.credit.credit": "Credit",
+  "billing.credit.dues": "Dues",
+  "billing.credit.partyCredit": "Party Credit",
+  "billing.credit.patientAccounts": "Patient Accounts",
+  "billing.credit.tabs": "Tabs",
+  "billing.credit.receivables": "Receivables",
+  "billing.tender.khata": "Khata",
+  "billing.tender.patientAccount": "Patient Account",
+  "billing.tender.tab": "Tab",
+  "billing.tender.receivable": "Receivable",
+
+  // What one sale is called, and what the grid to its left is full of.
+  "billing.noun.bill": "bill",
+  "billing.noun.order": "order",
+  "billing.noun.dispatch": "dispatch",
+  "billing.noun.items.products": "products",
+  "billing.noun.items.dishes": "dishes",
+  "billing.noun.items.medicines": "medicines",
+  "billing.noun.items.parts": "parts",
+  "billing.noun.items.styles": "styles",
+  "billing.noun.items.models": "models",
+  "billing.noun.items.titles": "titles",
 } as const;
