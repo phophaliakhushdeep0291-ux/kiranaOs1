@@ -101,7 +101,15 @@ interface NavigationItem {
   children?: Array<{ href: string; label: string }>;
 }
 
-const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
+/**
+ * Sections of the phone's "More" drawer.
+ *
+ * A pack joins one of these by NAME (`mobile.group`), so a name that is not here
+ * silently drops the entry — indistinguishable from a pack that meant to stay
+ * desktop-only. Exported so `vertical-navigation-fit.test.ts` can check every
+ * pack lands somewhere.
+ */
+export const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
   {
     label: "Sell",
     items: [
@@ -313,6 +321,9 @@ function MoreNavigation({ location, userRole }: { location: string; userRole?: s
   const { isHrefEnabled } = useModuleVisibility();
   const verticalPack = useActiveVerticalPack();
   const businessProfile = useShopBusinessProfile();
+  // The trade's own drawer rows carry dictionary keys, so this section needs the
+  // translator too — not just the tab bar below.
+  const { t } = useAppLanguage();
   // Modules switched off in Settings leave the drawer; a section with nothing
   // left in it drops its heading too rather than sitting there empty. The active
   // trade's own entries join their named group — another trade's never do.
@@ -335,7 +346,7 @@ function MoreNavigation({ location, userRole }: { location: string; userRole?: s
           ...group.items,
           ...extras
             .filter((entry) => entry.mobile?.group === group.label)
-            .map((entry) => ({ href: entry.href, label: entry.label, helper: entry.mobile!.helper, Icon: entry.Icon })),
+            .map((entry) => ({ href: entry.href, label: t(entry.label), helper: t(entry.mobile!.helper), Icon: entry.Icon })),
         ] as NavigationItem[])
           // A section is judged by its screens, not its own href: it survives on
           // whichever children are still switched on, and goes when none are.
@@ -346,7 +357,7 @@ function MoreNavigation({ location, userRole }: { location: string; userRole?: s
           }),
       }))
       .filter((group) => group.items.length > 0);
-  }, [businessProfile.data?.navigation, isHrefEnabled, userRole, verticalPack]);
+  }, [businessProfile.data?.navigation, isHrefEnabled, t, userRole, verticalPack]);
 
   return (
     <div className="mobile-more-groups">

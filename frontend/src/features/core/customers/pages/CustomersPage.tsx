@@ -752,7 +752,7 @@ export default function CustomersPage() {
       return `<tr><td>${escapeHtml(formatShortDate(row.display_date))}</td><td>${escapeHtml(row.note || row.source_id || row.display_type)}</td><td style="text-align:right">${escapeHtml(signed > 0 ? fmtMoney(signed) : "-")}</td><td style="text-align:right">${escapeHtml(signed < 0 ? fmtMoney(Math.abs(signed)) : "-")}</td><td style="text-align:right">${escapeHtml(fmtMoney(row.running_balance))}</td></tr>`;
     }).join("");
     const customerName = escapeHtml(selectedCustomer.name);
-    popup.document.write(`<!doctype html><html><head><title>Khata Statement — ${customerName}</title><style>body{font-family:Arial;font-size:12px;padding:18px;color:#111827}h1{font-size:17px;margin:0}p{margin:3px 0;color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #e2e8f0;padding:6px 4px;text-align:left;font-size:11px}th{background:#f5f8fc;text-transform:uppercase;font-size:10px}strong.due{color:#ef4444}</style></head><body><h1>Khata Statement — ${customerName}</h1><p>${escapeHtml(selectedCustomer.mobile)}</p><p>As on ${escapeHtml(formatShortDate(new Date().toISOString()))} · Outstanding: <strong class="due">${escapeHtml(fmtMoney(Math.max(0, money(selectedCustomer.ledgerBalance))))}</strong></p><table><thead><tr><th>${escapeHtml(t("customers.ledger.date"))}</th><th>${escapeHtml(t("customers.ledger.particulars"))}</th><th style="text-align:right">${escapeHtml(t("customers.ledger.udharAmount"))}</th><th style="text-align:right">${escapeHtml(t("customers.ledger.paidAmount"))}</th><th style="text-align:right">${escapeHtml(t("customers.ledger.balanceAmount"))}</th></tr></thead><tbody>${rows || `<tr><td colspan="5">${escapeHtml(t("customers.ledger.empty"))}</td></tr>`}</tbody></table><script>setTimeout(function(){window.print()},300)</script></body></html>`);
+    popup.document.write(`<!doctype html><html><head><title>${escapeHtml(t("customers.print.title", { name: customerName }))}</title><style>body{font-family:Arial;font-size:12px;padding:18px;color:#111827}h1{font-size:17px;margin:0}p{margin:3px 0;color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #e2e8f0;padding:6px 4px;text-align:left;font-size:11px}th{background:#f5f8fc;text-transform:uppercase;font-size:10px}strong.due{color:#ef4444}</style></head><body><h1>${escapeHtml(t("customers.print.title", { name: customerName }))}</h1><p>${escapeHtml(selectedCustomer.mobile)}</p><p>${escapeHtml(t("customers.print.asOn", { date: formatShortDate(new Date().toISOString()) }))}<strong class="due">${escapeHtml(fmtMoney(Math.max(0, money(selectedCustomer.ledgerBalance))))}</strong></p><table><thead><tr><th>${escapeHtml(t("customers.ledger.date"))}</th><th>${escapeHtml(t("customers.ledger.particulars"))}</th><th style="text-align:right">${escapeHtml(t("customers.ledger.udharAmount"))}</th><th style="text-align:right">${escapeHtml(t("customers.ledger.paidAmount"))}</th><th style="text-align:right">${escapeHtml(t("customers.ledger.balanceAmount"))}</th></tr></thead><tbody>${rows || `<tr><td colspan="5">${escapeHtml(t("customers.ledger.empty"))}</td></tr>`}</tbody></table><script>setTimeout(function(){window.print()},300)</script></body></html>`);
     popup.document.close();
   }
 
@@ -950,8 +950,8 @@ export default function CustomersPage() {
                     <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-[13px] font-black text-[var(--brand)]">{initials(customer.name)}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-black text-[var(--brand-ink)]">{customer.name}</span>
-                      <span className="mt-0.5 block truncate text-[12px] text-[#52627e]">{customer.mobile || "No mobile"}</span>
-                      <span className="mt-1 block text-[11px] text-[#64748b]">{customer.ledgerMetrics.lastBillAt ? t("customers.detail.lastBill") + formatShortDate(customer.ledgerMetrics.lastBillAt) : "No recent bill"}</span>
+                      <span className="mt-0.5 block truncate text-[12px] text-[#52627e]">{customer.mobile || t("customers.noMobile")}</span>
+                      <span className="mt-1 block text-[11px] text-[#64748b]">{customer.ledgerMetrics.lastBillAt ? t("customers.detail.lastBill") + formatShortDate(customer.ledgerMetrics.lastBillAt) : t("customers.list.noRecentBillShort")}</span>
                     </span>
                     <span className="shrink-0 text-right">
                       <span className={cn("block text-[13px] font-black", customer.ledgerBalance > 0 ? "text-rose-600" : "text-[var(--brand-ink)]")}>{fmtMoney(customer.ledgerBalance)}</span>
@@ -991,8 +991,8 @@ export default function CustomersPage() {
                         </span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-[#344668]">
-                        <span><Phone size={13} className="mr-1 inline text-[#64748b]" />{selectedCustomer.mobile || "No mobile"}</span>
-                        <span><MapPin size={13} className="mr-1 inline text-[#64748b]" />{selectedCustomer.address || "No address"}</span>
+                        <span><Phone size={13} className="mr-1 inline text-[#64748b]" />{selectedCustomer.mobile || t("customers.noMobile")}</span>
+                        <span><MapPin size={13} className="mr-1 inline text-[#64748b]" />{selectedCustomer.address || t("customers.noAddress")}</span>
                       </div>
                     </div>
                   </div>
@@ -1022,7 +1022,7 @@ export default function CustomersPage() {
                         <span className={cn("h-1.5 w-1.5 rounded-full", selectedRisk!.dot)} />
                         {t(selectedRisk!.labelKey)}
                       </span>
-                      <span className="text-[12px] text-[#64748b]">{selectedCustomer.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</span>
+                      <span className="text-[12px] text-[#64748b]">{selectedCustomer.ledgerMetrics.warning ?? t("customers.risk.trackable")}</span>
                     </div>
                   </div>
                   <div className="rounded-[14px] border border-[#e8eef7] bg-white p-4 text-center">
@@ -1103,7 +1103,7 @@ export default function CustomersPage() {
                         <div key={String(bill.id ?? index)} className={cn("flex items-center gap-3 py-2.5", index < Math.min(billRows.length, 8) - 1 && "border-b border-[#eef2f8]")}>
                           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><FileText size={15} /></span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[12.5px] font-black text-[var(--brand-ink)]">{String(bill.billNumber ?? bill.billNo ?? "Bill")}</p>
+                            <p className="truncate text-[12.5px] font-black text-[var(--brand-ink)]">{String(bill.billNumber ?? bill.billNo ?? t("customers.ledger.billFallback"))}</p>
                             <p className="text-[11px] text-[#94a3b8]">{formatShortDate(getDate(bill, ["businessDate", "business_date", "createdAt", "created_at"]))}</p>
                           </div>
                           <span className="text-[13px] font-black text-[var(--brand-ink)]">{fmtMoney(getAmount(bill, ["grandTotal", "grand_total", "totalAmount", "total_amount"]))}</span>
@@ -1135,7 +1135,7 @@ export default function CustomersPage() {
                   <div className="p-4">
                     <div className="rounded-[12px] border border-[#e8eef7] bg-[#fbfdff] p-4 text-[12.5px] leading-6 text-[#344668]">
                       {selectedCustomer.notes || t("customers.notes.empty")}
-                      <p className="mt-3 text-[11px] font-semibold text-[#94a3b8]">Updated {formatShortDate(selectedCustomer.updatedAt ?? selectedCustomer.createdAt)}</p>
+                      <p className="mt-3 text-[11px] font-semibold text-[#94a3b8]">{t("customers.profile.updatedOn", { date: formatShortDate(selectedCustomer.updatedAt ?? selectedCustomer.createdAt) })}</p>
                     </div>
                     <Button variant="outline" className="mt-3 h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => openEdit(selectedCustomer)}><Pencil size={13} /> {selectedCustomer.notes ? t("customers.action.editNote") : t("customers.action.addNote")}</Button>
                   </div>
@@ -1150,7 +1150,7 @@ export default function CustomersPage() {
                   <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-white/15"><Wallet size={18} /></span>
                   <span>
                     <span className="block text-[14px] font-black">{t("customers.action.recordPayment")}</span>
-                    <span className="block text-[12px] text-white/75">Receive payment from {selectedCustomer.name}</span>
+                    <span className="block text-[12px] text-white/75">{t("customers.profile.receivePaymentFrom", { name: selectedCustomer.name })}</span>
                   </span>
                 </span>
                 <ChevronRight size={20} />
@@ -1250,7 +1250,7 @@ export default function CustomersPage() {
                 {billRows.slice(0, 5).map((bill, index) => (
                   <div key={String(bill.id ?? index)} className="flex items-center justify-between gap-3 text-[12px]">
                     <span className="text-[#52627e]">{formatShortDate(bill.businessDate ?? bill.business_date ?? bill.createdAt ?? bill.created_at)}</span>
-                    <span className="font-semibold text-[var(--brand-ink)]">{String(bill.billNumber ?? bill.billNo ?? "Bill")}</span>
+                    <span className="font-semibold text-[var(--brand-ink)]">{String(bill.billNumber ?? bill.billNo ?? t("customers.ledger.billFallback"))}</span>
                     <span className={cn("rounded-[7px] px-2 py-[3px] text-[10px] font-black", money(bill.creditAmount) > 0 ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700")}>
                       {money(bill.creditAmount) > 0 ? "Due" : "Paid"}
                     </span>
@@ -1263,7 +1263,7 @@ export default function CustomersPage() {
           <RightCard title={t("customers.field.notes")} action="View all" onAction={() => setActiveTab("notes")}>
             <div className="rounded-[12px] border border-[#e8eef7] bg-[#fbfdff] p-3 text-[12px] leading-5 text-[#344668]">
               {selectedCustomer?.notes || t("customers.notes.emptyEdit")}
-              <p className="mt-3 text-[11px] font-semibold text-[#94a3b8]">Updated {formatShortDate(selectedCustomer?.updatedAt ?? selectedCustomer?.createdAt)}</p>
+              <p className="mt-3 text-[11px] font-semibold text-[#94a3b8]">{t("customers.profile.updatedOn", { date: formatShortDate(selectedCustomer?.updatedAt ?? selectedCustomer?.createdAt) })}</p>
             </div>
           </RightCard>
         </aside>
@@ -1292,7 +1292,7 @@ export default function CustomersPage() {
             <div><Label>{t("customers.form.promiseDate")}</Label><Input type="date" className="mt-1" value={customerForm.promiseToPayDate} onChange={(event) => setCustomerForm((form) => ({ ...form, promiseToPayDate: event.target.value }))} /></div>
             <div className="md:col-span-2"><Label>{t("customers.form.notes")}</Label><Textarea className="mt-1" value={customerForm.notes} onChange={(event) => setCustomerForm((form) => ({ ...form, notes: event.target.value }))} placeholder={t("customers.field.pricingExample")} /></div>
           </div>
-          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setCustomerOpen(false)}>{t("customers.form.cancel")}</Button><Button onClick={() => void saveCustomer()} disabled={saving}>{saving ? "Saving..." : t("customers.detail.saveLocally")}</Button></div>
+          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setCustomerOpen(false)}>{t("customers.form.cancel")}</Button><Button onClick={() => void saveCustomer()} disabled={saving}>{saving ? t("customers.detail.saving") : t("customers.detail.saveLocally")}</Button></div>
         </DialogContent>
       </Dialog>
 
@@ -1309,7 +1309,7 @@ export default function CustomersPage() {
             {paymentForm.mode === "split" && <div className="grid grid-cols-2 gap-3"><div><Label>{t("customers.payment.cashAmount")}</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.cashAmount} onChange={(event) => setPaymentForm((form) => ({ ...form, cashAmount: event.target.value }))} /></div><div><Label>{t("customers.payment.upiAmount")}</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.upiAmount} onChange={(event) => setPaymentForm((form) => ({ ...form, upiAmount: event.target.value }))} /></div></div>}
             <div><Label>{t("customers.payment.note")}</Label><Input className="mt-1" value={paymentForm.note} onChange={(event) => setPaymentForm((form) => ({ ...form, note: event.target.value }))} placeholder={t("restaurant.addons.optional")} /></div>
           </div>
-          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>{t("customers.form.cancel")}</Button><Button onClick={() => void recordPayment()} disabled={saving}>{saving ? "Saving..." : t("customers.detail.recordOffline")}</Button></div>
+          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>{t("customers.form.cancel")}</Button><Button onClick={() => void recordPayment()} disabled={saving}>{saving ? t("customers.detail.saving") : t("customers.detail.recordOffline")}</Button></div>
         </DialogContent>
       </Dialog>
 
@@ -1369,7 +1369,7 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
   const avatarTones = ["bg-[var(--brand-soft)] text-[var(--brand)]", "bg-[#ecfdf5] text-[#16a34a]", "bg-[#f5f3ff] text-[#7c3aed]", "bg-[#fff7ed] text-[#f97316]", "bg-[#fef2f2] text-[#ef4444]"];
   return (
     <section className="min-h-0 overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white shadow-[0_10px_30px_rgba(15,35,80,0.05)]">
-      <header className="flex h-[58px] items-center justify-between px-[18px]"><h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">{t("customers.list.title")}</h2><span className="rounded-full bg-[#f2f5f9] px-2.5 py-1 text-[9px] font-black text-[#60708e]">{customers.length} shown</span></header>
+      <header className="flex h-[58px] items-center justify-between px-[18px]"><h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">{t("customers.list.title")}</h2><span className="rounded-full bg-[#f2f5f9] px-2.5 py-1 text-[9px] font-black text-[#60708e]">{t("customers.list.shownCount", { count: customers.length })}</span></header>
       <div className="border-y border-[#e8edf4] p-3.5">
         <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input value={search} onChange={(event) => onSearch(event.target.value)} placeholder={t("customers.searchShort")} className="h-10 rounded-[10px] border-[#dfe7f2] pl-10 text-[12px]" /></div>
         <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", t("customers.filter.allCustomers")], ["udhar", t("customers.filter.withBalanceTitle")], ["due", t("customers.list.overdue")], ["cleared", t("customers.list.cleared")]] as const).map(([key, label]) => <button key={key} onClick={() => onFilter(key)} className={cn("h-11 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
@@ -1405,12 +1405,12 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
               </span>
               <span className="min-w-0 pr-1">
                 <span className="block truncate text-[12px] font-black leading-4 text-[var(--brand-ink)]">{customer.name}</span>
-                <span className="mt-1 block truncate text-[10px] leading-3 text-[#60708e]">{customer.address || "No address"}</span>
+                <span className="mt-1 block truncate text-[10px] leading-3 text-[#60708e]">{customer.address || t("customers.noAddress")}</span>
                 {/* Mobile and last activity shared one truncated line that needed
                     196px in a 137px column, so the date was always cut off mid-
                     word. The number is what gets dialled, so it keeps the line;
                     the activity sits under it in a form short enough to survive. */}
-                <span className="mt-1 block truncate text-[9.5px] leading-3 text-[#7c899f]">{customer.mobile || "No mobile"}</span>
+                <span className="mt-1 block truncate text-[9.5px] leading-3 text-[#7c899f]">{customer.mobile || t("customers.noMobile")}</span>
                 <span className="mt-0.5 block truncate text-[9.5px] leading-3 text-[#7c899f]">{formatCustomerActivityDateTime(lastActivity)}</span>
               </span>
               <span className="flex min-w-[92px] flex-col items-end pr-1 text-right">
@@ -1498,7 +1498,7 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
     <section className="min-w-0 space-y-5">
       <article className="min-h-[128px] overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="flex flex-col gap-4 p-[18px] sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{t(risk.labelKey)}</span><button onClick={() => onEdit(customer)} title={t("customers.detail.editCustomer")} className="grid h-7 w-7 place-items-center rounded-[8px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || "No mobile"}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || "No address"}</span></div></div></div>
+          <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{t(risk.labelKey)}</span><button onClick={() => onEdit(customer)} title={t("customers.detail.editCustomer")} className="grid h-7 w-7 place-items-center rounded-[8px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || t("customers.noMobile")}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || t("customers.noAddress")}</span></div></div></div>
           <div className="flex items-center gap-3">
             <Link href={`/customers/${customer.id}`} title={t("customers.openLedger")} className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors hover:bg-[var(--brand-strong)]"><BookOpen size={15} />{t("customers.detail.viewLedger")}</Link>
             <InfoMini label={t("customers.profile.lastPayment")} value={formatShortDate(customer.ledgerMetrics.lastPaymentAt)} />
@@ -1510,13 +1510,13 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
       <article className="rounded-[16px] border border-[#e6ecf5] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">{t("customers.detail.recordUdharPayment")}</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-[120px_1fr]"><div><p className="text-[10px] font-bold uppercase text-[#75839d]">{t("customers.detail.amountDue")}</p><p className="mt-1.5 text-[19px] font-black text-rose-600">{fmtMoney(outstanding)}</p></div><div><Label className="text-[10px] font-bold text-[#52627e]">{t("customers.payment.amountLabel")} <span className="text-rose-500">*</span></Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[#52627e]">₹</span><Input id="customer-payment-amount" type="number" inputMode="decimal" min="0" step="0.01" max={outstanding} value={paymentForm.amount} onChange={(event) => setTotal(event.target.value)} className="h-10 rounded-[10px] border-[#dfe7f2] pl-8 text-[13px] font-bold" placeholder="0.00" /></div></div></div>
-        <div className="mt-3 grid grid-cols-[1.45fr_repeat(4,1fr)] gap-2"><button onClick={() => chooseAmount(outstanding)} className="min-h-9 rounded-[8px] border border-[var(--brand)] bg-[var(--brand-soft)] px-1 text-[9px] font-bold text-[var(--brand)]">Full Due ({fmtMoney(outstanding)})</button>{[500,1000,2000].map((amount) => <button key={amount} onClick={() => chooseAmount(amount)} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{fmtMoney(amount)}</button>)}<button onClick={() => document.getElementById("customer-payment-amount")?.focus()} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{t("customers.payment.custom")}</button></div>
+        <div className="mt-3 grid grid-cols-[1.45fr_repeat(4,1fr)] gap-2"><button onClick={() => chooseAmount(outstanding)} className="min-h-9 rounded-[8px] border border-[var(--brand)] bg-[var(--brand-soft)] px-1 text-[9px] font-bold text-[var(--brand)]">{t("customers.collect.fullDue", { amount: fmtMoney(outstanding) })}</button>{[500,1000,2000].map((amount) => <button key={amount} onClick={() => chooseAmount(amount)} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{fmtMoney(amount)}</button>)}<button onClick={() => document.getElementById("customer-payment-amount")?.focus()} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{t("customers.payment.custom")}</button></div>
         <p className="mt-4 text-[10px] font-bold text-[#52627e]">{t("customers.payment.modeLabel")}</p>
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{paymentModeChoices(t).map(({ mode, label, icon }) => <button key={mode} onClick={() => onPaymentChange((form) => { const total = money(form.amount); return { ...form, mode, ...(mode === "split" && total > 0 && !form.cashAmount && !form.upiAmount ? { cashAmount: String(total), upiAmount: "0" } : {}) }; })} className={cn("inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[11px] font-bold transition-colors", paymentForm.mode === mode ? "border-[1.5px] border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dfe7f2] text-[#405273] hover:bg-[#f8faff]")}>{paymentForm.mode === mode && mode === "split" ? <CheckCircle2 size={15} /> : icon}{label}</button>)}</div>
         {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">{t("customers.payment.cashAmountLabel")}</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(addMoney(event.target.value, form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">{t("customers.payment.upiAmountLabel")}</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(addMoney(form.cashAmount, event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">{t("customers.pay.upi")}</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">{t("customers.payment.totalLabel")} <span className="text-[var(--brand-ink)]">{fmtMoney(paymentTotal)}</span></p></div>}
-        {moneyExceeds(paymentTotal, outstanding) && <p className="mt-2 text-[10px] font-semibold text-rose-600">Payment cannot exceed the outstanding balance of {fmtMoney(outstanding)}.</p>}
+        {moneyExceeds(paymentTotal, outstanding) && <p className="mt-2 text-[10px] font-semibold text-rose-600">{t("customers.collect.exceedsBalance", { amount: fmtMoney(outstanding) })}</p>}
         <div className="mt-3"><Label className="text-[10px] font-bold text-[#52627e]">{t("customers.payment.noteLabel")} <span className="font-medium text-[#94a3b8]">{t("customers.payment.optional")}</span></Label><Input value={paymentForm.note} onChange={(event) => onPaymentChange((form) => ({ ...form, note: event.target.value }))} className="mt-1.5 h-[42px] rounded-[10px] text-[12px]" placeholder={t("customers.field.paymentNote")} /></div>
-        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] text-[12px] font-bold shadow-[0_8px_18px_var(--brand-shadow)]"><CheckCircle2 size={16} />{saving ? "Saving..." : t("customers.collectPaymentTitle")}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[var(--brand)]"><Bell size={16} />{t("customers.payment.sendReminder")}</Button></div>
+        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] text-[12px] font-bold shadow-[0_8px_18px_var(--brand-shadow)]"><CheckCircle2 size={16} />{saving ? t("customers.detail.saving") : t("customers.collectPaymentTitle")}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[var(--brand)]"><Bell size={16} />{t("customers.payment.sendReminder")}</Button></div>
         <p className="mt-3 flex items-center justify-center gap-2 rounded-[8px] bg-[#f7f9fc] px-3 py-2 text-center text-[10px] text-[#71809a]"><Info size={13} className="text-[var(--brand)]" />{t("customers.payment.afterHelp")}</p>
       </article>
     </section>
@@ -1586,7 +1586,7 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
   const fromDate = rows.length > 0 ? formatShortDate(rows[rows.length - 1]?.display_date) : t("customers.range.allTime");
   const toDate = rows.length > 0 ? formatShortDate(rows[0]?.display_date) : formatShortDate(new Date().toISOString());
   const badgeFor = (type: string) => type === "PAYMENT" ? "bg-[#dcfce7] text-[#16a34a]" : type.includes("OPEN") ? "bg-[#dbeafe] text-[var(--brand)]" : type === "BILL" ? "bg-[#fee2e2] text-[#dc2626]" : "bg-[#f5f3ff] text-[#7c3aed]";
-  const labelFor = (type: string) => type === "PAYMENT" ? "Payment" : type === "BILL" ? "Bill" : type.includes("OPEN") ? "Opening Balance" : type.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const labelFor = (type: string) => type === "PAYMENT" ? "Payment" : type === "BILL" ? t("customers.ledger.typeBill") : type.includes("OPEN") ? "Opening Balance" : type.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   // A synced manual adjustment echoes back typed as debit/payment (mode:"adjustment"),
   // so display_type alone reads "Bill"/"Payment". Detect the adjustment and label it plainly.
   const entryBadge = (row: CustomerLedgerRow) => isManualAdjustmentEntry(row) ? "bg-[#f5f3ff] text-[#7c3aed]" : badgeFor(String(row.display_type ?? "ENTRY").toUpperCase());
@@ -1621,11 +1621,11 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
                     <span className="text-[11px] font-semibold text-[#71809a]">{formatShortDate(row.display_date)}</span>
                   </div>
                   <p className="mt-1 truncate text-[12px] font-bold text-[var(--brand-ink)]">{String(row.note || entryLabel(row))}</p>
-                  <p className="mt-1 truncate text-[11px] text-[#60708e]">{String(row.source_id ?? "—")} • {String(row.mode ?? "System")}</p>
+                  <p className="mt-1 truncate text-[11px] text-[#60708e]">{String(row.source_id ?? "—")} • {String(row.mode ?? t("customers.ledger.modeSystem"))}</p>
                 </div>
                 <div className="text-right">
                   <p className={cn("text-[14px] font-black", isCredit ? "text-[#16a34a]" : "text-[#ef4444]")}>{isCredit ? "-" : "+"}{fmtMoney(Math.abs(signed))}</p>
-                  <p className="mt-1 text-[11px] font-semibold text-[#71809a]">Bal {fmtMoney(row.running_balance)}</p>
+                  <p className="mt-1 text-[11px] font-semibold text-[#71809a]">{t("customers.collect.balance", { amount: fmtMoney(row.running_balance) })}</p>
                   <span className="mt-2 inline-flex rounded-[7px] bg-[#dcfce7] px-2 py-1 text-[10px] font-bold text-[#15803d]">{t("customers.ledger.posted")}</span>
                 </div>
               </div>
@@ -1638,7 +1638,7 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
             <tbody className="divide-y divide-[#e8edf4]">
               {loading ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">{t("customers.ledger.loading")}</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">{t("customers.ledger.emptyResult")}</td></tr> : visibleRows.slice(0, 8).map((row) => {
                 const signed = Number(row.signed_amount ?? 0);
-                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", entryBadge(row))}>{entryLabel(row)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[var(--brand)]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || entryLabel(row))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[var(--brand-ink)]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">{t("customers.ledger.posted")}</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title={t("customers.ledger.actions")} className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>{t("customers.ledger.copyReference")}</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />{t("customers.ledger.printStatement")}</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />{t("customers.ledger.openFull")}</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
+                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", entryBadge(row))}>{entryLabel(row)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[var(--brand)]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || entryLabel(row))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[var(--brand-ink)]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? t("customers.ledger.modeSystem"))}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">{t("customers.ledger.posted")}</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title={t("customers.ledger.actions")} className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>{t("customers.ledger.copyReference")}</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />{t("customers.ledger.printStatement")}</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />{t("customers.ledger.openFull")}</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
               })}
             </tbody>
           </table>

@@ -128,7 +128,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
       );
     } else {
       if (quantity > availableInPack) {
-        toast({ title: t("inventory.movement.outExceedsStock"), description: `Available: ${currentStock(selected)}`, variant: "destructive" });
+        toast({ title: t("inventory.movement.outExceedsStock"), description: t("inventory.movement.availableToast", { qty: currentStock(selected) }), variant: "destructive" });
         return;
       }
       recordSale.mutate(
@@ -151,8 +151,8 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
       <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{mode === "in" ? "New Stock In" : "New Stock Out"}</h2>
-          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{mode === "in" ? "Add incoming stock to a product." : "Record stock leaving inventory."}</p>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{mode === "in" ? t("inventory.movement.newStockIn") : t("inventory.movement.newStockOut")}</h2>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{mode === "in" ? t("inventory.movement.inHelp") : t("inventory.movement.outHelp")}</p>
         </div>
         <button onClick={close} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label={t("billing.pay.dynamicQr.close")}><X size={18} /></button>
       </div>
@@ -168,7 +168,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-extrabold text-[#14284e]">{selected.name}</p>
-                <p className="text-[11px] text-[#6d7c98]">In stock: {currentStock(selected)}</p>
+                <p className="text-[11px] text-[#6d7c98]">{t("inventory.movement.inStockLabel", { qty: currentStock(selected) })}</p>
               </div>
               <button onClick={() => { setProductId(""); setSearch(""); }} className="grid h-7 w-7 place-items-center rounded-lg text-[#536383] hover:bg-[#eef1f6]" aria-label={t("inventory.movement.changeProduct")}><X size={15} /></button>
             </div>
@@ -187,7 +187,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[12.5px] font-bold text-[#14284e]">{p.name}</span>
-                        <span className="block text-[11px] text-[#6d7c98]">In stock: {currentStock(p)}</span>
+                        <span className="block text-[11px] text-[#6d7c98]">{t("inventory.movement.inStockLabel", { qty: currentStock(p) })}</span>
                       </span>
                     </button>
                   ))}
@@ -224,7 +224,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
           <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Quantity{unitLabel ? ` (${unitLabel})` : ""}<span className="ml-0.5 text-rose-500">*</span></Label>
           <Input className="h-10" type="number" inputMode="decimal" min={0} placeholder="0" value={qty} onChange={(e) => setQty(e.target.value === "" ? "" : Number(e.target.value))} />
           {selected && mode === "out" ? (
-            <p className="mt-1 text-[11px] text-[#9aa6bb]">Available: {availableInPack} {unitLabel}</p>
+            <p className="mt-1 text-[11px] text-[#9aa6bb]">{t("inventory.movement.availableUnits", { qty: availableInPack, unit: unitLabel })}</p>
           ) : null}
         </div>
 

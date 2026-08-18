@@ -83,7 +83,7 @@ export function FileUploadBox({
             {isDragOver ? "Drop files here" : "Click to upload or drag & drop"}
           </p>
           {hint && <p className="mt-0.5 text-xs">{hint}</p>}
-          <p className="mt-0.5 text-xs">Max {maxSizeMB}MB per file</p>
+          <p className="mt-0.5 text-xs">{t("forms.upload.maxSize", { size: maxSizeMB })}</p>
         </div>
       </div>
 

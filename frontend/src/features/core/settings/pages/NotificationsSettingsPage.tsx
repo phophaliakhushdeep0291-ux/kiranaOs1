@@ -305,7 +305,7 @@ export default function NotificationsSettingsPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-[13px] font-black text-[var(--brand-ink)]">{template.name}</p>
-                        <Badge tone={template.active ? "green" : "gray"}>{template.active ? "Active" : "Paused"}</Badge>
+                        <Badge tone={template.active ? "green" : "gray"}>{template.active ? t("settings.notify.templateActive") : t("settings.notify.templatePaused")}</Badge>
                       </div>
                       <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#64748b]">{template.templateText}</p>
                     </div>
@@ -355,7 +355,7 @@ export default function NotificationsSettingsPage() {
                 <tbody>
                   {logs.map((log) => (
                     <tr key={log.id} className="border-t border-[#eef2f8]">
-                      <td className="px-4 py-3"><p className="font-black text-[var(--brand-ink)]">{log.customerName || t("settings.notify.customer")}</p><p className="text-[10px] text-[#8290a8]">{log.customerMobileMasked || "No mobile shown"}</p></td>
+                      <td className="px-4 py-3"><p className="font-black text-[var(--brand-ink)]">{log.customerName || t("settings.notify.customer")}</p><p className="text-[10px] text-[#8290a8]">{log.customerMobileMasked || t("settings.notify.noMobile")}</p></td>
                       <td className="max-w-[340px] px-4 py-3 text-[#52627e]"><p className="line-clamp-2">{log.messagePreview}</p>{log.error ? <p className="mt-1 text-[10px] font-bold text-rose-600">{log.error}</p> : null}</td>
                       <td className="px-4 py-3 font-bold uppercase text-[#52627e]">{log.provider || "disabled"}</td>
                       <td className="px-4 py-3"><DeliveryBadge status={log.status} /></td>

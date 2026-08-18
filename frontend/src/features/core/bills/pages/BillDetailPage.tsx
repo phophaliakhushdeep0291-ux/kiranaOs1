@@ -95,7 +95,7 @@ function BillItemDescription({ item }: { item: AnyRow }) {
 
   return <div className="min-w-0">
     <div className="break-words font-semibold text-foreground">{String(item.name ?? item.productName ?? t("billing.bills.item"))}</div>
-    {variation ? <div className="mt-1 text-xs font-semibold text-muted-foreground">Portion: {variation}</div> : null}
+    {variation ? <div className="mt-1 text-xs font-semibold text-muted-foreground">{t("billing.detail.portion", { variation })}</div> : null}
     {addons.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5" aria-label={t("billing.bills.selectedAddons")}>
       {addons.map((addon, addonIndex) => <span className="inline-flex max-w-full flex-wrap items-center gap-x-1 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold leading-4 text-amber-950" key={`${addon.optionId ?? addon.name}-${addonIndex}`}>
         {addon.groupName ? <span className="text-amber-700">{addon.groupName}:</span> : null}
@@ -346,7 +346,7 @@ export default function BillDetailPage() {
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <Button className="h-11 w-full sm:w-auto" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />{t("billing.bills.whatsapp")}</Button>
           <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={printBill}><Printer size={15} className="mr-1" />{t("billing.bills.printDuplicate")}</Button>
-          <span className="self-center text-xs text-muted-foreground">{whatsappState === "sent_via_api" ? "Sent via API" : whatsappState === "opened_share_sheet" ? "Opened in WhatsApp" : whatsappState === "failed" ? "Delivery failed" : "Not sent"}</span>
+          <span className="self-center text-xs text-muted-foreground">{whatsappState === "sent_via_api" ? t("billing.detail.waSentApi") : whatsappState === "opened_share_sheet" ? t("billing.detail.waOpened") : whatsappState === "failed" ? t("billing.detail.waFailed") : t("billing.detail.waNotSent")}</span>
           <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={() => { setEmailError(""); setEmailOpen(true); }}><Mail size={15} className="mr-1" />{t("billing.bills.emailReceipt")}</Button>
           {isDeleted(bill) ? (
             <Button onClick={() => requestPinAction("restore")}><RotateCcw size={15} className="mr-1" />{t("billing.bills.restore")}</Button>
@@ -371,8 +371,8 @@ export default function BillDetailPage() {
           <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white"><CheckCircle2 size={18} /></span>
           <div className="min-w-0">
             <p className="font-bold">{t("billing.bills.cancellationConfirmed")}</p>
-            <p className="mt-0.5 text-sm text-emerald-800 dark:text-emerald-200">Stock and customer balance were reversed. {syncState === "synced" ? "Cloud backup is confirmed." : "Cloud backup is still pending."}</p>
-            <p className="mt-1 break-words text-xs text-emerald-700 dark:text-emerald-300">Reason: {cancellationReason}</p>
+            <p className="mt-0.5 text-sm text-emerald-800 dark:text-emerald-200">{t("billing.detail.reversedLine", { backup: syncState === "synced" ? t("billing.detail.backupConfirmed") : t("billing.detail.backupPending") })}</p>
+            <p className="mt-1 break-words text-xs text-emerald-700 dark:text-emerald-300">{t("billing.detail.reasonLine", { reason: cancellationReason })}</p>
           </div>
         </div>
       )}
@@ -380,7 +380,7 @@ export default function BillDetailPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{t("billing.bills.total")}</CardTitle></CardHeader><CardContent className="px-4 pb-4 text-xl font-bold">{money(total)}</CardContent></Card>
         <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{t("billing.pay.paid")}</CardTitle></CardHeader><CardContent className="px-4 pb-4 text-xl font-bold text-emerald-600">{money(paid)}</CardContent></Card>
-        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{isCancelled ? "Reversed Udhar" : "Udhar"}</CardTitle></CardHeader><CardContent className={`px-4 pb-4 text-xl font-bold ${isCancelled ? "text-emerald-600" : "text-orange-600"}`}>{money(credit)}</CardContent></Card>
+        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{isCancelled ? t("billing.detail.reversedUdhar") : t("billing.detail.udhar")}</CardTitle></CardHeader><CardContent className={`px-4 pb-4 text-xl font-bold ${isCancelled ? "text-emerald-600" : "text-orange-600"}`}>{money(credit)}</CardContent></Card>
         <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{t("billing.bills.status")}</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-1.5 px-4 pb-4"><Badge>{paymentStatus(bill, visiblePayments, t)}</Badge><Badge variant="outline">{String(bill.sync_status ?? bill.status ?? "synced").replaceAll("_", " ")}</Badge></CardContent></Card>
       </div>
 
@@ -388,12 +388,12 @@ export default function BillDetailPage() {
         <Card>
           <CardHeader><CardTitle>{t("billing.bills.summary")}</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 text-sm">
-            <div><div className="text-muted-foreground">{t("billing.bills.date")}</div><div>{billDate(bill) ? new Date(billDate(bill)).toLocaleString("en-IN") : "No date"}</div></div>
+            <div><div className="text-muted-foreground">{t("billing.bills.date")}</div><div>{billDate(bill) ? new Date(billDate(bill)).toLocaleString("en-IN") : t("billing.detail.noDate")}</div></div>
             <div><div className="text-muted-foreground">{t("billing.bills.billType")}</div><div>{String(bill.billType ?? "normal_sale").replaceAll("_", " ")}</div></div>
             <div><div className="text-muted-foreground">{t("billing.summary.subtotal")}</div><div>{money(readNumber(bill.subtotal, total + readNumber(bill.discount, 0)))}</div></div>
             <div><div className="text-muted-foreground">{t("billing.summary.discount")}</div><div>{money(readNumber(bill.discount, 0))}</div></div>
-            <div><div className="text-muted-foreground">{t("billing.bills.deleted")}</div><div>{isDeleted(bill) ? "In recycle bin" : "No"}</div></div>
-            <div className="sm:col-span-2"><div className="text-muted-foreground">{t("billing.bills.recordIdentity")}</div><div className="mt-1 grid gap-1 text-xs sm:grid-cols-2"><span className="break-all rounded-lg bg-muted/60 px-2 py-1.5">Device: {localRecordId || "Merged after backup"}</span><span className="break-all rounded-lg bg-muted/60 px-2 py-1.5">Cloud: {cloudRecordId || "Waiting for backup"}</span></div></div>
+            <div><div className="text-muted-foreground">{t("billing.bills.deleted")}</div><div>{isDeleted(bill) ? t("billing.detail.inRecycleBin") : t("billing.bills.no")}</div></div>
+            <div className="sm:col-span-2"><div className="text-muted-foreground">{t("billing.bills.recordIdentity")}</div><div className="mt-1 grid gap-1 text-xs sm:grid-cols-2"><span className="break-all rounded-lg bg-muted/60 px-2 py-1.5">{t("billing.detail.deviceId", { id: localRecordId || t("billing.detail.mergedAfterBackup") })}</span><span className="break-all rounded-lg bg-muted/60 px-2 py-1.5">{t("billing.detail.cloudId", { id: cloudRecordId || t("billing.detail.waitingBackup") })}</span></div></div>
           </CardContent>
         </Card>
 
@@ -446,17 +446,17 @@ export default function BillDetailPage() {
         <Card>
           <CardHeader><CardTitle>{t("billing.bills.ledgerImpact")}</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {data.ledger.length === 0 ? <div className="text-muted-foreground">{t("billing.bills.noLedgerRows")}</div> : data.ledger.map((entry, index) => <div key={String(entry.id ?? index)} className="border-b pb-2"><div className="flex justify-between"><span>{String(entry.type ?? "entry").replaceAll("_", " ")}</span><span className="font-semibold">{money(readNumber(entry.amount, 0))}</span></div><div className="text-xs text-muted-foreground">{rowDate(entry) ? new Date(rowDate(entry)).toLocaleString("en-IN") : "No date"}</div></div>)}
+            {data.ledger.length === 0 ? <div className="text-muted-foreground">{t("billing.bills.noLedgerRows")}</div> : data.ledger.map((entry, index) => <div key={String(entry.id ?? index)} className="border-b pb-2"><div className="flex justify-between"><span>{String(entry.type ?? "entry").replaceAll("_", " ")}</span><span className="font-semibold">{money(readNumber(entry.amount, 0))}</span></div><div className="text-xs text-muted-foreground">{rowDate(entry) ? new Date(rowDate(entry)).toLocaleString("en-IN") : t("billing.detail.noDate")}</div></div>)}
             {credit > 0 && (isCancelled
-              ? <div className="rounded-md bg-emerald-50 p-2 text-emerald-700">Cancellation reversed this bill&apos;s {money(credit)} Udhar impact.</div>
-              : <div className="rounded-md bg-orange-50 p-2 text-orange-700">This bill adds {money(credit)} to customer Udhar.</div>)}
+              ? <div className="rounded-md bg-emerald-50 p-2 text-emerald-700">{t("billing.detail.cancelReversed", { amount: money(credit) })}</div>
+              : <div className="rounded-md bg-orange-50 p-2 text-orange-700">{t("billing.detail.addsUdhar", { amount: money(credit) })}</div>)}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle>{t("billing.bills.auditTrail")}</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm max-h-72 overflow-y-auto">
-            {data.audit.length === 0 ? <div className="text-muted-foreground">{t("billing.bills.noAuditActions")}</div> : data.audit.sort((a, b) => rowDate(b).localeCompare(rowDate(a))).map((entry, index) => <div key={String(entry.id ?? index)} className="border-b pb-2"><div className="font-medium">{String(entry.action ?? "audit").replaceAll("_", " ")}</div><div className="text-xs text-muted-foreground">{rowDate(entry) ? new Date(rowDate(entry)).toLocaleString("en-IN") : "No date"}</div><div className="text-xs">{String(entry.reason ?? entry.summary ?? "")}</div></div>)}
+            {data.audit.length === 0 ? <div className="text-muted-foreground">{t("billing.bills.noAuditActions")}</div> : data.audit.sort((a, b) => rowDate(b).localeCompare(rowDate(a))).map((entry, index) => <div key={String(entry.id ?? index)} className="border-b pb-2"><div className="font-medium">{String(entry.action ?? "audit").replaceAll("_", " ")}</div><div className="text-xs text-muted-foreground">{rowDate(entry) ? new Date(rowDate(entry)).toLocaleString("en-IN") : t("billing.detail.noDate")}</div><div className="text-xs">{String(entry.reason ?? entry.summary ?? "")}</div></div>)}
           </CardContent>
         </Card>
       </div>
@@ -474,7 +474,7 @@ export default function BillDetailPage() {
 
       <Dialog open={emailOpen} onOpenChange={(open) => { if (!emailSending) setEmailOpen(open); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{t("billing.bills.emailReceipt")}</DialogTitle><DialogDescription>Send a server-rendered copy of {billNo(bill)}. This requires internet and a configured email provider.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{t("billing.bills.emailReceipt")}</DialogTitle><DialogDescription>{t("billing.detail.emailHelp", { billNo: billNo(bill) })}</DialogDescription></DialogHeader>
           <div className="space-y-2 py-3">
             <Label htmlFor="receipt-email">{t("billing.bills.customerEmail")}</Label>
             <Input id="receipt-email" type="email" inputMode="email" autoComplete="email" value={receiptEmail} onChange={(event) => { setReceiptEmail(event.target.value); setEmailError(""); }} placeholder="customer@example.com" aria-invalid={Boolean(emailError) || undefined} aria-describedby={emailError ? "receipt-email-error" : undefined} />

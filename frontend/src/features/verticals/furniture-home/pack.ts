@@ -28,10 +28,10 @@ export const furniturePack: VerticalPack = {
   nav: [
     {
       href: "/orders",
-      label: "Order Book",
+      label: "shopType.nav.orderBook",
       Icon: NotebookPen,
       insertAfter: "/billing",
-      mobile: { group: "Sell", helper: "Quotes, advances, deliveries and what is late" },
+      mobile: { group: "Sell", helper: "shopType.nav.orderBook.helper" },
     },
   ],
   capabilities: [

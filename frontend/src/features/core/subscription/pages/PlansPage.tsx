@@ -9,6 +9,7 @@ import { PlanBadge, UpgradeModal } from "@/features/core/subscription/components
 import { useState } from "react";
 import { PageHeader, PageShell } from "@/components/shared";
 import { useLocation } from "wouter";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 export default function PlansPage() {
   const { snapshot } = useSubscriptionSnapshot();
@@ -16,12 +17,15 @@ export default function PlansPage() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("yearly");
   const [, navigate] = useLocation();
   const businessType = useBusinessTypeKey();
+  // Only the trade NAME is translated here; the rest of this page is still
+  // English and listed as such in the i18n allowlist.
+  const { t } = useAppLanguage();
 
   return (
     <PageShell className="space-y-5">
       <PageHeader
         title="Plans"
-        description={`${BUSINESS_TYPE_DEFS[businessType].label} pricing: in-person setup, supported hardware configuration, training, support and software.`}
+        description={`${t(BUSINESS_TYPE_DEFS[businessType].labelKey)} pricing: in-person setup, supported hardware configuration, training, support and software.`}
         actions={snapshot ? <PlanBadge planCode={snapshot.planCode} status={snapshot.status} /> : null}
       />
 

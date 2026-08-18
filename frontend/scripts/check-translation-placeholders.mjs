@@ -45,7 +45,14 @@ async function main() {
     // first paint does not block on the whole dictionary) does not fail this
     // gate with a complaint about a missing `hindi-something.hi.ts`. Nothing
     // English can collide with the prefix.
-    .filter((name) => name !== "hindi" && !name.startsWith("hindi-"))
+    //
+    // The ENGLISH aggregators need the same exemption, and did not get it when
+    // the English catalogue was split the same way. `english.ts`,
+    // `english-critical.ts` and `english-deferred.ts` re-export the per-module
+    // tables; they hold no strings of their own and there is no
+    // `english-critical.hi.ts` for them to be compared against. Without this the
+    // gate reported three missing counterparts that were never meant to exist.
+    .filter((name) => !["hindi", "english"].includes(name) && !name.startsWith("hindi-") && !name.startsWith("english-"))
     .sort();
 
   const problems = [];

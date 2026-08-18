@@ -294,3 +294,33 @@ export function mergeInventoryRows(...groups: Array<Array<Product | InventoryIte
 
   return [...merged.values(), ...anonymous];
 }
+
+/**
+ * The `subject` rows, filled in from `detail` — a LEFT JOIN, not a union.
+ *
+ * `mergeInventoryRows` returns every row of every group it is handed. That is
+ * right when the groups are alternative views of the same catalogue, which is
+ * what both other callers pass. It is wrong when one group is a SHORTLIST and
+ * the other is the whole shop: the Low Stock Alerts panel merged the catalogue
+ * into the server's low-stock list to pick up names and photos, and got the
+ * catalogue back — so it listed the three smallest products in the shop
+ * regardless of their reorder level, while the count beside it stayed right.
+ *
+ * `detail` is merged first so `subject` still wins on conflicting fields,
+ * exactly as it did when the call was a plain merge.
+ */
+export function enrichInventoryRows(
+  subject: Array<Product | InventoryItem> | undefined | null,
+  ...detail: Array<Array<Product | InventoryItem> | undefined | null>
+): InventoryItem[] {
+  const wanted = new Set<string>();
+  for (const row of subject ?? []) {
+    const key = row && rowKey(row);
+    if (key) wanted.add(key);
+  }
+  if (wanted.size === 0) return [];
+  return mergeInventoryRows(...detail, subject).filter((row) => {
+    const key = rowKey(row);
+    return key !== undefined && wanted.has(key);
+  });
+}

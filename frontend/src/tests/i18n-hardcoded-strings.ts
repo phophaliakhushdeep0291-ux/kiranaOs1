@@ -58,7 +58,18 @@ function isUserVisibleText(value: string): boolean {
   // to the allowlist over strings that do not exist. Reporting code as debt is worse
   // than missing it: it makes the list unshrinkable and teaches people to ignore it.
   if (/&&|\|\||=>|\[\]/.test(text)) return false;
+  // A date-fns pattern is machine tokens, not prose: `format(row.date, "d MMM,
+  // h:mm a")` sits between tags and reads exactly like a label. Every alphabetic
+  // run in a pattern is one token character repeated ("MMM", "yyyy", "mm"), which
+  // no English phrase is — so "Add" and "State" stay reportable.
+  if (isDateFormatPattern(text)) return false;
   return true;
+}
+
+function isDateFormatPattern(value: string): boolean {
+  const runs = value.match(/[A-Za-z]+/g);
+  if (!runs) return false;
+  return runs.every((run) => /^([dDeEcyYLMqQwWhHKkmsSabBpPzZXxOGtTuo])\1*$/.test(run));
 }
 
 /**
@@ -83,13 +94,33 @@ function isProse(value: string): boolean {
   return true;
 }
 
+/**
+ * The double-quoted literals inside a JSX expression, which is how a ternary
+ * writes its two arms. Only the arms are prose; the expression around them is
+ * code, so the caller still runs `isProse` over each one — that is what keeps a
+ * comparison operand out of the report.
+ *
+ * Empty and one-character literals are matched and then discarded rather than
+ * skipped by the pattern. Requiring three characters up front lets the regex pair
+ * a CLOSING quote with the next opening one, so `{ok ? "+" : ""}{qty}` reported
+ * the code between two empty strings as though it were a label.
+ */
+function quotedLiterals(expression: string): string[] {
+  return [...expression.matchAll(/"([^"\n]*)"/g)].map((match) => match[1]).filter((value) => value.length >= 3);
+}
+
 function stripCommentsAndClasses(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^\s*\/\/.*$/gm, "")
     // className/class strings are Tailwind, not prose, and dominate this codebase.
     .replace(/className=\{?["'`][\s\S]*?["'`]\}?/g, "className={}")
-    .replace(/data-testid=["'][^"']*["']/g, "");
+    .replace(/data-testid=["'][^"']*["']/g, "")
+    // A <style> block inside a printed-HTML template is CSS. Its rule bodies are
+    // braces, which used to stop rule 1 dead; now that braces are allowed inside a
+    // text run, `body h1 p table th,td` reads as a sentence. Nothing in a style
+    // block is ever read by a shopkeeper.
+    .replace(/<style[\s\S]*?<\/style>/g, "<style></style>");
 }
 
 export function findHardcodedStrings(source: string): HardcodedString[] {
@@ -97,13 +128,30 @@ export function findHardcodedStrings(source: string): HardcodedString[] {
   const lineOf = (index: number) => cleaned.slice(0, index).split("\n").length;
   const found: HardcodedString[] = [];
 
-  // 1. Bare JSX text: >Move to recycle bin<
+  // 1. JSX text between tags: >Move to recycle bin<
+  //    An embedded expression is allowed inside the run and stripped before the
+  //    text is judged, so `>Category: {item.category}<` reports "Category:". For a
+  //    long time the run had to be brace-free, which meant a label with a value in
+  //    it — the ordinary way a row is written — was skipped entirely.
   //    The lookbehind keeps `=>`, `<=` and `>=` from opening a match: an arrow
   //    function followed by a comparison or a generic reads as ">text<" otherwise,
   //    and `() => apiRequest<{...}>` was reported as the user-visible word "apiRequest".
-  for (const match of cleaned.matchAll(/(?<![=!<>])>(?!=)([^<>{}\n]+)</g)) {
-    if (isUserVisibleText(match[1])) {
-      found.push({ line: lineOf(match.index ?? 0), kind: "jsx-text", text: match[1].trim() });
+  for (const match of cleaned.matchAll(/(?<![=!<>])>(?!=)((?:[^<>{}\n]|\{[^{}<>\n]*\})+)</g)) {
+    const line = lineOf(match.index ?? 0);
+    // `${…}` loses its dollar too, so a printed-HTML template reports the label
+    // rather than the label plus a stray sigil.
+    const prose = match[1].replace(/\$?\{[^{}]*\}/g, " ");
+    if (isUserVisibleText(prose)) {
+      found.push({ line, kind: "jsx-text", text: prose.trim() });
+    }
+    // A ternary that fills the whole slot leaves no bare text behind, but its arms
+    // are what the shopkeeper reads: `{out ? "Out of stock" : "In stock"}` renders
+    // exactly like text between tags. `isProse` is what keeps the comparison
+    // operand in `{mode === "correction" ? … }` from being reported with them.
+    for (const literal of quotedLiterals(match[1])) {
+      if (isUserVisibleText(literal) && isProse(literal)) {
+        found.push({ line, kind: "jsx-text", text: literal });
+      }
     }
   }
 
@@ -139,6 +187,20 @@ export function findHardcodedStrings(source: string): HardcodedString[] {
     if (isUserVisibleText(match[1]) && isProse(match[1])) {
       seen.add(match[1]);
       found.push({ line: lineOf(match.index ?? 0), kind: "prop", text: match[1] });
+    }
+  }
+
+  // 5. The same prop, chosen by an expression: `label={out ? "Out of stock" : "In
+  //    stock"}`. It renders identically to the bare form above and was invisible to
+  //    it, because the rule required the quote to sit directly after the `=`. This
+  //    is the shape that kept a whole stock table in English on a Hindi counter.
+  for (const match of cleaned.matchAll(new RegExp(`\\b(?:${PROSE_ATTRIBUTES})\\s*=\\s*\\{([^{}\\n]*)\\}`, "g"))) {
+    for (const literal of quotedLiterals(match[1])) {
+      if (seen.has(literal)) continue;
+      if (isUserVisibleText(literal) && isProse(literal)) {
+        seen.add(literal);
+        found.push({ line: lineOf(match.index ?? 0), kind: "prop", text: literal });
+      }
     }
   }
 

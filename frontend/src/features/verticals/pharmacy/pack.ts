@@ -29,10 +29,10 @@ export const pharmacyPack: VerticalPack = {
   nav: [
     {
       href: "/prescriptions",
-      label: "Prescriptions",
+      label: "shopType.nav.prescriptions",
       Icon: Stethoscope,
       insertAfter: "/billing",
-      mobile: { group: "Sell", helper: "Record what was dispensed, and on whose slip" },
+      mobile: { group: "Sell", helper: "shopType.nav.prescriptions.helper" },
     },
   ],
   // Contributes the prescription control to shared billing, so core never

@@ -30,10 +30,10 @@ export const footwearPack: VerticalPack = {
   nav: [
     {
       href: "/size-runs",
-      label: "Size Runs",
+      label: "shopType.nav.sizeRuns",
       Icon: Footprints,
       insertAfter: "/inventory",
-      mobile: { group: "Stock & buying", helper: "Find a size, and see the gaps in each run" },
+      mobile: { group: "Stock & buying", helper: "shopType.nav.sizeRuns.helper" },
     },
   ],
   capabilities: [

@@ -1,5 +1,11 @@
 import { useCallback } from "react";
 import type { AccentColor } from "./theme";
+// Type-only. It used to import the English catalogue as a VALUE to check a
+// category against the keys that exist, which no longer works: the catalogue is
+// split, and `translations/english` statically pulls the deferred half — a value
+// import here would drag nine secondary-screen tables back into the startup
+// chunk. The shipped categories are already listed below, so ask them instead.
+import type { Translate, TranslationKey } from "./i18n";
 import {
   BUSINESS_TYPE_IDS,
   getStoredBusinessType,
@@ -32,40 +38,89 @@ export type QuickActionIconKey =
 export type QuickActionColorKey =
   | "primary" | "sky" | "amber" | "violet" | "emerald" | "rose" | "orange" | "teal";
 
+/**
+ * Copy in this table is a dictionary KEY, not the words themselves.
+ *
+ * This is a module-level constant: it is evaluated when the module is imported,
+ * long before a language has been chosen, so a sentence written here could never
+ * reach `t()` and rendered in English on every Hindi counter. Naming the key
+ * instead defers the choice to render time. The words live in
+ * `translations/shop-types.ts`, with the Hindi half beside it.
+ */
 export interface QuickAction {
-  label: string;
+  label: TranslationKey;
   href: string;
   icon: QuickActionIconKey;
   color: QuickActionColorKey;
 }
 
 export interface NavConfig {
-  billing: string;    // label for /billing nav item
-  products: string;   // label for /products nav item
-  inventory: string;  // label for /inventory nav item
-  udhar: string;      // label for /udhar nav item
-  tagline: string;    // sidebar brand tagline
+  billing: TranslationKey;    // label for /billing nav item
+  products: TranslationKey;   // label for /products nav item
+  inventory: TranslationKey;  // label for /inventory nav item
+  udhar: TranslationKey;      // label for /udhar nav item
+  tagline: TranslationKey;    // sidebar brand tagline
 }
 
 export interface DashboardConfig {
-  heroTitle: string;
-  heroSubtitle: string;
-  kpi: { revenue: string; profit: string; credit: string; cash: string; };
-  creditLabel: string;
+  heroTitle: TranslationKey;
+  heroSubtitle: TranslationKey;
+  kpi: { revenue: TranslationKey; profit: TranslationKey; credit: TranslationKey; cash: TranslationKey; };
+  creditLabel: TranslationKey;
   quickActions: [QuickAction, QuickAction, QuickAction, QuickAction];
 }
 
 export interface BusinessTypeDefinition {
+  /**
+   * English, and a WIRE VALUE — not display copy.
+   *
+   * It is written to `settingsJson.storeProfile.businessType` and read back by
+   * `businessTypeFromLabel`, so it has to mean the same thing on both sides of
+   * the network and in both languages. Never render it; render `labelKey`.
+   */
   label: string;
+  labelKey: TranslationKey;
   emoji: string;
-  description: string;
+  descriptionKey: TranslationKey;
+  /**
+   * Stored on the product exactly as written here, so these are data and stay
+   * English. `categoryLabelKey` turns one into words for display.
+   */
   categories: string[];
+  /** Unit codes that feed pricing and stock maths. Never translated. */
   primaryUnits: string[];
-  voiceExample: string;
+  voiceExampleKey: TranslationKey;
   defaultAccent: AccentColor;
   dashboardVariant: DashboardVariant;
   navConfig: NavConfig;
   dashboard: DashboardConfig;
+}
+
+/**
+ * The words for a category value, when it is one the trade ships with.
+ *
+ * A category the owner typed in themselves has no key and must be shown exactly
+ * as they wrote it — so this returns null rather than guessing, and the caller
+ * falls back to the raw value.
+ */
+let shippedCategories: Set<string> | null = null;
+
+export function categoryLabelKey(category: string): TranslationKey | null {
+  // Built on first call, not at module scope: `BUSINESS_TYPE_DEFS` is declared
+  // further down this file, so a module-level `new Set(...)` over it throws
+  // before initialization and takes the whole app down at import.
+  //
+  // Derived from the table rather than restated, so a trade that gains a
+  // category cannot be forgotten here. Whether the DICTIONARY has the matching
+  // key is a separate question, asked by vertical-navigation-fit.test.ts.
+  shippedCategories ??= new Set(Object.values(BUSINESS_TYPE_DEFS).flatMap((definition) => definition.categories));
+  return shippedCategories.has(category) ? (`shopType.category.${category}` as TranslationKey) : null;
+}
+
+/** A category in the reader's language, or as typed if the shop invented it. */
+export function translateCategory(category: string, t: Translate): string {
+  const key = categoryLabelKey(category);
+  return key ? t(key) : category.replace(/_/g, " ");
 }
 
 /** Choices that may create/change a shop — mirrors OFFERED_BUSINESS_TYPES on the server. */
@@ -87,291 +142,316 @@ export function defaultCategoryFor(businessType: BusinessType): string {
   return categories.find((category) => category !== "all") ?? "general";
 }
 
+/**
+ * Note on `label`: those twelve strings are persisted on shops that already
+ * exist and are parsed back by `businessTypeFromLabel`. Changing one silently
+ * orphans every shop that stored it — the lookup returns null and the trade
+ * falls back to whatever the device happens to remember. Edit
+ * `shopType.<key>.label` in the dictionary instead; that is the one on screen.
+ */
 export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = {
   kirana: {
     label: "Kirana / General Store",
+    labelKey: "shopType.kirana.label",
     emoji: "🛒",
-    description: "Grocery, FMCG, daily essentials",
+    descriptionKey: "shopType.kirana.description",
     categories: ["grocery", "dairy", "beverages", "snacks", "household", "personal_care", "stationery", "other"],
     primaryUnits: ["piece", "kg", "gram", "litre", "ml", "packet", "box", "dozen"],
-    voiceExample: "name aata, cost 40, selling 45, stock 10 kg, category grocery",
+    voiceExampleKey: "shopType.kirana.voiceExample",
     defaultAccent: "blue",
     dashboardVariant: "general",
-    navConfig: { billing: "Billing", products: "Products", inventory: "Inventory", udhar: "Customers / Udhar", tagline: "Built for busy Indian stores" },
+    navConfig: { billing: "shopType.kirana.nav.billing", products: "shopType.kirana.nav.products", inventory: "shopType.kirana.nav.inventory", udhar: "shopType.kirana.nav.udhar", tagline: "shopType.kirana.nav.tagline" },
     dashboard: {
-      heroTitle: "Today's counter",
-      heroSubtitle: "Sales, cash, udhar, and stock at a glance.",
-      kpi: { revenue: "Today's Sales", profit: "Gross Profit", credit: "Udhar Outstanding", cash: "Cash Collected" },
-      creditLabel: "Udhar",
+      heroTitle: "shopType.kirana.hero.title",
+      heroSubtitle: "shopType.kirana.hero.subtitle",
+      kpi: { revenue: "shopType.kirana.kpi.revenue", profit: "shopType.kirana.kpi.profit", credit: "shopType.kirana.kpi.credit", cash: "shopType.kirana.kpi.cash" },
+      creditLabel: "shopType.kirana.creditLabel",
       quickActions: [
-        { label: "New Bill",  href: "/billing",        icon: "billing",   color: "primary" },
-        { label: "Collect",   href: "/udhar",          icon: "payment",   color: "sky"     },
-        { label: "Purchase",  href: "/purchase-bills", icon: "purchase",  color: "amber"   },
-        { label: "Close Day", href: "/daily-closing",  icon: "closing",   color: "violet"  },
+        { label: "shopType.kirana.action.1", href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "shopType.kirana.action.2", href: "/udhar",          icon: "payment",   color: "sky"     },
+        { label: "shopType.kirana.action.3", href: "/purchase-bills", icon: "purchase",  color: "amber"   },
+        { label: "shopType.kirana.action.4", href: "/daily-closing",  icon: "closing",   color: "violet"  },
       ],
     },
   },
 
   clothing: {
     label: "Clothing & Fashion",
+    labelKey: "shopType.clothing.label",
     emoji: "👕",
-    description: "Garments, sarees, fabric, readymade",
+    descriptionKey: "shopType.clothing.description",
     categories: ["men", "women", "kids", "sarees", "fabric", "accessories", "innerwear", "other"],
     primaryUnits: ["piece", "meter", "yard", "set", "dozen", "roll", "bundle"],
-    voiceExample: "name cotton shirt, cost 200, selling 350, stock 20 piece, category men",
+    voiceExampleKey: "shopType.clothing.voiceExample",
     defaultAccent: "violet",
     dashboardVariant: "general",
-    navConfig: { billing: "New Bill", products: "Catalogue", inventory: "Stock", udhar: "Credit", tagline: "Fashion Counter" },
+    navConfig: { billing: "shopType.clothing.nav.billing", products: "shopType.clothing.nav.products", inventory: "shopType.clothing.nav.inventory", udhar: "shopType.clothing.nav.udhar", tagline: "shopType.clothing.nav.tagline" },
     dashboard: {
-      heroTitle: "Fashion counter",
-      heroSubtitle: "Today's sales, stock, and customer credit.",
-      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash In Hand" },
-      creditLabel: "Credit",
+      heroTitle: "shopType.clothing.hero.title",
+      heroSubtitle: "shopType.clothing.hero.subtitle",
+      kpi: { revenue: "shopType.clothing.kpi.revenue", profit: "shopType.clothing.kpi.profit", credit: "shopType.clothing.kpi.credit", cash: "shopType.clothing.kpi.cash" },
+      creditLabel: "shopType.clothing.creditLabel",
       quickActions: [
-        { label: "New Bill",  href: "/billing",        icon: "billing",   color: "primary" },
-        { label: "Collect",   href: "/udhar",          icon: "payment",   color: "sky"     },
-        { label: "Catalogue", href: "/products",       icon: "products",  color: "violet"  },
-        { label: "Reports",   href: "/reports",        icon: "reports",   color: "amber"   },
+        { label: "shopType.clothing.action.1", href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "shopType.clothing.action.2", href: "/udhar",          icon: "payment",   color: "sky"     },
+        { label: "shopType.clothing.action.3", href: "/products",       icon: "products",  color: "violet"  },
+        { label: "shopType.clothing.action.4", href: "/reports",        icon: "reports",   color: "amber"   },
       ],
     },
   },
 
   footwear: {
     label: "Footwear & Shoes",
+    labelKey: "shopType.footwear.label",
     emoji: "👟",
-    description: "Shoes, sandals, chappals, sports footwear",
+    descriptionKey: "shopType.footwear.description",
     categories: ["mens", "womens", "kids", "sandals", "sports", "formal", "casual", "other"],
     primaryUnits: ["pair", "piece", "dozen", "box", "set"],
-    voiceExample: "name sports shoes, cost 400, selling 650, stock 10 pair, category sports",
+    voiceExampleKey: "shopType.footwear.voiceExample",
     defaultAccent: "rose",
     dashboardVariant: "general",
-    navConfig: { billing: "New Bill", products: "Catalogue", inventory: "Stock", udhar: "Dues", tagline: "Footwear Counter" },
+    navConfig: { billing: "shopType.footwear.nav.billing", products: "shopType.footwear.nav.products", inventory: "shopType.footwear.nav.inventory", udhar: "shopType.footwear.nav.udhar", tagline: "shopType.footwear.nav.tagline" },
     dashboard: {
-      heroTitle: "Footwear counter",
-      heroSubtitle: "Today's billing and inventory overview.",
-      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Dues", cash: "Cash In Hand" },
-      creditLabel: "Dues",
+      heroTitle: "shopType.footwear.hero.title",
+      heroSubtitle: "shopType.footwear.hero.subtitle",
+      kpi: { revenue: "shopType.footwear.kpi.revenue", profit: "shopType.footwear.kpi.profit", credit: "shopType.footwear.kpi.credit", cash: "shopType.footwear.kpi.cash" },
+      creditLabel: "shopType.footwear.creditLabel",
       quickActions: [
-        { label: "New Bill",  href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",   href: "/udhar",         icon: "payment",   color: "sky"     },
-        { label: "Stock",     href: "/inventory",     icon: "inventory", color: "rose"    },
-        { label: "Close Day", href: "/daily-closing", icon: "closing",   color: "amber"   },
+        { label: "shopType.footwear.action.1", href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "shopType.footwear.action.2", href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "shopType.footwear.action.3", href: "/inventory",     icon: "inventory", color: "rose"    },
+        { label: "shopType.footwear.action.4", href: "/daily-closing", icon: "closing",   color: "amber"   },
       ],
     },
   },
 
   auto_parts: {
     label: "Auto Parts & Hardware",
+    labelKey: "shopType.auto_parts.label",
     emoji: "🔧",
-    description: "Tractor parts, spare parts, tools, hardware",
+    descriptionKey: "shopType.auto_parts.description",
     categories: ["engine_parts", "filters", "electrical", "body_parts", "tools", "lubricants", "hardware", "fasteners", "other"],
     primaryUnits: ["piece", "set", "box", "litre", "kg", "dozen", "bundle", "sheet"],
-    voiceExample: "name oil filter, cost 120, selling 180, stock 15 piece, category filters",
+    voiceExampleKey: "shopType.auto_parts.voiceExample",
     defaultAccent: "slate",
     dashboardVariant: "technical",
-    navConfig: { billing: "New Bill", products: "Parts", inventory: "Godown", udhar: "Khata", tagline: "Parts & Hardware" },
+    navConfig: { billing: "shopType.auto_parts.nav.billing", products: "shopType.auto_parts.nav.products", inventory: "shopType.auto_parts.nav.inventory", udhar: "shopType.auto_parts.nav.udhar", tagline: "shopType.auto_parts.nav.tagline" },
     dashboard: {
-      heroTitle: "Parts & hardware",
-      heroSubtitle: "Sales, supplier dues, and credit outstanding.",
-      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Party Credit", cash: "Cash Collected" },
-      creditLabel: "Party Credit",
+      heroTitle: "shopType.auto_parts.hero.title",
+      heroSubtitle: "shopType.auto_parts.hero.subtitle",
+      kpi: { revenue: "shopType.auto_parts.kpi.revenue", profit: "shopType.auto_parts.kpi.profit", credit: "shopType.auto_parts.kpi.credit", cash: "shopType.auto_parts.kpi.cash" },
+      creditLabel: "shopType.auto_parts.creditLabel",
       quickActions: [
-        { label: "New Bill",  href: "/billing",        icon: "billing",   color: "primary" },
-        { label: "Purchase",  href: "/purchase-bills", icon: "purchase",  color: "amber"   },
-        { label: "Suppliers", href: "/suppliers",      icon: "suppliers", color: "sky"     },
-        { label: "Reports",   href: "/reports",        icon: "reports",   color: "violet"  },
+        { label: "shopType.auto_parts.action.1", href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "shopType.auto_parts.action.2", href: "/purchase-bills", icon: "purchase",  color: "amber"   },
+        { label: "shopType.auto_parts.action.3", href: "/suppliers",      icon: "suppliers", color: "sky"     },
+        { label: "shopType.auto_parts.action.4", href: "/reports",        icon: "reports",   color: "violet"  },
       ],
     },
   },
 
   electronics: {
     label: "Electronics & Mobiles",
+    labelKey: "shopType.electronics.label",
     emoji: "📱",
-    description: "Phones, appliances, accessories, cables",
+    descriptionKey: "shopType.electronics.description",
     categories: ["mobiles", "accessories", "appliances", "computers", "cables", "batteries", "networking", "other"],
     primaryUnits: ["piece", "set", "box", "dozen"],
-    voiceExample: "name earphones, cost 300, selling 550, stock 8 piece, category accessories",
+    voiceExampleKey: "shopType.electronics.voiceExample",
     defaultAccent: "blue",
     dashboardVariant: "general",
-    navConfig: { billing: "New Bill", products: "Products", inventory: "Stock", udhar: "Credit", tagline: "Electronics Counter" },
+    navConfig: { billing: "shopType.electronics.nav.billing", products: "shopType.electronics.nav.products", inventory: "shopType.electronics.nav.inventory", udhar: "shopType.electronics.nav.udhar", tagline: "shopType.electronics.nav.tagline" },
     dashboard: {
-      heroTitle: "Electronics sales",
-      heroSubtitle: "Today's billing and payment tracking.",
-      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash Collected" },
-      creditLabel: "Credit",
+      heroTitle: "shopType.electronics.hero.title",
+      heroSubtitle: "shopType.electronics.hero.subtitle",
+      kpi: { revenue: "shopType.electronics.kpi.revenue", profit: "shopType.electronics.kpi.profit", credit: "shopType.electronics.kpi.credit", cash: "shopType.electronics.kpi.cash" },
+      creditLabel: "shopType.electronics.creditLabel",
       quickActions: [
-        { label: "New Bill",  href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",   href: "/udhar",         icon: "payment",   color: "sky"     },
-        { label: "Inventory", href: "/inventory",     icon: "inventory", color: "teal"    },
-        { label: "Reports",   href: "/reports",       icon: "reports",   color: "violet"  },
+        { label: "shopType.electronics.action.1", href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "shopType.electronics.action.2", href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "shopType.electronics.action.3", href: "/inventory",     icon: "inventory", color: "teal"    },
+        { label: "shopType.electronics.action.4", href: "/reports",       icon: "reports",   color: "violet"  },
       ],
     },
   },
 
   pharmacy: {
     label: "Pharmacy & Medical",
+    labelKey: "shopType.pharmacy.label",
     emoji: "💊",
-    description: "Medicines, medical equipment, health products",
+    descriptionKey: "shopType.pharmacy.description",
     categories: ["tablets", "syrups", "injections", "equipment", "vitamins", "topical", "surgical", "other"],
     primaryUnits: ["strip", "tablet", "bottle", "tube", "piece", "box", "ml", "gram"],
-    voiceExample: "name paracetamol, cost 12, selling 15, stock 50 strip, category tablets",
+    voiceExampleKey: "shopType.pharmacy.voiceExample",
     defaultAccent: "teal",
     dashboardVariant: "medical",
-    navConfig: { billing: "Counter", products: "Medicines", inventory: "Stock", udhar: "Accounts", tagline: "Pharmacy Counter" },
+    navConfig: { billing: "shopType.pharmacy.nav.billing", products: "shopType.pharmacy.nav.products", inventory: "shopType.pharmacy.nav.inventory", udhar: "shopType.pharmacy.nav.udhar", tagline: "shopType.pharmacy.nav.tagline" },
     dashboard: {
-      heroTitle: "Pharmacy counter",
-      heroSubtitle: "Dispensing, stock, and patient accounts.",
-      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Patient Accounts", cash: "Cash Collected" },
-      creditLabel: "Patient Accounts",
+      heroTitle: "shopType.pharmacy.hero.title",
+      heroSubtitle: "shopType.pharmacy.hero.subtitle",
+      kpi: { revenue: "shopType.pharmacy.kpi.revenue", profit: "shopType.pharmacy.kpi.profit", credit: "shopType.pharmacy.kpi.credit", cash: "shopType.pharmacy.kpi.cash" },
+      creditLabel: "shopType.pharmacy.creditLabel",
       quickActions: [
-        { label: "Counter",   href: "/billing",        icon: "billing",   color: "primary" },
-        { label: "Medicines", href: "/inventory",      icon: "inventory", color: "teal"    },
-        { label: "Purchase",  href: "/purchase-bills", icon: "purchase",  color: "amber"   },
-        { label: "Close Day", href: "/daily-closing",  icon: "closing",   color: "violet"  },
+        { label: "shopType.pharmacy.action.1", href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "shopType.pharmacy.action.2", href: "/inventory",      icon: "inventory", color: "teal"    },
+        { label: "shopType.pharmacy.action.3", href: "/purchase-bills", icon: "purchase",  color: "amber"   },
+        { label: "shopType.pharmacy.action.4", href: "/daily-closing",  icon: "closing",   color: "violet"  },
       ],
     },
   },
 
   stationery: {
     label: "Stationery & Books",
+    labelKey: "shopType.stationery.label",
     emoji: "📚",
-    description: "Books, pens, notebooks, office supplies",
+    descriptionKey: "shopType.stationery.description",
     categories: ["books", "pens", "notebooks", "art_supplies", "office", "files", "other"],
     primaryUnits: ["piece", "box", "dozen", "packet", "roll", "bundle"],
-    voiceExample: "name ball pen, cost 5, selling 10, stock 100 dozen, category pens",
+    voiceExampleKey: "shopType.stationery.voiceExample",
     defaultAccent: "amber",
     dashboardVariant: "general",
-    navConfig: { billing: "New Bill", products: "Products", inventory: "Stock", udhar: "Credit", tagline: "Stationery Counter" },
+    navConfig: { billing: "shopType.stationery.nav.billing", products: "shopType.stationery.nav.products", inventory: "shopType.stationery.nav.inventory", udhar: "shopType.stationery.nav.udhar", tagline: "shopType.stationery.nav.tagline" },
     dashboard: {
-      heroTitle: "Stationery counter",
-      heroSubtitle: "Today's sales and stock overview.",
-      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash In Hand" },
-      creditLabel: "Credit",
+      heroTitle: "shopType.stationery.hero.title",
+      heroSubtitle: "shopType.stationery.hero.subtitle",
+      kpi: { revenue: "shopType.stationery.kpi.revenue", profit: "shopType.stationery.kpi.profit", credit: "shopType.stationery.kpi.credit", cash: "shopType.stationery.kpi.cash" },
+      creditLabel: "shopType.stationery.creditLabel",
       quickActions: [
-        { label: "New Bill",  href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Products",  href: "/products",      icon: "products",  color: "amber"   },
-        { label: "Inventory", href: "/inventory",     icon: "inventory", color: "sky"     },
-        { label: "Reports",   href: "/reports",       icon: "reports",   color: "violet"  },
+        { label: "shopType.stationery.action.1", href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "shopType.stationery.action.2", href: "/products",      icon: "products",  color: "amber"   },
+        { label: "shopType.stationery.action.3", href: "/inventory",     icon: "inventory", color: "sky"     },
+        { label: "shopType.stationery.action.4", href: "/reports",       icon: "reports",   color: "violet"  },
       ],
     },
   },
 
   furniture: {
     label: "Furniture & Home",
+    labelKey: "shopType.furniture.label",
     emoji: "🪑",
-    description: "Furniture, décor, home furnishings",
+    descriptionKey: "shopType.furniture.description",
     categories: ["bedroom", "living_room", "kitchen", "decor", "lighting", "bedding", "storage", "other"],
     primaryUnits: ["piece", "set", "pair", "box"],
-    voiceExample: "name study chair, cost 2500, selling 3800, stock 5 piece, category bedroom",
+    voiceExampleKey: "shopType.furniture.voiceExample",
     defaultAccent: "orange",
     dashboardVariant: "general",
-    navConfig: { billing: "New Bill", products: "Products", inventory: "Stock", udhar: "Dues", tagline: "Furniture Showroom" },
+    navConfig: { billing: "shopType.furniture.nav.billing", products: "shopType.furniture.nav.products", inventory: "shopType.furniture.nav.inventory", udhar: "shopType.furniture.nav.udhar", tagline: "shopType.furniture.nav.tagline" },
     dashboard: {
-      heroTitle: "Furniture showroom",
-      heroSubtitle: "Sales, customer dues, and delivery.",
-      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Dues", cash: "Cash Collected" },
-      creditLabel: "Dues",
+      heroTitle: "shopType.furniture.hero.title",
+      heroSubtitle: "shopType.furniture.hero.subtitle",
+      kpi: { revenue: "shopType.furniture.kpi.revenue", profit: "shopType.furniture.kpi.profit", credit: "shopType.furniture.kpi.credit", cash: "shopType.furniture.kpi.cash" },
+      creditLabel: "shopType.furniture.creditLabel",
       quickActions: [
-        { label: "New Bill", href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",  href: "/udhar",         icon: "payment",   color: "sky"     },
-        { label: "Products", href: "/products",      icon: "products",  color: "orange"  },
-        { label: "Reports",  href: "/reports",       icon: "reports",   color: "violet"  },
+        { label: "shopType.furniture.action.1", href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "shopType.furniture.action.2", href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "shopType.furniture.action.3", href: "/products",      icon: "products",  color: "orange"  },
+        { label: "shopType.furniture.action.4", href: "/reports",       icon: "reports",   color: "violet"  },
       ],
     },
   },
 
   cosmetics: {
     label: "Beauty & Cosmetics",
+    labelKey: "shopType.cosmetics.label",
     emoji: "💄",
-    description: "Skincare, makeup, haircare, salon products",
+    descriptionKey: "shopType.cosmetics.description",
     categories: ["skincare", "makeup", "haircare", "fragrances", "nailcare", "grooming", "other"],
     primaryUnits: ["piece", "bottle", "tube", "ml", "gram", "box", "set"],
-    voiceExample: "name face cream, cost 80, selling 150, stock 20 piece, category skincare",
+    voiceExampleKey: "shopType.cosmetics.voiceExample",
     defaultAccent: "rose",
     dashboardVariant: "general",
-    navConfig: { billing: "New Bill", products: "Products", inventory: "Stock", udhar: "Credit", tagline: "Beauty Counter" },
+    navConfig: { billing: "shopType.cosmetics.nav.billing", products: "shopType.cosmetics.nav.products", inventory: "shopType.cosmetics.nav.inventory", udhar: "shopType.cosmetics.nav.udhar", tagline: "shopType.cosmetics.nav.tagline" },
     dashboard: {
-      heroTitle: "Beauty counter",
-      heroSubtitle: "Today's sales and customer care.",
-      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash In Hand" },
-      creditLabel: "Credit",
+      heroTitle: "shopType.cosmetics.hero.title",
+      heroSubtitle: "shopType.cosmetics.hero.subtitle",
+      kpi: { revenue: "shopType.cosmetics.kpi.revenue", profit: "shopType.cosmetics.kpi.profit", credit: "shopType.cosmetics.kpi.credit", cash: "shopType.cosmetics.kpi.cash" },
+      creditLabel: "shopType.cosmetics.creditLabel",
       quickActions: [
-        { label: "New Bill",  href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",   href: "/udhar",         icon: "payment",   color: "rose"    },
-        { label: "Products",  href: "/products",      icon: "products",  color: "sky"     },
-        { label: "Reports",   href: "/reports",       icon: "reports",   color: "violet"  },
+        { label: "shopType.cosmetics.action.1", href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "shopType.cosmetics.action.2", href: "/udhar",         icon: "payment",   color: "rose"    },
+        { label: "shopType.cosmetics.action.3", href: "/products",      icon: "products",  color: "sky"     },
+        { label: "shopType.cosmetics.action.4", href: "/reports",       icon: "reports",   color: "violet"  },
       ],
     },
   },
 
   restaurant: {
     label: "Restaurant & Café",
+    labelKey: "shopType.restaurant.label",
     emoji: "🍽️",
-    description: "Food, snacks, beverages, quick service",
+    descriptionKey: "shopType.restaurant.description",
     categories: ["starters", "main_course", "beverages", "snacks", "desserts", "thali", "other"],
     primaryUnits: ["piece", "plate", "glass", "bottle", "kg", "litre"],
-    voiceExample: "name dal makhani, cost 60, selling 120, stock 10 kg, category main_course",
+    voiceExampleKey: "shopType.restaurant.voiceExample",
     defaultAccent: "amber",
     dashboardVariant: "restaurant",
-    navConfig: { billing: "New Order", products: "Menu", inventory: "Kitchen", udhar: "Tabs", tagline: "Restaurant & Café" },
+    // "Menu" and "Kitchen" belong to the restaurant pack's own screens — the 86
+    // list at /menu and the ticket rail at /kitchen, both of which title
+    // themselves that way. Reusing the words here put two identical entries in
+    // the sidebar pointing at different pages, and hid each specialist screen
+    // behind the generic one. These two name what a kitchen actually calls them:
+    // the dishes it sells, and the room it keeps stock in.
+    navConfig: { billing: "shopType.restaurant.nav.billing", products: "shopType.restaurant.nav.products", inventory: "shopType.restaurant.nav.inventory", udhar: "shopType.restaurant.nav.udhar", tagline: "shopType.restaurant.nav.tagline" },
     dashboard: {
-      heroTitle: "Restaurant billing",
-      heroSubtitle: "Orders, revenue, and daily closing.",
-      kpi: { revenue: "Revenue Today", profit: "Gross Margin", credit: "Pending Tabs", cash: "Cash Collected" },
-      creditLabel: "Tabs",
+      heroTitle: "shopType.restaurant.hero.title",
+      heroSubtitle: "shopType.restaurant.hero.subtitle",
+      kpi: { revenue: "shopType.restaurant.kpi.revenue", profit: "shopType.restaurant.kpi.profit", credit: "shopType.restaurant.kpi.credit", cash: "shopType.restaurant.kpi.cash" },
+      creditLabel: "shopType.restaurant.creditLabel",
       quickActions: [
-        { label: "New Order", href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",   href: "/udhar",         icon: "payment",   color: "sky"     },
-        { label: "Menu",      href: "/products",      icon: "products",  color: "amber"   },
-        { label: "Close Day", href: "/daily-closing", icon: "closing",   color: "violet"  },
+        { label: "shopType.restaurant.action.1", href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "shopType.restaurant.action.2", href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "shopType.restaurant.action.3", href: "/products",      icon: "products",  color: "amber"   },
+        { label: "shopType.restaurant.action.4", href: "/daily-closing", icon: "closing",   color: "violet"  },
       ],
     },
   },
 
   manufacturing: {
     label: "Manufacturing, Wholesale & Export",
+    labelKey: "shopType.manufacturing.label",
     emoji: "🏭",
-    description: "Raw materials, production, packaging, wholesale and exports",
+    descriptionKey: "shopType.manufacturing.description",
     categories: ["raw_material", "packaging_material", "work_in_progress", "finished_goods", "by_product", "other"],
     primaryUnits: ["kg", "gram", "litre", "ml", "piece", "packet", "pouch", "box", "carton", "pallet"],
-    voiceExample: "name turmeric 500 gram pouch, SKU TUR-500, wholesale 82, stock 500 packet",
+    voiceExampleKey: "shopType.manufacturing.voiceExample",
     defaultAccent: "teal",
     dashboardVariant: "technical",
-    navConfig: { billing: "Dispatch Invoice", products: "Items & Packaging", inventory: "Materials & Stock", udhar: "Trade Receivables", tagline: "Manufacturing & Export" },
+    navConfig: { billing: "shopType.manufacturing.nav.billing", products: "shopType.manufacturing.nav.products", inventory: "shopType.manufacturing.nav.inventory", udhar: "shopType.manufacturing.nav.udhar", tagline: "shopType.manufacturing.nav.tagline" },
     dashboard: {
-      heroTitle: "Factory operations",
-      heroSubtitle: "Materials, production batches, packaging and dispatch readiness.",
-      kpi: { revenue: "Dispatch Value", profit: "Gross Margin", credit: "Trade Receivables", cash: "Collections" },
-      creditLabel: "Receivables",
+      heroTitle: "shopType.manufacturing.hero.title",
+      heroSubtitle: "shopType.manufacturing.hero.subtitle",
+      kpi: { revenue: "shopType.manufacturing.kpi.revenue", profit: "shopType.manufacturing.kpi.profit", credit: "shopType.manufacturing.kpi.credit", cash: "shopType.manufacturing.kpi.cash" },
+      creditLabel: "shopType.manufacturing.creditLabel",
       quickActions: [
-        { label: "Production", href: "/manufacturing", icon: "inventory", color: "teal" },
-        { label: "Purchase", href: "/purchase-bills", icon: "purchase", color: "amber" },
-        { label: "Dispatch", href: "/billing", icon: "billing", color: "primary" },
-        { label: "Reports", href: "/reports", icon: "reports", color: "violet" },
+        { label: "shopType.manufacturing.action.1", href: "/manufacturing", icon: "inventory", color: "teal" },
+        { label: "shopType.manufacturing.action.2", href: "/purchase-bills", icon: "purchase", color: "amber" },
+        { label: "shopType.manufacturing.action.3", href: "/billing", icon: "billing", color: "primary" },
+        { label: "shopType.manufacturing.action.4", href: "/reports", icon: "reports", color: "violet" },
       ],
     },
   },
 
   other: {
     label: "Other / Custom",
+    labelKey: "shopType.other.label",
     emoji: "🏪",
-    description: "Any other retail business",
+    descriptionKey: "shopType.other.description",
     categories: ["general", "category_a", "category_b", "other"],
     primaryUnits: ["piece", "box", "set", "bundle", "dozen"],
-    voiceExample: "name product, cost 100, selling 150, stock 10 piece, category general",
+    voiceExampleKey: "shopType.other.voiceExample",
     defaultAccent: "blue",
     dashboardVariant: "general",
-    navConfig: { billing: "New Bill", products: "Products", inventory: "Inventory", udhar: "Credit", tagline: "Retail Counter" },
+    navConfig: { billing: "shopType.other.nav.billing", products: "shopType.other.nav.products", inventory: "shopType.other.nav.inventory", udhar: "shopType.other.nav.udhar", tagline: "shopType.other.nav.tagline" },
     dashboard: {
-      heroTitle: "Business counter",
-      heroSubtitle: "Sales, stock, and daily management.",
-      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash Collected" },
-      creditLabel: "Credit",
+      heroTitle: "shopType.other.hero.title",
+      heroSubtitle: "shopType.other.hero.subtitle",
+      kpi: { revenue: "shopType.other.kpi.revenue", profit: "shopType.other.kpi.profit", credit: "shopType.other.kpi.credit", cash: "shopType.other.kpi.cash" },
+      creditLabel: "shopType.other.creditLabel",
       quickActions: [
-        { label: "New Bill",  href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",   href: "/udhar",         icon: "payment",   color: "sky"     },
-        { label: "Inventory", href: "/inventory",     icon: "inventory", color: "amber"   },
-        { label: "Reports",   href: "/reports",       icon: "reports",   color: "violet"  },
+        { label: "shopType.other.action.1", href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "shopType.other.action.2", href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "shopType.other.action.3", href: "/inventory",     icon: "inventory", color: "amber"   },
+        { label: "shopType.other.action.4", href: "/reports",       icon: "reports",   color: "violet"  },
       ],
     },
   },

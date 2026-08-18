@@ -29,10 +29,10 @@ export const autoPartsPack: VerticalPack = {
   nav: [
     {
       href: "/fitment",
-      label: "Part Finder",
+      label: "shopType.nav.fitment",
       Icon: Car,
       insertAfter: "/billing",
-      mobile: { group: "Sell", helper: "Find what fits a customer's vehicle" },
+      mobile: { group: "Sell", helper: "shopType.nav.fitment.helper" },
     },
   ],
   capabilities: [

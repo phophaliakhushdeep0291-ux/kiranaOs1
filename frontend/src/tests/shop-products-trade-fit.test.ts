@@ -39,7 +39,11 @@ describe("products page trade fit", () => {
     // "Total Products". Any trade whose nav renames /products must count its
     // rows under a different word from the generic one.
     for (const businessType of BUSINESS_TYPES) {
-      if (BUSINESS_TYPE_DEFS[businessType].navConfig.products === "Products") continue;
+      // `navConfig.products` holds a dictionary KEY now, not the word, so the
+      // skip has to resolve it first — comparing the key against "Products"
+      // never matched and put kirana, which does not rename /products, into the
+      // check it was written to exempt.
+      if (englishTranslations[BUSINESS_TYPE_DEFS[businessType].navConfig.products] === "Products") continue;
       expect(
         englishTranslations[getShopProductsProfile(businessType).totalLabelKey],
         businessType,

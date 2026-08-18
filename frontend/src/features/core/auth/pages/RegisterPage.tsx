@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -45,6 +46,9 @@ const BUSINESS_TYPES = offeredBusinessTypes().map((key) => [key, BUSINESS_TYPE_D
 
 export default function Register() {
   const [, setLocation] = useLocation();
+  // Only the twelve trade names and their one-liners are translated on this
+  // page; the rest of the form is still English and listed in the i18n allowlist.
+  const { t } = useAppLanguage();
   const auth = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedType, setSelectedType] = useState<BusinessType>("kirana");
@@ -280,8 +284,8 @@ export default function Register() {
                   >
                     <span className="text-2xl leading-none">{typeDef.emoji}</span>
                     <div className="min-w-0">
-                      <p className={cn("text-sm font-black leading-tight", active ? "text-primary" : "text-foreground")}>{typeDef.label}</p>
-                      <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{typeDef.description}</p>
+                      <p className={cn("text-sm font-black leading-tight", active ? "text-primary" : "text-foreground")}>{t(typeDef.labelKey)}</p>
+                      <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{t(typeDef.descriptionKey)}</p>
                     </div>
                     {active && (
                       <span className="absolute right-2 top-2">
@@ -299,9 +303,9 @@ export default function Register() {
                 <div className="flex items-center gap-3">
                   <span className="text-2xl leading-none">{def.emoji}</span>
                   <div>
-                    <p className="font-black text-foreground">{def.label}</p>
+                    <p className="font-black text-foreground">{t(def.labelKey)}</p>
                     <p className="text-xs text-muted-foreground">
-                      Dashboard: <span className="font-semibold">{def.dashboard.heroTitle}</span> · Color: <span className="font-semibold capitalize">{def.defaultAccent}</span>
+                      Dashboard: <span className="font-semibold">{t(def.dashboard.heroTitle)}</span> · Color: <span className="font-semibold capitalize">{def.defaultAccent}</span>
                     </p>
                   </div>
                 </div>

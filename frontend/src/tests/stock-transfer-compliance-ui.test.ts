@@ -57,11 +57,12 @@ describe("multi-GSTIN transfer and reporting UI", () => {
       'value="not_required_after_review"',
       "reviewOwnerPin",
       'invalidateQueries({ queryKey: ["gst-compliance-readiness"] })',
-      "not portal-verified",
+      "inventory.transfers.externalEwb",
     ]) expect(transfers).toContain(contract);
     expect(stockEn).toContain("12-digit e-way bill number");
     expect(transfers).toContain("inventory.transfers.ewayNumber");
     expect(transfers).toContain("does not verify the e-way bill portal");
+    expect(stockEn).toContain("not portal-verified");
   });
 
   it("supports auditable multi-line shipment dispatch, partial receipt, and cancellation", () => {
@@ -75,9 +76,10 @@ describe("multi-GSTIN transfer and reporting UI", () => {
       "Receive only what physically arrived",
       "remainingBaseQty",
       "/cancel",
-      "only unreceived quantities return to source availability",
+      "inventory.transfers.cancelNote",
       "/stores/replenishment-suggestions",
     ]) expect(transfers).toContain(contract);
+    expect(stockEn).toContain("only unreceived quantities return to source availability");
     for (const wording of [
       "Dispatch and receive",
       "Build one auditable shipment with multiple product lines",

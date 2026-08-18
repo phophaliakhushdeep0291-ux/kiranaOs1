@@ -19,6 +19,8 @@ import { restaurantHi } from "./restaurant.hi";
 import { settingsPagesHi } from "./settings-pages.hi";
 import { suppliersHi } from "./suppliers.hi";
 import { ordersHi } from "./orders.hi";
+import { shopTypesHi } from "./shop-types.hi";
+import { workflowsHi } from "./workflows.hi";
 
 export const hindiDeferredTranslations = {
   ...productsHi,
@@ -30,6 +32,8 @@ export const hindiDeferredTranslations = {
   ...settingsPagesHi,
   ...suppliersHi,
   ...ordersHi,
+  ...shopTypesHi,
+  ...workflowsHi,
 };
 
 /** Registered deferred modules. `hindi.ts` re-exports these into HI_MODULES. */
@@ -43,4 +47,6 @@ export const HI_DEFERRED_MODULES = {
   settingsPages: settingsPagesHi,
   suppliers: suppliersHi,
   orders: ordersHi,
+  shopTypes: shopTypesHi,
+  workflows: workflowsHi,
 } as const;

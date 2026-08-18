@@ -1171,7 +1171,7 @@ function MobileGeneralDashboard({
             <div className="mt-2 flex items-center gap-2 text-[12px] font-semibold text-blue-100/75">
               <MobileDelta delta={salesDelta} inverse />
               <span>·</span>
-              <span>{dashboard.billCount.toLocaleString("en-IN")} bills</span>
+              <span>{t("dashboard.tile.billsCount", { count: dashboard.billCount.toLocaleString("en-IN") })}</span>
             </div>
           </div>
           <Link href="/sync-status" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur">
@@ -1284,7 +1284,7 @@ function MobileGeneralDashboard({
                 <ProductAvatar product={productsById.get(row.productId) ?? ({ id: row.productId, name: row.name } as Product)} compact />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-black text-[var(--brand-ink)]">{row.name}</p>
-                  <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">{row.quantitySold.toLocaleString("en-IN")} sold</p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">{t("dashboard.tile.soldCount", { count: row.quantitySold.toLocaleString("en-IN") })}</p>
                 </div>
                 <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmtCompactRs(row.revenue)}</span>
                 <ChevronRight size={16} className="text-[#a2adbd]" />
@@ -1304,10 +1304,10 @@ function MobileGeneralDashboard({
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[#eef4ff] text-[var(--brand)]"><ReceiptText size={18} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-[13px] font-black text-[var(--brand-ink)]">Bill #{compactBillNumber(bill.billNo ?? bill.billNumber)}</span>
+                    <span className="truncate text-[13px] font-black text-[var(--brand-ink)]">{t("dashboard.tile.billNo", { number: compactBillNumber(bill.billNo ?? bill.billNumber) })}</span>
                     <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
                   </div>
-                  <span className="mt-1 block truncate text-[11px] font-semibold text-[#718096]">{bill.customerName ?? "Walk-in customer"}</span>
+                  <span className="mt-1 block truncate text-[11px] font-semibold text-[#718096]">{bill.customerName ?? t("dashboard.tile.walkIn")}</span>
                 </div>
                 <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
                 <ChevronRight size={16} className="text-[#a2adbd]" />
@@ -1514,8 +1514,8 @@ function ShopWorkflowPanel({ businessType, compact = false }: { businessType: Bu
       <div className="flex flex-col gap-3 border-b border-[#e8eef6] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--brand)]">{t("dashboard.shopTools")}</p>
-          <h2 className="mt-1 font-display text-[18px] font-black text-[var(--brand-ink)]">{workflow.title}</h2>
-          <p className="mt-1 max-w-3xl text-[11.5px] font-semibold leading-5 text-[#65748f]">{workflow.subtitle}</p>
+          <h2 className="mt-1 font-display text-[18px] font-black text-[var(--brand-ink)]">{t(workflow.title)}</h2>
+          <p className="mt-1 max-w-3xl text-[11.5px] font-semibold leading-5 text-[#65748f]">{t(workflow.subtitle)}</p>
         </div>
         <Link href="/settings/store-profile" className="inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start rounded-[10px] border border-[var(--brand-border)] bg-white px-3 text-[11px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]">
           Change shop type <ChevronRight size={14} />
@@ -1526,8 +1526,8 @@ function ShopWorkflowPanel({ businessType, compact = false }: { businessType: Bu
           <Link key={`${action.href}-${action.label}`} href={action.href} className="group flex min-h-[86px] items-center gap-3 rounded-[14px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_5px_14px_rgba(26,57,112,0.04)] transition hover:-translate-y-0.5 hover:border-[var(--brand-border)] hover:shadow-[0_10px_22px_rgba(26,57,112,0.08)]">
             <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-[11px]", ACTION_ICON_BG[tones[index]])}>{ACTION_ICON[action.icon]}</span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[12px] font-black text-[#13274d]">{action.label}</span>
-              <span className="mt-1 block text-[10.5px] font-semibold leading-4 text-[#718096]">{action.detail}</span>
+              <span className="block text-[12px] font-black text-[#13274d]">{t(action.label)}</span>
+              <span className="mt-1 block text-[10.5px] font-semibold leading-4 text-[#718096]">{t(action.detail)}</span>
             </span>
             <ChevronRight size={15} className="shrink-0 text-[#9ca9bb] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--brand)]" />
           </Link>
@@ -1661,7 +1661,7 @@ function LowStockAlerts({ items, packs = [], productsById }: { items: LocalRepor
                   <ProductAvatar product={product ?? { id: item.productId, name: item.name } as Product} compact />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black leading-tight text-[var(--brand-ink)] dark:text-card-foreground">{item.name}</p>
-                    <p className={cn("text-xs font-semibold", DASH_MUTED)}>Stock: {item.stock} {item.unit ?? "pcs"}</p>
+                    <p className={cn("text-xs font-semibold", DASH_MUTED)}>{t("dashboard.tile.stockLine", { qty: item.stock, unit: item.unit ?? "pcs" })}</p>
                   </div>
                   <span className={cn("shrink-0 rounded-[7px] px-2 py-1 text-[11px] font-black", isCritical ? "bg-[#fff0f2] text-[#ff304f]" : "bg-[#fff4e6] text-[#ff8a00]")}>
                     {isCritical ? "Critical" : "Low"}
@@ -1816,7 +1816,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
   return (
     <PageShell>
       <PageHeader
-        title={`${btDef.emoji} ${dbCfg.heroTitle}`}
+        title={`${btDef.emoji} ${t(dbCfg.heroTitle)}`}
         description={`${longDate(language)} — ${userName}`}
         eyebrow={(
           <div className="flex flex-wrap items-center gap-2">
@@ -1851,10 +1851,10 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
               <p className="mt-1 font-display text-5xl font-black tracking-tight text-foreground sm:text-6xl">
                 {fmt(dashboard.revenue)}
               </p>
-              <p className="mt-2 text-sm text-muted-foreground">{dbCfg.heroSubtitle}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{t(dbCfg.heroSubtitle)}</p>
               <div className="mt-4 flex items-center gap-2 text-xs font-semibold">
                 <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">
-                  Drawer {fmt(cashInDrawer)}
+                  {t("dashboard.tile.drawer", { amount: fmt(cashInDrawer) })}
                 </span>
                 {!dashboard.hasBusinessData && (
                   <button type="button" onClick={onLoadDemo} disabled={seedingDemo} className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
@@ -1870,7 +1870,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
                 <Link key={action.href + action.label} href={action.href}>
                   <div className="flex items-center gap-2.5 rounded-xl border bg-card px-4 py-3 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 lg:min-w-[152px]">
                     <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${ACTION_ICON_BG[action.color]}`}>{ACTION_ICON[action.icon]}</div>
-                    <span className="text-sm font-bold">{action.label}</span>
+                    <span className="text-sm font-bold">{t(action.label)}</span>
                   </div>
                 </Link>
               ))}
@@ -1882,10 +1882,10 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
       <ShopWorkflowPanel businessType={businessType} />
 
       <StatsGrid className="mb-6">
-        <StatCard label={dbCfg.kpi.revenue} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} orders`} icon={<ChefHat size={20} aria-hidden="true" />} loading={isLoading} tone="green" data-testid="metric-revenue" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
+        <StatCard label={t(dbCfg.kpi.revenue)} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} orders`} icon={<ChefHat size={20} aria-hidden="true" />} loading={isLoading} tone="green" data-testid="metric-revenue" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
         <StatCard label={t("dashboard.kpi.ordersToday")} value={String(dashboard.billCount)} description={avgOrder > 0 ? `Avg ${fmt(avgOrder)} per order` : t("dashboard.restaurant.noOrders")} icon={<ReceiptText size={20} aria-hidden="true" />} loading={isLoading} tone="blue" />
-        <StatCard label={dbCfg.kpi.profit} value={fmt(dashboard.grossProfit)} description={`${Math.round(dashboard.grossMarginPct)}% margin`} icon={<TrendingUp size={20} aria-hidden="true" />} loading={isLoading} tone="amber" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("profit")} onKeyDown={drilldownKeyHandler("profit")} />
-        <StatCard label={dbCfg.kpi.cash} value={fmt(dashboard.cashCollected)} description={`Drawer ${fmt(cashInDrawer)}`} icon={<Wallet size={20} aria-hidden="true" />} loading={isLoading} tone="violet" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("collection")} onKeyDown={drilldownKeyHandler("collection")} />
+        <StatCard label={t(dbCfg.kpi.profit)} value={fmt(dashboard.grossProfit)} description={`${Math.round(dashboard.grossMarginPct)}% margin`} icon={<TrendingUp size={20} aria-hidden="true" />} loading={isLoading} tone="amber" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("profit")} onKeyDown={drilldownKeyHandler("profit")} />
+        <StatCard label={t(dbCfg.kpi.cash)} value={fmt(dashboard.cashCollected)} description={`Drawer ${fmt(cashInDrawer)}`} icon={<Wallet size={20} aria-hidden="true" />} loading={isLoading} tone="violet" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("collection")} onKeyDown={drilldownKeyHandler("collection")} />
       </StatsGrid>
 
       <AttentionStrip supplierDue={dashboard.supplierDue} purchaseDue={dashboard.purchaseDue} lowStockCount={lowStockCount} pendingSyncCount={pendingSyncCount} hasUnsyncedOperations={hasUnsyncedOperations} />
@@ -1924,7 +1924,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-black text-primary">{i + 1}</span>
                   <p className="truncate text-sm font-medium">{dish.name}</p>
                 </div>
-                <span className="shrink-0 text-xs font-bold text-muted-foreground">{dish.quantitySold} sold</span>
+                <span className="shrink-0 text-xs font-bold text-muted-foreground">{t("dashboard.tile.soldCount", { count: dish.quantitySold })}</span>
               </div>
             ))}
           </div>
@@ -1945,7 +1945,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
   return (
     <PageShell>
       <PageHeader
-        title={`${btDef.emoji} ${dbCfg.heroTitle}`}
+        title={`${btDef.emoji} ${t(dbCfg.heroTitle)}`}
         description={`${longDate(language)} — ${userName}`}
         eyebrow={(
           <div className="flex flex-wrap items-center gap-2">
@@ -1974,7 +1974,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t("dashboard.salesToday")}</p>
                 <p className="mt-1 font-display text-4xl font-black tracking-tight text-foreground">{fmt(dashboard.revenue)}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{Math.round(dashboard.grossMarginPct)}% gross margin</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.tile.grossMargin", { percent: Math.round(dashboard.grossMarginPct) })}</p>
               </div>
               <div className={`rounded-xl p-4 ring-1 ${dashboard.supplierDue > 0 ? "bg-rose-50 ring-rose-200/60 dark:bg-rose-950/30 dark:ring-rose-900" : "bg-muted/40 ring-black/[0.06]"}`}>
                 <p className={`text-xs font-bold uppercase tracking-widest ${dashboard.supplierDue > 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground"}`}>{t("dashboard.supplierDue")}</p>
@@ -1982,7 +1982,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
                   {dashboard.supplierDue > 0 ? fmt(dashboard.supplierDue) : "Clear"}
                 </p>
                 {dashboard.purchaseDue > 0 && (
-                  <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">Today due: {fmt(dashboard.purchaseDue)}</p>
+                  <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{t("dashboard.tile.todayDue", { amount: fmt(dashboard.purchaseDue) })}</p>
                 )}
                 {dashboard.supplierDue === 0 && (
                   <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.noSupplierDue")}</p>
@@ -1991,7 +1991,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold">
-              <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">Drawer {fmt(cashInDrawer)}</span>
+              <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">{t("dashboard.tile.drawer", { amount: fmt(cashInDrawer) })}</span>
               {!dashboard.hasBusinessData && (
                 <button type="button" onClick={onLoadDemo} disabled={seedingDemo} className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
                   <Sparkles size={13} aria-hidden="true" /> {seedingDemo ? "Loading..." : "Load demo"}
@@ -2006,7 +2006,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
                 <Link key={action.href + action.label} href={action.href}>
                   <div className="flex items-center gap-3 rounded-xl border bg-card p-3.5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0">
                     <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${ACTION_ICON_BG[action.color]}`}>{ACTION_ICON[action.icon]}</div>
-                    <span className="text-sm font-bold">{action.label}</span>
+                    <span className="text-sm font-bold">{t(action.label)}</span>
                   </div>
                 </Link>
               ))}
@@ -2018,12 +2018,12 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
       <ShopWorkflowPanel businessType={businessType} />
 
       <StatsGrid className="mb-6">
-        <StatCard label={dbCfg.kpi.revenue} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} bills · tap for details`} icon={<Wrench size={20} aria-hidden="true" />} loading={isLoading} tone="green" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
+        <StatCard label={t(dbCfg.kpi.revenue)} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} bills · tap for details`} icon={<Wrench size={20} aria-hidden="true" />} loading={isLoading} tone="green" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
         <StatCard label={t("dashboard.supplierDues")} value={dashboard.supplierDue > 0 ? fmt(dashboard.supplierDue) : t("dashboard.signal.clear")} description={dashboard.purchaseDue > 0 ? `Today due ${fmt(dashboard.purchaseDue)}` : t("dashboard.signal.noUrgentDue")} icon={<Truck size={20} aria-hidden="true" />} loading={isLoading} tone={dashboard.supplierDue > 0 ? "red" : "green"} />
         <Link href="/customers?filter=udhar">
-          <StatCard label={dbCfg.kpi.credit} value={fmt(dashboard.totalOutstanding)} description={`${dashboard.outstandingCustomers.length} party accounts`} icon={<AlertTriangle size={20} aria-hidden="true" />} loading={isLoading} tone="amber" className="h-full cursor-pointer" />
+          <StatCard label={t(dbCfg.kpi.credit)} value={fmt(dashboard.totalOutstanding)} description={`${dashboard.outstandingCustomers.length} party accounts`} icon={<AlertTriangle size={20} aria-hidden="true" />} loading={isLoading} tone="amber" className="h-full cursor-pointer" />
         </Link>
-        <StatCard label={dbCfg.kpi.cash} value={fmt(dashboard.cashCollected)} description={`Drawer ${fmt(cashInDrawer)}`} icon={<Wallet size={20} aria-hidden="true" />} loading={isLoading} tone="violet" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("collection")} onKeyDown={drilldownKeyHandler("collection")} />
+        <StatCard label={t(dbCfg.kpi.cash)} value={fmt(dashboard.cashCollected)} description={`Drawer ${fmt(cashInDrawer)}`} icon={<Wallet size={20} aria-hidden="true" />} loading={isLoading} tone="violet" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("collection")} onKeyDown={drilldownKeyHandler("collection")} />
       </StatsGrid>
 
       <AttentionStrip supplierDue={dashboard.supplierDue} purchaseDue={dashboard.purchaseDue} lowStockCount={lowStockCount} pendingSyncCount={pendingSyncCount} hasUnsyncedOperations={hasUnsyncedOperations} />
@@ -2089,7 +2089,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
       )}
 
       <PageHeader
-        title={`${btDef.emoji} ${dbCfg.heroTitle}`}
+        title={`${btDef.emoji} ${t(dbCfg.heroTitle)}`}
         description={`${longDate(language)} — ${userName}`}
         eyebrow={(
           <div className="flex flex-wrap items-center gap-2">
@@ -2111,10 +2111,10 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
                 {lowStockCount > 0 ? `${lowStockCount} low stock` : "Stock healthy"}
               </span>
             </div>
-            <h2 className="mt-5 max-w-2xl font-display text-3xl font-black tracking-tight text-foreground sm:text-4xl">{dbCfg.heroTitle}</h2>
+            <h2 className="mt-5 max-w-2xl font-display text-3xl font-black tracking-tight text-foreground sm:text-4xl">{t(dbCfg.heroTitle)}</h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{t("dashboard.dispensingHelp")}</p>
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-semibold">
-              <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">Drawer {fmt(cashInDrawer)}</span>
+              <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">{t("dashboard.tile.drawer", { amount: fmt(cashInDrawer) })}</span>
               {!dashboard.hasBusinessData && (
                 <button type="button" onClick={onLoadDemo} disabled={seedingDemo} className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
                   <Sparkles size={13} aria-hidden="true" /> {seedingDemo ? "Loading..." : "Load demo"}
@@ -2129,7 +2129,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
                 <Link key={action.href + action.label} href={action.href}>
                   <div className="flex items-center gap-3 rounded-xl border bg-card p-3.5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0">
                     <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${ACTION_ICON_BG[action.color]}`}>{ACTION_ICON[action.icon]}</div>
-                    <span className="text-sm font-bold">{action.label}</span>
+                    <span className="text-sm font-bold">{t(action.label)}</span>
                   </div>
                 </Link>
               ))}
@@ -2141,12 +2141,12 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
       <ShopWorkflowPanel businessType={businessType} />
 
       <StatsGrid className="mb-6">
-        <StatCard label={dbCfg.kpi.revenue} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} dispensing counters`} icon={<ClipboardList size={20} aria-hidden="true" />} loading={isLoading} tone="green" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
+        <StatCard label={t(dbCfg.kpi.revenue)} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} dispensing counters`} icon={<ClipboardList size={20} aria-hidden="true" />} loading={isLoading} tone="green" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
         <StatCard label={t("products.stats.lowStock")} value={lowStockCount > 0 ? `${lowStockCount} items` : t("dashboard.signal.healthy")} description={lowStockCount > 0 ? t("dashboard.signal.reorderRequired") : t("dashboard.pharmacy.allStocked")} icon={<Pill size={20} aria-hidden="true" />} loading={isLoading} tone={lowStockCount > 0 ? "red" : "green"} />
         <Link href="/customers?filter=udhar">
-          <StatCard label={dbCfg.kpi.credit} value={fmt(dashboard.totalOutstanding)} description={`${dashboard.outstandingCustomers.length} patient accounts`} icon={<AlertTriangle size={20} aria-hidden="true" />} loading={isLoading} tone="amber" className="h-full cursor-pointer" />
+          <StatCard label={t(dbCfg.kpi.credit)} value={fmt(dashboard.totalOutstanding)} description={`${dashboard.outstandingCustomers.length} patient accounts`} icon={<AlertTriangle size={20} aria-hidden="true" />} loading={isLoading} tone="amber" className="h-full cursor-pointer" />
         </Link>
-        <StatCard label={dbCfg.kpi.cash} value={fmt(dashboard.cashCollected)} description={`Drawer ${fmt(cashInDrawer)}`} icon={<Wallet size={20} aria-hidden="true" />} loading={isLoading} tone="violet" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("collection")} onKeyDown={drilldownKeyHandler("collection")} />
+        <StatCard label={t(dbCfg.kpi.cash)} value={fmt(dashboard.cashCollected)} description={`Drawer ${fmt(cashInDrawer)}`} icon={<Wallet size={20} aria-hidden="true" />} loading={isLoading} tone="violet" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("collection")} onKeyDown={drilldownKeyHandler("collection")} />
       </StatsGrid>
 
       <AttentionStrip supplierDue={dashboard.supplierDue} purchaseDue={dashboard.purchaseDue} lowStockCount={lowStockCount} pendingSyncCount={pendingSyncCount} hasUnsyncedOperations={hasUnsyncedOperations} />
@@ -2163,7 +2163,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
                 </div>
                 <div className="text-right">
                   <p className="text-xs font-black text-rose-600 dark:text-rose-400">{item.stock} {item.unit ?? "pc"}</p>
-                  <p className="text-[10px] text-muted-foreground">min: {item.threshold}</p>
+                  <p className="text-[10px] text-muted-foreground">{t("dashboard.tile.minThreshold", { threshold: item.threshold })}</p>
                 </div>
               </div>
             ))}
@@ -2220,7 +2220,7 @@ function DashboardDrilldownDialog({
               <div key={row.billId} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{row.billNo} - {row.customerName}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Cash {fmt(row.cash)} - UPI {fmt(row.upi)} - Bank {fmt(row.bank)} - Udhar {fmt(row.udhar)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.tile.tenderBreakdown", { cash: fmt(row.cash), upi: fmt(row.upi), bank: fmt(row.bank), udhar: fmt(row.udhar) })}</p>
                 </div>
                 <MoneyBadge amount={row.amount} tone="success" compact />
               </div>
@@ -2235,11 +2235,11 @@ function DashboardDrilldownDialog({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{row.productName}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Qty {row.quantity.toLocaleString("en-IN")} - Revenue {fmt(row.revenue)} - Cost {fmt(row.cost)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t("dashboard.tile.productBreakdown", { qty: row.quantity.toLocaleString("en-IN"), revenue: fmt(row.revenue), cost: fmt(row.cost) })}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-emerald-700">{fmt(row.profit)}</p>
-                    <p className="text-xs text-muted-foreground">{row.marginPct}% margin</p>
+                    <p className="text-xs text-muted-foreground">{t("dashboard.tile.marginPct", { percent: row.marginPct })}</p>
                   </div>
                 </div>
               </div>
