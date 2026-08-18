@@ -148,13 +148,6 @@ export const reportsHi: Record<keyof typeof reportsEn, string> = {
   "reports.kpi.totalRevenue": "कुल आमदनी",
   "reports.kpi.dispatchValue": "डिस्पैच की कीमत",
 
-  "reports.credit.udhar": "उधार",
-  "reports.credit.credit": "क्रेडिट",
-  "reports.credit.dues": "बकाया",
-  "reports.credit.partyCredit": "पार्टी क्रेडिट",
-  "reports.credit.patientAccounts": "मरीज़ों के खाते",
-  "reports.credit.tabs": "टैब",
-  "reports.credit.receivables": "व्यापारिक वसूली",
   "reports.kpi.outstandingCredit": "बकाया {credit}",
   "reports.table.topCustomers": "बड़े ग्राहक ({credit})",
   "reports.mobile.creditDue": "{credit} बाकी",

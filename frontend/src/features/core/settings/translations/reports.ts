@@ -158,13 +158,6 @@ export const reportsEn = {
 
   // What money a customer owes is called. Interpolated so the phrases around it
   // stay one string each rather than one per trade.
-  "reports.credit.udhar": "Udhar",
-  "reports.credit.credit": "Credit",
-  "reports.credit.dues": "Dues",
-  "reports.credit.partyCredit": "Party Credit",
-  "reports.credit.patientAccounts": "Patient Accounts",
-  "reports.credit.tabs": "Tabs",
-  "reports.credit.receivables": "Receivables",
   "reports.kpi.outstandingCredit": "Outstanding {credit}",
   "reports.table.topCustomers": "Top Customers ({credit})",
   "reports.mobile.creditDue": "{credit} Due",

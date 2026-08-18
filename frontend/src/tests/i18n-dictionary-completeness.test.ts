@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EN_MODULES, englishTranslations, loadHindiDictionary } from "@/features/core/settings/i18n";
+import { loadHindiDictionary } from "@/features/core/settings/i18n";
+import { EN_MODULES, englishTranslations } from "@/features/core/settings/translations/english";
 import { HI_MODULES } from "@/features/core/settings/translations/hindi";
 import { SHARED_TRANSLATION_VALUES } from "./i18n-shared-values";
 

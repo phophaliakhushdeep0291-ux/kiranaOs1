@@ -16,18 +16,18 @@ import type { TranslationKey } from "./i18n";
  * is not obliged to invent eleven different nouns.
  */
 export const SHOP_CREDIT_WORD: Record<BusinessType, TranslationKey> = {
-  kirana: "reports.credit.udhar",
-  clothing: "reports.credit.credit",
-  footwear: "reports.credit.dues",
-  auto_parts: "reports.credit.partyCredit",
-  electronics: "reports.credit.credit",
-  pharmacy: "reports.credit.patientAccounts",
-  stationery: "reports.credit.credit",
-  furniture: "reports.credit.dues",
-  cosmetics: "reports.credit.credit",
-  restaurant: "reports.credit.tabs",
-  manufacturing: "reports.credit.receivables",
-  other: "reports.credit.credit",
+  kirana: "billing.credit.udhar",
+  clothing: "billing.credit.credit",
+  footwear: "billing.credit.dues",
+  auto_parts: "billing.credit.partyCredit",
+  electronics: "billing.credit.credit",
+  pharmacy: "billing.credit.patientAccounts",
+  stationery: "billing.credit.credit",
+  furniture: "billing.credit.dues",
+  cosmetics: "billing.credit.credit",
+  restaurant: "billing.credit.tabs",
+  manufacturing: "billing.credit.receivables",
+  other: "billing.credit.credit",
 };
 
 export function creditWordKeyFor(businessType: BusinessType): TranslationKey {
@@ -54,18 +54,18 @@ export function creditWordKeyFor(businessType: BusinessType): TranslationKey {
  * agrees with the button that opens it.
  */
 export const SHOP_TENDER_WORD: Record<BusinessType, TranslationKey> = {
-  kirana: "reports.credit.udhar",
-  clothing: "reports.credit.credit",
-  footwear: "reports.credit.credit",
+  kirana: "billing.credit.udhar",
+  clothing: "billing.credit.credit",
+  footwear: "billing.credit.credit",
   auto_parts: "billing.tender.khata",
-  electronics: "reports.credit.credit",
+  electronics: "billing.credit.credit",
   pharmacy: "billing.tender.patientAccount",
-  stationery: "reports.credit.credit",
-  furniture: "reports.credit.credit",
-  cosmetics: "reports.credit.credit",
+  stationery: "billing.credit.credit",
+  furniture: "billing.credit.credit",
+  cosmetics: "billing.credit.credit",
   restaurant: "billing.tender.tab",
   manufacturing: "billing.tender.receivable",
-  other: "reports.credit.credit",
+  other: "billing.credit.credit",
 };
 
 export function tenderWordKeyFor(businessType: BusinessType): TranslationKey {

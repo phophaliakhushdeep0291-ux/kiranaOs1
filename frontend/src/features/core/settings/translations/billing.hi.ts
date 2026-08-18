@@ -574,6 +574,13 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.bills.emailFailed": "यह रसीद ईमेल नहीं की जा सकी।",
 
   // ── दुकान के हिसाब से काउंटर के शब्द ──
+  "billing.credit.udhar": "उधार",
+  "billing.credit.credit": "क्रेडिट",
+  "billing.credit.dues": "बकाया",
+  "billing.credit.partyCredit": "पार्टी क्रेडिट",
+  "billing.credit.patientAccounts": "मरीज़ों के खाते",
+  "billing.credit.tabs": "टैब",
+  "billing.credit.receivables": "व्यापारिक वसूली",
   "billing.tender.khata": "खाता",
   "billing.tender.patientAccount": "मरीज़ का खाता",
   "billing.tender.tab": "टैब",

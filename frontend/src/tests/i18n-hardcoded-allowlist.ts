@@ -69,7 +69,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/loyalty/pages/LoyaltyPage.tsx", // 27
   "features/core/money-statement/pages/MoneyStatementPage.tsx", // 20
   "features/core/offers/pages/OffersPage.tsx", // 30
-  "features/core/orders/pages/OrdersReceivedPage.tsx", // 44
   "features/core/platform-admin/pages/PlatformAdminPage.tsx", // 4
   "features/core/pricing/pages/ProductPricingPage.tsx", // 26
   "features/core/products/pages/ProductsPage.tsx", // 4
@@ -104,7 +103,6 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "features/core/subscription/components/UpgradePrompt.tsx", // 1
   "features/core/subscription/pages/PlansPage.tsx", // 7
   "features/core/subscription/pages/SubscriptionPage.tsx", // 13
-  "features/core/suppliers/pages/SuppliersPage.tsx", // 11
   "features/core/support/ReportIssueButton.tsx", // 4
   "features/core/support/pages/AskArthaPage.tsx", // 1
   "features/core/sync/SyncAlertBanner.tsx", // 3
