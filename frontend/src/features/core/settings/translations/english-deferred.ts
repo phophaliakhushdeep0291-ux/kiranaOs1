@@ -29,7 +29,9 @@ import { productsEn } from "./products";
 import { reportsEn } from "./reports";
 import { restaurantEn } from "./restaurant";
 import { settingsPagesEn } from "./settings-pages";
+import { shopTypesEn } from "./shop-types";
 import { suppliersEn } from "./suppliers";
+import { workflowsEn } from "./workflows";
 
 export const englishDeferredTranslations = {
   ...productsEn,
@@ -42,6 +44,8 @@ export const englishDeferredTranslations = {
   ...settingsPagesEn,
   ...suppliersEn,
   ...ordersEn,
+  ...shopTypesEn,
+  ...workflowsEn,
 };
 
 /** Registered deferred modules. `english.ts` re-exports these into EN_MODULES. */
@@ -56,4 +60,6 @@ export const EN_DEFERRED_MODULES = {
   settingsPages: settingsPagesEn,
   suppliers: suppliersEn,
   orders: ordersEn,
+  shopTypes: shopTypesEn,
+  workflows: workflowsEn,
 } as const;

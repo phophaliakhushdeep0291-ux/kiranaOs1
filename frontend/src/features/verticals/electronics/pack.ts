@@ -29,10 +29,10 @@ export const electronicsPack: VerticalPack = {
   nav: [
     {
       href: "/serial-units",
-      label: "IMEI & Serials",
+      label: "shopType.nav.serialUnits",
       Icon: ScanLine,
       insertAfter: "/billing",
-      mobile: { group: "Sell", helper: "Check a handset, or add units to stock" },
+      mobile: { group: "Sell", helper: "shopType.nav.serialUnits.helper" },
     },
   ],
   capabilities: [

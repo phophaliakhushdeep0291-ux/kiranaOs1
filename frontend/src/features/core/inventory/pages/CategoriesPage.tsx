@@ -179,7 +179,7 @@ export default function CategoriesPage() {
           />
         </div>
         <Button onClick={openAdd} className="h-11 shrink-0 gap-1.5 rounded-[10px] px-5 text-[13px] font-bold shadow-[0_8px_18px_rgba(0,77,255,0.22)]">
-          <Plus size={16} /> Add Category
+          <Plus size={16} /> {t("inventory.categories.addTitle")}
         </Button>
       </div>
 
@@ -237,7 +237,7 @@ export default function CategoriesPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
                         <DropdownMenuItem onClick={() => openEdit(c)}><Pencil size={14} className="mr-2" /> {t("inventory.edit")}</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toggleStatus(c)}><Power size={14} className="mr-2" /> {c.status === "active" ? "Deactivate" : "Activate"}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toggleStatus(c)}><Power size={14} className="mr-2" /> {c.status === "active" ? t("inventory.categories.deactivate") : t("inventory.categories.activate")}</DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => removeCategory(c)}><Trash2 size={14} className="mr-2" /> {t("inventory.delete")}</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -256,7 +256,7 @@ export default function CategoriesPage() {
               Showing <span className="font-bold text-[#13274d]">{firstRow}</span> to <span className="font-bold text-[#13274d]">{lastRow}</span> of <span className="font-bold text-[#13274d]">{rows.length}</span> categories
             </p>
             <div className="sm:justify-self-center"><Pagination page={safePage} totalPages={totalPages} onChange={setPage} /></div>
-            <span className="text-[11px] text-[#9aa6bb] sm:justify-self-end">{ROWS_PER_PAGE} per page</span>
+            <span className="text-[11px] text-[#9aa6bb] sm:justify-self-end">{t("inventory.stock.perPage", { count: ROWS_PER_PAGE })}</span>
           </div>
         )}
       </div>
@@ -305,8 +305,8 @@ function CategoryDialog({
       <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{editing ? "Edit Category" : "Add Category"}</h2>
-          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{editing ? "Update this category." : "Create a new product category."}</p>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{editing ? t("inventory.categories.editTitle") : t("inventory.categories.addTitle")}</h2>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{editing ? t("inventory.categories.editHelp") : t("inventory.categories.addHelp")}</p>
         </div>
         <button onClick={() => onOpenChange(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label={t("billing.pay.dynamicQr.close")}><X size={18} /></button>
       </div>
@@ -347,7 +347,7 @@ function CategoryDialog({
             style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
             className="h-11 min-w-0 rounded-[10px] font-black text-white hover:opacity-95"
           >
-            {editing ? "Update Category" : "Add Category"}
+            {editing ? t("inventory.categories.updateAction") : t("inventory.categories.addTitle")}
           </Button>
         </div>
       </div>

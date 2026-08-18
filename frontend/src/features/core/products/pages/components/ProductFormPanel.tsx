@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Package, Plus, Scale, ScanLine, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useBusinessType } from "@/features/core/settings/business-types";
+import { translateCategory, useBusinessType } from "@/features/core/settings/business-types";
 import { getShopWorkflow } from "@/features/core/settings/shop-workflows";
 import { useFeature } from "@/features/core/subscription";
 import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAliases } from "@/features/core/products/product-reliability";
@@ -478,7 +478,7 @@ export function ProductFormPanel({
       <Select value={currentCategory} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
         <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
-          {categoryOptions.map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
+          {categoryOptions.map((c) => <SelectItem key={c} value={c} className="capitalize">{translateCategory(c, t)}</SelectItem>)}
         </SelectContent>
       </Select>
     </Field>
@@ -524,8 +524,8 @@ export function ProductFormPanel({
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
         <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           <div className="mb-4 rounded-[12px] border border-[var(--brand-border)] bg-[var(--brand-softer)] p-3" data-testid="shop-product-entry-guide">
-            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand)]">Optimized for {def.label}</p>
-            <p className="mt-1 text-[11.5px] font-semibold leading-5 text-[#52627e]">{productEntry.helper}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand)]">{t("products.form.optimizedFor", { trade: t(def.labelKey) })}</p>
+            <p className="mt-1 text-[11.5px] font-semibold leading-5 text-[#52627e]">{t(productEntry.helper)}</p>
           </div>
 
           {/* Product type: Packed / Loose. Only a trade that actually sells by
@@ -542,8 +542,8 @@ export function ProductFormPanel({
 
           {/* Basic Information */}
           <Section title={t("products.form.basicInfo")}>
-            <Field label={productEntry.nameLabel} required error={err.name?.message}>
-              <Input className="h-10" placeholder={isLoose ? productEntry.looseNamePlaceholder : productEntry.namePlaceholder} {...form.register("name")} />
+            <Field label={t(productEntry.nameLabel)} required error={err.name?.message}>
+              <Input className="h-10" placeholder={isLoose ? t(productEntry.looseNamePlaceholder) : t(productEntry.namePlaceholder)} {...form.register("name")} />
             </Field>
 
             {/* Category + Brand (brand hidden for loose) */}
@@ -552,8 +552,8 @@ export function ProductFormPanel({
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {CategoryField}
-                <Field label={productEntry.brandLabel}>
-                  <Input className="h-10" placeholder={productEntry.brandPlaceholder} {...form.register("brand")} />
+                <Field label={t(productEntry.brandLabel)}>
+                  <Input className="h-10" placeholder={t(productEntry.brandPlaceholder)} {...form.register("brand")} />
                 </Field>
               </div>
             )}
@@ -563,10 +563,10 @@ export function ProductFormPanel({
               UnitField
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label={productEntry.identifierLabel} error={err.barcode?.message}>
+                <Field label={t(productEntry.identifierLabel)} error={err.barcode?.message}>
                   <div className="flex gap-2">
                     <div className="relative min-w-0 flex-1">
-                      <Input className="h-10 pr-9" placeholder={productEntry.identifierPlaceholder} {...form.register("barcode")} />
+                      <Input className="h-10 pr-9" placeholder={t(productEntry.identifierPlaceholder)} {...form.register("barcode")} />
                       <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
                     </div>
                     <Button type="button" variant="outline" className="h-10 shrink-0 px-3" onClick={() => form.setValue("barcode", generateInternalEan13(), { shouldDirty: true, shouldValidate: true })}>
@@ -974,7 +974,7 @@ export function ProductFormPanel({
                   <p className="text-[12px] font-black text-[#13274d]">{t("products.form.batchExpiryTitle")}</p>
                   {productEntry.recommendBatchTracking && <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-teal-700">Recommended</span>}
                 </div>
-                <p className="mt-1 text-[10.5px] font-semibold leading-4 text-[#65748f]">{productEntry.batchRecommendation}</p>
+                <p className="mt-1 text-[10.5px] font-semibold leading-4 text-[#65748f]">{t(productEntry.batchRecommendation)}</p>
                 {!batchFeature.loading && !batchFeature.allowed && <p className="mt-1 text-[10.5px] font-bold text-amber-700">Available on {batchFeature.requiredPlan.name}.</p>}
               </div>
               <Switch
@@ -1045,12 +1045,12 @@ export function ProductFormPanel({
 
           {/* Additional Information */}
           <Section title={t("products.form.additionalInfo")}>
-            <Field label={productEntry.notesLabel}>
+            <Field label={t(productEntry.notesLabel)}>
               <textarea
                 {...form.register("description")}
                 maxLength={250}
                 rows={3}
-                placeholder={productEntry.notesPlaceholder}
+                placeholder={t(productEntry.notesPlaceholder)}
                 className="w-full resize-none rounded-[10px] border border-[#e3eaf3] bg-white px-3 py-2 text-[13px] text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus:border-[var(--brand)] focus:outline-none focus:ring-0"
               />
               <p className="mt-1 text-right text-[10px] text-[#9aa6bb]">{description.length}/250</p>

@@ -3,6 +3,7 @@ import type { BusinessType } from "@/features/core/settings/business-type-store"
 // The capability vocabulary is platform-wide and lives in core, because core
 // screens are the ones that ask. A pack only declares which ones it holds.
 import type { Capability } from "@/features/core/settings/capabilities";
+import type { TranslationKey } from "@/features/core/settings/i18n";
 import type { FeatureName } from "@/features/core/subscription/plans";
 
 /**
@@ -99,12 +100,22 @@ export interface VerticalRoute {
 
 export interface VerticalNavEntry {
   href: string;
-  label: string;
+  /**
+   * Dictionary key, not the word. A pack is a module-level constant like the
+   * business-type table, so a label written here would be evaluated before a
+   * language exists and render in English on every Hindi counter.
+   */
+  label: TranslationKey;
   Icon: LucideIcon;
   /** Sidebar placement: dropped in right after this href. Appended when absent. */
   insertAfter?: string;
-  /** Placement in the mobile "More" drawer. Omit to keep the entry desktop-only. */
-  mobile?: { group: string; helper: string };
+  /**
+   * Placement in the mobile "More" drawer. `group` matches a drawer section by
+   * its literal label — a name the drawer does not know silently drops the entry,
+   * so `vertical-navigation-fit.test.ts` checks every one. Omit to keep the
+   * entry desktop-only.
+   */
+  mobile?: { group: string; helper: TranslationKey };
 }
 
 export interface VerticalPack {

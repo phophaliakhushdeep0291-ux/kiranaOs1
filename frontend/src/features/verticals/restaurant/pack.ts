@@ -39,36 +39,37 @@ export const restaurantPack: VerticalPack = {
   nav: [
     {
       href: "/tables",
-      label: "Tables",
+      label: "shopType.nav.tables",
       Icon: LayoutGrid,
       insertAfter: "/billing",
-      mobile: { group: "Sell", helper: "Seat a table and open its order" },
+      mobile: { group: "Sell", helper: "shopType.nav.tables.helper" },
     },
     {
       href: "/kitchen",
-      label: "Kitchen",
+      label: "shopType.nav.kitchen",
       Icon: ChefHat,
       // Anchored to the core entry, not to "/tables": the sidebar only splices
       // after items in the shared list, so anchoring to a sibling vertical entry
       // would drop this one to the tail. Pack order keeps Tables ahead of it.
       insertAfter: "/billing",
-      mobile: { group: "Sell", helper: "Work off the kitchen tickets" },
+      mobile: { group: "Sell", helper: "shopType.nav.kitchen.helper" },
     },
     {
       href: "/menu",
-      label: "Menu",
+      label: "shopType.nav.menu",
       Icon: Utensils,
       // Anchored to the catalogue rather than to a sibling vertical entry: the
       // menu IS this trade's catalogue view, and it reads next to Products.
       insertAfter: "/products",
-      mobile: { group: "Catalogue", helper: "Courses, veg marks and tonight's 86 list" },
+      // "Catalogue" is not a drawer section; the dishes live under stock.
+      mobile: { group: "Stock & buying", helper: "shopType.nav.menu.helper" },
     },
     {
       href: "/kitchen-stock",
-      label: "Kitchen stock",
+      label: "shopType.nav.kitchenStock",
       Icon: Soup,
       insertAfter: "/products",
-      mobile: { group: "Catalogue", helper: "Recipes, what's left and what can't be served" },
+      mobile: { group: "Stock & buying", helper: "shopType.nav.kitchenStock.helper" },
     },
   ],
   // Contributes the add-on dialog to shared billing, so core never imports

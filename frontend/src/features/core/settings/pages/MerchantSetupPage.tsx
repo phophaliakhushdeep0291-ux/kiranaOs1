@@ -100,8 +100,9 @@ async function loadFacts(shop?: Shop | null, prefs?: Record<string, unknown>): P
 }
 
 function ReadyPill({ step }: { step: MerchantSetupStep }) {
-  if (step.complete) return <Badge tone={step.skipped ? "gray" : "green"}>{step.skipped ? "Skipped" : "Ready"}</Badge>;
-  return <Badge tone={step.required ? "amber" : "gray"}>{step.required ? "Needed" : "Optional"}</Badge>;
+  const { t } = useAppLanguage();
+  if (step.complete) return <Badge tone={step.skipped ? "gray" : "green"}>{step.skipped ? t("settings.setup.skippedPill") : t("settings.setup.readyPill")}</Badge>;
+  return <Badge tone={step.required ? "amber" : "gray"}>{step.required ? t("settings.setup.neededPill") : t("settings.setup.optionalPill")}</Badge>;
 }
 
 export default function MerchantSetupPage() {

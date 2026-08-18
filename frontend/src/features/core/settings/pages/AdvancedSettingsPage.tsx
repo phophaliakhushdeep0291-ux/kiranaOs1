@@ -465,7 +465,7 @@ export default function AdvancedSettingsPage() {
                     <p className="text-[13px] font-bold text-[#7f1d1d]">{d.label}</p>
                     <p className="text-[11px] text-rose-700/70">{d.desc}</p>
                   </div>
-                  <Button size="sm" variant="outline" className="h-8 shrink-0 rounded-[8px] border-rose-300 text-[12px] font-bold text-rose-700 hover:bg-rose-100" onClick={() => { setDangerError(null); setDanger(d); }}>{d.safe ? t("settings.advanced.run") : "Confirm"}</Button>
+                  <Button size="sm" variant="outline" className="h-8 shrink-0 rounded-[8px] border-rose-300 text-[12px] font-bold text-rose-700 hover:bg-rose-100" onClick={() => { setDangerError(null); setDanger(d); }}>{d.safe ? t("settings.advanced.run") : t("settings.advanced.confirm")}</Button>
                 </div>
               ))}
             </div>
@@ -519,7 +519,7 @@ function DangerDialog({ item, error, running, onClose, onConfirm }: {
             <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" disabled={running} onClick={onClose}>{t("settings.advanced.cancel")}</Button>
             <Button type="submit" className="h-11 flex-1 gap-2 rounded-[10px] bg-rose-600 font-black text-white hover:bg-rose-700" disabled={running || (needsPin && pin.trim().length < 4)}>
               {running ? <Loader2 size={15} className="animate-spin" /> : item?.safe ? <RotateCcw size={15} /> : <AlertTriangle size={15} />}
-              {running ? "Working…" : item?.safe ? "Run now" : "Confirm"}
+              {running ? t("settings.advanced.working") : item?.safe ? t("settings.advanced.runNow") : t("settings.advanced.confirm")}
             </Button>
           </div>
         </form>

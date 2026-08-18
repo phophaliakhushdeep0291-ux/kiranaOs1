@@ -31,10 +31,10 @@ export const cosmeticsPack: VerticalPack = {
   nav: [
     {
       href: "/testers",
-      label: "Testers",
+      label: "shopType.nav.testers",
       Icon: Sparkles,
       insertAfter: "/inventory",
-      mobile: { group: "Stock & buying", helper: "What is open on the counter, and what it costs" },
+      mobile: { group: "Stock & buying", helper: "shopType.nav.testers.helper" },
     },
   ],
   capabilities: [

@@ -562,7 +562,7 @@ export default function BillsPage() {
   const topCustomers = useMemo(() => {
     const groups = new Map<string, { name: string; bills: number; total: number }>();
     for (const bill of realSaleRows(periodBills)) {
-      const name = String(bill.customerName || "Walk-in Customer");
+      const name = String(bill.customerName || t("billing.bills.walkInCustomer"));
       const current = groups.get(name) ?? { name, bills: 0, total: 0 };
       current.bills += 1;
       current.total += billTotal(bill);
@@ -704,7 +704,7 @@ export default function BillsPage() {
             <span>{backupStatus.label}</span>
             <span className="font-semibold opacity-70">{backupStatus.sub}</span>
           </span>
-          {counts.pending > 0 && <Link href="/sync-status" className="inline-flex h-10 items-center rounded-[9px] border border-amber-200 bg-amber-50 px-3 text-[11px] font-bold text-amber-700">{counts.pending} pending sync</Link>}
+          {counts.pending > 0 && <Link href="/sync-status" className="inline-flex h-10 items-center rounded-[9px] border border-amber-200 bg-amber-50 px-3 text-[11px] font-bold text-amber-700">{t("billing.bills.pendingSync", { count: counts.pending })}</Link>}
         </div>
         <div className="grid grid-cols-2 items-center gap-2 lg:flex lg:flex-wrap">
           <div className="col-span-2 lg:contents">
@@ -741,12 +741,12 @@ export default function BillsPage() {
       </div>
 
       <div className="grid grid-cols-2 items-stretch gap-2.5 lg:grid-cols-3 lg:gap-3 xl:grid-cols-6">
-        <BillKpiCard label={t("billing.bills.totalBills")} value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
-        <BillKpiCard label={t("billing.bills.totalSales")} value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
-        <BillKpiCard mobileHidden label={t("billing.bills.stats.paid")} value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
-        <BillKpiCard label={t("billing.bills.stats.udhar")} value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
-        <BillKpiCard mobileHidden label={t("billing.bills.stats.average")} value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
-        <BillKpiCard label={t("billing.bills.stats.cancelled")} value={String(analytics.cancelledBills)} delta={analytics.cancelledBillsDelta} data={analytics.sparks.cancelledBills} color={RED} icon={<Ban size={17} />} iconClass="border-[#ffcfd8] bg-[#ffecef] text-[#ff314f] shadow-[0_10px_22px_rgba(255,49,79,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
+        <BillKpiCard label={t("billing.bills.totalBills")} value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
+        <BillKpiCard label={t("billing.bills.totalSales")} value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
+        <BillKpiCard mobileHidden label={t("billing.bills.stats.paid")} value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
+        <BillKpiCard label={t("billing.bills.stats.udhar")} value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} deltaPositiveIsBad />
+        <BillKpiCard mobileHidden label={t("billing.bills.stats.average")} value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
+        <BillKpiCard label={t("billing.bills.stats.cancelled")} value={String(analytics.cancelledBills)} delta={analytics.cancelledBillsDelta} data={analytics.sparks.cancelledBills} color={RED} icon={<Ban size={17} />} iconClass="border-[#ffcfd8] bg-[#ffecef] text-[#ff314f] shadow-[0_10px_22px_rgba(255,49,79,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} deltaPositiveIsBad />
       </div>
 
       <section id="billing-history-table" className={cn(CARD, "overflow-hidden")}>
@@ -806,9 +806,9 @@ export default function BillsPage() {
           </div>
           {(counts.deleted > 0 || counts.pending > 0 || counts.estimates > 0) && (
             <div className="flex flex-wrap gap-2 text-[10px] font-bold">
-              {counts.estimates > 0 && <span className="rounded-full bg-[#f5f0ff] px-2.5 py-1 text-[#6d3df0]">{counts.estimates} estimate bills separated</span>}
-              {counts.deleted > 0 && <span className="rounded-full bg-[#eef2f8] px-2.5 py-1 text-[#64748b]">{counts.deleted} in recycle bin</span>}
-              {counts.pending > 0 && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">{counts.pending} waiting for backup</span>}
+              {counts.estimates > 0 && <span className="rounded-full bg-[#f5f0ff] px-2.5 py-1 text-[#6d3df0]">{t("billing.bills.estimatesSeparated", { count: counts.estimates })}</span>}
+              {counts.deleted > 0 && <span className="rounded-full bg-[#eef2f8] px-2.5 py-1 text-[#64748b]">{t("billing.bills.inRecycleBin", { count: counts.deleted })}</span>}
+              {counts.pending > 0 && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">{t("billing.bills.waitingBackup", { count: counts.pending })}</span>}
             </div>
           )}
         </div>
@@ -837,8 +837,8 @@ export default function BillsPage() {
                   <article key={bill.id} className={cn("rounded-[16px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]", deleted && "opacity-70")}>
                     <div className="flex items-start justify-between gap-3">
                       <Link href={`/bills/${bill.id}`} className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-extrabold text-[var(--brand)]">Bill #{compactBillNo(billNo(bill))}</p>
-                        <p className="mt-1 truncate text-xs font-bold text-[var(--brand-ink)]">{bill.customerName || "Walk-in Customer"}</p>
+                        <p className="truncate text-[14px] font-extrabold text-[var(--brand)]">{t("billing.bills.billNo", { number: compactBillNo(billNo(bill)) })}</p>
+                        <p className="mt-1 truncate text-xs font-bold text-[var(--brand-ink)]">{bill.customerName || t("billing.bills.walkInCustomer")}</p>
                         <p className="mt-0.5 text-[11px] font-medium text-[#71809b]">{date.date} {date.time ? `• ${date.time}` : ""} • {itemsCount(bill) || 0} items</p>
                       </Link>
                       <div className="text-right">
@@ -870,7 +870,7 @@ export default function BillsPage() {
                           ) : (
                             <>
                               {bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> {t("billing.bills.cancelBill")}</DropdownMenuItem>}
-                              <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> {estimate ? "Move estimate to recycle bin" : "Move to recycle bin"}</DropdownMenuItem>
+                              <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> {estimate ? t("billing.bills.moveEstimateToBin") : t("billing.bills.moveToBin")}</DropdownMenuItem>
                             </>
                           )}
                         </DropdownMenuContent>
@@ -907,7 +907,7 @@ export default function BillsPage() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 font-black text-[var(--brand)]">{compactBillNo(billNo(bill))}</td>
                         <td className="min-w-[145px] px-4 py-2.5">
-                          <p className="font-bold text-[var(--brand-ink)]">{bill.customerName || "Walk-in Customer"}</p>
+                          <p className="font-bold text-[var(--brand-ink)]">{bill.customerName || t("billing.bills.walkInCustomer")}</p>
                           <p className="mt-0.5 text-[#6f7f9b]">{bill.customerMobile || "-"}</p>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5">
@@ -949,7 +949,7 @@ export default function BillsPage() {
                                 ) : (
                                   <>
                                     {bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> {t("billing.bills.cancelBill")}</DropdownMenuItem>}
-                                    <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> {estimate ? "Move estimate to recycle bin" : "Move to recycle bin"}</DropdownMenuItem>
+                                    <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> {estimate ? t("billing.bills.moveEstimateToBin") : t("billing.bills.moveToBin")}</DropdownMenuItem>
                                   </>
                                 )}
                               </DropdownMenuContent>
@@ -963,7 +963,7 @@ export default function BillsPage() {
               </table>
             </div>
             <div className="flex flex-col items-center justify-between gap-3 border-t border-[#e8edf4] px-4 py-3 sm:flex-row">
-              <span className="text-[11px] font-medium text-[#60708e]">Showing {(safePage - 1) * perPage + 1} to {Math.min(safePage * perPage, filtered.length)} of {filtered.length} entries</span>
+              <span className="text-[11px] font-medium text-[#60708e]">{t("billing.bills.showingEntries", { from: (safePage - 1) * perPage + 1, to: Math.min(safePage * perPage, filtered.length), total: filtered.length })}</span>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1">
                   <PageBtn ariaLabel="Previous page" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={14} aria-hidden="true" /></PageBtn>
@@ -1022,6 +1022,7 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
   deltaPositiveIsBad?: boolean;
   mobileHidden?: boolean;
 }) {
+  const { t } = useAppLanguage();
   const positive = delta > 0;
   const bad = deltaPositiveIsBad ? positive : delta < 0;
   const DeltaIcon = delta === 0 ? null : positive ? ArrowUpRight : ArrowDownRight;
@@ -1037,7 +1038,7 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
         <span className={cn("inline-flex items-center gap-0.5 font-black", delta === 0 ? "text-[#70809a]" : bad ? "text-[#ff334d]" : "text-[#10a948]")}>
           {DeltaIcon ? <DeltaIcon size={11} /> : null}{Math.abs(delta)}%
         </span>
-        <span className="font-semibold text-[#7a879f]">{comparisonLabel ?? "vs last week"}</span>
+        <span className="font-semibold text-[#7a879f]">{comparisonLabel ?? t("billing.bills.vsLastWeek")}</span>
       </div>
       <div className="mt-auto hidden h-9 pt-2 lg:block">
         <ResponsiveContainer width="100%" height="100%">

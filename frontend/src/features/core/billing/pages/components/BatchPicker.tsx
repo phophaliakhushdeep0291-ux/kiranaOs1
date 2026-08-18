@@ -97,7 +97,7 @@ export function BatchPicker({
                   )}
                 >
                   <span className="font-mono font-bold text-[#13274d]">{batch.batchNumber}</span>
-                  {batch.mrp ? <span className="ml-1 font-semibold text-[#1a8a4e]">MRP ₹{batch.mrp.toLocaleString("en-IN")}</span> : null}
+                  {batch.mrp ? <span className="ml-1 font-semibold text-[#1a8a4e]">{t("billing.batch.mrp", { amount: batch.mrp.toLocaleString("en-IN") })}</span> : null}
                   <span className={cn("ml-1 font-semibold", days <= 30 ? "text-amber-700" : "text-[#64748b]")}>
                     {days < 0 ? t("billing.batch.expiredAgo", { days: Math.abs(days) }) : t("billing.batch.daysLeft", { days })}
                   </span>

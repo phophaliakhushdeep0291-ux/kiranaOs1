@@ -30,10 +30,10 @@ export const stationeryPack: VerticalPack = {
   nav: [
     {
       href: "/book-lists",
-      label: "Book Lists",
+      label: "shopType.nav.bookLists",
       Icon: GraduationCap,
       insertAfter: "/billing",
-      mobile: { group: "Sell", helper: "A class's whole set, on one bill" },
+      mobile: { group: "Sell", helper: "shopType.nav.bookLists.helper" },
     },
   ],
   capabilities: [

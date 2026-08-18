@@ -1,127 +1,129 @@
 /**
- * Files that still contain user-visible English written straight into the component.
+ * Files that still contain user-visible English written straight into the component,
+ * and how many strings each one is carrying today.
  *
  * Every path here is a screen a shopkeeper can still hit an untranslated string on. The
  * list is the honest record of that debt, and the check in
  * i18n-hardcoded-strings.test.ts enforces STRICTLY on every file not listed — so the
  * rule is real today instead of waiting for a full migration.
  *
- * The only correct direction is down. Translate a file, delete its line. A companion
- * test fails if a listed file no longer exists or no longer has any hardcoded string,
- * so the list cannot rot or be padded.
+ * The COUNT is enforced too, which is what keeps a listed file from becoming a free
+ * pass: a file may only ever carry fewer strings than it does here, never more. Adding
+ * a new English label to a page on this list still fails the check. Translate strings
+ * and lower the number; translate all of them and delete the line. A companion test
+ * fails if a listed file no longer exists, is already clean, or has dropped below its
+ * recorded count — so the list cannot rot, be padded, or drift out of date.
  *
- * Counted at 2662 strings across 138 files. The previous count (2791/145) was taken
- * before the checker stopped reporting JSX guards and generic signatures as prose, so
- * part of that drop is debt that never existed; the rest is billing and first-run setup
- * being translated out of this list.
+ * Counted at 2938 strings across 105 files, re-measured when this branch merged main —
+ * the same rebuild the previous merge needed, and for the same reason: both sides were
+ * translating at once, so neither side's numbers described the merged tree. Main's last
+ * measurement was 3160 across 112; the assurance screens translated on this branch
+ * account for the drop, and seven files came off the list entirely.
  */
-export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
-  "app/providers.tsx", // 3
-  "components/layout/Layout.tsx", // 20
-  "components/layout/MobileAppChrome.tsx", // 3
-  "components/security/OwnerPinModal.tsx", // 3
-  "components/shared/ErrorBoundary.tsx", // 3
-  "components/shared/MetricCard.tsx", // 1
-  "components/shared/NotFound.tsx", // 1
-  "components/ui/alert.tsx", // 1
-  "components/ui/breadcrumb.tsx", // 1
-  "components/ui/button-group.tsx", // 1
-  "components/ui/carousel.tsx", // 3
-  "components/ui/chart.tsx", // 1
-  "components/ui/dialog.tsx", // 1
-  "components/ui/empty.tsx", // 1
-  "components/ui/field.tsx", // 1
-  "components/ui/form.tsx", // 4
-  "components/ui/input-group.tsx", // 1
-  "components/ui/item.tsx", // 1
-  "components/ui/pagination.tsx", // 3
-  "components/ui/sheet.tsx", // 1
-  "components/ui/sidebar.tsx", // 4
-  "features/core/activity/pages/ActivityInsightsPage.tsx", // 1
-  // Not debt: the two strings left are the language names in the explanation
-  // picker. An endonym is written in its own language everywhere — translating
-  // "Hinglish" into Hindi would make the option harder to find, not easier.
-  "features/core/assurance/pages/FindingDetailPage.tsx", // 2
-  "features/core/audit-logs/pages/AuditLogsPage.tsx", // 21
-  "features/core/auth/AuthContext.tsx", // 2
-  "features/core/auth/pages/ForgotPasswordPage.tsx", // 3
-  "features/core/auth/pages/LoginPage.tsx", // 15
-  "features/core/auth/pages/RegisterPage.tsx", // 16
-  "features/core/auth/pages/ResetPasswordPage.tsx", // 4
-  "features/core/auth/pages/VerifyEmailPage.tsx", // 1
-  "features/core/customer-order/BillingOrderQrButton.tsx", // 10
-  "features/core/customer-order/CustomerOrderPage.tsx", // 155
-  "features/core/customer-order/DineInMenuPage.tsx", // 4
-  "features/core/customer-order/ImportOrderPage.tsx", // 6
-  "features/core/customer-order/OwnerOrderingCard.tsx", // 5
-  "features/core/demo/DemoModeBanner.tsx", // 4
-  "features/core/devices/pages/DeviceRemovedPage.tsx", // 2
-  "features/core/devices/pages/DevicesPage.tsx", // 20
-  "features/core/expenses/pages/ExpensesPage.tsx", // 47
-  "features/core/gift-cards/GiftCardsPage.tsx", // 38
-  "features/core/innovation/components/OfflineConfidenceMeter.tsx", // 8
-  "features/core/innovation/pages/SmartToolsPage.tsx", // 4
-  "features/core/loyalty/pages/LoyaltyPage.tsx", // 27
-  "features/core/money-statement/pages/MoneyStatementPage.tsx", // 20
-  "features/core/offers/pages/OffersPage.tsx", // 30
-  "features/core/platform-admin/pages/PlatformAdminPage.tsx", // 4
-  "features/core/pricing/pages/ProductPricingPage.tsx", // 26
-  "features/core/products/pages/ProductsPage.tsx", // 4
-  "features/core/products/pages/components/BulkDeleteDialog.tsx", // 4
-  "features/core/products/pages/components/BulkEditDialog.tsx", // 16
-  "features/core/products/pages/components/ImportProductsDialog.tsx", // 17
-  "features/core/products/pages/components/ProductAliasSuggestions.tsx", // 5
-  "features/core/products/pages/components/ProductFormPanel.tsx", // 16
-  "features/core/products/pages/components/ProductPricingForm.tsx", // 11
-  "features/core/products/pages/components/ProductStockForm.tsx", // 3
-  "features/core/products/pages/components/VariantGridEditor.tsx", // 5
-  "features/core/purchases/components/PurchaseOrdersPanel.tsx", // 113
-  "features/core/purchases/pages/PurchaseBillsPage.tsx", // 141
-  "features/core/recovery/pages/RecoveryModePage.tsx", // 7
-  "features/core/recycle-bin/pages/RecycleBinPage.tsx", // 19
-  "features/core/remote-support/RemoteHelpCard.tsx", // 2
-  "features/core/remote-support/pages/RemoteSupportConsolePage.tsx", // 8
-  "features/core/reports/components/AccountingControlPanel.tsx", // 11
-  "features/core/reports/components/BankReconciliationPanel.tsx", // 45
-  "features/core/reports/pages/DailyClosingPage.tsx", // 53
-  "features/core/reports/pages/ReportsPage.tsx", // 34
-  "features/core/returns/components/ReturnDialog.tsx", // 33
-  "features/core/returns/pages/NewReturnPage.tsx", // 56
-  "features/core/sales/pages/SalesOverviewPage.tsx", // 15
-  // Not debt: the one string here is a developer assertion thrown when the hook
-  // is used outside its provider. It never reaches a shopkeeper.
-  "features/core/settings/i18n.tsx", // 1
-  "features/core/staff/pages/StaffPage.tsx", // 40
-  "features/core/subscription/components/CancelSubscriptionDialog.tsx", // 8
-  "features/core/subscription/components/SubscriptionStatusBanner.tsx", // 3
-  "features/core/subscription/components/UpgradeModal.tsx", // 12
-  "features/core/subscription/components/UpgradePrompt.tsx", // 1
-  "features/core/subscription/pages/PlansPage.tsx", // 7
-  "features/core/subscription/pages/SubscriptionPage.tsx", // 13
-  "features/core/support/ReportIssueButton.tsx", // 4
-  "features/core/support/pages/AskArthaPage.tsx", // 1
-  "features/core/sync/SyncAlertBanner.tsx", // 3
-  "features/core/sync/pages/SyncDiagnosticsSection.tsx", // 4
-  "features/core/sync/pages/SyncStatusPage.tsx", // 59
-  "features/core/voice/VoiceAssistant.tsx", // 9
-  "features/verticals/auto-parts/fitment/pages/FitmentPage.tsx", // 19
-  "features/verticals/beauty-cosmetics/testers/pages/TestersPage.tsx", // 27
-  "features/verticals/clothing/rentals/components/RentalBookingPanel.tsx", // 13
-  "features/verticals/clothing/rentals/pages/RentalsPage.tsx", // 22
-  "features/verticals/electronics/units/components/ReceiveUnitsPanel.tsx", // 8
-  "features/verticals/electronics/units/pages/ProductUnitsPage.tsx", // 28
-  "features/verticals/footwear/sizes/pages/SizeRunsPage.tsx", // 22
-  "features/verticals/furniture-home/orders/components/OrderPanel.tsx", // 11
-  "features/verticals/furniture-home/orders/pages/FurnitureOrdersPage.tsx", // 20
-  "features/verticals/pharmacy/prescriptions/components/PrescriptionAttach.tsx", // 1
-  "features/verticals/pharmacy/prescriptions/components/PrescriptionPanel.tsx", // 9
-  "features/verticals/pharmacy/prescriptions/pages/PrescriptionsPage.tsx", // 17
-  "features/verticals/restaurant/pages/KitchenPage.tsx", // 7
-  "features/verticals/restaurant/pages/KitchenStockPage.tsx", // 9
-  "features/verticals/restaurant/pages/MenuPage.tsx", // 19
-  "features/verticals/restaurant/pages/TablesPage.tsx", // 12
-  "features/verticals/restaurant/pages/components/GuestOrdersStrip.tsx", // 2
-  "features/verticals/restaurant/pages/components/TableQrDialog.tsx", // 3
-  "features/verticals/stationery-books/book-lists/components/BookListPanel.tsx", // 8
-  "features/verticals/stationery-books/book-lists/pages/BookListsPage.tsx", // 22
-];
+export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
+  "app/providers.tsx": 3,
+  "components/layout/Layout.tsx": 53,
+  "components/layout/MobileAppChrome.tsx": 50,
+  "components/security/OwnerPinModal.tsx": 7,
+  "components/shared/ErrorBoundary.tsx": 4,
+  "components/shared/MetricCard.tsx": 1,
+  "components/shared/NotFound.tsx": 1,
+  "components/ui/alert.tsx": 1,
+  "components/ui/breadcrumb.tsx": 1,
+  "components/ui/button-group.tsx": 1,
+  "components/ui/carousel.tsx": 3,
+  "components/ui/chart.tsx": 1,
+  "components/ui/dialog.tsx": 1,
+  "components/ui/empty.tsx": 1,
+  "components/ui/field.tsx": 1,
+  "components/ui/form.tsx": 4,
+  "components/ui/input-group.tsx": 1,
+  "components/ui/item.tsx": 1,
+  "components/ui/pagination.tsx": 5,
+  "components/ui/sheet.tsx": 1,
+  "components/ui/sidebar.tsx": 4,
+  "features/core/activity/pages/ActivityInsightsPage.tsx": 47,
+  "features/core/assurance/pages/AuditRulesPage.tsx": 1,
+  "features/core/assurance/pages/FindingDetailPage.tsx": 4,
+  "features/core/audit-logs/pages/AuditLogsPage.tsx": 35,
+  "features/core/auth/AuthContext.tsx": 2,
+  "features/core/auth/pages/ForgotPasswordPage.tsx": 5,
+  "features/core/auth/pages/LoginPage.tsx": 21,
+  "features/core/auth/pages/RegisterPage.tsx": 23,
+  "features/core/auth/pages/ResetPasswordPage.tsx": 5,
+  "features/core/auth/pages/VerifyEmailPage.tsx": 1,
+  "features/core/customer-order/BillingOrderQrButton.tsx": 12,
+  "features/core/customer-order/CustomerOrderPage.tsx": 258,
+  "features/core/customer-order/DineInMenuPage.tsx": 25,
+  "features/core/customer-order/ImportOrderPage.tsx": 8,
+  "features/core/customer-order/OwnerOrderingCard.tsx": 9,
+  "features/core/demo/DemoModeBanner.tsx": 4,
+  "features/core/devices/pages/DeviceRemovedPage.tsx": 3,
+  "features/core/devices/pages/DevicesPage.tsx": 66,
+  "features/core/expenses/pages/ExpensesPage.tsx": 80,
+  "features/core/gift-cards/GiftCardsPage.tsx": 46,
+  "features/core/innovation/components/OfflineConfidenceMeter.tsx": 16,
+  "features/core/innovation/pages/SmartToolsPage.tsx": 6,
+  "features/core/loyalty/pages/LoyaltyPage.tsx": 34,
+  "features/core/money-statement/pages/MoneyStatementPage.tsx": 37,
+  "features/core/offers/pages/OffersPage.tsx": 73,
+  "features/core/platform-admin/pages/PlatformAdminPage.tsx": 28,
+  "features/core/pricing/pages/ProductPricingPage.tsx": 50,
+  "features/core/products/pages/ProductsPage.tsx": 5,
+  "features/core/products/pages/components/BulkDeleteDialog.tsx": 7,
+  "features/core/products/pages/components/BulkEditDialog.tsx": 18,
+  "features/core/products/pages/components/ImportProductsDialog.tsx": 24,
+  "features/core/products/pages/components/ProductAliasSuggestions.tsx": 6,
+  "features/core/products/pages/components/ProductFormPanel.tsx": 23,
+  "features/core/products/pages/components/ProductPricingForm.tsx": 11,
+  "features/core/products/pages/components/ProductStockForm.tsx": 4,
+  "features/core/products/pages/components/VariantGridEditor.tsx": 10,
+  "features/core/purchases/components/PurchaseOrdersPanel.tsx": 172,
+  "features/core/purchases/pages/PurchaseBillsPage.tsx": 205,
+  "features/core/recovery/pages/RecoveryModePage.tsx": 34,
+  "features/core/recycle-bin/pages/RecycleBinPage.tsx": 33,
+  "features/core/remote-support/RemoteHelpCard.tsx": 6,
+  "features/core/remote-support/pages/RemoteSupportConsolePage.tsx": 19,
+  "features/core/reports/components/AccountingControlPanel.tsx": 26,
+  "features/core/reports/components/BankReconciliationPanel.tsx": 90,
+  "features/core/reports/pages/DailyClosingPage.tsx": 72,
+  "features/core/reports/pages/ReportsPage.tsx": 72,
+  "features/core/returns/components/ReturnDialog.tsx": 50,
+  "features/core/returns/pages/NewReturnPage.tsx": 72,
+  "features/core/sales/pages/SalesOverviewPage.tsx": 49,
+  "features/core/settings/i18n.tsx": 1,
+  "features/core/settings/pages/SyncSettingsPage.tsx": 1,
+  "features/core/staff/pages/StaffPage.tsx": 70,
+  "features/core/subscription/components/CancelSubscriptionDialog.tsx": 10,
+  "features/core/subscription/components/SubscriptionStatusBanner.tsx": 5,
+  "features/core/subscription/components/UpgradeModal.tsx": 20,
+  "features/core/subscription/components/UpgradePrompt.tsx": 2,
+  "features/core/subscription/pages/PlansPage.tsx": 19,
+  "features/core/subscription/pages/SubscriptionPage.tsx": 22,
+  "features/core/support/ReportIssueButton.tsx": 6,
+  "features/core/support/pages/AskArthaPage.tsx": 5,
+  "features/core/sync/SyncAlertBanner.tsx": 3,
+  "features/core/sync/pages/SyncDiagnosticsSection.tsx": 10,
+  "features/core/sync/pages/SyncStatusPage.tsx": 93,
+  "features/core/voice/VoiceAssistant.tsx": 12,
+  "features/verticals/auto-parts/fitment/pages/FitmentPage.tsx": 42,
+  "features/verticals/beauty-cosmetics/testers/pages/TestersPage.tsx": 42,
+  "features/verticals/clothing/rentals/components/RentalBookingPanel.tsx": 43,
+  "features/verticals/clothing/rentals/pages/RentalsPage.tsx": 41,
+  "features/verticals/electronics/units/components/ReceiveUnitsPanel.tsx": 23,
+  "features/verticals/electronics/units/pages/ProductUnitsPage.tsx": 51,
+  "features/verticals/footwear/sizes/pages/SizeRunsPage.tsx": 41,
+  "features/verticals/furniture-home/orders/components/OrderPanel.tsx": 31,
+  "features/verticals/furniture-home/orders/pages/FurnitureOrdersPage.tsx": 34,
+  "features/verticals/pharmacy/prescriptions/components/PrescriptionAttach.tsx": 4,
+  "features/verticals/pharmacy/prescriptions/components/PrescriptionPanel.tsx": 55,
+  "features/verticals/pharmacy/prescriptions/pages/PrescriptionsPage.tsx": 29,
+  "features/verticals/restaurant/pages/KitchenPage.tsx": 10,
+  "features/verticals/restaurant/pages/KitchenStockPage.tsx": 18,
+  "features/verticals/restaurant/pages/MenuPage.tsx": 51,
+  "features/verticals/restaurant/pages/TablesPage.tsx": 27,
+  "features/verticals/restaurant/pages/components/GuestOrdersStrip.tsx": 3,
+  "features/verticals/restaurant/pages/components/TableQrDialog.tsx": 4,
+  "features/verticals/stationery-books/book-lists/components/BookListPanel.tsx": 26,
+  "features/verticals/stationery-books/book-lists/pages/BookListsPage.tsx": 32,
+};

@@ -218,7 +218,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
       <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{mode === "edit" ? t("billing.bills.editBill") : "Add items to bill"}</DialogTitle>
+            <DialogTitle>{mode === "edit" ? t("billing.bills.editBill") : t("billing.bills.addItemsToBill")}</DialogTitle>
             <DialogDescription>
               {mode === "edit"
                 ? "Finalized bills stay immutable. Saving voids this bill and creates a corrected one — owner PIN required."
@@ -318,7 +318,7 @@ export function EditBillDialog({ open, mode, bill, itemRows, onClose, onDone }: 
             </div>
 
             <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
-              <span className="text-sm font-medium">{pay === "credit" ? "Goes to udhar" : "Customer pays"}</span>
+              <span className="text-sm font-medium">{pay === "credit" ? t("billing.edit.goesToUdhar") : t("billing.edit.customerPays")}</span>
               <span className="text-lg font-bold">{money(total)}</span>
             </div>
           </div>
