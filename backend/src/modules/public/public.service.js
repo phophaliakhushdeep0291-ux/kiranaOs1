@@ -44,6 +44,50 @@ export function toCustomerSafeProduct(p) {
 }
 
 /**
+ * The product's own selling unit — the bag, the 10-tablet strip, the 1 kg packet
+ * that the storefront prices and the guest counts in.
+ */
+function defaultSellingUnit(product) {
+  const units = Array.isArray(product?.sellingUnits)
+    ? product.sellingUnits.filter((unit) => unit.isActive !== false)
+    : [];
+  return units.find((unit) => unit.isDefault) ?? units[0] ?? null;
+}
+
+/**
+ * How much stock one tap of "+" on the storefront actually costs, in base units.
+ *
+ * The catalogue prices and counts a product in its selling unit while stock is
+ * kept in base units, so the two only line up through the unit's own
+ * conversionToBase — which is exactly the number billing converts with
+ * (bills.service.js). Reading it here is what keeps the QR page and the till
+ * agreeing about what is left: a 10-tablet strip costs ten pieces of stock on
+ * both, not one on one of them.
+ *
+ * toBaseQty is the fallback, for products old enough to carry no selling-unit
+ * row at all. It knows eighteen units and REFUSES the rest, which is right where
+ * a shopkeeper is typing a quantity and a wrong guess would corrupt stock — and
+ * wrong here, where the trades sell in bags, strips, pairs and plates and the
+ * throw took down the whole order with a 400 about units the guest never chose.
+ * An unrecognised unit is its own base unit, which is what those rows already
+ * store.
+ */
+export function baseQtyPerSellingUnit(product) {
+  const unit = defaultSellingUnit(product);
+  if (unit) return Number(unit.conversionToBase) || 1;
+  try {
+    return toBaseQty(1, product.rateUnit || product.baseUnit, product.baseUnit) || 1;
+  } catch {
+    return 1;
+  }
+}
+
+/** Whether a guest could order even one of these — the shelf storefront's stock rule. */
+export function hasSellableStock(product) {
+  return Number(product.stockBaseQty ?? 0) + 0.000001 >= baseQtyPerSellingUnit(product);
+}
+
+/**
  * Everything a shop is willing to show a stranger, before any one trade decides
  * how to present it.
  *
@@ -91,10 +135,14 @@ export async function getPublicCatalog(shopId, requestedLocationId = null, { tab
   });
 
   const safe = storefront?.products
-    // Only the default shelf storefront hides zero-stock items. A trade that
+    // Only the default shelf storefront hides out-of-stock items. A trade that
     // claimed the storefront has already applied its own rule, which for a
     // kitchen is the 86 list and its recipes — not a plate count nobody keeps.
-    ?? candidates.filter((p) => Number(p.stockBaseQty ?? 0) > 0).map(toCustomerSafeProduct);
+    //
+    // "In stock" means at least ONE of what the guest would tap, not one base
+    // unit: five loose grams of a product sold by the kilo is not a kilo, and
+    // showing it only moved the refusal to the checkout.
+    ?? candidates.filter(hasSellableStock).map(toCustomerSafeProduct);
 
   return {
     shop: { id: shop.id, name: shop.name, city: shop.city ?? null },
@@ -296,19 +344,25 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   for (const [productId, qty] of preparedLines ? [] : normalizedItems) {
     const product = byId.get(productId);
     if (!product || qty <= 0) continue;
+    const safe = toCustomerSafeProduct(product);
     if (orderableIds) {
       // The trade that owns this storefront already decided. For a kitchen that
       // is the 86 list and the recipe's ingredients — asking about the dish's
       // own stock here would refuse every dish a restaurant does not count.
       if (!orderableIds.has(productId)) continue;
     } else {
-      if (Number(product.stockBaseQty ?? 0) <= 0) continue;
-      const requestedBaseQty = toBaseQty(qty, product.rateUnit || product.baseUnit, product.baseUnit);
-      if (requestedBaseQty > Number(product.stockBaseQty ?? 0) + 0.000001) {
-        throw new AppError(`${product.name} has only ${product.stockBaseQty} ${product.baseUnit} available at this store.`, 409, "ORDER_QUANTITY_UNAVAILABLE");
+      // The same rule, in the same units, as the catalogue read above.
+      if (!hasSellableStock(product)) continue;
+      const perUnit = baseQtyPerSellingUnit(product);
+      const availableBaseQty = Number(product.stockBaseQty ?? 0);
+      if (round2(qty * perUnit) > availableBaseQty + 0.000001) {
+        // Counted in what the guest was shown and tapped. Base units are the
+        // shop's own bookkeeping: "only 90 piece available" of a medicine sold
+        // by the strip tells a customer nothing they can act on.
+        const available = Math.floor((availableBaseQty + 0.000001) / perUnit);
+        throw new AppError(`${product.name} has only ${available} ${safe.unit} available at this store.`, 409, "ORDER_QUANTITY_UNAVAILABLE");
       }
     }
-    const safe = toCustomerSafeProduct(product);
     lines.push({ productId: safe.id, name: safe.name, unit: safe.unit, price: safe.price, qty });
   }
   if (lines.length === 0) throw new AppError("None of the selected items are available.", 400);

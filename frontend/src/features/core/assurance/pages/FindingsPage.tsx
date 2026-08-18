@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { listFindings, type EntityType, type FindingStatus, type RiskLevel } from "../api";
-import { AssuranceDisclaimer, Chip, EmptyState, RiskChip, ScoreBar, StatusChip, fmtDateTime, humanize, inrFromPaise } from "../ui";
+import { listFindings, updateFindingStatus, type EntityType, type Finding, type FindingStatus, type RiskLevel } from "../api";
+import { AssuranceDisclaimer, EmptyState, humanize } from "../ui";
+import { ProblemCard } from "../ProblemCard";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUSES: FindingStatus[] = [
   "OPEN", "EVIDENCE_REQUESTED", "UNDER_REVIEW", "CONFIRMED_ISSUE", "FALSE_POSITIVE", "CORRECTED", "ACCEPTED_RISK", "CLOSED",
@@ -22,11 +24,12 @@ export type FindingsPageProps = {
 };
 
 export default function FindingsPage({
-  title = "Findings",
-  description = "Every potential inconsistency the engine has raised, newest and riskiest first.",
+  title,
+  description,
   presetOpenOnly = false,
   presetRiskLevels,
 }: FindingsPageProps) {
+  const { t } = useAppLanguage();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<FindingStatus | "">("");
   const [riskLevel, setRiskLevel] = useState<RiskLevel | "">(presetRiskLevels?.length === 1 ? presetRiskLevels[0] : "");
@@ -54,8 +57,8 @@ export default function FindingsPage({
   return (
     <div className="space-y-4 p-4">
       <header>
-        <h1 className="text-xl font-semibold">{title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        <h1 className="text-xl font-semibold">{title ?? t("assurance.title")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{description ?? t("assurance.subtitle")}</p>
       </header>
 
       <AssuranceDisclaimer />
@@ -119,43 +122,14 @@ export default function FindingsPage({
       ) : query.isError ? (
         <EmptyState title="Could not load findings" hint={(query.error as Error)?.message} />
       ) : findings.length === 0 ? (
-        <EmptyState
-          title="No findings match these filters"
-          hint="Either your records are consistent for this filter, or no review has covered this period yet."
-        />
+        <EmptyState title={t("assurance.empty.title")} hint={t("assurance.empty.hint")} />
       ) : (
         <ul className="space-y-2">
           {findings.map((finding) => (
             <li key={finding.findingId} className="rounded-xl border border-border bg-card p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <Link href={`/assurance/findings/${finding.findingId}`} className="text-sm font-semibold hover:underline">
-                    {finding.title}
-                  </Link>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <StatusChip status={finding.status} />
-                    <Chip>{humanize(finding.sourceEntityType)}</Chip>
-                    {finding.primaryCategory ? <Chip>{humanize(finding.primaryCategory)}</Chip> : null}
-                    {finding.reopenCount > 0 ? <Chip>Reopened ×{finding.reopenCount}</Chip> : null}
-                  </div>
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    {(finding.triggeredRules ?? []).filter((rule) => rule.active).map((rule) => (
-                      <span key={rule.ruleCode} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                        {rule.ruleCode} +{rule.scoreContribution}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="w-40 shrink-0 space-y-1 text-right">
-                  <RiskChip level={finding.riskLevel} score={finding.riskScore} />
-                  <ScoreBar score={finding.riskScore} />
-                  <p className="text-xs text-muted-foreground">
-                    {finding.discrepancyPaise !== null
-                      ? `Gap ${inrFromPaise(finding.discrepancyPaise)}`
-                      : inrFromPaise(finding.amountPaise)}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">{fmtDateTime(finding.createdAt)}</p>
-                </div>
+                <ProblemCard finding={finding} />
+                <DecideButtons finding={finding} />
               </div>
             </li>
           ))}
@@ -180,6 +154,49 @@ export default function FindingsPage({
           </Button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The two decisions an owner actually makes about a flagged row.
+ *
+ * Both are real transitions the engine already allows out of OPEN — this is not
+ * a shortcut around the review workflow, it is the same PATCH the detail screen
+ * sends, minus the vocabulary. A row whose status has moved on shows nothing
+ * here: re-deciding belongs on the detail screen where the history is visible.
+ */
+function DecideButtons({ finding }: { finding: Finding }) {
+  const { t } = useAppLanguage();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const decide = useMutation({
+    mutationFn: (status: FindingStatus) => updateFindingStatus(finding.findingId, { status }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assurance"] }),
+    onError: (error: Error) => toast({ title: error.message, variant: "destructive" }),
+  });
+
+  if (finding.status !== "OPEN") return null;
+
+  return (
+    <div className="flex shrink-0 gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={decide.isPending}
+        onClick={() => decide.mutate("FALSE_POSITIVE")}
+      >
+        {t("assurance.action.fine")}
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={decide.isPending}
+        onClick={() => decide.mutate("CONFIRMED_ISSUE")}
+      >
+        {t("assurance.action.problem")}
+      </Button>
     </div>
   );
 }
