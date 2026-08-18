@@ -606,6 +606,16 @@ export const billingEn = {
   // Only the singular tender forms live here; the collective words a report
   // uses are the `reports.credit.*` entries, and most trades share one string
   // between the two.
+  // What money a customer owes is called, per trade. These live in the
+  // CRITICAL half because the till renders them: a deferred credit word
+  // would leave the tender button with no noun at first paint.
+  "billing.credit.udhar": "Udhar",
+  "billing.credit.credit": "Credit",
+  "billing.credit.dues": "Dues",
+  "billing.credit.partyCredit": "Party Credit",
+  "billing.credit.patientAccounts": "Patient Accounts",
+  "billing.credit.tabs": "Tabs",
+  "billing.credit.receivables": "Receivables",
   "billing.tender.khata": "Khata",
   "billing.tender.patientAccount": "Patient Account",
   "billing.tender.tab": "Tab",

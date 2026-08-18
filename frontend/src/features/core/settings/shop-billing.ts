@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { getStoredBusinessType, useBusinessTypeKey, type BusinessType } from "./business-types";
-import { englishTranslations, useAppLanguage, type TranslationKey } from "./i18n";
+import { englishCritical, useAppLanguage, type TranslationKey } from "./i18n";
 import { SHOP_TENDER_WORD } from "./shop-credit";
 
 /**
@@ -139,7 +139,7 @@ export interface ShopBillingWords {
  * this bug that leaves the building.
  */
 export function receiptCreditWordEnglish(): string {
-  return englishTranslations[SHOP_TENDER_WORD[getStoredBusinessType()]];
+  return englishCritical[SHOP_TENDER_WORD[getStoredBusinessType()] as keyof typeof englishCritical];
 }
 
 export function useShopBillingWords(): ShopBillingWords {

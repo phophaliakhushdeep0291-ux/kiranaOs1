@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useListSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier,
   getListSuppliersQueryKey, type Supplier
@@ -15,20 +15,35 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Plus, Search, Pencil, Loader2, Phone, MapPin, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import { TradeFocusStrip } from "@/components/shared";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { getShopSuppliersProfile } from "@/features/core/settings/shop-suppliers";
 
-const schema = z.object({
-  name: z.string().min(1, "Name required"),
-  mobile: z.string().optional(),
-  address: z.string().optional(),
-  // Validated here too so a typo is caught at the keyboard, not by the server:
-  // the first two digits pick which government receives the input tax credit.
-  gstin: z.string().trim().optional().refine((v) => !v || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v.toUpperCase()), "Enter a valid 15-character GSTIN"),
-});
-type FormData = z.infer<typeof schema>;
+// Validation messages are dictionary keys rather than sentences: the schema is
+// built inside the component so it can resolve them, since a module-level schema
+// would be frozen in whichever language happened to load first.
+function supplierSchema(message: (key: "nameRequired" | "gstinInvalid") => string) {
+  return z.object({
+    name: z.string().min(1, message("nameRequired")),
+    mobile: z.string().optional(),
+    address: z.string().optional(),
+    // Validated here too so a typo is caught at the keyboard, not by the server:
+    // the first two digits pick which government receives the input tax credit.
+    gstin: z.string().trim().optional().refine((v) => !v || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(v.toUpperCase()), message("gstinInvalid")),
+  });
+}
+type FormData = z.infer<ReturnType<typeof supplierSchema>>;
 
 export default function Suppliers() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // A chemist buys from distributors and a factory from vendors — the plural
+  // goes in counts and empty states, the singular in buttons and dialog titles.
+  const tradeProfile = getShopSuppliersProfile(useBusinessTypeKey());
+  const plural = t(tradeProfile.pluralWordKey);
+  const singular = t(tradeProfile.singularWordKey);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
@@ -36,19 +51,26 @@ export default function Suppliers() {
 
   const suppliers = useListSuppliers();
 
+  const schema = useMemo(
+    () => supplierSchema((key) => t(key === "nameRequired" ? "suppliers.form.nameRequired" : "suppliers.form.gstinInvalid")),
+    [t],
+  );
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { name: "", mobile: "", address: "", gstin: "" },
   });
+
+  const failed = (err: unknown) =>
+    (err as { data?: { message?: string } })?.data?.message ?? t("suppliers.toast.failed");
 
   const createSupplier = useCreateSupplier({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListSuppliersQueryKey() });
         setOpen(false); form.reset();
-        toast({ title: "Supplier added" });
+        toast({ title: t("suppliers.toast.added", { supplier: singular }) });
       },
-      onError: (err: unknown) => toast({ title: "Error", description: (err as { data?: { message?: string } })?.data?.message ?? "Failed", variant: "destructive" }),
+      onError: (err: unknown) => toast({ title: t("suppliers.toast.error"), description: failed(err), variant: "destructive" }),
     },
   });
 
@@ -57,9 +79,9 @@ export default function Suppliers() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListSuppliersQueryKey() });
         setOpen(false); setEditing(null); form.reset();
-        toast({ title: "Supplier updated" });
+        toast({ title: t("suppliers.toast.updated", { supplier: singular }) });
       },
-      onError: (err: unknown) => toast({ title: "Error", description: (err as { data?: { message?: string } })?.data?.message ?? "Failed", variant: "destructive" }),
+      onError: (err: unknown) => toast({ title: t("suppliers.toast.error"), description: failed(err), variant: "destructive" }),
     },
   });
 
@@ -68,9 +90,15 @@ export default function Suppliers() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListSuppliersQueryKey() });
         setDeleteTarget(null);
-        toast({ title: "Supplier moved to recycle bin locally" });
+        toast({ title: t("suppliers.toast.recycled", { supplier: singular }) });
       },
-      onError: (err: unknown) => toast({ title: "Delete blocked", description: (err as { data?: { message?: string }; message?: string })?.data?.message ?? (err as { message?: string })?.message ?? "Owner PIN is required.", variant: "destructive" }),
+      onError: (err: unknown) => toast({
+        title: t("suppliers.toast.deleteBlocked"),
+        description: (err as { data?: { message?: string }; message?: string })?.data?.message
+          ?? (err as { message?: string })?.message
+          ?? t("suppliers.toast.ownerPinRequired"),
+        variant: "destructive",
+      }),
     },
   });
 
@@ -98,29 +126,39 @@ export default function Suppliers() {
   const filtered = (suppliers.data ?? []).filter((s) =>
     !search || s.name.toLowerCase().includes(search.toLowerCase()) || s.mobile?.includes(search)
   );
+  const total = suppliers.data?.length ?? 0;
 
   return (
     <div className="p-6 w-full max-w-none">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Suppliers</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{suppliers.data?.length ?? 0} {suppliers.data?.length === 1 ? "supplier" : "suppliers"}</p>
+          <h1 className="text-2xl font-bold text-foreground">{t(tradeProfile.headingKey)}</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {total === 1 ? t("suppliers.count.one", { supplier: plural }) : t("suppliers.count.many", { count: total, supplier: plural })}
+          </p>
         </div>
         <Button data-testid="button-add-supplier" onClick={openAdd}>
-          <Plus size={16} className="mr-1.5" />Add Supplier
+          <Plus size={16} className="mr-1.5" />{t("suppliers.add", { supplier: singular })}
         </Button>
       </div>
 
+      <TradeFocusStrip
+        titleKey="suppliers.trade.title"
+        focusKey={tradeProfile.focusKey}
+        links={tradeProfile.links}
+        className="mb-5"
+      />
+
       <div className="relative mb-5">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input data-testid="input-search" className="pl-9" placeholder="Search by name or mobile..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input data-testid="input-search" className="pl-9" placeholder={t("suppliers.search.placeholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       {suppliers.isLoading ? (
         <div className="grid gap-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}</div>
       ) : filtered.length === 0 ? (
         <div className="bg-card border rounded-xl p-12 text-center text-muted-foreground">
-          {search ? "No suppliers match your search" : "No suppliers yet — add your first supplier"}
+          {search ? t("suppliers.empty.noMatch", { supplier: plural }) : t("suppliers.empty.none", { supplier: plural })}
         </div>
       ) : (
         <div className="grid gap-3">
@@ -151,7 +189,7 @@ export default function Suppliers() {
                   type="button"
                   data-testid={`button-edit-${s.id}`}
                   onClick={() => openEdit(s)}
-                  aria-label={`Edit ${s.name}`}
+                  aria-label={t("suppliers.row.edit", { name: s.name })}
                   className="grid h-11 w-11 place-items-center rounded-xl border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground active:scale-95"
                 >
                   <Pencil size={17} aria-hidden="true" />
@@ -160,7 +198,7 @@ export default function Suppliers() {
                   type="button"
                   data-testid={`button-delete-${s.id}`}
                   onClick={() => setDeleteTarget(s)}
-                  aria-label={`Delete ${s.name}`}
+                  aria-label={t("suppliers.row.delete", { name: s.name })}
                   className="grid h-11 w-11 place-items-center rounded-xl border border-transparent text-muted-foreground transition-colors hover:border-destructive/25 hover:bg-destructive/10 hover:text-destructive active:scale-95"
                 >
                   <Trash2 size={17} aria-hidden="true" />
@@ -174,32 +212,32 @@ export default function Suppliers() {
       <Dialog open={open} onOpenChange={(o) => { if (!o) { setOpen(false); setEditing(null); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit Supplier" : "Add Supplier"}</DialogTitle>
+            <DialogTitle>{editing ? t("suppliers.form.editTitle", { supplier: singular }) : t("suppliers.form.addTitle", { supplier: singular })}</DialogTitle>
           </DialogHeader>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-2">
             <div>
-              <Label>Name *</Label>
-              <Input data-testid="input-supplier-name" className="mt-1" placeholder="Supplier name" {...form.register("name")} />
+              <Label>{t("suppliers.form.name")}</Label>
+              <Input data-testid="input-supplier-name" className="mt-1" placeholder={t("suppliers.form.namePlaceholder")} {...form.register("name")} />
               {form.formState.errors.name && <p className="text-destructive text-xs mt-1">{form.formState.errors.name.message}</p>}
             </div>
             <div>
-              <Label>Mobile</Label>
+              <Label>{t("suppliers.form.mobile")}</Label>
               <Input data-testid="input-supplier-mobile" className="mt-1" placeholder="9876543210" {...form.register("mobile")} />
             </div>
             <div>
-              <Label>Address</Label>
-              <Input data-testid="input-supplier-address" className="mt-1" placeholder="Address" {...form.register("address")} />
+              <Label>{t("suppliers.form.address")}</Label>
+              <Input data-testid="input-supplier-address" className="mt-1" placeholder={t("suppliers.form.address")} {...form.register("address")} />
             </div>
             <div>
-              <Label>GSTIN</Label>
+              <Label>{t("suppliers.form.gstin")}</Label>
               <Input data-testid="input-supplier-gstin" className="mt-1 uppercase" placeholder="27AAECS1234F1Z5" maxLength={15} {...form.register("gstin")} />
               {form.formState.errors.gstin && <p className="text-destructive text-xs mt-1">{form.formState.errors.gstin.message}</p>}
-              <p className="text-muted-foreground text-xs mt-1">Needed to claim input GST on this supplier&apos;s bills. Its first two digits decide whether the tax is CGST+SGST or IGST.</p>
+              <p className="text-muted-foreground text-xs mt-1">{t("suppliers.form.gstinHelp")}</p>
             </div>
             <div className="flex gap-3 pt-2">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => { setOpen(false); setEditing(null); }}>Cancel</Button>
+              <Button type="button" variant="outline" className="flex-1" onClick={() => { setOpen(false); setEditing(null); }}>{t("suppliers.form.cancel")}</Button>
               <Button type="submit" className="flex-1" disabled={createSupplier.isPending || updateSupplier.isPending}>
-                {createSupplier.isPending || updateSupplier.isPending ? <Loader2 size={14} className="animate-spin" /> : editing ? "Save" : "Add"}
+                {createSupplier.isPending || updateSupplier.isPending ? <Loader2 size={14} className="animate-spin" /> : editing ? t("suppliers.form.save") : t("suppliers.form.addAction")}
               </Button>
             </div>
           </form>
@@ -208,9 +246,9 @@ export default function Suppliers() {
 
       <OwnerPinModal
         open={Boolean(deleteTarget)}
-        title="Move supplier to recycle bin"
-        description={`Delete ${deleteTarget?.name ?? "this supplier"}? This is a soft delete and will be queued for sync.`}
-        confirmLabel="Move to recycle bin"
+        title={t("suppliers.delete.title")}
+        description={t("suppliers.delete.description", { name: deleteTarget?.name ?? t("suppliers.delete.thisOne") })}
+        confirmLabel={t("suppliers.delete.confirm")}
         reasonRequired
         loading={deleteSupplier.isPending}
         onCancel={() => { if (!deleteSupplier.isPending) setDeleteTarget(null); }}

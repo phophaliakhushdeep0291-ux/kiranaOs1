@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BUSINESS_TYPE_DEFS, type BusinessType } from "@/features/core/settings/business-types";
-import { englishTranslations } from "@/features/core/settings/i18n";
+import { englishTranslations } from "@/features/core/settings/translations/english";
 import { SHOP_CREDIT_WORD } from "@/features/core/settings/shop-credit";
 import { SHOP_CUSTOMERS, getShopCustomersProfile } from "@/features/core/settings/shop-customers";
 import { SHOP_PURCHASES, getShopPurchasesProfile } from "@/features/core/settings/shop-purchases";

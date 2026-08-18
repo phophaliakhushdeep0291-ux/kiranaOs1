@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { EN_MODULES } from "@/features/core/settings/i18n";
+import { EN_MODULES } from "@/features/core/settings/translations/english";
 import { HI_CRITICAL_MODULES, hindiCriticalTranslations } from "@/features/core/settings/translations/hindi-critical";
 import { HI_DEFERRED_MODULES, hindiDeferredTranslations } from "@/features/core/settings/translations/hindi-deferred";
 import { HI_MODULES, hindiTranslations } from "@/features/core/settings/translations/hindi";

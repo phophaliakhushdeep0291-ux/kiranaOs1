@@ -5,7 +5,8 @@ import {
   normaliseMerchantSetupState,
   type MerchantSetupFacts,
 } from "@/features/core/settings/merchant-setup-state";
-import { englishTranslations, type Translate } from "@/features/core/settings/i18n";
+import { type Translate } from "@/features/core/settings/i18n";
+import { englishTranslations } from "@/features/core/settings/translations/english";
 import { KIRANA_STARTER_CATALOG_COUNT } from "@/features/core/products/starter-catalog/kirana-catalog-summary.generated";
 
 /**

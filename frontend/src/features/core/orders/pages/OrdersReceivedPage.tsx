@@ -29,13 +29,19 @@ import { alertCustomerOnWhatsapp } from "../notify";
 import { listCustomerOrders, updateCustomerOrder, type CustomerOrder } from "../api";
 import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 import { escapeHtml } from "@/lib/escape-html";
+import { TradeFocusStrip } from "@/components/shared";
+import { useAppLanguage, type Translate, type TranslationKey } from "@/features/core/settings/i18n";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { getShopOrdersProfile } from "@/features/core/settings/shop-orders";
 
-const STATUS_TABS: Array<{ value: string; label: string }> = [
-  { value: "new", label: "New" },
-  { value: "accepted", label: "Accepted" },
-  { value: "ready", label: "Ready" },
-  { value: "fulfilled", label: "Done" },
-  { value: "all", label: "All" },
+// Labels are dictionary KEYS rather than text: these maps are module-level, so a
+// string here would be frozen in whichever language happened to load first.
+const STATUS_TABS: Array<{ value: string; labelKey: TranslationKey }> = [
+  { value: "new", labelKey: "orders.tab.new" },
+  { value: "accepted", labelKey: "orders.tab.accepted" },
+  { value: "ready", labelKey: "orders.tab.ready" },
+  { value: "fulfilled", labelKey: "orders.tab.fulfilled" },
+  { value: "all", labelKey: "orders.tab.all" },
 ];
 
 const STATUS_STYLE: Record<CustomerOrder["status"], string> = {
@@ -47,17 +53,17 @@ const STATUS_STYLE: Record<CustomerOrder["status"], string> = {
   cancelled: "bg-[#fff1f2] text-[#be123c]",
 };
 
-const STATUS_LABEL: Record<CustomerOrder["status"], string> = {
-  new: "Received",
-  accepted: "Preparing",
-  ready: "Ready",
-  fulfilled: "Done",
-  rejected: "Rejected",
-  cancelled: "Cancelled",
+const STATUS_LABEL: Record<CustomerOrder["status"], TranslationKey> = {
+  new: "orders.status.new",
+  accepted: "orders.status.accepted",
+  ready: "orders.status.ready",
+  fulfilled: "orders.status.fulfilled",
+  rejected: "orders.status.rejected",
+  cancelled: "orders.status.cancelled",
 };
 
-const CHANNEL_LABEL: Record<CustomerOrder["sourceChannel"], string> = { pos: "POS", customer_portal: "QR order", api: "API", marketplace: "Marketplace" };
-const PAYMENT_LABEL: Record<CustomerOrder["paymentStatus"], string> = { unpaid: "Unpaid", partially_paid: "Part paid", paid: "Paid", refunded: "Refunded" };
+const CHANNEL_LABEL: Record<CustomerOrder["sourceChannel"], TranslationKey> = { pos: "orders.channel.pos", customer_portal: "orders.channel.customerPortal", api: "orders.channel.api", marketplace: "orders.channel.marketplace" };
+const PAYMENT_LABEL: Record<CustomerOrder["paymentStatus"], TranslationKey> = { unpaid: "orders.payment.unpaid", partially_paid: "orders.payment.partiallyPaid", paid: "orders.payment.paid", refunded: "orders.payment.refunded" };
 const PAYMENT_STYLE: Record<CustomerOrder["paymentStatus"], string> = {
   unpaid: "bg-amber-50 text-amber-700", partially_paid: "bg-orange-50 text-orange-700", paid: "bg-emerald-50 text-emerald-700", refunded: "bg-slate-100 text-slate-600",
 };
@@ -68,13 +74,13 @@ const fmtMoney = (n: number) => Number(n || 0).toLocaleString("en-IN", { minimum
 /** Friendly display code for a cuid order id, e.g. ORD-9B2AK4. */
 const orderCode = (id: string) => `ORD-${id.slice(-6).toUpperCase()}`;
 
-function timeAgo(iso: string): string {
+function timeAgo(t: Translate, iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t("orders.time.justNow");
+  if (mins < 60) return t("orders.time.minutesAgo", { count: mins });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) return t("orders.time.hoursAgo", { count: hrs });
   return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 }
 
@@ -118,6 +124,10 @@ function playNewOrderChime(): void {
 
 export default function OrdersReceivedPage() {
   const [, navigate] = useLocation();
+  const { t } = useAppLanguage();
+  // A restaurant's orders are simply its orders; a showroom's are customer
+  // orders against a lead time, a factory's are buyer orders against capacity.
+  const tradeProfile = getShopOrdersProfile(useBusinessTypeKey());
   const { toast } = useToast();
   const { shop } = useAuth();
   const shopName = shop?.name ?? "";
@@ -164,7 +174,10 @@ export default function OrdersReceivedPage() {
     if (prev != null && newCount > prev) {
       playNewOrderChime();
       const added = newCount - prev;
-      toast({ title: `${added} new order${added === 1 ? "" : "s"} received`, description: "Open the New tab to review." });
+      toast({
+        title: added === 1 ? t("orders.toast.newOrder", { count: added }) : t("orders.toast.newOrders", { count: added }),
+        description: t("orders.toast.newOrderHint"),
+      });
     }
     prevNewCountRef.current = newCount;
   }, [newCount, toast]);
@@ -177,7 +190,7 @@ export default function OrdersReceivedPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
     },
-    onError: (err: unknown) => toast({ title: "Could not update order", description: err instanceof Error ? err.message : "Try again", variant: "destructive" }),
+    onError: (err: unknown) => toast({ title: t("orders.toast.updateFailed"), description: err instanceof Error ? err.message : t("orders.toast.tryAgain"), variant: "destructive" }),
   });
 
   // Primary action: open the order in Billing so the owner can adjust items, rates,
@@ -188,8 +201,8 @@ export default function OrdersReceivedPage() {
     void loadIntoBilling(order)
       .catch((error: unknown) => {
         toast({
-          title: "Could not open order",
-          description: error instanceof Error ? error.message : "Please try again.",
+          title: t("orders.toast.openFailed"),
+          description: error instanceof Error ? error.message : t("orders.toast.tryAgainPolite"),
           variant: "destructive",
         });
       })
@@ -200,7 +213,7 @@ export default function OrdersReceivedPage() {
   function messageCustomer(order: CustomerOrder, kind: "received" | "ready") {
     const { targetedCustomer } = alertCustomerOnWhatsapp(order, shopName, kind);
     if (!targetedCustomer) {
-      toast({ title: "Opened WhatsApp", description: "Pick the customer's chat to send the message." });
+      toast({ title: t("orders.toast.whatsappOpened"), description: t("orders.toast.whatsappOpenedHint") });
     }
   }
 
@@ -218,7 +231,7 @@ export default function OrdersReceivedPage() {
       catalogProducts = (refreshed.data ?? []).filter((p) => p.deletedAt == null);
     }
     if (catalogProducts.length === 0) {
-      throw new Error("Product catalog is still loading. Please try again in a moment.");
+      throw new Error(t("orders.error.catalogLoading"));
     }
 
     const [currentHeldBills, activeDraft] = await Promise.all([
@@ -233,7 +246,7 @@ export default function OrdersReceivedPage() {
 
     if (activeOrderAlreadyOpen) {
       if (order.status === "new") statusMutation.mutate({ id: order.id, next: "accepted" });
-      toast({ title: "Order already open", description: "Taking you back to Billing." });
+      toast({ title: t("orders.toast.alreadyOpen"), description: t("orders.toast.alreadyOpenHint") });
       navigate("/billing");
       return;
     }
@@ -250,7 +263,7 @@ export default function OrdersReceivedPage() {
         offlineDB.setSetting(BILLING_DRAFT_KEY, billingDraftFromHeldBill(existingHeldOrder)),
       ]);
       if (order.status === "new") statusMutation.mutate({ id: order.id, next: "accepted" });
-      toast({ title: "Order already in Billing", description: "Opened the existing bill instead of adding another copy." });
+      toast({ title: t("orders.toast.alreadyInBilling"), description: t("orders.toast.alreadyInBillingHint") });
       navigate("/billing");
       return;
     }
@@ -258,7 +271,7 @@ export default function OrdersReceivedPage() {
     const importOrder = () => billFromImportedCart(
       catalogProducts,
       requestedItems,
-      { label: `${order.customerName} (order)`, sourceOrderId: order.id },
+      { label: t("orders.billing.importLabel", { name: order.customerName }), sourceOrderId: order.id },
     );
     let imported = importOrder();
     // A non-empty cache can still be partial (for example after a location or
@@ -271,7 +284,7 @@ export default function OrdersReceivedPage() {
     }
     const { bill, matched, skipped } = imported;
     if (matched === 0) {
-      toast({ title: "No matching products", description: "These items are not in your catalog anymore.", variant: "destructive" });
+      toast({ title: t("orders.toast.noMatch"), description: t("orders.toast.noMatchHint"), variant: "destructive" });
       return;
     }
     const withCustomer: HeldBill = { ...bill, customerName: order.customerName, customerMobile: order.customerMobile };
@@ -281,8 +294,11 @@ export default function OrdersReceivedPage() {
     ]);
     statusMutation.mutate({ id: order.id, next: "accepted" });
     toast({
-      title: "Order sent to Billing",
-      description: `${matched} item${matched === 1 ? "" : "s"} ready — adjust the amount and save the final bill${skipped.length ? ` · ${skipped.length} unavailable` : ""}.`,
+      title: t("orders.toast.sentToBilling"),
+      description: (matched === 1
+        ? t("orders.toast.sentToBillingHint", { count: matched })
+        : t("orders.toast.sentToBillingHintPlural", { count: matched }))
+        + (skipped.length ? t("orders.toast.sentToBillingSkipped", { count: skipped.length }) : ""),
     });
     navigate("/billing");
   }
@@ -291,26 +307,26 @@ export default function OrdersReceivedPage() {
   function printOrderSlip(order: CustomerOrder) {
     const popup = window.open("", "_blank", "width=420,height=640");
     if (!popup) {
-      toast({ title: "Print blocked", description: "Allow pop-ups to print the order slip.", variant: "destructive" });
+      toast({ title: t("orders.toast.printBlocked"), description: t("orders.toast.printBlockedHint"), variant: "destructive" });
       return;
     }
     const rows = order.items
       .map((it, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(it.qty)}× ${escapeHtml(it.name)}</td><td style="text-align:right">${escapeHtml(fmtMoney(it.qty * it.price))}</td></tr>`)
       .join("");
     popup.document.write(
-      `<!doctype html><html><head><title>Order slip ${escapeHtml(orderCode(order.id))}</title></head>` +
+      `<!doctype html><html><head><title>${escapeHtml(t("orders.slip.title", { code: orderCode(order.id) }))}</title></head>` +
         `<body style="font-family:system-ui,sans-serif;padding:20px;margin:0;color:#111">` +
-        `<h2 style="margin:0 0 2px">${escapeHtml(shopName || "Order slip")}</h2>` +
+        `<h2 style="margin:0 0 2px">${escapeHtml(shopName || t("orders.slip.fallbackHeading"))}</h2>` +
         `<p style="margin:0 0 12px;color:#555;font-size:12px">${escapeHtml(orderCode(order.id))} · ${escapeHtml(fullDateTime(order.createdAt))}</p>` +
         `<p style="margin:0 0 12px;font-size:13px"><b>${escapeHtml(order.customerName)}</b> · ${escapeHtml(order.customerMobile)}` +
         `${order.customerAddress ? `<br/>${escapeHtml(order.customerAddress)}` : ""}</p>` +
         `<table style="width:100%;border-collapse:collapse;font-size:13px">` +
-        `<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>#</th><th>Item</th><th style="text-align:right">Rs</th></tr></thead>` +
+        `<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>#</th><th>${escapeHtml(t("orders.slip.item"))}</th><th style="text-align:right">Rs</th></tr></thead>` +
         `<tbody>${rows}</tbody>` +
-        `<tfoot><tr style="border-top:1px solid #ccc;font-weight:bold"><td></td><td>Estimated total</td><td style="text-align:right">${escapeHtml(fmtMoney(order.estimatedTotal))}</td></tr></tfoot>` +
+        `<tfoot><tr style="border-top:1px solid #ccc;font-weight:bold"><td></td><td>${escapeHtml(t("orders.slip.estimatedTotal"))}</td><td style="text-align:right">${escapeHtml(fmtMoney(order.estimatedTotal))}</td></tr></tfoot>` +
         `</table>` +
         `${order.note ? `<p style="margin-top:12px;font-size:12px;font-style:italic">"${escapeHtml(order.note)}"</p>` : ""}` +
-        `<p style="margin-top:14px;font-size:11px;color:#888">Final price is set at billing.</p>` +
+        `<p style="margin-top:14px;font-size:11px;color:#888">${escapeHtml(t("orders.slip.finalPriceNote"))}</p>` +
         `<script>window.onload=function(){window.print()}</script></body></html>`,
     );
     popup.document.close();
@@ -322,14 +338,14 @@ export default function OrdersReceivedPage() {
       `${order.customerName} · ${order.customerMobile}`,
       ...(order.customerAddress ? [order.customerAddress] : []),
       ...order.items.map((it) => `- ${it.qty}× ${it.name} @ ${fmtMoney(it.price)} = ${fmtMoney(it.qty * it.price)}`),
-      `Estimated total: ${fmtRs(order.estimatedTotal)}`,
-      ...(order.note ? [`Note: ${order.note}`] : []),
+      t("orders.copy.estimatedTotal", { amount: fmtRs(order.estimatedTotal) }),
+      ...(order.note ? [t("orders.copy.note", { note: order.note })] : []),
     ];
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
-      toast({ title: "Order copied", description: "Details are on your clipboard." });
+      toast({ title: t("orders.toast.copied"), description: t("orders.toast.copiedHint") });
     } catch {
-      toast({ title: "Could not copy", description: "Clipboard is unavailable in this browser.", variant: "destructive" });
+      toast({ title: t("orders.toast.copyFailed"), description: t("orders.toast.copyFailedHint"), variant: "destructive" });
     }
   }
 
@@ -367,12 +383,12 @@ export default function OrdersReceivedPage() {
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-display text-xl font-black text-[var(--brand-ink)]">Online orders</h1>
+            <h1 className="font-display text-xl font-black text-[var(--brand-ink)]">{t(tradeProfile.headingKey)}</h1>
             {(stats.newOrders + stats.preparing + stats.ready) > 0 ? (
-              <span className="rounded-full bg-[#eaf2ff] px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[var(--brand)]">{stats.newOrders + stats.preparing + stats.ready} active</span>
+              <span className="rounded-full bg-[#eaf2ff] px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[var(--brand)]">{t("orders.badge.active", { count: stats.newOrders + stats.preparing + stats.ready })}</span>
             ) : null}
           </div>
-          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{stats.ordersToday} received today · Live queue refreshes every 20 seconds</p>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{t("orders.subtitle", { count: stats.ordersToday })}</p>
         </div>
         <button
           type="button"
@@ -381,41 +397,48 @@ export default function OrdersReceivedPage() {
             void allOrdersQuery.refetch();
           }}
           className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#dfe7f2] bg-white text-[#405273] shadow-sm hover:bg-[var(--brand-softer)]"
-          aria-label="Refresh orders"
+          aria-label={t("orders.refresh")}
         >
           <RefreshCw size={16} className={ordersQuery.isFetching || allOrdersQuery.isFetching ? "animate-spin" : ""} />
         </button>
       </div>
+
+      <TradeFocusStrip
+        titleKey="orders.trade.title"
+        focusKey={tradeProfile.focusKey}
+        links={tradeProfile.links}
+        className="mb-4"
+      />
 
       {/* Stats strip */}
       <div className="mb-5 grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3">
         <StatCard
           icon={<Inbox size={18} />}
           tint="bg-[#eaf2ff] text-[var(--brand)]"
-          label="Needs review"
+          label={t("orders.stat.needsReview")}
           value={stats.newOrders}
-          sub="confirm before preparing"
+          sub={t("orders.stat.needsReviewHint")}
         />
         <StatCard
           icon={<ChefHat size={18} />}
           tint="bg-[#fff7ed] text-[#c2410c]"
-          label="In preparation"
+          label={t("orders.stat.inPreparation")}
           value={stats.preparing}
-          sub="accepted, being prepared"
+          sub={t("orders.stat.inPreparationHint")}
         />
         <StatCard
           icon={<CheckCircle2 size={18} />}
           tint="bg-[#f3efff] text-[#7c3aed]"
-          label="Ready now"
+          label={t("orders.stat.readyNow")}
           value={stats.ready}
-          sub="waiting for handover"
+          sub={t("orders.stat.readyNowHint")}
         />
         <StatCard
           icon={<PackageCheck size={18} />}
           tint="bg-[#e9fbf0] text-[#16a34a]"
-          label="Completed today"
+          label={t("orders.stat.completedToday")}
           value={stats.doneToday}
-          sub={todayDelta == null ? "today's completed orders" : `${stats.ordersToday} total received today`}
+          sub={todayDelta == null ? t("orders.stat.completedTodayHint") : t("orders.stat.receivedToday", { count: stats.ordersToday })}
         />
       </div>
 
@@ -430,7 +453,7 @@ export default function OrdersReceivedPage() {
           onMarkReady={() => statusMutation.mutate({ id: selectedOrder.id, next: "ready" })}
           onMarkDone={() => statusMutation.mutate({ id: selectedOrder.id, next: "fulfilled" })}
           onReject={() => {
-            if (window.confirm(`Reject ${orderCode(selectedOrder.id)}? The customer will see this order as declined.`)) {
+            if (window.confirm(t("orders.confirm.reject", { code: orderCode(selectedOrder.id) }))) {
               statusMutation.mutate({ id: selectedOrder.id, next: "rejected" });
             }
           }}
@@ -449,7 +472,7 @@ export default function OrdersReceivedPage() {
                   status === tab.value ? "bg-[var(--brand)] text-white shadow-[0_8px_20px_rgba(7,95,255,0.2)]" : "border border-[#dfe7f2] bg-white text-[#536383] hover:bg-[var(--brand-softer)]"
                 }`}
               >
-                {tab.label}
+                {t(tab.labelKey)}
                 {tab.value === "new" && stats.newOrders > 0 ? ` ${stats.newOrders}` : ""}
                 {tab.value === "accepted" && stats.preparing > 0 ? ` ${stats.preparing}` : ""}
                 {tab.value === "ready" && stats.ready > 0 ? ` ${stats.ready}` : ""}
@@ -458,21 +481,21 @@ export default function OrdersReceivedPage() {
           </div>
 
           {ordersQuery.isLoading ? (
-            <div className="space-y-3" aria-label="Loading orders">
+            <div className="space-y-3" aria-label={t("orders.loading")}>
               {[0, 1, 2].map((key) => <div key={key} className="h-40 animate-pulse rounded-2xl border border-[#e6ecf4] bg-white" />)}
             </div>
           ) : ordersQuery.isError ? (
             <div className="rounded-2xl border border-[#fecdd3] bg-[#fff7f7] px-5 py-10 text-center">
               <XCircle size={28} className="mx-auto text-[#e11d48]" />
-              <p className="mt-3 text-sm font-black text-[#9f1239]">Could not load online orders</p>
-              <p className="mt-1 text-xs text-[#7f1d1d]">Check the connection and try again. Existing billing data is unchanged.</p>
-              <button type="button" onClick={() => void ordersQuery.refetch()} className="mt-4 min-h-11 rounded-xl bg-[var(--brand)] px-5 text-xs font-black text-white">Try again</button>
+              <p className="mt-3 text-sm font-black text-[#9f1239]">{t("orders.error.title")}</p>
+              <p className="mt-1 text-xs text-[#7f1d1d]">{t("orders.error.detail")}</p>
+              <button type="button" onClick={() => void ordersQuery.refetch()} className="mt-4 min-h-11 rounded-xl bg-[var(--brand)] px-5 text-xs font-black text-white">{t("orders.error.retry")}</button>
             </div>
           ) : orders.length === 0 ? (
             <div className="flex flex-col items-center py-16 text-center">
               <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[#eef2f8] text-[#94a3b8]"><Inbox size={26} /></div>
-              <p className="mt-3 text-sm font-semibold text-[#536383]">No {status === "all" ? "" : status} orders</p>
-              <p className="mt-1 max-w-xs text-[12px] text-[#8290a8]">When a customer scans your Order QR and sends an order, it shows up here.</p>
+              <p className="mt-3 text-sm font-semibold text-[#536383]">{status === "all" ? t("orders.empty.title") : t("orders.empty.titleFiltered", { status: t(STATUS_TABS.find((tab) => tab.value === status)?.labelKey ?? "orders.tab.all") })}</p>
+              <p className="mt-1 max-w-xs text-[12px] text-[#8290a8]">{t("orders.empty.hint")}</p>
             </div>
           ) : (
             <ul className="space-y-3">
@@ -494,17 +517,17 @@ export default function OrdersReceivedPage() {
                       </a>
                       <p className="mt-1 flex items-center gap-1 text-[11px] font-bold text-[#6d7c98]">
                         {order.fulfillmentType === "pickup" ? <ShoppingCart size={12} /> : <MapPin size={12} />}
-                        {order.fulfillmentType === "pickup" ? "Store pickup" : "Delivery"}{order.promisedSlot ? ` · ${order.promisedSlot}` : ""}
+                        {order.fulfillmentType === "pickup" ? t("orders.row.pickup") : t("orders.row.delivery")}{order.promisedSlot ? ` · ${order.promisedSlot}` : ""}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-start gap-2 text-right">
                       <div>
-                        <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${STATUS_STYLE[order.status]}`}>{STATUS_LABEL[order.status]}</span>
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${STATUS_STYLE[order.status]}`}>{t(STATUS_LABEL[order.status])}</span>
                         <div className="mt-1 flex justify-end gap-1">
-                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">{CHANNEL_LABEL[order.sourceChannel]}</span>
-                          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${PAYMENT_STYLE[order.paymentStatus]}`}>{PAYMENT_LABEL[order.paymentStatus]}</span>
+                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">{t(CHANNEL_LABEL[order.sourceChannel])}</span>
+                          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${PAYMENT_STYLE[order.paymentStatus]}`}>{t(PAYMENT_LABEL[order.paymentStatus])}</span>
                         </div>
-                        <p className="mt-1 text-[10px] font-semibold text-[#8290a8]">{timeAgo(order.createdAt)}</p>
+                        <p className="mt-1 text-[10px] font-semibold text-[#8290a8]">{timeAgo(t, order.createdAt)}</p>
                       </div>
                       <ChevronRight size={16} className="mt-1 text-[#9aa7bd]" />
                     </div>
@@ -513,7 +536,7 @@ export default function OrdersReceivedPage() {
                   <div className="mt-3 flex items-center justify-between rounded-xl border border-[#eef2f8] bg-[#f9fbfe] px-3 py-2 text-[12.5px]">
                     <span className="min-w-0 truncate text-[#334364]">
                       {order.items.slice(0, 3).map((it) => `${it.qty}× ${it.name}`).join(" · ")}
-                      {order.items.length > 3 ? ` +${order.items.length - 3} more` : ""}
+                      {order.items.length > 3 ? ` ${t("orders.row.moreItems", { count: order.items.length - 3 })}` : ""}
                     </span>
                     <span className="ml-3 shrink-0 font-black text-[var(--brand-ink)]">{fmtRs(order.estimatedTotal)}</span>
                   </div>
@@ -526,7 +549,7 @@ export default function OrdersReceivedPage() {
                           onClick={(e: MouseEvent) => { e.stopPropagation(); setSelectedId(order.id); }}
                           className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold text-white shadow-sm sm:col-span-1"
                         >
-                          <ChevronRight size={15} /> Review & confirm
+                          <ChevronRight size={15} /> {t("orders.row.reviewConfirm")}
                         </button>
                       ) : order.status === "accepted" ? (
                         <button
@@ -535,7 +558,7 @@ export default function OrdersReceivedPage() {
                           onClick={(e: MouseEvent) => { e.stopPropagation(); acceptAndBill(order); }}
                           className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-3 text-[12px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
                         >
-                          <ShoppingCart size={14} /> {openingOrderId === order.id ? "Opening..." : "Open in Billing"}
+                          <ShoppingCart size={14} /> {openingOrderId === order.id ? t("orders.row.opening") : t("orders.row.openInBilling")}
                         </button>
                       ) : (
                         <button
@@ -544,7 +567,7 @@ export default function OrdersReceivedPage() {
                           onClick={(e: MouseEvent) => { e.stopPropagation(); statusMutation.mutate({ id: order.id, next: "fulfilled" }); }}
                           className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#16a34a] px-3 text-[12px] font-bold text-white shadow-sm disabled:opacity-60"
                         >
-                          <PackageCheck size={14} /> Complete handover
+                          <PackageCheck size={14} /> {t("orders.row.completeHandover")}
                         </button>
                       )}
                       <button
@@ -552,7 +575,7 @@ export default function OrdersReceivedPage() {
                         onClick={(e: MouseEvent) => { e.stopPropagation(); messageCustomer(order, order.status === "accepted" ? "ready" : "received"); }}
                         className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-3 text-[12px] font-bold text-[#16a34a]"
                       >
-                        <MessageCircle size={14} /> Message
+                        <MessageCircle size={14} /> {t("orders.row.message")}
                       </button>
                       {order.status === "accepted" ? (
                         <button
@@ -561,7 +584,7 @@ export default function OrdersReceivedPage() {
                           onClick={(e: MouseEvent) => { e.stopPropagation(); statusMutation.mutate({ id: order.id, next: "ready" }); }}
                           className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-3 text-[12px] font-bold text-[#405273] sm:col-span-1"
                         >
-                          <CheckCircle2 size={14} /> Mark ready
+                          <CheckCircle2 size={14} /> {t("orders.row.markReady")}
                         </button>
                       ) : null}
                     </div>
@@ -579,7 +602,7 @@ export default function OrdersReceivedPage() {
                 onClick={() => void ordersQuery.fetchNextPage()}
                 className="rounded-xl border border-[#dfe7f2] bg-white px-5 py-2.5 text-[12.5px] font-bold text-[#405273] hover:bg-[var(--brand-softer)] disabled:cursor-wait disabled:opacity-60"
               >
-                {ordersQuery.isFetchingNextPage ? "Loading..." : "Load older orders"}
+                {ordersQuery.isFetchingNextPage ? t("orders.loadingShort") : t("orders.loadOlder")}
               </button>
             </div>
           ) : null}
@@ -620,40 +643,40 @@ function StatCard({
 
 // ── Order detail (reference-style: banner, items table, stepper, sidebar) ─────
 
-const BANNER: Record<CustomerOrder["status"], { title: string; desc: string; icon: React.ReactNode; tint: string }> = {
+const BANNER: Record<CustomerOrder["status"], { titleKey: TranslationKey; descKey: TranslationKey; icon: React.ReactNode; tint: string }> = {
   new: {
-    title: "Order Received Successfully",
-    desc: "The customer order has been received and is awaiting your confirmation.",
+    titleKey: "orders.banner.new.title",
+    descKey: "orders.banner.new.desc",
     icon: <CheckCircle2 size={30} />,
     tint: "bg-[#e9fbf0] text-[#16a34a]",
   },
   accepted: {
-    title: "Order Confirmed — Preparing",
-    desc: "Open it in Billing to adjust items and rates, then save the final bill.",
+    titleKey: "orders.banner.accepted.title",
+    descKey: "orders.banner.accepted.desc",
     icon: <ChefHat size={30} />,
     tint: "bg-[#eaf2ff] text-[var(--brand)]",
   },
   ready: {
-    title: "Order Ready for Handover",
-    desc: "The customer can collect it now, or the delivery can leave the store.",
+    titleKey: "orders.banner.ready.title",
+    descKey: "orders.banner.ready.desc",
     icon: <PackageCheck size={30} />,
     tint: "bg-[#f3efff] text-[#7c3aed]",
   },
   fulfilled: {
-    title: "Order Completed",
-    desc: "This order has been billed and handed over.",
+    titleKey: "orders.banner.fulfilled.title",
+    descKey: "orders.banner.fulfilled.desc",
     icon: <PackageCheck size={30} />,
     tint: "bg-[#e9fbf0] text-[#16a34a]",
   },
   rejected: {
-    title: "Order Rejected",
-    desc: "This order was declined. The customer sees it as declined on their tracker.",
+    titleKey: "orders.banner.rejected.title",
+    descKey: "orders.banner.rejected.desc",
     icon: <XCircle size={30} />,
     tint: "bg-[#fff1f2] text-[#e11d48]",
   },
   cancelled: {
-    title: "Order Cancelled",
-    desc: "This order is closed and cannot be moved back into preparation.",
+    titleKey: "orders.banner.cancelled.title",
+    descKey: "orders.banner.cancelled.desc",
     icon: <XCircle size={30} />,
     tint: "bg-[#fff1f2] text-[#be123c]",
   },
@@ -684,6 +707,7 @@ function OrderDetail({
   onPrint: () => void;
   onCopy: () => void;
 }) {
+  const { t } = useAppLanguage();
   const banner = BANNER[order.status];
   const totalQty = order.items.reduce((sum, it) => sum + it.qty, 0);
   const active = order.status === "new" || order.status === "accepted" || order.status === "ready";
@@ -697,7 +721,7 @@ function OrderDetail({
   return (
     <div>
       <button type="button" onClick={onBack} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273] hover:text-[var(--brand)]">
-        <ArrowLeft size={14} /> All orders
+        <ArrowLeft size={14} /> {t("orders.detail.back")}
       </button>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -708,21 +732,21 @@ function OrderDetail({
             <div className="flex items-start gap-4">
               <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl ${banner.tint}`}>{banner.icon}</span>
               <div className="min-w-0">
-                <h2 className="font-display text-lg font-black text-[var(--brand-ink)]">{banner.title}</h2>
-                <p className="mt-0.5 text-[12.5px] text-[#5b6b85]">{banner.desc}</p>
+                <h2 className="font-display text-lg font-black text-[var(--brand-ink)]">{t(banner.titleKey)}</h2>
+                <p className="mt-0.5 text-[12.5px] text-[#5b6b85]">{t(banner.descKey)}</p>
               </div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#eef2f8] pt-4 sm:grid-cols-4">
-              <BannerField label="Order ID" value={orderCode(order.id)} />
-              <BannerField label="Date & Time" value={fullDateTime(order.createdAt)} />
+              <BannerField label={t("orders.detail.orderId")} value={orderCode(order.id)} />
+              <BannerField label={t("orders.detail.dateTime")} value={fullDateTime(order.createdAt)} />
               <div>
-                <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">Order Source</p>
-                <p className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-[var(--brand-ink)]"><QrCode size={13} className="text-[var(--brand)]" /> {CHANNEL_LABEL[order.sourceChannel]}</p>
+                <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">{t("orders.detail.orderSource")}</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-[var(--brand-ink)]"><QrCode size={13} className="text-[var(--brand)]" /> {t(CHANNEL_LABEL[order.sourceChannel])}</p>
               </div>
               <div>
-                <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">Status</p>
+                <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">{t("orders.detail.status")}</p>
                 <span className={`mt-1 inline-block rounded-full px-2 py-1 text-[10px] font-black uppercase ${STATUS_STYLE[order.status]}`}>
-                  {STATUS_LABEL[order.status]}
+                  {t(STATUS_LABEL[order.status])}
                 </span>
               </div>
             </div>
@@ -730,14 +754,14 @@ function OrderDetail({
 
           {/* Items table */}
           <div className="rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)] sm:p-5">
-            <p className="mb-3 inline-flex items-center gap-2 text-[13.5px] font-black text-[var(--brand-ink)]"><ShoppingCart size={15} className="text-[var(--brand)]" /> Order Items</p>
+            <p className="mb-3 inline-flex items-center gap-2 text-[13.5px] font-black text-[var(--brand-ink)]"><ShoppingCart size={15} className="text-[var(--brand)]" /> {t("orders.detail.orderItems")}</p>
             <div className="space-y-2 sm:hidden">
               {order.items.map((it, i) => (
                 <div key={`${it.productId}-${i}`} className="flex items-center gap-3 rounded-xl border border-[#edf2f8] bg-[#fbfdff] p-3">
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eef4ff] text-sm font-black text-[var(--brand)]">{it.name.charAt(0).toUpperCase()}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12.5px] font-black text-[var(--brand-ink)]">{it.name}</p>
-                    <p className="mt-0.5 text-[11px] font-semibold capitalize text-[#6d7c98]">{it.qty} × {it.unit} · {fmtRs(it.price)} each</p>
+                    <p className="mt-0.5 text-[11px] font-semibold capitalize text-[#6d7c98]">{t("orders.detail.each", { qty: it.qty, unit: it.unit, price: fmtRs(it.price) })}</p>
                   </div>
                   <span className="shrink-0 text-[13px] font-black tabular-nums text-[var(--brand-ink)]">{fmtRs(it.qty * it.price)}</span>
                 </div>
@@ -748,11 +772,11 @@ function OrderDetail({
                 <thead>
                   <tr className="border-b border-[#eef2f8] text-left text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">
                     <th className="pb-2 pr-2">#</th>
-                    <th className="pb-2 pr-2">Item</th>
-                    <th className="pb-2 pr-2 text-right">Qty</th>
-                    <th className="pb-2 pr-2">Unit</th>
-                    <th className="pb-2 pr-2 text-right">Rate (Rs)</th>
-                    <th className="pb-2 text-right">Amount (Rs)</th>
+                    <th className="pb-2 pr-2">{t("orders.detail.colItem")}</th>
+                    <th className="pb-2 pr-2 text-right">{t("orders.detail.colQty")}</th>
+                    <th className="pb-2 pr-2">{t("orders.detail.colUnit")}</th>
+                    <th className="pb-2 pr-2 text-right">{t("orders.detail.colRate")}</th>
+                    <th className="pb-2 text-right">{t("orders.detail.colAmount")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -778,19 +802,19 @@ function OrderDetail({
             </div>
             <div className="mt-4 ml-auto w-full max-w-[300px] space-y-1.5 text-[12.5px]">
               <div className="flex items-center justify-between text-[#5b6b85]">
-                <span>Subtotal</span><span className="tabular-nums">{fmtRs(order.estimatedTotal)}</span>
+                <span>{t("orders.detail.subtotal")}</span><span className="tabular-nums">{fmtRs(order.estimatedTotal)}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-[#f4f8ff] px-2.5 py-2 text-[13.5px] font-black text-[var(--brand-ink)]">
-                <span>Estimated Total</span><span className="tabular-nums">{fmtRs(order.estimatedTotal)}</span>
+                <span>{t("orders.detail.estimatedTotal")}</span><span className="tabular-nums">{fmtRs(order.estimatedTotal)}</span>
               </div>
-              <p className="text-[10.5px] leading-snug text-[#8290a8]">Discounts, delivery and GST are applied at billing.</p>
+              <p className="text-[10.5px] leading-snug text-[#8290a8]">{t("orders.detail.billingNote")}</p>
             </div>
           </div>
 
           {/* Fulfillment progress */}
           {order.status !== "rejected" && order.status !== "cancelled" && (
             <div className="rounded-2xl border border-[#e6ecf4] bg-white p-5 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
-              <p className="mb-4 inline-flex items-center gap-2 text-[13.5px] font-black text-[var(--brand-ink)]"><PackageCheck size={15} className="text-[var(--brand)]" /> Fulfillment Progress</p>
+              <p className="mb-4 inline-flex items-center gap-2 text-[13.5px] font-black text-[var(--brand-ink)]"><PackageCheck size={15} className="text-[var(--brand)]" /> {t("orders.detail.progress")}</p>
               <FulfillmentStepper order={order} />
             </div>
           )}
@@ -804,13 +828,13 @@ function OrderDetail({
                 onClick={onAcceptBill}
                 className="col-span-2 inline-flex min-h-12 items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-4 text-[12.5px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70 sm:col-span-1"
               >
-                <CheckCircle2 size={15} /> {opening ? "Opening..." : order.status === "new" ? "Confirm & Open in Billing" : "Open in Billing"}
+                <CheckCircle2 size={15} /> {opening ? t("orders.row.opening") : order.status === "new" ? t("orders.detail.confirmAndBill") : t("orders.row.openInBilling")}
               </button>
               <button type="button" onClick={onPrint} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-3 text-[12.5px] font-bold text-[#405273]">
-                <Printer size={15} /> Print Slip
+                <Printer size={15} /> {t("orders.detail.printSlip")}
               </button>
               <button type="button" onClick={onMessage} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-3 text-[12.5px] font-bold text-[#16a34a]">
-                <MessageCircle size={15} /> WhatsApp Customer
+                <MessageCircle size={15} /> {t("orders.detail.whatsappCustomer")}
               </button>
               {order.status !== "new" ? (
                 <button
@@ -819,7 +843,7 @@ function OrderDetail({
                   onClick={order.status === "accepted" ? onMarkReady : onMarkDone}
                   className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-3 text-[12.5px] font-bold text-[#405273] sm:col-span-1"
                 >
-                  <PackageCheck size={15} /> {order.status === "accepted" ? "Mark Ready" : "Complete handover"}
+                  <PackageCheck size={15} /> {order.status === "accepted" ? t("orders.detail.markReady") : t("orders.row.completeHandover")}
                 </button>
               ) : null}
               <button
@@ -828,7 +852,7 @@ function OrderDetail({
                 onClick={onReject}
                 className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#f0d5d5] bg-[#fff5f5] px-3 text-[12.5px] font-bold text-[#e11d48] sm:col-span-1"
               >
-                <XCircle size={15} /> Reject order
+                <XCircle size={15} /> {t("orders.detail.rejectOrder")}
               </button>
             </div>
           )}
@@ -837,13 +861,13 @@ function OrderDetail({
         {/* Sidebar */}
         <div className="space-y-4">
           {/* Customer details */}
-          <SideCard title="Customer Details">
+          <SideCard title={t("orders.detail.customerDetails")}>
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#eaf2ff] font-display text-[14px] font-black text-[var(--brand)]">{initials}</span>
               <div className="min-w-0">
                 <p className="flex items-center gap-2 font-bold text-[var(--brand-ink)]">
                   <span className="truncate">{order.customerName}</span>
-                  {order.status === "new" && <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[9.5px] font-black uppercase text-[#16a34a]">New</span>}
+                  {order.status === "new" && <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[9.5px] font-black uppercase text-[#16a34a]">{t("orders.detail.newBadge")}</span>}
                 </p>
                 <a href={`tel:${order.customerMobile}`} className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--brand)]">
                   <Phone size={12} /> +91 {order.customerMobile}
@@ -855,52 +879,52 @@ function OrderDetail({
                 <MapPin size={13} className="mt-0.5 shrink-0 text-[#8290a8]" /> {order.customerAddress}
               </p>
             ) : (
-              <p className="mt-2.5 text-[12px] text-[#9aa7bd]">No address given — counter pickup.</p>
+              <p className="mt-2.5 text-[12px] text-[#9aa7bd]">{t("orders.detail.noAddress")}</p>
             )}
           </SideCard>
 
           {/* Payment & fulfillment */}
-          <SideCard title="Payment & Fulfillment">
-            <InfoRow label="Payment" chip="At billing" chipClass="bg-[#eaf2ff] text-[var(--brand)]" />
-            <InfoRow label="Order Source" chip="QR Order" chipClass="bg-[#eaf2ff] text-[var(--brand)]" />
-            <InfoRow label="Fulfillment" value={order.fulfillmentType === "pickup" ? "Store pickup" : "Delivery"} />
-            {order.promisedSlot ? <InfoRow label="Preferred Slot" value={order.promisedSlot} /> : null}
-            <InfoRow label="Placed On" value={fullDateTime(order.createdAt)} />
-            <InfoRow label="Status" chip={STATUS_LABEL[order.status]} chipClass={STATUS_STYLE[order.status]} />
-            {order.billId ? <InfoRow label="Linked Bill" value={order.billId.length > 14 ? `…${order.billId.slice(-10)}` : order.billId} mono /> : null}
+          <SideCard title={t("orders.detail.paymentFulfillment")}>
+            <InfoRow label={t("orders.detail.payment")} chip={t("orders.detail.atBilling")} chipClass="bg-[#eaf2ff] text-[var(--brand)]" />
+            <InfoRow label={t("orders.detail.orderSource")} chip={t("orders.detail.qrOrder")} chipClass="bg-[#eaf2ff] text-[var(--brand)]" />
+            <InfoRow label={t("orders.detail.fulfillment")} value={order.fulfillmentType === "pickup" ? t("orders.row.pickup") : t("orders.row.delivery")} />
+            {order.promisedSlot ? <InfoRow label={t("orders.detail.preferredSlot")} value={order.promisedSlot} /> : null}
+            <InfoRow label={t("orders.detail.placedOn")} value={fullDateTime(order.createdAt)} />
+            <InfoRow label={t("orders.detail.status")} chip={t(STATUS_LABEL[order.status])} chipClass={STATUS_STYLE[order.status]} />
+            {order.billId ? <InfoRow label={t("orders.detail.linkedBill")} value={order.billId.length > 14 ? `…${order.billId.slice(-10)}` : order.billId} mono /> : null}
           </SideCard>
 
           {/* Order summary */}
-          <SideCard title="Order Summary">
-            <InfoRow label="Total Items" value={`${order.itemCount} item${order.itemCount === 1 ? "" : "s"} · ${totalQty} qty`} />
-            <InfoRow label="Estimated Amount" value={fmtRs(order.estimatedTotal)} />
+          <SideCard title={t("orders.detail.orderSummary")}>
+            <InfoRow label={t("orders.detail.totalItems")} value={order.itemCount === 1 ? t("orders.detail.itemsQty", { count: order.itemCount, qty: totalQty }) : t("orders.detail.itemsQtyPlural", { count: order.itemCount, qty: totalQty })} />
+            <InfoRow label={t("orders.detail.estimatedAmount")} value={fmtRs(order.estimatedTotal)} />
             <div className="mt-2 flex items-center justify-between border-t border-[#eef2f8] pt-2.5">
-              <span className="text-[13px] font-black text-[var(--brand-ink)]">Grand Total</span>
+              <span className="text-[13px] font-black text-[var(--brand-ink)]">{t("orders.detail.grandTotal")}</span>
               <span className="font-display text-[16px] font-black text-[var(--brand)]">{fmtRs(order.estimatedTotal)}</span>
             </div>
-            <p className="mt-1 text-[10.5px] text-[#8290a8]">Estimated — final price is set when you bill it.</p>
+            <p className="mt-1 text-[10.5px] text-[#8290a8]">{t("orders.detail.estimatedNote")}</p>
           </SideCard>
 
           {/* Notes */}
-          <SideCard title="Notes / Instructions">
+          <SideCard title={t("orders.detail.notes")}>
             {order.note ? (
               <p className="flex items-start gap-1.5 text-[12.5px] italic leading-snug text-[#5b6b85]">
                 <StickyNote size={13} className="mt-0.5 shrink-0 text-[#c2410c]" /> "{order.note}"
               </p>
             ) : (
-              <p className="text-[12px] text-[#9aa7bd]">No notes from the customer.</p>
+              <p className="text-[12px] text-[#9aa7bd]">{t("orders.detail.noNotes")}</p>
             )}
           </SideCard>
 
           {/* Quick actions */}
-          <SideCard title="Quick Actions">
+          <SideCard title={t("orders.detail.quickActions")}>
             <div className="grid grid-cols-3 gap-2">
-              <QuickAction icon={<ShoppingCart size={16} />} label="Open in Billing" disabled={!active || opening} onClick={onAcceptBill} />
-              <QuickAction icon={<MessageCircle size={16} />} label="WhatsApp" onClick={onMessage} />
-              <QuickAction icon={<Printer size={16} />} label="Print Slip" onClick={onPrint} />
-              <QuickAction icon={<Copy size={16} />} label="Copy Details" onClick={onCopy} />
-              <QuickAction icon={<PackageCheck size={16} />} label={order.status === "accepted" ? "Mark Ready" : order.status === "ready" ? "Complete" : "Next status"} disabled={!active || mutationPending || order.status === "new"} onClick={order.status === "accepted" ? onMarkReady : onMarkDone} />
-              <QuickAction icon={<XCircle size={16} />} label="Reject" tone="danger" disabled={!active || mutationPending} onClick={onReject} />
+              <QuickAction icon={<ShoppingCart size={16} />} label={t("orders.row.openInBilling")} disabled={!active || opening} onClick={onAcceptBill} />
+              <QuickAction icon={<MessageCircle size={16} />} label={t("orders.detail.whatsapp")} onClick={onMessage} />
+              <QuickAction icon={<Printer size={16} />} label={t("orders.detail.printSlip")} onClick={onPrint} />
+              <QuickAction icon={<Copy size={16} />} label={t("orders.detail.copyDetails")} onClick={onCopy} />
+              <QuickAction icon={<PackageCheck size={16} />} label={order.status === "accepted" ? t("orders.detail.markReady") : order.status === "ready" ? t("orders.detail.complete") : t("orders.detail.nextStatus")} disabled={!active || mutationPending || order.status === "new"} onClick={order.status === "accepted" ? onMarkReady : onMarkDone} />
+              <QuickAction icon={<XCircle size={16} />} label={t("orders.detail.reject")} tone="danger" disabled={!active || mutationPending} onClick={onReject} />
             </div>
           </SideCard>
         </div>
@@ -918,14 +942,15 @@ function BannerField({ label, value }: { label: string; value: string }) {
   );
 }
 
-const STEPS = [
-  { label: "Order Received", pendingSub: "" },
-  { label: "Confirm by Store", pendingSub: "Next step" },
-  { label: "Ready", pendingSub: "Pending" },
-  { label: "Completed", pendingSub: "Pending" },
-] as const;
+const STEPS: ReadonlyArray<{ labelKey: TranslationKey }> = [
+  { labelKey: "orders.step.received" },
+  { labelKey: "orders.step.confirm" },
+  { labelKey: "orders.step.ready" },
+  { labelKey: "orders.step.completed" },
+];
 
 function FulfillmentStepper({ order }: { order: CustomerOrder }) {
+  const { t } = useAppLanguage();
   // First step that is NOT done: new → confirm(1); accepted → bill(2); fulfilled → past the end.
   const currentIndex = order.status === "new" ? 1 : order.status === "accepted" ? 2 : order.status === "ready" ? 3 : STEPS.length;
 
@@ -936,7 +961,7 @@ function FulfillmentStepper({ order }: { order: CustomerOrder }) {
           const done = i < currentIndex;
           const activeStep = i === currentIndex;
           return (
-            <div key={step.label} className="relative flex justify-center">
+            <div key={step.labelKey} className="relative flex justify-center">
               {i > 0 && <span className={`absolute left-0 right-1/2 top-1/2 h-0.5 -translate-y-1/2 ${i <= currentIndex - 1 ? "bg-[#16a34a]" : "bg-[#e6ecf4]"}`} />}
               {i < STEPS.length - 1 && <span className={`absolute left-1/2 right-0 top-1/2 h-0.5 -translate-y-1/2 ${i < currentIndex - 1 ? "bg-[#16a34a]" : "bg-[#e6ecf4]"}`} />}
               <span
@@ -956,12 +981,12 @@ function FulfillmentStepper({ order }: { order: CustomerOrder }) {
           const activeStep = i === currentIndex;
           const sub =
             i === 0 ? fullDateTime(order.createdAt)
-            : done ? (i === STEPS.length - 1 ? timeAgo(order.updatedAt) : "Done")
-            : activeStep ? (i === 1 ? "Next step" : "Open in Billing")
-            : "Pending";
+            : done ? (i === STEPS.length - 1 ? timeAgo(t, order.updatedAt) : t("orders.step.done"))
+            : activeStep ? (i === 1 ? t("orders.step.nextStep") : t("orders.step.openInBilling"))
+            : t("orders.step.pending");
           return (
-            <div key={step.label} className="px-1">
-              <p className={`text-[11px] font-black leading-tight ${done || activeStep ? "text-[var(--brand-ink)]" : "text-[#9aa7bd]"}`}>{step.label}</p>
+            <div key={step.labelKey} className="px-1">
+              <p className={`text-[11px] font-black leading-tight ${done || activeStep ? "text-[var(--brand-ink)]" : "text-[#9aa7bd]"}`}>{t(step.labelKey)}</p>
               <p className="mt-0.5 truncate text-[10px] font-semibold text-[#8290a8]">{sub}</p>
             </div>
           );

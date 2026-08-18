@@ -1,45 +1,62 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { billingEn } from "./translations/billing";
-import { customersEn } from "./translations/customers";
-import { productsEn } from "./translations/products";
-import { reportsEn } from "./translations/reports";
-import { restaurantEn } from "./translations/restaurant";
-import { shellEn } from "./translations/shell";
-import { manufacturingEn } from "./translations/manufacturing";
-import { inventoryEn } from "./translations/inventory";
-import { settingsPagesEn } from "./translations/settings-pages";
+import { englishCriticalTranslations } from "./translations/english-critical";
+// TYPE ONLY, and that is the entire point of the split. A value import here puts
+// nine secondary-screen tables back into the startup chunk every merchant
+// downloads; a type import is erased and still gives `TranslationKey` every key.
+import type { englishDeferredTranslations } from "./translations/english-deferred";
 
 export type AppLanguage = "en" | "hi";
 
 const LANGUAGE_STORAGE_KEY = "kirana-os:ui-language:v1";
 
-const en = { ...shellEn, ...billingEn, ...productsEn, ...customersEn, ...restaurantEn, ...reportsEn, ...manufacturingEn, ...inventoryEn, ...settingsPagesEn };
+/**
+ * The complete key catalogue as a TYPE; only the boot half is a value.
+ *
+ * Every key in the product is still in this union, so a screen cannot call `t()`
+ * with a key nobody wrote. What changed is that the STRINGS for the deferred half
+ * arrive after mount instead of inside the startup download.
+ */
+type EnglishCatalogue = typeof englishCriticalTranslations & typeof englishDeferredTranslations;
+
+// `EN_MODULES` and the complete `englishTranslations` moved to
+// translations/english.ts. Both statically import the deferred half, so importing
+// either from here would undo the split — the same rule hindi.ts already carries.
+// Tests and tooling take them from there.
 
 /**
- * The registered modules, as data rather than only as a spread.
+ * What `t()` actually reads. Starts as the boot half and absorbs the rest.
  *
- * The spread above is what gives `TranslationKey` its literal type; this map is what
- * lets the completeness test say "every registered module", so adding a module to the
- * app without adding it to the Hindi side fails a test instead of shipping an English
- * string mid-bill. `i18n-dictionary-completeness.test.ts` asserts the two agree.
+ * Mutable, unlike the frozen object this replaced, because the deferred tables
+ * land after the module has already been evaluated. Every write is an
+ * `Object.assign` of a whole table, so a key is either absent or final — a
+ * half-written string is not a state this can be in.
  */
-export const EN_MODULES = {
-  shell: shellEn,
-  billing: billingEn,
-  products: productsEn,
-  customers: customersEn,
-  restaurant: restaurantEn,
-  reports: reportsEn,
-  manufacturing: manufacturingEn,
-  inventory: inventoryEn,
-  settingsPages: settingsPagesEn,
-} as const;
+const en: Partial<Record<string, string>> = { ...englishCriticalTranslations };
 
-// The English dictionary is the key catalog, so a new key only has to be declared
-// once. Each Hindi table is typed against its English counterpart, which is what
-// makes a missing Hindi string a build failure instead of an English word
-// surfacing mid-bill.
-export type TranslationKey = keyof typeof en;
+let englishDeferredRequest: Promise<boolean> | null = null;
+
+/**
+ * Fetch the rest of the English catalogue.
+ *
+ * Kicked off at module scope below, before the first render. Nothing waits on it:
+ * the screens it serves are all behind lazy route chunks that are themselves a
+ * network request away, so in practice it has landed long before one of them can
+ * render. A failed fetch is swallowed for the same reason the Hindi one is — a
+ * chunk that will not load must not stop the counter from selling.
+ */
+export function loadDeferredEnglish(): Promise<boolean> {
+  if (!englishDeferredRequest) {
+    englishDeferredRequest = import("./translations/english-deferred")
+      .then((module) => {
+        Object.assign(en, module.englishDeferredTranslations);
+        return true;
+      })
+      .catch(() => false);
+  }
+  return englishDeferredRequest;
+}
+
+export type TranslationKey = keyof EnglishCatalogue;
 
 type Dictionary = Record<TranslationKey, string>;
 /** Hindi arrives in two stages, so the boot half is usable on its own. */
@@ -119,6 +136,28 @@ function interpolate(template: string, vars?: TranslationVars): string {
   });
 }
 
+/**
+ * Hindi if it has landed, else English, else the key itself.
+ *
+ * That last step is new and is the one cost of splitting English. It is reachable
+ * only for a deferred key read before its chunk arrives — a window that opens at
+ * module scope and closes on one cached request, while every screen those keys
+ * belong to sits behind a lazy route chunk that has not been fetched yet either.
+ *
+ * It returns the key rather than an empty string deliberately: a blank label is
+ * indistinguishable from a working screen with nothing to say, and would be found
+ * by a shopkeeper. A visible `orders.detail.grandTotal` is found in review.
+ */
+function resolve(
+  language: AppLanguage,
+  hindi: PartialDictionary | null,
+  key: TranslationKey,
+  vars?: TranslationVars,
+): string {
+  const hindiValue = language === "hi" ? hindi?.[key] : undefined;
+  return interpolate(hindiValue ?? en[key] ?? key, vars);
+}
+
 interface AppLanguageContextValue {
   language: AppLanguage;
   setLanguage: (language: AppLanguage) => void;
@@ -150,10 +189,24 @@ export function getInitialLanguage(): AppLanguage {
 // main.tsx additionally waits on the CRITICAL half before mounting React — see the
 // note there. The rest is requested in the same breath but nothing waits on it.
 if (getInitialLanguage() === "hi") void loadHindiDictionary();
+// Every shop, not just English ones: this half is the fallback under every gap in
+// the Hindi table, so a Hindi counter needs it exactly as much.
+void loadDeferredEnglish();
 
 export function AppLanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<AppLanguage>(getInitialLanguage);
   const [hindi, setHindi] = useState<PartialDictionary | null>(hindiDictionary);
+  // `en` is mutated in place when the deferred half lands, so React has no reason
+  // to re-render on its own. This counter is the nudge — without it a screen that
+  // mounted during the fetch would keep whatever it first rendered.
+  const [englishTier, setEnglishTier] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    void loadDeferredEnglish().then((loaded) => {
+      if (loaded && !cancelled) setEnglishTier((tier) => tier + 1);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (typeof document !== "undefined") document.documentElement.lang = language === "hi" ? "hi" : "en";
@@ -183,9 +236,10 @@ export function AppLanguageProvider({ children }: { children: ReactNode }) {
   // English is the complete catalogue and the fallback in every gap: before the
   // Hindi chunk lands, and if its fetch failed. A screen never renders a raw key.
   const t = useCallback(
-    (key: TranslationKey, vars?: TranslationVars) =>
-      interpolate((language === "hi" ? hindi?.[key] : undefined) ?? en[key], vars),
-    [language, hindi],
+    (key: TranslationKey, vars?: TranslationVars) => resolve(language, hindi, key, vars),
+    // `englishTier` is not read in the body on purpose: it exists to give this
+    // callback a new identity once the deferred strings are in `en`.
+    [language, hindi, englishTier],
   );
   const value = useMemo(() => ({ language, setLanguage, t }), [language, setLanguage, t]);
 
@@ -201,7 +255,7 @@ export function AppLanguageProvider({ children }: { children: ReactNode }) {
 const DETACHED: AppLanguageContextValue = {
   language: "en",
   setLanguage: () => {},
-  t: (key, vars) => interpolate(en[key], vars),
+  t: (key, vars) => resolve("en", null, key, vars),
 };
 
 export function useAppLanguage() {
@@ -234,7 +288,15 @@ export function useAppLanguage() {
 export type Translate = AppLanguageContextValue["t"];
 
 /** English catalogue, exposed for the dictionary-completeness test. */
-export const englishTranslations = en;
+/**
+ * The boot half only, for the one runtime caller that needs an English string
+ * outside React (`shop-billing.receiptCreditWordEnglish`). Everything it reads is
+ * a `billing.*` key, which is why the credit words were moved into that table.
+ *
+ * Tests and tooling want the WHOLE catalogue and must import
+ * `englishTranslations` from translations/english.ts instead.
+ */
+export const englishCritical = englishCriticalTranslations;
 
 /**
  * Loads and returns the Hindi tables. For tests and preloading, not render paths.
