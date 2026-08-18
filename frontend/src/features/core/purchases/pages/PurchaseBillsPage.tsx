@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { TradeFocusStrip } from "@/components/shared";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { getShopPurchasesProfile } from "@/features/core/settings/shop-purchases";
 import { cn } from "@/lib/utils";
@@ -110,9 +111,33 @@ interface PurchaseLine {
   productId: string;
   qty: string;
   cost: string;
+  // Only ever filled for a batch-tracked product. Held as strings because they
+  // come straight off the printed strip through date and text inputs.
+  batchNumber: string;
+  manufacturedOn: string;
+  expiresOn: string;
+  batchMrp: string;
+}
+
+/**
+ * Whether this line is receiving stock that carries a lot.
+ *
+ * Read from the PRODUCT, not from the shop's business type. Batch tracking is
+ * per product and opt-in — a kirana store enables it on dated food and on
+ * nothing else — so a trade-level test would demand a batch number for a shop's
+ * every last packet of biscuits.
+ */
+function lineNeedsBatch(products: Product[], line: PurchaseLine): boolean {
+  return Boolean(products.find((product) => product.id === line.productId)?.batchTrackingEnabled);
+}
+
+/** A blank line, so every place that adds one agrees on the shape. */
+function emptyPurchaseLine(key: number): PurchaseLine {
+  return { key, productId: "", qty: "", cost: "", batchNumber: "", manufacturedOn: "", expiresOn: "", batchMrp: "" };
 }
 
 export default function PurchaseBillsPage() {
+  const { t } = useAppLanguage();
   // Receiving is where a trade's second record gets made — the lot, the serial,
   // the size run — and this screen is the last moment the delivery is in hand.
   const tradeProfile = getShopPurchasesProfile(useBusinessTypeKey());
@@ -1025,6 +1050,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   products: Product[]; suppliers: Supplier[]; existingRows: SupplierDueRow[];
   onClose: () => void; onSaved: () => Promise<void> | void;
 }) {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [supplierId, setSupplierId] = useState("");
@@ -1035,7 +1061,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   const [payMode, setPayMode] = useState("upi");
   const [payStatus, setPayStatus] = useState<"paid" | "partial" | "due">("due");
   const [paidInput, setPaidInput] = useState("");
-  const [lines, setLines] = useState<PurchaseLine[]>([{ key: 1, productId: "", qty: "", cost: "" }]);
+  const [lines, setLines] = useState<PurchaseLine[]>([emptyPurchaseLine(1)]);
   const [notes, setNotes] = useState("");
   const [scanOpen, setScanOpen] = useState(false);
   const [scanValue, setScanValue] = useState("");
@@ -1075,7 +1101,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   function reset() {
     setSupplierId(""); setNewSupplierName(""); setMobile("");
     setDate(new Date().toISOString().slice(0, 10)); setPurchaseNo(""); setPayMode("upi"); setPayStatus("due");
-    setPaidInput(""); setLines([{ key: keyRef.current++, productId: "", qty: "", cost: "" }]); setNotes("");
+    setPaidInput(""); setLines([emptyPurchaseLine(keyRef.current++)]); setNotes("");
     setOcrDraft(null); setOcrImage("");
     if (ocrImageRef.current) URL.revokeObjectURL(ocrImageRef.current);
     ocrImageRef.current = "";
@@ -1103,11 +1129,11 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
     if (ocrDraft.invoiceDate && ocrDraft.headerChecks.invoiceDateValid) setDate(ocrDraft.invoiceDate);
     if (ocrDraft.supplierMatch === "exact" && ocrDraft.supplierId) setSupplierId(ocrDraft.supplierId);
     setLines(ocrDraft.lines.length ? ocrDraft.lines.map((line) => ({
-      key: keyRef.current++,
+      ...emptyPurchaseLine(keyRef.current++),
       productId: line.catalogMatch === "exact" ? line.productId ?? "" : "",
       qty: line.prefillAllowed && line.quantity != null ? String(line.quantity) : "",
       cost: line.prefillAllowed && line.unitCost != null ? String(line.unitCost) : "",
-    })) : [{ key: keyRef.current++, productId: "", qty: "", cost: "" }]);
+    })) : [emptyPurchaseLine(keyRef.current++)]);
   }
 
   function acceptBarcode() {
@@ -1126,7 +1152,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
       const empty = current.find((line) => !line.productId);
       const cost = String(product.costPerRateUnit ?? product.costPrice ?? "");
       if (empty) return current.map((line) => line.key === empty.key ? { ...line, productId: product.id, qty: "1", cost } : line);
-      return [...current, { key: keyRef.current++, productId: product.id, qty: "1", cost }];
+      return [...current, { ...emptyPurchaseLine(keyRef.current++), productId: product.id, qty: "1", cost }];
     });
     setScanValue("");
     toast({ title: `${product.name} added`, description: "Scan again to increase quantity." });
@@ -1138,6 +1164,32 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
     const supplierName = supplierId === "new" ? newSupplierName.trim() : selectedSupplier?.name ?? "";
     if (!supplierName) { toast({ title: "Choose a supplier", description: "Pick an existing supplier or add a new one.", variant: "destructive" }); return; }
     if (validLines.length === 0) { toast({ title: "Add at least one product", description: "Each line needs a product, quantity, and cost.", variant: "destructive" }); return; }
+    // Batch-tracked stock without a lot is stock FEFO can never allocate and a
+    // recall can never find. Enforced here rather than on the server: an older
+    // device can hold a purchase queued before this field existed, and an event
+    // that can never validate would block everything behind it in that outbox.
+    const missingBatch = validLines.filter((line) => lineNeedsBatch(products, line) && (!line.batchNumber.trim() || !line.expiresOn));
+    if (missingBatch.length > 0) {
+      const names = missingBatch.map((line) => products.find((product) => product.id === line.productId)?.name).filter(Boolean).join(", ");
+      toast({ title: t("purchases.batch.required"), description: t("purchases.batch.requiredDetail", { names }), variant: "destructive" });
+      return;
+    }
+    // An expiry already in the past is a receipt the shop should refuse at the
+    // door. The server rejects it too; catching it here means the whole bill is
+    // not lost to a single mistyped year.
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const expired = validLines.filter((line) => line.expiresOn && new Date(line.expiresOn) < today);
+    if (expired.length > 0) {
+      const names = expired.map((line) => products.find((product) => product.id === line.productId)?.name).filter(Boolean).join(", ");
+      toast({ title: t("purchases.batch.expired"), description: t("purchases.batch.expiredDetail", { names }), variant: "destructive" });
+      return;
+    }
+    const badDates = validLines.filter((line) => line.manufacturedOn && line.expiresOn && line.manufacturedOn >= line.expiresOn);
+    if (badDates.length > 0) {
+      toast({ title: t("purchases.batch.datesInvalid"), description: t("purchases.batch.datesInvalidDetail"), variant: "destructive" });
+      return;
+    }
+
     if (payStatus === "partial" && (paidAmount <= 0 || paidAmount >= totalAmount)) {
       toast({ title: "Enter partial paid amount", description: "Partial purchases need a paid amount greater than zero and less than the bill total.", variant: "destructive" });
       return;
@@ -1213,6 +1265,17 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
           purchaseDueAmount: lineDue,
           purchaseDueDate: lineDue > 0 ? date : undefined,
           note: notes.trim() || undefined,
+          // Sent only for a line that actually carries a lot: recordReceiptLot
+          // rejects batch details on a product without batch tracking, so an
+          // unconditional spread would fail the whole receipt.
+          ...(lineNeedsBatch(products, line)
+            ? {
+              batchNumber: line.batchNumber.trim(),
+              expiresOn: line.expiresOn,
+              ...(line.manufacturedOn ? { manufacturedOn: line.manufacturedOn } : {}),
+              ...(Number(line.batchMrp) > 0 ? { batchMrp: Number(line.batchMrp) } : {}),
+            }
+            : {}),
         };
       });
       await recordPurchaseBatchLocalFirst(purchaseLines);
@@ -1325,10 +1388,33 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
               <Input className="h-9 px-2 text-[12px]" type="number" min="0" step="0.01" placeholder="₹0" value={line.cost} onChange={(e) => setLine(line.key, { cost: e.target.value })} />
               <span className="truncate text-right text-[12px] font-bold text-[var(--brand-ink)]">{fmt(lineTotal(line))}</span>
               <button onClick={() => setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== line.key) : prev))} className="purchase-line-remove" aria-label="Remove line"><Trash2 size={13} /></button>
+              {lineNeedsBatch(products, line) && (
+                /* Spans the whole row: these four sit UNDER the line they belong
+                   to, because a lot read off the wrong strip is worse than a
+                   lot not recorded at all. */
+                <div className="purchase-line-batch">
+                  <div>
+                    <label htmlFor={`batch-no-${line.key}`}>{t("purchases.batch.number")}</label>
+                    <Input id={`batch-no-${line.key}`} className="h-9 px-2 text-[12px]" value={line.batchNumber} placeholder={t("purchases.batch.numberPlaceholder")} onChange={(e) => setLine(line.key, { batchNumber: e.target.value })} />
+                  </div>
+                  <div>
+                    <label htmlFor={`batch-exp-${line.key}`}>{t("purchases.batch.expiry")}</label>
+                    <Input id={`batch-exp-${line.key}`} className="h-9 px-2 text-[12px]" type="date" value={line.expiresOn} onChange={(e) => setLine(line.key, { expiresOn: e.target.value })} />
+                  </div>
+                  <div>
+                    <label htmlFor={`batch-mfg-${line.key}`}>{t("purchases.batch.manufactured")}</label>
+                    <Input id={`batch-mfg-${line.key}`} className="h-9 px-2 text-[12px]" type="date" value={line.manufacturedOn} onChange={(e) => setLine(line.key, { manufacturedOn: e.target.value })} />
+                  </div>
+                  <div>
+                    <label htmlFor={`batch-mrp-${line.key}`}>{t("purchases.batch.mrp")}</label>
+                    <Input id={`batch-mrp-${line.key}`} className="h-9 px-2 text-[12px]" type="number" min="0" step="0.01" placeholder={t("purchases.batch.mrpPlaceholder")} value={line.batchMrp} onChange={(e) => setLine(line.key, { batchMrp: e.target.value })} />
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           <div className="purchase-lines-actions">
-            <button onClick={() => setLines((prev) => [...prev, { key: keyRef.current++, productId: "", qty: "", cost: "" }])}><Plus size={13} /> Add Product</button>
+            <button onClick={() => setLines((prev) => [...prev, emptyPurchaseLine(keyRef.current++)])}><Plus size={13} /> Add Product</button>
             <Button variant="outline" onClick={() => setScanOpen(true)}><Barcode size={13} /> Scan Barcode</Button>
           </div>
 

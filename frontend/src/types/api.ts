@@ -738,6 +738,13 @@ export interface StockMovementInput {
   purchaseDueAmount?: number;
   purchaseDueDate?: string;
   costPerRateUnit?: number;
+  // The lot in hand, for a purchase of batch-tracked stock. Named rather than
+  // left to the index signature below because the server reads exactly these
+  // four and silently records no batch if one is misspelled.
+  batchNumber?: string;
+  manufacturedOn?: string;
+  expiresOn?: string;
+  batchMrp?: number;
   reason?: string;
   note?: string;
   ownerPin?: string;

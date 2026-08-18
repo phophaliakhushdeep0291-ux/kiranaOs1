@@ -11,6 +11,7 @@ import {
   setLocationInventory,
 } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
 
 async function writeRequiredInventoryAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -260,6 +261,7 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
     productId, supplierId, supplierName,
     quantity, enteredUnit, billAmount,
     note, updateCost, updateMinPrice,
+    batchNumber, manufacturedOn, expiresOn, batchMrp,
   } = data;
   const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
 
@@ -374,6 +376,38 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
       },
     });
 
+    // The lot in hand, for stock that carries one.
+    //
+    // Written here rather than left to the batches screen because this is the
+    // only moment the delivery is in front of someone: the number and the date
+    // are printed on the strip and on nothing the shop keeps afterwards. Until
+    // now only the purchase-ORDER receive path recorded a lot, so a shop doing
+    // its receiving on this screen — which is the offline-first one, and the one
+    // most shops actually use — built up batch-tracked stock that FEFO could
+    // never allocate.
+    //
+    // Called only when the receiver actually supplied a batch, NOT whenever the
+    // product is batch-tracked. recordReceiptLot rejects a batch-tracked product
+    // with no lot details, and a device can hold a purchase queued before this
+    // field existed; failing it here would leave an outbox event that can never
+    // succeed, which stops that device syncing anything behind it. The receiving
+    // screen is where the requirement is enforced.
+    const lot = batchNumber || expiresOn
+      ? await recordReceiptLot(tx, {
+        shopId,
+        locationId: location.id,
+        product,
+        receiptItemId: null,
+        quantityBaseQty: qtyInBase,
+        actualRate: pricePerRateUnit,
+        batchNumber,
+        manufacturedOn,
+        expiresOn,
+        mrp: batchMrp,
+        note: note ?? null,
+      })
+      : null;
+
     await writeRequiredInventoryAudit({
       shopId,
       userId: identity.userId ?? null,
@@ -396,6 +430,8 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
         purchaseDueAmount: purchasePayment.purchaseDueAmount,
         idempotencyKey,
         offlineSyncEventId: identity.syncEventId ?? null,
+        inventoryLotId: lot?.id ?? null,
+        batchNumber: lot?.batchNumber ?? null,
       },
       req: identity.req ?? null,
     }, tx);
