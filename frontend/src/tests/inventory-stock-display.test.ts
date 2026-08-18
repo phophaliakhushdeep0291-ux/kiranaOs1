@@ -130,6 +130,20 @@ describe("inventory stock display", () => {
       expect(enrichInventoryRows([], catalogue)).toEqual([]);
     });
 
+    it("does not count a finished product as low stock", () => {
+      // `isLowStock` is `qty <= threshold`, so a product at zero satisfies it.
+      // The panel and the Low Stock filter both drop those rows; the metric card
+      // did not, so it read "1" above an empty panel. All three now agree, and a
+      // finished product is counted once — under Out of Stock.
+      const page = readFileSync("src/features/core/inventory/pages/InventoryPage.tsx", "utf8");
+      expect(page).toContain("const hasStock = (item: InventoryItem) => Number(item.stockBaseQty ?? 0) > 0;");
+      expect(page).toContain("rows.filter((item) => isLowStock(item) && hasStock(item))");
+      expect(page).toContain("(lowStock.data ?? []).filter(hasStock)");
+      // The panel and the table keep their own qty > 0 guards.
+      expect(page).toContain('.filter((item) => Number(item.stockBaseQty ?? 0) > 0)');
+      expect(page).toContain('if (stockFilter === "low") return tracked && qty > 0 && isLowStock(item);');
+    });
+
     it("is what the Low Stock Alerts panel actually calls", () => {
       // The bug was at the call site, not in the merge, so pin the call site.
       const page = readFileSync("src/features/core/inventory/pages/InventoryPage.tsx", "utf8");

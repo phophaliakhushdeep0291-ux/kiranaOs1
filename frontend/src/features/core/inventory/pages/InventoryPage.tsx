@@ -354,8 +354,14 @@ export default function InventoryPage() {
     const soldLast30Days = movementRows
       .filter((row) => (row.action ?? row.type) === "sale" && safeDate(row.createdAt ?? row.created_at).getTime() >= Date.now() - 30 * 86_400_000)
       .reduce((sum, row) => sum + Math.abs(Number(row.quantityDelta ?? row.quantity_delta ?? 0)), 0);
-    const localLowStock = rows.filter(isLowStock);
-    const remoteLowStock = lowStock.data ?? [];
+    // A product sitting at zero belongs to "Out of Stock", not to both cards.
+    // `isLowStock` is `qty <= threshold`, so zero satisfies it — and the panel and
+    // the Low Stock table filter those rows out while this count did not. The
+    // card therefore read 1 above a panel that was empty and a filter that
+    // matched nothing.
+    const hasStock = (item: InventoryItem) => Number(item.stockBaseQty ?? 0) > 0;
+    const localLowStock = rows.filter((item) => isLowStock(item) && hasStock(item));
+    const remoteLowStock = (lowStock.data ?? []).filter(hasStock);
     return {
       products: rows.length,
       lowStock: (remoteLowStock.length > 0 ? remoteLowStock : localLowStock).length,
