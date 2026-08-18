@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
-import { readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
+import { instantCacheUpdatedAt, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import * as customersApi from "@/features/core/customers/api";
 import * as ledgerApi from "@/features/core/ledger/api";
 import { cacheAuthoritativeSummary } from "@/features/core/ledger/authoritative-balances";
@@ -129,6 +129,10 @@ export function useListCustomers(
     ...extra,
     queryKey: getListCustomersQueryKey(params),
     initialData: extra.initialData ?? cached,
+    // Dated so the cached rows paint instantly without posing as the server's
+    // answer: undated initialData counts as fresh from now, so nothing refetches
+    // until staleTime lapses and the screen stays pinned to the cache.
+    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(CUSTOMERS_CACHE_KEY),
     queryFn: async () => {
       const liveCached = readCachedCustomers(params);
       const fromDB = await readCustomersFromIndexedDB(params);
@@ -206,6 +210,10 @@ export function useGetUdharSummary(options?: QueryHookOptions<UdharSummary, Udha
     ...extra,
     queryKey: getGetUdharSummaryQueryKey(),
     initialData: extra.initialData ?? cached,
+    // Dated so the cached rows paint instantly without posing as the server's
+    // answer: undated initialData counts as fresh from now, so nothing refetches
+    // until staleTime lapses and the screen stays pinned to the cache.
+    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(CUSTOMERS_CACHE_KEY),
     queryFn: async () => {
       // Offline falls back to the last server snapshot (plus local movement
       // since) rather than the raw device ledger — see authoritative-balances.
@@ -234,6 +242,10 @@ export function useGetUdharLedger(
     ...extra,
     queryKey: getGetUdharLedgerQueryKey(params),
     initialData: extra.initialData ?? cached,
+    // Dated so the cached rows paint instantly without posing as the server's
+    // answer: undated initialData counts as fresh from now, so nothing refetches
+    // until staleTime lapses and the screen stays pinned to the cache.
+    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(CUSTOMERS_CACHE_KEY),
     queryFn: async () => {
       if (!isBrowserOnline()) return getLocalUdharLedger(normalisedLimit) as LedgerResult<UdharLedgerDisplayEntry>;
       try {

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
-import { RECENT_CACHE_DAYS, pruneRecentRows, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
+import { RECENT_CACHE_DAYS, pruneRecentRows, instantCacheUpdatedAt, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { offlineDB } from "@/lib/offline/db";
 import { getQueryOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as billingApi from "@/features/core/billing/api";
@@ -107,6 +107,10 @@ export function useListBills(
     ...extra,
     queryKey: getListBillsQueryKey(params),
     initialData: extra.initialData ?? { bills: cachedBills, total: cachedBills.length },
+    // Dated so the cached rows paint instantly without posing as the server's
+    // answer: undated initialData counts as fresh from now, so nothing refetches
+    // until staleTime lapses and the screen stays pinned to the cache.
+    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(BILLS_CACHE_KEY),
     queryFn: async () => {
       const liveCachedBills = readCachedBills();
       if (!isBrowserOnline()) return { bills: liveCachedBills, total: liveCachedBills.length };

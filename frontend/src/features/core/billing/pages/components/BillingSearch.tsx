@@ -197,7 +197,13 @@ export function BillingSearch({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanFrameRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const displayedProducts = showAll ? filteredProducts : filteredProducts.slice(0, 10);
+  // How many the grid shows before "View all products" is offered.
+  const COLLAPSED_PRODUCT_COUNT = 10;
+  const displayedProducts = showAll ? filteredProducts : filteredProducts.slice(0, COLLAPSED_PRODUCT_COUNT);
+  // Offering it with nothing behind it is why it read as broken: the counter
+  // taps "View all products", the same ten stay on screen, and the only thing
+  // that ever changed anything was reloading the page.
+  const canExpandProducts = filteredProducts.length > COLLAPSED_PRODUCT_COUNT;
 
   /* ── Capture-on-first-scan ──
      An unknown code opens a sheet asking which item it is. Every field below is set
@@ -893,7 +899,8 @@ export function BillingSearch({
                 ))}
               </div>
 
-              {/* View all products */}
+              {/* View all products — only when there is more to reveal. */}
+              {canExpandProducts && (
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={() => setShowAll((v) => !v)}
@@ -906,6 +913,7 @@ export function BillingSearch({
                   )}
                 </button>
               </div>
+              )}
             </>
           )}
         </div>

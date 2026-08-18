@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
-import { writeInstantCache, readInstantCache } from "@/lib/offline/instant-cache";
+import { instantCacheUpdatedAt, KEEP_EVERY_ROW, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as productsApi from "@/features/core/products/api";
@@ -34,8 +34,15 @@ function filterCachedProducts(products: Product[], params?: ListProductsParams):
   return filtered.slice(0, Number.isFinite(limit) && limit > 0 ? limit : filtered.length);
 }
 
+function productsCacheKey(): string {
+  return `${PRODUCTS_CACHE_KEY}:${getActiveLocationId() ?? "company"}`;
+}
+
 export async function cacheProducts(products: Product[]) {
-  writeInstantCache(`${PRODUCTS_CACHE_KEY}:${getActiveLocationId() ?? "company"}`, products);
+  // KEEP_EVERY_ROW, not the default 30-day window: a catalogue is master data,
+  // and a product nobody has edited in a month is still on the shelf. Pruning it
+  // here quietly deleted it from the billing screen until the next hard reload.
+  writeInstantCache(productsCacheKey(), products, KEEP_EVERY_ROW);
   try {
     await offlineDB.putMany("products", products);
   } catch {
@@ -44,7 +51,7 @@ export async function cacheProducts(products: Product[]) {
 }
 
 function readCachedProducts(params?: ListProductsParams): Product[] {
-  return filterCachedProducts(readInstantCache<Product[]>(`${PRODUCTS_CACHE_KEY}:${getActiveLocationId() ?? "company"}`, []), params);
+  return filterCachedProducts(readInstantCache<Product[]>(productsCacheKey(), []), params);
 }
 
 async function readProductsFromIndexedDB(params?: ListProductsParams): Promise<Product[]> {
@@ -112,6 +119,11 @@ export function useListProducts(
     ...extra,
     queryKey: getListProductsQueryKey(params),
     initialData: extra.initialData ?? (cached.length > 0 ? cached : undefined),
+    // Dated, so the cache paints instantly WITHOUT claiming to be the server's
+    // answer. Undated initialData counts as fresh from now, and under this
+    // screen's staleTime the catalogue was then never fetched at all — billing
+    // sat on whatever the cache held until the user reloaded the page.
+    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(productsCacheKey()),
     queryFn: async () => {
       const liveCached = readCachedProducts(params);
       const fromDB = await readProductsFromIndexedDB(params);

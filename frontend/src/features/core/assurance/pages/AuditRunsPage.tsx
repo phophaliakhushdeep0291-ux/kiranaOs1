@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { getRun, listRuns, startRun } from "../api";
-import { AssuranceDisclaimer, Chip, EmptyState, SectionCard, fmtDateTime, humanize } from "../ui";
+import { AssuranceDisclaimer, Chip, EmptyState, SectionCard, fmtDateTime, humanize, useAssuranceWords } from "../ui";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 function defaultFrom() {
   return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -14,6 +15,8 @@ function defaultFrom() {
 
 export default function AuditRunsPage() {
   const { toast } = useToast();
+  const { t } = useAppLanguage();
+  const words = useAssuranceWords();
   const queryClient = useQueryClient();
   const [from, setFrom] = useState(defaultFrom());
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
@@ -35,34 +38,34 @@ export default function AuditRunsPage() {
       }),
     onSuccess: (result) => {
       toast({
-        title: "Review complete",
-        description: `${result.evaluated} transaction(s) reviewed · ${result.findingsCreated} new · ${result.findingsUpdated} updated.`,
+        title: t("assurance.runDone"),
+        description: t("assurance.runDoneDetail", { count: result.evaluated, created: result.findingsCreated }),
       });
       queryClient.invalidateQueries({ queryKey: ["assurance"] });
       setSelectedRunId(result.runId);
     },
-    onError: (error: Error) => toast({ title: "Run failed", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.runs.failed"), description: error.message, variant: "destructive" }),
   });
 
   return (
     <div className="space-y-4 p-4">
       <header>
-        <h1 className="text-xl font-semibold">Audit Runs</h1>
+        <h1 className="text-xl font-semibold">{t("assurance.runs.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Every evaluation of your records — automatic after each transaction, scheduled, or started by you.
+          {t("assurance.runs.subtitle")}
         </p>
       </header>
 
       <AssuranceDisclaimer />
 
-      <SectionCard title="Start a review" description="Evaluates all transactions recorded in the chosen period">
+      <SectionCard title={t("assurance.runs.start")} description={t("assurance.runs.startHint")}>
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <Label htmlFor="run-from" className="text-xs">From</Label>
+            <Label htmlFor="run-from" className="text-xs">{t("assurance.from")}</Label>
             <Input id="run-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-9 w-40" />
           </div>
           <div>
-            <Label htmlFor="run-to" className="text-xs">To</Label>
+            <Label htmlFor="run-to" className="text-xs">{t("assurance.to")}</Label>
             <Input id="run-to" type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-9 w-40" />
           </div>
           <Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
@@ -76,13 +79,13 @@ export default function AuditRunsPage() {
       </SectionCard>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Recent runs">
+        <SectionCard title={t("assurance.runs.recent")}>
           {runs.isLoading ? (
             <div className="flex h-32 items-center justify-center text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
             </div>
           ) : (runs.data?.runs.length ?? 0) === 0 ? (
-            <EmptyState title="No runs yet" hint="Start a review above." />
+            <EmptyState title={t("assurance.runs.none")} hint={t("assurance.runs.noneHint")} />
           ) : (
             <ul className="divide-y divide-border">
               {runs.data?.runs.map((run) => (
@@ -108,9 +111,9 @@ export default function AuditRunsPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Run detail" description={selectedRunId ? "Per-transaction evaluations from this run" : "Select a run to inspect it"}>
+        <SectionCard title={t("assurance.runs.detail")} description={selectedRunId ? t("assurance.runs.detail") : t("assurance.runs.pick")}>
           {!selectedRunId ? (
-            <EmptyState title="No run selected" />
+            <EmptyState title={t("assurance.runs.pick")} />
           ) : runDetail.isLoading ? (
             <div className="flex h-32 items-center justify-center text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
@@ -118,14 +121,14 @@ export default function AuditRunsPage() {
           ) : runDetail.data ? (
             <div className="space-y-3">
               <dl className="grid gap-1 text-xs sm:grid-cols-2">
-                <Row label="Status" value={humanize(runDetail.data.status)} />
-                <Row label="Reviewed" value={String(runDetail.data.entitiesEvaluated)} />
-                <Row label="Findings created" value={String(runDetail.data.findingsCreated)} />
-                <Row label="Findings updated" value={String(runDetail.data.findingsUpdated)} />
-                <Row label="Engine" value={runDetail.data.engineVersion} mono />
-                <Row label="Rule set" value={runDetail.data.rulesetVersion} mono />
-                <Row label="Started" value={fmtDateTime(runDetail.data.startedAt)} />
-                <Row label="Finished" value={fmtDateTime(runDetail.data.completedAt)} />
+                <Row label={t("assurance.status.OPEN")} value={words.runStatus(runDetail.data.status)} />
+                <Row label={t("assurance.runs.checked")} value={String(runDetail.data.entitiesEvaluated)} />
+                <Row label={t("assurance.runs.newProblems")} value={String(runDetail.data.findingsCreated)} />
+                <Row label={t("assurance.runs.updated")} value={String(runDetail.data.findingsUpdated)} />
+                <Row label={t("assurance.engine")} value={runDetail.data.engineVersion} mono />
+                <Row label={t("assurance.ruleSet")} value={runDetail.data.rulesetVersion} mono />
+                <Row label={t("assurance.runs.started")} value={fmtDateTime(runDetail.data.startedAt)} />
+                <Row label={t("assurance.runs.finished")} value={fmtDateTime(runDetail.data.completedAt)} />
               </dl>
 
               {runDetail.data.summary.findingsByRiskLevel ? (
@@ -147,9 +150,9 @@ export default function AuditRunsPage() {
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-card">
                     <tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="py-1 pr-2 font-medium">Record</th>
-                      <th className="py-1 pr-2 text-right font-medium">Score</th>
-                      <th className="py-1 font-medium">Rules</th>
+                      <th className="py-1 pr-2 font-medium">{t("assurance.runs.record")}</th>
+                      <th className="py-1 pr-2 text-right font-medium">{t("assurance.score")}</th>
+                      <th className="py-1 font-medium">{t("assurance.checks")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -167,7 +170,7 @@ export default function AuditRunsPage() {
               </div>
             </div>
           ) : (
-            <EmptyState title="Run not found" />
+            <EmptyState title={t("assurance.notFound")} />
           )}
         </SectionCard>
       </div>

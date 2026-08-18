@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { offlineDB } from "@/lib/offline/db";
-import { readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
+import { instantCacheUpdatedAt, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as suppliersApi from "@/features/core/suppliers/api";
 import { createSupplierLocalFirst, deleteSupplierLocalFirst, updateSupplierLocalFirst } from "@/features/core/suppliers/local-actions";
@@ -67,6 +67,10 @@ export function useListSuppliers(options?: QueryHookOptions<ListSuppliersRespons
     ...extra,
     queryKey: getListSuppliersQueryKey(),
     initialData: extra.initialData ?? cached,
+    // Dated so the cached rows paint instantly without posing as the server's
+    // answer: undated initialData counts as fresh from now, so nothing refetches
+    // until staleTime lapses and the screen stays pinned to the cache.
+    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(SUPPLIERS_CACHE_KEY),
     queryFn: async () => {
       const liveCached = readCachedSuppliers();
       if (!isBrowserOnline()) return mergeSuppliers([], [...liveCached, ...await readSuppliersFromIndexedDB()]);

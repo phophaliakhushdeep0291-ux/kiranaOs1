@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listFindings, updateFindingStatus, type EntityType, type Finding, type FindingStatus, type RiskLevel } from "../api";
-import { AssuranceDisclaimer, EmptyState, humanize } from "../ui";
+import { AssuranceDisclaimer, EmptyState, useAssuranceWords } from "../ui";
 import { ProblemCard } from "../ProblemCard";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,7 @@ export default function FindingsPage({
   presetRiskLevels,
 }: FindingsPageProps) {
   const { t } = useAppLanguage();
+  const words = useAssuranceWords();
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<FindingStatus | "">("");
   const [riskLevel, setRiskLevel] = useState<RiskLevel | "">(presetRiskLevels?.length === 1 ? presetRiskLevels[0] : "");
@@ -68,34 +69,34 @@ export default function FindingsPage({
           className="h-9 rounded-md border border-input bg-background px-2 text-sm"
           value={status}
           onChange={(event) => { setStatus(event.target.value as FindingStatus | ""); setPage(1); }}
-          aria-label="Filter by status"
+          aria-label={t("assurance.filter.status")}
         >
-          <option value="">All statuses</option>
-          {STATUSES.map((value) => <option key={value} value={value}>{humanize(value)}</option>)}
+          <option value="">{t("assurance.filter.allStatuses")}</option>
+          {STATUSES.map((value) => <option key={value} value={value}>{words.status(value)}</option>)}
         </select>
         <select
           className="h-9 rounded-md border border-input bg-background px-2 text-sm"
           value={riskLevel}
           onChange={(event) => { setRiskLevel(event.target.value as RiskLevel | ""); setPage(1); }}
-          aria-label="Filter by risk level"
+          aria-label={t("assurance.filter.risk")}
         >
-          <option value="">All risk levels</option>
-          {RISK_LEVELS.map((value) => <option key={value} value={value}>{value}</option>)}
+          <option value="">{t("assurance.filter.allRisk")}</option>
+          {RISK_LEVELS.map((value) => <option key={value} value={value}>{words.risk(value)}</option>)}
         </select>
         <select
           className="h-9 rounded-md border border-input bg-background px-2 text-sm"
           value={entityType}
           onChange={(event) => { setEntityType(event.target.value as EntityType | ""); setPage(1); }}
-          aria-label="Filter by record type"
+          aria-label={t("assurance.filter.type")}
         >
-          <option value="">All record types</option>
-          {ENTITY_TYPES.map((value) => <option key={value} value={value}>{humanize(value)}</option>)}
+          <option value="">{t("assurance.filter.allTypes")}</option>
+          {ENTITY_TYPES.map((value) => <option key={value} value={value}>{words.entity(value)}</option>)}
         </select>
         <div className="relative">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="h-9 w-56 pl-8"
-            placeholder="Rule code, e.g. BILL_TOTAL_MISMATCH"
+            placeholder={t("assurance.filter.ruleCode")}
             value={ruleCode}
             onChange={(event) => { setRuleCode(event.target.value.toUpperCase()); setPage(1); }}
           />
@@ -106,7 +107,7 @@ export default function FindingsPage({
             checked={openOnly}
             onChange={(event) => { setOpenOnly(event.target.checked); setPage(1); }}
           />
-          Unresolved only
+          {t("assurance.status.OPEN")}
         </label>
         {pagination ? (
           <span className="ml-auto text-xs text-muted-foreground">
@@ -120,7 +121,7 @@ export default function FindingsPage({
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading findings…
         </div>
       ) : query.isError ? (
-        <EmptyState title="Could not load findings" hint={(query.error as Error)?.message} />
+        <EmptyState title={t("assurance.loadFailed")} hint={(query.error as Error)?.message} />
       ) : findings.length === 0 ? (
         <EmptyState title={t("assurance.empty.title")} hint={t("assurance.empty.hint")} />
       ) : (

@@ -25,9 +25,11 @@ import {
   humanize,
   inr,
 } from "../ui";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 export default function CasesPage() {
   const { toast } = useToast();
+  const { t } = useAppLanguage();
   const queryClient = useQueryClient();
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [titles, setTitles] = useState<Record<string, string>>({});
@@ -50,11 +52,11 @@ export default function CasesPage() {
     mutationFn: (proposal: CaseProposal) =>
       createCase({ title: titles[proposal.key]?.trim() || proposal.label, findingIds: proposal.findingIds }),
     onSuccess: (created) => {
-      toast({ title: "Case opened", description: `${created.findingCount} finding(s) grouped for investigation.` });
+      toast({ title: t("assurance.cases.opened") });
       setSelectedCaseId(created.caseId);
       invalidate();
     },
-    onError: (error: Error) => toast({ title: "Could not open case", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.cases.openFailed"), description: error.message, variant: "destructive" }),
   });
 
   const summaryMutation = useMutation({
@@ -66,7 +68,7 @@ export default function CasesPage() {
       });
       invalidate();
     },
-    onError: (error: Error) => toast({ title: "Could not summarize", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.detail.explain"), description: error.message, variant: "destructive" }),
   });
 
   const statusMutation = useMutation({
@@ -75,13 +77,13 @@ export default function CasesPage() {
       toast({ title: `Case ${humanize(updated.status).toLowerCase()}` });
       invalidate();
     },
-    onError: (error: Error) => toast({ title: "Could not update case", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.cases.updateFailed"), description: error.message, variant: "destructive" }),
   });
 
   return (
     <div className="space-y-4 p-4">
       <header>
-        <h1 className="text-xl font-semibold">Investigation Cases</h1>
+        <h1 className="text-xl font-semibold">{t("assurance.cases.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Related findings grouped into one story — by customer, supplier, staff member, business day, or a rule that keeps
           repeating.
@@ -91,8 +93,8 @@ export default function CasesPage() {
       <AssuranceDisclaimer />
 
       <SectionCard
-        title="Suggested groupings"
-        description="Grouped because the findings share a real relationship in your data — nothing is opened until you decide"
+        title={t("assurance.cases.suggested")}
+        description={t("assurance.cases.suggestedHint")}
       >
         {proposals.isLoading ? (
           <div className="flex h-24 items-center justify-center text-muted-foreground">
@@ -100,8 +102,8 @@ export default function CasesPage() {
           </div>
         ) : !proposals.data?.groups.length ? (
           <EmptyState
-            title="No groupings suggested"
-            hint={`${proposals.data?.findingsConsidered ?? 0} open finding(s) considered. Groupings appear when two or more share a customer, supplier, staff member, day or rule.`}
+            title={t("assurance.cases.noneSuggested")}
+            hint={t("assurance.cases.noneSuggestedHint", { count: proposals.data?.findingsConsidered ?? 0 })}
           />
         ) : (
           <ul className="space-y-2">
@@ -131,7 +133,7 @@ export default function CasesPage() {
                       placeholder={proposal.label}
                       value={titles[proposal.key] ?? ""}
                       onChange={(event) => setTitles((current) => ({ ...current, [proposal.key]: event.target.value }))}
-                      aria-label="Case title"
+                      aria-label={t("assurance.cases.detail")}
                     />
                     <Button
                       size="sm"
@@ -149,13 +151,13 @@ export default function CasesPage() {
       </SectionCard>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Open cases" description="Select a case to see the findings inside it">
+        <SectionCard title={t("assurance.cases.open")} description={t("assurance.cases.openHint")}>
           {cases.isLoading ? (
             <div className="flex h-24 items-center justify-center text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
             </div>
           ) : !cases.data?.cases.length ? (
-            <EmptyState title="No cases yet" hint="Open one from a suggested grouping above." />
+            <EmptyState title={t("assurance.cases.none")} hint={t("assurance.cases.noneHint")} />
           ) : (
             <ul className="divide-y divide-border">
               {cases.data.cases.map((row) => (
@@ -185,8 +187,8 @@ export default function CasesPage() {
         </SectionCard>
 
         <SectionCard
-          title="Case detail"
-          description={selectedCaseId ? "Findings keep their own independent lifecycle" : "Select a case"}
+          title={t("assurance.cases.detail")}
+          description={selectedCaseId ? t("assurance.cases.detailHint") : t("assurance.select")}
           actions={
             selectedCaseId ? (
               <div className="flex items-center gap-1.5">
@@ -212,13 +214,13 @@ export default function CasesPage() {
           }
         >
           {!selectedCaseId ? (
-            <EmptyState title="No case selected" />
+            <EmptyState title={t("assurance.select")} />
           ) : detail.isLoading ? (
             <div className="flex h-24 items-center justify-center text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading…
             </div>
           ) : !detail.data ? (
-            <EmptyState title="Case not found" />
+            <EmptyState title={t("assurance.notFound")} />
           ) : (
             <div className="space-y-3">
               <div>

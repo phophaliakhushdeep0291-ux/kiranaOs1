@@ -38,15 +38,10 @@ export const I18N_HARDCODED_ALLOWLIST: readonly string[] = [
   "components/ui/sheet.tsx", // 1
   "components/ui/sidebar.tsx", // 4
   "features/core/activity/pages/ActivityInsightsPage.tsx", // 1
-  "features/core/assurance/pages/AssuranceDashboardPage.tsx", // 12
-  "features/core/assurance/pages/AssuranceReportPage.tsx", // 9
-  "features/core/assurance/pages/AuditRulesPage.tsx", // 6
-  "features/core/assurance/pages/AuditRunsPage.tsx", // 7
-  "features/core/assurance/pages/CasesPage.tsx", // 5
-  "features/core/assurance/pages/EvidenceRequestsPage.tsx", // 2
-  "features/core/assurance/pages/FindingDetailPage.tsx", // 27
-  "features/core/assurance/pages/FindingsPage.tsx", // 3
-  "features/core/assurance/ui.tsx", // 1
+  // Not debt: the two strings left are the language names in the explanation
+  // picker. An endonym is written in its own language everywhere — translating
+  // "Hinglish" into Hindi would make the option harder to find, not easier.
+  "features/core/assurance/pages/FindingDetailPage.tsx", // 2
   "features/core/audit-logs/pages/AuditLogsPage.tsx", // 21
   "features/core/auth/AuthContext.tsx", // 2
   "features/core/auth/pages/ForgotPasswordPage.tsx", // 3

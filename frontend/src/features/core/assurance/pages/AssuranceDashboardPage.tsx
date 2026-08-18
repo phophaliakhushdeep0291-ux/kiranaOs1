@@ -19,6 +19,7 @@ import {
   fmtDateTime,
   humanize,
   inr,
+  useAssuranceWords,
 } from "../ui";
 
 function isoDaysAgo(days: number) {
@@ -27,6 +28,7 @@ function isoDaysAgo(days: number) {
 
 export default function AssuranceDashboardPage() {
   const { t } = useAppLanguage();
+  const words = useAssuranceWords();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [rangeDays, setRangeDays] = useState(7);
@@ -45,14 +47,14 @@ export default function AssuranceDashboardPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["assurance"] });
     },
-    onError: (error: Error) => toast({ title: "Run failed", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.runs.failed"), description: error.message, variant: "destructive" }),
   });
 
   const baselineMutation = useMutation({
     mutationFn: recomputeBaselines,
     onSuccess: (result) =>
-      toast({ title: "Baselines recomputed", description: `${result.baselineCount} shop baseline(s) refreshed from your own history.` }),
-    onError: (error: Error) => toast({ title: "Baseline refresh failed", description: error.message, variant: "destructive" }),
+      toast({ title: t("assurance.dash.baselinesDone"), description: `${result.baselineCount} shop baseline(s) refreshed from your own history.` }),
+    onError: (error: Error) => toast({ title: t("assurance.dash.baselinesFailed"), description: error.message, variant: "destructive" }),
   });
 
   const data = dashboard.data;
@@ -76,7 +78,7 @@ export default function AssuranceDashboardPage() {
   if (dashboard.isError) {
     return (
       <div className="p-4">
-        <EmptyState title="Could not load the assurance dashboard" hint={(dashboard.error as Error)?.message} />
+        <EmptyState title={t("assurance.dash.loadFailed")} hint={(dashboard.error as Error)?.message} />
       </div>
     );
   }
@@ -97,12 +99,12 @@ export default function AssuranceDashboardPage() {
             className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={rangeDays}
             onChange={(event) => setRangeDays(Number(event.target.value))}
-            aria-label="Review period"
+            aria-label={t("assurance.period.label")}
           >
-            <option value={1}>Last 24 hours</option>
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={90}>Last 90 days</option>
+            <option value={1}>{t("assurance.period.1")}</option>
+            <option value={7}>{t("assurance.period.7")}</option>
+            <option value={30}>{t("assurance.period.30")}</option>
+            <option value={90}>{t("assurance.period.90")}</option>
           </select>
           <Button onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
             {runMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
@@ -138,7 +140,7 @@ export default function AssuranceDashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Findings over time" description="New findings raised per day (last 30 days)">
+        <SectionCard title={t("assurance.dash.trend")} description={t("assurance.dash.trendHint")}>
           {data?.trend?.length ? (
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
@@ -154,11 +156,11 @@ export default function AssuranceDashboardPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <EmptyState title="No findings yet" hint="Run a review to check your recent transactions." />
+            <EmptyState title={t("assurance.dash.noneYet")} hint={t("assurance.dash.noneYetHint")} />
           )}
         </SectionCard>
 
-        <SectionCard title="Findings by area" description="Open findings grouped by control category">
+        <SectionCard title={t("assurance.dash.byArea")} description={t("assurance.dash.byAreaHint")}>
           {categoryChart.length ? (
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
@@ -172,19 +174,19 @@ export default function AssuranceDashboardPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <EmptyState title="Nothing open" hint="No open findings in any category." />
+            <EmptyState title={t("assurance.dash.nothingOpen")} hint={t("assurance.dash.nothingOpenHint")} />
           )}
         </SectionCard>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <SectionCard
-          title="Highest-risk findings"
-          description="Sorted by risk score"
+          title={t("assurance.dash.top")}
+          description={t("assurance.dash.topHint")}
           className="lg:col-span-2"
           actions={
             <Button asChild variant="outline" size="sm">
-              <Link href="/assurance/findings">View all</Link>
+              <Link href="/assurance/findings">{t("assurance.viewAll")}</Link>
             </Button>
           }
         >
@@ -201,30 +203,30 @@ export default function AssuranceDashboardPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Latest review run" description="Most recent evaluation of your books">
+        <SectionCard title={t("assurance.dash.lastRun")} description={t("assurance.dash.lastRunHint")}>
           {data?.latestRun ? (
             <dl className="space-y-2 text-sm">
-              <Row label="Type" value={humanize(data.latestRun.runType)} />
-              <Row label="Status" value={<Chip>{humanize(data.latestRun.status)}</Chip>} />
-              <Row label="Reviewed" value={`${data.latestRun.entitiesEvaluated} transaction(s)`} />
-              <Row label="New findings" value={String(data.latestRun.findingsCreated)} />
-              <Row label="Finished" value={fmtDateTime(data.latestRun.completedAt)} />
-              <Row label="Engine" value={<span className="font-mono text-[11px]">{data.latestRun.engineVersion}</span>} />
-              <Row label="Rule set" value={<span className="font-mono text-[11px]">{data.latestRun.rulesetVersion}</span>} />
+              <Row label={t("assurance.dash.type")} value={words.runType(data.latestRun.runType)} />
+              <Row label={t("assurance.status.OPEN")} value={<Chip>{words.runStatus(data.latestRun.status)}</Chip>} />
+              <Row label={t("assurance.runs.checked")} value={String(data.latestRun.entitiesEvaluated)} />
+              <Row label={t("assurance.runs.newProblems")} value={String(data.latestRun.findingsCreated)} />
+              <Row label={t("assurance.runs.finished")} value={fmtDateTime(data.latestRun.completedAt)} />
+              <Row label={t("assurance.engine")} value={<span className="font-mono text-[11px]">{data.latestRun.engineVersion}</span>} />
+              <Row label={t("assurance.ruleSet")} value={<span className="font-mono text-[11px]">{data.latestRun.rulesetVersion}</span>} />
               <div className="pt-2">
                 <Button asChild variant="outline" size="sm" className="w-full">
-                  <Link href="/assurance/runs">All runs</Link>
+                  <Link href="/assurance/runs">{t("assurance.allChecks")}</Link>
                 </Button>
               </div>
             </dl>
           ) : (
-            <EmptyState title="No runs yet" hint="Use “Run review” to evaluate your recent transactions." />
+            <EmptyState title={t("assurance.runs.none")} hint={t("assurance.dash.noneYetHint")} />
           )}
         </SectionCard>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Top risk areas" description="Rules triggering most often in your shop">
+        <SectionCard title={t("assurance.dash.topAreas")} description={t("assurance.dash.topAreasHint")}>
           {data?.topRiskAreas?.length ? (
             <ul className="space-y-2">
               {data.topRiskAreas.map((area) => (
@@ -241,13 +243,13 @@ export default function AssuranceDashboardPage() {
               ))}
             </ul>
           ) : (
-            <EmptyState title="Nothing triggering" />
+            <EmptyState title={t("assurance.dash.nothingTriggering")} />
           )}
         </SectionCard>
 
         <SectionCard
-          title="Who and what is affected"
-          description="Derived from the source transactions of open findings — for follow-up, not blame"
+          title={t("assurance.dash.affected")}
+          description={t("assurance.dash.affectedHint")}
         >
           <div className="space-y-4">
             <AffectedList
@@ -274,7 +276,7 @@ export default function AssuranceDashboardPage() {
         </SectionCard>
       </div>
 
-      <SectionCard title="Engine status" description="The deterministic engine runs regardless of AI availability">
+      <SectionCard title={t("assurance.dash.engine")} description={t("assurance.dash.engineHint")}>
         <div className="flex flex-wrap items-center gap-4 text-sm">
           <span className="flex items-center gap-1.5">
             <FileSearch className="h-4 w-4 text-muted-foreground" />
@@ -286,7 +288,7 @@ export default function AssuranceDashboardPage() {
           <span className="flex items-center gap-1.5">
             AI explanations: <Chip>{data?.aiStatus.provider ?? "disabled"}</Chip>
             {data?.aiStatus.provider === "disabled" ? (
-              <span className="text-xs text-muted-foreground">plain-language summaries are generated locally</span>
+              <span className="text-xs text-muted-foreground">{t("assurance.dash.localSummaries")}</span>
             ) : null}
           </span>
         </div>
@@ -312,6 +314,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function AffectedList({ heading, rows }: { heading: string; rows: Array<{ id: string; label: string; count: number }> }) {
+  const { t } = useAppLanguage();
   return (
     <div>
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{heading}</h3>
@@ -325,7 +328,7 @@ function AffectedList({ heading, rows }: { heading: string; rows: Array<{ id: st
           ))}
         </ul>
       ) : (
-        <p className="mt-1 text-xs text-muted-foreground">None affected.</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("assurance.dash.noneAffected")}</p>
       )}
     </div>
   );

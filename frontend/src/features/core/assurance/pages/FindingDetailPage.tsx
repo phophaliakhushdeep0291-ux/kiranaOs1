@@ -31,6 +31,7 @@ import {
   humanize,
   inrFromPaise,
 } from "../ui";
+import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
 
 const EVIDENCE_TYPES = [
   "SALES_INVOICE", "PURCHASE_INVOICE", "PAYMENT_RECEIPT", "UPI_REFERENCE", "BANK_TRANSACTION",
@@ -39,18 +40,21 @@ const EVIDENCE_TYPES = [
   "DEVICE_TIMESTAMP_METADATA",
 ];
 
-const RESOLUTIONS: { status: FindingStatus; label: string; hint: string }[] = [
-  { status: "UNDER_REVIEW", label: "Start review", hint: "You are looking into this" },
-  { status: "CONFIRMED_ISSUE", label: "Confirm issue", hint: "This is a real problem" },
-  { status: "CORRECTED", label: "Mark corrected", hint: "Fixed through the normal screens" },
-  { status: "FALSE_POSITIVE", label: "False positive", hint: "The records are actually fine" },
-  { status: "ACCEPTED_RISK", label: "Accept risk", hint: "Known and accepted as-is" },
-  { status: "CLOSED", label: "Close", hint: "No further action needed" },
+// Order matters: this is the order an owner reads them in, easiest decision
+// first. Labels live in the catalogue, keyed by the status they set.
+const RESOLUTIONS: FindingStatus[] = [
+  "FALSE_POSITIVE",
+  "CONFIRMED_ISSUE",
+  "CORRECTED",
+  "UNDER_REVIEW",
+  "ACCEPTED_RISK",
+  "CLOSED",
 ];
 
 export default function FindingDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const { t } = useAppLanguage();
   const queryClient = useQueryClient();
 
   const [comment, setComment] = useState("");
@@ -75,14 +79,14 @@ export default function FindingDetailPage() {
       setComment("");
       invalidate();
     },
-    onError: (error: Error) => toast({ title: "Could not change status", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.toast.statusFailed"), description: error.message, variant: "destructive" }),
   });
 
   const evidenceMutation = useMutation({
     mutationFn: () => submitEvidence(id, { evidenceType, referenceValue: evidenceValue.trim(), referenceKind: "reference" }),
     onSuccess: (evidence) => {
       toast({
-        title: "Evidence recorded",
+        title: t("assurance.toast.proofSaved"),
         description: evidence.reuseWarningCount
           ? `Note: this reference is already attached to ${evidence.reuseWarningCount} other finding(s).`
           : "A reviewer still needs to verify it.",
@@ -90,17 +94,17 @@ export default function FindingDetailPage() {
       setEvidenceValue("");
       invalidate();
     },
-    onError: (error: Error) => toast({ title: "Could not save evidence", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.toast.proofFailed"), description: error.message, variant: "destructive" }),
   });
 
   const requestMutation = useMutation({
     mutationFn: () => requestEvidence(id, { evidenceType: requestType, description: requestNote.trim() || `Please provide ${humanize(requestType)}` }),
     onSuccess: () => {
-      toast({ title: "Evidence requested" });
+      toast({ title: t("assurance.toast.proofAsked") });
       setRequestNote("");
       invalidate();
     },
-    onError: (error: Error) => toast({ title: "Could not request evidence", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.toast.proofAskFailed"), description: error.message, variant: "destructive" }),
   });
 
   const verifyMutation = useMutation({
@@ -110,17 +114,17 @@ export default function FindingDetailPage() {
       toast({ title: `Evidence ${humanize(evidence.verificationStatus).toLowerCase()}` });
       invalidate();
     },
-    onError: (error: Error) => toast({ title: "Could not update evidence", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.toast.proofUpdateFailed"), description: error.message, variant: "destructive" }),
   });
 
   const reviewMutation = useMutation({
     mutationFn: (decision: string) => addReview(id, { decision, notes: reviewNotes.trim() || undefined }),
     onSuccess: () => {
-      toast({ title: "Review note added" });
+      toast({ title: t("assurance.toast.noteAdded") });
       setReviewNotes("");
       invalidate();
     },
-    onError: (error: Error) => toast({ title: "Could not add review", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.toast.noteFailed"), description: error.message, variant: "destructive" }),
   });
 
   const explainMutation = useMutation({
@@ -132,7 +136,7 @@ export default function FindingDetailPage() {
       });
       invalidate();
     },
-    onError: (error: Error) => toast({ title: "Could not generate explanation", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: t("assurance.toast.explainFailed"), description: error.message, variant: "destructive" }),
   });
 
   if (query.isLoading) {
@@ -145,7 +149,7 @@ export default function FindingDetailPage() {
   if (query.isError || !query.data) {
     return (
       <div className="p-4">
-        <EmptyState title="Finding not found" hint="It may belong to another shop, or the id is wrong." />
+        <EmptyState title={t("assurance.detail.notFound")} hint={t("assurance.detail.notFoundHint")} />
       </div>
     );
   }
@@ -159,7 +163,7 @@ export default function FindingDetailPage() {
     <div className="space-y-4 p-4">
       <div className="flex items-center gap-2">
         <Button asChild variant="ghost" size="sm">
-          <Link href="/assurance/findings"><ArrowLeft className="mr-1 h-4 w-4" /> Findings</Link>
+          <Link href="/assurance/findings"><ArrowLeft className="mr-1 h-4 w-4" /> {t("assurance.back")}</Link>
         </Button>
       </div>
 
@@ -171,8 +175,8 @@ export default function FindingDetailPage() {
               <StatusChip status={finding.status} />
               <Chip>{humanize(finding.sourceEntityType)}</Chip>
               {finding.primaryCategory ? <Chip>{humanize(finding.primaryCategory)}</Chip> : null}
-              <Chip>Confidence {Math.round(finding.confidence * 100)}%</Chip>
-              {finding.reopenCount > 0 ? <Chip>Reopened ×{finding.reopenCount}</Chip> : null}
+              <Chip>{t("assurance.detail.confidence", { percent: Math.round(finding.confidence * 100) })}</Chip>
+              {finding.reopenCount > 0 ? <Chip>{t("assurance.detail.reopened", { count: finding.reopenCount })}</Chip> : null}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
               Raised {fmtDateTime(finding.createdAt)} ·{" "}
@@ -180,7 +184,7 @@ export default function FindingDetailPage() {
                 ? `gap ${inrFromPaise(finding.discrepancyPaise)} on a ${inrFromPaise(finding.amountPaise)} record`
                 : `record value ${inrFromPaise(finding.amountPaise)}`}{" "}
               · engine{" "}
-              <span className="font-mono">{finding.engineVersion}</span> · rule set <span className="font-mono">{finding.rulesetVersion}</span>
+              <span className="font-mono">{finding.engineVersion}</span> · {t("assurance.ruleSet")} <span className="font-mono">{finding.rulesetVersion}</span>
             </p>
           </div>
           <div className="w-48 space-y-2">
@@ -196,9 +200,9 @@ export default function FindingDetailPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          <SectionCard title="Why this was flagged" description="Each rule below is a deterministic check with its own numbers">
+          <SectionCard title={t("assurance.detail.why")} description={t("assurance.detail.whyHint")}>
             {activeRules.length === 0 ? (
-              <EmptyState title="No rules currently triggering" hint="The condition may have been corrected since." />
+              <EmptyState title={t("assurance.detail.noRules")} hint={t("assurance.detail.noRulesHint")} />
             ) : (
               <ul className="space-y-3">
                 {activeRules.map((rule) => (
@@ -221,7 +225,7 @@ export default function FindingDetailPage() {
                     </div>
                     {rule.remediation ? (
                       <p className="mt-2 text-xs">
-                        <span className="font-semibold">What to do: </span>
+                        <span className="font-semibold">{t("assurance.whatToDo")}: </span>
                         {rule.remediation}
                       </p>
                     ) : null}
@@ -238,20 +242,20 @@ export default function FindingDetailPage() {
           </SectionCard>
 
           <SectionCard
-            title="How the score was calculated"
-            description="Fully reproducible — no model output is involved in this number"
+            title={t("assurance.auditorView")}
+            description={t("assurance.auditorViewHint")}
           >
             <p className="mb-3 rounded bg-muted/40 p-2 font-mono text-[11px] leading-relaxed">{breakdown.formula}</p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="py-1 pr-2 font-medium">Rule</th>
-                    <th className="py-1 pr-2 font-medium">Severity</th>
-                    <th className="py-1 pr-2 text-right font-medium">Weight</th>
-                    <th className="py-1 pr-2 text-right font-medium">× Severity</th>
-                    <th className="py-1 pr-2 text-right font-medium">Raw</th>
-                    <th className="py-1 text-right font-medium">Contribution</th>
+                    <th className="py-1 pr-2 font-medium">{t("assurance.detail.scoreRule")}</th>
+                    <th className="py-1 pr-2 font-medium">{t("assurance.detail.scoreSeverity")}</th>
+                    <th className="py-1 pr-2 text-right font-medium">{t("assurance.detail.scoreWeight")}</th>
+                    <th className="py-1 pr-2 text-right font-medium">{t("assurance.detail.scoreMultiplier")}</th>
+                    <th className="py-1 pr-2 text-right font-medium">{t("assurance.detail.scoreRaw")}</th>
+                    <th className="py-1 text-right font-medium">{t("assurance.detail.scoreContribution")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -261,13 +265,13 @@ export default function FindingDetailPage() {
                       <td className="py-1 pr-2">{rule.severity}</td>
                       <td className="py-1 pr-2 text-right tabular-nums">
                         {rule.weight}
-                        {rule.weightSource === "shop_override" ? <span className="ml-1 text-muted-foreground">(custom)</span> : null}
+                        {rule.weightSource === "shop_override" ? <span className="ml-1 text-muted-foreground">{t("assurance.custom")}</span> : null}
                       </td>
                       <td className="py-1 pr-2 text-right tabular-nums">×{rule.severityMultiplier}</td>
                       <td className="py-1 pr-2 text-right tabular-nums">{rule.rawContribution}</td>
                       <td className="py-1 text-right font-semibold tabular-nums">
                         {rule.scoreContribution}
-                        {rule.cappedAt ? <span className="ml-1 text-[10px] text-muted-foreground">(capped)</span> : null}
+                        {rule.cappedAt ? <span className="ml-1 text-[10px] text-muted-foreground">{t("assurance.capped")}</span> : null}
                       </td>
                     </tr>
                   ))}
@@ -275,7 +279,7 @@ export default function FindingDetailPage() {
               </table>
             </div>
             <dl className="mt-3 space-y-1 text-xs">
-              <BreakdownRow label="Base score (sum of contributions)" value={`${breakdown.baseScore}${breakdown.summedContributions > 100 ? " (clamped from " + breakdown.summedContributions + ")" : ""}`} />
+              <BreakdownRow label={t("assurance.baseScore")} value={`${breakdown.baseScore}${breakdown.summedContributions > 100 ? " (clamped from " + breakdown.summedContributions + ")" : ""}`} />
               <BreakdownRow label={`Materiality (${breakdown.materialityBand})`} value={`× ${breakdown.materialityMultiplier}`} />
               <BreakdownRow label={`History (${breakdown.historyLabel})`} value={`× ${breakdown.historyMultiplier}`} />
               {breakdown.scoreFloorApplied ? (
@@ -284,8 +288,8 @@ export default function FindingDetailPage() {
                   value={`floor ${breakdown.scoreFloor} applied (was ${breakdown.modifiedScore})`}
                 />
               ) : null}
-              <BreakdownRow label="Final risk score" value={`${breakdown.finalScore} → ${breakdown.riskLevel}`} strong />
-              <BreakdownRow label="Confidence" value={String(breakdown.confidence)} />
+              <BreakdownRow label={t("assurance.finalScore")} value={`${breakdown.finalScore} → ${breakdown.riskLevel}`} strong />
+              <BreakdownRow label={t("assurance.confidenceLabel")} value={String(breakdown.confidence)} />
             </dl>
             <ul className="mt-2 list-inside list-disc text-[11px] text-muted-foreground">
               {breakdown.confidenceReasons.map((reason) => <li key={reason}>{reason}</li>)}
@@ -293,7 +297,7 @@ export default function FindingDetailPage() {
             <p className="mt-2 break-all font-mono text-[10px] text-muted-foreground">input hash: {breakdown.inputHash}</p>
           </SectionCard>
 
-          <SectionCard title="Source transaction" description="Read-only view of the record this finding is about">
+          <SectionCard title={t("assurance.detail.record")} description={t("assurance.detail.recordHint")}>
             <DetailGrid details={sanitizeSource(finding.sourceTransaction)} />
             <p className="mt-2 text-[11px] text-muted-foreground">
               The assurance module never edits this record. Corrections must be made through the normal Artha screens so
@@ -302,15 +306,15 @@ export default function FindingDetailPage() {
           </SectionCard>
 
           <SectionCard
-            title="Plain-language explanation"
-            description="Rephrases the deterministic result — it never changes any number"
+            title={t("assurance.detail.explain")}
+            description={t("assurance.detail.explainHint")}
             actions={
               <div className="flex items-center gap-2">
                 <select
                   className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                   value={language}
                   onChange={(event) => setLanguage(event.target.value as typeof language)}
-                  aria-label="Explanation language"
+                  aria-label={t("assurance.lang")}
                 >
                   <option value="en">English</option>
                   <option value="hi">हिन्दी</option>
@@ -326,33 +330,35 @@ export default function FindingDetailPage() {
             {finding.aiExplanation ? (
               <p className="whitespace-pre-line text-sm">{finding.aiExplanation}</p>
             ) : (
-              <EmptyState title="No explanation generated yet" hint="Use Explain to produce an owner-friendly summary." />
+              <EmptyState title={t("assurance.detail.noExplanation")} hint={t("assurance.detail.noExplanationHint")} />
             )}
           </SectionCard>
         </div>
 
         <div className="space-y-4">
-          <SectionCard title="Resolution" description="Every change is recorded permanently">
+          <SectionCard title={t("assurance.detail.decide")} description={t("assurance.detail.decideHint")}>
             <div className="space-y-2">
-              <Label htmlFor="resolution-comment" className="text-xs">Comment (recommended)</Label>
+              <Label htmlFor="resolution-comment" className="text-xs">{t("assurance.detail.comment")}</Label>
               <Input
                 id="resolution-comment"
                 value={comment}
                 onChange={(event) => setComment(event.target.value)}
-                placeholder="What did you find?"
+                placeholder={t("assurance.detail.commentHint")}
               />
               <div className="grid gap-1.5 pt-1">
                 {RESOLUTIONS.map((option) => (
                   <Button
-                    key={option.status}
+                    key={option}
                     variant="outline"
                     size="sm"
                     className="justify-between"
-                    disabled={statusMutation.isPending || finding.status === option.status}
-                    onClick={() => statusMutation.mutate(option.status)}
+                    disabled={statusMutation.isPending || finding.status === option}
+                    onClick={() => statusMutation.mutate(option)}
                   >
-                    <span>{option.label}</span>
-                    <span className="text-[10px] font-normal text-muted-foreground">{option.hint}</span>
+                    <span>{t(`assurance.act.${option}` as TranslationKey)}</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">
+                      {t(`assurance.act.${option}.hint` as TranslationKey)}
+                    </span>
                   </Button>
                 ))}
               </div>
@@ -362,9 +368,9 @@ export default function FindingDetailPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Evidence requested" description="Raised automatically by the triggered rules">
+          <SectionCard title={t("assurance.detail.proofAsked")} description={t("assurance.detail.proofAskedHint")}>
             {finding.evidenceRequirements.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Nothing outstanding.</p>
+              <p className="text-xs text-muted-foreground">{t("assurance.detail.proofNothing")}</p>
             ) : (
               <ul className="space-y-2">
                 {finding.evidenceRequirements.map((requirement) => (
@@ -381,7 +387,7 @@ export default function FindingDetailPage() {
               </ul>
             )}
             <div className="mt-3 space-y-2 border-t border-border pt-3">
-              <Label className="text-xs">Request more evidence</Label>
+              <Label className="text-xs">{t("assurance.detail.proofAskMore")}</Label>
               <select
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={requestType}
@@ -389,7 +395,7 @@ export default function FindingDetailPage() {
               >
                 {EVIDENCE_TYPES.map((type) => <option key={type} value={type}>{humanize(type)}</option>)}
               </select>
-              <Input value={requestNote} onChange={(event) => setRequestNote(event.target.value)} placeholder="What exactly is needed?" />
+              <Input value={requestNote} onChange={(event) => setRequestNote(event.target.value)} placeholder={t("assurance.detail.proofWhat")} />
               <Button size="sm" variant="outline" className="w-full" onClick={() => requestMutation.mutate()} disabled={requestMutation.isPending}>
                 {requestMutation.isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="mr-1 h-3.5 w-3.5" />}
                 Request
@@ -397,9 +403,9 @@ export default function FindingDetailPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Evidence provided" description="Submitted documents and references are never auto-verified">
+          <SectionCard title={t("assurance.detail.proofGiven")} description={t("assurance.detail.proofGivenHint")}>
             {finding.evidence.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No evidence submitted yet.</p>
+              <p className="text-xs text-muted-foreground">{t("assurance.detail.proofNone")}</p>
             ) : (
               <ul className="space-y-2">
                 {finding.evidence.map((evidence) => (
@@ -453,7 +459,7 @@ export default function FindingDetailPage() {
               </ul>
             )}
             <div className="mt-3 space-y-2 border-t border-border pt-3">
-              <Label className="text-xs">Submit evidence</Label>
+              <Label className="text-xs">{t("assurance.detail.proofSubmit")}</Label>
               <select
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={evidenceType}
@@ -464,7 +470,7 @@ export default function FindingDetailPage() {
               <Input
                 value={evidenceValue}
                 onChange={(event) => setEvidenceValue(event.target.value)}
-                placeholder="Invoice no., UPI ref, or a written explanation"
+                placeholder={t("assurance.detail.proofPlaceholder")}
               />
               <Button
                 size="sm"
@@ -478,7 +484,7 @@ export default function FindingDetailPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Reviewer notes">
+          <SectionCard title={t("assurance.detail.notes")}>
             {finding.reviews.length ? (
               <ul className="mb-3 space-y-2">
                 {finding.reviews.map((review) => (
@@ -493,7 +499,7 @@ export default function FindingDetailPage() {
                 ))}
               </ul>
             ) : null}
-            <Input value={reviewNotes} onChange={(event) => setReviewNotes(event.target.value)} placeholder="Add a review note" />
+            <Input value={reviewNotes} onChange={(event) => setReviewNotes(event.target.value)} placeholder={t("assurance.detail.addNote")} />
             <div className="mt-2 grid grid-cols-2 gap-1.5">
               {["CONFIRMED_ISSUE", "FALSE_POSITIVE", "NEEDS_MORE_EVIDENCE", "CORRECTED"].map((decision) => (
                 <Button
@@ -510,7 +516,7 @@ export default function FindingDetailPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Timeline" description="Append-only history of this finding">
+          <SectionCard title={t("assurance.detail.history")} description={t("assurance.detail.historyHint")}>
             <ol className="space-y-2">
               {finding.timeline.map((entry) => (
                 <li key={entry.historyId} className="border-l-2 border-border pl-3">

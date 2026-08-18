@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ApiClientError, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
-import { readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
+import { instantCacheUpdatedAt, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as inventoryApi from "@/features/core/inventory/api";
@@ -59,6 +59,10 @@ export function useGetInventory(options?: QueryHookOptions<InventoryResponse, In
     ...extra,
     queryKey: getGetInventoryQueryKey(),
     initialData: extra.initialData ?? (cached.length > 0 ? cached : undefined),
+    // Dated so the cached rows paint instantly without posing as the server's
+    // answer: undated initialData counts as fresh from now, so nothing refetches
+    // until staleTime lapses and the screen stays pinned to the cache.
+    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(INVENTORY_CACHE_KEY),
     queryFn: async () => {
       const liveCached = readCachedInventory();
       if (liveCached.length === 0) {
@@ -111,6 +115,10 @@ export function useGetLowStock(options?: QueryHookOptions<InventoryResponse, Low
     ...extra,
     queryKey: getGetLowStockQueryKey(),
     initialData: extra.initialData ?? (cached.length > 0 ? cached : undefined),
+    // Dated so the cached rows paint instantly without posing as the server's
+    // answer: undated initialData counts as fresh from now, so nothing refetches
+    // until staleTime lapses and the screen stays pinned to the cache.
+    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(INVENTORY_CACHE_KEY),
     queryFn: async () => {
       const liveCached = readCachedLowStock();
       if (liveCached.length === 0) {
@@ -147,6 +155,10 @@ export function useGetStockLedger(
     ...extra,
     queryKey: getGetStockLedgerQueryKey(params),
     initialData: extra.initialData ?? cached,
+    // Dated so the cached rows paint instantly without posing as the server's
+    // answer: undated initialData counts as fresh from now, so nothing refetches
+    // until staleTime lapses and the screen stays pinned to the cache.
+    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(INVENTORY_MOVEMENTS_CACHE_KEY),
     queryFn: async () => {
       const liveCached = readCachedLedger();
       if (!isBrowserOnline()) return liveCached;

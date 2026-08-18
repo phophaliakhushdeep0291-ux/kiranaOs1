@@ -4,6 +4,7 @@
 // being redesigned, so these only reuse existing primitives.
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
+import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
 import type { EvidenceStatus, FindingStatus, RiskLevel } from "./api";
 
 export const RISK_TONE: Record<RiskLevel, string> = {
@@ -32,6 +33,33 @@ export const EVIDENCE_TONE: Record<EvidenceStatus, string> = {
   INSUFFICIENT: CHIP_TONES.amber,
   NOT_APPLICABLE: CHIP_TONES.gray,
 };
+
+/**
+ * The engine's enum names, in shop words.
+ *
+ * `humanize()` still exists for keys nobody has translated (a rule's own detail
+ * field names), but anything an owner reads on a chip comes through here.
+ */
+export function useAssuranceWords() {
+  const { t } = useAppLanguage();
+  const word = (prefix: string, value: string | null | undefined, fallback?: string) => {
+    if (!value) return "—";
+    const key = `assurance.${prefix}.${value}` as TranslationKey;
+    const translated = t(key);
+    // `t()` returns the key itself when nothing is registered — that is the
+    // signal to fall back rather than print "assurance.area.NEW_THING".
+    return translated === key ? (fallback ?? humanize(value)) : translated;
+  };
+  return {
+    status: (value: string | null | undefined) => word("status", value),
+    risk: (value: string | null | undefined) => word("risk", value),
+    entity: (value: string | null | undefined) => word("entity", value),
+    area: (value: string | null | undefined) => word("area", value),
+    proof: (value: string | null | undefined) => word("proof", value),
+    runType: (value: string | null | undefined) => word("runType", value),
+    runStatus: (value: string | null | undefined) => word("runStatus", value),
+  };
+}
 
 export function humanize(value: string | null | undefined) {
   if (!value) return "—";
@@ -74,16 +102,23 @@ export function Chip({ tone, children, className }: { tone?: string; children: R
 }
 
 export function RiskChip({ level, score }: { level: RiskLevel; score?: number }) {
+  const words = useAssuranceWords();
   return (
     <Chip tone={RISK_TONE[level]}>
-      {level}
+      {words.risk(level)}
       {score !== undefined ? ` · ${score}` : ""}
     </Chip>
   );
 }
 
 export function StatusChip({ status }: { status: FindingStatus }) {
-  return <Chip tone={STATUS_TONE[status]}>{humanize(status)}</Chip>;
+  const words = useAssuranceWords();
+  return <Chip tone={STATUS_TONE[status]}>{words.status(status)}</Chip>;
+}
+
+export function EvidenceChip({ status }: { status: EvidenceStatus }) {
+  const words = useAssuranceWords();
+  return <Chip tone={EVIDENCE_TONE[status]}>{words.proof(status)}</Chip>;
 }
 
 export function StatCard({
@@ -145,10 +180,10 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
 // Shown on every assurance surface. The product must never read as a statutory
 // audit or as an accusation, so this is a component rather than ad-hoc copy.
 export function AssuranceDisclaimer({ className }: { className?: string }) {
+  const { t } = useAppLanguage();
   return (
     <p className={cn("text-xs leading-relaxed text-muted-foreground", className)}>
-      Continuous financial-control monitoring. Findings are <strong>potential inconsistencies for review</strong> — not
-      proof of wrongdoing, not a statutory audit, and not a substitute for your Chartered Accountant.
+      {t("assurance.disclaimer")}
     </p>
   );
 }
@@ -181,7 +216,7 @@ export function DetailGrid({ details }: { details: Record<string, unknown> }) {
 
 function formatDetailValue(value: unknown): string {
   if (value === null || value === undefined) return "—";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "boolean") return value ? "✓" : "✗";
   if (typeof value === "number") return value.toLocaleString("en-IN", { maximumFractionDigits: 4 });
   if (typeof value === "string") {
     if (/^\d{4}-\d{2}-\d{2}T/.test(value)) return fmtDateTime(value);
