@@ -35,20 +35,29 @@ function purchaseRecordsTheLot() {
   assert.ok(body.includes('recordReceiptLot(tx,'), 'the lot must be written on the same transaction handle');
 }
 
-function lotIsOnlyAttemptedWhenOneWasSupplied() {
+function batchTrackedStockIsRefusedWithoutALot() {
   const body = recordPurchaseBody();
-  // Deliberately NOT "whenever the product is batch-tracked". recordReceiptLot
-  // throws for a batch-tracked product with no lot details, and a device can
-  // hold a purchase queued before these fields existed — failing it on the
-  // server would leave an outbox event that can never succeed, which stops that
-  // device syncing everything behind it. The receiving screen enforces instead.
+  // Stock that lands with no lot is stock FEFO cannot allocate and a recall
+  // cannot find, which is worse than a receipt the shop has to redo.
+  assert.ok(body.includes('BATCH_DETAILS_REQUIRED'), 'a batch-tracked receipt with no lot must be refused');
   assert.ok(
-    body.includes('batchNumber || expiresOn'),
-    'the lot write must be guarded on the batch details actually being supplied',
+    body.includes('product.batchTrackingEnabled && !suppliedLot && clientAsksForLots'),
+    'the refusal must test the product flag, the missing lot AND the client capability together',
+  );
+}
+
+function aPurchaseQueuedBeforeLotCaptureStillSyncs() {
+  const body = recordPurchaseBody();
+  // The one exception. Such an event is already written and can never be
+  // corrected, so refusing it fails that purchase forever. A live REST call
+  // gets no exception: identity.syncEventId is only set on the sync path.
+  assert.ok(
+    body.includes('batchCaptureSupported === true || !identity.syncEventId'),
+    'only a queued SYNC event may omit the lot, and only when it never claimed to collect one',
   );
   assert.ok(
-    !body.includes('product.batchTrackingEnabled\n      ? await recordReceiptLot'),
-    'the guard must not be the product flag, or a queued legacy purchase becomes unsyncable',
+    body.includes('lotSkippedLegacyClient'),
+    'a receipt let through without its lot must be findable afterwards',
   );
 }
 
@@ -60,6 +69,7 @@ function schemaAcceptsTheLotOptionally() {
   // Every one optional, for the same queued-event reason as above.
   assert.match(schema, /batchNumber: z\.string\(\)\.trim\(\)\.min\(1\)\.max\(80\)\.optional\(\)/);
   assert.match(schema, /batchMrp: moneyAmount\(\{ positive: true \}\)\.optional\(\)/);
+  assert.match(schema, /batchCaptureSupported: z\.boolean\(\)\.optional\(\)/);
   // Dates are day-precision strings off a printed strip, same contract the
   // purchase-order receive path already uses.
   assert.match(schema, /Batch date must be YYYY-MM-DD/);
@@ -77,7 +87,8 @@ function theLotServiceStillGuardsWhatItAlwaysGuarded() {
 
 const cases = [
   ['a purchase records the lot it received', purchaseRecordsTheLot],
-  ['the lot write is guarded on details, not on the product flag', lotIsOnlyAttemptedWhenOneWasSupplied],
+  ['batch-tracked stock is refused without a lot', batchTrackedStockIsRefusedWithoutALot],
+  ['a purchase queued before lot capture still syncs', aPurchaseQueuedBeforeLotCaptureStillSyncs],
   ['purchaseSchema accepts the lot, all fields optional', schemaAcceptsTheLotOptionally],
   ['the lot service keeps its own guards', theLotServiceStillGuardsWhatItAlwaysGuarded],
 ];

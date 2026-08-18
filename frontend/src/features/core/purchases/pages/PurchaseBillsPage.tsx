@@ -1270,6 +1270,10 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
           // unconditional spread would fail the whole receipt.
           ...(lineNeedsBatch(products, line)
             ? {
+              // Tells the server this client asked for the lot, so a
+              // batch-tracked receipt arriving without one is a real omission
+              // rather than an event queued by a build that never knew to ask.
+              batchCaptureSupported: true,
               batchNumber: line.batchNumber.trim(),
               expiresOn: line.expiresOn,
               ...(line.manufacturedOn ? { manufacturedOn: line.manufacturedOn } : {}),

@@ -261,7 +261,7 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
     productId, supplierId, supplierName,
     quantity, enteredUnit, billAmount,
     note, updateCost, updateMinPrice,
-    batchNumber, manufacturedOn, expiresOn, batchMrp,
+    batchNumber, manufacturedOn, expiresOn, batchMrp, batchCaptureSupported,
   } = data;
   const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
 
@@ -386,13 +386,27 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
     // most shops actually use — built up batch-tracked stock that FEFO could
     // never allocate.
     //
-    // Called only when the receiver actually supplied a batch, NOT whenever the
-    // product is batch-tracked. recordReceiptLot rejects a batch-tracked product
-    // with no lot details, and a device can hold a purchase queued before this
-    // field existed; failing it here would leave an outbox event that can never
-    // succeed, which stops that device syncing anything behind it. The receiving
-    // screen is where the requirement is enforced.
-    const lot = batchNumber || expiresOn
+    // Batch-tracked stock is REFUSED without a lot. Both receiving screens ask
+    // for one, so reaching here without it means the stock would land where FEFO
+    // cannot allocate it and a recall cannot find it — which is worse than a
+    // receipt the shop has to redo.
+    //
+    // The single exception is a purchase queued on a device running a build from
+    // before lot capture existed. Such an event can never be corrected — it is
+    // already written — and rejecting it would fail that one purchase forever.
+    // `batchCaptureSupported` is how a current client says "I asked"; only a
+    // SYNCED event may omit it, because a live REST call is by definition made by
+    // a client that could have sent it.
+    const suppliedLot = Boolean(batchNumber || expiresOn);
+    const clientAsksForLots = batchCaptureSupported === true || !identity.syncEventId;
+    if (product.batchTrackingEnabled && !suppliedLot && clientAsksForLots) {
+      throw new AppError(
+        `${product.name} is tracked by batch — record the batch number and expiry printed on the pack`,
+        422,
+        "BATCH_DETAILS_REQUIRED",
+      );
+    }
+    const lot = suppliedLot
       ? await recordReceiptLot(tx, {
         shopId,
         locationId: location.id,
@@ -432,6 +446,9 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
         offlineSyncEventId: identity.syncEventId ?? null,
         inventoryLotId: lot?.id ?? null,
         batchNumber: lot?.batchNumber ?? null,
+        // Findable later: the batch-tracked receipts that came in from a build
+        // predating lot capture and therefore carry no lot.
+        lotSkippedLegacyClient: product.batchTrackingEnabled && !lot ? true : undefined,
       },
       req: identity.req ?? null,
     }, tx);

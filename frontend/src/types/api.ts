@@ -745,6 +745,8 @@ export interface StockMovementInput {
   manufacturedOn?: string;
   expiresOn?: string;
   batchMrp?: number;
+  /** Set by a client that collects the lot; see recordPurchase on the server. */
+  batchCaptureSupported?: boolean;
   reason?: string;
   note?: string;
   ownerPin?: string;

@@ -572,4 +572,6 @@ export const inventoryEn = {
   "purchases.batch.expiredDetail": "{names} has an expiry date in the past. Check the pack — expired stock cannot be received as saleable.",
   "purchases.batch.datesInvalid": "Check the batch dates",
   "purchases.batch.datesInvalidDetail": "The expiry date has to be after the manufacturing date.",
+  "inventory.page.batchSectionTitle": "Batch and expiry",
+  "inventory.page.batchSectionHelp": "Taken from the pack in front of you. Billing sells the earliest expiry first, and a recall is traced through this number.",
 } as const;

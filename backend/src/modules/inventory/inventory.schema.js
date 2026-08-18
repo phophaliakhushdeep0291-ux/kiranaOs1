@@ -51,6 +51,10 @@ export const purchaseSchema = z.object({
   // The MRP printed on THIS batch's pack. Medicine MRP is revised between
   // batches, so the strip in hand and the product record routinely disagree.
   batchMrp: moneyAmount({ positive: true }).optional(),
+  // Set by a client that asks for the lot when the product is batch-tracked.
+  // Its ABSENCE on a queued sync event is what marks that event as written by a
+  // build that predates lot capture — see recordPurchase.
+  batchCaptureSupported: z.boolean().optional(),
   note: z.string().optional(),
   updateCost: z.boolean().default(true),
   updateMinPrice: z.boolean().default(false),

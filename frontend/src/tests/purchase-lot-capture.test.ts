@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { englishTranslations } from "@/features/core/settings/translations/english";
 
 const purchasesPage = readFileSync(join(process.cwd(), "src/features/core/purchases/pages/PurchaseBillsPage.tsx"), "utf8");
+const inventoryPage = readFileSync(join(process.cwd(), "src/features/core/inventory/pages/InventoryPage.tsx"), "utf8");
 const apiTypes = readFileSync(join(process.cwd(), "src/types/api.ts"), "utf8");
 const css = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
 
@@ -29,8 +30,6 @@ describe("purchase form lot capture", () => {
   it("refuses to save a batch-tracked line with no number or expiry", () => {
     expect(purchasesPage).toContain("const missingBatch = validLines.filter((line) => lineNeedsBatch(products, line)");
     expect(purchasesPage).toContain('t("purchases.batch.required")');
-    // Enforced in the UI on purpose: the server stays lenient so a purchase
-    // queued on a device before this field existed can still sync.
     expect(purchasesPage).toContain("return;");
   });
 
@@ -68,6 +67,26 @@ describe("purchase form lot capture", () => {
     // this sixth child is squeezed into the 44px remove-button column.
     expect(css).toContain(".purchase-line-batch");
     expect(css).toMatch(/\.purchase-line-batch \{ @apply col-span-full/);
+  });
+
+  it("asks for the lot on BOTH receiving doors, not just this one", () => {
+    // The inventory Add-stock dialog posts the same purchase through the same
+    // service. Leaving it alone would have meant the server's tightened guard
+    // simply broke that screen for batch-tracked products.
+    expect(inventoryPage).toContain("const receivingBatchTracked = form.movementType === \"purchase\"");
+    expect(inventoryPage).toContain("?.batchTrackingEnabled");
+    expect(inventoryPage).toContain("{receivingBatchTracked ? (");
+    for (const key of ["purchases.batch.required", "purchases.batch.expired", "purchases.batch.datesInvalid"]) {
+      expect(inventoryPage, key).toContain(`t("${key}"`);
+    }
+  });
+
+  it("tells the server it collected the lot, from every path that does", () => {
+    // The server refuses a batch-tracked receipt with no lot ONLY when the client
+    // claimed to ask for one. A path that captures the lot but forgets this flag
+    // would quietly keep the old lenient behaviour.
+    expect(purchasesPage).toContain("batchCaptureSupported: true");
+    expect(inventoryPage).toContain("batchCaptureSupported: true");
   });
 
   it("translates every string it added, in both languages", () => {

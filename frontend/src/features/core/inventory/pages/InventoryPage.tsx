@@ -112,6 +112,12 @@ type MovementForm = {
   purchasePaymentMode: "cash" | "upi";
   purchasePaidAmount: string;
   purchaseDueDate: string;
+  // Only ever filled when receiving batch-tracked stock; strings because they
+  // are typed straight off the printed pack.
+  batchNumber: string;
+  manufacturedOn: string;
+  expiresOn: string;
+  batchMrp: string;
   costPrice: string;
   minPrice: string;
   sellingPrice: string;
@@ -168,6 +174,10 @@ const initialForm: MovementForm = {
   purchasePaymentMode: "cash",
   purchasePaidAmount: "",
   purchaseDueDate: "",
+  batchNumber: "",
+  manufacturedOn: "",
+  expiresOn: "",
+  batchMrp: "",
   costPrice: "",
   minPrice: "",
   sellingPrice: "",
@@ -439,6 +449,10 @@ export default function InventoryPage() {
   const selectedProduct = (products.data ?? []).find((product: Product) => product.id === form.productId);
   const selectedSupplier = (suppliers.data ?? []).find((supplier: Supplier) => supplier.id === form.supplierId);
   const selectedProductUnit = inventoryMovementUnit(selectedProduct) ?? form.unit;
+  // Receiving batch-tracked stock: the lot is printed on the pack in hand and on
+  // nothing kept afterwards, so this dialog has to ask for it too. Read from the
+  // PRODUCT — batch tracking is per-product opt-in, not a trade-wide setting.
+  const receivingBatchTracked = form.movementType === "purchase" && Boolean(selectedProduct?.batchTrackingEnabled);
   const selectedProductSimpleUnit = selectedProduct ? inventorySimpleUnit(selectedProduct, form.unit) : form.unit;
   const purchaseConversionToBase = selectedProduct ? inventoryConversionToBase(selectedProduct, form.unit) : undefined;
   const selectedCostRateUnit = purchaseConversionToBase
@@ -556,6 +570,25 @@ export default function InventoryPage() {
         toast({ title: t("inventory.page.invalidPaidAmount"), description: t("inventory.page.invalidPaidAmountHelp"), variant: "destructive" });
         return;
       }
+      // The same three checks the purchase-bills form makes, because this is the
+      // other door into the same receiving path and the server now refuses a
+      // batch-tracked receipt with no lot behind it.
+      if (receivingBatchTracked) {
+        const productName = selectedProduct?.name ?? "";
+        if (!form.batchNumber.trim() || !form.expiresOn) {
+          toast({ title: t("purchases.batch.required"), description: t("purchases.batch.requiredDetail", { names: productName }), variant: "destructive" });
+          return;
+        }
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        if (new Date(form.expiresOn) < today) {
+          toast({ title: t("purchases.batch.expired"), description: t("purchases.batch.expiredDetail", { names: productName }), variant: "destructive" });
+          return;
+        }
+        if (form.manufacturedOn && form.manufacturedOn >= form.expiresOn) {
+          toast({ title: t("purchases.batch.datesInvalid"), description: t("purchases.batch.datesInvalidDetail"), variant: "destructive" });
+          return;
+        }
+      }
     }
     if (!manageInventory.allowed) {
       toast({ title: t("inventory.page.permissionDenied"), description: manageInventory.reason, variant: "destructive" });
@@ -603,6 +636,19 @@ export default function InventoryPage() {
       purchaseDueDate: form.purchaseDueDate || undefined,
       purchaseBillNo: form.movementType === "purchase" ? `LPB-${Date.now().toString().slice(-6)}` : undefined,
       costPerRateUnit: form.movementType === "purchase" ? purchaseUnitCost || undefined : form.costPrice ? Number(form.costPrice) : undefined,
+      // The lot in hand. Sent only for a purchase of batch-tracked stock:
+      // the server refuses batch details on a product without batch tracking,
+      // and `batchCaptureSupported` is what tells it this client would have
+      // asked for them — see recordPurchase.
+      ...(receivingBatchTracked
+        ? {
+          batchCaptureSupported: true,
+          batchNumber: form.batchNumber.trim(),
+          expiresOn: form.expiresOn,
+          ...(form.manufacturedOn ? { manufacturedOn: form.manufacturedOn } : {}),
+          ...(Number(form.batchMrp) > 0 ? { batchMrp: Number(form.batchMrp) } : {}),
+        }
+        : {}),
       reason: ownerPinReason || form.reason || undefined,
       note: ownerPinReason || form.reason || undefined,
       ownerPin: ownerPin || undefined,
@@ -981,6 +1027,18 @@ export default function InventoryPage() {
                   <div><Label>{t("inventory.page.dueDate")}</Label><Input type="date" className="mt-1" value={form.purchaseDueDate} onChange={(event) => setForm((current) => ({ ...current, purchaseDueDate: event.target.value }))} disabled={purchaseDueAmount <= 0} /></div>
                 </div>
                 <p className="text-xs text-muted-foreground">{t("inventory.page.purchaseBillHelp")}</p>
+              </div>
+            ) : null}
+            {receivingBatchTracked ? (
+              <div className="rounded-xl border border-dashed border-[#cddcf0] bg-[#f7fbff] p-3 space-y-3">
+                <p className="text-xs font-bold text-[#41527a]">{t("inventory.page.batchSectionTitle")}</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div><Label>{t("purchases.batch.number")}</Label><Input className="mt-1" value={form.batchNumber} placeholder={t("purchases.batch.numberPlaceholder")} onChange={(event) => setForm((current) => ({ ...current, batchNumber: event.target.value }))} /></div>
+                  <div><Label>{t("purchases.batch.expiry")}</Label><Input type="date" className="mt-1" value={form.expiresOn} onChange={(event) => setForm((current) => ({ ...current, expiresOn: event.target.value }))} /></div>
+                  <div><Label>{t("purchases.batch.manufactured")}</Label><Input type="date" className="mt-1" value={form.manufacturedOn} onChange={(event) => setForm((current) => ({ ...current, manufacturedOn: event.target.value }))} /></div>
+                  <div><Label>{t("purchases.batch.mrp")}</Label><Input type="number" min="0" step="0.01" className="mt-1" value={form.batchMrp} placeholder={t("purchases.batch.mrpPlaceholder")} onChange={(event) => setForm((current) => ({ ...current, batchMrp: event.target.value }))} /></div>
+                </div>
+                <p className="text-xs text-muted-foreground">{t("inventory.page.batchSectionHelp")}</p>
               </div>
             ) : null}
             {form.movementType === "purchase" ? (

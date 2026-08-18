@@ -542,4 +542,6 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "purchases.batch.expiredDetail": "{names} की एक्सपायरी बीत चुकी है। पैक देख लें — एक्सपायर माल बिकने लायक स्टॉक में नहीं चढ़ सकता।",
   "purchases.batch.datesInvalid": "बैच की तारीखें जांचें",
   "purchases.batch.datesInvalidDetail": "एक्सपायरी बनने की तारीख के बाद की होनी चाहिए।",
+  "inventory.page.batchSectionTitle": "बैच और एक्सपायरी",
+  "inventory.page.batchSectionHelp": "सामने रखे पैक से भरें। बिलिंग पहले सबसे जल्दी एक्सपायर होने वाला माल बेचती है, और रिकॉल इसी नंबर से खोजा जाता है।",
 };
