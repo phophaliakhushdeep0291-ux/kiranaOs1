@@ -11,6 +11,7 @@ import {
   setLocationInventory,
 } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
 
 async function writeRequiredInventoryAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -260,6 +261,7 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
     productId, supplierId, supplierName,
     quantity, enteredUnit, billAmount,
     note, updateCost, updateMinPrice,
+    batchNumber, manufacturedOn, expiresOn, batchMrp, batchCaptureSupported,
   } = data;
   const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
 
@@ -374,6 +376,52 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
       },
     });
 
+    // The lot in hand, for stock that carries one.
+    //
+    // Written here rather than left to the batches screen because this is the
+    // only moment the delivery is in front of someone: the number and the date
+    // are printed on the strip and on nothing the shop keeps afterwards. Until
+    // now only the purchase-ORDER receive path recorded a lot, so a shop doing
+    // its receiving on this screen — which is the offline-first one, and the one
+    // most shops actually use — built up batch-tracked stock that FEFO could
+    // never allocate.
+    //
+    // Batch-tracked stock is REFUSED without a lot. Both receiving screens ask
+    // for one, so reaching here without it means the stock would land where FEFO
+    // cannot allocate it and a recall cannot find it — which is worse than a
+    // receipt the shop has to redo.
+    //
+    // The single exception is a purchase queued on a device running a build from
+    // before lot capture existed. Such an event can never be corrected — it is
+    // already written — and rejecting it would fail that one purchase forever.
+    // `batchCaptureSupported` is how a current client says "I asked"; only a
+    // SYNCED event may omit it, because a live REST call is by definition made by
+    // a client that could have sent it.
+    const suppliedLot = Boolean(batchNumber || expiresOn);
+    const clientAsksForLots = batchCaptureSupported === true || !identity.syncEventId;
+    if (product.batchTrackingEnabled && !suppliedLot && clientAsksForLots) {
+      throw new AppError(
+        `${product.name} is tracked by batch — record the batch number and expiry printed on the pack`,
+        422,
+        "BATCH_DETAILS_REQUIRED",
+      );
+    }
+    const lot = suppliedLot
+      ? await recordReceiptLot(tx, {
+        shopId,
+        locationId: location.id,
+        product,
+        receiptItemId: null,
+        quantityBaseQty: qtyInBase,
+        actualRate: pricePerRateUnit,
+        batchNumber,
+        manufacturedOn,
+        expiresOn,
+        mrp: batchMrp,
+        note: note ?? null,
+      })
+      : null;
+
     await writeRequiredInventoryAudit({
       shopId,
       userId: identity.userId ?? null,
@@ -396,6 +444,11 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
         purchaseDueAmount: purchasePayment.purchaseDueAmount,
         idempotencyKey,
         offlineSyncEventId: identity.syncEventId ?? null,
+        inventoryLotId: lot?.id ?? null,
+        batchNumber: lot?.batchNumber ?? null,
+        // Findable later: the batch-tracked receipts that came in from a build
+        // predating lot capture and therefore carry no lot.
+        lotSkippedLegacyClient: product.batchTrackingEnabled && !lot ? true : undefined,
       },
       req: identity.req ?? null,
     }, tx);

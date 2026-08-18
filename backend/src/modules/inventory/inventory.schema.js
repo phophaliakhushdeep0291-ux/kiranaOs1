@@ -6,6 +6,13 @@ const purchaseDueDate = z.string()
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Purchase due date must be YYYY-MM-DD")
   .optional();
+// Batch dates are day-precision and typed off a printed strip, so they are
+// carried as YYYY-MM-DD and parsed to a UTC day by the lot service — the same
+// contract the purchase-order receive endpoint already uses.
+const batchDay = z.string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Batch date must be YYYY-MM-DD")
+  .optional();
 const idempotencyKey = z.string().trim().min(8).max(160);
 const clientMovementId = z.string().trim().min(8).max(160).optional();
 
@@ -32,6 +39,22 @@ export const purchaseSchema = z.object({
   purchasePaidAmount: moneyAmount().optional(),
   purchaseDueAmount: moneyAmount().optional(),
   purchaseDueDate,
+  // ── The lot in hand, for stock that carries one ─────────────────────────
+  // Optional on the wire even for a batch-tracked product, and deliberately so:
+  // an offline device can hold a queued purchase written before this field
+  // existed, and an event that can never validate would block its whole outbox.
+  // The receiving screen requires them; the server records a lot when it is
+  // given one. See recordPurchase.
+  batchNumber: z.string().trim().min(1).max(80).optional(),
+  manufacturedOn: batchDay,
+  expiresOn: batchDay,
+  // The MRP printed on THIS batch's pack. Medicine MRP is revised between
+  // batches, so the strip in hand and the product record routinely disagree.
+  batchMrp: moneyAmount({ positive: true }).optional(),
+  // Set by a client that asks for the lot when the product is batch-tracked.
+  // Its ABSENCE on a queued sync event is what marks that event as written by a
+  // build that predates lot capture — see recordPurchase.
+  batchCaptureSupported: z.boolean().optional(),
   note: z.string().optional(),
   updateCost: z.boolean().default(true),
   updateMinPrice: z.boolean().default(false),

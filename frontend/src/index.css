@@ -770,6 +770,11 @@
   .purchase-lines-head { @apply grid min-w-[440px] grid-cols-[1fr_56px_76px_76px_44px] items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]; }
   .purchase-line { @apply grid min-w-[440px] grid-cols-[1fr_56px_76px_76px_44px] items-center gap-1.5; }
   .purchase-line-remove { @apply grid h-11 w-11 place-items-center rounded text-rose-400 hover:bg-rose-50; }
+  /* The lot in hand, under the line it belongs to. `col-span-full` because the
+     row above is a fixed five-column grid and this is a sixth child — without it
+     the block would be squeezed into the 44px remove-button column. */
+  .purchase-line-batch { @apply col-span-full mb-1 grid grid-cols-2 gap-1.5 rounded-lg border border-dashed border-[#cddcf0] bg-[#f7fbff] p-2 sm:grid-cols-4; }
+  .purchase-line-batch label { @apply mb-1 block text-[9.5px] font-bold uppercase tracking-wide text-[#71809b]; }
   .purchase-lines-actions { @apply flex min-w-[420px] items-center justify-between pt-1; }
   .purchase-lines-actions > button:first-child { @apply flex min-h-11 items-center gap-1 px-2 text-[12px] font-bold text-[var(--brand)] hover:underline; }
   .purchase-lines-actions > button:last-child { @apply h-8 gap-1.5 rounded-[8px] text-[11.5px] font-bold; }
