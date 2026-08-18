@@ -883,7 +883,7 @@ function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogPr
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-black text-[#0b1735]">{product.name}</p>
-        <p className="text-xs font-semibold text-[#687892]">{product.unit} - In Stock</p>
+        <p className="text-xs font-semibold text-[#687892]">{product.unit}</p>
         <p className="mt-1 text-sm font-black text-[#071432]">{formatRs(product.price)}</p>
       </div>
       {qty > 0 ? (

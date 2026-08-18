@@ -506,6 +506,53 @@ if (ctx.skip) {
       assert.equal(blocked.code, "STORE_LIMIT_REACHED");
     });
 
+    test("takes an online order for something the shelf says is empty", async () => {
+      // A customer order is a REQUEST, not a sale: it lands in the owner's inbox
+      // and moves no stock, which only moves later if the shopkeeper bills it.
+      // Kirana stock counts drift constantly — the counter itself permits
+      // overselling rather than block a real sale — so gating the QR page on
+      // stock refused a customer over a number nobody keeps accurate, and did it
+      // silently: the shop never learnt it had lost an order.
+      //
+      // Trade units made it worse. rateUnit is whatever the trade sells in (bag,
+      // strip, bottle, pair, plate) and the old check ran those through
+      // toBaseQty, which rejects everything outside its eighteen known units, so
+      // the whole cart 400'd at any stock level.
+      const { tenant, auth } = await ownerContext();
+      await ctx.db.shop.update({
+        where: { id: tenant.shop.id },
+        data: { settingsJson: JSON.stringify({ customerOrdering: { enabled: true } }) },
+      });
+      const soldOut = await createProduct(ctx.db, tenant.shop.id, {
+        name: "Sold Out Atta", stockBaseQty: 0, defaultPricePerRateUnit: 265,
+        // A unit toBaseQty has never heard of, which is most of what the trades sell in.
+        rateUnit: "bag", displayUnit: "bag", baseUnit: "bag",
+      });
+
+      const catalog = assertSuccess(await ctx.get(`/api/public/shops/${tenant.shop.id}/catalog`));
+      assert.ok(
+        catalog.products.some((row) => row.id === soldOut.id),
+        "an out-of-stock product must still be on the storefront — the shopkeeper decides whether to fill the order",
+      );
+
+      const placed = assertSuccess(await ctx.post(`/api/public/shops/${tenant.shop.id}/orders`, {
+        fulfillmentType: "pickup",
+        customerName: "Hopeful Customer",
+        customerMobile: "9876543210",
+        // Far more than exists, in a unit the conversion table rejects.
+        items: [{ productId: soldOut.id, qty: 12 }],
+      }, { headers: { "Idempotency-Key": "sold-out-order-1" } }), 201);
+      assert.equal(placed.itemCount, 1, "the line must survive: no silent drop");
+      assert.equal(placed.estimatedTotal, 3180, "12 bags at the shop's own price");
+
+      // And it reaches the owner, which is the whole point of not refusing it.
+      const inbox = assertSuccess(await ctx.get("/api/orders", { token: auth.accessToken }));
+      assert.ok(inbox.orders.some((row) => row.id === placed.orderId), "the order must reach the owner's inbox");
+
+      // Stock is untouched — an order is not a sale.
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: soldOut.id } })).stockBaseQty, 0);
+    });
+
     test("routes public customer orders to one branch with live stock, pricing, and guarded fulfillment", async () => {
       const { tenant, auth } = await ownerContext();
       const webhook = await ctx.db.webhookEndpoint.create({
