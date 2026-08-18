@@ -43,7 +43,11 @@ export function humanize(value: string | null | undefined) {
 
 export function inr(value: number | null | undefined) {
   const amount = Number(value ?? 0);
-  return `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  // The sign goes OUTSIDE the symbol. `₹-200` reads as a typo at counter speed;
+  // a negative expected-cash figure is a real state here (cash kharcha can
+  // exceed cash taken), so it has to be legible rather than merely correct.
+  const sign = amount < 0 ? "−" : "";
+  return `${sign}₹${Math.abs(amount).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
 export function inrFromPaise(paise: number | null | undefined) {

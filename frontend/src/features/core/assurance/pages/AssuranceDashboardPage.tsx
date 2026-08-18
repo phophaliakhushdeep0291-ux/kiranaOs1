@@ -6,6 +6,8 @@ import { AlertTriangle, FileSearch, Loader2, Play, RefreshCw, ShieldCheck } from
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getAssuranceDashboard, recomputeBaselines, startRun } from "../api";
+import { ProblemCard } from "../ProblemCard";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import {
   AssuranceDisclaimer,
   Chip,
@@ -24,6 +26,7 @@ function isoDaysAgo(days: number) {
 }
 
 export default function AssuranceDashboardPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [rangeDays, setRangeDays] = useState(7);
@@ -37,8 +40,8 @@ export default function AssuranceDashboardPage() {
     mutationFn: () => startRun({ runType: "MANUAL", from: isoDaysAgo(rangeDays), to: new Date().toISOString() }),
     onSuccess: (result) => {
       toast({
-        title: "Assurance run finished",
-        description: `${result.evaluated} transaction(s) reviewed · ${result.findingsCreated} new finding(s) · ${result.findingsUpdated} updated.`,
+        title: t("assurance.runDone"),
+        description: t("assurance.runDoneDetail", { count: result.evaluated, created: result.findingsCreated }),
       });
       queryClient.invalidateQueries({ queryKey: ["assurance"] });
     },
@@ -83,10 +86,10 @@ export default function AssuranceDashboardPage() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <ShieldCheck className="h-5 w-5 text-primary" /> Financial Assurance
+            <ShieldCheck className="h-5 w-5 text-primary" /> {t("assurance.title")}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Continuous control monitoring across billing, khata, stock, purchases, expenses, cash and sync.
+            {t("assurance.subtitle")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -103,7 +106,7 @@ export default function AssuranceDashboardPage() {
           </select>
           <Button onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
             {runMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-            Run review
+            {t("assurance.run")}
           </Button>
           <Button variant="outline" onClick={() => baselineMutation.mutate()} disabled={baselineMutation.isPending}>
             {baselineMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
@@ -114,25 +117,24 @@ export default function AssuranceDashboardPage() {
 
       <AssuranceDisclaimer />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Open findings" value={data?.totals.openFindings ?? 0} hint="Awaiting review or evidence" />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Critical"
+          label={t("assurance.stat.toCheck")}
+          value={inr(data?.totals.highRiskAmountRupees ?? 0)}
+          hint={t("assurance.stat.toCheckHint")}
+        />
+        <StatCard label={t("assurance.stat.problems")} value={data?.totals.openFindings ?? 0} hint={t("assurance.stat.problemsHint")} />
+        <StatCard
+          label={t("assurance.stat.urgent")}
           value={data?.totals.criticalFindings ?? 0}
-          hint="Needs attention first"
+          hint={t("assurance.stat.urgentHint")}
           tone={(data?.totals.criticalFindings ?? 0) > 0 ? "text-[#ef4444]" : undefined}
         />
-        <StatCard label="High risk" value={data?.totals.highFindings ?? 0} hint="Serious but not critical" />
         <StatCard
-          label="Value of gaps found"
-          value={inr(data?.totals.highRiskAmountRupees ?? 0)}
-          hint={
-            (data?.totals.unquantifiedHighRiskFindings ?? 0) > 0
-              ? `Measured shortfalls and drifts · ${data?.totals.unquantifiedHighRiskFindings} more not yet quantified`
-              : "Measured shortfalls and drifts — money to check, not a confirmed loss"
-          }
+          label={t("assurance.stat.proof")}
+          value={data?.totals.unresolvedEvidenceRequests ?? 0}
+          hint={t("assurance.stat.proofHint")}
         />
-        <StatCard label="Evidence pending" value={data?.totals.unresolvedEvidenceRequests ?? 0} hint="Documents still requested" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -190,24 +192,12 @@ export default function AssuranceDashboardPage() {
             <ul className="divide-y divide-border">
               {data.topFindings.map((finding) => (
                 <li key={finding.findingId} className="flex flex-wrap items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-                  <div className="min-w-0">
-                    <Link href={`/assurance/findings/${finding.findingId}`} className="text-sm font-medium hover:underline">
-                      {finding.title}
-                    </Link>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <StatusChip status={finding.status} />
-                      <Chip>{humanize(finding.sourceEntityType)}</Chip>
-                      {finding.triggeredRules?.slice(0, 2).map((rule) => (
-                        <Chip key={rule.ruleCode}>{rule.ruleCode}</Chip>
-                      ))}
-                    </div>
-                  </div>
-                  <RiskChip level={finding.riskLevel} score={finding.riskScore} />
+                  <ProblemCard finding={finding} compact />
                 </li>
               ))}
             </ul>
           ) : (
-            <EmptyState title="No open findings" hint="Your recent transactions look internally consistent." />
+            <EmptyState title={t("assurance.empty.title")} hint={t("assurance.empty.hint")} />
           )}
         </SectionCard>
 
