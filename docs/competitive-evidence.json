@@ -82,18 +82,18 @@
       "id": "restaurant_operations",
       "domain": "billing_inventory",
       "weight": 15,
-      "status": "partial",
+      "status": "verified",
       "proofKind": "code_controlled",
-      "summary": "Tables, KOT, recipes, QR ordering and menu add-ons exist; reservations, kiosk and staff scheduling are not complete.",
+      "summary": "Tables, KOT, recipes, QR ordering and menu add-ons, plus the three service-floor workflows that were missing. Reservations refuse to promise one table to two overlapping sittings, free the slot the moment a booking is cancelled, and re-check the clash on every edit; back-to-back seatings are allowed because the intervals are half-open. Staff shifts apply the same overlap rule per person, exclude cancelled shifts from scheduled hours, and report scheduled time explicitly rather than implying hours worked. Kiosk terminals are named and revocable and serve the same catalogue and order path as the table QR, so the room can never hold two menus that disagree.",
       "competitorEvidence": [
         { "product": "Petpooja", "url": "https://www.petpooja.com/poss", "claim": "Restaurant POS breadth includes KOT, tables, ordering, recipes and operational add-ons." },
         { "product": "Toast", "url": "https://pos.toasttab.com/restaurant-pos", "claim": "Restaurant platform breadth includes KDS, online ordering, scheduling and integrations." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/src/verticals/restaurant", "frontend/src/features/verticals/restaurant"],
-        "testCommands": ["cd backend && npm run test:restaurant", "cd backend && npm run test:integration", "cd frontend && npm test"]
+        "sourcePaths": ["backend/src/verticals/restaurant", "backend/src/verticals/restaurant/service-ops/intervals.js", "backend/src/verticals/restaurant/service-ops/reservations.service.js", "backend/src/verticals/restaurant/service-ops/shifts.service.js", "backend/src/verticals/restaurant/service-ops/kiosk.service.js", "backend/prisma-postgres/migrations/000112_restaurant_service_ops/migration.sql", "frontend/src/features/verticals/restaurant", "frontend/src/features/verticals/restaurant/pages/ReservationsPage.tsx"],
+        "testCommands": ["cd backend && npm run test:restaurant", "cd backend && npm run prod:check", "cd frontend && npm test"]
       },
-      "lastVerifiedAt": "2026-08-08"
+      "lastVerifiedAt": "2026-08-19"
     },
     {
       "id": "gst_working_papers",

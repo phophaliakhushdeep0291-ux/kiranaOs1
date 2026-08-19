@@ -116,6 +116,9 @@ model Shop {
   furnitureOrders               FurnitureOrder[]
   testerUnits                   TesterUnit[]
   restaurantTables              RestaurantTable[]
+  tableReservations             TableReservation[]
+  staffShifts                   StaffShift[]
+  kioskTerminals                KioskTerminal[]
   kitchenTickets                KitchenTicket[]
   dishRecipeComponents          DishRecipeComponent[]
   menuAddonGroups               MenuAddonGroup[]
@@ -396,6 +399,7 @@ model User {
   aiActionLogs                AiActionLog[]
   auditLogs                   AuditLog[]
   sessions                    Session[]
+  staffShifts                 StaffShift[]
   authTokens                  AuthToken[]
   devices                     Device[]
   deviceReplacementChallenges DeviceReplacementChallenge[]
@@ -897,6 +901,9 @@ model StoreLocation {
   storageBins              StorageBin[]
   inventoryLots            InventoryLot[]
   restaurantTables         RestaurantTable[]
+  tableReservations        TableReservation[]
+  staffShifts              StaffShift[]
+  kioskTerminals           KioskTerminal[]
   kitchenTickets           KitchenTicket[]
   channelSettlementImports ChannelSettlementImport[]
   channelSettlementRows    ChannelSettlementRow[]
@@ -4019,8 +4026,10 @@ model RestaurantTable {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  reservations TableReservation[]
+  location     StoreLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   // One sticker, one table. The guard that stops a mistyped code silently
   // pointing two tables at the same order.
@@ -4045,6 +4054,97 @@ model RestaurantTable {
 // Rows are deleted outright rather than soft-deleted. A recipe line is
 // configuration, not history — and a soft-deleted row would sit inside the
 // unique index below, silently refusing to let the cook add the ingredient back.
+// A table booked ahead of service. The floor is the scarce resource, so the one
+// rule that matters is that two parties are never promised the same table at the
+// same time — enforced in the service against the interval, because a unique index
+// cannot express "overlaps".
+//
+// tableId is nullable on purpose: a booking taken over the phone often has a time
+// and a party size before anyone decides which table it sits at, and refusing to
+// record it until a table is chosen would push the host back to paper.
+model TableReservation {
+  id              String    @id @default(cuid())
+  shopId          String
+  locationId      String?
+  tableId         String?
+  guestName       String
+  guestPhone      String?
+  partySize       Int       @default(2)
+  reservedFor     DateTime
+  durationMinutes Int       @default(90)
+  // booked -> seated -> completed, or cancelled / no_show. Only the open statuses
+  // hold a table, so a cancelled booking frees the slot immediately.
+  status          String    @default("booked")
+  source          String    @default("phone")
+  note            String?
+  seatedAt        DateTime?
+  closedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop     Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  table    RestaurantTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+
+  @@index([shopId, reservedFor])
+  @@index([shopId, status, reservedFor])
+  @@index([shopId, tableId, reservedFor])
+  @@index([shopId, updatedAt, id])
+}
+
+// Who is rostered on, and when. Kept deliberately thin: this is the schedule the
+// manager publishes, not a timeclock — hours actually worked are a separate
+// question and inventing them from a roster would be fiction.
+//
+// Overlapping shifts for one person are refused for the same reason two parties
+// cannot hold one table: the schedule is only useful if it cannot say someone is
+// in two places at once.
+model StaffShift {
+  id         String   @id @default(cuid())
+  shopId     String
+  locationId String?
+  userId     String
+  startsAt   DateTime
+  endsAt     DateTime
+  position   String?
+  status     String   @default("scheduled")
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, startsAt])
+  @@index([shopId, userId, startsAt])
+  @@index([shopId, updatedAt, id])
+}
+
+// A self-order terminal standing in the shop. It is the same storefront the table
+// QR already serves, minus the table: the guest orders against the terminal and
+// carries an order number away, so nothing about the menu, stock or order path is
+// duplicated for it.
+model KioskTerminal {
+  id            String    @id @default(cuid())
+  shopId        String
+  locationId    String?
+  code          String
+  name          String
+  active        Boolean   @default(true)
+  requirePrepay Boolean   @default(false)
+  lastSeenAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@unique([shopId, code])
+  @@index([shopId, active])
+  @@index([shopId, updatedAt, id])
+}
+
 model DishRecipeComponent {
   id     String @id @default(cuid())
   shopId String

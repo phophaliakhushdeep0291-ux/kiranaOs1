@@ -1,4 +1,4 @@
-import { ChefHat, LayoutGrid, Soup, Utensils } from "lucide-react";
+import { CalendarClock, ChefHat, LayoutGrid, Soup, Utensils } from "lucide-react";
 import type { VerticalPack } from "../types";
 
 /**
@@ -29,12 +29,15 @@ export const restaurantPack: VerticalPack = {
   id: "restaurant",
   label: "Restaurant & Café",
   businessTypes: ["restaurant"],
-  paths: ["/tables", "/kitchen", "/menu", "/kitchen-stock"],
+  paths: ["/tables", "/kitchen", "/menu", "/kitchen-stock", "/reservations"],
   routes: [
     { path: "/tables", page: "restaurant/tables", featureName: "restaurant_tables" },
     { path: "/kitchen", page: "restaurant/kitchen", featureName: "restaurant_kot" },
     { path: "/menu", page: "restaurant/menu", featureName: "restaurant_menu" },
     { path: "/kitchen-stock", page: "restaurant/kitchen-stock", featureName: "restaurant_recipe_inventory" },
+    // Same gate as the floor plan: a shop that seats guests at numbered tables
+    // is exactly the shop that books them ahead.
+    { path: "/reservations", page: "restaurant/reservations", featureName: "restaurant_tables" },
   ],
   nav: [
     {
@@ -70,6 +73,17 @@ export const restaurantPack: VerticalPack = {
       Icon: Soup,
       insertAfter: "/products",
       mobile: { group: "Stock & buying", helper: "shopType.nav.kitchenStock.helper" },
+    },
+    {
+      href: "/reservations",
+      label: "shopType.nav.reservations",
+      Icon: CalendarClock,
+      // Anchored to Customers, not Billing. /billing already carries Tables and
+      // Kitchen, and a third entry spliced there lands two rows below its anchor —
+      // which is the drift vertical-navigation-fit exists to catch. Customers is
+      // also where a booking belongs: it is a guest record before it is a sale.
+      insertAfter: "/customers",
+      mobile: { group: "Sell", helper: "shopType.nav.reservations.helper" },
     },
   ],
   // Contributes the add-on dialog to shared billing, so core never imports

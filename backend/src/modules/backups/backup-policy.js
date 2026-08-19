@@ -99,6 +99,13 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // would hand back correct quantities with no idea which shelf any of it is on, and
   // every pick in the building would start from scratch.
   "StorageBin", "BinPlacement",
+  // The service side of a restaurant floor. A reservation is a promise already made
+  // to a guest and a shift is a promise already made to staff — both are business
+  // history the shop authored, not install state, and a restore that dropped them
+  // would hand back a room with no idea who is coming or who is working. The kiosk
+  // terminal restores with them because every screen in the room is configured
+  // against its code, and losing the row turns each one into a dead terminal.
+  "TableReservation", "StaffShift", "KioskTerminal",
 ]);
 
 export const RESTORABLE_CHILD_MODELS = Object.freeze({
