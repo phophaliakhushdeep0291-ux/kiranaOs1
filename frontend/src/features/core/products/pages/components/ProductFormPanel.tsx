@@ -1070,7 +1070,7 @@ export function ProductFormPanel({
           {!editing && (
             <label className="mb-3 flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-[#45577a]">
               <input type="checkbox" aria-label={t("products.form.keepOpen")} checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[var(--brand)]" />
-              Keep panel open to add another product
+              {t("products.form.keepOpen")}
             </label>
           )}
           <div className="grid grid-cols-2 gap-2.5">
