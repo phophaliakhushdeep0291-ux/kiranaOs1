@@ -93,6 +93,12 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // would hand back combos that contain nothing and break "which combos include
   // roti?", the question asked every time a dish is 86'd or repriced.
   "MenuComboComponent",
+  // Where inside a branch each product sits. A placement is not stock — location
+  // stock stays authoritative and a bin move nets to zero — but the bin map is the
+  // shop's own put-away layout, built by hand over months. A restore that dropped it
+  // would hand back correct quantities with no idea which shelf any of it is on, and
+  // every pick in the building would start from scratch.
+  "StorageBin", "BinPlacement",
 ]);
 
 export const RESTORABLE_CHILD_MODELS = Object.freeze({

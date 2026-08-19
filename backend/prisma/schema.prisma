@@ -93,6 +93,8 @@ model Shop {
   loyaltyTransactions           LoyaltyTransaction[]
   complianceDocuments           ComplianceDocument[]
   stockCountSessions            StockCountSession[]
+  storageBins                   StorageBin[]
+  binPlacements                 BinPlacement[]
   giftCards                     GiftCard[]
   giftCardTransactions          GiftCardTransaction[]
   backupArtifacts               BackupArtifact[]
@@ -252,11 +254,12 @@ model ProductSellingUnit {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  shop           Shop            @relation(fields: [shopId], references: [id])
-  product        Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shop           Shop                @relation(fields: [shopId], references: [id])
+  product        Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
   pricingRules   PricingRule[]
   billItems      BillItem[]
   locationStocks LocationStock[]
+  binPlacements  BinPlacement[]
   transferItems  StockTransferItem[]
 
   @@unique([shopId, productId, unitCode])
@@ -581,6 +584,7 @@ model Product {
   purchaseReturnItems  PurchaseReturnItem[]
   stockCountLines      StockCountLine[]
   inventoryLots        InventoryLot[]
+  binPlacements        BinPlacement[]
   addonGroups          ProductAddonGroup[]
 
   @@unique([shopId, idempotencyKey])
@@ -871,28 +875,29 @@ model StoreLocation {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  shop                 Shop                   @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  stocks               LocationStock[]
-  outgoingTransfers    StockTransfer[]        @relation("TransferFrom")
-  incomingTransfers    StockTransfer[]        @relation("TransferTo")
-  bills                Bill[]
-  stockLedger          StockLedger[]
-  udharLedger          UdharLedger[]
-  purchaseHistory      PurchaseHistory[]
-  expenses             Expense[]
-  dailyClosings        DailyClosingSnapshot[]
-  retailPaymentIntents RetailPaymentIntent[]
-  purchaseOrders       PurchaseOrder[]
-  purchaseReceipts     PurchaseReceipt[]
-  purchaseReturns      PurchaseReturn[]
-  customerOrders       CustomerOrder[]
-  userAccess           UserLocationAccess[]
-  pricingRules         PricingRule[]
-  loyaltyTransactions  LoyaltyTransaction[]
-  stockCountSessions   StockCountSession[]
-  inventoryLots        InventoryLot[]
-  restaurantTables     RestaurantTable[]
-  kitchenTickets       KitchenTicket[]
+  shop                     Shop                      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  stocks                   LocationStock[]
+  outgoingTransfers        StockTransfer[]           @relation("TransferFrom")
+  incomingTransfers        StockTransfer[]           @relation("TransferTo")
+  bills                    Bill[]
+  stockLedger              StockLedger[]
+  udharLedger              UdharLedger[]
+  purchaseHistory          PurchaseHistory[]
+  expenses                 Expense[]
+  dailyClosings            DailyClosingSnapshot[]
+  retailPaymentIntents     RetailPaymentIntent[]
+  purchaseOrders           PurchaseOrder[]
+  purchaseReceipts         PurchaseReceipt[]
+  purchaseReturns          PurchaseReturn[]
+  customerOrders           CustomerOrder[]
+  userAccess               UserLocationAccess[]
+  pricingRules             PricingRule[]
+  loyaltyTransactions      LoyaltyTransaction[]
+  stockCountSessions       StockCountSession[]
+  storageBins              StorageBin[]
+  inventoryLots            InventoryLot[]
+  restaurantTables         RestaurantTable[]
+  kitchenTickets           KitchenTicket[]
   channelSettlementImports ChannelSettlementImport[]
   channelSettlementRows    ChannelSettlementRow[]
 
@@ -931,6 +936,61 @@ model LocationStock {
   @@unique([locationId, productId, sellingUnitId])
   @@index([shopId, productId])
   @@index([shopId, sellingUnitId])
+}
+
+model StorageBin {
+  id         String   @id @default(cuid())
+  shopId     String
+  locationId String
+  code       String
+  name       String
+  zone       String?
+  // pick = the face a cashier picks from, bulk = reserve pallets/sacks behind it,
+  // staging = received-but-not-put-away. Put-away suggestions read this.
+  kind       String   @default("pick")
+  sortOrder  Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  shop       Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location   StoreLocation  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  placements BinPlacement[]
+
+  @@unique([locationId, code])
+  @@index([shopId, locationId, active])
+  @@index([shopId, updatedAt, id])
+}
+
+// Where inside a location a product physically sits. This is deliberately NOT a
+// second stock ledger: LocationStock (and Product.stockBaseQty for the primary)
+// stays authoritative for how much a location holds, and the quantity not yet
+// assigned to any bin is derived as location stock minus the sum of placements.
+// The only mutation is a move between two bins of the SAME location, which nets
+// to zero, so no bin operation can change what a location owns. A design that let
+// bins own quantity would need every sale, transfer and count to know about bins
+// and would drift the moment one path forgot.
+model BinPlacement {
+  id            String   @id @default(cuid())
+  shopId        String
+  binId         String
+  productId     String
+  // Per-pack products place each size separately, for the same reason
+  // LocationStock does: a placement that cannot say which size it holds cannot be
+  // picked from or audited.
+  sellingUnitId String?
+  stockBaseQty  Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shop        Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  bin         StorageBin          @relation(fields: [binId], references: [id], onDelete: Cascade)
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sellingUnit ProductSellingUnit? @relation(fields: [sellingUnitId], references: [id], onDelete: Cascade)
+
+  @@unique([binId, productId, sellingUnitId])
+  @@index([shopId, productId])
+  @@index([shopId, updatedAt, id])
 }
 
 model StockCountSession {
@@ -1708,8 +1768,8 @@ model InventoryLot {
   locationId            String
   productId             String
   purchaseReceiptItemId String?
-  sellingUnitId          String?
-  producedByRunId        String?
+  sellingUnitId         String?
+  producedByRunId       String?
   batchNumber           String
   manufacturedOn        DateTime?
   expiresOn             DateTime
@@ -1777,25 +1837,25 @@ model ManufacturingBomItem {
 }
 
 model ProductionRun {
-  id                    String    @id @default(cuid())
-  shopId                String
-  locationId            String
-  bomId                  String
-  runNumber              String
-  status                 String    @default("planned")
-  plannedOutputBaseQty  Float
-  actualOutputBaseQty   Float?
-  finishedBatchNumber   String?
-  manufacturedOn        DateTime?
-  expiresOn             DateTime?
-  qcStatus               String    @default("pending")
-  notes                  String?
-  startedAt              DateTime?
-  completedAt            DateTime?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  shopId               String
+  locationId           String
+  bomId                String
+  runNumber            String
+  status               String    @default("planned")
+  plannedOutputBaseQty Float
+  actualOutputBaseQty  Float?
+  finishedBatchNumber  String?
+  manufacturedOn       DateTime?
+  expiresOn            DateTime?
+  qcStatus             String    @default("pending")
+  notes                String?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  bom          ManufacturingBom       @relation(fields: [bomId], references: [id], onDelete: Restrict)
+  bom          ManufacturingBom        @relation(fields: [bomId], references: [id], onDelete: Restrict)
   consumptions ProductionConsumption[]
   outputs      ProductionOutput[]
 
@@ -1805,15 +1865,15 @@ model ProductionRun {
 }
 
 model ProductionConsumption {
-  id                 String   @id @default(cuid())
-  shopId             String
-  runId              String
-  productId          String
-  inventoryLotId     String?
-  plannedBaseQty     Float
-  actualBaseQty      Float
-  sourceBatchNumber  String?
-  createdAt          DateTime @default(now())
+  id                String   @id @default(cuid())
+  shopId            String
+  runId             String
+  productId         String
+  inventoryLotId    String?
+  plannedBaseQty    Float
+  actualBaseQty     Float
+  sourceBatchNumber String?
+  createdAt         DateTime @default(now())
 
   run ProductionRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
@@ -1822,17 +1882,17 @@ model ProductionConsumption {
 }
 
 model ProductionOutput {
-  id                 String   @id @default(cuid())
-  shopId             String
-  runId              String
-  productId          String
-  sellingUnitId      String?
-  inventoryLotId     String?
-  packagingSku       String?
-  quantityBaseQty    Float
-  packageCount       Float?
-  batchNumber        String
-  createdAt          DateTime @default(now())
+  id              String   @id @default(cuid())
+  shopId          String
+  runId           String
+  productId       String
+  sellingUnitId   String?
+  inventoryLotId  String?
+  packagingSku    String?
+  quantityBaseQty Float
+  packageCount    Float?
+  batchNumber     String
+  createdAt       DateTime @default(now())
 
   run ProductionRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
@@ -1889,23 +1949,23 @@ model TradeOrder {
 }
 
 model TradeOrderItem {
-  id                 String   @id @default(cuid())
-  shopId             String
-  orderId            String
-  productId          String
-  sellingUnitId      String?
-  sku                 String?
-  buyerProductCode   String?
-  description        String
-  hsn                 String?
-  quantity            Float
-  quantityBaseQty     Float
-  unitPrice           Float
-  gstRate             Float   @default(0)
-  lineDiscount        Float   @default(0)
-  lineTotal           Float
-  packedQuantity      Float   @default(0)
-  createdAt           DateTime @default(now())
+  id               String   @id @default(cuid())
+  shopId           String
+  orderId          String
+  productId        String
+  sellingUnitId    String?
+  sku              String?
+  buyerProductCode String?
+  description      String
+  hsn              String?
+  quantity         Float
+  quantityBaseQty  Float
+  unitPrice        Float
+  gstRate          Float    @default(0)
+  lineDiscount     Float    @default(0)
+  lineTotal        Float
+  packedQuantity   Float    @default(0)
+  createdAt        DateTime @default(now())
 
   order       TradeOrder             @relation(fields: [orderId], references: [id], onDelete: Cascade)
   allocations TradeOrderAllocation[]
@@ -1915,13 +1975,13 @@ model TradeOrderItem {
 }
 
 model TradeOrderAllocation {
-  id                 String   @id @default(cuid())
-  shopId             String
-  orderItemId        String
-  inventoryLotId     String
-  batchNumber        String
-  quantityBaseQty    Float
-  createdAt          DateTime @default(now())
+  id              String   @id @default(cuid())
+  shopId          String
+  orderItemId     String
+  inventoryLotId  String
+  batchNumber     String
+  quantityBaseQty Float
+  createdAt       DateTime @default(now())
 
   orderItem TradeOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
 
@@ -1930,9 +1990,9 @@ model TradeOrderAllocation {
 }
 
 model TradeDispatch {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   shopId             String
-  orderId            String   @unique
+  orderId            String    @unique
   dispatchNumber     String
   dispatchDate       DateTime
   transporterName    String?
@@ -1948,8 +2008,8 @@ model TradeDispatch {
   grossWeight        Float?
   sealNumber         String?
   notes              String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   order TradeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
 
@@ -2730,9 +2790,9 @@ model PaymentTransaction {
   shop         Shop          @relation(fields: [shopId], references: [id])
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
 
+  @@unique([provider, providerPaymentId])
   @@index([shopId, createdAt])
   @@index([subscriptionId])
-  @@unique([provider, providerPaymentId])
 }
 
 model PaymentProviderEvent {
@@ -4174,7 +4234,7 @@ model BillItemAddon {
 // Provider-neutral order and payout reconciliation. Importers map their own
 // CSV headers onto these canonical fields; no proprietary format is guessed.
 model ChannelSettlementImport {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   shopId             String
   locationId         String?
   provider           String
@@ -4183,18 +4243,18 @@ model ChannelSettlementImport {
   mappingJson        String
   periodFrom         DateTime?
   periodTo           DateTime?
-  rowCount           Int      @default(0)
-  grossPaise         BigInt   @default(0)
-  calculatedNetPaise BigInt   @default(0)
-  paidNetPaise       BigInt   @default(0)
-  variancePaise      BigInt   @default(0)
-  status             String   @default("processed")
+  rowCount           Int       @default(0)
+  grossPaise         BigInt    @default(0)
+  calculatedNetPaise BigInt    @default(0)
+  paidNetPaise       BigInt    @default(0)
+  variancePaise      BigInt    @default(0)
+  status             String    @default("processed")
   importedByUserId   String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  shop     Shop                   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
   rows     ChannelSettlementRow[]
 
   @@unique([shopId, provider, fileHash])
@@ -4204,7 +4264,7 @@ model ChannelSettlementImport {
 }
 
 model ChannelSettlementRow {
-  id                         String   @id @default(cuid())
+  id                         String    @id @default(cuid())
   importId                   String
   shopId                     String
   locationId                 String?
@@ -4214,33 +4274,33 @@ model ChannelSettlementRow {
   externalOrderId            String
   orderDate                  DateTime
   channelStatus              String?
-  currency                   String   @default("INR")
+  currency                   String    @default("INR")
   grossPaise                 BigInt
-  merchantDiscountPaise      BigInt   @default(0)
-  platformCommissionPaise    BigInt   @default(0)
-  paymentFeePaise            BigInt   @default(0)
-  taxOnFeesPaise             BigInt   @default(0)
-  tcsPaise                   BigInt   @default(0)
-  tdsPaise                   BigInt   @default(0)
-  adjustmentPaise            BigInt   @default(0)
-  refundPaise                BigInt   @default(0)
+  merchantDiscountPaise      BigInt    @default(0)
+  platformCommissionPaise    BigInt    @default(0)
+  paymentFeePaise            BigInt    @default(0)
+  taxOnFeesPaise             BigInt    @default(0)
+  tcsPaise                   BigInt    @default(0)
+  tdsPaise                   BigInt    @default(0)
+  adjustmentPaise            BigInt    @default(0)
+  refundPaise                BigInt    @default(0)
   providerExpectedNetPaise   BigInt?
   calculatedExpectedNetPaise BigInt
   paidNetPaise               BigInt
   variancePaise              BigInt
-  mismatchTypesJson          String   @default("[]")
-  matchStatus                String   @default("open")
+  mismatchTypesJson          String    @default("[]")
+  matchStatus                String    @default("open")
   candidateCustomerOrderId   String?
   candidateBillId            String?
   matchedCustomerOrderId     String?
   matchedBillId              String?
   bankStatementTransactionId String?
-  resolutionStatus           String   @default("open")
+  resolutionStatus           String    @default("open")
   resolutionNote             String?
   resolvedByUserId           String?
   resolvedAt                 DateTime?
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   import   ChannelSettlementImport  @relation(fields: [importId], references: [id], onDelete: Cascade)
   shop     Shop                     @relation(fields: [shopId], references: [id], onDelete: Cascade)
@@ -4296,8 +4356,8 @@ model MenuComboComponent {
   componentName      String
 
   /// How many of this dish the combo includes — 2 roti in a thali.
-  quantity  Float @default(1)
-  sortOrder Int   @default(0)
+  quantity  Float   @default(1)
+  sortOrder Int     @default(0)
   note      String?
 
   createdAt DateTime @default(now())

@@ -183,18 +183,18 @@
       "id": "warehouse_repackaging",
       "domain": "multi_store",
       "weight": 25,
-      "status": "partial",
+      "status": "verified",
       "proofKind": "code_controlled",
-      "summary": "Warehouse-grade transfer orders now support multiple product lines, approval, in-transit reservation, carrier tracking, partial receiving, safe remainder cancellation and reviewable branch replenishment recommendations that account for open incoming stock. Bin locations, bulk repackaging and unattended replenishment execution remain incomplete.",
+      "summary": "Warehouse-grade transfer orders support multiple product lines, approval, in-transit reservation, carrier tracking, partial receiving and safe remainder cancellation. Bin locations record placement within a branch as a net-zero map over authoritative location stock, with a derived unplaced remainder, an over-placement report and an explicit reconcile. Bulk repackaging breaks a bulk pack into retail packs conserving base quantity, refusing fractional packs and requiring wastage to be declared. Unattended replenishment executes the branch suggestions on a schedule, disabled by default, capped per run and per transfer, shipping in-transit so a human still receives, and standing down on a re-run because open incoming stock is already subtracted.",
       "competitorEvidence": [
         { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "Central warehousing, repackaging and outlet replenishment are leading multi-store capabilities." },
         { "product": "Zoho Inventory", "url": "https://www.zoho.com/us/inventory/help/warehouses/transfer-orders.html", "claim": "Transfer orders benchmark in-transit and instant modes, approvals, tracking and manual receipt." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/prisma/schema.prisma", "backend/prisma-postgres/migrations/000102_stock_transfer_lifecycle/migration.sql", "backend/src/modules/stores/stores.service.js", "backend/src/modules/stores/stores.routes.js", "backend/tests/integration/retail-operations.integration.test.js", "frontend/src/features/core/inventory/pages/StockTransfersPage.tsx"],
-        "testCommands": ["cd backend && npm run test:integration", "cd backend && npm run migration:safety", "cd frontend && npm test"]
+        "sourcePaths": ["backend/prisma/schema.prisma", "backend/prisma-postgres/migrations/000111_storage_bins/migration.sql", "backend/src/modules/inventory/bins.service.js", "backend/src/modules/inventory/repack.service.js", "backend/src/modules/stores/replenishment.service.js", "backend/scripts/run-replenishment.js", "backend/src/modules/stores/stores.service.js", "backend/src/modules/stores/stores.routes.js", "frontend/src/features/core/inventory/pages/StockTransfersPage.tsx"],
+        "testCommands": ["cd backend && npm run test:warehouse", "cd backend && npm run test:integration", "cd backend && npm run prod:check"]
       },
-      "lastVerifiedAt": "2026-08-11"
+      "lastVerifiedAt": "2026-08-19"
     },
     {
       "id": "local_print_bridge",
