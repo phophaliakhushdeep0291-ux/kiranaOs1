@@ -36,6 +36,18 @@ export async function gstr1Working(req, res, next) {
   } catch (error) { return next(error); }
 }
 
+export async function filingRun(req, res, next) {
+  try {
+    const data = await service.getMultiGstinFilingRun(req.shopId, { ...req.query, locationId: requestLocationId(req) });
+    if (req.query.format === "csv") {
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="gst-filing-run-${new Date().toISOString().slice(0, 10)}.csv"`);
+      return res.send(`﻿${service.filingRunToCsv(data)}`);
+    }
+    return res.json({ success: true, data });
+  } catch (error) { return next(error); }
+}
+
 export async function hsnSummary(req, res, next) {
   try { res.json({ success: true, data: await service.getHsnCategorySummary(req.shopId) }); } catch (error) { next(error); }
 }

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "KiranaOS competitive capability evidence",
-  "generatedAt": "2026-08-11",
+  "generatedAt": "2026-08-19",
   "scoreScale": 10,
   "statusFactors": {
     "verified": 1,
@@ -115,17 +115,17 @@
       "id": "gst_registration_scoping",
       "domain": "gst_compliance",
       "weight": 25,
-      "status": "partial",
+      "status": "verified",
       "proofKind": "code_controlled",
-      "summary": "Location-aware registration scope and blocking warnings exist, but automated multi-GSTIN filing orchestration is incomplete.",
+      "summary": "Location-aware registration scope, blocking warnings and automated multi-GSTIN filing orchestration. One run partitions the invoice register by seller GSTIN, builds GSTR-1, GSTR-3B and the Table 13 document series per registration, and proves the split is lossless by reconciling per-registration totals against the whole register. Invoices carrying no seller GSTIN are quarantined and block the run instead of being spread across registrations or dropped; an empty period and a malformed GSTIN both refuse to report themselves filing-ready.",
       "competitorEvidence": [
         { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/multi-store-pos/", "claim": "Centralized multi-store statutory control is a chain-retail benchmark." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/src/modules/compliance/compliance.service.js", "backend/src/modules/stores/location-context.service.js"],
-        "testCommands": ["cd backend && npm run test:compliance"]
+        "sourcePaths": ["backend/src/modules/compliance/compliance.service.js", "backend/src/modules/compliance/compliance.controller.js", "backend/src/modules/compliance/compliance.routes.js", "backend/src/modules/stores/location-context.service.js", "frontend/src/features/core/settings/pages/TaxesSettingsPage.tsx"],
+        "testCommands": ["cd backend && npm run test:compliance", "cd frontend && npm test"]
       },
-      "lastVerifiedAt": "2026-08-08"
+      "lastVerifiedAt": "2026-08-19"
     },
     {
       "id": "gst_legal_submission",

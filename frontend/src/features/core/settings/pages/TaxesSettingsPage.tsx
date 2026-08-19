@@ -57,6 +57,21 @@ interface GstReport {
   sgst: number;
   igst: number;
 }
+interface GstFilingRun {
+  registrationCount: number;
+  // Split across lines for the same reason as ComplianceReadiness.gaps below.
+  registrations: Array<{
+    sellerGstin: string;
+    sellerLegalName: string;
+    stateCode: string;
+    formatValid: boolean;
+    invoiceCount: number;
+    totals: { rowCount: number; taxableValue: number; totalTax: number; lineTotal: number };
+  }>;
+  unregistered: { rowCount: number; invoiceCount: number; warning: string | null };
+  reconciliation: { balanced: boolean };
+  filingReady: boolean;
+}
 interface ComplianceReadiness {
   score: number;
   legallyReady: boolean;
@@ -141,6 +156,7 @@ export default function TaxesSettingsPage() {
   const gstQ = useQuery({ queryKey: ["gst-report-month"], queryFn: () => apiRequest<GstReport>("/reports/gst?range=monthly"), enabled: gstReportsFeature.allowed, retry: 1 });
   const readinessQ = useQuery({ queryKey: ["gst-compliance-readiness"], queryFn: () => apiRequest<ComplianceReadiness>("/compliance/readiness"), retry: 1 });
   const hsnSummaryQ = useQuery({ queryKey: ["gst-hsn-summary"], queryFn: () => apiRequest<HsnSummary>("/compliance/hsn-summary"), enabled: gstReportsFeature.allowed, retry: 1 });
+  const filingRunQ = useQuery({ queryKey: ["gst-filing-run"], queryFn: () => apiRequest<GstFilingRun>("/compliance/filing-run?range=monthly"), enabled: gstReportsFeature.allowed, retry: 1 });
   const recentBillsQ = useQuery({ queryKey: ["gst-compliance-recent-bills"], queryFn: () => apiRequest<BillListResult>("/bills?status=active&page=1&limit=50"), enabled: gstReportsFeature.allowed && (ewayOpen || eInvoiceOpen), retry: 1 });
   const inr = (n?: number) => (n == null ? "—" : `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
@@ -299,6 +315,15 @@ export default function TaxesSettingsPage() {
       toast({ title: t("settings.tax.exportUnavailable"), description: error instanceof Error ? error.message : t("settings.tax.gstr1ExportFailed"), variant: "destructive" });
     }
   }
+  async function exportFilingRun() {
+    try {
+      const csv = await apiRequest<string>("/compliance/filing-run?range=monthly&format=csv");
+      downloadText(`artha-gst-filing-run-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+      toast({ title: t("settings.tax.filingDownloaded"), description: t("settings.tax.filingDownloadedHelp") });
+    } catch (error) {
+      toast({ title: t("settings.tax.exportUnavailable"), description: error instanceof Error ? error.message : t("settings.tax.filingExportFailed"), variant: "destructive" });
+    }
+  }
 
   return (
     <SettingsShell>
@@ -424,6 +449,33 @@ export default function TaxesSettingsPage() {
                 </Select>
                 <p className="mt-2 text-[11px] leading-4 text-[#64748b]">{t("settings.tax.sellerHelp")}</p>
                 {!readinessQ.isLoading && uniqueRegistrations.length === 0 && <p className="mt-2 text-[11px] font-bold text-rose-700">{t("settings.tax.noValidSeller")}</p>}
+              </div>
+              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-black text-[var(--brand-ink)]">{t("settings.tax.filingCoverage")}</p>
+                    <p className="mt-0.5 text-[11px] leading-4 text-[#64748b]">{t("settings.tax.filingCoverageSub")}</p>
+                  </div>
+                  <button type="button" onClick={exportFilingRun} className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> {t("settings.tax.allRegistrations")}</button>
+                </div>
+                {filingRunQ.isLoading && <p className="mt-3 text-[11px] text-[#64748b]">{t("settings.tax.filingLoading")}</p>}
+                {!filingRunQ.isLoading && filingRunQ.data?.registrationCount === 0 && <p className="mt-3 text-[11px] text-[#64748b]">{t("settings.tax.filingNoData")}</p>}
+                {!filingRunQ.isLoading && filingRunQ.data && filingRunQ.data.registrationCount > 0 && (
+                  <ul className="mt-3 space-y-1.5">
+                    {filingRunQ.data.registrations.map((registration) => (
+                      <li key={registration.sellerGstin} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-2.5 py-2">
+                        <span className="min-w-0">
+                          <span className="block truncate text-[12px] font-black text-[var(--brand-ink)]">{registration.sellerGstin}</span>
+                          <span className="block truncate text-[11px] text-[#64748b]">{t("settings.tax.filingInvoices", { count: String(registration.invoiceCount), state: registration.stateCode })}</span>
+                        </span>
+                        <span className="shrink-0 text-[12px] font-bold text-[#17345f]">{inr(registration.totals.totalTax)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {filingRunQ.data && filingRunQ.data.unregistered.rowCount > 0 && <p className="mt-2 text-[11px] font-bold text-rose-700">{t("settings.tax.filingUnassigned", { count: String(filingRunQ.data.unregistered.invoiceCount) })}</p>}
+                {filingRunQ.data && !filingRunQ.data.reconciliation.balanced && <p className="mt-2 text-[11px] font-bold text-rose-700">{t("settings.tax.filingOutOfBalance")}</p>}
+                {filingRunQ.data && filingRunQ.data.reconciliation.balanced && filingRunQ.data.registrationCount > 0 && <p className="mt-2 text-[11px] font-semibold text-emerald-700">{t("settings.tax.filingBalanced")}</p>}
               </div>
             </div>
             <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">

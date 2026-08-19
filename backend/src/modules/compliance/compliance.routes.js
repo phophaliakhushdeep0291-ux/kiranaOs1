@@ -14,6 +14,7 @@ router.get("/readiness", requireRole("owner", "admin"), controller.readiness);
 router.get("/gst-register", requireRole("owner", "admin"), requireFeature("gst_reports"), validateQuery(complianceExportQuery), requireLocationAccess("view"), controller.gstRegister);
 router.get("/gstr1-working", requireRole("owner", "admin"), requireFeature("gst_reports"), validateQuery(complianceExportQuery), requireLocationAccess("view"), controller.gstr1Working);
 router.get("/gstr3b-working", requireRole("owner", "admin"), requireFeature("gst_reports"), validateQuery(complianceExportQuery), requireLocationAccess("view"), controller.gstr3bWorking);
+router.get("/filing-run", requireRole("owner", "admin"), requireFeature("gst_reports"), validateQuery(complianceExportQuery), requireLocationAccess("view"), controller.filingRun);
 router.get("/hsn-summary", requireRole("owner", "admin"), requireFeature("gst_reports"), controller.hsnSummary);
 router.put("/hsn-category", requireRole("owner", "admin"), requireFeature("gst_reports"), requireOwnerPin, validate(hsnCategoryAssignmentSchema), controller.assignHsnCategory);
 router.post("/e-invoices/:billId/sandbox", requireRole("owner", "admin"), requireFeature("gst_reports"), requireOwnerPin, controller.sandboxEInvoice);
