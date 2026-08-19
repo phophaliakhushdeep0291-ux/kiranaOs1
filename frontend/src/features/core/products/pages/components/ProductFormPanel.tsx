@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Package, Plus, Scale, ScanLine, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 import { translateCategory, useBusinessType } from "@/features/core/settings/business-types";
 import { getShopWorkflow } from "@/features/core/settings/shop-workflows";
 import { useFeature } from "@/features/core/subscription";
@@ -150,6 +151,7 @@ export function ProductFormPanel({
 }: ProductFormPanelProps) {
   const { t } = useAppLanguage();
   const { toast } = useToast();
+  const keyboardInset = useKeyboardInset();
   const { businessType, def } = useBusinessType();
   const hasCapability = useShopCapability();
   const workflow = getShopWorkflow(businessType);
@@ -496,10 +498,15 @@ export function ProductFormPanel({
     </Field>
   );
 
+  // The action row lives at the bottom of a 100dvh panel, and `dvh` does not
+  // shrink for the on-screen keyboard — so on a phone the Save button ends up
+  // underneath it the moment a field is focused. Chrome fixes this itself via
+  // `interactive-widget=resizes-content` in the viewport meta, in which case the
+  // inset reads 0 and nothing here applies. This is the iOS Safari path.
   return (
     <aside
       data-mobile-task-panel="product-form"
-      style={{ width }}
+      style={keyboardInset > 0 ? { width, height: `calc(100dvh - ${keyboardInset}px)` } : { width }}
       className={`app-slide-panel fixed inset-y-0 right-0 top-0 z-[90] flex h-[100dvh] w-full max-w-[100vw] flex-col border-l-0 border-[#e6ecf4] bg-white shadow-none transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:z-[80] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] lg:border-l lg:shadow-[-12px_0_40px_rgba(15,23,42,0.10)] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog"
       aria-label={editing ? t("products.action.edit") : t("products.action.addNewProduct")}
