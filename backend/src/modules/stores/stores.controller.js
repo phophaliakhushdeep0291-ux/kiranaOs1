@@ -1,4 +1,5 @@
 import * as service from "./stores.service.js";
+import { runUnattendedReplenishment } from "./replenishment.service.js";
 
 const actor = (req) => ({ userId: req.user?.userId ?? null, deviceId: req.user?.deviceId ?? undefined, req });
 
@@ -26,6 +27,13 @@ export async function inventory(req, res, next) {
 
 export async function replenishmentSuggestions(req, res, next) {
   try { res.json({ success: true, data: await service.getBranchReplenishmentSuggestions(req.shopId, req.user) }); } catch (error) { next(error); }
+}
+
+export async function runReplenishment(req, res, next) {
+  try {
+    const data = await runUnattendedReplenishment(req.shopId, { dryRun: req.body.dryRun === true });
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
 }
 
 export async function transfers(req, res, next) {

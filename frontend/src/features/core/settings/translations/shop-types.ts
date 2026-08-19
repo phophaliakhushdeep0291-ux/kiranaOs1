@@ -286,6 +286,8 @@ export const shopTypesEn = {
   "shopType.nav.prescriptions.helper": "Record what was dispensed, and on whose slip",
   "shopType.nav.tables": "Tables",
   "shopType.nav.tables.helper": "Seat a table and open its order",
+  "shopType.nav.reservations": "Reservations",
+  "shopType.nav.reservations.helper": "See who is booked in tonight",
   "shopType.nav.kitchen": "Kitchen",
   "shopType.nav.kitchen.helper": "Work off the kitchen tickets",
   "shopType.nav.menu": "Menu",

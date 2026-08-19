@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "KiranaOS competitive capability evidence",
-  "generatedAt": "2026-08-11",
+  "generatedAt": "2026-08-19",
   "scoreScale": 10,
   "statusFactors": {
     "verified": 1,
@@ -82,18 +82,18 @@
       "id": "restaurant_operations",
       "domain": "billing_inventory",
       "weight": 15,
-      "status": "partial",
+      "status": "verified",
       "proofKind": "code_controlled",
-      "summary": "Tables, KOT, recipes, QR ordering and menu add-ons exist; reservations, kiosk and staff scheduling are not complete.",
+      "summary": "Tables, KOT, recipes, QR ordering and menu add-ons, plus the three service-floor workflows that were missing. Reservations refuse to promise one table to two overlapping sittings, free the slot the moment a booking is cancelled, and re-check the clash on every edit; back-to-back seatings are allowed because the intervals are half-open. Staff shifts apply the same overlap rule per person, exclude cancelled shifts from scheduled hours, and report scheduled time explicitly rather than implying hours worked. Kiosk terminals are named and revocable and serve the same catalogue and order path as the table QR, so the room can never hold two menus that disagree.",
       "competitorEvidence": [
         { "product": "Petpooja", "url": "https://www.petpooja.com/poss", "claim": "Restaurant POS breadth includes KOT, tables, ordering, recipes and operational add-ons." },
         { "product": "Toast", "url": "https://pos.toasttab.com/restaurant-pos", "claim": "Restaurant platform breadth includes KDS, online ordering, scheduling and integrations." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/src/verticals/restaurant", "frontend/src/features/verticals/restaurant"],
-        "testCommands": ["cd backend && npm run test:restaurant", "cd backend && npm run test:integration", "cd frontend && npm test"]
+        "sourcePaths": ["backend/src/verticals/restaurant", "backend/src/verticals/restaurant/service-ops/intervals.js", "backend/src/verticals/restaurant/service-ops/reservations.service.js", "backend/src/verticals/restaurant/service-ops/shifts.service.js", "backend/src/verticals/restaurant/service-ops/kiosk.service.js", "backend/prisma-postgres/migrations/000112_restaurant_service_ops/migration.sql", "frontend/src/features/verticals/restaurant", "frontend/src/features/verticals/restaurant/pages/ReservationsPage.tsx"],
+        "testCommands": ["cd backend && npm run test:restaurant", "cd backend && npm run prod:check", "cd frontend && npm test"]
       },
-      "lastVerifiedAt": "2026-08-08"
+      "lastVerifiedAt": "2026-08-19"
     },
     {
       "id": "gst_working_papers",
@@ -115,17 +115,17 @@
       "id": "gst_registration_scoping",
       "domain": "gst_compliance",
       "weight": 25,
-      "status": "partial",
+      "status": "verified",
       "proofKind": "code_controlled",
-      "summary": "Location-aware registration scope and blocking warnings exist, but automated multi-GSTIN filing orchestration is incomplete.",
+      "summary": "Location-aware registration scope, blocking warnings and automated multi-GSTIN filing orchestration. One run partitions the invoice register by seller GSTIN, builds GSTR-1, GSTR-3B and the Table 13 document series per registration, and proves the split is lossless by reconciling per-registration totals against the whole register. Invoices carrying no seller GSTIN are quarantined and block the run instead of being spread across registrations or dropped; an empty period and a malformed GSTIN both refuse to report themselves filing-ready.",
       "competitorEvidence": [
         { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/multi-store-pos/", "claim": "Centralized multi-store statutory control is a chain-retail benchmark." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/src/modules/compliance/compliance.service.js", "backend/src/modules/stores/location-context.service.js"],
-        "testCommands": ["cd backend && npm run test:compliance"]
+        "sourcePaths": ["backend/src/modules/compliance/compliance.service.js", "backend/src/modules/compliance/compliance.controller.js", "backend/src/modules/compliance/compliance.routes.js", "backend/src/modules/stores/location-context.service.js", "frontend/src/features/core/settings/pages/TaxesSettingsPage.tsx"],
+        "testCommands": ["cd backend && npm run test:compliance", "cd frontend && npm test"]
       },
-      "lastVerifiedAt": "2026-08-08"
+      "lastVerifiedAt": "2026-08-19"
     },
     {
       "id": "gst_legal_submission",
@@ -183,18 +183,18 @@
       "id": "warehouse_repackaging",
       "domain": "multi_store",
       "weight": 25,
-      "status": "partial",
+      "status": "verified",
       "proofKind": "code_controlled",
-      "summary": "Warehouse-grade transfer orders now support multiple product lines, approval, in-transit reservation, carrier tracking, partial receiving, safe remainder cancellation and reviewable branch replenishment recommendations that account for open incoming stock. Bin locations, bulk repackaging and unattended replenishment execution remain incomplete.",
+      "summary": "Warehouse-grade transfer orders support multiple product lines, approval, in-transit reservation, carrier tracking, partial receiving and safe remainder cancellation. Bin locations record placement within a branch as a net-zero map over authoritative location stock, with a derived unplaced remainder, an over-placement report and an explicit reconcile. Bulk repackaging breaks a bulk pack into retail packs conserving base quantity, refusing fractional packs and requiring wastage to be declared. Unattended replenishment executes the branch suggestions on a schedule, disabled by default, capped per run and per transfer, shipping in-transit so a human still receives, and standing down on a re-run because open incoming stock is already subtracted.",
       "competitorEvidence": [
         { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "Central warehousing, repackaging and outlet replenishment are leading multi-store capabilities." },
         { "product": "Zoho Inventory", "url": "https://www.zoho.com/us/inventory/help/warehouses/transfer-orders.html", "claim": "Transfer orders benchmark in-transit and instant modes, approvals, tracking and manual receipt." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/prisma/schema.prisma", "backend/prisma-postgres/migrations/000102_stock_transfer_lifecycle/migration.sql", "backend/src/modules/stores/stores.service.js", "backend/src/modules/stores/stores.routes.js", "backend/tests/integration/retail-operations.integration.test.js", "frontend/src/features/core/inventory/pages/StockTransfersPage.tsx"],
-        "testCommands": ["cd backend && npm run test:integration", "cd backend && npm run migration:safety", "cd frontend && npm test"]
+        "sourcePaths": ["backend/prisma/schema.prisma", "backend/prisma-postgres/migrations/000111_storage_bins/migration.sql", "backend/src/modules/inventory/bins.service.js", "backend/src/modules/inventory/repack.service.js", "backend/src/modules/stores/replenishment.service.js", "backend/scripts/run-replenishment.js", "backend/src/modules/stores/stores.service.js", "backend/src/modules/stores/stores.routes.js", "frontend/src/features/core/inventory/pages/StockTransfersPage.tsx"],
+        "testCommands": ["cd backend && npm run test:warehouse", "cd backend && npm run test:integration", "cd backend && npm run prod:check"]
       },
-      "lastVerifiedAt": "2026-08-11"
+      "lastVerifiedAt": "2026-08-19"
     },
     {
       "id": "local_print_bridge",

@@ -609,6 +609,176 @@ export async function getGstr3bWorkingPapers(shopId, query = {}) {
   return { ...buildGstr3bFromRegister(register), registrationScope: register.registrationScope };
 }
 
+/**
+ * GST returns are filed per registration, so a shop trading from two states files
+ * two GSTR-1s and two GSTR-3Bs. getGstr1WorkingPapers/getGstr3bWorkingPapers
+ * deliberately refuse an unscoped register (SELLER_GSTIN_SCOPE_REQUIRED) so two
+ * registrations can never be merged into one return. That refusal is correct, but
+ * on its own it leaves the operator to discover their own GSTINs and re-run every
+ * export once per registration, tracking coverage by hand.
+ *
+ * This builds the whole set in one pass and then proves the split is lossless:
+ * every register row lands in exactly one registration, and the per-registration
+ * totals re-add to the unscoped register totals. A partition that quietly dropped
+ * rows would understate liability, so the reconciliation ships in the payload
+ * rather than living only in a test.
+ *
+ * Bills carrying no seller GSTIN are kept in their own bucket instead of being
+ * spread across registrations or dropped. They belong to no registration and
+ * cannot be filed under one, so they block the run where the operator can see them.
+ */
+const UNREGISTERED_GSTIN_KEY = "";
+
+function normaliseGstinKey(value) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function sumRegisterRows(rows) {
+  const totals = { rowCount: rows.length, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, lineTotal: 0 };
+  for (const row of rows) {
+    totals.taxableValue += Number(row.taxableValue) || 0;
+    totals.cgst += Number(row.cgst) || 0;
+    totals.sgst += Number(row.sgst) || 0;
+    totals.igst += Number(row.igst) || 0;
+    totals.lineTotal += Number(row.lineTotal) || 0;
+  }
+  totals.taxableValue = money(totals.taxableValue);
+  totals.cgst = money(totals.cgst);
+  totals.sgst = money(totals.sgst);
+  totals.igst = money(totals.igst);
+  totals.lineTotal = money(totals.lineTotal);
+  totals.totalTax = money(totals.cgst + totals.sgst + totals.igst);
+  return totals;
+}
+
+function groupBySellerGstin(entries) {
+  const grouped = new Map();
+  for (const entry of entries ?? []) {
+    const key = normaliseGstinKey(entry.sellerGstin);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(entry);
+  }
+  return grouped;
+}
+
+export function buildMultiGstinFilingRun(register) {
+  const rowsByGstin = groupBySellerGstin(register.rows);
+  const documentsByGstin = groupBySellerGstin(register.documents);
+
+  // A registration whose documents were all cancelled still has a return to file,
+  // so the key set is the union of both sides rather than the priced rows alone.
+  const gstins = [...new Set([...rowsByGstin.keys(), ...documentsByGstin.keys()])]
+    .filter((key) => key !== UNREGISTERED_GSTIN_KEY)
+    .sort();
+
+  const registrations = gstins.map((sellerGstin) => {
+    const rows = rowsByGstin.get(sellerGstin) ?? [];
+    const documents = documentsByGstin.get(sellerGstin) ?? [];
+    const identity = rows[0] ?? {};
+    const validation = validateGstin(sellerGstin);
+    // The builders read only from/to/rows/documents, so a scoped register is a
+    // faithful input rather than a stub of one.
+    const scoped = { from: register.from, to: register.to, rows, documents, rowCount: rows.length };
+    return {
+      sellerGstin,
+      sellerLegalName: identity.sellerLegalName || "",
+      sellerTradeName: identity.sellerTradeName || "",
+      stateCode: identity.sellerStateCode || (validation.valid ? validation.stateCode : ""),
+      formatValid: validation.valid,
+      formatReason: validation.valid ? null : validation.reason,
+      invoiceCount: new Set(rows.map((row) => row.invoiceNumber)).size,
+      totals: sumRegisterRows(rows),
+      gstr1: buildGstr1WorkingFromRegister(scoped),
+      gstr3b: buildGstr3bFromRegister(scoped),
+      documentSeries: buildDocumentSeries(scoped),
+    };
+  });
+
+  const unregisteredRows = rowsByGstin.get(UNREGISTERED_GSTIN_KEY) ?? [];
+  const unregisteredDocuments = documentsByGstin.get(UNREGISTERED_GSTIN_KEY) ?? [];
+  const unregisteredInvoiceNumbers = [...new Set(unregisteredRows.map((row) => row.invoiceNumber))].sort();
+  const unregistered = {
+    rowCount: unregisteredRows.length,
+    invoiceCount: unregisteredInvoiceNumbers.length,
+    documentCount: unregisteredDocuments.length,
+    totals: sumRegisterRows(unregisteredRows),
+    invoiceNumbers: unregisteredInvoiceNumbers,
+    warning: unregisteredRows.length > 0
+      ? "These invoices carry no seller GSTIN, so they belong to no registration and cannot be filed. Set the GSTIN on the billing location and reissue them, or agree an exclusion with your accountant."
+      : null,
+  };
+
+  const registerTotals = sumRegisterRows(register.rows ?? []);
+  const summed = [...registrations.map((registration) => registration.totals), unregistered.totals].reduce((accumulator, totals) => ({
+    rowCount: accumulator.rowCount + totals.rowCount,
+    taxableValue: money(accumulator.taxableValue + totals.taxableValue),
+    cgst: money(accumulator.cgst + totals.cgst),
+    sgst: money(accumulator.sgst + totals.sgst),
+    igst: money(accumulator.igst + totals.igst),
+    lineTotal: money(accumulator.lineTotal + totals.lineTotal),
+    totalTax: money(accumulator.totalTax + totals.totalTax),
+  }), { rowCount: 0, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, lineTotal: 0, totalTax: 0 });
+
+  const differences = {
+    rowCount: summed.rowCount - registerTotals.rowCount,
+    taxableValue: money(summed.taxableValue - registerTotals.taxableValue),
+    cgst: money(summed.cgst - registerTotals.cgst),
+    sgst: money(summed.sgst - registerTotals.sgst),
+    igst: money(summed.igst - registerTotals.igst),
+    lineTotal: money(summed.lineTotal - registerTotals.lineTotal),
+    totalTax: money(summed.totalTax - registerTotals.totalTax),
+  };
+  // Rounding each bucket to paise before re-adding can leave a sub-paise trail on a
+  // long register, so the balance test allows under half a paise per field and
+  // still reports the exact difference rather than hiding it.
+  const balanced = differences.rowCount === 0
+    && Object.entries(differences).every(([field, value]) => field === "rowCount" || Math.abs(value) < 0.005);
+
+  return {
+    schemaVersion: "artha-gst-filing-run-v1",
+    from: register.from,
+    to: register.to,
+    registrationCount: registrations.length,
+    registrations,
+    unregistered,
+    reconciliation: { balanced, register: registerTotals, summed, differences },
+    // An empty period has nothing to file, so it is not "ready" — a nil return is
+    // filed on the portal, not from a working-paper run, and reporting an empty
+    // month as ready invites a green tick over a period nobody has billed in.
+    filingReady: registrations.length > 0
+      && balanced
+      && unregistered.rowCount === 0
+      && registrations.every((registration) => registration.formatValid),
+    filingWarning: "One GSTR-1 and one GSTR-3B per registration. Input tax credit is not derived from POS data; reconcile Table 4 against GSTR-2B with your accountant before filing.",
+  };
+}
+
+export async function getMultiGstinFilingRun(shopId, query = {}) {
+  // Covering every registration is the whole point, so a caller-supplied
+  // sellerGstin would defeat it; the single-scope routes already serve that case.
+  const { sellerGstin, ...unscoped } = query;
+  const register = await getGstInvoiceRegister(shopId, unscoped);
+  return { ...buildMultiGstinFilingRun(register), generatedAt: new Date().toISOString() };
+}
+
+export function filingRunToCsv(run) {
+  const labels = ["Seller GSTIN", "Legal Name", "Trade Name", "State", "GSTIN Valid", "Invoices", "Line Rows", "Taxable Value", "CGST", "SGST", "IGST", "Total Tax", "Invoice Value"];
+  const line = (label, legalName, tradeName, stateCode, valid, invoiceCount, totals) => [
+    label, legalName, tradeName, stateCode, valid, invoiceCount,
+    totals.rowCount, totals.taxableValue, totals.cgst, totals.sgst, totals.igst, totals.totalTax, totals.lineTotal,
+  ];
+  const rows = run.registrations.map((registration) => line(
+    registration.sellerGstin, registration.sellerLegalName, registration.sellerTradeName,
+    registration.stateCode, registration.formatValid ? "yes" : "no", registration.invoiceCount, registration.totals,
+  ));
+  if (run.unregistered.rowCount > 0) {
+    rows.push(line("(no seller GSTIN)", "", "", "", "no", run.unregistered.invoiceCount, run.unregistered.totals));
+  }
+  rows.push(line("Register total", "", "", "", "", "", run.reconciliation.register));
+  rows.push(line(run.reconciliation.balanced ? "Reconciliation: balanced" : "Reconciliation: OUT OF BALANCE", "", "", "", "", "", run.reconciliation.differences));
+  return [labels.join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\r\n");
+}
+
 export function gstr1WorkingToCsv(working) {
   const header = ["Section", "Document Number", "Document Date", "Buyer GSTIN", "Place of Supply", "Original Invoice Number", "Original Invoice Date", "HSN", "Description", "Unit", "UQC", "GST Rate", "Quantity", "Taxable Value", "CGST", "SGST", "IGST", "Post-tax Discount", "Invoice/Note Value"];
   const rows = [

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { buildGstr1WorkingFromRegister, buildInvoiceTaxSnapshot, calculateLineTaxBreakdown, validateGstin, validateHsn } from "../src/modules/compliance/compliance.service.js";
+import { buildGstr1WorkingFromRegister, buildInvoiceTaxSnapshot, buildMultiGstinFilingRun, calculateLineTaxBreakdown, filingRunToCsv, validateGstin, validateHsn } from "../src/modules/compliance/compliance.service.js";
 import { createCustomerSchema, updateCustomerSchema } from "../src/modules/customers/customers.schema.js";
 import { cancelTransferSchema, createLocationSchema, createTransferSchema, receiveTransferSchema, transferComplianceReviewSchema, updateLocationSchema } from "../src/modules/stores/stores.schema.js";
 import { billSellerIdentity, locationSellerIdentity } from "../src/utils/gstIdentity.js";
@@ -222,5 +222,132 @@ assert.equal(fs.existsSync(new URL("../prisma/migrations/20260729200000_transfer
 assert.equal(fs.existsSync(new URL("../prisma-postgres/migrations/000072_transfer_eway_review_evidence/migration.sql", import.meta.url)), true);
 assert.equal(fs.existsSync(new URL("../prisma/migrations/20260810183000_stock_transfer_lifecycle/migration.sql", import.meta.url)), true);
 assert.equal(fs.existsSync(new URL("../prisma-postgres/migrations/000102_stock_transfer_lifecycle/migration.sql", import.meta.url)), true);
+
+
+// Multi-GSTIN filing orchestration. A shop registered in two states files two
+// GSTR-1s and two GSTR-3Bs, so the register has to split by seller GSTIN without
+// losing or double-counting a single line.
+const filingRow = (sellerGstin, invoiceNumber, overrides = {}) => ({
+  invoiceNumber,
+  invoiceDate: "2026-08-05",
+  invoiceType: "gst_invoice",
+  documentType: "invoice",
+  sellerGstin,
+  sellerStateCode: sellerGstin.slice(0, 2),
+  sellerLegalName: sellerGstin ? `${sellerGstin} Legal` : "",
+  sellerTradeName: sellerGstin ? `${sellerGstin} Trade` : "",
+  customerName: "Walk-in",
+  buyerGstin: "",
+  placeOfSupply: sellerGstin.slice(0, 2),
+  supplyType: "intrastate",
+  hsn: "1905",
+  description: "Biscuits",
+  quantity: 1,
+  unit: "pcs",
+  gstRate: 18,
+  taxableValue: 100,
+  cgst: 9,
+  sgst: 9,
+  igst: 0,
+  grossLineTotal: 118,
+  discount: 0,
+  lineTotal: 118,
+  paymentModes: "cash",
+  ...overrides,
+});
+
+const MAHARASHTRA_GSTIN = "27AAPFU0939F1ZV";
+const KARNATAKA_GSTIN = "29AAPFU0939F1ZR";
+const filingRegister = {
+  from: "2026-08-01T00:00:00.000Z",
+  to: "2026-08-31T23:59:59.999Z",
+  rows: [
+    filingRow(MAHARASHTRA_GSTIN, "MH-1"),
+    filingRow(MAHARASHTRA_GSTIN, "MH-2"),
+    filingRow(KARNATAKA_GSTIN, "KA-1"),
+    filingRow("", "NOGST-1"),
+  ],
+  documents: [
+    { invoiceNumber: "MH-1", sellerGstin: MAHARASHTRA_GSTIN, cancelled: false },
+    { invoiceNumber: "MH-2", sellerGstin: MAHARASHTRA_GSTIN, cancelled: false },
+    { invoiceNumber: "MH-3", sellerGstin: MAHARASHTRA_GSTIN, cancelled: true },
+    { invoiceNumber: "KA-1", sellerGstin: KARNATAKA_GSTIN, cancelled: false },
+    { invoiceNumber: "NOGST-1", sellerGstin: "", cancelled: false },
+  ],
+};
+
+const filingRun = buildMultiGstinFilingRun(filingRegister);
+assert.equal(filingRun.registrationCount, 2, "each seller GSTIN files its own return");
+assert.deepEqual(filingRun.registrations.map((row) => row.sellerGstin), [MAHARASHTRA_GSTIN, KARNATAKA_GSTIN]);
+assert.equal(filingRun.registrations[0].invoiceCount, 2);
+assert.equal(filingRun.registrations[1].invoiceCount, 1);
+
+// The split must be lossless: every priced line lands in exactly one bucket.
+const bucketedRows = filingRun.registrations.reduce((sum, row) => sum + row.totals.rowCount, 0) + filingRun.unregistered.rowCount;
+assert.equal(bucketedRows, filingRegister.rows.length, "no register row may be dropped or counted twice");
+assert.equal(filingRun.reconciliation.balanced, true);
+assert.equal(filingRun.reconciliation.differences.rowCount, 0);
+assert.equal(filingRun.reconciliation.differences.totalTax, 0);
+assert.equal(filingRun.reconciliation.register.taxableValue, 400);
+assert.equal(filingRun.reconciliation.register.totalTax, 72);
+assert.equal(filingRun.reconciliation.summed.totalTax, filingRun.reconciliation.register.totalTax);
+
+// Each return is scoped to its own registration, never the whole register.
+assert.equal(filingRun.registrations[0].gstr3b.outwardSupplies["3.1(a)"].taxableValue, 200);
+assert.equal(filingRun.registrations[0].gstr3b.taxPayable.total, 36);
+assert.equal(filingRun.registrations[1].gstr3b.outwardSupplies["3.1(a)"].taxableValue, 100);
+assert.equal(filingRun.registrations[1].gstr3b.taxPayable.total, 18);
+assert.equal(filingRun.registrations[0].totals.totalTax + filingRun.registrations[1].totals.totalTax + filingRun.unregistered.totals.totalTax, 72);
+
+// Table 13 stays per registration and still counts the cancelled document.
+const maharashtraSeries = filingRun.registrations[0].documentSeries.find((entry) => entry.prefix === "MH-");
+assert.equal(maharashtraSeries.totalIssued, 3);
+assert.equal(maharashtraSeries.cancelled, 1);
+assert.equal(maharashtraSeries.net, 2);
+assert.equal(filingRun.registrations[1].documentSeries.some((entry) => entry.prefix === "MH-"), false, "one registration must not see another's series");
+
+// A bill with no seller GSTIN belongs to no return, so it is quarantined and blocks filing.
+assert.equal(filingRun.unregistered.rowCount, 1);
+assert.deepEqual(filingRun.unregistered.invoiceNumbers, ["NOGST-1"]);
+assert.match(filingRun.unregistered.warning, /cannot be filed/);
+assert.equal(filingRun.filingReady, false, "unassignable invoices must block the run");
+
+const cleanFilingRun = buildMultiGstinFilingRun({
+  ...filingRegister,
+  rows: filingRegister.rows.filter((row) => row.sellerGstin),
+  documents: filingRegister.documents.filter((document) => document.sellerGstin),
+});
+assert.equal(cleanFilingRun.filingReady, true);
+assert.equal(cleanFilingRun.unregistered.rowCount, 0);
+assert.equal(cleanFilingRun.unregistered.warning, null);
+assert.equal(cleanFilingRun.reconciliation.balanced, true);
+
+// A structurally invalid GSTIN is reported rather than silently filed under.
+const malformedFilingRun = buildMultiGstinFilingRun({
+  ...filingRegister,
+  rows: [filingRow("27AAPFU0939F1ZA", "BAD-1")],
+  documents: [{ invoiceNumber: "BAD-1", sellerGstin: "27AAPFU0939F1ZA", cancelled: false }],
+});
+assert.equal(malformedFilingRun.registrations[0].formatValid, false);
+assert.ok(malformedFilingRun.registrations[0].formatReason);
+assert.equal(malformedFilingRun.filingReady, false, "an invalid registration must block the run");
+
+// An empty period has nothing to file, so it must not report itself ready.
+const emptyFilingRun = buildMultiGstinFilingRun({ from: filingRegister.from, to: filingRegister.to, rows: [], documents: [] });
+assert.equal(emptyFilingRun.registrationCount, 0);
+assert.equal(emptyFilingRun.reconciliation.balanced, true);
+assert.equal(emptyFilingRun.filingReady, false, "an empty period is not a filable run");
+
+const filingCsv = filingRunToCsv(filingRun);
+assert.match(filingCsv, /Seller GSTIN,Legal Name/);
+assert.match(filingCsv, new RegExp(MAHARASHTRA_GSTIN));
+assert.match(filingCsv, new RegExp(KARNATAKA_GSTIN));
+assert.match(filingCsv, /\(no seller GSTIN\)/);
+assert.match(filingCsv, /Register total/);
+assert.match(filingCsv, /Reconciliation: balanced/);
+
+// The run must never be narrowed to one registration by a stray query parameter.
+assert.match(complianceService, /const \{ sellerGstin, \.\.\.unscoped \} = query/);
+assert.match(complianceService, /artha-gst-filing-run-v1/);
 
 console.log("Compliance tax and HSN examples passed");

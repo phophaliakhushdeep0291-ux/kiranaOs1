@@ -1,5 +1,6 @@
 import * as svc from "./inventory.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
+import { recordRepack } from "./repack.service.js";
 import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
 import { ENTITY_TYPES } from "../assurance/assurance.constants.js";
 
@@ -72,4 +73,12 @@ export async function getLedger(req, res, next) {
     const data = await svc.getLedger(req.shopId, { ...req.query, locationId: requestLocationId(req) });
     res.json({ success: true, data });
   } catch (err) { next(err); }
+}
+
+export async function repack(req, res, next) {
+  try {
+    const identity = movementIdentity(req);
+    const data = await recordRepack(req.shopId, { ...req.body, locationId: req.body.locationId ?? identity.locationId }, identity);
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
 }

@@ -113,6 +113,7 @@ const VERTICAL_PAGES: Record<VerticalPageId, ComponentType> = {
   "restaurant/kitchen": lazy(() => import("@/features/verticals/restaurant/pages/KitchenPage")),
   "restaurant/menu": lazy(() => import("@/features/verticals/restaurant/pages/MenuPage")),
   "restaurant/kitchen-stock": lazy(() => import("@/features/verticals/restaurant/pages/KitchenStockPage")),
+  "restaurant/reservations": lazy(() => import("@/features/verticals/restaurant/pages/ReservationsPage")),
   "manufacturing/operations": lazy(() => import("@/features/verticals/manufacturing/pages/ManufacturingPage")),
 };
 

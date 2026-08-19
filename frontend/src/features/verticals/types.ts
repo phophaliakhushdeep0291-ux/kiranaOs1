@@ -66,6 +66,7 @@ export type VerticalPageId =
   | "restaurant/kitchen"
   | "restaurant/menu"
   | "restaurant/kitchen-stock"
+  | "restaurant/reservations"
   | "manufacturing/operations";
 
 /**

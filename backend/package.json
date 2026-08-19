@@ -26,6 +26,8 @@
     "test:barcode": "node tests/barcode-binding.examples.js && node tests/product-knowledge.examples.js",
     "test:trade-attributes": "node --test tests/product-trade-attributes.examples.js",
     "test:sync-conflicts": "node tests/sync-conflict-entity-matrix.examples.js && node tests/sync-id-format.examples.js",
+    "test:warehouse": "node scripts/run-db-example-tests.js tests/storage-bins.examples.js tests/stock-repack.examples.js tests/replenishment-run.examples.js",
+    "replenishment:run": "node scripts/run-replenishment.js",
     "test:compliance": "node tests/compliance-tax.examples.js",
     "test:tally": "node tests/tally-voucher.examples.js",
     "test:manufacturing": "node --test tests/manufacturing-vertical.examples.js",
@@ -115,7 +117,7 @@
     "test:book-lists": "node tests/book-lists.examples.js",
     "test:furniture-orders": "node tests/furniture-orders.examples.js",
     "test:testers": "node tests/cosmetics-testers.examples.js",
-    "test:restaurant": "node tests/restaurant-tables-menu.examples.js && node tests/kitchen-tickets.examples.js"
+    "test:restaurant": "node tests/restaurant-tables-menu.examples.js && node tests/kitchen-tickets.examples.js && node scripts/run-db-example-tests.js tests/restaurant-service-ops.examples.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",

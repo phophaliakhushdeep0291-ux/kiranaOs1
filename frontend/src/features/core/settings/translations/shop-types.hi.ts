@@ -280,6 +280,8 @@ export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
   "shopType.nav.prescriptions": "पर्चे",
   "shopType.nav.prescriptions.helper": "किसके पर्चे पर क्या दवा दी, वह दर्ज करें",
   "shopType.nav.tables": "टेबल",
+  "shopType.nav.reservations": "रिज़र्वेशन",
+  "shopType.nav.reservations.helper": "आज कौन बुक है, देखें",
   "shopType.nav.tables.helper": "टेबल लगाएं और उसका ऑर्डर खोलें",
   "shopType.nav.kitchen": "किचन",
   "shopType.nav.kitchen.helper": "किचन के टिकट निपटाएं",

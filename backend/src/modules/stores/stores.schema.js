@@ -44,6 +44,13 @@ const documentDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Document date must
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }, "Document date must be a real calendar date");
 
+// Manual trigger for the scheduled replenishment run. dryRun returns the plan
+// without shipping anything, which is how an owner checks their thresholds.
+export const replenishmentRunSchema = z.object({
+  dryRun: z.coerce.boolean().default(false),
+  ownerPin: z.string().regex(/^\d{4}$/).optional(),
+}).strict();
+
 export const createTransferSchema = z.object({
   fromLocationId: z.string().min(1),
   toLocationId: z.string().min(1),
