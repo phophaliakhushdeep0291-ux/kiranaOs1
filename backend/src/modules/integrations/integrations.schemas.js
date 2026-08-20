@@ -33,6 +33,22 @@ export const integrationListQuerySchema = z.object({
   cursor: z.string().trim().min(1).optional(),
 });
 
+export const flipkartOrderSyncSchema = z.object({
+  from: z.string().date(),
+  to: z.string().date(),
+  maxShipments: z.coerce.number().int().min(1).max(500).default(100),
+}).superRefine((value, ctx) => {
+  const from = new Date(`${value.from}T00:00:00.000Z`);
+  const to = new Date(`${value.to}T00:00:00.000Z`);
+  if (to < from) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "End date must be on or after start date" });
+    return;
+  }
+  if ((to.getTime() - from.getTime()) / 86_400_000 > 30) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "A Flipkart sync can cover at most 31 days" });
+  }
+});
+
 // The books a shop can post to Tally. Sales alone leaves the accountant
 // re-keying every purchase and collection by hand, so the default is the full
 // set and narrowing it is the deliberate choice.

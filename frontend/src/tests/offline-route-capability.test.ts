@@ -8,7 +8,9 @@ describe("offline route capability contract", () => {
     expect(routes).toContain('data-testid="internet-required-route"');
     expect(routes).toContain('t("chrome.route.internetRequired")');
     expect(routes).toContain('setLocation("/sync-status")');
-    expect(routes).toContain("onlineOnly && !browserOnline");
+    expect(routes).toContain("onlineOnly && !routeConnection");
+    expect(routes).toContain('window.addEventListener("kirana:backend-status-changed"');
+    expect(routes).toContain("snapshot.browserOnline && snapshot.backendReachable");
   });
 
   it("labels sensitive cloud-only routes instead of mounting their network loaders offline", () => {

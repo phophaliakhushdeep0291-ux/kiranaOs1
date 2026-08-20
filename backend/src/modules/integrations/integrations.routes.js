@@ -6,7 +6,7 @@ import { validate, validateQuery } from "../../middleware/validate.js";
 import { requireFeature } from "../feature-gates/featureGate.middleware.js";
 import * as ctrl from "./integrations.controller.js";
 import * as svc from "./integrations.service.js";
-import { createApiKeySchema, createWebhookSchema, updateWebhookSchema, integrationListQuerySchema, tallyExportQuerySchema, tallyPostedBodySchema } from "./integrations.schemas.js";
+import { createApiKeySchema, createWebhookSchema, updateWebhookSchema, integrationListQuerySchema, tallyExportQuerySchema, tallyPostedBodySchema, flipkartOrderSyncSchema } from "./integrations.schemas.js";
 
 const router = Router();
 
@@ -41,5 +41,6 @@ router.post("/exports/tally/push", requireFeature("tally_export"), requireOwnerP
 router.post("/exports/tally/posted", requireFeature("tally_export"), validate(tallyPostedBodySchema), ctrl.tallyPosted);
 router.get("/flipkart/status", ctrl.flipkartConnectorStatus);
 router.get("/flipkart/shipments/:shipmentId/:kind(invoice|label).pdf", ctrl.flipkartDocument);
+router.post("/flipkart/orders/sync", requireFeature("api_webhook_later"), requireOwnerPin, validate(flipkartOrderSyncSchema), ctrl.flipkartOrderSync);
 
 export default router;

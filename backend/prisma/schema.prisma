@@ -488,6 +488,12 @@ model Product {
   minPricePerRateUnitPaise     BigInt? // Phase 27 shadow integer paise column
   defaultPricePerRateUnit      Float     @default(0) // default sell price
   defaultPricePerRateUnitPaise BigInt? // Phase 27 shadow integer paise column
+  // Simple quantity tiers used by the counter and offline clients. Prices are
+  // nullable so pre-existing products naturally fall back to the default price.
+  retailPricePerRateUnit       Float?
+  retailFromQuantity           Float     @default(1)
+  wholesalePricePerRateUnit    Float?
+  wholesaleFromQuantity        Float     @default(10)
   gstRate                      Float     @default(0) // e.g. 5, 12, 18
   hsn                          String?
   barcode                      String? // scanned/typed product barcode

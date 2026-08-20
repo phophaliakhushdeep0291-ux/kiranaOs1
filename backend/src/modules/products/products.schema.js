@@ -53,6 +53,10 @@ export const createProductSchema = z.object({
   costPerRateUnit: moneyAmount().default(0),
   minPricePerRateUnit: moneyAmount().default(0),
   defaultPricePerRateUnit: moneyAmount(),
+  retailPricePerRateUnit: moneyAmount().optional().nullable(),
+  retailFromQuantity: quantityAmount().default(1),
+  wholesalePricePerRateUnit: moneyAmount().optional().nullable(),
+  wholesaleFromQuantity: quantityAmount().default(10),
   gstRate: percentageRate().default(0),
   // Nullable columns accept an explicit null: that is how a caller clears an optional
   // field, and how a whole-record payload (conflict resolution, sync echo) states the
