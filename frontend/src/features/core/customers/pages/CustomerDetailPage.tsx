@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { buildCustomerTimeline, loadCustomerDetail, reconcileCustomerWithAuthoritativeSummary, formatDateTime, formatMoney, formatShortDate, toLedgerDriftCandidates, type CustomerTimelineEvent } from "@/features/core/customers/customer-ledger-data";
+import { buildCustomerTimeline, loadCustomerDetail, projectCustomerOutstanding, reconcileCustomerWithAuthoritativeSummary, formatDateTime, formatMoney, formatShortDate, toLedgerDriftCandidates, type CustomerDetailData, type CustomerTimelineEvent, type CustomerWithLedger } from "@/features/core/customers/customer-ledger-data";
 import { isManualAdjustmentEntry, ledgerEntryLabel, normaliseLedgerType } from "@/features/core/ledger/accounting";
 import { resolveAuthoritativeUdharSummary } from "@/features/core/ledger/authoritative-balances";
 import { repairLedgerDriftFromServer } from "@/features/core/ledger/ledger-drift-repair";
@@ -136,6 +136,7 @@ export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id ?? "";
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const reversePaymentPermission = usePermission("reverse_payment");
   const { data, isLoading, refetch } = useCustomerDetail(id);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -203,17 +204,29 @@ export default function CustomerDetailPage() {
     }
     setSaving(true);
     try {
-      await recordPaymentLocalFirst(
+      const result = await recordPaymentLocalFirst(
         customer.id,
         { amount, mode: payment.mode, note: payment.note.trim() || undefined },
         // The displayed balance is the authoritative one; the device ledger can
         // be drifted and would otherwise reject a legitimate collection.
         { expectedOutstanding: outstanding },
       );
+      // The local transaction already knows the exact remaining balance. Put it
+      // on screen before any server refresh so an older response can never leave
+      // the operator looking at ₹0/the pre-payment amount until a manual reload.
+      queryClient.setQueryData<CustomerDetailData | null>(["customer-detail", id], (current) => {
+        if (!current) return current;
+        const projected = projectCustomerOutstanding([current.customer], customer.id, result.nextBalance)[0];
+        return projected ? { ...current, customer: projected } : current;
+      });
+      queryClient.setQueryData<CustomerWithLedger[]>(["customers-ledger-list"], (current) =>
+        projectCustomerOutstanding(current ?? [], customer.id, result.nextBalance));
       toast({ title: t("customers.toast.paymentRecorded"), description: t("customers.toast.ledgerOffline") });
       setPaymentOpen(false);
       setPayment({ amount: "", mode: "cash", note: "" });
-      await refetch();
+      // Refresh the new ledger row in the background; payment acknowledgement
+      // and the corrected balance must not wait for the network.
+      void refetch();
     } catch (error) {
       toast({ title: t("customers.toast.paymentFailed"), description: error instanceof Error ? error.message : t("customers.toast.tryAgain"), variant: "destructive" });
     } finally { setSaving(false); }

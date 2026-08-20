@@ -18,7 +18,7 @@ describe("mobile billing checkout touch targets", () => {
   });
 
   it("keeps checkout disclosure and destructive actions at least 44px", () => {
-    expect(summary).toContain('className="ml-auto inline-flex min-h-11');
+    expect(summary).toContain('className="ml-auto inline-flex min-h-11 min-w-11');
     expect(summary).toContain('className="inline-flex min-h-11 items-center text-[12px]');
     expect(summary).toContain('className="flex h-11 w-full items-center');
     expect(summary).toContain('className="flex min-h-11 w-full items-center');

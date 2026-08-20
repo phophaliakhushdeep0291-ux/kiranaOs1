@@ -48,6 +48,8 @@ export interface LocalPaymentResult {
   paymentId: string;
   customerId: string;
   amount: number;
+  /** Durable balance after this payment, calculated inside the local transaction. */
+  nextBalance: number;
   pendingSync: true;
 }
 
@@ -639,7 +641,7 @@ async function recordPaymentLocalFirstUnlocked(
     customerId,
     action: "appended",
   });
-  return { success: true, paymentId, customerId, amount, pendingSync: true };
+  return { success: true, paymentId, customerId, amount, nextBalance, pendingSync: true };
 }
 
 export function recordPaymentLocalFirst(

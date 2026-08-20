@@ -54,6 +54,7 @@ const CAUSE_BY_CODE = {
   OFFER_REFERENCE_REQUIRED: "the coupon discount is missing its offer reference",
   OFFER_DISCOUNT_CHANGED: "the coupon value changed — reapply the coupon",
   OFFER_DISCOUNT_MISMATCH: "the bill discount is lower than the validated coupon value",
+  PACKAGING_MODE_STOCK_MIGRATION_REQUIRED: "the product still has stock; count it to zero before changing pack-level tracking",
 };
 
 // The stored OfflineSyncEvent.error is just a string (no statusCode), so we also
@@ -73,6 +74,7 @@ function codeFromMessage(message) {
   if (m.includes("negative balance")) return "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";
   if (m.includes("depends on") || m.includes("dependency")) return "SYNC_DEPENDENCY_PENDING";
   if (m.includes("permission") || m.includes("forbidden") || m.includes("not allowed")) return "PERMISSION_DENIED";
+  if (m.includes("count stock to zero") && m.includes("pack-level inventory")) return "PACKAGING_MODE_STOCK_MIGRATION_REQUIRED";
   if (m.includes("no longer exists") || m.includes("not found")) return "NOT_FOUND";
   return null;
 }

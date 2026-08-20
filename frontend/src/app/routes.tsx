@@ -156,7 +156,11 @@ function BusinessProfileRouteGate({ capability, children }: { capability?: strin
   const { t } = useAppLanguage();
   const [location] = useLocation();
   const profile = useShopBusinessProfile();
-  if (profile.isLoading) return <LoadingScreen />;
+  const definitelyOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+  // A cold offline restart may not have profile metadata yet. The profile is a
+  // navigation filter, not the source of the local bill/customer data, so never
+  // hold a usable offline route behind a network-shaped loader.
+  if (profile.isLoading && !definitelyOffline) return <LoadingScreen />;
   // Preserve offline-first access when bootstrap itself is temporarily unavailable.
   if (!profile.data) return <>{children}</>;
   if (!isPathInBusinessProfile(location, profile.data.navigation)) {

@@ -393,7 +393,7 @@ export function BillingSummary({
             </div>
             <button
               onClick={() => setShowCustomerOptions((v) => !v)}
-              className="ml-auto inline-flex min-h-11 shrink-0 items-center px-2 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
+              className="ml-auto inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-2 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
             >
               {t("billing.summary.change")}
             </button>

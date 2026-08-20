@@ -111,11 +111,14 @@ export function productData(shopId, overrides = {}) {
     rateUnit: overrides.rateUnit || "piece",
     stockBaseQty: overrides.stockBaseQty ?? 20,
     costPerRateUnit: overrides.costPerRateUnit ?? 10,
-    minPricePerRateUnit: overrides.minPricePerRateUnit ?? 12,
+    // Keep the default fixture internally valid when a test lowers only the
+    // ordinary selling price. Tests that exercise below-minimum approval still
+    // opt in explicitly by supplying minPricePerRateUnit.
+    minPricePerRateUnit: overrides.minPricePerRateUnit ?? Math.min(12, overrides.defaultPricePerRateUnit ?? 20),
     defaultPricePerRateUnit: overrides.defaultPricePerRateUnit ?? 20,
     ...moneyShadows({
       costPerRateUnit: overrides.costPerRateUnit ?? 10,
-      minPricePerRateUnit: overrides.minPricePerRateUnit ?? 12,
+      minPricePerRateUnit: overrides.minPricePerRateUnit ?? Math.min(12, overrides.defaultPricePerRateUnit ?? 20),
       defaultPricePerRateUnit: overrides.defaultPricePerRateUnit ?? 20,
     }),
     gstRate: overrides.gstRate ?? 0,
@@ -153,11 +156,11 @@ export function productPayload(overrides = {}) {
     rateUnit: overrides.rateUnit || "piece",
     stockBaseQty: overrides.stockBaseQty ?? 20,
     costPerRateUnit: overrides.costPerRateUnit ?? 10,
-    minPricePerRateUnit: overrides.minPricePerRateUnit ?? 12,
+    minPricePerRateUnit: overrides.minPricePerRateUnit ?? Math.min(12, overrides.defaultPricePerRateUnit ?? 20),
     defaultPricePerRateUnit: overrides.defaultPricePerRateUnit ?? 20,
     ...moneyShadows({
       costPerRateUnit: overrides.costPerRateUnit ?? 10,
-      minPricePerRateUnit: overrides.minPricePerRateUnit ?? 12,
+      minPricePerRateUnit: overrides.minPricePerRateUnit ?? Math.min(12, overrides.defaultPricePerRateUnit ?? 20),
       defaultPricePerRateUnit: overrides.defaultPricePerRateUnit ?? 20,
     }),
     gstRate: overrides.gstRate ?? 0,

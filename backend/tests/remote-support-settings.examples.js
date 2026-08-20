@@ -139,6 +139,23 @@ async function main() {
   assert.equal(JSON.parse(auditRow.afterJson).gstNumber, VALID_GSTIN, "after value recorded");
   assert.equal(JSON.parse(auditRow.metadataJson).operatorEmail, "operator@example.com", "and who did it");
 
+  // A support repair without its before/after trail is not allowed to land.
+  await db.$executeRawUnsafe(`
+    CREATE TRIGGER fail_setting_repair_audit
+    BEFORE INSERT ON AuditLog
+    WHEN NEW.action = 'SUPPORT_SETTING_REPAIRED'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced setting repair audit failure');
+    END
+  `);
+  await expectRejection(
+    applySettingRepair({ session: sessionFor(shopA), key: "shop.gstNumber", value: VALID_GSTIN }),
+    "SETTING_REPAIR_AUDIT_WRITE_FAILED",
+    "an unaudited support repair rolls back",
+  );
+  await db.$executeRawUnsafe("DROP TRIGGER fail_setting_repair_audit");
+  assert.equal((await db.shop.findUnique({ where: { id: shopA.id }, select: { gstNumber: true } })).gstNumber, null);
+
   // 8) The owner can see what was changed, in their own shop's history.
   const history = await listSettingRepairs({ shopId: shopA.id });
   assert.equal(history.length, 1);
@@ -190,6 +207,7 @@ main()
   .finally(async () => {
     const ids = [shopA?.id, shopB?.id].filter(Boolean);
     try {
+      await db.$executeRawUnsafe("DROP TRIGGER IF EXISTS fail_setting_repair_audit");
       await db.deviceCommand.deleteMany({ where: { shopId: { in: ids } } });
       await db.storeLocation.deleteMany({ where: { shopId: { in: ids } } });
       await db.auditLog.deleteMany({ where: { shopId: { in: ids } } });

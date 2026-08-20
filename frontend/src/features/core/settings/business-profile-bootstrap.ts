@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/features/core/auth/useAuth";
-import { getShopBootstrap } from "./api";
+import { getShopBootstrap, readCachedShopBootstrap } from "./api";
 import { getStoredBusinessType, saveBusinessType } from "./business-type-store";
 import { useModuleVisibility } from "./modules";
 
@@ -13,6 +13,7 @@ export function useShopBusinessProfile() {
     queryKey: SHOP_BOOTSTRAP_QUERY_KEY,
     queryFn: getShopBootstrap,
     enabled: isAuthenticated,
+    initialData: () => readCachedShopBootstrap(),
     staleTime: 30_000,
   });
 
