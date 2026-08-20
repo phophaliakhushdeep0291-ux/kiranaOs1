@@ -157,12 +157,11 @@ function BusinessProfileRouteGate({ capability, children }: { capability?: strin
   const { t } = useAppLanguage();
   const [location] = useLocation();
   const profile = useShopBusinessProfile();
-  const definitelyOffline = typeof navigator !== "undefined" && navigator.onLine === false;
-  // A cold offline restart may not have profile metadata yet. The profile is a
-  // navigation filter, not the source of the local bill/customer data, so never
-  // hold a usable offline route behind a network-shaped loader.
-  if (profile.isLoading && !definitelyOffline) return <LoadingScreen />;
-  // Preserve offline-first access when bootstrap itself is temporarily unavailable.
+  // Profile bootstrap is a navigation filter, not the source of local counter
+  // data. Never hold a page behind this background request: doing so made fast
+  // route changes look frozen whenever the backend, token refresh, or IndexedDB
+  // startup was slow. Cached data still filters synchronously; without it, the
+  // requested page opens and the completed bootstrap applies on the next render.
   if (!profile.data) return <>{children}</>;
   if (!isPathInBusinessProfile(location, profile.data.navigation)) {
     return <PermissionDenied title={t("chrome.route.notInProfile")} message={t("chrome.route.notInProfileHelp")} />;

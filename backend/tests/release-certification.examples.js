@@ -19,6 +19,7 @@ assert.ok(
 );
 for (const evidence of [
   "frontend-production-check",
+  "backend-warehouse",
   "backend-integration-sqlite",
   "ai-safety",
   "hardware-bridge-contracts",

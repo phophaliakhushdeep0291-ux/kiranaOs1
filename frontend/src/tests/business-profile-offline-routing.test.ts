@@ -11,11 +11,11 @@ describe("business profile offline routing", () => {
     expect(api).toContain("SHOP_BOOTSTRAP_OFFLINE");
   });
 
-  it("seeds the route gate synchronously and never waits for network when definitely offline", () => {
+  it("seeds the route gate synchronously and never holds a page behind the network", () => {
     const bootstrap = fs.readFileSync("src/features/core/settings/business-profile-bootstrap.ts", "utf8");
     const routes = fs.readFileSync("src/app/routes.tsx", "utf8");
     expect(bootstrap).toContain("initialData: () => readCachedShopBootstrap()");
-    expect(routes).toContain("profile.isLoading && !definitelyOffline");
     expect(routes).toContain("if (!profile.data) return <>{children}</>");
+    expect(routes).not.toContain("profile.isLoading &&");
   });
 });

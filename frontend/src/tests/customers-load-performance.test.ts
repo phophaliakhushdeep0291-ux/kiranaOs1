@@ -25,6 +25,16 @@ describe("Customers/Udhar first-load performance contracts", () => {
     expect(hook).not.toMatch(/queryFn:\s*async[\s\S]*?await resolveAuthoritativeUdharSummary/);
   });
 
+  it("hydrates a fresh device directly from the customer API without blocking local paint", () => {
+    const content = source("../features/core/customers/pages/CustomersPage.tsx");
+    const hook = content.slice(content.indexOf("function useCustomersLedgerList"), content.indexOf("function money"));
+
+    expect(hook).toContain('queryKey: ["customers-ledger-server-refresh"]');
+    expect(hook).toContain("listCustomersFromServer({ limit: 1_000 })");
+    expect(hook).toContain("await cacheCustomers(merged)");
+    expect(hook.indexOf("const localQuery = useQuery")).toBeLessThan(hook.indexOf("const serverCustomersQuery = useQuery"));
+  });
+
   it("keeps the legacy Udhar loader local-first and refreshes server truth separately", () => {
     const content = source("../features/core/udhar/pages/UdharPage.tsx");
     const loader = content.slice(content.indexOf("async function loadUdharHome"), content.indexOf("function readInstantUdharHome"));

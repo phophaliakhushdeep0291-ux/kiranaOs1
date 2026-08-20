@@ -58,7 +58,7 @@
     {
       "gate": "Frontend production check",
       "result": "passed",
-      "details": "250 files passed, 1 skipped; 1594 tests passed, 1 skipped; 4603 translation keys checked; typecheck, build and bundle budgets passed"
+      "details": "251 files passed, 1 skipped; 1597 tests passed, 1 skipped; 4606 translation keys checked; typecheck, build and bundle budgets passed"
     },
     {
       "gate": "Isolated backend billing integration",
@@ -69,6 +69,11 @@
       "gate": "Backend production check",
       "result": "passed",
       "details": "Production checks passed after transactional daily-closing audit coverage was aligned with the service boundary"
+    },
+    {
+      "gate": "Complete backend test command",
+      "result": "passed",
+      "details": "npm test passed end to end on 2026-08-20, including guarded pretest, billing, money, sync/source contracts, verticals, restaurant, packaging DB and reports DB posttests"
     },
     {
       "gate": "Migration safety",
