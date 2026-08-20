@@ -1,5 +1,6 @@
 import {
   dexieDB,
+  offlineDB,
   type SyncCursorRow,
 } from "@/lib/offline/db";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
@@ -18,6 +19,40 @@ import type { SyncPullChange, SyncPullResponse } from "@/types/api";
 const DEFAULT_SYNC_SINCE = "1970-01-01T00:00:00.000Z";
 const SYNC_PULL_LIMIT = 500;
 const MAX_PULL_PAGES_PER_CYCLE = 10;
+
+/**
+ * Last pull outcome, kept on the device because nothing else can report it.
+ * `/sync/diagnostics` is the SERVER's view, so it only ever knows about pushes —
+ * it cannot tell a shop that this device has stopped receiving data.
+ */
+export const LAST_PULL_FAILURE_SETTING = "sync:last_pull_failure";
+
+export interface PullFailureRecord {
+  reason: string;
+  at: string;
+}
+
+async function recordPullOutcome(reason: string | null): Promise<void> {
+  try {
+    if (reason === null) {
+      await offlineDB.setSetting<PullFailureRecord | null>(LAST_PULL_FAILURE_SETTING, null);
+      return;
+    }
+    await offlineDB.setSetting<PullFailureRecord>(LAST_PULL_FAILURE_SETTING, {
+      reason,
+      at: nowIso(),
+    });
+  } catch {
+    // Recording the outcome must never be the thing that breaks a sync cycle.
+  }
+}
+
+export async function readLastPullFailure(): Promise<PullFailureRecord | null> {
+  const stored = await offlineDB
+    .getSetting<PullFailureRecord | null>(LAST_PULL_FAILURE_SETTING)
+    .catch(() => null);
+  return stored && typeof stored.reason === "string" ? stored : null;
+}
 const ENTITY_CURSOR_KEYS = [
   "products",
   "customers",
@@ -171,6 +206,17 @@ export async function pullServerChanges(): Promise<{
   conflicts: number;
   cursor?: string | number | null;
   hasMore?: boolean;
+  /**
+   * True when this cycle could not finish reading the server's changes.
+   *
+   * Without it a total pull outage is indistinguishable from "nothing new":
+   * both return `pulled: 0`. A shop ran for a whole session against a `/sync/pull`
+   * that answered HTTP 500 every time while the app said "Everything is syncing
+   * cleanly" — push still worked, so bills left the device and the owner had no
+   * reason to doubt that anything was arriving.
+   */
+  failed: boolean;
+  failureReason?: string;
 }> {
   let totalPulled = 0;
   let totalConflicts = 0;
@@ -224,8 +270,21 @@ export async function pullServerChanges(): Promise<{
         pulled: totalPulled,
         conflicts: totalConflicts,
       });
-    return { pulled: totalPulled, conflicts: totalConflicts, cursor: latestCursor, hasMore };
-  } catch {
-    return { pulled: totalPulled, conflicts: totalConflicts, cursor: latestCursor, hasMore };
+    await recordPullOutcome(null);
+    return { pulled: totalPulled, conflicts: totalConflicts, cursor: latestCursor, hasMore, failed: false };
+  } catch (error) {
+    // Swallowing the throw is deliberate: pages already applied in this cycle
+    // must stand, and a dead pull must not take push down with it. Reporting it
+    // is not optional though — see the `failed` field above.
+    const failureReason = error instanceof Error ? error.message : String(error);
+    await recordPullOutcome(failureReason);
+    return {
+      pulled: totalPulled,
+      conflicts: totalConflicts,
+      cursor: latestCursor,
+      hasMore,
+      failed: true,
+      failureReason,
+    };
   }
 }

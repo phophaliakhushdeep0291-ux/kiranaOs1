@@ -87,11 +87,19 @@ export async function runSyncCycle(): Promise<SyncRunResult> {
 
   await repairResolvedSyncStatusNoise().catch(() => 0);
   const moved = push.pushed + pull.pulled + push.failed + push.conflicts + pull.conflicts;
-  if (moved > 0) {
+  // A failed pull moves nothing, so it would never be recorded if `moved` alone
+  // decided — which is exactly how a total receive outage stayed invisible.
+  if (moved > 0 || pull.failed) {
     trackSyncEvent(
-      push.failed > 0 ? ACTIVITY_EVENTS.SYNC_FAILED : ACTIVITY_EVENTS.SYNC_COMPLETED,
+      push.failed > 0 || pull.failed ? ACTIVITY_EVENTS.SYNC_FAILED : ACTIVITY_EVENTS.SYNC_COMPLETED,
       Date.now() - startedAt,
-      { pushed: push.pushed, pulled: pull.pulled, failed: push.failed, conflicts: push.conflicts + pull.conflicts },
+      {
+        pushed: push.pushed,
+        pulled: pull.pulled,
+        failed: push.failed,
+        conflicts: push.conflicts + pull.conflicts,
+        ...(pull.failed ? { pullFailed: true, reason: pull.failureReason ?? "unknown" } : {}),
+      },
     );
   }
 
@@ -103,6 +111,8 @@ export async function runSyncCycle(): Promise<SyncRunResult> {
     pending: (await readSyncQueueCounts()).totalBlocking,
     skipped: push.skipped,
     cursor: pull.cursor,
+    pullFailed: pull.failed,
+    pullFailureReason: pull.failureReason,
   };
 }
 
