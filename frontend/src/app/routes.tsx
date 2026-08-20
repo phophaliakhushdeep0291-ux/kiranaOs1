@@ -1,5 +1,5 @@
 import { useAppLanguage } from "@/features/core/settings/i18n";
-import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { Redirect, Route, Switch, useLocation } from "wouter";
 import NotFound from "@/components/shared/NotFound";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
@@ -17,6 +17,7 @@ import type { FeatureName } from "@/features/core/subscription/plans";
 import { isPathInBusinessProfile, profileHasCapability, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { PermissionDenied } from "@/components/shared/PermissionDenied";
 import { loadBillingRoute, loadCustomersRoute, loadInventoryRoute, loadPurchasesRoute, loadSalesOverviewRoute } from "./route-preload";
+import { Button } from "@/components/ui/button";
 
 const Login = lazy(() => import("@/features/core/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/core/auth/pages/RegisterPage"));
@@ -172,8 +173,39 @@ function BusinessProfileRouteGate({ capability, children }: { capability?: strin
   return <>{children}</>;
 }
 
-function ProtectedRoute({ component: Component, featureName, capability }: { component: ComponentType; featureName?: FeatureName; capability?: string }) {
+function useBrowserOnline(): boolean {
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  useEffect(() => {
+    const markOnline = () => setOnline(true);
+    const markOffline = () => setOnline(false);
+    window.addEventListener("online", markOnline);
+    window.addEventListener("offline", markOffline);
+    return () => {
+      window.removeEventListener("online", markOnline);
+      window.removeEventListener("offline", markOffline);
+    };
+  }, []);
+  return online;
+}
+
+function InternetRequiredRoute() {
+  const { t } = useAppLanguage();
+  const [, setLocation] = useLocation();
+  return (
+    <div className="app-page-shell flex min-h-[60vh] items-center justify-center p-4" data-testid="internet-required-route">
+      <div className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-sm">
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-amber-100 text-xl" aria-hidden="true">↯</div>
+        <h1 className="mt-4 text-xl font-black text-slate-900">{t("chrome.route.internetRequired")}</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{t("chrome.route.internetRequiredHelp")}</p>
+        <Button className="mt-5 min-h-11" onClick={() => setLocation("/sync-status")}>{t("chrome.route.openOfflineStatus")}</Button>
+      </div>
+    </div>
+  );
+}
+
+function ProtectedRoute({ component: Component, featureName, capability, onlineOnly = false }: { component: ComponentType; featureName?: FeatureName; capability?: string; onlineOnly?: boolean }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const browserOnline = useBrowserOnline();
 
   if (isLoading) return <LoadingScreen />;
 
@@ -191,7 +223,9 @@ function ProtectedRoute({ component: Component, featureName, capability }: { com
         <AppLayout>
           <ErrorBoundary>
             <BusinessProfileRouteGate capability={capability}>
-              <LazyPage component={Component} featureName={featureName} />
+              {onlineOnly && !browserOnline
+                ? <InternetRequiredRoute />
+                : <LazyPage component={Component} featureName={featureName} />}
             </BusinessProfileRouteGate>
           </ErrorBoundary>
         </AppLayout>
@@ -444,16 +478,16 @@ export function AppRoutes() {
         <ProtectedRoute component={Offers} featureName="dynamic_customer_pricing" />
       </Route>
       <Route path="/loyalty">
-        <ProtectedRoute component={Loyalty} featureName="loyalty_program" />
+        <ProtectedRoute component={Loyalty} featureName="loyalty_program" onlineOnly />
       </Route>
       <Route path="/gift-cards">
-        <ProtectedRoute component={GiftCards} featureName="loyalty_program" />
+        <ProtectedRoute component={GiftCards} featureName="loyalty_program" onlineOnly />
       </Route>
       <Route path="/reports">
         <ProtectedRoute component={Reports} />
       </Route>
       <Route path="/channel-settlements">
-        <ProtectedRoute component={ChannelSettlements} featureName="channel_settlement" />
+        <ProtectedRoute component={ChannelSettlements} featureName="channel_settlement" onlineOnly />
       </Route>
       <Route path="/money-statement">
         <ProtectedRoute component={MoneyStatementPage} />
@@ -483,7 +517,7 @@ export function AppRoutes() {
         <ProtectedRoute component={StaffSettings} featureName="staff_login" />
       </Route>
       <Route path="/settings/devices">
-        <ProtectedRoute component={DevicesSettings} />
+        <ProtectedRoute component={DevicesSettings} onlineOnly />
       </Route>
       <Route path="/settings/sync">
         <ProtectedRoute component={SyncSettings} />
@@ -495,34 +529,34 @@ export function AppRoutes() {
         <ProtectedRoute component={SecuritySettings} />
       </Route>
       <Route path="/settings/notifications">
-        <ProtectedRoute component={NotificationsSettings} />
+        <ProtectedRoute component={NotificationsSettings} onlineOnly />
       </Route>
       <Route path="/settings/integrations">
-        <ProtectedRoute component={IntegrationsSettings} featureName="api_webhook_later" />
+        <ProtectedRoute component={IntegrationsSettings} featureName="api_webhook_later" onlineOnly />
       </Route>
       <Route path="/settings/advanced">
         <ProtectedRoute component={AdvancedSettings} />
       </Route>
       <Route path="/plans">
-        <ProtectedRoute component={PlansPage} />
+        <ProtectedRoute component={PlansPage} onlineOnly />
       </Route>
       <Route path="/subscription">
-        <ProtectedRoute component={SubscriptionPage} />
+        <ProtectedRoute component={SubscriptionPage} onlineOnly />
       </Route>
       <Route path="/devices">
-        <ProtectedRoute component={DevicesPage} />
+        <ProtectedRoute component={DevicesPage} onlineOnly />
       </Route>
       <Route path="/platform-admin">
-        <ProtectedRoute component={PlatformAdminPage} />
+        <ProtectedRoute component={PlatformAdminPage} onlineOnly />
       </Route>
       <Route path="/platform-admin/support">
-        <ProtectedRoute component={RemoteSupportConsolePage} />
+        <ProtectedRoute component={RemoteSupportConsolePage} onlineOnly />
       </Route>
       <Route path="/help">
-        <ProtectedRoute component={AskArthaPage} />
+        <ProtectedRoute component={AskArthaPage} onlineOnly />
       </Route>
       <Route path="/activity-insights">
-        <ProtectedRoute component={ActivityInsightsPage} />
+        <ProtectedRoute component={ActivityInsightsPage} onlineOnly />
       </Route>
       <Route path="/staff">
         <ProtectedRoute component={StaffPage} featureName="staff_login" />
@@ -531,31 +565,31 @@ export function AppRoutes() {
         <ProtectedRoute component={AuditLogsPage} featureName="audit_logs" />
       </Route>
       <Route path="/assurance/findings/:id">
-        <ProtectedRoute component={AssuranceFindingDetailPage} />
+        <ProtectedRoute component={AssuranceFindingDetailPage} onlineOnly />
       </Route>
       <Route path="/assurance/findings">
-        <ProtectedRoute component={AssuranceFindingsPage} />
+        <ProtectedRoute component={AssuranceFindingsPage} onlineOnly />
       </Route>
       <Route path="/assurance/evidence">
-        <ProtectedRoute component={AssuranceEvidencePage} />
+        <ProtectedRoute component={AssuranceEvidencePage} onlineOnly />
       </Route>
       <Route path="/assurance/review-queue">
-        <ProtectedRoute component={AssuranceReviewQueuePage} />
+        <ProtectedRoute component={AssuranceReviewQueuePage} onlineOnly />
       </Route>
       <Route path="/assurance/runs">
-        <ProtectedRoute component={AssuranceRunsPage} />
+        <ProtectedRoute component={AssuranceRunsPage} onlineOnly />
       </Route>
       <Route path="/assurance/rules">
-        <ProtectedRoute component={AssuranceRulesPage} />
+        <ProtectedRoute component={AssuranceRulesPage} onlineOnly />
       </Route>
       <Route path="/assurance/report">
-        <ProtectedRoute component={AssuranceReportPage} />
+        <ProtectedRoute component={AssuranceReportPage} onlineOnly />
       </Route>
       <Route path="/assurance/cases">
-        <ProtectedRoute component={AssuranceCasesPage} />
+        <ProtectedRoute component={AssuranceCasesPage} onlineOnly />
       </Route>
       <Route path="/assurance">
-        <ProtectedRoute component={AssuranceDashboardPage} />
+        <ProtectedRoute component={AssuranceDashboardPage} onlineOnly />
       </Route>
       <Route path="/recycle-bin">
         <ProtectedRoute component={RecycleBinPage} />

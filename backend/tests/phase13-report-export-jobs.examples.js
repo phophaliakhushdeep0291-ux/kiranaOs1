@@ -116,6 +116,10 @@ for (const snippet of [
 ]) {
   assert(productionCheck.includes(snippet), `production-check missing Phase 13 snippet: ${snippet}`);
 }
+assert(
+  productionCheck.includes("[reportController, snapshotService, reportExportService].some"),
+  "production-check must accept Phase 13 audit actions from their transactional services",
+);
 assert(packageJson.scripts["test:billing"].includes("phase13-report-export-jobs.examples.js"), "Phase 13 test must be wired into npm test");
 
 console.log("Phase 13 report export jobs examples passed");

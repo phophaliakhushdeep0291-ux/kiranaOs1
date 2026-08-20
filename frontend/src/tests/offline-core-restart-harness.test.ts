@@ -25,14 +25,27 @@ describe("offline cold-restart QA harness", () => {
 
   it("covers every core route and fails on bounce, blank/error, loading, overflow or runtime failure", () => {
     for (const route of [
-      "/dashboard", "/billing", "/products", "/customers", "/inventory",
-      "/bills", "/purchase-bills", "/reports", "/settings", "/sync-status", "/recovery-mode",
+      "/dashboard", "/billing", "/import-order", "/returns/new", "/bills",
+      "/orders-received", "/sales-overview", "/products", "/customers", "/inventory",
+      "/inventory/stock-in", "/inventory/stock-out", "/inventory/adjustments",
+      "/inventory/stock-counts", "/categories", "/purchase-bills", "/suppliers",
+      "/expenses", "/offers", "/loyalty", "/gift-cards", "/reports",
+      "/channel-settlements", "/money-statement", "/daily-closing", "/settings",
+      "/settings/store-profile", "/settings/modules", "/settings/printer",
+      "/settings/billing", "/settings/staff", "/settings/devices", "/settings/sync",
+      "/settings/taxes", "/settings/security", "/settings/notifications",
+      "/settings/integrations", "/settings/advanced", "/sync-status", "/plans",
+      "/subscription", "/devices", "/help", "/activity-insights", "/staff",
+      "/audit-logs", "/assurance", "/recycle-bin", "/smart-tools", "/recovery-mode",
     ]) expect(source).toContain(`\"${route}\"`);
     expect(source).toContain("bounced from");
     expect(source).toContain("rendered a fatal offline error");
     expect(source).toContain("remained stuck loading offline");
     expect(source).toContain("overflowed offline");
     expect(source).toContain("runtime errors offline");
+    expect(source).toContain("offline capability label mismatch");
+    expect(source).toContain('data-testid="internet-required-route"');
+    expect(source).toContain("hasCoreMarker");
   });
 
   it("proves local product and customer data survive the cold restart", () => {
