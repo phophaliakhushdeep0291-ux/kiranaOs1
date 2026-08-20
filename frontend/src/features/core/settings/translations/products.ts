@@ -146,6 +146,15 @@ export const productsEn = {
   "products.form.stockInventory": "Stock & Inventory",
   "products.form.gridStockHint": "Counted from the size grid above.",
   "products.form.reorderLevel": "Reorder Level",
+  // The size grid repeats these per row, so they are the short forms — a 72px
+  // column cannot carry the full sentence the main form uses.
+  "products.form.variantDetails": "Per-size cost, MRP & reorder",
+  "products.form.variantMrp": "MRP",
+  "products.form.variantCost": "Cost",
+  "products.form.variantMinPrice": "Min price",
+  "products.form.variantLowStock": "Low stock",
+  "products.form.variantReorder": "Reorder at",
+  "products.form.variantInheritHint": "Blank cost, MRP or min price follows the product above. Blank low stock or reorder means no alert for this size.",
   "products.form.rateStockUnit": "Rate / Stock Unit",
   "products.form.batchExpiry": "Enable batch and expiry tracking",
   "products.form.batchExpiryTitle": "Batch and expiry tracking",

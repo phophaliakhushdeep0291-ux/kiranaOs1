@@ -137,6 +137,19 @@ async function fileToResizedDataUrl(file: File, max = 512): Promise<string> {
   });
 }
 
+/**
+ * A product-level number worth handing down to a size, or null for "nothing set".
+ *
+ * Zero counts as nothing on purpose. Every one of these fields defaults to 0 in
+ * the form, and a 0 MRP is this form's own way of saying "no ceiling" — handing
+ * that down as a variant's maximumPrice would instead read as a ceiling of ₹0
+ * and refuse every sale of that size.
+ */
+function numberOrNull(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 export function ProductFormPanel({
   open,
   editing,
@@ -728,6 +741,14 @@ export function ProductFormPanel({
                 // form value stops being the moment anything is typed.
                 baselineUnits={editing?.sellingUnits ?? []}
                 fallbackPrice={Number(form.watch("sellingPrice") || 0)}
+                // A size left blank in the grid follows the product rather than
+                // being saved as null, which is what used to strip every variant
+                // row of its MRP ceiling and its cost.
+                productDefaults={{
+                  mrp: numberOrNull(form.watch("mrp")),
+                  costPrice: numberOrNull(form.watch("costPrice")),
+                  minimumPrice: numberOrNull(form.watch("minimumSellingPrice")),
+                }}
                 unitType={selectedUnit}
                 onChange={({ axes, sellingUnits: nextUnits }) => {
                   form.setValue("variantAxes", axes, { shouldDirty: true });

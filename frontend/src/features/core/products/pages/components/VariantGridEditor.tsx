@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Grid3x3, Lock, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Grid3x3, Lock, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input, useMoneyDraft, useQuantityDraft } from "@/components/ui/input";
+import { Input, useMoneyDraft, useNumericDraft, useQuantityDraft } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   MAX_AXES,
@@ -14,6 +14,7 @@ import {
   variantCellsToSellingUnits,
   type VariantCell,
 } from "@/features/core/products/pages/variant-grid";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import type { ProductSellingUnit, ProductVariantAxis } from "@/types/api";
 
 /**
@@ -29,7 +30,7 @@ import type { ProductSellingUnit, ProductVariantAxis } from "@/types/api";
 /** What these axes are usually called, so nobody has to think of the word. */
 const AXIS_PRESETS = ["Size", "Colour", "Shade", "Material", "Fit", "Pack"];
 
-export function VariantGridEditor({ axes, sellingUnits, baselineUnits, fallbackPrice, unitType, onChange }: {
+export function VariantGridEditor({ axes, sellingUnits, baselineUnits, fallbackPrice, productDefaults, unitType, onChange }: {
   axes: ProductVariantAxis[];
   /** Every selling unit currently on the form, variant rows and packaging rows alike. */
   sellingUnits: ProductSellingUnit[];
@@ -45,11 +46,26 @@ export function VariantGridEditor({ axes, sellingUnits, baselineUnits, fallbackP
   baselineUnits: ProductSellingUnit[];
   /** What a brand-new cell is priced at until the shop says otherwise. */
   fallbackPrice: number;
+  /**
+   * The product's own money and reorder settings, which a size that has none of
+   * its own falls back to when saved. Left blank in the grid, a size simply
+   * follows the product — which is what a shop expects when every size costs
+   * the same and only one of them is unusual.
+   */
+  productDefaults: {
+    mrp?: number | null;
+    costPrice?: number | null;
+    minimumPrice?: number | null;
+  };
   unitType: string;
   onChange: (next: { axes: ProductVariantAxis[]; sellingUnits: ProductSellingUnit[] }) => void;
 }) {
+  const { t } = useAppLanguage();
   const [valueDrafts, setValueDrafts] = useState<string[]>(["", ""]);
   const [bulkPrice, setBulkPrice] = useState("");
+  // Which rows have their cost/MRP/reorder panel open. Kept per row rather than
+  // one-at-a-time so two sizes can be compared without collapsing the first.
+  const [openRows, setOpenRows] = useState<Record<string, boolean>>({});
 
   // Saved rows already tagged with an axis position. Once any exist the axes are
   // append-only, because a row's variantValue1 is its value on axes[0] and
@@ -77,7 +93,7 @@ export function VariantGridEditor({ axes, sellingUnits, baselineUnits, fallbackP
       // A grid replaces the packaging rows: a garment is sold by size, not by
       // pack, and leaving both would put a sizeless row on the shelf.
       sellingUnits: nextAxes.length > 0
-        ? variantCellsToSellingUnits(built, { unitType })
+        ? variantCellsToSellingUnits(built, { unitType, ...productDefaults })
         : packagingRows,
     });
   }
@@ -285,40 +301,103 @@ export function VariantGridEditor({ axes, sellingUnits, baselineUnits, fallbackP
                 Showing the first {MAX_CELLS} combinations. Split the product if you genuinely stock more.
               </p>
             )}
-            {cells.map((cell) => (
+            {cells.map((cell) => {
+              const open = openRows[cell.unitCode] ?? false;
+              return (
               /* A grid, not flex-wrap. Four controls do not fit a 343 px panel,
                  and left to wrap they broke across three ragged lines with the
                  name sitting 11 px below the boxes beside it. Here the phone
                  gets the name on its own line and the three fields in even
-                 columns under it; from `sm` up it is one aligned row. */
+                 columns under it; from `sm` up it is one aligned row.
+
+                 The rarer per-size money lives behind the chevron rather than in
+                 four more columns: seven boxes abreast is unreadable on a phone,
+                 and a shop sets cost and reorder level far less often than it
+                 sets price and count. */
               <div
                 key={cell.unitCode}
                 className={cn(
-                  "grid grid-cols-3 items-center gap-2 border-b border-[#f2f5f9] px-2.5 py-2 last:border-b-0",
-                  "sm:grid-cols-[minmax(0,1fr)_84px_72px_116px]",
+                  "border-b border-[#f2f5f9] last:border-b-0",
                   cell.qty <= 0 && "bg-[#fffaf5]",
                 )}
               >
-                <span className="col-span-3 truncate text-[11.5px] font-bold text-[#13274d] sm:col-span-1">{cell.name}</span>
-                <CellPrice
-                  price={cell.price}
-                  onChange={(price) => patchCell(cell.unitCode, { price })}
-                  label={`Price for ${cell.name}`}
-                />
-                <CellQty
-                  qty={cell.qty}
-                  onChange={(qty) => patchCell(cell.unitCode, { qty })}
-                  label={`Stock for ${cell.name}`}
-                />
-                <Input
-                  className="h-8 w-full text-[11px]"
-                  placeholder="Barcode"
-                  value={cell.barcode ?? ""}
-                  onChange={(e) => patchCell(cell.unitCode, { barcode: e.target.value || null })}
-                  aria-label={`Barcode for ${cell.name}`}
-                />
+                <div className="grid grid-cols-3 items-center gap-2 px-2.5 py-2 sm:grid-cols-[minmax(0,1fr)_84px_72px_116px]">
+                  <div className="col-span-3 flex min-w-0 items-center gap-1 sm:col-span-1">
+                    <span className="truncate text-[11.5px] font-bold text-[#13274d]">{cell.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setOpenRows((prev) => ({ ...prev, [cell.unitCode]: !open }))}
+                      aria-expanded={open}
+                      aria-label={`${t("products.form.variantDetails")} — ${cell.name}`}
+                      className="grid h-6 w-6 shrink-0 place-items-center rounded text-[#8492ac] hover:bg-[#eef3f9] hover:text-[var(--brand)]"
+                    >
+                      <ChevronDown size={13} className={cn("transition-transform", open && "rotate-180")} />
+                    </button>
+                  </div>
+                  <CellPrice
+                    price={cell.price}
+                    onChange={(price) => patchCell(cell.unitCode, { price })}
+                    label={`Price for ${cell.name}`}
+                  />
+                  <CellQty
+                    qty={cell.qty}
+                    onChange={(qty) => patchCell(cell.unitCode, { qty })}
+                    label={`Stock for ${cell.name}`}
+                  />
+                  <Input
+                    className="h-8 w-full text-[11px]"
+                    placeholder="Barcode"
+                    value={cell.barcode ?? ""}
+                    onChange={(e) => patchCell(cell.unitCode, { barcode: e.target.value || null })}
+                    aria-label={`Barcode for ${cell.name}`}
+                  />
+                </div>
+
+                {open && (
+                  <div className="border-t border-dashed border-[#e6edf6] bg-[#f8fafd] px-2.5 py-2" data-testid={`variant-cell-details-${cell.unitCode}`}>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                      <CellOptional
+                        value={cell.mrp}
+                        onChange={(mrp) => patchCell(cell.unitCode, { mrp })}
+                        title={t("products.form.variantMrp")}
+                        label={`${t("products.form.variantMrp")} — ${cell.name}`}
+                        decimals={2}
+                      />
+                      <CellOptional
+                        value={cell.costPrice}
+                        onChange={(costPrice) => patchCell(cell.unitCode, { costPrice })}
+                        title={t("products.form.variantCost")}
+                        label={`${t("products.form.variantCost")} — ${cell.name}`}
+                        decimals={2}
+                      />
+                      <CellOptional
+                        value={cell.minimumPrice}
+                        onChange={(minimumPrice) => patchCell(cell.unitCode, { minimumPrice })}
+                        title={t("products.form.variantMinPrice")}
+                        label={`${t("products.form.variantMinPrice")} — ${cell.name}`}
+                        decimals={2}
+                      />
+                      <CellOptional
+                        value={cell.lowStockThreshold}
+                        onChange={(lowStockThreshold) => patchCell(cell.unitCode, { lowStockThreshold })}
+                        title={t("products.form.variantLowStock")}
+                        label={`${t("products.form.variantLowStock")} — ${cell.name}`}
+                        decimals={3}
+                      />
+                      <CellOptional
+                        value={cell.reorderLevel}
+                        onChange={(reorderLevel) => patchCell(cell.unitCode, { reorderLevel })}
+                        title={t("products.form.variantReorder")}
+                        label={`${t("products.form.variantReorder")} — ${cell.name}`}
+                        decimals={3}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-[9.5px] font-semibold leading-snug text-[#9aa6bb]">{t("products.form.variantInheritHint")}</p>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -348,4 +427,37 @@ function CellPrice({ price, onChange, label }: { price: number; onChange: (next:
 function CellQty({ qty, onChange, label }: { qty: number; onChange: (next: number) => void; label: string }) {
   const props = useQuantityDraft(qty, onChange, { min: 0 });
   return <Input className="h-8 w-full text-[11.5px]" type="number" inputMode="decimal" step="1" aria-label={label} {...props} />;
+}
+
+/**
+ * A per-size box that is allowed to stay empty.
+ *
+ * `useMoneyDraft` and `useQuantityDraft` can only ever commit a number, so
+ * neither can express "this size has no MRP of its own — use the product's".
+ * That distinction is the whole point of these fields: null inherits, a typed
+ * number overrides, and a typed 0 is neither (a free sample really is priced
+ * zero). `emptyCommitsNull` is what carries clearing the box back up.
+ */
+function CellOptional({ value, onChange, title, label, decimals }: {
+  value: number | null;
+  onChange: (next: number | null) => void;
+  title: string;
+  label: string;
+  decimals: number;
+}) {
+  const props = useNumericDraft(value, onChange, { min: 0, decimals, emptyCommitsNull: true });
+  return (
+    <label className="block min-w-0">
+      <span className="mb-0.5 block truncate text-[9.5px] font-black uppercase tracking-wide text-[#8492ac]">{title}</span>
+      <Input
+        className="h-8 w-full text-[11px]"
+        type="number"
+        inputMode="decimal"
+        step={decimals === 2 ? "0.01" : "1"}
+        placeholder="—"
+        aria-label={label}
+        {...props}
+      />
+    </label>
+  );
 }
