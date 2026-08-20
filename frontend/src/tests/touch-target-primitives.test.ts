@@ -42,7 +42,7 @@ describe("shared touch-target primitives", () => {
 
   it("keeps the sync diagnostics refresh action at 44px", () => {
     const source = readFileSync("src/features/core/sync/pages/SyncDiagnosticsSection.tsx", "utf8");
-    expect(source).toContain('aria-label="Refresh sync diagnostics"');
+    expect(source).toContain('aria-label={t("settings.sync.refreshDiagnostics")}');
     expect(source).toContain("grid h-11 w-11 shrink-0");
     expect(source).not.toContain("grid h-9 w-9 shrink-0");
   });

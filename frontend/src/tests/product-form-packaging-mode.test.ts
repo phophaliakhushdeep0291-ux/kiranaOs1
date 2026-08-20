@@ -85,7 +85,22 @@ describe("packaging mode round-trips through the product form", () => {
   it("restores the saved mode when editing an existing product", () => {
     const saved = { id: "p1", name: "Maggi", defaultPricePerRateUnit: 108, packagingMode: "per_pack" } as Product;
     expect(productToForm(saved).packagingMode).toBe("per_pack");
-    // Anything unrecognised falls back to the safe shared pool rather than trusting it.
+    // A legacy record without either a mode or individual pack quantities is a
+    // pooled product.
     expect(productToForm({ ...saved, packagingMode: undefined }).packagingMode).toBe("pooled");
+  });
+
+  it("recognises legacy per-pack products from their saved pack quantities", () => {
+    const legacyProduct = {
+      id: "p1",
+      name: "Almond drop",
+      packagingMode: undefined,
+      sellingUnits: [
+        { name: "300 ml", unitCode: "piece-300-ml", onHandQty: 20, isDefault: true },
+        { name: "60 ml", unitCode: "piece-60-ml", onHandQty: 30, isDefault: false },
+      ],
+    } as Product;
+
+    expect(productToForm(legacyProduct).packagingMode).toBe("per_pack");
   });
 });
