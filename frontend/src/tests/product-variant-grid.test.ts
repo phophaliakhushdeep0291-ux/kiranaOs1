@@ -267,6 +267,67 @@ describe("the grid as selling units", () => {
   });
 });
 
+describe("each size keeps its own cost, MRP and reorder level", () => {
+  /**
+   * A size is not just a price and a count. XXL costs more to buy, a shade that
+   * is being cleared sells under its own MRP, and a size that turns over fast
+   * runs out at a different number from the rest.
+   *
+   * This used to be impossible to say. `variantCellsToSellingUnits` read cost,
+   * MRP and minimum price off one shared `base` and hardcoded
+   * `lowStockThreshold: null`, while `buildVariantCells` never read any of them
+   * back — so every trip through the editor gave all sizes one set of numbers
+   * and wrote null over whatever each had been saved with.
+   */
+  const priced = unit({
+    id: "u-m", unitCode: "m-blue", variantValue1: "M", variantValue2: "Blue",
+    defaultPrice: 350, costPrice: 210, maximumPrice: 499, minimumPrice: 300,
+    onHandQty: 7, lowStockThreshold: 2, reorderLevel: 5,
+  });
+  const axes = [{ name: "Size", values: ["S", "M"] }, { name: "Colour", values: ["Blue"] }];
+
+  it("reads a saved size's own numbers back into its cell", () => {
+    const cells = buildVariantCells(axes, [priced], { price: 350 });
+    const m = cells.find((cell) => cell.value1 === "M");
+    expect(m).toMatchObject({ costPrice: 210, mrp: 499, minimumPrice: 300, lowStockThreshold: 2, reorderLevel: 5 });
+  });
+
+  it("survives a full round trip instead of coming back null", () => {
+    // The regression itself: open a saved garment, change nothing, save.
+    const reSaved = variantCellsToSellingUnits(buildVariantCells(axes, [priced], { price: 350 }), { unitType: "piece" });
+    const m = reSaved.find((row) => row.variantValue1 === "M");
+    expect(m).toMatchObject({ costPrice: 210, maximumPrice: 499, minimumPrice: 300, lowStockThreshold: 2, reorderLevel: 5 });
+  });
+
+  it("lets two sizes hold different numbers at once", () => {
+    const cells = buildVariantCells(axes, [priced], { price: 350 });
+    const edited = cells.map((cell) => (cell.value1 === "S" ? { ...cell, costPrice: 180, mrp: 420, lowStockThreshold: 9 } : cell));
+    const rows = variantCellsToSellingUnits(edited, { unitType: "piece" });
+    expect(rows.find((r) => r.variantValue1 === "S")).toMatchObject({ costPrice: 180, maximumPrice: 420, lowStockThreshold: 9 });
+    expect(rows.find((r) => r.variantValue1 === "M")).toMatchObject({ costPrice: 210, maximumPrice: 499, lowStockThreshold: 2 });
+  });
+
+  it("falls back to the product's value only where a size has none", () => {
+    // Blank in the grid means "same as the product", which is what a shop means
+    // when only one size is unusual. It must not overwrite a size that spoke.
+    const cells = buildVariantCells(axes, [priced], { price: 350 });
+    const rows = variantCellsToSellingUnits(cells, { unitType: "piece", costPrice: 200, mrp: 450, minimumPrice: 280 });
+    expect(rows.find((r) => r.variantValue1 === "S")).toMatchObject({ costPrice: 200, maximumPrice: 450, minimumPrice: 280 });
+    expect(rows.find((r) => r.variantValue1 === "M")).toMatchObject({ costPrice: 210, maximumPrice: 499, minimumPrice: 300 });
+  });
+
+  it("keeps a deliberate zero rather than reading it as unset", () => {
+    // A sample priced at zero and a reorder level of none are real answers, and
+    // `Number(x) || null` would quietly turn both back into the product's value.
+    const free = unit({ id: "u-f", unitCode: "s-blue", variantValue1: "S", variantValue2: "Blue", costPrice: 0, reorderLevel: 0 });
+    const cells = buildVariantCells(axes, [free], { price: 350 });
+    const s = cells.find((cell) => cell.value1 === "S");
+    expect(s).toMatchObject({ costPrice: 0, reorderLevel: 0 });
+    const rows = variantCellsToSellingUnits(cells, { unitType: "piece", costPrice: 999 });
+    expect(rows.find((r) => r.variantValue1 === "S")?.costPrice).toBe(0);
+  });
+});
+
 describe("round-tripping through the product form", () => {
   const shirt: Product = {
     id: "p_1",
