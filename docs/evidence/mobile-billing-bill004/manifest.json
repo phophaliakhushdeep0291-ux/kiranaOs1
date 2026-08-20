@@ -1,0 +1,121 @@
+{
+  "requirement": "BILL-004",
+  "capturedAt": "2026-08-20T17:35:00+05:30",
+  "scope": "GST and estimate bill separation with phone-first Billing History QA",
+  "sourceCheckpoints": [
+    "f40379bf",
+    "c8ba8d5e",
+    "0eb44bd7"
+  ],
+  "liveQa": {
+    "shop": "BILL-004 Mobile QA",
+    "viewport": "390x844",
+    "documentsCreated": [
+      "EST-2026-000001",
+      "KOS-2026-000001"
+    ],
+    "gstGuard": "After GST was disabled, a GST-invoice attempt was rejected while checkout state was retained and no additional document was created.",
+    "databaseProof": {
+      "documentCount": 2,
+      "billCounter": 1,
+      "estimateCounter": 1,
+      "returnCounter": 0,
+      "remainingStock": 8
+    }
+  },
+  "viewportMatrix": [
+    {
+      "viewport": "375x667",
+      "horizontalOverflow": false,
+      "interactiveElementsChecked": 32,
+      "touchTargetsBelow44px": 0
+    },
+    {
+      "viewport": "390x844",
+      "horizontalOverflow": false,
+      "interactiveElementsChecked": 32,
+      "touchTargetsBelow44px": 0
+    },
+    {
+      "viewport": "430x932",
+      "horizontalOverflow": false,
+      "interactiveElementsChecked": 32,
+      "touchTargetsBelow44px": 0
+    },
+    {
+      "viewport": "768x1024",
+      "horizontalOverflow": false,
+      "interactiveElementsChecked": 34,
+      "touchTargetsBelow44px": 0
+    }
+  ],
+  "automatedEvidence": [
+    {
+      "gate": "Focused frontend billing tests",
+      "result": "passed",
+      "details": "3 files; 11 tests passed"
+    },
+    {
+      "gate": "Frontend production check",
+      "result": "passed",
+      "details": "250 files passed, 1 skipped; 1594 tests passed, 1 skipped; 4603 translation keys checked; typecheck, build and bundle budgets passed"
+    },
+    {
+      "gate": "Isolated backend billing integration",
+      "result": "passed",
+      "details": "29 tests passed, including independent KOS/EST series, replay idempotency and GST-disabled zero-side-effect coverage"
+    },
+    {
+      "gate": "Backend production check",
+      "result": "passed",
+      "details": "Production checks passed after transactional daily-closing audit coverage was aligned with the service boundary"
+    },
+    {
+      "gate": "Migration safety",
+      "result": "passed",
+      "details": "0 warnings after assigning unique unreleased migration sequence numbers 000113 and 000114"
+    },
+    {
+      "gate": "Release gate",
+      "result": "passed_with_expected_warning",
+      "details": "One expected human-signoff warning because RELEASE_APPROVED is not true"
+    },
+    {
+      "gate": "Hardware bridge tests",
+      "result": "passed",
+      "details": "32 tests passed; installer PowerShell syntax passed"
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "gst-disabled-guard-390x844.png",
+      "sha256": "36292fc0eb04835717e7c1f7d51ef5b93809e339d1fda2bd364debb53384b04b",
+      "bytes": 33814,
+      "note": "Captures retained GST selection and checkout state; the localized rejection was observed in the rendered DOM and the no-write result is independently proven by the database state."
+    },
+    {
+      "file": "history-390x844.png",
+      "sha256": "62d1e62531ee4c57abf6e192e6dee1714b475803736ea0ea0b6ba4426977f5c1",
+      "bytes": 37486
+    },
+    {
+      "file": "history-rows-390x844.png",
+      "sha256": "9daa4d16f33be6f91045fda1d1206ffa464ed43eb695100041c0869ee519bc4e",
+      "bytes": 34855
+    },
+    {
+      "file": "history-touch-targets-390x844.png",
+      "sha256": "0fc5809845ecc331cc0bbe122fe8604dd5cf3c84a5c89a97305ff192d6e96eb1",
+      "bytes": 37124
+    },
+    {
+      "file": "history-touch-targets-768x1024.png",
+      "sha256": "673c0b209f7ffc6ed22408eb7b068a3ac954cb4598e7b3af76a4466cad0e4baf",
+      "bytes": 63079
+    }
+  ],
+  "limitations": [
+    "Physical receipt-printer certification remains tracked under BILL-007 and HW-001.",
+    "Candidate CI and named human release sign-off remain required before production approval."
+  ]
+}

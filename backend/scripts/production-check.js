@@ -1457,10 +1457,10 @@ if (exists("src/workers/reports.worker.js")) {
   }
 }
 
-if (exists("src/modules/reports/reports.controller.js")) {
-  const reportController = read("src/modules/reports/reports.controller.js");
+if (exists("src/modules/reports/dailyClosingSnapshot.service.js")) {
+  const snapshotService = read("src/modules/reports/dailyClosingSnapshot.service.js");
   for (const action of ["DAILY_CLOSING_SNAPSHOT_CREATED", "DAILY_CLOSING_SNAPSHOT_REFRESHED", "DAILY_CLOSING_SNAPSHOT_LOCKED"]) {
-    if (!reportController.includes(action)) errors.push(`Missing Phase 12 audit action: ${action}`);
+    if (!snapshotService.includes(action)) errors.push(`Missing Phase 12 audit action: ${action}`);
   }
 }
 
@@ -1544,8 +1544,14 @@ if (exists("src/modules/reports/dailyClosingSnapshot.service.js")) {
 
 if (exists("src/modules/reports/reports.controller.js")) {
   const reportController = read("src/modules/reports/reports.controller.js");
+  const snapshotService = exists("src/modules/reports/dailyClosingSnapshot.service.js")
+    ? read("src/modules/reports/dailyClosingSnapshot.service.js")
+    : "";
+  const reportExportService = exists("src/modules/reports/reportExport.service.js")
+    ? read("src/modules/reports/reportExport.service.js")
+    : "";
   for (const action of ["REPORT_EXPORT_JOB_CANCELLED", "DAILY_CLOSING_SNAPSHOT_OVERRIDE_REFRESHED"]) {
-    if (!reportController.includes(action) && !(action === "REPORT_EXPORT_JOB_CANCELLED" && exists("src/modules/reports/reportExport.service.js") && read("src/modules/reports/reportExport.service.js").includes(action))) {
+    if (![reportController, snapshotService, reportExportService].some((source) => source.includes(action))) {
       errors.push(`Missing Phase 13 audit action: ${action}`);
     }
   }

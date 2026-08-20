@@ -12,6 +12,8 @@ if (files.length === 0) {
 
 const backendRoot = path.resolve(process.cwd());
 const testsRoot = path.resolve(backendRoot, "tests");
+const sourceSchemaPath = path.join(backendRoot, "prisma", "schema.prisma");
+const generatedSchemaPath = path.join(backendRoot, "generated", "integration-prisma-client", "schema.prisma");
 const resolvedFiles = files.map((file) => {
   const absolute = path.resolve(backendRoot, file);
   const relative = path.relative(testsRoot, absolute);
@@ -22,10 +24,25 @@ const resolvedFiles = files.map((file) => {
   return absolute;
 });
 
+const explicitDatabaseUrl = process.env.POSTGRES_TEST_DATABASE_URL || process.env.TEST_DATABASE_URL;
+const isolatedDatabasePath = explicitDatabaseUrl
+  ? null
+  : path.join(backendRoot, "prisma", `db-example-${process.pid}-${Date.now()}.db`);
+const generatedClientMatchesSource = fs.existsSync(sourceSchemaPath)
+  && fs.existsSync(generatedSchemaPath)
+  && fs.readFileSync(generatedSchemaPath, "utf8") === fs.readFileSync(sourceSchemaPath, "utf8");
+
 const env = buildTestEnv({
   NODE_ENV: "test",
   PRISMA_CLIENT_VARIANT: "integration",
   FORCE_DB_TESTS: "true",
+  ...(isolatedDatabasePath ? {
+    TEST_DATABASE_URL: `file:${isolatedDatabasePath}`,
+    DATABASE_URL: `file:${isolatedDatabasePath}`,
+  } : {}),
+  // A loaded query-engine DLL cannot be replaced on Windows. Reuse is safe
+  // only when Prisma's generated schema exactly matches the authoritative one.
+  ...(generatedClientMatchesSource ? { SKIP_PRISMA_GENERATE: "true" } : {}),
 });
 
 function runNode(args, label) {
@@ -38,10 +55,21 @@ function runNode(args, label) {
   if (result.status !== 0) throw new Error(`${label} failed with exit code ${result.status ?? "unknown"}`);
 }
 
-console.log(`Preparing guarded DB-example environment at ${maskDatabaseUrl(env.TEST_DATABASE_URL)}`);
-runNode(["scripts/setup-test-db.js"], "Isolated test database setup");
-for (const file of resolvedFiles) {
-  console.log(`Running isolated DB example: ${path.relative(backendRoot, file)}`);
-  runNode([file], path.basename(file));
+try {
+  console.log(`Preparing guarded DB-example environment at ${maskDatabaseUrl(env.TEST_DATABASE_URL)}`);
+  runNode(["scripts/setup-test-db.js"], "Isolated test database setup");
+  for (const file of resolvedFiles) {
+    console.log(`Running isolated DB example: ${path.relative(backendRoot, file)}`);
+    runNode([file], path.basename(file));
+  }
+} finally {
+  if (isolatedDatabasePath) {
+    for (const suffix of ["", "-journal", "-shm", "-wal"]) {
+      try {
+        fs.rmSync(`${isolatedDatabasePath}${suffix}`, { force: true });
+      } catch (error) {
+        console.warn(`Could not remove isolated DB artifact ${path.basename(`${isolatedDatabasePath}${suffix}`)}: ${error.message}`);
+      }
+    }
+  }
 }
-

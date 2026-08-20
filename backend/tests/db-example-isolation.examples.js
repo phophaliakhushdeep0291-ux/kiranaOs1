@@ -12,6 +12,10 @@ for (const snippet of [
   "scripts/setup-test-db.js",
   "path.relative(testsRoot",
   "maskDatabaseUrl",
+  "db-example-${process.pid}-${Date.now()}",
+  "generatedClientMatchesSource",
+  "SKIP_PRISMA_GENERATE",
+  "fs.rmSync",
 ]) {
   assert.ok(runner.includes(snippet), `DB example runner must retain ${snippet}`);
 }
@@ -44,6 +48,7 @@ for (const file of [
 }
 assert.ok(pkg.scripts.posttest.includes("test:packaging-db"), "the default backend suite must run DB packaging safety examples");
 assert.match(setup, /generated["'], ["']integration-prisma-client/, "skip-generation checks must validate the isolated client, not the default client");
+assert.match(setup, /generatedSchema !== sourceSchema/, "skip-generation checks must reject a stale integration client");
 assert.match(certification, /id: "backend-tests"[\s\S]*?SKIP_PRISMA_GENERATE: "true"/, "certification must reuse the integration client prepared by backend-source-db");
 
 for (const [name, command] of Object.entries(pkg.scripts)) {

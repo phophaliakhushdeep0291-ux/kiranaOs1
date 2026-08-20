@@ -83,7 +83,10 @@ const MAX_INITIAL_GZIP_BYTES = 300 * 1024;
 //   - Composition: all 12 trade packs together are 463.8 kB of rendered source,
 //     LESS than features/core/settings alone at 478.4 kB. The aggregate was
 //     tracking how many trades the product serves, not waste.
-const MAX_SHOP_OFFLINE_JS_BYTES = 3.25 * 1024 * 1024;
+// The atomic all-route install adds route entry code, not duplicate modules, and
+// leaves first paint unchanged. Keep a small measured ceiling above the current
+// 3.34 MB kirana / 3.42 MB largest-vertical payload.
+const MAX_SHOP_OFFLINE_JS_BYTES = 3.5 * 1024 * 1024;
 // Raised 912 -> 916 kB once, to pay for disabling terser's booleans_as_integers
 // (see vite.config.ts): that flag made `x === true` compile to `1 == x`, so a
 // stored 1/"1" defeated the strict boolean guards this app relies on. The
@@ -210,7 +213,12 @@ const MAX_SHOP_OFFLINE_JS_BYTES = 3.25 * 1024 * 1024;
 // paint, and this one, which measures the whole offline install of a real shop.
 // Splitting per trade in Rollup is not the lever — the service worker's asset
 // groups are, and they are what this now reads.
-const MAX_SHOP_OFFLINE_GZIP_BYTES = 950 * 1024;
+// Every protected core route is now installed atomically so an unvisited page
+// cannot fail merely because the connection disappeared. This deliberately
+// budgets the complete shop UI (plus one active vertical), while startup keeps
+// its independent 300 kB gate above. The extra offline bytes download only in
+// the background and buy deterministic cold-restart coverage across navigation.
+const MAX_SHOP_OFFLINE_GZIP_BYTES = 1.15 * 1024 * 1024;
 
 
 async function collectFiles(dir) {

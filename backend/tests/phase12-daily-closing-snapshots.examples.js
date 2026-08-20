@@ -103,6 +103,10 @@ for (const snippet of [
 ]) {
   assert(productionCheck.includes(snippet), `production-check missing Phase 12 snippet: ${snippet}`);
 }
+assert(
+  productionCheck.includes("if (!snapshotService.includes(action)) errors.push(`Missing Phase 12 audit action: ${action}`)"),
+  "production-check must inspect the transactional snapshot service for Phase 12 audit actions",
+);
 assert(packageJson.scripts["test:billing"].includes("phase12-daily-closing-snapshots.examples.js"), "Phase 12 test must be wired into npm test");
 
 // Regression guard (CODE_REVIEW_LOGIC_FLAWS.md #2): the snapshot staleness check must use the

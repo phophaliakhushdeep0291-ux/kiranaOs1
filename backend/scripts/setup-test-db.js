@@ -36,6 +36,16 @@ function assertCompatibleGeneratedClient() {
       `SKIP_PRISMA_GENERATE=true found an incompatible Prisma client; expected ${expectedProvider}. Regenerate the client first.`
     );
   }
+
+  if (useIsolatedClient) {
+    const sourceSchemaPath = path.join(process.cwd(), "prisma", "schema.prisma");
+    const sourceSchema = fs.readFileSync(sourceSchemaPath, "utf8");
+    if (generatedSchema !== sourceSchema) {
+      throw new Error(
+        "SKIP_PRISMA_GENERATE=true found a stale integration Prisma client. Regenerate it from prisma/schema.prisma first."
+      );
+    }
+  }
 }
 
 function ensureSqliteDatabaseFile() {

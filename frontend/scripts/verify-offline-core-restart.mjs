@@ -15,17 +15,58 @@ const PROFILE_DIR = path.resolve(process.env.QA_OFFLINE_PROFILE_DIR || path.join
 const BUILD_ID = process.env.QA_OFFLINE_BUILD_ID || "offline-core-restart-qa";
 const VIEWPORT = { width: 390, height: 844 };
 const ROUTES = [
-  ["OQA-DASH-01", "/dashboard"],
-  ["OQA-BILL-01", "/billing"],
-  ["OQA-PROD-01", "/products"],
-  ["OQA-CUST-01", "/customers"],
-  ["OQA-INV-01", "/inventory"],
-  ["OQA-HIST-01", "/bills"],
-  ["OQA-PUR-01", "/purchase-bills"],
-  ["OQA-RPT-01", "/reports"],
-  ["OQA-SET-01", "/settings"],
-  ["OQA-SYNC-01", "/sync-status"],
-  ["OQA-REC-01", "/recovery-mode"],
+  ["OQA-DASH-01", "/dashboard", false],
+  ["OQA-BILL-01", "/billing", false],
+  ["OQA-IMPORT-01", "/import-order", false],
+  ["OQA-RETURN-01", "/returns/new", false],
+  ["OQA-HIST-01", "/bills", false],
+  ["OQA-BILL-DETAIL-01", "/bills/offline-missing-bill", false],
+  ["OQA-ORDER-01", "/orders-received", false],
+  ["OQA-SALES-01", "/sales-overview", false],
+  ["OQA-PROD-01", "/products", false],
+  ["OQA-CUST-01", "/customers", false],
+  ["OQA-CUST-DETAIL-01", "/customers/offline-missing-customer", false],
+  ["OQA-INV-01", "/inventory", false],
+  ["OQA-STOCK-IN-01", "/inventory/stock-in", false],
+  ["OQA-STOCK-OUT-01", "/inventory/stock-out", false],
+  ["OQA-ADJUST-01", "/inventory/adjustments", false],
+  ["OQA-COUNT-01", "/inventory/stock-counts", false],
+  ["OQA-CATEGORY-01", "/categories", false],
+  ["OQA-PUR-01", "/purchase-bills", false],
+  ["OQA-SUPPLIER-01", "/suppliers", false],
+  ["OQA-EXPENSE-01", "/expenses", false],
+  ["OQA-OFFER-01", "/offers", false],
+  ["OQA-LOYALTY-01", "/loyalty", true],
+  ["OQA-GIFT-01", "/gift-cards", true],
+  ["OQA-RPT-01", "/reports", false],
+  ["OQA-CHANNEL-01", "/channel-settlements", true],
+  ["OQA-MONEY-01", "/money-statement", false],
+  ["OQA-CLOSING-01", "/daily-closing", false],
+  ["OQA-SET-01", "/settings", false],
+  ["OQA-PROFILE-01", "/settings/store-profile", false],
+  ["OQA-MODULE-01", "/settings/modules", false],
+  ["OQA-PRINTER-01", "/settings/printer", false],
+  ["OQA-BILL-SET-01", "/settings/billing", false],
+  ["OQA-STAFF-SET-01", "/settings/staff", false],
+  ["OQA-DEVICE-SET-01", "/settings/devices", true],
+  ["OQA-SYNC-SET-01", "/settings/sync", false],
+  ["OQA-TAX-SET-01", "/settings/taxes", false],
+  ["OQA-SECURITY-01", "/settings/security", false],
+  ["OQA-NOTIFY-01", "/settings/notifications", true],
+  ["OQA-INTEGRATION-01", "/settings/integrations", true],
+  ["OQA-ADVANCED-01", "/settings/advanced", false],
+  ["OQA-SYNC-01", "/sync-status", false],
+  ["OQA-PLAN-01", "/plans", true],
+  ["OQA-SUBSCRIPTION-01", "/subscription", true],
+  ["OQA-DEVICE-01", "/devices", true],
+  ["OQA-HELP-01", "/help", true],
+  ["OQA-ACTIVITY-01", "/activity-insights", true],
+  ["OQA-STAFF-01", "/staff", false],
+  ["OQA-AUDIT-01", "/audit-logs", false],
+  ["OQA-ASSURANCE-01", "/assurance", true],
+  ["OQA-RECYCLE-01", "/recycle-bin", false],
+  ["OQA-SMART-01", "/smart-tools", false],
+  ["OQA-REC-01", "/recovery-mode", false],
 ];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const assert = (value, message) => { if (!value) throw new Error(message); };
@@ -85,7 +126,7 @@ async function waitForPage(client, expression, timeout = 45_000) {
     try { if (await client.evaluate(expression)) return; } catch { /* navigation swaps execution contexts */ }
     await sleep(150);
   }
-  const state = await client.evaluate(`({href:location.href,text:document.body?.innerText?.slice(0,1500),errors:window.__arthaQaErrors||[]})`).catch(() => null);
+  const state = await client.evaluate(`({href:location.href,text:document.body?.innerText?.slice(0,1500),technical:document.querySelector("details pre")?.textContent||null,errors:window.__arthaQaErrors||[],consoleErrors:window.__arthaQaConsoleErrors||[]})`).catch(() => null);
   throw new Error(`Page condition timed out: ${expression}; ${JSON.stringify(state)}`);
 }
 
@@ -150,7 +191,7 @@ async function launchChrome(initialUrl, debugPort) {
   await client.send("Runtime.enable");
   await client.send("Network.enable");
   await client.send("Page.addScriptToEvaluateOnNewDocument", {
-    source: `window.__arthaQaErrors=[];window.addEventListener("error",event=>window.__arthaQaErrors.push(String(event.error?.stack||event.message||event.error)));window.addEventListener("unhandledrejection",event=>window.__arthaQaErrors.push(String(event.reason?.stack||event.reason)));`,
+    source: `window.__arthaQaErrors=[];window.__arthaQaConsoleErrors=[];const __arthaConsoleError=console.error.bind(console);console.error=(...args)=>{window.__arthaQaConsoleErrors.push(args.map(value=>String(value?.stack||value)).join(" ").slice(0,4000));return __arthaConsoleError(...args)};window.addEventListener("error",event=>window.__arthaQaErrors.push(String(event.error?.stack||event.message||event.error)));window.addEventListener("unhandledrejection",event=>window.__arthaQaErrors.push(String(event.reason?.stack||event.reason)));`,
   });
   return { chrome, client, debugPort };
 }
@@ -228,8 +269,8 @@ async function primeOfflineInstall(client) {
   await waitForPage(client, `document.body.innerText.includes("Offline Matrix Rice")`, 60_000);
   await navigateOnline(client, "/customers");
   await waitForPage(client, `document.body.innerText.includes("Offline Matrix Customer")`, 60_000);
-  const cacheState = await client.evaluate(`(async()=>{const keys=(await caches.keys()).filter(key=>key.startsWith("kiranaos-shell"));const entries=[];for(const key of keys){const cache=await caches.open(key);entries.push(...(await cache.keys()).map(request=>new URL(request.url).pathname))}return{keys,entryCount:new Set(entries).size,hasIndex:entries.includes("/index.html"),hasManifest:entries.includes("/manifest.webmanifest"),hasOffline:entries.includes("/offline.html"),hasScript:entries.some(path=>path.endsWith(".js")),hasStyles:entries.some(path=>path.endsWith(".css"))}})()`);
-  assert(cacheState.keys.length > 0 && cacheState.hasIndex && cacheState.hasManifest && cacheState.hasOffline && cacheState.hasScript && cacheState.hasStyles, `Offline shell did not finish caching: ${JSON.stringify(cacheState)}`);
+  const cacheState = await client.evaluate(`(async()=>{const keys=(await caches.keys()).filter(key=>key.startsWith("kiranaos-shell"));const entries=[];for(const key of keys){const cache=await caches.open(key);entries.push(...(await cache.keys()).map(request=>new URL(request.url).pathname))}return{keys,entryCount:new Set(entries).size,hasIndex:entries.includes("/index.html"),hasManifest:entries.includes("/manifest.webmanifest"),hasOffline:entries.includes("/offline.html"),hasScript:entries.some(path=>path.endsWith(".js")),hasStyles:entries.some(path=>path.endsWith(".css")),hasCoreMarker:entries.some(path=>path.startsWith("/__offline/core/"))}})()`);
+  assert(cacheState.keys.length > 0 && cacheState.hasIndex && cacheState.hasManifest && cacheState.hasOffline && cacheState.hasScript && cacheState.hasStyles && cacheState.hasCoreMarker, `Offline shell did not finish caching: ${JSON.stringify(cacheState)}`);
   return cacheState;
 }
 
@@ -244,7 +285,7 @@ async function setOffline(client) {
   await sleep(500);
 }
 
-async function auditOfflineRoute(client, qaId, route) {
+async function auditOfflineRoute(client, qaId, route, expectsInternetRequired = false) {
   const startedAt = Date.now();
   await client.send("Page.navigate", { url: `${FRONTEND_URL}${route}` });
   await waitForPage(client, `document.readyState === "complete" && location.pathname === ${JSON.stringify(route)}`, 60_000);
@@ -257,7 +298,7 @@ async function auditOfflineRoute(client, qaId, route) {
   // navigator.onLine is only a network-interface hint and can remain true while
   // every request is blocked. Prove the cut with an uncached cross-origin fetch.
   const networkBlocked = await client.evaluate(`fetch(${JSON.stringify(API_HEALTH_URL)}+"?offlineProbe="+Date.now(),{cache:"no-store"}).then(()=>false).catch(()=>true)`);
-  const metrics = await client.evaluate(`(()=>{const text=document.body.innerText,main=document.getElementById("main-content");return{path:location.pathname,online:navigator.onLine,controlled:Boolean(navigator.serviceWorker?.controller),windowScrollTop:Math.round(window.scrollY),mainScrollTop:Math.round(main?.scrollTop||0),documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,genericFailure:/something went wrong|unexpected error|page failed to load|application failed to start/i.test(text),localDbProblem:text.includes("Local database problem detected"),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[],hasSeedProduct:text.includes("Offline Matrix Rice"),hasSeedCustomer:text.includes("Offline Matrix Customer"),hasLocalBackupTool:text.includes("Encrypted local emergency backup")&&text.includes("Export local backup")&&text.includes("Works offline")}})()`);
+  const metrics = await client.evaluate(`(()=>{const text=document.body.innerText,main=document.getElementById("main-content");return{path:location.pathname,online:navigator.onLine,controlled:Boolean(navigator.serviceWorker?.controller),windowScrollTop:Math.round(window.scrollY),mainScrollTop:Math.round(main?.scrollTop||0),documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,genericFailure:/something went wrong|unexpected error|page failed to load|application failed to start/i.test(text),localDbProblem:text.includes("Local database problem detected"),internetRequired:Boolean(document.querySelector('[data-testid="internet-required-route"]')),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[],hasSeedProduct:text.includes("Offline Matrix Rice"),hasSeedCustomer:text.includes("Offline Matrix Customer"),hasLocalBackupTool:text.includes("Encrypted local emergency backup")&&text.includes("Export local backup")&&text.includes("Works offline")}})()`);
   const screenshot = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
   const filename = `${qaId.toLowerCase()}-${VIEWPORT.width}x${VIEWPORT.height}.png`;
   await mkdir(OUTPUT_DIR, { recursive: true });
@@ -271,6 +312,7 @@ async function auditOfflineRoute(client, qaId, route) {
   assert(!metrics.genericFailure, `${qaId} rendered a fatal offline error`);
   assert(!metrics.stuckLoading, `${qaId} remained stuck loading offline`);
   assert(metrics.runtimeErrors.length === 0, `${qaId} runtime errors offline: ${metrics.runtimeErrors.join(" | ")}`);
+  assert(metrics.internetRequired === expectsInternetRequired, `${qaId} offline capability label mismatch: ${JSON.stringify(metrics)}`);
   if (route === "/products") assert(metrics.hasSeedProduct, `${qaId} did not restore cached product data`);
   if (route === "/customers") assert(metrics.hasSeedCustomer, `${qaId} did not restore cached customer data`);
   if (route === "/recovery-mode") {
@@ -298,7 +340,7 @@ async function main() {
     await offlineBrowser.client.send("Emulation.setDeviceMetricsOverride", { ...VIEWPORT, deviceScaleFactor: 1, mobile: true });
     await setOffline(offlineBrowser.client);
     const results = [];
-    for (const [qaId, route] of ROUTES) results.push(await auditOfflineRoute(offlineBrowser.client, qaId, route));
+    for (const [qaId, route, expectsInternetRequired] of ROUTES) results.push(await auditOfflineRoute(offlineBrowser.client, qaId, route, expectsInternetRequired));
     await mkdir(OUTPUT_DIR, { recursive: true });
     await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), buildId: BUILD_ID, frontendUrl: FRONTEND_URL, cacheState, coldRestart: true, networkDisabled: true, results }, null, 2));
     console.log(`Offline cold-restart matrix passed ${results.length}/${results.length} routes. Artifacts: ${OUTPUT_DIR}`);
