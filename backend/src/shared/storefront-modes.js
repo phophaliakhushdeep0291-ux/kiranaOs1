@@ -51,6 +51,10 @@ const modes = [];
  *     guestCount?: number | null,
  *     requiresAddress?: boolean,
  *   }>,
+ *   resolveTerminal?: (context: {
+ *     shopId: string,
+ *     terminalCode: string,
+ *   }) => Promise<object | null>,
  * }} mode
  *   `shapeCatalog` returns null when this trade does not claim the shop, which
  *   is how one registry serves eleven trades without any of them knowing about
@@ -103,6 +107,21 @@ export async function prepareStorefrontOrderLines(context) {
     if (typeof mode.prepareOrderLines !== "function") continue;
     const prepared = await mode.prepareOrderLines(context);
     if (prepared) return prepared;
+  }
+  return null;
+}
+
+/**
+ * Resolve a public self-order terminal without teaching the shared public route
+ * which trade owns it. A resolver returns null when the code is not one of its
+ * terminals, allowing future verticals to register their own unattended mode.
+ */
+export async function resolveStorefrontTerminal(context) {
+  if (modes.length === 0) return null;
+  for (const mode of modes) {
+    if (typeof mode.resolveTerminal !== "function") continue;
+    const resolved = await mode.resolveTerminal(context);
+    if (resolved) return resolved;
   }
   return null;
 }

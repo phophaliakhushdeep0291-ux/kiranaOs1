@@ -1,6 +1,6 @@
 /* Artha service worker: app-shell only. Business data stays in IndexedDB, not Cache Storage. */
 const BUILD_ID = "__KIRANA_BUILD_ID__";
-const CACHE_VERSION = `kiranaos-shell-v7-${BUILD_ID}`;
+const CACHE_VERSION = `kiranaos-shell-v8-${BUILD_ID}`;
 const CORE_ASSETS = __KIRANA_CORE_ASSETS__;
 const VERTICAL_ASSETS = __KIRANA_VERTICAL_ASSETS__;
 const APP_SHELL = [
@@ -33,7 +33,13 @@ const NEVER_CACHE_PATTERNS = [
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
-      .then((cache) => cache.addAll([...APP_SHELL, ...CORE_ASSETS]))
+      .then(async (cache) => {
+        // `addAll` is atomic: publish the marker only after every operational
+        // route and dependency is present. Readiness can then prove the whole
+        // build is restartable instead of guessing from one arbitrary JS file.
+        await cache.addAll([...APP_SHELL, ...CORE_ASSETS]);
+        await cache.put(`/__offline/core/${BUILD_ID}`, new Response("ready"));
+      })
   );
 });
 

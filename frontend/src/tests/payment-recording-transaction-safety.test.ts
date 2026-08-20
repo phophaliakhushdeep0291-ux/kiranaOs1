@@ -100,7 +100,7 @@ describe("payment recording transaction safety", () => {
   it("decreases customer balance and writes all payment records in one transaction", async () => {
     const result = await recordPaymentLocalFirst("customer_1", { amount: 200, mode: "cash", note: "Partial payment" });
 
-    expect(result).toEqual({ success: true, paymentId: "payment_1", customerId: "customer_1", amount: 200, pendingSync: true });
+    expect(result).toEqual({ success: true, paymentId: "payment_1", customerId: "customer_1", amount: 200, nextBalance: 300, pendingSync: true });
     expect(mockedOfflineDB.transaction).toHaveBeenCalledWith(
       expect.arrayContaining(["payments", "customer_ledger", "customers", "local_audit_logs", "sync_outbox"]),
       expect.any(Function),

@@ -20,6 +20,7 @@ describe("offline cold-restart QA harness", () => {
     expect(source).toContain("persistent profile's file locks");
     expect(source).toContain('offline: true');
     expect(source).toContain('networkDisabled: true');
+    expect(source).not.toContain("for (const [, route] of ROUTES) await navigateOnline");
   });
 
   it("covers every core route and fails on bounce, blank/error, loading, overflow or runtime failure", () => {

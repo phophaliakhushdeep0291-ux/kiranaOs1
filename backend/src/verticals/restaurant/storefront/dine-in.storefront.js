@@ -4,6 +4,7 @@ import { groupMenuByCourse, parseTags, PORTION_UNIT_TYPE, UNCATEGORISED_COURSE }
 import { addonGroupsByProduct, validateSelection } from "../menu/addons.service.js";
 import { portionsPossible } from "../recipes/recipes.service.js";
 import { resolvePublicTable } from "../tables/tables.service.js";
+import { resolveTerminal as resolveKioskTerminal } from "../service-ops/kiosk.service.js";
 import db from "../../../db.js";
 import { AppError } from "../../../middleware/error.js";
 
@@ -282,8 +283,19 @@ async function prepareOrderLines({ shopId, settings, rawItems, products, orderab
   return lines;
 }
 
+async function resolveTerminal({ shopId, terminalCode }) {
+  try {
+    return await resolveKioskTerminal(shopId, terminalCode);
+  } catch (error) {
+    // "Not mine" is a registry miss, not the restaurant vertical's public
+    // response. Shared code emits the same flat 404 after every mode declines.
+    if (error?.code === "KIOSK_TERMINAL_NOT_FOUND") return null;
+    throw error;
+  }
+}
+
 export function registerDineInStorefront() {
-  registerStorefrontMode({ id: "dine_in", shapeCatalog, resolveOrderContext, prepareOrderLines });
+  registerStorefrontMode({ id: "dine_in", shapeCatalog, resolveOrderContext, prepareOrderLines, resolveTerminal });
 }
 
 // Loading this module registers the storefront. It is reached through the

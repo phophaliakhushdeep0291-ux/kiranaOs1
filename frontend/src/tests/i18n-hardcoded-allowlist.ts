@@ -104,7 +104,6 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/support/ReportIssueButton.tsx": 6,
   "features/core/support/pages/AskArthaPage.tsx": 5,
   "features/core/sync/SyncAlertBanner.tsx": 3,
-  "features/core/sync/pages/SyncDiagnosticsSection.tsx": 10,
   "features/core/sync/pages/SyncStatusPage.tsx": 93,
   "features/core/voice/VoiceAssistant.tsx": 12,
   "features/verticals/auto-parts/fitment/pages/FitmentPage.tsx": 42,

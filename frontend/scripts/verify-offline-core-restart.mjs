@@ -220,7 +220,10 @@ async function primeOfflineInstall(client) {
   await navigateOnline(client, "/dashboard");
   await waitForPage(client, `navigator.serviceWorker && navigator.serviceWorker.ready.then(()=>true)`);
   await waitForPage(client, `navigator.serviceWorker.controller !== null`);
-  for (const [, route] of ROUTES) await navigateOnline(client, route);
+  // Do not visit every route before cutting the network. That used to warm each
+  // lazy chunk through runtime caching and made the QA pass even when the
+  // install manifest was incomplete. Only hydrate the two local-data screens;
+  // every other route must survive solely because installation precached it.
   await navigateOnline(client, "/products");
   await waitForPage(client, `document.body.innerText.includes("Offline Matrix Rice")`, 60_000);
   await navigateOnline(client, "/customers");

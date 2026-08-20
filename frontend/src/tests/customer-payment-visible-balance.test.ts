@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { projectCustomerOutstanding, type CustomerWithLedger } from "@/features/core/customers/customer-ledger-data";
+
+function source(relativePath: string) {
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), "utf8");
+}
 
 function customer(): CustomerWithLedger {
   return {
@@ -40,5 +46,25 @@ describe("partial-payment visible balance", () => {
   it("does not alter a different customer", () => {
     const original = customer();
     expect(projectCustomerOutstanding([original], "customer_2", 0)[0]).toBe(original);
+  });
+
+  it("paints the transaction's exact remainder before background refreshes", () => {
+    const listPage = source("../features/core/customers/pages/CustomersPage.tsx");
+    const listPayment = listPage.slice(
+      listPage.indexOf("async function recordPayment()"),
+      listPage.indexOf("function applyRange"),
+    );
+    const detailPage = source("../features/core/customers/pages/CustomerDetailPage.tsx");
+    const detailPayment = detailPage.slice(
+      detailPage.indexOf("async function savePayment()"),
+      detailPage.indexOf("async function saveReverse"),
+    );
+
+    expect(listPayment).toContain("nextOutstanding = result.nextBalance");
+    expect(listPayment.indexOf("queryClient.setQueryData")).toBeLessThan(listPayment.indexOf("void refetch()"));
+    expect(listPayment).not.toContain("await refetch()");
+    expect(detailPayment).toContain("result.nextBalance");
+    expect(detailPayment.indexOf("queryClient.setQueryData")).toBeLessThan(detailPayment.indexOf("void refetch()"));
+    expect(detailPayment).not.toContain("await refetch()");
   });
 });

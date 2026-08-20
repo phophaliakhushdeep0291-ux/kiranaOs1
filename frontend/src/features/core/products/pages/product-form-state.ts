@@ -197,6 +197,13 @@ function defaultSellingUnitFor(businessType: BusinessType): string {
 
 export function productToForm(product?: Product): ProductFormData {
   const defaultUnit = product?.sellingUnits?.find((row) => row.isDefault) ?? product?.sellingUnits?.[0];
+  // Products saved before `packagingMode` existed may still have an individual
+  // quantity on each pack. Preserve that established mode when editing them;
+  // otherwise merely saving a price would accidentally request a mode change.
+  const packagingMode = product?.packagingMode === "per_pack"
+    || (product?.packagingMode == null && product?.sellingUnits?.some((row) => row.onHandQty != null))
+    ? "per_pack"
+    : "pooled";
   const businessType = getStoredBusinessType();
   const unit = defaultUnit?.unitType ?? product?.unit ?? product?.rateUnit ?? product?.displayUnit
     ?? defaultSellingUnitFor(businessType);
@@ -213,7 +220,7 @@ export function productToForm(product?: Product): ProductFormData {
     packSizeUnit: defaultUnit?.packSizeUnit ?? product?.baseUnit ?? (product?.isLooseItem ? unit : "piece"),
     sellingUnits: product?.sellingUnits ?? [],
     variantAxes: product?.variantAxes ?? [],
-    packagingMode: product?.packagingMode === "per_pack" ? "per_pack" : "pooled",
+    packagingMode,
     barcode: product?.barcode ?? product?.sku ?? "",
     hsn: product?.hsn ?? "",
     aliasesText: (product?.aliases ?? []).join(", "),

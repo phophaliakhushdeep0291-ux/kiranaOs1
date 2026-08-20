@@ -102,13 +102,26 @@ function buildPriceBelowMinimumAudit(product: Product, previous: Product | undef
 }
 
 /**
+ * Older product records predate `packagingMode`. Their per-pack quantities are
+ * still an authoritative record of how they are tracked, so infer that mode
+ * before comparing an edit. Otherwise a normal save would look like a dangerous
+ * pooled → per-pack conversion and be blocked even though nothing changed.
+ */
+function packagingModeForExistingProduct(product: Product | undefined): "pooled" | "per_pack" {
+  if (product?.packagingMode === "per_pack" || product?.packagingMode === "pooled") {
+    return product.packagingMode;
+  }
+  return product?.sellingUnits?.some((unit) => unit.onHandQty != null) ? "per_pack" : "pooled";
+}
+
+/**
  * A product with stock cannot safely switch between pooled and per-pack tracking.
  * The server enforces the same rule, but rejecting it here keeps an offline edit
  * from being written locally and then appearing as an unresolvable sync conflict.
  */
 function assertPackagingModeChangeIsSafe(existing: Product | undefined, next: ProductInput) {
   if (!existing) return;
-  const currentMode = String(existing.packagingMode ?? "pooled").trim().toLowerCase();
+  const currentMode = packagingModeForExistingProduct(existing);
   const nextMode = String(next.packagingMode ?? currentMode).trim().toLowerCase();
   const stockOnHand = Number(existing.stockBaseQty ?? 0);
   if (currentMode === nextMode || !Number.isFinite(stockOnHand) || Math.abs(stockOnHand) < 0.000_001) return;
@@ -172,7 +185,7 @@ function toProduct(data: ProductInput, id = createLocalId("product"), existing?:
     ...existing,
     id,
     name: normalized.name,
-    packagingMode: normalized.packagingMode ?? existing?.packagingMode ?? "pooled",
+    packagingMode: normalized.packagingMode ?? packagingModeForExistingProduct(existing),
     category: normalized.category ?? existing?.category ?? "general",
     unit: normalized.unit ?? normalized.displayUnit ?? existing?.unit ?? existing?.displayUnit ?? "piece",
     aliases: uniqueProductAliases(normalized.aliases ?? existing?.aliases ?? []),
@@ -698,9 +711,12 @@ export async function patchProductLocalFirst(id: string, data: Partial<ProductIn
     wholesaleFromQuantity: existing?.wholesaleFromQuantity ?? 10,
     quantitySlabPricing: [],
     customerSpecificPricing: [],
+    sellingUnits: existing?.sellingUnits ?? [],
+    variantAxes: existing?.variantAxes ?? [],
     gstRate: existing?.gstRate ?? 0,
     lowStockThreshold: existing?.lowStockThreshold ?? existing?.lowStockAlert ?? 0,
     lowStockAlert: existing?.lowStockAlert ?? existing?.lowStockThreshold ?? 0,
+    packagingMode: packagingModeForExistingProduct(existing),
     isActive: existing?.isActive ?? existing?.status !== "inactive",
     status: existing?.status ?? "active",
   };

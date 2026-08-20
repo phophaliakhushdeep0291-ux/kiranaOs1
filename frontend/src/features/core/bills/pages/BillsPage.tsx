@@ -884,8 +884,17 @@ export default function BillsPage() {
               <table className="w-full min-w-[1240px] border-collapse text-[11px]">
                 <thead>
                   <tr className={TABLE_HEAD}>
-                    <th className="w-9 px-4 py-2.5 text-left">
-                      <input type="checkbox" className="h-3.5 w-3.5 rounded border-[#cbd5e1] accent-[var(--brand)]" aria-label={t("billing.bills.selectAll")} checked={pageRows.length > 0 && pageRows.every((bill) => checked.has(bill.id))} onChange={toggleAllOnPage} />
+                    <th className="w-11 px-2 py-1 text-left">
+                      <label className="relative grid h-11 w-11 cursor-pointer place-items-center rounded-xl transition-colors hover:bg-[#edf4ff] focus-within:ring-2 focus-within:ring-[var(--brand)]/30">
+                        <input type="checkbox" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label={t("billing.bills.selectAll")} checked={pageRows.length > 0 && pageRows.every((bill) => checked.has(bill.id))} onChange={toggleAllOnPage} />
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "pointer-events-none h-4 w-4 rounded-[4px] border border-[#cbd5e1] bg-white transition-colors",
+                            pageRows.length > 0 && pageRows.every((bill) => checked.has(bill.id)) && "border-[var(--brand)] bg-[var(--brand)] shadow-[inset_0_0_0_3px_white]",
+                          )}
+                        />
+                      </label>
                     </th>
                     {["Bill No", "Customer", "Date & Time", t("billing.bills.items"), "Payment Mode", "Bill Type", "Amount", t("billing.bills.status"), "Staff", "Sync", "Action"].map((header) => (
                       <th key={header} className={cn("px-4 py-2.5 font-bold", [t("billing.bills.items"), "Amount"].includes(header) ? "text-right" : "text-left")}>{header}</th>
@@ -902,8 +911,17 @@ export default function BillsPage() {
                     const estimate = isEstimateBill(bill);
                     return (
                       <tr key={bill.id} className={cn("text-[#24385f] transition-colors hover:bg-[#fbfcfe]", deleted && "bg-[#f8fafc] opacity-70")}>
-                        <td className="px-4 py-2.5">
-                          <input type="checkbox" className="h-3.5 w-3.5 rounded border-[#cbd5e1] accent-[var(--brand)]" aria-label={`Select bill ${billNo(bill)}`} checked={checked.has(bill.id)} onChange={() => toggleOne(bill.id)} />
+                        <td className="px-2 py-1">
+                          <label className="relative grid h-11 w-11 cursor-pointer place-items-center rounded-xl transition-colors hover:bg-[#edf4ff] focus-within:ring-2 focus-within:ring-[var(--brand)]/30">
+                            <input type="checkbox" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label={`Select bill ${billNo(bill)}`} checked={checked.has(bill.id)} onChange={() => toggleOne(bill.id)} />
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "pointer-events-none h-4 w-4 rounded-[4px] border border-[#cbd5e1] bg-white transition-colors",
+                                checked.has(bill.id) && "border-[var(--brand)] bg-[var(--brand)] shadow-[inset_0_0_0_3px_white]",
+                              )}
+                            />
+                          </label>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 font-black text-[var(--brand)]">{compactBillNo(billNo(bill))}</td>
                         <td className="min-w-[145px] px-4 py-2.5">
@@ -931,14 +949,14 @@ export default function BillsPage() {
                                 type="button"
                                 title={t("billing.bills.deleteEstimate")}
                                 onClick={() => requestPinAction("delete", bill)}
-                                className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-[7px] border border-rose-200 bg-rose-50 px-2.5 text-[11px] font-bold text-rose-600 transition-colors hover:border-rose-300 hover:bg-rose-100"
+                                className="inline-flex h-11 items-center gap-1 whitespace-nowrap rounded-xl border border-rose-200 bg-rose-50 px-3 text-[11px] font-bold text-rose-600 transition-colors hover:border-rose-300 hover:bg-rose-100"
                               >
                                 <Trash2 size={13} /> Delete
                               </button>
                             )}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[#405273] transition-colors hover:border-[#c7d8ef] hover:bg-[var(--brand-softer)]" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={14} /></button>
+                                <button className="grid h-11 w-11 place-items-center rounded-xl border border-[#dfe7f2] bg-white text-[#405273] transition-colors hover:border-[#c7d8ef] hover:bg-[var(--brand-softer)]" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={16} /></button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> {t("billing.bills.openBill")}</span></Link></DropdownMenuItem>
@@ -1111,7 +1129,7 @@ function RecentActivityCard({ rows }: { rows: Array<{ id: string; title: string;
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
         <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">{t("billing.bills.recentActivity")}</h2>
-        <Link href="/bills" className="tap-target text-[11px] font-bold text-[var(--brand)]">{t("billing.bills.viewAll")}</Link>
+        <Link href="/bills" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl px-2 text-[11px] font-bold text-[var(--brand)] transition-colors hover:bg-[#edf4ff]">{t("billing.bills.viewAll")}</Link>
       </header>
       <div className="divide-y divide-[#edf2f8]">
         {rows.length === 0 ? (
@@ -1179,7 +1197,7 @@ function TopCustomersCard({ rows }: { rows: Array<{ name: string; bills: number;
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
         <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">{t("billing.bills.topCustomers")}</h2>
-        <Link href="/customers" className="tap-target text-[11px] font-bold text-[var(--brand)]">{t("billing.bills.viewAll")}</Link>
+        <Link href="/customers" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl px-2 text-[11px] font-bold text-[var(--brand)] transition-colors hover:bg-[#edf4ff]">{t("billing.bills.viewAll")}</Link>
       </header>
       {rows.length === 0 ? (
         <div className="grid h-44 place-items-center text-[12px] font-semibold text-[#8290a8]">{t("billing.bills.noCustomerSales")}</div>

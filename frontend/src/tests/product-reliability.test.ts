@@ -206,6 +206,37 @@ describe("product reliability", () => {
     expect(mockState.committed.products).toHaveLength(0);
   });
 
+  it("allows normal edits to legacy per-pack products with stock", async () => {
+    mockState.products = [{
+      ...existingProduct,
+      packagingMode: undefined,
+      sellingUnits: [
+        {
+          name: "300 ml", unitType: "piece", unitCode: "piece-300-ml", conversionToBase: 1,
+          defaultPrice: 124, onHandQty: 20, isDefault: true, isActive: true,
+        },
+        {
+          name: "60 ml", unitType: "piece", unitCode: "piece-60-ml", conversionToBase: 1,
+          defaultPrice: 38, onHandQty: 30, isDefault: false, isActive: true,
+        },
+      ],
+    }];
+
+    await expect(patchProductLocalFirst("product_sugar", { description: "Legacy pack product" })).resolves.toEqual(
+      expect.objectContaining({
+        packagingMode: "per_pack",
+        description: "Legacy pack product",
+        sellingUnits: expect.arrayContaining([
+          expect.objectContaining({ unitCode: "piece-300-ml", onHandQty: 20 }),
+          expect.objectContaining({ unitCode: "piece-60-ml", onHandQty: 30 }),
+        ]),
+      }),
+    );
+    expect(mockState.committed.sync_outbox).toEqual(expect.arrayContaining([
+      expect.objectContaining({ operation_type: "UPDATE_PRODUCT", entity_id: "product_sugar" }),
+    ]));
+  });
+
   it("keeps a 36-cell variant grid, per-pack stock, and pharmacy controls in the local record", async () => {
     const sellingUnits = Array.from({ length: 36 }, (_, index) => ({
       name: `Size ${index + 1}`,

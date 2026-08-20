@@ -62,9 +62,10 @@ const OFFLINE_VERTICAL_BY_BUSINESS_TYPE: Partial<Record<BusinessType, string>> =
         .every((path) => paths.has(path));
       const hasScript = [...paths].some((path) => path.endsWith(".js"));
       const hasStyles = [...paths].some((path) => path.endsWith(".css"));
+      const hasVerifiedCore = paths.has(`/__offline/core/${buildId()}`);
       const verticalId = OFFLINE_VERTICAL_BY_BUSINESS_TYPE[getStoredBusinessType()];
       const hasActiveVertical = !verticalId || paths.has(`/__offline/vertical/${verticalId}/${buildId()}`);
-      if (hasRequiredShell && hasScript && hasStyles && hasActiveVertical) return true;
+      if (hasRequiredShell && hasScript && hasStyles && hasVerifiedCore && hasActiveVertical) return true;
     }
   } catch {
     // Cache Storage can be unavailable in private or restricted browser modes.

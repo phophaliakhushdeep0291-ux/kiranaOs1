@@ -280,7 +280,9 @@ assert.equal(
 
 const publicService = read("modules/public/public.service.js");
 assert.ok(
-  publicService.includes("shapeStorefrontCatalog") && publicService.includes("resolveStorefrontOrderContext"),
+  publicService.includes("shapeStorefrontCatalog")
+    && publicService.includes("resolveStorefrontOrderContext")
+    && publicService.includes("resolveStorefrontTerminal"),
   "the public catalogue must ask the registry which storefront to serve",
 );
 assert.ok(
@@ -294,6 +296,11 @@ assert.ok(
 
 const storefront = read("verticals/restaurant/storefront/dine-in.storefront.js");
 assert.ok(storefront.includes("registerStorefrontMode("), "the dine-in storefront registers itself on load");
+assert.ok(storefront.includes("resolveTerminal"), "the restaurant must register its public kiosk resolver through the storefront seam");
+assert.ok(
+  !/verticals\/restaurant/.test(read("modules/public/public.routes.js")),
+  "the public kiosk route must not import the restaurant vertical directly",
+);
 assert.ok(
   read("verticals/restaurant/tables/tables.routes.js").includes("storefront/dine-in.storefront.js"),
   "mounting the restaurant's routes must be what loads its storefront",

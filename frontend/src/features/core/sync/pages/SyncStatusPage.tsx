@@ -803,7 +803,7 @@ function ConflictList({
                       Open
                     </a>
                   </Button>
-                  {onMarkResolved && allowsDirectConflictChoice(conflict.entity_type) ? (
+                  {onMarkResolved && allowsDirectConflictChoice(conflict.entity_type) && !requiresPackagingMigration(conflict) ? (
                     <>
                       <Button size="sm" onClick={() => onMarkResolved(conflict.id, "use_local")}>
                         Keep local
