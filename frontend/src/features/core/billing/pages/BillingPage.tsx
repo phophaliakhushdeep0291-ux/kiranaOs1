@@ -1450,13 +1450,16 @@ export default function Billing() {
     };
   }
 
-  function billingSensitiveApprovalCovers(actions: BillingSensitiveAction[]) {
+  function billingSensitiveApprovalCovers(
+    actions: BillingSensitiveAction[],
+    approval: typeof sensitiveApproval = sensitiveApproval,
+  ) {
     if (actions.length === 0) return true;
     const fingerprint = billingSensitiveApprovalFingerprint(cart, safeDiscount, effectiveLoyaltyPoints);
     return Boolean(
-      sensitiveApproval?.ownerPin
-      && sensitiveApproval.fingerprint === fingerprint
-      && actions.every((action) => sensitiveApproval.actions.includes(action)),
+      approval?.ownerPin
+      && approval.fingerprint === fingerprint
+      && actions.every((action) => approval.actions.includes(action)),
     );
   }
 
@@ -1472,7 +1475,11 @@ export default function Billing() {
     return actions;
   }
 
-  function handleConfirm(overrideBillType?: BillTypeSelection, printDecision?: boolean) {
+  function handleConfirm(
+    overrideBillType?: BillTypeSelection,
+    printDecision?: boolean,
+    approvalOverride?: NonNullable<typeof sensitiveApproval>,
+  ) {
     if (!newBillingFeature.allowed) {
       toast({ title: t("billing.page.billingLocked"), description: newBillingFeature.reason, variant: "destructive" });
       return;
@@ -1511,7 +1518,8 @@ export default function Billing() {
     }
 
     const sensitiveActions = requiredBillingSensitiveActions();
-    if (sensitiveActions.length > 0 && !billingSensitiveApprovalCovers(sensitiveActions)) {
+    const effectiveSensitiveApproval = approvalOverride ?? sensitiveApproval;
+    if (sensitiveActions.length > 0 && !billingSensitiveApprovalCovers(sensitiveActions, effectiveSensitiveApproval)) {
       setPendingSensitiveBillType(nextBillType);
       setSensitivePinOpen(true);
       return;
@@ -1658,8 +1666,8 @@ export default function Billing() {
           hsn: item.product.hsn ?? undefined,
         })),
         payments,
-        ownerPin: sensitiveActions.length > 0 ? sensitiveApproval?.ownerPin : undefined,
-        reason: sensitiveActions.length > 0 ? sensitiveApproval?.reason : undefined,
+        ownerPin: sensitiveActions.length > 0 ? effectiveSensitiveApproval?.ownerPin : undefined,
+        reason: sensitiveActions.length > 0 ? effectiveSensitiveApproval?.reason : undefined,
         sensitiveActions,
       },
     });
@@ -2198,16 +2206,20 @@ export default function Billing() {
         reasonRequired
         onConfirm={async ({ ownerPin, reason }) => {
           const actions = requiredBillingSensitiveActions();
-          setSensitiveApproval({
+          const approval = {
             ownerPin,
             reason,
             actions,
             fingerprint: billingSensitiveApprovalFingerprint(cart, safeDiscount, effectiveLoyaltyPoints),
-          });
+          };
+          setSensitiveApproval(approval);
           setSensitivePinOpen(false);
           const nextType = pendingSensitiveBillType ?? undefined;
           setPendingSensitiveBillType(null);
-          window.setTimeout(() => handleConfirm(nextType), 0);
+          // React callbacks retain the state from the render that created them.
+          // Pass the freshly-entered approval explicitly so this same attempt
+          // cannot enqueue the previous (possibly rejected) PIN.
+          window.setTimeout(() => handleConfirm(nextType, undefined, approval), 0);
         }}
       />
 

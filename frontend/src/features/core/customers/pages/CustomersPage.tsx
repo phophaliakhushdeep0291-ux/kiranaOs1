@@ -80,6 +80,9 @@ import {
 import { cn } from "@/lib/utils";
 import { validateGstin } from "@/lib/gstin";
 import { escapeHtml } from "@/lib/escape-html";
+import { isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
+import { cacheCustomers, mergeCustomers } from "@/features/core/customers/queries";
+import { listCustomers as listCustomersFromServer } from "@/features/core/customers/api";
 
 interface CustomerFormState {
   name: string;
@@ -145,6 +148,34 @@ function useCustomersLedgerList() {
     // freshly fetched result for the whole stale window.
     refetchOnMount: "always",
   });
+
+  const serverCustomersQuery = useQuery({
+    queryKey: ["customers-ledger-server-refresh"],
+    queryFn: async () => {
+      if (!isBrowserOnline()) return null;
+      try {
+        const [fresh, localRows] = await Promise.all([
+          listCustomersFromServer({ limit: 1_000 }),
+          offlineDB.getAll<CustomerWithLedger>("customers").catch(() => []),
+        ]);
+        const merged = mergeCustomers(fresh, localRows);
+        await cacheCustomers(merged);
+        return merged;
+      } catch (error) {
+        if (isRecoverableNetworkError(error)) return null;
+        throw error;
+      }
+    },
+    staleTime: 10_000,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!serverCustomersQuery.data) return;
+    // Re-read the customer and ledger tables together so the newly downloaded
+    // rows receive the same balance calculation as existing offline rows.
+    void queryClient.invalidateQueries({ queryKey: listKey });
+  }, [queryClient, serverCustomersQuery.dataUpdatedAt, serverCustomersQuery.data]);
 
   const authoritativeQuery = useQuery({
     queryKey: ["customers-authoritative-summary-refresh"],

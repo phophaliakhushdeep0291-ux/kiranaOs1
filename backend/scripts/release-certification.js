@@ -287,6 +287,21 @@ runStep({
   },
 });
 runStep({
+  id: "backend-warehouse",
+  label: "Warehouse bins, repack, and replenishment workflows",
+  args: ["run", "test:warehouse"],
+  env: {
+    NODE_ENV: "test",
+    DATABASE_URL: sqliteTestUrl,
+    TEST_DATABASE_URL: sqliteTestUrl,
+    POSTGRES_TEST_DATABASE_URL: "",
+    PRISMA_CLIENT_VARIANT: "integration",
+    FORCE_DB_TESTS: "true",
+    SKIP_PRISMA_GENERATE: "true",
+    LOG_LEVEL: "silent",
+  },
+});
+runStep({
   id: "backend-integration-sqlite",
   label: "Backend regression and integration tests (isolated SQLite)",
   args: ["run", "test:integration"],

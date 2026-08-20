@@ -179,6 +179,18 @@ export async function getOverview(shopId) {
   const whatsapp = getWhatsAppProviderStatus();
   const retailPayment = retailPaymentReadiness();
   const gstProvider = env.GST_PROVIDER === "gsp_http" ? gspHttpReadiness() : { configured: env.GST_PROVIDER === "sandbox", legalSubmission: false, providerName: env.GST_PROVIDER === "sandbox" ? "Sandbox" : null };
+  let flipkartLocationCount = 0;
+  try {
+    const mapping = JSON.parse(env.FLIPKART_LOCATION_MAP_JSON || "{}");
+    if (mapping && !Array.isArray(mapping) && typeof mapping === "object") flipkartLocationCount = Object.keys(mapping).length;
+  } catch { /* readiness remains setup_required */ }
+  const flipkartBound = Boolean(
+    env.FLIPKART_SELLER_API_ENABLED
+    && env.FLIPKART_APP_ID
+    && env.FLIPKART_APP_SECRET
+    && env.FLIPKART_SHOP_ID === shopId
+    && flipkartLocationCount > 0,
+  );
   let printerConnection = "browser";
   try { printerConnection = JSON.parse(shopSettings?.settingsJson || "{}")?.printer?.connection || "browser"; } catch { printerConnection = "browser"; }
   const providers = [
@@ -189,6 +201,7 @@ export async function getOverview(shopId) {
     { id: "whatsapp", name: "WhatsApp Business", category: "Messaging", status: whatsapp.implemented && whatsapp.configured ? "ready" : whatsapp.configured ? "adapter_required" : "setup_required", detail: whatsapp.implemented ? "Provider adapter configured" : "Reminder workflow exists; provider adapter is not yet certified" },
     { id: "storage", name: storage.provider === "local" ? "Local export storage" : `${storage.provider.toUpperCase()} object storage`, category: "Storage", status: storage.provider === "local" ? "development_only" : storage.bucketConfigured ? "ready" : "setup_required", detail: storage.provider === "local" ? "Use S3, R2, or MinIO before production" : "Encrypted export object storage" },
     { id: "tally", name: "TallyPrime XML", category: "Accounting", status: tallyAllowed ? "ready" : "upgrade_required", detail: tallyAllowed ? "Tenant-scoped voucher export with date filters" : "Available on the Pro plan" },
+    { id: "flipkart", name: "Flipkart Seller", category: "Marketplace", status: !flipkartBound ? "setup_required" : developerAllowed ? "ready" : "upgrade_required", detail: !flipkartBound ? "Bind Seller API credentials and warehouse mappings to this shop" : developerAllowed ? `${flipkartLocationCount} seller warehouse mapping${flipkartLocationCount === 1 ? "" : "s"}; official order pull, invoices, and labels` : "Order sync is available on the Pro plan; connection settings remain protected" },
     { id: "api", name: "KiranaOS API", category: "Developer", status: developerAllowed ? activeKeys > 0 ? "ready" : "available" : "upgrade_required", detail: developerAllowed ? `${activeKeys} active scoped key${activeKeys === 1 ? "" : "s"}` : "API credentials require the Pro plan" },
     { id: "webhooks", name: "Signed webhooks", category: "Developer", status: developerAllowed ? activeWebhooks > 0 ? "ready" : "available" : "upgrade_required", detail: developerAllowed ? `${activeWebhooks} active endpoint${activeWebhooks === 1 ? "" : "s"}; HMAC-SHA256 signatures and delivery logs` : "Signed webhooks require the Pro plan" },
   ];

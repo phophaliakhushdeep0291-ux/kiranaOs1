@@ -37,6 +37,10 @@ export const SENSITIVE_PRODUCT_FIELDS = Object.freeze([
   "costPerRateUnit",
   "minPricePerRateUnit",
   "defaultPricePerRateUnit",
+  "retailPricePerRateUnit",
+  "retailFromQuantity",
+  "wholesalePricePerRateUnit",
+  "wholesaleFromQuantity",
   "gstRate",
   "hsn",
   "mrp",
@@ -61,6 +65,10 @@ function productAuditSnapshot(product) {
     costPerRateUnit: Number(product.costPerRateUnit ?? 0),
     minPricePerRateUnit: Number(product.minPricePerRateUnit ?? 0),
     defaultPricePerRateUnit: Number(product.defaultPricePerRateUnit ?? 0),
+    retailPricePerRateUnit: product.retailPricePerRateUnit == null ? null : Number(product.retailPricePerRateUnit),
+    retailFromQuantity: Number(product.retailFromQuantity ?? 1),
+    wholesalePricePerRateUnit: product.wholesalePricePerRateUnit == null ? null : Number(product.wholesalePricePerRateUnit),
+    wholesaleFromQuantity: Number(product.wholesaleFromQuantity ?? 10),
     gstRate: Number(product.gstRate ?? 0),
     hsn: product.hsn ?? null,
     mrp: Number(product.mrp ?? 0),
@@ -1096,6 +1104,10 @@ async function getPermanentDeleteBlockReason(productId, client = db) {
 export function deserializeProduct(p) {
   return {
     ...p,
+    // Keep the legacy aliases while the canonical persisted fields stay explicit.
+    // Older products have null tier prices and therefore inherit the default.
+    retailPrice: p.retailPricePerRateUnit ?? p.defaultPricePerRateUnit,
+    wholesalePrice: p.wholesalePricePerRateUnit ?? p.defaultPricePerRateUnit,
     aliases: JSON.parse(p.aliasesJson ?? "[]"),
     variantAxes: parseVariantAxes(p.variantAxesJson),
     attributes: parseProductAttributes(p.attributesJson),

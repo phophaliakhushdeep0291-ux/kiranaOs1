@@ -46,6 +46,10 @@ import {
 const protectedProductFields = [
   "stockBaseQty",
   "defaultPricePerRateUnit",
+  "retailPricePerRateUnit",
+  "retailFromQuantity",
+  "wholesalePricePerRateUnit",
+  "wholesaleFromQuantity",
   "costPerRateUnit",
   "minPricePerRateUnit",
   "gstRate",
@@ -65,6 +69,10 @@ const protectedProductFields = [
 const numericProtectedProductFields = new Set([
   "stockBaseQty",
   "defaultPricePerRateUnit",
+  "retailPricePerRateUnit",
+  "retailFromQuantity",
+  "wholesalePricePerRateUnit",
+  "wholesaleFromQuantity",
   "costPerRateUnit",
   "minPricePerRateUnit",
   "gstRate",

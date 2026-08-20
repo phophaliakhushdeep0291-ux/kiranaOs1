@@ -1,7 +1,7 @@
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { useMemo, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, AlertTriangle, Check, CheckCircle2, Clock3, Cloud, Copy, Download, ExternalLink, KeyRound, Link2, Loader2, Plug, RefreshCcw, RotateCcw, Send, ShieldCheck, Trash2, Webhook } from "lucide-react";
+import { Activity, AlertTriangle, Check, CheckCircle2, Clock3, Cloud, Copy, Download, ExternalLink, KeyRound, Link2, Loader2, Plug, RefreshCcw, RotateCcw, Send, ShieldCheck, ShoppingBag, Trash2, Webhook } from "lucide-react";
 import { apiRequest } from "@/lib/api/http";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,6 +25,9 @@ type ApiKeyRow = { id: string; name: string; keyPrefix: string; scopes: string[]
 type WebhookRow = { id: string; name: string; url: string; events: string[]; enabled: boolean; lastSuccessAt: string | null; lastFailureAt: string | null; lastError: string | null; createdAt: string; _count: { deliveries: number } };
 type NewSecret = { title: string; value: string; note: string };
 type TallyDocument = { type: string; id: string; voucherNumber: string; remoteId: string };
+type FlipkartStatus = { enabled: boolean; configured: boolean; boundToCurrentShop: boolean; officialDocuments: boolean; orderSyncConfigured: boolean; mappedLocations: number };
+type FlipkartSyncIssue = { shipmentId: string; code: string; locationId?: string | null; missingSkus?: string[]; ambiguousSkus?: string[]; invalidSkus?: string[] };
+type FlipkartSyncResult = { fetched: number; created: number; updated: number; unchanged: number; skipped: number; truncated: boolean; issues: FlipkartSyncIssue[]; omittedIssueCount: number };
 type Approval = { title: string; description: string; confirmLabel: string; run: (pin: string) => Promise<void> };
 
 const apiScopes = (t: Translate) => [
@@ -65,6 +68,14 @@ function errorMessage(t: Translate, error: unknown) {
   return error instanceof Error ? error.message : t("settings.integrations.genericError");
 }
 
+function flipkartIssueText(t: Translate, issue: FlipkartSyncIssue) {
+  if (issue.code === "LOCATION_UNMAPPED") return t("settings.integrations.flipkartIssueLocation", { location: issue.locationId || "—" });
+  if (issue.code === "SKU_UNMAPPED") return t("settings.integrations.flipkartIssueSku", { skus: issue.missingSkus?.join(", ") || "—" });
+  if (issue.code === "SKU_AMBIGUOUS") return t("settings.integrations.flipkartIssueAmbiguous", { skus: issue.ambiguousSkus?.join(", ") || "—" });
+  if (issue.code === "ITEM_INVALID") return t("settings.integrations.flipkartIssueInvalid", { skus: issue.invalidSkus?.join(", ") || "—" });
+  return t("settings.integrations.flipkartIssueOther", { code: issue.code });
+}
+
 function downloadText(filename: string, value: string, type: string) {
   const url = URL.createObjectURL(new Blob([value], { type }));
   const link = document.createElement("a");
@@ -100,10 +111,14 @@ export default function IntegrationsSettingsPage() {
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [tallyInventory, setTallyInventory] = useState(false);
   const [tallyDocs, setTallyDocs] = useState<string[]>(tallyBooks(t).map((document) => document.id));
+  const [flipkartFrom, setFlipkartFrom] = useState(() => new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10));
+  const [flipkartTo, setFlipkartTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [flipkartResult, setFlipkartResult] = useState<FlipkartSyncResult | null>(null);
 
   const overviewQ = useQuery({ queryKey: ["integrations", "overview"], queryFn: () => apiRequest<Overview>("/integrations/overview"), retry: 1 });
   const keysQ = useQuery({ queryKey: ["integrations", "keys"], queryFn: () => apiRequest<ApiKeyRow[]>("/integrations/api-keys"), retry: 1 });
   const webhooksQ = useQuery({ queryKey: ["integrations", "webhooks"], queryFn: () => apiRequest<WebhookRow[]>("/integrations/webhooks"), retry: 1 });
+  const flipkartQ = useQuery({ queryKey: ["integrations", "flipkart", "status"], queryFn: () => apiRequest<FlipkartStatus>("/integrations/flipkart/status"), retry: 1 });
   const deliveriesQ = useInfiniteQuery({
     queryKey: ["integrations", "deliveries"],
     initialPageParam: null as string | null,
@@ -150,6 +165,9 @@ export default function IntegrationsSettingsPage() {
   const overview = overviewQ.data;
   const developerPlanEnabled = Boolean(overview) && overview?.providers.find((provider) => provider.id === "api")?.status !== "upgrade_required";
   const tallyPlanEnabled = Boolean(overview) && overview?.providers.find((provider) => provider.id === "tally")?.status !== "upgrade_required";
+  const flipkartReady = Boolean(flipkartQ.data?.orderSyncConfigured && developerPlanEnabled);
+  const flipkartRangeDays = flipkartFrom && flipkartTo ? Math.floor((new Date(`${flipkartTo}T00:00:00Z`).getTime() - new Date(`${flipkartFrom}T00:00:00Z`).getTime()) / 86400000) + 1 : 0;
+  const flipkartRangeValid = flipkartRangeDays >= 1 && flipkartRangeDays <= 31;
   const activeKeys = developerPlanEnabled ? (keysQ.data ?? []).filter((key) => !key.revokedAt && !isKeyExpired(key)) : [];
   const activeWebhooks = developerPlanEnabled ? (webhooksQ.data ?? []).filter((endpoint) => endpoint.enabled) : [];
   const deliveries = useMemo(() => deliveriesQ.data?.pages.flatMap((page) => page.items) ?? [], [deliveriesQ.data]);
@@ -204,6 +222,28 @@ export default function IntegrationsSettingsPage() {
       setWebhookUrl("");
       toast({ title: t("settings.integrations.webhookCreated") });
     } });
+  }
+
+  function syncFlipkart() {
+    if (!flipkartReady || !flipkartRangeValid) return;
+    requestApproval({
+      title: t("settings.integrations.flipkartApproveTitle"),
+      description: t("settings.integrations.flipkartApproveHelp", { from: flipkartFrom, to: flipkartTo }),
+      confirmLabel: t("settings.integrations.flipkartSyncAction"),
+      run: async (ownerPin) => {
+        const result = await apiRequest<FlipkartSyncResult>("/integrations/flipkart/orders/sync", {
+          method: "POST",
+          ownerPin,
+          body: JSON.stringify({ from: flipkartFrom, to: flipkartTo, maxShipments: 100 }),
+        });
+        setFlipkartResult(result);
+        await queryClient.invalidateQueries({ queryKey: ["orders"] });
+        toast({
+          title: t("settings.integrations.flipkartSyncComplete"),
+          description: t("settings.integrations.flipkartSyncSummary", { created: result.created, updated: result.updated, skipped: result.skipped }),
+        });
+      },
+    });
   }
 
   function protectedAction(action: "revoke" | "delete" | "test" | "retry" | "toggle", id: string, enabled?: boolean) {
@@ -278,6 +318,49 @@ export default function IntegrationsSettingsPage() {
           <div className="space-y-4 px-5 pb-5"><div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900"><div className="flex items-start gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0" /><p>{tallyPlanEnabled ? t("settings.integrations.tallyReady") : t("settings.integrations.tallyLocked")}</p></div></div><div className="grid grid-cols-2 gap-3"><Fld label={t("inventory.transfers.from")}><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></Fld><Fld label={t("settings.integrations.dateTo")}><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></Fld></div><div><p className="mb-1.5 text-[12px] font-semibold text-[#45577a]">{t("settings.integrations.booksToExport")}</p><div className="grid gap-2 sm:grid-cols-2">{tallyBooks(t).map((document) => <label key={document.id} className="flex cursor-pointer items-start gap-2 rounded-lg border border-[#e4ebf6] p-2.5"><Checkbox checked={tallyDocs.includes(document.id)} disabled={!tallyPlanEnabled} onCheckedChange={(checked) => setTallyDocs((current) => checked ? [...new Set([...current, document.id])] : current.filter((item) => item !== document.id))} /><span><span className="block text-xs font-bold text-[var(--brand-ink)]">{document.label}</span><span className="block text-[11px] leading-4 text-[#64748b]">{document.detail}</span></span></label>)}</div></div><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#e4ebf6] p-3"><Checkbox checked={tallyInventory} onCheckedChange={(checked) => setTallyInventory(checked === true)} disabled={!tallyPlanEnabled || !tallyDocs.includes("sales")} /><span><span className="block text-sm font-bold text-[var(--brand-ink)]">{t("settings.integrations.includeStock")}</span><span className="block text-xs leading-5 text-[#64748b]">{t("settings.integrations.includeStockHelp")}</span></span></label><div className="grid gap-2 sm:grid-cols-2"><Button className="w-full gap-2" disabled={!tallyPlanEnabled || tallyPushM.isPending || tallyM.isPending || !from || !to || from > to || tallyDocs.length === 0} onClick={() => tallyPushM.mutate()}>{tallyPushM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} {tallyPushM.isPending ? t("settings.integrations.sendingToTally") : t("settings.integrations.sendToTally")}</Button><Button variant="outline" className="w-full gap-2" disabled={!tallyPlanEnabled || tallyM.isPending || tallyPushM.isPending || !from || !to || from > to || tallyDocs.length === 0} onClick={() => tallyM.mutate()}>{tallyM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} {tallyPlanEnabled ? t("settings.integrations.downloadXml") : t("settings.integrations.upgradeToExport")}</Button></div><p className="text-[11px] leading-4 text-[#64748b]">{t("settings.integrations.sendVsDownload")}</p><a className="inline-flex items-center gap-1 text-xs font-bold text-[var(--brand)] hover:underline" href="https://help.tallysolutions.com/import-data-in-tallyprime/" target="_blank" rel="noreferrer">{t("settings.integrations.tallyInstructions")} <ExternalLink size={12} /></a></div>
         </Card>
       </div>
+
+      <Card>
+        <CardHead
+          icon={<ShoppingBag size={15} />}
+          title={t("settings.integrations.flipkartTitle")}
+          sub={t("settings.integrations.flipkartSub")}
+          action={<Badge tone={flipkartReady ? "green" : "amber"}>{flipkartReady ? t("settings.integrations.flipkartConnected") : developerPlanEnabled ? t("settings.integrations.flipkartSetupRequired") : t("settings.integrations.tallyProPlan")}</Badge>}
+        />
+        <div className="grid gap-5 px-5 pb-5 lg:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]">
+          <div className="space-y-4">
+            <div className={`rounded-xl border p-3 text-xs leading-5 ${flipkartReady ? "border-emerald-100 bg-emerald-50/60 text-emerald-900" : "border-amber-100 bg-amber-50/70 text-amber-900"}`}>
+              <div className="flex items-start gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0" /><p>{flipkartReady ? t("settings.integrations.flipkartReady", { count: flipkartQ.data?.mappedLocations ?? 0 }) : t("settings.integrations.flipkartNotReady")}</p></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Fld label={t("inventory.transfers.from")}><Input type="date" value={flipkartFrom} onChange={(event) => setFlipkartFrom(event.target.value)} /></Fld>
+              <Fld label={t("settings.integrations.dateTo")}><Input type="date" value={flipkartTo} onChange={(event) => setFlipkartTo(event.target.value)} /></Fld>
+            </div>
+            {!flipkartRangeValid && <p className="text-xs font-semibold text-rose-600">{t("settings.integrations.flipkartRangeInvalid")}</p>}
+            <Button className="w-full gap-2" disabled={!flipkartReady || !flipkartRangeValid || approving} onClick={syncFlipkart}>
+              {approving && approval?.title === t("settings.integrations.flipkartApproveTitle") ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />}
+              {t("settings.integrations.flipkartSyncAction")}
+            </Button>
+            <p className="text-[11px] leading-5 text-[#64748b]">{t("settings.integrations.flipkartSafetyHelp")}</p>
+            <a className="inline-flex items-center gap-1 text-xs font-bold text-[var(--brand)] hover:underline" href="https://seller.flipkart.com/api-docs/order-api-docs/OMAPIOverview.html" target="_blank" rel="noreferrer">{t("settings.integrations.flipkartDocs")} <ExternalLink size={12} /></a>
+          </div>
+
+          <div className="rounded-xl border border-[#e4ebf6] bg-[#fbfcfe] p-4">
+            {!flipkartResult ? <Empty icon={<ShoppingBag size={18} />} title={t("settings.integrations.flipkartNoRun")} detail={t("settings.integrations.flipkartNoRunHelp")} /> : <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {[
+                  [t("settings.integrations.flipkartFetched"), flipkartResult.fetched, "text-slate-700"],
+                  [t("settings.integrations.flipkartCreated"), flipkartResult.created, "text-emerald-700"],
+                  [t("settings.integrations.flipkartUpdated"), flipkartResult.updated, "text-blue-700"],
+                  [t("settings.integrations.flipkartUnchanged"), flipkartResult.unchanged, "text-slate-600"],
+                  [t("settings.integrations.flipkartSkipped"), flipkartResult.skipped, flipkartResult.skipped ? "text-amber-700" : "text-slate-600"],
+                ].map(([label, value, tone]) => <div key={String(label)} className="rounded-lg border border-[#e6ebf3] bg-white p-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">{label}</p><p className={`mt-1 text-xl font-black ${tone}`}>{value}</p></div>)}
+              </div>
+              {flipkartResult.truncated && <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">{t("settings.integrations.flipkartTruncated")}</p>}
+              {flipkartResult.issues.length > 0 ? <div><p className="text-xs font-bold text-[var(--brand-ink)]">{t("settings.integrations.flipkartReviewTitle")}</p><div className="mt-2 space-y-2">{flipkartResult.issues.slice(0, 5).map((issue) => <div key={`${issue.shipmentId}-${issue.code}`} className="flex items-start gap-2 rounded-lg border border-amber-100 bg-white px-3 py-2 text-xs"><AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-500" /><div><p className="font-mono font-bold text-[#344668]">{issue.shipmentId}</p><p className="mt-0.5 leading-5 text-[#64748b]">{flipkartIssueText(t, issue)}</p></div></div>)}</div>{flipkartResult.issues.length > 5 || flipkartResult.omittedIssueCount > 0 ? <p className="mt-2 text-[11px] text-[#64748b]">{t("settings.integrations.flipkartMoreIssues", { count: Math.max(0, flipkartResult.issues.length - 5) + flipkartResult.omittedIssueCount })}</p> : null}</div> : <div className="flex items-start gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800"><CheckCircle2 size={14} className="mt-0.5 shrink-0" /><p>{t("settings.integrations.flipkartNoIssues")}</p></div>}
+            </div>}
+          </div>
+        </div>
+      </Card>
 
       <Dialog open={keyOpen} onOpenChange={setKeyOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>{t("settings.integrations.createScopedKey")}</DialogTitle><DialogDescription>{t("settings.integrations.createScopedKeyHelp")}</DialogDescription></DialogHeader><div className="space-y-4"><Fld label={t("settings.integrations.credentialName")}><Input value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder={t("settings.integrations.credentialNamePlaceholder")} /></Fld><Fld label={t("settings.integrations.autoExpiry")} hint={t("settings.integrations.autoExpiryHelp")}><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={keyTtlDays} onChange={(event) => setKeyTtlDays(event.target.value)}><option value="30">{t("settings.integrations.days30")}</option><option value="90">{t("settings.integrations.days90")}</option><option value="365">{t("settings.integrations.year1")}</option><option value="0">{t("settings.integrations.neverValue")}</option></select></Fld><div><p className="mb-1.5 text-[12px] font-semibold text-[#45577a]">{t("settings.integrations.permissions")}</p><div className="space-y-2">{apiScopes(t).map((scope) => <label key={scope.id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#e4ebf6] p-3"><Checkbox checked={scopes.includes(scope.id)} onCheckedChange={(checked) => setScopes((current) => checked ? [...new Set([...current, scope.id])] : current.filter((item) => item !== scope.id))} /><span><span className="block text-sm font-bold text-[var(--brand-ink)]">{scope.label}</span><span className="block text-xs text-[#64748b]">{scope.detail}</span></span></label>)}</div></div></div><DialogFooter><Button variant="outline" onClick={() => setKeyOpen(false)}>{t("settings.integrations.cancel")}</Button><Button onClick={createKey}>{t("settings.integrations.continueSecurely")}</Button></DialogFooter></DialogContent></Dialog>
 

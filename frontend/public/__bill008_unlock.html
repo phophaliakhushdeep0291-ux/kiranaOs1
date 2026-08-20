@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>QA session bootstrap</title>
+<script>
+  const now = String(Date.now());
+  localStorage.setItem("kirana-os:ui-language:v1", "en");
+  localStorage.setItem("kiranaos.security.lastActivity.v1", now);
+  sessionStorage.setItem("kiranaos.security.sessionStarted.v1", now);
+  location.replace("/billing");
+</script>

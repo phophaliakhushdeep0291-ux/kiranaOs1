@@ -18,6 +18,7 @@ import { isPathInBusinessProfile, profileHasCapability, useShopBusinessProfile }
 import { PermissionDenied } from "@/components/shared/PermissionDenied";
 import { loadBillingRoute, loadCustomersRoute, loadInventoryRoute, loadPurchasesRoute, loadSalesOverviewRoute } from "./route-preload";
 import { Button } from "@/components/ui/button";
+import { readBackendConnectionSnapshot, type BackendConnectionSnapshot } from "@/features/core/sync/backend-health";
 
 const Login = lazy(() => import("@/features/core/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/core/auth/pages/RegisterPage"));
@@ -157,12 +158,11 @@ function BusinessProfileRouteGate({ capability, children }: { capability?: strin
   const { t } = useAppLanguage();
   const [location] = useLocation();
   const profile = useShopBusinessProfile();
-  const definitelyOffline = typeof navigator !== "undefined" && navigator.onLine === false;
-  // A cold offline restart may not have profile metadata yet. The profile is a
-  // navigation filter, not the source of the local bill/customer data, so never
-  // hold a usable offline route behind a network-shaped loader.
-  if (profile.isLoading && !definitelyOffline) return <LoadingScreen />;
-  // Preserve offline-first access when bootstrap itself is temporarily unavailable.
+  // Profile bootstrap is a navigation filter, not the source of local counter
+  // data. Never hold a page behind this background request: doing so made fast
+  // route changes look frozen whenever the backend, token refresh, or IndexedDB
+  // startup was slow. Cached data still filters synchronously; without it, the
+  // requested page opens and the completed bootstrap applies on the next render.
   if (!profile.data) return <>{children}</>;
   if (!isPathInBusinessProfile(location, profile.data.navigation)) {
     return <PermissionDenied title={t("chrome.route.notInProfile")} message={t("chrome.route.notInProfileHelp")} />;
@@ -173,16 +173,30 @@ function BusinessProfileRouteGate({ capability, children }: { capability?: strin
   return <>{children}</>;
 }
 
-function useBrowserOnline(): boolean {
-  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+function routeConnectionAvailable(): boolean {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+  const snapshot = readBackendConnectionSnapshot();
+  // Unknown is treated as available for the first frame to avoid flashing an
+  // offline notice while the layout performs its immediate health probe.
+  return snapshot.checkedAt ? snapshot.backendReachable : true;
+}
+
+function useRouteConnection(): boolean {
+  const [online, setOnline] = useState(routeConnectionAvailable);
   useEffect(() => {
     const markOnline = () => setOnline(true);
     const markOffline = () => setOnline(false);
+    const handleBackendStatus = (event: Event) => {
+      const snapshot = (event as CustomEvent<BackendConnectionSnapshot>).detail;
+      if (snapshot) setOnline(snapshot.browserOnline && snapshot.backendReachable);
+    };
     window.addEventListener("online", markOnline);
     window.addEventListener("offline", markOffline);
+    window.addEventListener("kirana:backend-status-changed", handleBackendStatus);
     return () => {
       window.removeEventListener("online", markOnline);
       window.removeEventListener("offline", markOffline);
+      window.removeEventListener("kirana:backend-status-changed", handleBackendStatus);
     };
   }, []);
   return online;
@@ -205,7 +219,7 @@ function InternetRequiredRoute() {
 
 function ProtectedRoute({ component: Component, featureName, capability, onlineOnly = false }: { component: ComponentType; featureName?: FeatureName; capability?: string; onlineOnly?: boolean }) {
   const { isAuthenticated, isLoading } = useAuth();
-  const browserOnline = useBrowserOnline();
+  const routeConnection = useRouteConnection();
 
   if (isLoading) return <LoadingScreen />;
 
@@ -223,7 +237,7 @@ function ProtectedRoute({ component: Component, featureName, capability, onlineO
         <AppLayout>
           <ErrorBoundary>
             <BusinessProfileRouteGate capability={capability}>
-              {onlineOnly && !browserOnline
+              {onlineOnly && !routeConnection
                 ? <InternetRequiredRoute />
                 : <LazyPage component={Component} featureName={featureName} />}
             </BusinessProfileRouteGate>

@@ -14,6 +14,10 @@ router.use(requireAuth, requireShop, requireDeviceActivated());
 const protectedProductFields = [
   "stockBaseQty",
   "defaultPricePerRateUnit",
+  "retailPricePerRateUnit",
+  "retailFromQuantity",
+  "wholesalePricePerRateUnit",
+  "wholesaleFromQuantity",
   "costPerRateUnit",
   "minPricePerRateUnit",
   "gstRate",

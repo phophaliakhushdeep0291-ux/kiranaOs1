@@ -145,6 +145,14 @@ const envSchema = z.object({
   FLIPKART_SELLER_API_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   FLIPKART_APP_ID: z.string().optional(),
   FLIPKART_APP_SECRET: z.string().optional(),
+  // Seller API credentials are process-level secrets, so they must be pinned to
+  // exactly one tenant. A second deployment/secret set is required for a second
+  // seller account; no request may choose the tenant at runtime.
+  FLIPKART_SHOP_ID: z.string().trim().min(1).optional(),
+  // JSON object: {"flipkart-location-id":"kiranaos-location-code"}. An
+  // unmapped marketplace warehouse is rejected instead of silently routing its
+  // stock/order work to the primary branch.
+  FLIPKART_LOCATION_MAP_JSON: z.string().default("{}"),
   FLIPKART_API_BASE_URL: z.string().url().default("https://api.flipkart.net"),
   FLIPKART_API_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),
   // GST compliance submission is disabled until a certified provider adapter is
@@ -349,6 +357,34 @@ if (parsed.data.NODE_ENV === "production" && parsed.data.WHATSAPP_PROVIDER !== "
   }
   if (missing.length) {
     console.error(`❌ ${missing.join(", ")} required in production when WHATSAPP_PROVIDER=${parsed.data.WHATSAPP_PROVIDER}`);
+    process.exit(1);
+  }
+}
+
+if (parsed.data.FLIPKART_SELLER_API_ENABLED) {
+  const missing = ["FLIPKART_APP_ID", "FLIPKART_APP_SECRET", "FLIPKART_SHOP_ID"].filter((key) => !parsed.data[key]);
+  try {
+    const mapping = JSON.parse(parsed.data.FLIPKART_LOCATION_MAP_JSON);
+    if (!mapping || Array.isArray(mapping) || typeof mapping !== "object" || Object.keys(mapping).length === 0) {
+      missing.push("FLIPKART_LOCATION_MAP_JSON_NON_EMPTY_OBJECT");
+    } else if (Object.entries(mapping).some(([externalId, locationCode]) => !String(externalId).trim() || !String(locationCode).trim())) {
+      missing.push("FLIPKART_LOCATION_MAP_JSON_VALID_ENTRIES");
+    }
+  } catch {
+    missing.push("FLIPKART_LOCATION_MAP_JSON_VALID_JSON");
+  }
+  if (parsed.data.NODE_ENV === "production") {
+    try {
+      const baseUrl = new URL(parsed.data.FLIPKART_API_BASE_URL);
+      if (baseUrl.protocol !== "https:" || baseUrl.hostname !== "api.flipkart.net") {
+        missing.push("FLIPKART_API_BASE_URL_OFFICIAL_HTTPS_HOST_REQUIRED");
+      }
+    } catch {
+      missing.push("FLIPKART_API_BASE_URL_INVALID");
+    }
+  }
+  if (missing.length) {
+    console.error(`❌ ${[...new Set(missing)].join(", ")} required when FLIPKART_SELLER_API_ENABLED=true`);
     process.exit(1);
   }
 }
