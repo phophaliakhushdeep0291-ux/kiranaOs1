@@ -6,6 +6,18 @@ import { getLocationQuantity, getVariantLocationQuantity } from "../stores/locat
 
 const BIN_KINDS = new Set(["pick", "bulk", "staging"]);
 
+async function writeRequiredBinAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Bin action was not saved because its audit record could not be stored",
+      503,
+      "BIN_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
 /**
  * Bins say WHERE inside a branch stock sits. They never say HOW MUCH the branch
  * owns — LocationStock does, and for the primary branch that is the product total
@@ -77,22 +89,24 @@ export async function createBin(shopId, input, actor = {}, req = null) {
   const existing = await db.storageBin.findFirst({ where: { locationId: location.id, code } });
   if (existing) throw new AppError(`Bin ${code} already exists at ${location.name}`, 409, "BIN_CODE_TAKEN");
 
-  const bin = await db.storageBin.create({
-    data: {
-      shopId,
-      locationId: location.id,
-      code,
-      name: String(input.name || code).trim(),
-      zone: input.zone ? String(input.zone).trim() : null,
-      kind: input.kind || "pick",
-      sortOrder: Number.isFinite(Number(input.sortOrder)) ? Number(input.sortOrder) : 0,
-    },
+  return db.$transaction(async (tx) => {
+    const bin = await tx.storageBin.create({
+      data: {
+        shopId,
+        locationId: location.id,
+        code,
+        name: String(input.name || code).trim(),
+        zone: input.zone ? String(input.zone).trim() : null,
+        kind: input.kind || "pick",
+        sortOrder: Number.isFinite(Number(input.sortOrder)) ? Number(input.sortOrder) : 0,
+      },
+    });
+    await writeRequiredBinAudit({
+      shopId, userId: actor.userId ?? null, module: "inventory", action: "STORAGE_BIN_CREATED",
+      entityType: "StorageBin", entityId: bin.id, after: bin, req,
+    }, tx);
+    return bin;
   });
-  await createAuditLog({
-    shopId, userId: actor.userId ?? null, module: "inventory", action: "STORAGE_BIN_CREATED",
-    entityType: "StorageBin", entityId: bin.id, after: bin, req,
-  });
-  return bin;
 }
 
 export async function updateBin(shopId, binId, input, actor = {}, req = null) {
@@ -110,21 +124,23 @@ export async function updateBin(shopId, binId, input, actor = {}, req = null) {
     }
   }
 
-  const updated = await db.storageBin.update({
-    where: { id: bin.id },
-    data: {
-      ...(input.name !== undefined && { name: String(input.name).trim() }),
-      ...(input.zone !== undefined && { zone: input.zone ? String(input.zone).trim() : null }),
-      ...(input.kind !== undefined && { kind: input.kind }),
-      ...(input.sortOrder !== undefined && { sortOrder: Number(input.sortOrder) || 0 }),
-      ...(input.active !== undefined && { active: Boolean(input.active) }),
-    },
+  return db.$transaction(async (tx) => {
+    const updated = await tx.storageBin.update({
+      where: { id: bin.id },
+      data: {
+        ...(input.name !== undefined && { name: String(input.name).trim() }),
+        ...(input.zone !== undefined && { zone: input.zone ? String(input.zone).trim() : null }),
+        ...(input.kind !== undefined && { kind: input.kind }),
+        ...(input.sortOrder !== undefined && { sortOrder: Number(input.sortOrder) || 0 }),
+        ...(input.active !== undefined && { active: Boolean(input.active) }),
+      },
+    });
+    await writeRequiredBinAudit({
+      shopId, userId: actor.userId ?? null, module: "inventory", action: "STORAGE_BIN_UPDATED",
+      entityType: "StorageBin", entityId: bin.id, before: bin, after: updated, req,
+    }, tx);
+    return updated;
   });
-  await createAuditLog({
-    shopId, userId: actor.userId ?? null, module: "inventory", action: "STORAGE_BIN_UPDATED",
-    entityType: "StorageBin", entityId: bin.id, before: bin, after: updated, req,
-  });
-  return updated;
 }
 
 export async function getBinMap(shopId, locationId, query = {}) {
@@ -223,13 +239,13 @@ export async function movePlacement(shopId, input, actor = {}, req = null) {
     if (Math.abs(round2(afterStock) - round2(locationStockBaseQty)) >= 0.005) {
       throw new AppError("Bin move changed branch stock and was rolled back", 500, "BIN_MOVE_CHANGED_STOCK");
     }
-    return summarisePlacements(afterStock, after);
-  });
-
-  await createAuditLog({
-    shopId, userId: actor.userId ?? null, module: "inventory", action: "BIN_PLACEMENT_MOVED",
-    entityType: "BinPlacement", entityId: `${location.id}:${product.id}`,
-    after: { locationId: location.id, productId: product.id, sellingUnitId, fromBinId, toBinId, quantityBaseQty }, req,
+    const result = summarisePlacements(afterStock, after);
+    await writeRequiredBinAudit({
+      shopId, userId: actor.userId ?? null, module: "inventory", action: "BIN_PLACEMENT_MOVED",
+      entityType: "BinPlacement", entityId: `${location.id}:${product.id}`,
+      after: { locationId: location.id, productId: product.id, sellingUnitId, fromBinId, toBinId, quantityBaseQty }, req,
+    }, tx);
+    return result;
   });
   return { ...result, locationId: location.id, productId: product.id, sellingUnitId };
 }
@@ -263,15 +279,13 @@ export async function reconcilePlacements(shopId, input, actor = {}, req = null)
       remaining = round2(remaining - take);
     }
     const after = await tx.binPlacement.findMany({ where: { shopId, productId: product.id, sellingUnitId, bin: { locationId: location.id } } });
-    return { ...summarisePlacements(locationStockBaseQty, after), trimmedBaseQty: before.overPlacedBaseQty };
-  });
-
-  if (result.trimmedBaseQty > 0) {
-    await createAuditLog({
+    const result = { ...summarisePlacements(locationStockBaseQty, after), trimmedBaseQty: before.overPlacedBaseQty };
+    await writeRequiredBinAudit({
       shopId, userId: actor.userId ?? null, module: "inventory", action: "BIN_PLACEMENTS_RECONCILED",
       entityType: "BinPlacement", entityId: `${location.id}:${product.id}`,
       after: { locationId: location.id, productId: product.id, sellingUnitId, trimmedBaseQty: result.trimmedBaseQty }, req,
-    });
-  }
+    }, tx);
+    return result;
+  });
   return result;
 }

@@ -7,12 +7,18 @@
  * This avoids the old race-prone pattern of querying the last bill and incrementing it.
  * It must be called inside the same transaction that creates the bill.
  */
-export async function generateBillNo(shopId, tx, { billType } = {}) {
+export async function generateBillNo(shopId, tx, { billType, businessDate } = {}) {
   if (!tx?.billCounter) {
     throw new Error("generateBillNo requires a Prisma transaction client with billCounter");
   }
 
-  const year = new Date().getFullYear();
+  const issuedAt = businessDate === undefined ? new Date() : new Date(businessDate);
+  if (!Number.isFinite(issuedAt.getTime())) {
+    throw new Error("generateBillNo requires a valid businessDate when one is provided");
+  }
+  // Offline bills keep their real transaction date. The year printed in their
+  // statutory number must therefore come from that same date, not sync-server time.
+  const year = issuedAt.getUTCFullYear();
   const isEstimate = billType === "estimate";
   const isReturn = billType === "sales_return";
   const prefix = `${isEstimate ? "EST" : isReturn ? "RET" : "KOS"}-${year}-`;

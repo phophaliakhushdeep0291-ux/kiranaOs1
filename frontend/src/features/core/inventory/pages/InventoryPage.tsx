@@ -604,11 +604,15 @@ export default function InventoryPage() {
       toast({ title: t("inventory.page.permissionDenied"), description: manageInventory.reason, variant: "destructive" });
       return;
     }
-    // Damage and correction both adjust stock outside a sale — the server sync
-    // handler requires an owner PIN for both, so collect it here. Without this a
-    // damage write-off saves locally but its sync op fails forever ("Owner PIN
-    // required"), diverging local stock from the server.
-    if (form.movementType === "correction" || form.movementType === "damage") {
+    // Damage and correction both adjust stock outside a sale. A purchase can also
+    // change protected minimum/selling prices. Each is rechecked by the sync
+    // backend, so collect owner approval before placing the related local change
+    // in the outbox instead of creating a retry loop that can never succeed.
+    if (
+      form.movementType === "correction" ||
+      form.movementType === "damage" ||
+      (form.movementType === "purchase" && hasPurchasePriceUpdate())
+    ) {
       setOwnerPinOpen(true);
       return;
     }
@@ -666,7 +670,7 @@ export default function InventoryPage() {
 
     if (form.movementType === "purchase") {
       recordPurchase.mutate({ data: payload });
-      await maybeUpdateProductPrices();
+      await maybeUpdateProductPrices(ownerPin, ownerPinReason);
       return;
     }
     if (form.movementType === "damage") {
@@ -689,7 +693,16 @@ export default function InventoryPage() {
     }
   }
 
-  async function maybeUpdateProductPrices() {
+  function hasPurchasePriceUpdate() {
+    return Boolean(
+      form.minPrice.trim() ||
+      form.minMarginPercent.trim() ||
+      form.sellingPrice.trim() ||
+      form.sellingMarginPercent.trim(),
+    );
+  }
+
+  async function maybeUpdateProductPrices(ownerPin?: string, ownerPinReason?: string) {
     if (!form.productId) return;
     const update: Record<string, number | string> = {};
     // Average cost is updated by the purchase movement using weighted average.
@@ -697,7 +710,12 @@ export default function InventoryPage() {
     if (form.sellingPrice || form.sellingMarginPercent) update.defaultPricePerRateUnit = Number(form.sellingPrice || sellingMarginSuggestion);
     if (Object.keys(update).length === 0) return;
     try {
-      await patchProductLocalFirst(form.productId, update, undefined, form.reason || undefined);
+      await patchProductLocalFirst(
+        form.productId,
+        update,
+        ownerPin,
+        ownerPinReason || form.reason || undefined,
+      );
     } catch {
       // Movement should still save; product price update can be corrected later.
     }
@@ -1085,8 +1103,8 @@ export default function InventoryPage() {
         open={ownerPinOpen}
         onCancel={() => setOwnerPinOpen(false)}
         title={t("products.toast.ownerApprovalRequired")}
-        description={t("inventory.page.correctionPinHelp")}
-        confirmLabel={t("customers.detail.saveCorrection")}
+        description={form.movementType === "purchase" ? t("inventory.page.purchasePricePinHelp") : t("inventory.page.correctionPinHelp")}
+        confirmLabel={form.movementType === "purchase" ? t("inventory.page.savePurchase") : t("customers.detail.saveCorrection")}
         loading={isSaving}
         reasonRequired
         onConfirm={({ ownerPin, reason }) => {

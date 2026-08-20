@@ -372,6 +372,8 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.page.autoFromBill": "बिल की रकम से अपने आप",
   "inventory.page.correctionReason": "जैसे गिनती में अंतर, पैकेट खराब",
   "inventory.page.correctionPinHelp": "स्टॉक सुधार से असली स्टॉक बदल जाता है। इसे इस डिवाइस पर सेव करने के लिए मालिक का पासवर्ड/PIN डालें।",
+  "inventory.page.purchasePricePinHelp": "खरीद दर्ज करते समय सामान की कीमत बदलने के लिए मालिक की मंजूरी चाहिए।",
+  "inventory.page.savePurchase": "खरीद सेव करें",
 
   // The strings a ternary used to hide from the checker.
   "inventory.page.checkForm": "फ़ॉर्म एक बार जांच लें।",

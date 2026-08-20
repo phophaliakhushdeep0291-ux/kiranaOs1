@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { billCreationSchema } from "@/lib/validation";
 
 const billsPage = readFileSync("src/features/core/bills/pages/BillsPage.tsx", "utf8");
 const billingEn = readFileSync("src/features/core/settings/translations/billing.ts", "utf8");
@@ -7,6 +8,7 @@ const billDetailPage = readFileSync("src/features/core/bills/pages/BillDetailPag
 const billingPage = readFileSync("src/features/core/billing/pages/BillingPage.tsx", "utf8");
 const billingSummary = readFileSync("src/features/core/billing/pages/components/BillingSummary.tsx", "utf8");
 const paymentPanel = readFileSync("src/features/core/billing/pages/components/BillingPaymentPanel.tsx", "utf8");
+const validationSchemas = readFileSync("src/lib/validation/schemas.ts", "utf8");
 
 // Estimates (kacha bills) work the same as real bills — stock, payments, udhar, reports —
 // and differ ONLY by their EST- number series plus estimate-specific views/filters.
@@ -49,5 +51,18 @@ describe("estimate bills work like real bills under their own number series", ()
     expect(paymentPanel).not.toContain('estimate-payment-panel');
     expect(paymentPanel).not.toContain('No payment saved');
     expect(billingPage).toContain('if (getPrinterConfigSync().autoPrint)');
+  });
+
+  it("prevents a GST invoice from being saved with GST disabled", () => {
+    expect(validationSchemas).toContain('bill.billType === "gst_invoice" && bill.gstMode === "none"');
+    expect(billingPage).toContain('nextBillType === BillInputBillType.gst_invoice && getTaxConfigSync().mode === "none"');
+    expect(billingEn).toContain('"billing.page.gstModeRequired"');
+    const common = {
+      items: [{ name: "Taxed item", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 118, lineDiscount: 0, gstRate: 18 }],
+      payments: [{ mode: "cash" as const, amount: 118 }],
+    };
+    expect(billCreationSchema.safeParse({ ...common, billType: "gst_invoice", gstMode: "none" }).success).toBe(false);
+    expect(billCreationSchema.safeParse({ ...common, billType: "gst_invoice", gstMode: "inclusive" }).success).toBe(true);
+    expect(billCreationSchema.safeParse({ ...common, billType: "normal_sale", gstMode: "none" }).success).toBe(true);
   });
 });

@@ -145,6 +145,31 @@ async function main() {
     // Reconciling an already-clean map is a no-op rather than an error.
     assert.equal((await reconcilePlacements(shop.id, scope, {})).trimmedBaseQty, 0);
 
+    // Bin state and placement quantities are inseparable from their audit trail.
+    // Force the audit insert to fail and prove both kinds of mutation roll back.
+    const beforeAuditFailure = await getBinMap(shop.id, branch.id, scope);
+    await db.$executeRawUnsafe(`
+      CREATE TRIGGER fail_bin_audit
+      BEFORE INSERT ON AuditLog
+      WHEN NEW.action IN ('STORAGE_BIN_CREATED', 'STORAGE_BIN_UPDATED', 'BIN_PLACEMENT_MOVED', 'BIN_PLACEMENTS_RECONCILED')
+      BEGIN
+        SELECT RAISE(ABORT, 'forced bin audit failure');
+      END
+    `);
+    await expectFailure(
+      createBin(shop.id, { locationId: branch.id, code: "ROLLBACK" }, {}),
+      "BIN_AUDIT_WRITE_FAILED",
+      "an unaudited bin must not be created",
+    );
+    assert.equal(await db.storageBin.count({ where: { shopId: shop.id, code: "ROLLBACK" } }), 0);
+    await expectFailure(
+      movePlacement(shop.id, { ...scope, fromBinId: rack.id, toBinId: reserve.id, quantityBaseQty: 100 }, {}),
+      "BIN_AUDIT_WRITE_FAILED",
+      "an unaudited placement move must roll back",
+    );
+    await db.$executeRawUnsafe("DROP TRIGGER fail_bin_audit");
+    assert.deepEqual(await getBinMap(shop.id, branch.id, scope), beforeAuditFailure, "audit failure must leave the bin map unchanged");
+
     // ── the audit trail ───────────────────────────────────────────────
     const actions = await db.auditLog.findMany({ where: { shopId: shop.id }, select: { action: true } });
     const seen = new Set(actions.map((row) => row.action));
@@ -154,6 +179,7 @@ async function main() {
 
     console.log("Storage bin examples passed");
   } finally {
+    await db.$executeRawUnsafe("DROP TRIGGER IF EXISTS fail_bin_audit");
     await db.auditLog.deleteMany({ where: { shopId: shop.id } });
     await db.binPlacement.deleteMany({ where: { shopId: shop.id } });
     await db.storageBin.deleteMany({ where: { shopId: shop.id } });

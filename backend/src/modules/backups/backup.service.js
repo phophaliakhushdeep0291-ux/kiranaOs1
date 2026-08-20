@@ -39,6 +39,18 @@ function appError(message, statusCode, code) {
   return new AppError(message, statusCode, code);
 }
 
+async function writeRequiredBackupAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw appError(
+      "Backup action was not saved because its audit record could not be stored",
+      503,
+      "BACKUP_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
 function encryptionKey() {
   const raw = String(env.BACKUP_ENCRYPTION_KEY || "").trim();
   const decoded = Buffer.from(raw, "base64");
@@ -465,13 +477,16 @@ export async function restoreShopBackup(shopId, artifactId, userId, confirmation
   let recoveryBackup = null;
   try {
     recoveryBackup = await createImmediateRecoveryBackup(shopId, userId);
-    const result = await db.$transaction((tx) => replaceRestorableShopData(tx, shopId, snapshot), {
+    const result = await db.$transaction(async (tx) => {
+      const restored = await replaceRestorableShopData(tx, shopId, snapshot);
+      await writeRequiredBackupAudit({
+        shopId, userId, action: "SHOP_BACKUP_RESTORED", entityType: "BackupArtifact", entityId: artifactId,
+        metadata: { recoveryArtifactId: recoveryBackup.id, schemaVersion: BACKUP_SCHEMA_VERSION, ...restored },
+      }, tx);
+      return restored;
+    }, {
       isolationLevel: "Serializable", maxWait: 15_000, timeout: 180_000,
     });
-    await createAuditLog({
-      shopId, userId, action: "SHOP_BACKUP_RESTORED", entityType: "BackupArtifact", entityId: artifactId,
-      metadata: { recoveryArtifactId: recoveryBackup.id, schemaVersion: BACKUP_SCHEMA_VERSION, ...result },
-    }).catch(() => undefined);
     return { ...result, artifact_id: artifactId, recovery_backup: recoveryBackup };
   } finally {
     await releaseShopMaintenanceLock(shopId, lock.token).catch(() => undefined);
@@ -480,22 +495,25 @@ export async function restoreShopBackup(shopId, artifactId, userId, confirmation
 
 export async function createAndEnqueueShopBackup(shopId, userId) {
   assertBackupStorageSafe();
-  const artifact = await db.backupArtifact.create({
-    data: {
+  const artifact = await db.$transaction(async (tx) => {
+    const created = await tx.backupArtifact.create({
+      data: {
+        shopId,
+        requestedByUserId: userId,
+        type: "shop_logical",
+        status: "queued",
+        expiresAt: new Date(Date.now() + env.BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000),
+      },
+    });
+    await writeRequiredBackupAudit({
       shopId,
-      requestedByUserId: userId,
-      type: "shop_logical",
-      status: "queued",
-      expiresAt: new Date(Date.now() + env.BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000),
-    },
-  });
-  await createAuditLog({
-    shopId,
-    userId,
-    action: "SHOP_BACKUP_REQUESTED",
-    entityType: "BackupArtifact",
-    entityId: artifact.id,
-    metadata: { type: artifact.type, encrypted: true, expiresAt: artifact.expiresAt },
+      userId,
+      action: "SHOP_BACKUP_REQUESTED",
+      entityType: "BackupArtifact",
+      entityId: created.id,
+      metadata: { type: created.type, encrypted: true, expiresAt: created.expiresAt },
+    }, tx);
+    return created;
   });
   if (!isQueueEnabled()) {
     if (env.NODE_ENV === "production") {
@@ -564,32 +582,35 @@ export async function processShopBackupArtifact(artifactId, expectedShopId) {
       contentType: "application/vnd.kiranaos.backup",
       metadata: { artifactId: artifact.id, format: BACKUP_FORMAT, checksumSha256: checksum },
     });
-    const completed = await db.backupArtifact.update({
-      where: { id: artifact.id },
-      data: {
-        status: "completed",
-        format: BACKUP_FORMAT,
-        storageProvider: stored.provider,
-        objectKey: key,
-        checksumSha256: checksum,
-        sizeBytes: BigInt(encrypted.length),
-        recordCount: countRows(snapshot.data),
-        schemaVersion: BACKUP_SCHEMA_VERSION,
-        completedAt: new Date(),
-      },
-    });
-    await createAuditLog({
-      shopId: artifact.shopId,
-      userId: artifact.requestedByUserId,
-      action: "SHOP_BACKUP_COMPLETED",
-      entityType: "BackupArtifact",
-      entityId: artifact.id,
-      metadata: {
-        format: BACKUP_FORMAT,
-        checksumSha256: checksum,
-        sizeBytes: String(encrypted.length),
-        recordCount: completed.recordCount,
-      },
+    const completed = await db.$transaction(async (tx) => {
+      const updated = await tx.backupArtifact.update({
+        where: { id: artifact.id },
+        data: {
+          status: "completed",
+          format: BACKUP_FORMAT,
+          storageProvider: stored.provider,
+          objectKey: key,
+          checksumSha256: checksum,
+          sizeBytes: BigInt(encrypted.length),
+          recordCount: countRows(snapshot.data),
+          schemaVersion: BACKUP_SCHEMA_VERSION,
+          completedAt: new Date(),
+        },
+      });
+      await writeRequiredBackupAudit({
+        shopId: artifact.shopId,
+        userId: artifact.requestedByUserId,
+        action: "SHOP_BACKUP_COMPLETED",
+        entityType: "BackupArtifact",
+        entityId: artifact.id,
+        metadata: {
+          format: BACKUP_FORMAT,
+          checksumSha256: checksum,
+          sizeBytes: String(encrypted.length),
+          recordCount: updated.recordCount,
+        },
+      }, tx);
+      return updated;
     });
     return publicArtifact(completed);
   } catch (error) {

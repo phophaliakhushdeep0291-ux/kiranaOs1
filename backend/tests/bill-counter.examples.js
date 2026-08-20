@@ -55,6 +55,7 @@ async function run() {
   const third = await generateBillNo("shop-a", tx);
   const otherShopFirst = await generateBillNo("shop-b", tx);
   const otherShopEstimate = await generateBillNo("shop-b", tx, { billType: "estimate" });
+  const offlinePriorYear = await generateBillNo("shop-c", tx, { billType: "estimate", businessDate: "2025-12-31T23:58:00.000Z" });
 
   assert.match(first, /^KOS-\d{4}-000001$/);
   assert.match(firstEstimate, /^EST-\d{4}-000001$/);
@@ -65,6 +66,7 @@ async function run() {
   assert.match(third, /^KOS-\d{4}-000003$/);
   assert.match(otherShopFirst, /^KOS-\d{4}-000001$/);
   assert.match(otherShopEstimate, /^EST-\d{4}-000001$/);
+  assert.equal(offlinePriorYear, "EST-2025-000001", "number year follows the bill business date, not replay time");
   assert.notStrictEqual(second, third, "Bill numbers must increment per shop");
   assert.notStrictEqual(firstEstimate, secondEstimate, "Estimate numbers must increment per shop");
 

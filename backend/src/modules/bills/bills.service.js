@@ -286,6 +286,12 @@ export async function confirmBill(shopId, body, actor = {}) {
   const requestedLocationId = body.locationId ?? body.location_id ?? actor?.locationId ?? null;
 
   const isEstimate = billType === "estimate";
+  // Keep the invariant at the service boundary too. HTTP and sync requests are
+  // schema-validated, but jobs/tests can call confirmBill directly; none of those
+  // paths may persist a tax document whose declared tax mode disables GST.
+  if (billType === "gst_invoice" && gstMode === "none") {
+    throw new AppError("GST invoice requires inclusive or exclusive GST mode", 400, "GST_MODE_REQUIRED");
+  }
   // Phase 12: cashier attribution is taken only from authenticated server context,
   // never from frontend/offline payload attribution fields.
   const createdByUserId = actor?.userId ?? null;
@@ -705,7 +711,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       });
 
     // ── 3. Generate bill number ───────────────────────────────
-    const billNo = await generateBillNo(shopId, tx, { billType });
+    const billNo = await generateBillNo(shopId, tx, { billType, businessDate });
 
     // ── 4. Create bill ────────────────────────────────────────
     const bill = await tx.bill.create({

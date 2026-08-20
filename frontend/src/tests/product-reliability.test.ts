@@ -63,7 +63,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 import { offlineDB } from "@/lib/offline/db";
 import { emitLocalDataChanged, removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
-import { createProductLocalFirst, deleteProductLocalFirst, updateProductLocalFirst } from "@/features/core/products/local-actions";
+import { createProductLocalFirst, deleteProductLocalFirst, patchProductLocalFirst, updateProductLocalFirst } from "@/features/core/products/local-actions";
 import { productUpdateNeedsOwnerApproval } from "@/features/core/products/pages/product-form-state";
 import {
   findDuplicateProductWarnings,
@@ -174,6 +174,26 @@ describe("product reliability", () => {
       expect.objectContaining({ operation_type: "UPDATE_PRODUCT", entity_id: "product_sugar" }),
     ]));
     expect(mockedEmitLocalDataChanged).toHaveBeenCalledWith({ entityType: "product", action: "updated", entityId: "product_sugar" });
+  });
+
+  it("preserves approval supplied with a partial product update for cloud sync", async () => {
+    await patchProductLocalFirst("product_sugar", {
+      defaultPricePerRateUnit: 48,
+      ownerPin: "1234",
+      ownerPinReason: "New supplier price",
+    });
+
+    expect(mockState.committed.sync_outbox).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        operation_type: "UPDATE_PRODUCT",
+        entity_id: "product_sugar",
+        payload: expect.objectContaining({
+          ownerPin: "1234",
+          reason: "New supplier price",
+          ownerPinProvided: true,
+        }),
+      }),
+    ]));
   });
 
   it("keeps a 36-cell variant grid, per-pack stock, and pharmacy controls in the local record", async () => {

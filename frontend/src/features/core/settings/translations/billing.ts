@@ -178,6 +178,8 @@ export const billingEn = {
   "billing.summary.grandTotal": "Grand Total",
   "billing.summary.billSavedSafely": "Bill saved safely",
   "billing.summary.nextBillReady": "Last bill: {billNo}. You can start the next bill now.",
+  "billing.page.gstModeRequired": "Turn on GST for this invoice",
+  "billing.page.gstModeRequiredDetail": "Choose inclusive or exclusive GST in Settings → Taxes before saving a GST invoice.",
   "billing.summary.moreOptions": "More sale options",
   "billing.summary.moreOptionsHint": "Coupon and loyalty",
   "billing.summary.applyCoupon": "Apply Coupon Code",

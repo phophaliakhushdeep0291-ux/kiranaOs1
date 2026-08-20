@@ -105,6 +105,13 @@ export const confirmBillSchema = z.object({
   idempotencyKey: z.string().min(1).optional(),
   idempotency_key: z.string().min(1).optional(),
 }).superRefine((data, ctx) => {
+  if (data.billType === "gst_invoice" && data.gstMode === "none") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["gstMode"],
+      message: "GST invoice requires inclusive or exclusive GST mode",
+    });
+  }
   const declaredLineNet = (item) => Math.max(0, Number(item.quantity) * Number(item.ratePerRateUnit) - Number(item.lineDiscount || 0));
   const declaredSubtotal = data.items.reduce((sum, item) => sum + declaredLineNet(item), 0);
   const declaredGstToAdd = data.gstMode === "exclusive"
