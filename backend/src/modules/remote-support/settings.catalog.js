@@ -23,8 +23,8 @@ export const SETTING_INPUTS = Object.freeze({
   NONE: "none", // a reset: the repair takes no value
 });
 
-function requireLocation(shopId, locationId) {
-  return db.storeLocation.findFirst({
+function requireLocation(shopId, locationId, client = db) {
+  return client.storeLocation.findFirst({
     where: locationId ? { id: locationId, shopId } : { shopId, isPrimary: true },
     select: { id: true, name: true, code: true, gstNumber: true, gstStateCode: true, isPrimary: true },
   });
@@ -65,8 +65,8 @@ export const SETTING_REPAIRS = Object.freeze({
       };
     },
 
-    async apply({ shopId, locationId = null, value }) {
-      const location = await requireLocation(shopId, locationId);
+    async apply({ shopId, locationId = null, value, client = db }) {
+      const location = await requireLocation(shopId, locationId, client);
       if (!location) {
         throw new AppError("That store location does not exist.", 404, "SETTING_TARGET_MISSING");
       }
@@ -80,7 +80,7 @@ export const SETTING_REPAIRS = Object.freeze({
       // splits, which is a silent tax error rather than a visible failure.
       const after = { gstNumber: check.normalized, gstStateCode: check.stateCode };
 
-      await db.storeLocation.update({ where: { id: location.id }, data: after });
+      await client.storeLocation.update({ where: { id: location.id }, data: after });
       return { before, after, target: { locationId: location.id, locationName: location.name } };
     },
   },
@@ -102,14 +102,14 @@ export const SETTING_REPAIRS = Object.freeze({
       return { value: shop?.gstNumber ?? null, context: null };
     },
 
-    async apply({ shopId, value }) {
-      const shop = await db.shop.findUnique({ where: { id: shopId }, select: { gstNumber: true } });
+    async apply({ shopId, value, client = db }) {
+      const shop = await client.shop.findUnique({ where: { id: shopId }, select: { gstNumber: true } });
       const check = validateGstin(value);
       if (!check.valid) throw new AppError(check.reason, 400, "SETTING_VALUE_INVALID");
 
       const before = { gstNumber: shop?.gstNumber ?? null };
       const after = { gstNumber: check.normalized };
-      await db.shop.update({ where: { id: shopId }, data: after });
+      await client.shop.update({ where: { id: shopId }, data: after });
       return { before, after, target: { shopId } };
     },
   },
@@ -145,8 +145,8 @@ export const SETTING_REPAIRS = Object.freeze({
       return { value: hidden.length ? hidden.join(", ") : null, context: { hiddenCount: hidden.length } };
     },
 
-    async apply({ shopId }) {
-      const shop = await db.shop.findUnique({ where: { id: shopId }, select: { settingsJson: true } });
+    async apply({ shopId, client = db }) {
+      const shop = await client.shop.findUnique({ where: { id: shopId }, select: { settingsJson: true } });
       const parsed = parseSettings(shop?.settingsJson);
       const before = { moduleVisibility: parsed.moduleVisibility ?? null };
 
@@ -155,7 +155,7 @@ export const SETTING_REPAIRS = Object.freeze({
       // module list every time one is added.
       delete parsed.moduleVisibility;
 
-      await db.shop.update({ where: { id: shopId }, data: { settingsJson: JSON.stringify(parsed) } });
+      await client.shop.update({ where: { id: shopId }, data: { settingsJson: JSON.stringify(parsed) } });
       return { before, after: { moduleVisibility: null }, target: { shopId } };
     },
   },

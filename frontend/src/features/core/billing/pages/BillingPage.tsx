@@ -1367,6 +1367,10 @@ export default function Billing() {
       toast({ title: t("billing.page.invalidItem"), description: t("billing.page.invalidItemDetail"), variant: "destructive" });
       return false;
     }
+    if (nextBillType === BillInputBillType.gst_invoice && getTaxConfigSync().mode === "none") {
+      toast({ title: t("billing.page.gstModeRequired"), description: t("billing.page.gstModeRequiredDetail"), variant: "destructive" });
+      return false;
+    }
     if (totalDiscount > payableBase) {
       toast({ title: t("billing.page.discountTooHigh"), description: t("billing.page.discountTooHighDetail"), variant: "destructive" });
       return false;
@@ -1724,7 +1728,6 @@ export default function Billing() {
       });
       return false;
     }
-
     openBillTransitionLockRef.current = true;
     setOpenBillTransitionPending(true);
     try {

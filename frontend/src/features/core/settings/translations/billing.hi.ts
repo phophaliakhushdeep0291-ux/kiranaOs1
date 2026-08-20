@@ -170,6 +170,8 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.summary.grandTotal": "कुल रकम",
   "billing.summary.billSavedSafely": "बिल सुरक्षित रूप से सेव हो गया",
   "billing.summary.nextBillReady": "पिछला बिल: {billNo}। अब आप अगला बिल शुरू कर सकते हैं।",
+  "billing.page.gstModeRequired": "इस इनवॉइस के लिए GST चालू करें",
+  "billing.page.gstModeRequiredDetail": "GST इनवॉइस सेव करने से पहले सेटिंग्स → टैक्स में इनक्लूसिव या एक्सक्लूसिव GST चुनें।",
   "billing.summary.moreOptions": "और बिक्री विकल्प",
   "billing.summary.moreOptionsHint": "कूपन और लॉयल्टी",
   "billing.summary.applyCoupon": "कूपन कोड लगाएं",

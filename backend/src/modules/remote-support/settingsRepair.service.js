@@ -22,6 +22,18 @@ import { EVENT_TOPICS, publishEvent } from "../../lib/eventBus.js";
 const DEVICE_NUDGE_WINDOW_MS = 15 * 60 * 1000;
 const MAX_DEVICE_NUDGES = 5;
 
+async function writeRequiredSettingRepairAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Setting repair was not saved because its audit record could not be stored",
+      503,
+      "SETTING_REPAIR_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
 /** Every repairable setting with its current value, for the operator's screen. */
 export async function readRepairableSettings({ shopId, locationId = null }) {
   const entries = await Promise.all(
@@ -108,28 +120,31 @@ export async function applySettingRepair({ session, key, value = null, locationI
   }
 
   const { shopId } = session;
-  const result = await repair.apply({ shopId, locationId, value });
+  const result = await db.$transaction(async (tx) => {
+    const applied = await repair.apply({ shopId, locationId, value, client: tx });
 
-  // before/after is the whole point of auditing a data change: it is what lets the
-  // owner — or us, later — say exactly what this setting used to be.
-  await createAuditLog({
-    shopId,
-    userId,
-    module: "settings",
-    action: "SUPPORT_SETTING_REPAIRED",
-    entityType: "ShopSetting",
-    entityId: key,
-    before: result.before,
-    after: result.after,
-    metadata: {
-      key,
-      operatorEmail: session.operatorEmail,
-      sessionId: session.id,
-      reason: reason ? String(reason).slice(0, 500) : null,
-      target: result.target ?? null,
-    },
-    req,
-  }).catch(() => null);
+    // The setting write and its before/after record are one operation. If either
+    // cannot be stored, neither is allowed to commit.
+    await writeRequiredSettingRepairAudit({
+      shopId,
+      userId,
+      module: "settings",
+      action: "SUPPORT_SETTING_REPAIRED",
+      entityType: "ShopSetting",
+      entityId: key,
+      before: applied.before,
+      after: applied.after,
+      metadata: {
+        key,
+        operatorEmail: session.operatorEmail,
+        sessionId: session.id,
+        reason: reason ? String(reason).slice(0, 500) : null,
+        target: applied.target ?? null,
+      },
+      req,
+    }, tx);
+    return applied;
+  });
 
   await publishEvent(EVENT_TOPICS.SUPPORT_REQUESTED, shopId, {
     kind: "setting_repaired",

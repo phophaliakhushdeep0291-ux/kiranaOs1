@@ -4,6 +4,18 @@ import { round2 } from "../../utils/money.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { decrementLocationInventory, incrementLocationInventory, resolveOperationalLocation } from "../stores/location-context.service.js";
 
+async function writeRequiredRepackAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Stock repack was not saved because its audit record could not be stored",
+      503,
+      "REPACK_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
 /**
  * Breaking bulk: one 50 kg sack becomes fifty 1 kg packets. The sack and the
  * packet are two packagings of the SAME product, so base quantity is conserved and
@@ -124,19 +136,18 @@ export async function recordRepack(shopId, data, identity = {}) {
     });
 
     const fresh = await tx.product.findFirst({ where: { id: productId, shopId }, select: { stockBaseQty: true } });
+    await writeRequiredRepackAudit({
+      shopId, userId: identity.userId ?? null, deviceId: identity.deviceId, module: "inventory",
+      action: "STOCK_REPACKED", entityType: "Product", entityId: productId,
+      after: {
+        locationId: location.id,
+        fromSellingUnitId, toSellingUnitId,
+        fromQuantity: plan.fromQuantity, producedUnits: plan.producedUnits,
+        consumedBaseQty: plan.consumedBaseQty, producedBaseQty: plan.producedBaseQty, wastageBaseQty: plan.wastageBaseQty,
+      },
+      req: identity.req ?? null,
+    }, tx);
     return { consumed, produced, globalStockBaseQty: round2(Number(fresh?.stockBaseQty ?? 0)) };
-  });
-
-  await createAuditLog({
-    shopId, userId: identity.userId ?? null, deviceId: identity.deviceId, module: "inventory",
-    action: "STOCK_REPACKED", entityType: "Product", entityId: productId,
-    after: {
-      locationId: location.id,
-      fromSellingUnitId, toSellingUnitId,
-      fromQuantity: plan.fromQuantity, producedUnits: plan.producedUnits,
-      consumedBaseQty: plan.consumedBaseQty, producedBaseQty: plan.producedBaseQty, wastageBaseQty: plan.wastageBaseQty,
-    },
-    req: identity.req ?? null,
   });
 
   return {

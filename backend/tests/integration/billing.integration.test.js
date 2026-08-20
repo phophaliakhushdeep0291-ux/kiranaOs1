@@ -535,6 +535,57 @@ if (ctx.skip) {
       assert.equal(refreshedProduct.stockBaseQty, 8);
     });
 
+    test("Pakka bills and estimates keep independent number series across replay", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 20, defaultPricePerRateUnit: 20 });
+      const year = new Date().getUTCFullYear();
+      const normalPayload = {
+        ...billPayload(product, { quantity: 1, ratePerRateUnit: 20 }),
+        clientBillId: "series-pakka-1",
+      };
+      const estimatePayload = {
+        ...billPayload(product, { billType: "estimate", quantity: 1, ratePerRateUnit: 20 }),
+        clientBillId: "series-estimate-1",
+      };
+
+      const normal = assertSuccess(await ctx.post("/api/bills/confirm", normalPayload, { token: ownerAuth.accessToken }), 201);
+      const estimate = assertSuccess(await ctx.post("/api/bills/confirm", estimatePayload, { token: ownerAuth.accessToken }), 201);
+      const replay = assertSuccess(await ctx.post("/api/bills/confirm", estimatePayload, { token: ownerAuth.accessToken }), 201);
+      const nextNormal = assertSuccess(await ctx.post("/api/bills/confirm", {
+        ...normalPayload,
+        clientBillId: "series-pakka-2",
+      }, { token: ownerAuth.accessToken }), 201);
+
+      assert.equal(normal.billNo, `KOS-${year}-000001`);
+      assert.equal(estimate.billNo, `EST-${year}-000001`);
+      assert.equal(replay.id, estimate.id, "lost-response replay returns the original estimate");
+      assert.equal(nextNormal.billNo, `KOS-${year}-000002`, "estimate and replay do not consume Pakka numbers");
+      assert.deepEqual(
+        await ctx.db.billCounter.findUnique({ where: { shopId: tenant.shop.id }, select: { lastNumber: true, estimateLastNumber: true } }),
+        { lastNumber: 2, estimateLastNumber: 1 },
+      );
+    });
+
+    test("GST invoice rejects no-tax mode before any money or stock effect", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 118, gstRate: 18 });
+      const response = await ctx.post("/api/bills/confirm", billPayload(product, {
+        billType: "gst_invoice",
+        gstMode: "none",
+        quantity: 1,
+        ratePerRateUnit: 118,
+        gstRate: 18,
+      }), { token: ownerAuth.accessToken });
+
+      const failure = assertFailure(response, 400);
+      assert.match(JSON.stringify(failure), /GST invoice requires inclusive or exclusive GST mode/);
+      assert.equal(await ctx.db.bill.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.billCounter.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id } }), 0);
+    });
+
     test("legacy quote-shaped estimate (no payment data) is still accepted as unpaid", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });

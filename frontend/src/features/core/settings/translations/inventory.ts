@@ -392,6 +392,8 @@ export const inventoryEn = {
   "inventory.page.autoFromBill": "Auto from bill amount",
   "inventory.page.correctionReason": "e.g. physical count, damaged packet",
   "inventory.page.correctionPinHelp": "Stock correction changes real inventory. Enter owner password/PIN to save locally.",
+  "inventory.page.purchasePricePinHelp": "Updating product prices while recording a purchase needs owner approval.",
+  "inventory.page.savePurchase": "Save purchase",
 
   // Inventory page text the scanner used to walk past. A ternary picking between
   // two literals — between tags, or inside a prop — is invisible to a rule that

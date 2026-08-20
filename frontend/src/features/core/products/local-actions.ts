@@ -686,6 +686,12 @@ export async function patchProductLocalFirst(id: string, data: Partial<ProductIn
   };
   const nextInput = { ...fallbackInput, ...data, ownerPin: ownerPin ?? data.ownerPin, ownerPinReason: reason ?? data.ownerPinReason };
   const validated = parseOrThrow(productCreationSchema, nextInput) as unknown as ProductInput;
+  // Callers may provide approval as part of the patch (the product editor does)
+  // or as the explicit third/fourth arguments (the inventory flow does). Always
+  // use the validated values below: otherwise a valid approval in `data` is
+  // silently discarded and the queued protected update can never sync.
+  const approvedOwnerPin = validated.ownerPin;
+  const approvalReason = validated.ownerPinReason;
   const product = touchLocalEntity(toProduct(validated, id, existing), "pending_sync");
   const auditLogs = [
     buildAuditLogRow({
@@ -695,12 +701,12 @@ export async function patchProductLocalFirst(id: string, data: Partial<ProductIn
       entityLabel: product.name,
       oldValue: existing ?? null,
       newValue: product,
-      ownerPinProvided: Boolean(ownerPin),
-      reason,
+      ownerPinProvided: Boolean(approvedOwnerPin),
+      reason: approvalReason,
       summary: `Product ${product.name} edited`,
     }),
   ];
-  const priceAudit = buildPriceBelowMinimumAudit(product, existing, ownerPin, reason);
+  const priceAudit = buildPriceBelowMinimumAudit(product, existing, approvedOwnerPin, approvalReason);
   if (priceAudit) auditLogs.push(priceAudit);
 
   await commitProductWrite({
@@ -710,7 +716,14 @@ export async function patchProductLocalFirst(id: string, data: Partial<ProductIn
       entity_type: "product",
       entity_id: id,
       operation_type: "UPDATE_PRODUCT",
-      payload: { productId: id, product: data, locationId: getActiveLocationId(), ownerPin, reason, ownerPinProvided: Boolean(ownerPin) },
+      payload: {
+        productId: id,
+        product: data,
+        locationId: getActiveLocationId(),
+        ownerPin: approvedOwnerPin,
+        reason: approvalReason,
+        ownerPinProvided: Boolean(approvedOwnerPin),
+      },
     },
   });
   upsertCachedListItem<Product>(CACHE_KEY, product, 1000);

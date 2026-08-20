@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { confirmBillSchema } from "../src/modules/bills/bills.schema.js";
 
 // Estimates (kacha bills) work the same as real bills — they move stock, record payments,
 // carry udhar, and count in sales/cash/P&L reports. The ONLY differences: their own EST-
@@ -72,6 +73,26 @@ assert.deepEqual(
     usesEstimateSeries: true,
   },
   "estimate behaves exactly like a real sale — stock, tender, udhar, ledger — under the EST- series"
+);
+
+const commonInvoice = {
+  items: [{ name: "Taxed item", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 118, gstRate: 18 }],
+  payments: [{ mode: "cash", amount: 118 }],
+};
+assert.equal(
+  confirmBillSchema.safeParse({ ...commonInvoice, billType: "gst_invoice", gstMode: "none" }).success,
+  false,
+  "a GST invoice cannot disable GST",
+);
+assert.equal(
+  confirmBillSchema.safeParse({ ...commonInvoice, billType: "gst_invoice", gstMode: "inclusive" }).success,
+  true,
+  "a GST invoice accepts inclusive GST",
+);
+assert.equal(
+  confirmBillSchema.safeParse({ ...commonInvoice, billType: "normal_sale", gstMode: "none" }).success,
+  true,
+  "a non-tax Pakka bill may explicitly use no GST",
 );
 
 assert.deepEqual(

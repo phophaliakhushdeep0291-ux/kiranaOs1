@@ -129,6 +129,28 @@ async function main() {
       "a shared stock pool has no per-pack stock to repack",
     );
 
+    // The pack counts, pooled stock and both ledger legs must not commit if the
+    // mandatory audit row cannot be written.
+    const beforeAuditFailure = await readCounts();
+    await db.$executeRawUnsafe(`
+      CREATE TRIGGER fail_repack_audit
+      BEFORE INSERT ON AuditLog
+      WHEN NEW.action = 'STOCK_REPACKED'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced repack audit failure');
+      END
+    `);
+    await expectFailure(
+      recordRepack(shop.id, {
+        productId: product.id, fromSellingUnitId: sackUnit.id, toSellingUnitId: packetUnit.id,
+        quantity: 1, idempotencyKey: `audit-rollback-${Date.now()}`,
+      }),
+      "REPACK_AUDIT_WRITE_FAILED",
+      "an unaudited repack must roll back completely",
+    );
+    await db.$executeRawUnsafe("DROP TRIGGER fail_repack_audit");
+    assert.deepEqual(await readCounts(), beforeAuditFailure, "audit failure must leave every stock quantity unchanged");
+
     // ── the trail ─────────────────────────────────────────────────────
     const ledger = await db.stockLedger.findMany({ where: { shopId: shop.id, productId: product.id }, orderBy: { createdAt: "asc" } });
     const out = ledger.filter((row) => row.action === "repack_out");
@@ -145,6 +167,7 @@ async function main() {
 
     console.log("Stock repack examples passed");
   } finally {
+    await db.$executeRawUnsafe("DROP TRIGGER IF EXISTS fail_repack_audit");
     await db.auditLog.deleteMany({ where: { shopId: shop.id } });
     await db.stockLedger.deleteMany({ where: { shopId: shop.id } });
     await db.locationStock.deleteMany({ where: { shopId: shop.id } });

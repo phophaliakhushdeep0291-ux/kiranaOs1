@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { CheckCircle2, RefreshCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RefreshCcw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getSyncDiagnostics, type SyncDiagnostics, type SyncFailureExplanation } from "@/features/core/sync/api";
+import { readLastPullFailure, type PullFailureRecord } from "@/features/core/sync/sync-pull";
 
 // Diagnostics §3: surfaces the consolidated sync health with a plain-language
 // explanation for every failure/conflict, so an owner understands *why* something
@@ -45,10 +46,14 @@ export function SyncDiagnosticsSection() {
   const [data, setData] = useState<SyncDiagnostics | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  // The server's diagnostics only describe pushes. Whether this device is still
+  // RECEIVING data is something only the device knows.
+  const [pullFailure, setPullFailure] = useState<PullFailureRecord | null>(null);
 
   function load() {
     setLoading(true);
     setFailed(false);
+    void readLastPullFailure().then(setPullFailure).catch(() => setPullFailure(null));
     getSyncDiagnostics({ background: true })
       .then((result) => setData(result))
       .catch(() => setFailed(true))
@@ -92,12 +97,26 @@ export function SyncDiagnosticsSection() {
               <span className="ml-auto text-xs text-muted-foreground">Last successful sync {timeAgo(data.lastSuccessfulSyncAt)}</span>
             </div>
 
-            {issues.length === 0 ? (
+            {pullFailure ? (
+              <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="font-semibold">This device stopped receiving updates.</span>{" "}
+                  Bills you make here are still being backed up, but changes from your other
+                  devices are not arriving — prices, stock and bills may be out of date.
+                  <span className="mt-1 block text-xs text-rose-700">
+                    Last attempt {timeAgo(pullFailure.at)}: {pullFailure.reason}
+                  </span>
+                </span>
+              </div>
+            ) : null}
+
+            {issues.length === 0 && !pullFailure ? (
               <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                 <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                 Everything is syncing cleanly — no failures or conflicts.
               </div>
-            ) : (
+            ) : issues.length === 0 ? null : (
               <ul className="space-y-2">
                 {issues.map((item, index) => (
                   <IssueRow key={item.eventId ?? item.id ?? `${item.code}-${index}`} item={item} />

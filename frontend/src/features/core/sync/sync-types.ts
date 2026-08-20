@@ -49,6 +49,13 @@ export interface SyncRunResult {
   pending: number;
   skipped: number;
   cursor?: string | number | null;
+  /**
+   * The device could not read the server's changes this cycle. Distinct from
+   * `failed`, which counts outbox operations that could not be PUSHED — a shop
+   * can be pushing perfectly while receiving nothing at all.
+   */
+  pullFailed?: boolean;
+  pullFailureReason?: string;
 }
 
 export interface PreparedOperation {

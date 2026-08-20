@@ -25,7 +25,6 @@ import {
   dedupeLedgerEntries,
   calculateTrustScore,
   getLedgerCustomerId,
-  getLedgerDate,
   ledgerSignedAmount,
   type CustomerLedgerEntry,
 } from "@/features/core/ledger/accounting";
@@ -53,6 +52,16 @@ export interface LocalPaymentResult {
 }
 
 const PENDING_LEDGER_STATUSES = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
+
+/**
+ * Statuses whose ledger rows have NOT reached the server, so no server snapshot
+ * can already contain them.
+ *
+ * `conflict` is deliberately absent. The server DID see those rows and refused
+ * them, so applying one moves the balance away from the truth — and for a
+ * rejected payment it keeps re-creating debt that was never owed.
+ */
+const UNSYNCED_LEDGER_STATUSES = new Set(["pending_sync", "syncing", "failed", "local_only"]);
 
 type CustomerRecord = Customer & Record<string, unknown>;
 
@@ -136,21 +145,24 @@ function normaliseOutstandingRow(
 }
 
 /**
- * Unsynced local movement for a customer since the server snapshot was taken.
- * Entries older than the snapshot are already reflected in it, so counting them
- * again would double them; entries after it are this device's own work and must
- * show immediately (a payment collected offline has to move the number).
+ * Local movement for a customer that the server snapshot cannot know about yet.
+ *
+ * Membership is decided by SYNC STATUS, never by a timestamp. It used to also
+ * skip entries dated at or before `capturedAt`, on the theory that anything
+ * older was already inside the snapshot — but the summary is re-fetched right
+ * after a payment is written, so `capturedAt` routinely moves PAST a row that is
+ * still `pending_sync` and the server plainly does not have. That dropped the
+ * first collection of the day: a customer who paid ₹120 and then ₹80 against a
+ * ₹200 bill was left owing ₹120, and the app offered to collect it again.
+ *
+ * An unsynced row is absent from the server's number by definition, whenever it
+ * was written, so it always counts.
  */
-function pendingLedgerDeltasSince(
-  entries: CustomerLedgerEntry[],
-  capturedAt: string | null,
-): Map<string, number> {
+function pendingLedgerDeltas(entries: CustomerLedgerEntry[]): Map<string, number> {
   const deltas = new Map<string, number>();
-  if (!capturedAt) return deltas;
   for (const entry of entries) {
     const status = String(entry.sync_status ?? "").toLowerCase();
-    if (!PENDING_LEDGER_STATUSES.has(status)) continue;
-    if (getLedgerDate(entry) <= capturedAt) continue;
+    if (!UNSYNCED_LEDGER_STATUSES.has(status)) continue;
     const id = getLedgerCustomerId(entry);
     if (!id) continue;
     deltas.set(id, roundMoney((deltas.get(id) ?? 0) + ledgerSignedAmount(entry)));
@@ -177,7 +189,7 @@ function buildLocalUdharSummary(input: {
   const idMappings = input.idMappings ?? [];
   const authoritative = input.authoritative;
   if (authoritative) {
-    const deltas = pendingLedgerDeltasSince(ledgerEntries, authoritative.capturedAt);
+    const deltas = pendingLedgerDeltas(ledgerEntries);
     const rows = new Map<string, UdharSummary["customers"][number]>();
     const handledCustomerIds = new Set<string>();
 
@@ -414,7 +426,7 @@ async function resolveCachedAuthoritativePaymentBalance(input: {
   );
   const base = authoritativeOutstandingFor(cached.summary, [...ids]);
   if (base === null) return null;
-  const deltas = pendingLedgerDeltasSince(input.ledgerEntries, cached.capturedAt);
+  const deltas = pendingLedgerDeltas(input.ledgerEntries);
   return roundMoney(Math.max(0, base + pendingDeltaForIds(deltas, ids)));
 }
 

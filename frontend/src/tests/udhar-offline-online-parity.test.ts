@@ -106,18 +106,19 @@ describe("udhar offline/online parity", () => {
     expect(getLocalUdharSummary()).toEqual({ totalOutstanding: 0, customers: [] });
   });
 
-  it("applies unsynced local movement recorded after the snapshot was captured", () => {
+  it("applies unsynced local movement on top of the snapshot, and only that", () => {
     seedCachedSummary("2026-07-25T12:00:00.000Z");
     cacheState.instant.set("customers", [{ id: "customer_gops", name: "gops" }]);
     cacheState.instant.set("customer_ledger", [
-      // Already in the server snapshot — counting it again would double it.
+      // Acknowledged by the server, so it is already inside the ₹300 snapshot —
+      // counting it again would double it. Being `synced` is what says so.
       {
         id: "ledger_old",
         customerId: "customer_gops",
         type: "PAYMENT",
         amount: 50,
         entry_at: "2026-07-25T09:00:00.000Z",
-        sync_status: "pending_sync",
+        sync_status: "synced",
       },
       // Collected offline after the snapshot: has to move the number now.
       {
@@ -134,6 +135,56 @@ describe("udhar offline/online parity", () => {
       expect.objectContaining({
         totalOutstanding: 150,
         customers: [expect.objectContaining({ customerId: "customer_gops", outstanding: 150 })],
+      }),
+    );
+  });
+
+  it("applies an unsynced payment even when it predates the snapshot", () => {
+    // The udhar page refetches /udhar/summary immediately after a payment is
+    // written, so `capturedAt` normally lands AFTER a row that is still waiting
+    // to be pushed. Dating that row out of the reckoning lost the first
+    // collection of the day and re-created debt the customer had already paid.
+    seedCachedSummary("2026-07-25T12:00:00.000Z");
+    cacheState.instant.set("customers", [{ id: "customer_gops", name: "gops" }]);
+    cacheState.instant.set("customer_ledger", [
+      {
+        id: "ledger_unpushed",
+        customerId: "customer_gops",
+        type: "PAYMENT",
+        amount: 120,
+        entry_at: "2026-07-25T09:00:00.000Z",
+        sync_status: "pending_sync",
+      },
+    ]);
+
+    expect(getLocalUdharSummary()).toEqual(
+      expect.objectContaining({
+        totalOutstanding: 180,
+        customers: [expect.objectContaining({ customerId: "customer_gops", outstanding: 180 })],
+      }),
+    );
+  });
+
+  it("ignores a payment the server rejected", () => {
+    // A conflicted row is not pending: the server saw it and refused it. Letting
+    // it reduce the balance keeps regenerating debt that was never owed.
+    seedCachedSummary("2026-07-25T12:00:00.000Z");
+    cacheState.instant.set("customers", [{ id: "customer_gops", name: "gops" }]);
+    cacheState.instant.set("customer_ledger", [
+      {
+        id: "ledger_rejected",
+        customerId: "customer_gops",
+        type: "PAYMENT",
+        amount: 120,
+        entry_at: "2026-07-25T18:00:00.000Z",
+        sync_status: "conflict",
+      },
+    ]);
+
+    expect(getLocalUdharSummary()).toEqual(
+      expect.objectContaining({
+        totalOutstanding: 300,
+        customers: [expect.objectContaining({ customerId: "customer_gops", outstanding: 300 })],
       }),
     );
   });

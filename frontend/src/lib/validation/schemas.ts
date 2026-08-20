@@ -225,6 +225,13 @@ export const billCreationSchema = z
     payments: z.array(billPaymentSchema).default([]),
   })
   .superRefine((bill, ctx) => {
+    if (bill.billType === "gst_invoice" && bill.gstMode === "none") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["gstMode"],
+        message: "GST invoice requires inclusive or exclusive GST mode",
+      });
+    }
     bill.items.forEach((item, index) => {
       if (item.lineDiscount > item.quantity * item.ratePerRateUnit) {
         ctx.addIssue({
