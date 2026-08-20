@@ -101,6 +101,25 @@ function buildPriceBelowMinimumAudit(product: Product, previous: Product | undef
   });
 }
 
+/**
+ * A product with stock cannot safely switch between pooled and per-pack tracking.
+ * The server enforces the same rule, but rejecting it here keeps an offline edit
+ * from being written locally and then appearing as an unresolvable sync conflict.
+ */
+function assertPackagingModeChangeIsSafe(existing: Product | undefined, next: ProductInput) {
+  if (!existing) return;
+  const currentMode = String(existing.packagingMode ?? "pooled").trim().toLowerCase();
+  const nextMode = String(next.packagingMode ?? currentMode).trim().toLowerCase();
+  const stockOnHand = Number(existing.stockBaseQty ?? 0);
+  if (currentMode === nextMode || !Number.isFinite(stockOnHand) || Math.abs(stockOnHand) < 0.000_001) return;
+
+  const error = new Error(
+    "Count this product's stock to zero before changing how it tracks pack-level inventory. Sync that stock correction, then change the packaging setup.",
+  ) as Error & { code?: string };
+  error.code = "PACKAGING_MODE_STOCK_MIGRATION_REQUIRED";
+  throw error;
+}
+
 async function commitProductWrite(input: {
   product: Product;
   auditLogs: AuditLogRow[];
@@ -427,6 +446,7 @@ export async function updateProductLocalFirst(id: string, data: ProductInput): P
   const validated = parseOrThrow(productCreationSchema, data) as unknown as ProductInput;
   await assertNoLocalProductNameConflict(validated.name, id);
   const existing = await offlineDB.getAll<Product>("products").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
+  assertPackagingModeChangeIsSafe(existing, validated);
   const product = touchLocalEntity(toProduct(validated, id, existing), "pending_sync");
   const auditLogs = [
     buildAuditLogRow({
@@ -686,6 +706,7 @@ export async function patchProductLocalFirst(id: string, data: Partial<ProductIn
   };
   const nextInput = { ...fallbackInput, ...data, ownerPin: ownerPin ?? data.ownerPin, ownerPinReason: reason ?? data.ownerPinReason };
   const validated = parseOrThrow(productCreationSchema, nextInput) as unknown as ProductInput;
+  assertPackagingModeChangeIsSafe(existing, validated);
   // Callers may provide approval as part of the patch (the product editor does)
   // or as the explicit third/fourth arguments (the inventory flow does). Always
   // use the validated values below: otherwise a valid approval in `data` is

@@ -219,6 +219,19 @@ export function classifySyncError(error) {
     };
   }
 
+  // A packaging conversion with stock on hand is a corrective workflow, not a
+  // competing device edit. Recording it as a conflict offered the owner a
+  // dangerous and ineffective "Keep local / Keep cloud" choice. It must be
+  // fixed by reconciling stock to zero first, then creating a fresh change.
+  if (explicitCode === 'PACKAGING_MODE_STOCK_MIGRATION_REQUIRED') {
+    return {
+      syncStatus: SYNC_EVENT_STATUSES.FAILED,
+      resultStatus: 'failed',
+      code: explicitCode,
+      retryable: false,
+    };
+  }
+
   // Every other 4xx is the server saying "this request is wrong and will stay
   // wrong" — retrying it unchanged can never succeed.
   //

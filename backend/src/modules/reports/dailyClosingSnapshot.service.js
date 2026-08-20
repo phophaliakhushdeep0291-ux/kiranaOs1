@@ -4,6 +4,19 @@ import { getDailyClosing } from "./reports.service.js";
 import { dateRangeForDateOnly } from "../../utils/dates.js";
 import { env } from "../../config/env.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
+
+async function writeRequiredDailyClosingAudit(entry, client) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Daily closing change was not saved because its audit record could not be stored",
+      503,
+      "DAILY_CLOSING_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
 
 function normalizeDateInput(date) {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
@@ -157,18 +170,47 @@ export async function generateDailyClosingSnapshot(shopId, date, options = {}) {
   const live = await getDailyClosing(shopId, { date: dateKey(day), locationId: location.id });
   const data = dailyClosingToSnapshotData(shopId, day, live, { ...options, storeId: location.id });
 
-  const snapshot = await db.dailyClosingSnapshot.upsert({
-    where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
-    create: data,
-    update: {
-      ...data,
-      // Preserve explicit locking metadata unless caller has a future override policy.
-      lockedAt: existing?.lockedAt ?? null,
-      lockedByUserId: existing?.lockedByUserId ?? null,
-    },
+  const outcome = await db.$transaction(async (tx) => {
+    const current = await tx.dailyClosingSnapshot.findUnique({
+      where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
+    });
+    if (current?.lockedAt && !options.allowLockedOverride) {
+      return { snapshot: current, created: false, skipped: true };
+    }
+
+    const snapshot = await tx.dailyClosingSnapshot.upsert({
+      where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
+      create: data,
+      update: {
+        ...data,
+        lockedAt: current?.lockedAt ?? null,
+        lockedByUserId: current?.lockedByUserId ?? null,
+      },
+    });
+    const action = options.auditAction
+      ?? (current ? "DAILY_CLOSING_SNAPSHOT_REFRESHED" : "DAILY_CLOSING_SNAPSHOT_CREATED");
+    await writeRequiredDailyClosingAudit({
+      shopId,
+      userId: options.userId ?? null,
+      action,
+      entityType: "DailyClosingSnapshot",
+      entityId: snapshot.id,
+      before: current ?? undefined,
+      after: snapshot,
+      metadata: {
+        date: dateKey(day),
+        storeId: location.id,
+        source: options.source ?? "manual",
+        reason: options.reason ? String(options.reason).slice(0, 500) : null,
+      },
+    }, tx);
+    return { snapshot, created: !current, skipped: false };
   });
 
-  return snapshotToDailyClosing(snapshot, { created: !existing, refreshed: Boolean(existing) });
+  if (outcome.skipped) {
+    return snapshotToDailyClosing(outcome.snapshot, { locked: true, skipped: true, reason: "SNAPSHOT_LOCKED" });
+  }
+  return snapshotToDailyClosing(outcome.snapshot, { created: outcome.created, refreshed: !outcome.created });
 }
 
 export async function refreshDailyClosingSnapshot(shopId, date, options = {}) {
@@ -190,12 +232,23 @@ export async function lockDailyClosingSnapshot(shopId, date, userId, requestedSt
     if (!snapshot) return generated;
   }
 
-  if (!snapshot.lockedAt) {
-    snapshot = await db.dailyClosingSnapshot.update({
+  snapshot = await db.$transaction(async (tx) => {
+    const current = await tx.dailyClosingSnapshot.findUnique({
+      where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
+    });
+    if (!current) throw new AppError("Daily closing snapshot not found", 404, "DAILY_CLOSING_SNAPSHOT_NOT_FOUND");
+    if (current.lockedAt) return current;
+    const locked = await tx.dailyClosingSnapshot.update({
       where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
       data: { lockedAt: new Date(), lockedByUserId: userId ?? null },
     });
-  }
+    await writeRequiredDailyClosingAudit({
+      shopId, userId, action: "DAILY_CLOSING_SNAPSHOT_LOCKED",
+      entityType: "DailyClosingSnapshot", entityId: locked.id,
+      before: current, after: locked, metadata: { date: dateKey(day), storeId: location.id },
+    }, tx);
+    return locked;
+  }, { isolationLevel: "Serializable" });
 
   return snapshotToDailyClosing(snapshot, { locked: true });
 }
@@ -215,6 +268,7 @@ export async function overrideRefreshDailyClosingSnapshot(shopId, date, options 
     ...options,
     source: options.source ?? "manual",
     allowLockedOverride: true,
+    auditAction: "DAILY_CLOSING_SNAPSHOT_OVERRIDE_REFRESHED",
     storeId: location.id,
   });
   return {
@@ -232,9 +286,22 @@ export async function overrideRefreshDailyClosingSnapshot(shopId, date, options 
 export async function unlockDailyClosingSnapshot(shopId, date, userId, requestedStoreId = null) {
   const day = normalizeDateInput(date);
   const location = await resolveOperationalLocation(shopId, requestedStoreId, db, { allowInactive: true });
-  const snapshot = await db.dailyClosingSnapshot.update({
-    where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
-    data: { lockedAt: null, lockedByUserId: null, generatedByUserId: userId ?? null },
+  const snapshot = await db.$transaction(async (tx) => {
+    const current = await tx.dailyClosingSnapshot.findUnique({
+      where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
+    });
+    if (!current) throw new AppError("Daily closing snapshot not found", 404, "DAILY_CLOSING_SNAPSHOT_NOT_FOUND");
+    if (!current.lockedAt) return current;
+    const unlocked = await tx.dailyClosingSnapshot.update({
+      where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
+      data: { lockedAt: null, lockedByUserId: null, generatedByUserId: userId ?? null },
+    });
+    await writeRequiredDailyClosingAudit({
+      shopId, userId, action: "DAILY_CLOSING_SNAPSHOT_UNLOCKED",
+      entityType: "DailyClosingSnapshot", entityId: unlocked.id,
+      before: current, after: unlocked, metadata: { date: dateKey(day), storeId: location.id },
+    }, tx);
+    return unlocked;
   });
   return snapshotToDailyClosing(snapshot, { locked: false });
 }

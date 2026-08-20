@@ -312,8 +312,12 @@ for (const snippet of ["accepted", "X-Hub-Signature-256", "X-Twilio-Signature", 
 }
 
 const notificationUi = read("../frontend/src/features/core/settings/pages/NotificationsSettingsPage.tsx");
-for (const snippet of ["/reminders/status", "/reminders/templates", "/reminders/logs?limit=20", "Actual Delivery History", "No local sample is being substituted", "Accepted", "Delivered", "Read", "verified provider callback"]) {
+for (const snippet of ["/reminders/status", "/reminders/templates", "/reminders/logs?limit=20", "settings.notify.historyTitle", "settings.notify.templatesFailed", "Accepted", "Delivered", "Read", "verified provider callback"]) {
   assert(notificationUi.includes(snippet), "notification UI missing real server flow: " + snippet);
+}
+const notificationCopy = read("../frontend/src/features/core/settings/translations/settings-pages.ts");
+for (const snippet of ["Actual Delivery History", "No local sample is being substituted"]) {
+  assert(notificationCopy.includes(snippet), "notification translation missing truthful delivery copy: " + snippet);
 }
 assert(!notificationUi.includes("const HISTORY"), "notification UI must never render fabricated delivery history");
 assert(!notificationUi.includes("Notification Channels"), "unimplemented SMS/email/push channels must not be presented as connected");

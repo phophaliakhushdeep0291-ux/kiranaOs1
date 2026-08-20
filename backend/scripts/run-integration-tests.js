@@ -10,13 +10,24 @@ import {
 } from "./test-db-utils.js";
 
 const integrationDir = path.join(process.cwd(), "tests", "integration");
-const files = fs.readdirSync(integrationDir)
+const requestedFiles = process.argv.slice(2)
+  .map((value) => path.normalize(value))
+  .filter(Boolean);
+const discoveredFiles = fs.readdirSync(integrationDir)
   .filter((name) => name.endsWith(".integration.test.js"))
   .sort()
   .map((name) => path.join("tests", "integration", name));
+const files = requestedFiles.length > 0
+  ? discoveredFiles.filter((file) => requestedFiles.some((requested) => (
+      path.normalize(file) === requested
+      || path.basename(file) === path.basename(requested)
+    )))
+  : discoveredFiles;
 
 if (!files.length) {
-  console.error("No integration test files found under tests/integration");
+  console.error(requestedFiles.length > 0
+    ? `No requested integration test files matched: ${requestedFiles.join(", ")}`
+    : "No integration test files found under tests/integration");
   process.exit(1);
 }
 

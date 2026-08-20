@@ -104,7 +104,7 @@ assert(snapshotService.includes("overrideRefreshDailyClosingSnapshot"), "Locked 
 assert(snapshotService.includes("SNAPSHOT_OVERRIDE_REASON_REQUIRED"), "Override must require reason");
 assert(reportRoutes.includes("/daily-closing/:date/override-refresh"), "Override refresh route must exist");
 assert(reportRoutes.includes("overrideDailyClosingSnapshotSchema"), "Override route must validate reason body");
-assert(reportController.includes("DAILY_CLOSING_SNAPSHOT_OVERRIDE_REFRESHED"), "Override refresh audit action must exist");
+assert(snapshotService.includes("DAILY_CLOSING_SNAPSHOT_OVERRIDE_REFRESHED"), "Override refresh audit action must exist in the transactional snapshot service");
 
 for (const snippet of [
   "ReportExportJob model must exist",

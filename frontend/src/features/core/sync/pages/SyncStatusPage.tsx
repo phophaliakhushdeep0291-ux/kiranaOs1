@@ -715,6 +715,14 @@ function allowsDirectConflictChoice(entityType: unknown) {
     .includes(String(entityType ?? "").toLowerCase());
 }
 
+// This is a product setup rule, not a competing edit from another device. The
+// record must be corrected and saved again; choosing a version cannot make the
+// blocked packaging conversion valid.
+function requiresPackagingMigration(conflict: ConflictRow) {
+  const message = String(conflict.error_message ?? "").toLowerCase();
+  return message.includes("count stock to zero") && message.includes("pack-level inventory");
+}
+
 async function applyResolvedConflictLocally(conflict: SyncConflictRecord) {
   if (!allowsDirectConflictChoice(conflict.entity_type) || !isRecord(conflict.merged_payload)) return;
   const table = tableNameForEntity(conflict.entity_type);
@@ -1354,7 +1362,7 @@ export default function SyncStatusPage() {
                         Open record
                       </a>
                     </Button>
-                    {allowsDirectConflictChoice(conflict.entity_type) ? <>
+                    {allowsDirectConflictChoice(conflict.entity_type) && !requiresPackagingMigration(conflict) ? <>
                       <Button size="sm" onClick={() => void handleMarkConflictResolved(conflict.id, "use_local")}>Keep local</Button>
                       <Button size="sm" variant="outline" onClick={() => void handleMarkConflictResolved(conflict.id, "use_server")}>Keep cloud</Button>
                     </> : <Badge variant="outline">Correction required</Badge>}

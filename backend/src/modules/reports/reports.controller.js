@@ -58,15 +58,6 @@ export async function createDailyClosingSnapshot(req, res, next) {
       userId: req.user?.userId ?? null,
       storeId: requestLocationId(req),
     });
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: data?.snapshot?.created ? "DAILY_CLOSING_SNAPSHOT_CREATED" : "DAILY_CLOSING_SNAPSHOT_REFRESHED",
-      entityType: "DailyClosingSnapshot",
-      entityId: data?.snapshot?.id ?? null,
-      metadata: { date: req.body.date, source: "manual", skipped: data?.snapshot?.skipped ?? false },
-      req,
-    });
     res.status(201).json({ success: true, data });
   }
   catch (err) { next(err); }
@@ -75,15 +66,6 @@ export async function createDailyClosingSnapshot(req, res, next) {
 export async function lockDailyClosingSnapshot(req, res, next) {
   try {
     const data = await snapshotSvc.lockDailyClosingSnapshot(req.shopId, req.params.date, req.user?.userId ?? null, requestLocationId(req));
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "DAILY_CLOSING_SNAPSHOT_LOCKED",
-      entityType: "DailyClosingSnapshot",
-      entityId: data?.snapshot?.id ?? null,
-      metadata: { date: req.params.date },
-      req,
-    });
     res.json({ success: true, data });
   }
   catch (err) { next(err); }
@@ -96,20 +78,6 @@ export async function overrideRefreshDailyClosingSnapshot(req, res, next) {
       reason: req.body.reason,
       source: "manual",
       storeId: requestLocationId(req),
-    });
-    await createAuditLog({
-      shopId: req.shopId,
-      userId: req.user?.userId,
-      action: "DAILY_CLOSING_SNAPSHOT_OVERRIDE_REFRESHED",
-      entityType: "DailyClosingSnapshot",
-      entityId: data?.snapshot?.id ?? null,
-      metadata: {
-        date: req.params.date,
-        reason: req.body.reason,
-        previousLockedAt: data?.snapshot?.previousLockedAt ?? null,
-        previousLockedByUserId: data?.snapshot?.previousLockedByUserId ?? null,
-      },
-      req,
     });
     res.json({ success: true, data });
   }

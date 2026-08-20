@@ -88,7 +88,7 @@ for (const action of [
   "DAILY_CLOSING_SNAPSHOT_REFRESHED",
   "DAILY_CLOSING_SNAPSHOT_LOCKED",
 ]) {
-  assert(reportController.includes(action), `Controller must audit ${action}`);
+  assert(snapshotService.includes(action), `Transactional snapshot service must audit ${action}`);
 }
 
 assert(reportsWorker.includes("dailyClosingSnapshot.service.js"), "Worker must use persisted snapshot service");

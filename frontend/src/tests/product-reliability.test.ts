@@ -196,6 +196,16 @@ describe("product reliability", () => {
     ]));
   });
 
+  it("blocks a pack-tracking conversion until the product has zero stock", async () => {
+    await expect(updateProductLocalFirst("product_sugar", {
+      ...baseProductInput,
+      packagingMode: "per_pack",
+    })).rejects.toMatchObject({ code: "PACKAGING_MODE_STOCK_MIGRATION_REQUIRED" });
+
+    expect(mockState.committed.sync_outbox).toHaveLength(0);
+    expect(mockState.committed.products).toHaveLength(0);
+  });
+
   it("keeps a 36-cell variant grid, per-pack stock, and pharmacy controls in the local record", async () => {
     const sellingUnits = Array.from({ length: 36 }, (_, index) => ({
       name: `Size ${index + 1}`,

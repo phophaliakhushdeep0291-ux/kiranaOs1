@@ -50,6 +50,13 @@ for (const status of [408, 425, 429]) {
 assert.equal(classifySyncError({ name: "ZodError", message: "bad shape" }).code, "INVALID_EVENT");
 assert.equal(classifySyncError({ statusCode: 403 }).code, "PERMISSION_DENIED");
 assert.equal(classifySyncError({ statusCode: 403 }).retryable, false);
+const packagingMigration = classifySyncError(new AppError(
+  "Count stock to zero before changing how this product tracks pack-level inventory.",
+  409,
+  "PACKAGING_MODE_STOCK_MIGRATION_REQUIRED",
+));
+assert.equal(packagingMigration.syncStatus, "failed", "a blocked packaging migration is not a competing device conflict");
+assert.equal(packagingMigration.retryable, false, "changing no data cannot make a packaging migration valid");
 // No status at all still means "unknown, worth a retry" — that is the only case
 // where assuming a server fault is the safe reading.
 assert.equal(classifySyncError(new Error("socket hang up")).retryable, true);
