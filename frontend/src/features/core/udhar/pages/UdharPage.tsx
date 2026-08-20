@@ -7,8 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { offlineDB } from "@/lib/offline/db";
 import { formatMoney, roundMoney } from "@/lib/money";
-import { getLocalUdharSummaryAsync } from "@/features/core/payments/local-actions";
-import { applyAuthoritativeUdharSummary, loadCustomersWithLedger, type CustomerWithLedger } from "@/features/core/customers/customer-ledger-data";
+import { getLocalUdharSummary, getLocalUdharSummaryAsync } from "@/features/core/payments/local-actions";
+import { applyAuthoritativeUdharSummary, loadCustomersWithLedger, readCachedCustomersWithLedger, type CustomerWithLedger } from "@/features/core/customers/customer-ledger-data";
 import { resolveAuthoritativeUdharSummary } from "@/features/core/ledger/authoritative-balances";
 import { dedupeLedgerEntries, getLedgerCustomerId, getLedgerDate, normaliseLedgerType, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 import { customerMatchesUdharSearch } from "../udhar-search";
@@ -23,14 +23,15 @@ function sameDay(a: Date, b: Date) { return a.getFullYear() === b.getFullYear() 
 function daysSince(value?: string) { if (!value) return null; return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000)); }
 
 async function loadUdharHome(): Promise<UdharHomeData> {
-  const [localCustomers, localSummary, resolved, ledger] = await Promise.all([
+  // This is deliberately local-only. Waiting for `/udhar/summary` here made the
+  // entire page wait on slow/mobile networks even though every row already
+  // exists in IndexedDB. The authoritative refresh runs independently below.
+  const [localCustomers, localSummary, ledger] = await Promise.all([
     loadCustomersWithLedger(),
     getLocalUdharSummaryAsync(),
-    resolveAuthoritativeUdharSummary().catch(() => null),
     offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []),
   ]);
-  const summary = resolved?.summary ?? localSummary;
-  const customers = applyAuthoritativeUdharSummary(localCustomers, summary).filter((customer) => customer.ledgerBalance > 0);
+  const customers = applyAuthoritativeUdharSummary(localCustomers, localSummary).filter((customer) => customer.ledgerBalance > 0);
   const lastPaymentByCustomer = new Map<string, string>();
   let todayCollected = 0;
   const now = new Date();
@@ -45,18 +46,57 @@ async function loadUdharHome(): Promise<UdharHomeData> {
   return { customers, todayCollected, lastPaymentByCustomer };
 }
 
+function readInstantUdharHome(): UdharHomeData {
+  const customers = applyAuthoritativeUdharSummary(
+    readCachedCustomersWithLedger(),
+    getLocalUdharSummary(),
+  ).filter((customer) => customer.ledgerBalance > 0);
+  return { customers, todayCollected: 0, lastPaymentByCustomer: new Map() };
+}
+
 export default function UdharPage() {
   const queryClient = useQueryClient();
   const { shop } = useAuth();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortMode>("amount");
-  const query = useQuery({ queryKey: ["udhar-home"], queryFn: loadUdharHome, staleTime: 1_500 });
+  const query = useQuery({
+    queryKey: ["udhar-home"],
+    queryFn: loadUdharHome,
+    placeholderData: readInstantUdharHome,
+    staleTime: 1_500,
+  });
+  const authoritativeQuery = useQuery({
+    queryKey: ["customers-authoritative-summary-refresh"],
+    queryFn: resolveAuthoritativeUdharSummary,
+    staleTime: 10_000,
+  });
+
   useEffect(() => {
-    const refresh = () => void queryClient.invalidateQueries({ queryKey: ["udhar-home"] });
-    window.addEventListener("kirana:local-data-changed", refresh);
-    window.addEventListener("kirana:sync-queue-updated", refresh);
-    return () => { window.removeEventListener("kirana:local-data-changed", refresh); window.removeEventListener("kirana:sync-queue-updated", refresh); };
+    const summary = authoritativeQuery.data?.summary;
+    if (!summary) return;
+    // Reconcile server truth after local rows are already visible. Pending local
+    // payments remain device-authoritative inside this helper, so a response
+    // captured just before the payment cannot flash the old/zero balance.
+    queryClient.setQueryData<UdharHomeData>(["udhar-home"], (current) => current ? {
+      ...current,
+      customers: applyAuthoritativeUdharSummary(current.customers, summary)
+        .filter((customer) => customer.ledgerBalance > 0),
+    } : current);
+  }, [authoritativeQuery.data, queryClient]);
+
+  useEffect(() => {
+    const refreshLocal = () => void queryClient.invalidateQueries({ queryKey: ["udhar-home"] });
+    const refreshAfterSync = () => {
+      void queryClient.invalidateQueries({ queryKey: ["udhar-home"] });
+      void queryClient.invalidateQueries({ queryKey: ["customers-authoritative-summary-refresh"] });
+    };
+    window.addEventListener("kirana:local-data-changed", refreshLocal);
+    window.addEventListener("kirana:sync-queue-updated", refreshAfterSync);
+    return () => {
+      window.removeEventListener("kirana:local-data-changed", refreshLocal);
+      window.removeEventListener("kirana:sync-queue-updated", refreshAfterSync);
+    };
   }, [queryClient]);
 
   const rows = useMemo(() => (query.data?.customers ?? []).filter((customer) => customerMatchesUdharSearch(customer, search)).sort((a, b) => {
@@ -76,8 +116,8 @@ export default function UdharPage() {
       <header className="rounded-2xl bg-[#0f3f8f] p-4 text-white shadow-lg sm:p-5">
         <p className="text-sm font-bold text-blue-100">उधार खाता</p><h1 className="mt-1 text-2xl font-black">किससे कितना लेना है</h1>
         <div className="mt-4 grid grid-cols-1 gap-2 min-[390px]:grid-cols-3">
-          <Metric icon={<WalletCards size={20} />} label="कुल बाकी" value={formatMoney(total)} />
-          <Metric icon={<Users size={20} />} label="ग्राहक" value={String(query.data?.customers.length ?? 0)} />
+          <Metric icon={<WalletCards size={20} />} label="कुल बाकी" value={query.isPlaceholderData && !query.data?.customers.length ? "…" : formatMoney(total)} />
+          <Metric icon={<Users size={20} />} label="ग्राहक" value={query.isPlaceholderData && !query.data?.customers.length ? "…" : String(query.data?.customers.length ?? 0)} />
           <Metric icon={<ArrowRight size={20} />} label="आज आया" value={formatMoney(query.data?.todayCollected ?? 0)} />
         </div>
       </header>
@@ -90,7 +130,7 @@ export default function UdharPage() {
           <Link href={`/customers/${encodeURIComponent(customer.id)}`} className="min-w-0 rounded-xl py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"><p className="truncate text-base font-black text-slate-900">{customer.name}</p><p className="mt-1 flex items-center gap-1 text-sm text-slate-500"><Clock3 size={14} />{age === null ? "अब तक भुगतान नहीं" : age === 0 ? "आज भुगतान" : `${age} दिन पहले भुगतान`}</p><p className="mt-1 text-xl font-black text-rose-600">{formatMoney(customer.ledgerBalance)}</p></Link>
           <Button type="button" size="icon" className="h-12 w-12 shrink-0 rounded-xl bg-[#16a34a] hover:bg-[#15803d]" aria-label={`${customer.name} को ${formatMoney(customer.ledgerBalance)} का WhatsApp रिमाइंडर`} onClick={() => remind(customer)}><MessageCircle size={21} /></Button>
         </article>; })}
-        {!query.isLoading && rows.length === 0 ? <div className="rounded-2xl border border-dashed p-10 text-center text-slate-500">कोई बाकी उधार नहीं मिला।</div> : null}
+        {!query.isPending && !query.isPlaceholderData && rows.length === 0 ? <div className="rounded-2xl border border-dashed p-10 text-center text-slate-500">कोई बाकी उधार नहीं मिला।</div> : null}
       </section>
     </main>
   );

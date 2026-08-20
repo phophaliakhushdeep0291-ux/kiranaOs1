@@ -1,6 +1,5 @@
 import { Router } from "express";
 import * as ctrl from "./public.controller.js";
-import { resolveTerminal } from "../../verticals/restaurant/service-ops/kiosk.service.js";
 
 // Public, unauthenticated routes for the QR customer self-order flow. No requireAuth /
 // requireShop / requireDeviceActivated here on purpose — these are read-only, storefront-safe,
@@ -11,11 +10,7 @@ router.get("/shops/:shopId/catalog", ctrl.catalog);
 // A self-order screen waking up asks whether it is still a live terminal. No
 // session exists behind a kiosk, so this sits with the other storefront reads;
 // a retired or unknown code is a flat 404 and reveals nothing else.
-router.get("/shops/:shopId/kiosk/:terminalCode", (req, res, next) => {
-  resolveTerminal(req.params.shopId, req.params.terminalCode)
-    .then((data) => res.json({ success: true, data }))
-    .catch(next);
-});
+router.get("/shops/:shopId/kiosk/:terminalCode", ctrl.kioskTerminal);
 // Customer submits an order from their phone; it lands in the owner's Orders Received inbox.
 router.post("/shops/:shopId/orders", ctrl.submitOrder);
 // Customer tracks their own order by its unguessable id (received → preparing → ready / declined).

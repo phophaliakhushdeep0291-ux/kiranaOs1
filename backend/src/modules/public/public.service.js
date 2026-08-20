@@ -3,7 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { listProducts } from "../products/products.service.js";
 import { priceCatalogProducts } from "../pricing/pricing.service.js";
 import { unavailableProductIds } from "../../shared/catalog-availability.js";
-import { prepareStorefrontOrderLines, resolveStorefrontOrderContext, shapeStorefrontCatalog } from "../../shared/storefront-modes.js";
+import { prepareStorefrontOrderLines, resolveStorefrontOrderContext, resolveStorefrontTerminal, shapeStorefrontCatalog } from "../../shared/storefront-modes.js";
 import { parseShopSettings } from "../shops/businessProfiles.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -28,6 +28,15 @@ export function isCustomerOrderingEnabled(settingsJson) {
   } catch {
     return false;
   }
+}
+
+export async function getPublicTerminal(shopId, terminalCode) {
+  const terminal = await resolveStorefrontTerminal({
+    shopId: String(shopId ?? "").trim(),
+    terminalCode: String(terminalCode ?? "").trim(),
+  });
+  if (!terminal) throw new AppError("Terminal not found", 404, "KIOSK_TERMINAL_NOT_FOUND");
+  return terminal;
 }
 
 export function toCustomerSafeProduct(p) {

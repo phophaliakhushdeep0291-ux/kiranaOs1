@@ -60,6 +60,7 @@ import {
   readCachedCustomersWithLedger,
   formatShortDate,
   toLedgerDriftCandidates,
+  type CustomerDetailData,
   type CustomerWithLedger,
 } from "@/features/core/customers/customer-ledger-data";
 import { loadCachedAuthoritativeSummary, resolveAuthoritativeUdharSummary } from "@/features/core/ledger/authoritative-balances";
@@ -75,7 +76,6 @@ import {
   formatMoney as formatRupees,
   moneyExceeds,
   roundMoney,
-  subtractMoney,
 } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { validateGstin } from "@/lib/gstin";
@@ -784,22 +784,36 @@ export default function CustomersPage() {
     try {
       // Validate against the balance the operator can see (the authoritative
       // summary this page overlays), not the device ledger — it can be drifted.
+      let nextOutstanding = outstanding;
       if (paymentForm.mode === "split") {
         const baseNote = paymentForm.note.trim();
-        if (cashAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: cashAmount, mode: "cash", note: baseNote ? `${baseNote} (split cash)` : t("customers.detail.splitCash") }, { expectedOutstanding: outstanding });
-        if (upiAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: upiAmount, mode: "upi", note: baseNote ? `${baseNote} (split UPI)` : t("customers.detail.splitUpi") }, { expectedOutstanding: Math.max(0, subtractMoney(outstanding, cashAmount)) });
+        if (cashAmount > 0) {
+          const result = await recordPaymentLocalFirst(paymentForm.customerId, { amount: cashAmount, mode: "cash", note: baseNote ? `${baseNote} (split cash)` : t("customers.detail.splitCash") }, { expectedOutstanding: outstanding });
+          nextOutstanding = result.nextBalance;
+        }
+        if (upiAmount > 0) {
+          const result = await recordPaymentLocalFirst(paymentForm.customerId, { amount: upiAmount, mode: "upi", note: baseNote ? `${baseNote} (split UPI)` : t("customers.detail.splitUpi") }, { expectedOutstanding: nextOutstanding });
+          nextOutstanding = result.nextBalance;
+        }
       } else {
-        await recordPaymentLocalFirst(paymentForm.customerId, { amount, mode: paymentForm.mode, note: paymentForm.note.trim() || undefined }, { expectedOutstanding: outstanding });
+        const result = await recordPaymentLocalFirst(paymentForm.customerId, { amount, mode: paymentForm.mode, note: paymentForm.note.trim() || undefined }, { expectedOutstanding: outstanding });
+        nextOutstanding = result.nextBalance;
       }
-      toast({ title: t("customers.toast.paymentRecorded"), description: t("customers.ledger.updatedLocally") });
-      setPaymentOpen(false);
-      await refetch();
-      const nextOutstanding = Math.max(0, subtractMoney(outstanding, amount));
+      // Paint the durable local result immediately. Network refreshes below are
+      // reconciliation work and must never gate what the cashier sees.
       queryClient.setQueryData<CustomerWithLedger[]>(["customers-ledger-list"], (current) =>
         projectCustomerOutstanding(current ?? [], paymentForm.customerId, nextOutstanding),
       );
-      await overviewQuery.refetch();
-      await selectedDetail.refetch();
+      queryClient.setQueryData<CustomerDetailData | null>(["customer-detail", paymentForm.customerId], (current) => {
+        if (!current) return current;
+        const projected = projectCustomerOutstanding([current.customer], paymentForm.customerId, nextOutstanding)[0];
+        return projected ? { ...current, customer: projected } : current;
+      });
+      toast({ title: t("customers.toast.paymentRecorded"), description: t("customers.ledger.updatedLocally") });
+      setPaymentOpen(false);
+      void refetch();
+      void overviewQuery.refetch();
+      void selectedDetail.refetch();
       // Replace the optimistic projection with a fresh server-ledger summary.
       // Do not await this network refresh: payment acknowledgement and the
       // correct local balance are already durable and visible.

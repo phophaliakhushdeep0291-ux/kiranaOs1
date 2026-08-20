@@ -16,6 +16,15 @@ export async function catalog(req, res, next) {
   }
 }
 
+export async function kioskTerminal(req, res, next) {
+  try {
+    const data = await svc.getPublicTerminal(req.params.shopId, req.params.terminalCode);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function submitOrder(req, res, next) {
   try {
     const data = await svc.createPublicOrder(req.params.shopId, req.body, {

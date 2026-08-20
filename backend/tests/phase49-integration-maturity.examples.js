@@ -43,6 +43,7 @@ assert.equal(createApiKeySchema.safeParse({ name: "Expired", scopes: ["catalog:r
 const service = read("src/modules/integrations/integrations.service.js");
 const routes = read("src/modules/integrations/integrations.routes.js");
 const frontend = read("../frontend/src/features/core/settings/pages/IntegrationsSettingsPage.tsx");
+const settingsTranslations = read("../frontend/src/features/core/settings/translations/settings-pages.ts");
 const sqliteSchema = read("prisma/schema.prisma");
 const postgresSchema = read("prisma-postgres/schema.prisma");
 const metrics = read("src/lib/metrics.js");
@@ -65,8 +66,11 @@ assert.match(routes, /requireFeature\("api_webhook_later"\)/, "integration mutat
 assert.match(routes, /requireOwnerPin, validate\(createApiKeySchema\)/, "credential creation requires owner intent");
 assert.match(routes, /requireOwnerPin, validate\(createWebhookSchema\)/, "endpoint creation requires owner intent");
 assert.doesNotMatch(frontend, /crypto\.randomUUID|useSettingsPrefs|apiKey:\s*saved/, "frontend must not mint or persist integration secrets");
-assert.match(frontend, /shown only|shown once|cannot be viewed again/i, "one-time secret disclosure must be explicit");
-assert.match(frontend, /Automatic expiry/, "API key creation must default to a bounded credential lifetime");
+assert.match(frontend, /setSecret\s*\(/, "created credentials must be routed into the one-time secret dialog");
+assert.match(frontend, /settings\.integrations\.(copyKeyNow|verifySignature)/, "the secret dialog must use explicit disclosure copy");
+assert.match(settingsTranslations, /shown only|shown once|cannot be viewed again/i, "one-time secret disclosure must be explicit in translated UI copy");
+assert.match(frontend, /settings\.integrations\.autoExpiry/, "API key creation must render the bounded-lifetime explanation");
+assert.match(settingsTranslations, /Automatic expiry/, "API key creation must explain automatic expiry in translated UI copy");
 assert.match(frontend, /QueryFailure/, "integration query failures must not masquerade as empty data");
 assert.match(frontend, /useInfiniteQuery/, "delivery history must expose pagination instead of silently truncating activity");
 assert.match(frontend, /upgrade_required/, "provider readiness must explain plan-locked capabilities");

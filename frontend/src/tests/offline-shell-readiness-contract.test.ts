@@ -9,12 +9,19 @@ describe("offline shell and readiness contract", () => {
     for (const route of [
       "DashboardPage.tsx",
       "BillingPage.tsx",
+      "BillDetailPage.tsx",
       "ProductsPage.tsx",
       "CustomersPage.tsx",
+      "CustomerDetailPage.tsx",
       "InventoryPage.tsx",
+      "StockCountsPage.tsx",
       "BillsPage.tsx",
       "PurchaseBillsPage.tsx",
+      "SuppliersPage.tsx",
+      "ExpensesPage.tsx",
       "ReportsPage.tsx",
+      "DailyClosingPage.tsx",
+      "SettingsPage.tsx",
       "SyncStatusPage.tsx",
       "RecoveryModePage.tsx",
     ]) expect(vite).toContain(route);
@@ -26,6 +33,8 @@ describe("offline shell and readiness contract", () => {
     expect(readiness).toContain('["/index.html", "/manifest.webmanifest", "/offline.html"]');
     expect(readiness).toContain("const hasScript");
     expect(readiness).toContain("const hasStyles");
+    expect(readiness).toContain("hasVerifiedCore");
+    expect(readiness).toContain("/__offline/core/");
   });
 
   it("includes licence and current-device validity in the readiness decision", () => {

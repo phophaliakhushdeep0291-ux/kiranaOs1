@@ -47,7 +47,7 @@ export function SyncAlertBanner() {
 
   const isFailing = counts.failedOrConflict > 0;
   const headline = isFailing
-    ? `${counts.failedOrConflict} change${counts.failedOrConflict === 1 ? "" : "s"} couldn't back up`
+    ? `${counts.failedOrConflict} change${counts.failedOrConflict === 1 ? "" : "s"} needs review`
     : `${counts.pending} change${counts.pending === 1 ? "" : "s"} waiting to back up`;
   const sub = isFailing
     ? "Your data is safe on this device. Retry, or open Sync Status to review."
