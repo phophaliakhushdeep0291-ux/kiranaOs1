@@ -12,7 +12,7 @@ import {
   variantCellName,
   variantCellsToSellingUnits,
 } from "@/features/core/products/pages/variant-grid";
-import { formToInput, productToForm } from "@/features/core/products/pages/product-form-state";
+import { formToInput, productFormSchema, productToForm } from "@/features/core/products/pages/product-form-state";
 import type { Product, ProductSellingUnit } from "@/types/api";
 
 /**
@@ -264,6 +264,118 @@ describe("the grid as selling units", () => {
     const empty = buildVariantCells([{ name: "Size", values: ["S", "M"] }], [], { price: 100 });
     const units = variantCellsToSellingUnits(empty, { unitType: "piece" });
     expect(units.filter((u) => u.isDefault)).toHaveLength(1);
+  });
+});
+
+describe("each size keeps its own cost, MRP and reorder level", () => {
+  /**
+   * A size is not just a price and a count. XXL costs more to buy, a shade that
+   * is being cleared sells under its own MRP, and a size that turns over fast
+   * runs out at a different number from the rest.
+   *
+   * This used to be impossible to say. `variantCellsToSellingUnits` read cost,
+   * MRP and minimum price off one shared `base` and hardcoded
+   * `lowStockThreshold: null`, while `buildVariantCells` never read any of them
+   * back — so every trip through the editor gave all sizes one set of numbers
+   * and wrote null over whatever each had been saved with.
+   */
+  const priced = unit({
+    id: "u-m", unitCode: "m-blue", variantValue1: "M", variantValue2: "Blue",
+    defaultPrice: 350, costPrice: 210, maximumPrice: 499, minimumPrice: 300,
+    onHandQty: 7, lowStockThreshold: 2, reorderLevel: 5,
+  });
+  const axes = [{ name: "Size", values: ["S", "M"] }, { name: "Colour", values: ["Blue"] }];
+
+  it("reads a saved size's own numbers back into its cell", () => {
+    const cells = buildVariantCells(axes, [priced], { price: 350 });
+    const m = cells.find((cell) => cell.value1 === "M");
+    expect(m).toMatchObject({ costPrice: 210, mrp: 499, minimumPrice: 300, lowStockThreshold: 2, reorderLevel: 5 });
+  });
+
+  it("survives a full round trip instead of coming back null", () => {
+    // The regression itself: open a saved garment, change nothing, save.
+    const reSaved = variantCellsToSellingUnits(buildVariantCells(axes, [priced], { price: 350 }), { unitType: "piece" });
+    const m = reSaved.find((row) => row.variantValue1 === "M");
+    expect(m).toMatchObject({ costPrice: 210, maximumPrice: 499, minimumPrice: 300, lowStockThreshold: 2, reorderLevel: 5 });
+  });
+
+  it("lets two sizes hold different numbers at once", () => {
+    const cells = buildVariantCells(axes, [priced], { price: 350 });
+    const edited = cells.map((cell) => (cell.value1 === "S" ? { ...cell, costPrice: 180, mrp: 420, lowStockThreshold: 9 } : cell));
+    const rows = variantCellsToSellingUnits(edited, { unitType: "piece" });
+    expect(rows.find((r) => r.variantValue1 === "S")).toMatchObject({ costPrice: 180, maximumPrice: 420, lowStockThreshold: 9 });
+    expect(rows.find((r) => r.variantValue1 === "M")).toMatchObject({ costPrice: 210, maximumPrice: 499, lowStockThreshold: 2 });
+  });
+
+  it("falls back to the product's value only where a size has none", () => {
+    // Blank in the grid means "same as the product", which is what a shop means
+    // when only one size is unusual. It must not overwrite a size that spoke.
+    const cells = buildVariantCells(axes, [priced], { price: 350 });
+    const rows = variantCellsToSellingUnits(cells, { unitType: "piece", costPrice: 200, mrp: 450, minimumPrice: 280 });
+    expect(rows.find((r) => r.variantValue1 === "S")).toMatchObject({ costPrice: 200, maximumPrice: 450, minimumPrice: 280 });
+    expect(rows.find((r) => r.variantValue1 === "M")).toMatchObject({ costPrice: 210, maximumPrice: 499, minimumPrice: 300 });
+  });
+
+  it("keeps a deliberate zero rather than reading it as unset", () => {
+    // A sample priced at zero and a reorder level of none are real answers, and
+    // `Number(x) || null` would quietly turn both back into the product's value.
+    const free = unit({ id: "u-f", unitCode: "s-blue", variantValue1: "S", variantValue2: "Blue", costPrice: 0, reorderLevel: 0 });
+    const cells = buildVariantCells(axes, [free], { price: 350 });
+    const s = cells.find((cell) => cell.value1 === "S");
+    expect(s).toMatchObject({ costPrice: 0, reorderLevel: 0 });
+    const rows = variantCellsToSellingUnits(cells, { unitType: "piece", costPrice: 999 });
+    expect(rows.find((r) => r.variantValue1 === "S")?.costPrice).toBe(0);
+  });
+});
+
+describe("a per-row reorder level reaches the server", () => {
+  /**
+   * `sellingUnitFormSchema` is a plain `z.object`, so it STRIPS every key it
+   * does not name. `reorderLevel` was not named, which meant a number typed
+   * against a pack or a size was parsed away between the form and `formToInput`
+   * — present in the UI, in the row object, and nowhere in the payload.
+   *
+   * This is the same trap that once cost `drugSchedule` its prescription check,
+   * and it is invisible from the screen: nothing errors, the value simply never
+   * arrives. Asserting on the parse is the only place it shows.
+   */
+  it("survives the schema parse instead of being stripped", () => {
+    const parsed = productFormSchema.parse({
+      ...productToForm(),
+      name: "Almond Drop",
+      category: "grocery",
+      unit: "piece",
+      packSizeValue: 100,
+      packSizeUnit: "ml",
+      sellingPrice: 70,
+      sellingUnits: [{
+        name: "piece 200 ml", unitType: "piece", unitCode: "piece-200-ml",
+        conversionToBase: 200, defaultPrice: 124, costPrice: 96,
+        minimumPrice: 110, maximumPrice: 138, onHandQty: 20,
+        lowStockThreshold: 4, reorderLevel: 8, isDefault: false, isActive: true,
+      }],
+    });
+    expect(parsed.sellingUnits[0]).toMatchObject({ reorderLevel: 8, costPrice: 96, minimumPrice: 110 });
+  });
+
+  it("carries a pack's own cost, floor and reorder level into the payload", () => {
+    const almond: Product = {
+      id: "p_3",
+      name: "Almond Drop",
+      defaultPricePerRateUnit: 70,
+      packagingMode: "per_pack",
+      sellingUnits: [
+        unit({ unitCode: "piece-100-ml", name: "piece 100 ml", variantValue1: null, variantValue2: null, isDefault: true, onHandQty: 144 }),
+        unit({
+          unitCode: "piece-200-ml", name: "piece 200 ml", variantValue1: null, variantValue2: null, isDefault: false,
+          defaultPrice: 124, costPrice: 96, minimumPrice: 110, maximumPrice: 138, onHandQty: 20, reorderLevel: 8,
+        }),
+      ],
+    };
+    const pack = formToInput(productToForm(almond)).sellingUnits?.find((row) => row.unitCode === "piece-200-ml");
+    // The screenshot that started this: a 200 ml pack saved with costPrice null,
+    // so its margin was measured against the 100 ml pack's cost or nothing at all.
+    expect(pack).toMatchObject({ costPrice: 96, minimumPrice: 110, maximumPrice: 138, reorderLevel: 8 });
   });
 });
 

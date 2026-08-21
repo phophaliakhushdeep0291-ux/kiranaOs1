@@ -14,11 +14,14 @@
  * fails if a listed file no longer exists, is already clean, or has dropped below its
  * recorded count — so the list cannot rot, be padded, or drift out of date.
  *
- * Counted at 2938 strings across 105 files, re-measured when this branch merged main —
- * the same rebuild the previous merge needed, and for the same reason: both sides were
- * translating at once, so neither side's numbers described the merged tree. Main's last
- * measurement was 3160 across 112; the assurance screens translated on this branch
- * account for the drop, and seven files came off the list entirely.
+ * Counted at 2923 strings across 103 files. The last full re-measure was 2938 across
+ * 105, taken when this branch merged main — the same rebuild the previous merge needed,
+ * and for the same reason: both sides were translating at once, so neither side's
+ * numbers described the merged tree. Main's last measurement was 3160 across 112; the
+ * assurance screens translated on this branch account for the drop, and seven files
+ * came off the list entirely. Two more left it without being translated at all:
+ * ProductPricingForm and ProductStockForm were dead duplicates of the live
+ * ProductFormPanel, imported by nothing, so they were deleted instead.
  */
 export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "app/providers.tsx": 3,
@@ -75,8 +78,6 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/products/pages/components/ImportProductsDialog.tsx": 24,
   "features/core/products/pages/components/ProductAliasSuggestions.tsx": 6,
   "features/core/products/pages/components/ProductFormPanel.tsx": 23,
-  "features/core/products/pages/components/ProductPricingForm.tsx": 11,
-  "features/core/products/pages/components/ProductStockForm.tsx": 4,
   "features/core/products/pages/components/VariantGridEditor.tsx": 10,
   "features/core/purchases/components/PurchaseOrdersPanel.tsx": 172,
   "features/core/purchases/pages/PurchaseBillsPage.tsx": 205,

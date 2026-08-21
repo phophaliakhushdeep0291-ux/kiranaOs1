@@ -33,6 +33,24 @@ export interface VariantCell {
   price: number;
   /** This cell's own stock. A variant grid always counts per row. */
   qty: number;
+  /**
+   * This size's own money and reorder settings.
+   *
+   * These used to live only on the parent product, which meant every size
+   * shared one MRP and one cost — and, because the editor had nowhere to read
+   * them back from, an edit wrote null over whatever a size had been saved
+   * with. A size that costs more to buy (XXL fabric) or sells under a
+   * different MRP is ordinary, so each cell carries its own.
+   *
+   * Null means "nothing set for this size". A new cell starts null and simply
+   * follows the product when saved, so a shop that prices every size alike
+   * never types anything here; filling one in is how a single odd size opts out.
+   */
+  mrp: number | null;
+  costPrice: number | null;
+  minimumPrice: number | null;
+  lowStockThreshold: number | null;
+  reorderLevel: number | null;
   barcode: string | null;
   isActive: boolean;
 }
@@ -119,6 +137,19 @@ function matchKey(value1: string, value2?: string | null) {
 }
 
 /**
+ * What this size was actually saved with, or null for "never set".
+ *
+ * Kept explicit rather than `Number(x) || null` because a stored 0 is a real
+ * answer — a sample priced zero, a reorder level of none — and truthiness
+ * would quietly turn it back into "inherit from the product".
+ */
+function savedNumber(saved: number | null | undefined): number | null {
+  if (saved === null || saved === undefined) return null;
+  const value = Number(saved);
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
  * The grid the axes describe, carrying across whatever the existing rows hold.
  *
  * This is the whole point of the module. A shop that adds "XL" to a shirt in
@@ -147,6 +178,13 @@ export function buildVariantCells(
       name: variantCellName(value1, value2),
       price: previous ? Number(previous.defaultPrice) || 0 : Number(fallback.price) || 0,
       qty: previous ? Number(previous.onHandQty ?? 0) : 0,
+      // Reading these back is the whole point: without it every trip through
+      // the editor rewrote a saved size's cost, MRP and reorder level as null.
+      mrp: savedNumber(previous?.maximumPrice),
+      costPrice: savedNumber(previous?.costPrice),
+      minimumPrice: savedNumber(previous?.minimumPrice),
+      lowStockThreshold: savedNumber(previous?.lowStockThreshold),
+      reorderLevel: savedNumber(previous?.reorderLevel),
       // A barcode is unique to one physical SKU, so a new cell never inherits
       // the product's — two sizes sharing a barcode would scan as each other.
       barcode: previous?.barcode ?? null,
@@ -203,13 +241,22 @@ export function variantCellsToSellingUnits(
     conversionToBase: 1,
     barcode: cell.barcode?.trim() || null,
     defaultPrice: Number(cell.price) || 0,
-    minimumPrice: base.minimumPrice ?? null,
-    maximumPrice: base.mrp ?? null,
-    costPrice: base.costPrice ?? null,
+    // Each size carries its own. Taking these from a shared `base` was what
+    // gave every size one MRP and one cost price, and wrote null over both
+    // whenever the caller had nothing to pass — which the product form never did.
+    minimumPrice: cell.minimumPrice ?? base.minimumPrice ?? null,
+    maximumPrice: cell.mrp ?? base.mrp ?? null,
+    costPrice: cell.costPrice ?? base.costPrice ?? null,
     // A variant grid always counts per row — that is what makes "which size is
     // out?" answerable, and the server forces per_pack for exactly this reason.
     onHandQty: Number(cell.qty) || 0,
-    lowStockThreshold: null,
+    // Deliberately no fall back to the product for these two, unlike cost and
+    // MRP above. A rate is per piece and means the same on every size, but the
+    // product's low-stock number is a count for the whole garment — pushing 10
+    // down would arm a separate alert at 10 on each of six sizes. Blank here
+    // means this size raises no alert of its own, which is what it meant before.
+    lowStockThreshold: cell.lowStockThreshold ?? null,
+    reorderLevel: cell.reorderLevel ?? null,
     variantValue1: cell.value1,
     variantValue2: cell.value2,
     isDefault: index === defaultIndex,

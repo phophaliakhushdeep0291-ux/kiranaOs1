@@ -25,6 +25,10 @@ const sellingUnitFormSchema = z.object({
   // products leave them null and keep using the single shared stock number.
   onHandQty: z.number().nullable().optional(),
   lowStockThreshold: z.number().nullable().optional(),
+  // Named here for the same reason the variant values below are: this schema
+  // STRIPS anything it does not list, so a reorder level typed against a pack or
+  // a size would be silently dropped between the form and the server.
+  reorderLevel: z.number().nullable().optional(),
   // Where this row sits on the product's variant axes. Carried through the form
   // explicitly: anything not named here is dropped on save, which would strip
   // every size and colour off a garment the moment it was edited.
@@ -361,6 +365,7 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
       ? {
           onHandQty: Number(values.stockQuantity) || 0,
           lowStockThreshold: Number(values.lowStockAlert) || null,
+          reorderLevel: Number(values.reorderLevel) || null,
         }
       : {}),
     isDefault: true,
