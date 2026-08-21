@@ -80,6 +80,10 @@ const CELL: Partial<Record<ProductImportField, (item: StarterCatalogItem) => str
   packSizeUnit: (item) => item.packSizeUnit,
   isLooseItem: (item) => (item.isLooseItem ? "yes" : "no"),
   isActive: (item) => (item.isActive ? "yes" : "no"),
+  // Deliberately blank: a ready-made list carries one pack per item. Which OTHER sizes
+  // a shop sells is a per-shop fact — guessing that every kirana also stocks the 5 kg
+  // bag would put a price on the shelf that nobody chose.
+  sellingUnits: () => "",
 };
 
 /**
