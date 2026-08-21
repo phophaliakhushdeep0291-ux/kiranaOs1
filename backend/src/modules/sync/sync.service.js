@@ -353,7 +353,16 @@ async function applyMutableConflictChoice(shopId, conflict, resolution, mergedPa
     : resolution === "use_local"
       ? conflictEntitySnapshot(local, entityType)
       : conflictEntitySnapshot(server, entityType);
-  if (!selected || typeof selected !== "object" || Array.isArray(selected) || Object.keys(selected).length === 0) {
+  const hasSelection = selected && typeof selected === "object" && !Array.isArray(selected)
+    && Object.keys(selected).length > 0;
+  if (!hasSelection) {
+    // "Keep cloud" means leave the server record exactly as it stands, so there is
+    // nothing to write and nothing that needs writing. A refusal answers with a
+    // message rather than a record (PACKAGING_UNIT_HAS_STOCK, for one), so those
+    // conflicts are stored with no server snapshot — and used to dead-end here with
+    // "the selected version is incomplete", leaving the shop a review it could never
+    // clear. Only use_local and manual_merge genuinely need a payload to apply.
+    if (resolution === "use_server") return null;
     throw new AppError("The selected conflict version is unavailable", 409, "SYNC_CONFLICT_SNAPSHOT_MISSING");
   }
 
@@ -541,9 +550,14 @@ export async function resolveSyncConflict(shopId, input, actor = {}) {
       selectedPayload = await applyMutableConflictChoice(shopId, existing, resolution, input.merged_payload);
     }
   } catch (error) {
+    // Undo the whole claim, version included. Reopening while leaving the version
+    // incremented burned a number the device can never learn: it keeps sending the
+    // expected_version it was given, so every later attempt failed the optimistic
+    // check with "changed on another device" and refreshing did not help — one
+    // failed decision locked the review out of being resolved at all.
     await db.syncConflict.updateMany({
-      where: { id: existing.id, shopId, status: "resolving" },
-      data: { status: "open", expiresAt: syncConflictExpiry() },
+      where: { id: existing.id, shopId, status: "resolving", version: expectedVersion + 1 },
+      data: { status: "open", version: { decrement: 1 }, expiresAt: syncConflictExpiry() },
     });
     throw error;
   }

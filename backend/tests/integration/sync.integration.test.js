@@ -2258,8 +2258,75 @@ if (ctx.skip) {
         }, { token: ownerAuth.accessToken, headers: deviceHeaders });
         assert.equal(blocked.status, 409, `${entityType} history cannot be overwritten`);
         assert.equal(blocked.body?.code, "SYNC_CONFLICT_COMPENSATING_ENTRY_REQUIRED");
-        assert.equal((await ctx.db.syncConflict.findUnique({ where: { id: financial.id } })).status, "open");
+        const reopened = await ctx.db.syncConflict.findUnique({ where: { id: financial.id } });
+        assert.equal(reopened.status, "open");
+        // A refused decision must leave the row exactly as it was found. Reopening it
+        // with the claim's version increment still applied burned a number the device
+        // could never learn: it keeps sending the expected_version it was handed, so
+        // every later press failed the optimistic check with "changed on another
+        // device" - Ignore included, locking the review out of ever being cleared.
+        assert.equal(reopened.version, financial.version, `${entityType} refusal must not consume a version`);
       }
+    });
+
+    test("a refused decision can be retried with the version the device already has", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "retry after refusal", stockBaseQty: 5 });
+      const conflict = assertSuccess(await ctx.post("/api/sync/conflicts/report", {
+        client_conflict_id: "retry-after-refusal",
+        entity_type: "product",
+        entity_id: product.id,
+        reason_code: "VERSION_MISMATCH",
+        message: "packaging refusal",
+        // No local snapshot, so use_local is refused - the failure we then retry past.
+        local_snapshot: {},
+        server_snapshot: { id: product.id, name: "retry after refusal" },
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders })).conflict;
+
+      const refused = await ctx.post("/api/sync/resolve-conflict", {
+        conflict_id: conflict.id,
+        resolution: "use_local",
+        expected_version: conflict.version,
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders });
+      assert.equal(refused.status, 409);
+
+      // Same expected_version as the first attempt: the device has no way to learn a
+      // new one, so this is exactly what a second press sends.
+      const retried = assertSuccess(await ctx.post("/api/sync/resolve-conflict", {
+        conflict_id: conflict.id,
+        resolution: "use_server",
+        expected_version: conflict.version,
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(retried.conflict.status, "resolved");
+    });
+
+    test("keeping the cloud version resolves a refusal that carried no server snapshot", async () => {
+      // A validation refusal answers with a message, not a record (for example
+      // PACKAGING_UNIT_HAS_STOCK), so the conflict is stored with no server snapshot.
+      // "Keep cloud" means leave the server record as it stands - there is nothing to
+      // restore and nothing that needs restoring - but it used to dead-end on
+      // SYNC_CONFLICT_SNAPSHOT_MISSING, leaving a review the shop could never clear.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "no server snapshot", stockBaseQty: 7 });
+      const conflict = assertSuccess(await ctx.post("/api/sync/conflicts/report", {
+        client_conflict_id: "no-server-snapshot",
+        entity_type: "product",
+        entity_id: product.id,
+        reason_code: "OWNER_REVIEW",
+        message: "Count packet-10-kg to zero before removing or disabling that pack.",
+        local_snapshot: { productId: product.id, product: { name: "no server snapshot" } },
+        server_snapshot: null,
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders })).conflict;
+
+      const resolved = assertSuccess(await ctx.post("/api/sync/resolve-conflict", {
+        conflict_id: conflict.id,
+        resolution: "use_server",
+        expected_version: conflict.version,
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(resolved.conflict.status, "resolved");
+      assert.equal(resolved.conflict.resolution, "use_server");
+      // The server record is untouched, which is the whole point of keeping the cloud.
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).name, "no server snapshot");
     });
 
     test("owner conflict resolution accepts whole-record snapshots as the app actually stores them", async () => {
