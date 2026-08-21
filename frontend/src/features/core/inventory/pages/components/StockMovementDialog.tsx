@@ -9,8 +9,8 @@ import { Loader2, Search, X } from "lucide-react";
 import { getListProductsQueryKey, useListProducts, type Product } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { getProductEmoji } from "@/features/core/billing/pages/components/BillingSearch";
-import { fromBaseQty, isDeletedProduct, productDisplayUnit, toBaseQty } from "@/features/core/products/pages/product-pricing";
-import { activeInventorySellingUnits, findInventorySellingUnit, inventoryDisplayQuantity } from "@/features/core/inventory/stock-display";
+import { isDeletedProduct, productDisplayUnit, toBaseQty } from "@/features/core/products/pages/product-pricing";
+import { activeInventorySellingUnits, findInventorySellingUnit, inventoryDisplayQuantity, inventoryStockLabel } from "@/features/core/inventory/stock-display";
 import { useRecordPurchase, useRecordSale } from "@/features/core/inventory/queries";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 import { useAppLanguage } from "@/features/core/settings/i18n";
@@ -90,8 +90,9 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
       const rows = activeInventorySellingUnits(p);
       if (rows.length > 0) return rows.map((unit) => `${Number(unit.onHandQty ?? 0)} × ${unit.name}`).join(" · ");
     }
-    const unit = productDisplayUnit(p);
-    return `${fromBaseQty(stockBaseQty(p), unit)} ${unit}`;
+    // Pack maths, not a unit-name lookup: a 100 ml bottle keeps its stock as ml,
+    // so dividing by the pack's own conversion is the only way to reach bottles.
+    return inventoryStockLabel(p);
   }
 
   function submit() {
