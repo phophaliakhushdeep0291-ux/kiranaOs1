@@ -13,7 +13,7 @@ import {
   incrementLocationInventory,
   resolveOperationalLocation,
 } from "../stores/location-context.service.js";
-import { sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
+import { sellingUnitCostPrice, sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
 import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
 import { reapplyBillLoyaltyInTransaction, recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
 import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
@@ -458,7 +458,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       // Determine units from product if productId given, else use what's passed
       const baseUnit = product?.baseUnit ?? item.enteredUnit;
       const rateUnit = sellingUnit?.name ?? product?.rateUnit ?? item.enteredUnit;
-      const costPerRateUnit = sellingUnit?.costPrice ?? product?.costPerRateUnit ?? 0;
+      const costPerRateUnit = sellingUnitCostPrice(sellingUnit, product, defaultSellingUnitByProduct.get(product?.id));
 
       // Convert entered qty to base qty
       const qtyInBase = sellingUnit

@@ -132,6 +132,8 @@ export const productsEn = {
   "products.form.soldAs": "Sold as",
   "products.form.soldAsTitle": "Sold As",
   "products.form.sellingPriceRs": "Selling price (Rs)",
+  "products.form.packCost": "Cost price for this pack (Rs)",
+  "products.form.packCostHint": "What one of THIS pack costs you. Blank = the product cost scaled to this pack size.",
   "products.form.packMrp": "MRP for this pack (Rs)",
   "products.form.packMrpHint": "Blank = the product MRP scaled to this pack size.",
   "products.form.packPriceAboveMrp": "Price is above this pack's MRP",

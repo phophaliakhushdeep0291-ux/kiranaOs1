@@ -233,12 +233,22 @@ export function productToForm(product?: Product): ProductFormData {
     retailFromQuantity: product?.retailFromQuantity ?? 1,
     wholesalePrice: product?.wholesalePrice ?? product?.wholesalePricePerRateUnit ?? sellingPrice,
     wholesaleFromQuantity: product?.wholesaleFromQuantity ?? 10,
-    stockQuantity: defaultUnit?.conversionToBase
-      ? roundMoney(Number(product?.stockBaseQty ?? 0) / defaultUnit.conversionToBase)
-      : fromBaseQty(product?.stockBaseQty, unit),
-    lowStockAlert: defaultUnit?.conversionToBase
-      ? roundMoney(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
-      : fromBaseQty(product?.lowStockThreshold, unit),
+    // These two boxes describe the DEFAULT pack, and in per-pack mode that pack
+    // holds its own count — the product's total belongs to every size together.
+    // Dividing the total by the default pack's size instead reported the whole
+    // shelf as if it were all 1 kg packets (10 x 1 kg + 20 x 500 g read back as
+    // "20 packets"), and saving wrote that inflated figure onto the 1 kg row:
+    // opening a per-pack product and pressing Save silently created stock.
+    stockQuantity: packagingMode === "per_pack"
+      ? roundMoney(Number(defaultUnit?.onHandQty ?? 0))
+      : defaultUnit?.conversionToBase
+        ? roundMoney(Number(product?.stockBaseQty ?? 0) / defaultUnit.conversionToBase)
+        : fromBaseQty(product?.stockBaseQty, unit),
+    lowStockAlert: packagingMode === "per_pack" && defaultUnit?.lowStockThreshold != null
+      ? roundMoney(Number(defaultUnit.lowStockThreshold))
+      : defaultUnit?.conversionToBase
+        ? roundMoney(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
+        : fromBaseQty(product?.lowStockThreshold, unit),
     batchTrackingEnabled: product?.batchTrackingEnabled ?? false,
     drugSchedule: product?.drugSchedule ?? null,
     attributes: normalizeProductAttributes(product?.attributes),
@@ -326,9 +336,32 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
   // The server does not recompute it, and everything that asks "how many of this
   // shirt are there?" without opening the grid reads this number.
   const gridQty = roundMoney(variantRows.reduce((sum, row) => sum + (Number(row.onHandQty) || 0), 0));
-  const stockQuantity = hasGrid ? gridQty : values.stockQuantity;
+  /**
+   * Per-pack stock is the sum over every pack, never the default pack alone.
+   *
+   * In "count each size" mode each row carries its own count, and the server
+   * requires the product total to equal sum(count x pack size) — anything else
+   * is refused with PACKAGING_STOCK_TOTAL_MISMATCH. This used to be built from
+   * the main stock box only, so the moment a second size was given any count at
+   * all the save failed outright: "Per-pack opening stock totals 20000 base
+   * units, but the product total says 10000." Adding a size and typing how many
+   * you have is the ordinary use of the feature, so it failed on the first try
+   * on both create and edit.
+   */
+  const perPackBaseQty = roundMoney(sellingUnits.reduce((sum, row) => (
+    row.isActive === false ? sum : sum + (Number(row.onHandQty) || 0) * (Number(row.conversionToBase) || 0)
+  ), 0));
+  const perPack = !hasGrid && values.packagingMode === "per_pack";
   // A cell is one piece, never a pack, so the grid's total is already in base units.
-  const stockBaseQty = hasGrid ? gridQty : roundMoney(values.stockQuantity * conversionToBase);
+  const stockBaseQty = hasGrid ? gridQty : perPack ? perPackBaseQty : roundMoney(values.stockQuantity * conversionToBase);
+  // The product's stock counted in its own default pack — a display figure that
+  // must stay the base total's twin, because readers that have no selling unit to
+  // hand multiply it back by the default conversion (see inventoryBaseQuantity).
+  const stockQuantity = hasGrid
+    ? gridQty
+    : perPack && conversionToBase > 0
+      ? roundMoney(perPackBaseQty / conversionToBase)
+      : values.stockQuantity;
 
   return {
     name: values.name.trim(),

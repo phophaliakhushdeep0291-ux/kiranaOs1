@@ -276,6 +276,21 @@ function getCustomerId(row: RecordLike): string | null {
   return id || null;
 }
 
+/**
+ * Every id by which a payment row can be recognised — including the LEDGER entry
+ * it belongs to.
+ *
+ * A udhar collection exists server-side as an UdharLedger row only; there is no
+ * Payment row for it. That row's `sourceId` is the ledger entry's own client id
+ * (`sourceType: "udhar_payment"`), not the payment's. So once the server echo
+ * replaced the device's local ledger row, the paymentId link the local row had
+ * was gone, the collecting device's still-present payment row no longer matched
+ * anything, and the loose-payment fallback counted the same rupee a second time —
+ * a ₹455 ledger was reported as ₹510 of cash recovered.
+ *
+ * recordPaymentLocalFirst writes the ledger id onto the payment precisely so the
+ * two can still be tied together, whichever way round the reference points.
+ */
 function paymentIdentityKeys(payment: RecordLike): string[] {
   return [
     readString(payment, ["id"]),
@@ -284,6 +299,9 @@ function paymentIdentityKeys(payment: RecordLike): string[] {
     readString(payment, ["paymentId", "payment_id"]),
     readString(payment, ["clientPaymentId", "client_payment_id", "localPaymentId", "local_payment_id"]),
     readString(payment, ["idempotencyKey", "idempotency_key"]),
+    readString(payment, ["ledgerEntryId", "ledger_entry_id"]),
+    readString(payment, ["localLedgerEntryId", "local_ledger_entry_id"]),
+    readString(payment, ["clientLedgerId", "client_ledger_id"]),
   ].filter(Boolean);
 }
 
@@ -293,6 +311,10 @@ function ledgerPaymentReferenceKeys(entry: RecordLike): string[] {
     readString(entry, ["source_id", "sourceId"]),
     readString(entry, ["localPaymentId", "local_payment_id"]),
     readString(entry, ["clientPaymentId", "client_payment_id"]),
+    // The entry's own client id: what the server puts in `sourceId`, and what the
+    // payment row carries as `clientLedgerId`.
+    readString(entry, ["clientLedgerId", "client_ledger_id"]),
+    readString(entry, ["local_id", "localId"]),
   ].filter(Boolean);
 }
 

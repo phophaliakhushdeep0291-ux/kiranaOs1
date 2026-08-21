@@ -397,6 +397,55 @@ describe("FinancialAggregationService", () => {
     expect(snapshot.totalUpiCollectedToday).toBe(700);
   });
 
+  it("counts a synced udhar collection once, when the server ledger row points at itself", () => {
+    // The server stores a udhar collection as an UdharLedger row ONLY — there is no
+    // Payment row for it — and it sets sourceId to the ledger entry's OWN client id
+    // (sourceType "udhar_payment"), not to the payment. The collecting device still
+    // holds its local payment row, so once the echo replaced the local ledger row the
+    // paymentId link was gone and the same rupee was counted twice: once from the
+    // ledger, once again from the loose-payment fallback.
+    // Live: a ₹455 ledger was reported as ₹510 of udhar recovery.
+    const snapshot = aggregateFinancialRows({
+      date,
+      payments: [
+        payment("payment_local_1", {
+          billId: null,
+          bill_id: null,
+          customerId: "customer_1",
+          customer_id: "customer_1",
+          amount: 200,
+          // What recordPaymentLocalFirst writes alongside the payment.
+          ledgerEntryId: "ledger_local_1",
+          ledger_entry_id: "ledger_local_1",
+          clientLedgerId: "ledger_local_1",
+          client_ledger_id: "ledger_local_1",
+        }),
+      ],
+      ledger: [
+        {
+          // The server's echo: its own cuid, and sourceId pointing at the ledger.
+          id: "srv_ledger_1",
+          customerId: "customer_1",
+          customer_id: "customer_1",
+          type: "payment",
+          source_type: "udhar_payment",
+          sourceType: "udhar_payment",
+          source_id: "ledger_local_1",
+          sourceId: "ledger_local_1",
+          clientLedgerId: "ledger_local_1",
+          client_ledger_id: "ledger_local_1",
+          mode: "cash",
+          amount: 200,
+          createdAt: `${date}T10:05:00.000`,
+          created_at: `${date}T10:05:00.000`,
+        },
+      ],
+    });
+
+    expect(snapshot.cashUdharRecoveryToday).toBe(200);
+    expect(snapshot.totalCashCollectedToday).toBe(200);
+  });
+
   it("does not turn loose same-day sale payment echoes into cash in hand", () => {
     const snapshot = aggregateFinancialRows({
       date,

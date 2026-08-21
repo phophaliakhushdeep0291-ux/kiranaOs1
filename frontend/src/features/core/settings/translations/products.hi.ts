@@ -124,6 +124,8 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.form.soldAs": "कैसे बेचा जाता है",
   "products.form.soldAsTitle": "कैसे बेचा जाता है",
   "products.form.sellingPriceRs": "बिक्री रेट (₹)",
+  "products.form.packCost": "इस पैक की खरीद कीमत (₹)",
+  "products.form.packCostHint": "इस पैक का एक नग आपको कितने का पड़ता है। खाली छोड़ें = माल की खरीद कीमत इस पैक की साइज़ के हिसाब से लगेगी।",
   "products.form.packMrp": "इस पैक का MRP (₹)",
   "products.form.packMrpHint": "खाली छोड़ें = माल का MRP इस पैक की साइज़ के हिसाब से लगेगा।",
   "products.form.packPriceAboveMrp": "रेट इस पैक के MRP से ज्यादा है",

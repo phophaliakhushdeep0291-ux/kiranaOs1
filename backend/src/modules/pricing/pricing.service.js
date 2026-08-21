@@ -2,7 +2,7 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { evaluatePricing, RULE_TYPE_PRIORITY } from "./pricing-engine.js";
-import { sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
+import { sellingUnitCostPrice, sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
 import { moneyShadows } from "../../utils/money.js";
 import { assertLocationCapability } from "../stores/location-access.service.js";
 
@@ -215,7 +215,7 @@ export async function evaluate(shopId, body = {}) {
     quantity: Number(body.quantity ?? 1),
     billDate: body.billDate || new Date().toISOString(),
     paymentMethod: body.paymentMethod,
-    productCost: Number(sellingUnit?.costPrice ?? product.costPerRateUnit ?? 0),
+    productCost: sellingUnitCostPrice(sellingUnit, product, defaultSellingUnit),
     defaultPrice: Number(sellingUnit?.defaultPrice ?? product.defaultPricePerRateUnit ?? 0),
     minimumSellingPrice: Number(sellingUnit?.minimumPrice ?? product.minPricePerRateUnit ?? 0),
     maximumRetailPrice: sellingUnitMaxPrice(sellingUnit, product, defaultSellingUnit),

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -135,16 +135,16 @@ export default function Register() {
               <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-md ring-1 ring-white/10">
                 <BrandMark size={26} />
               </div>
-              <h1 className="mt-6 font-display text-3xl font-black text-white">Set up your shop counter</h1>
+              <h1 className="mt-6 font-display text-3xl font-black text-white">{t("register.hero.title")}</h1>
               <p className="mt-3 max-w-md text-sm leading-6 text-sidebar-foreground/75">
-                Billing, inventory, credit management, and owner controls — all in one place, from day one.
+                {t("register.hero.subtitle")}
               </p>
             </div>
             <div className="grid gap-3 text-sm">
               {[
-                "Works offline — bills even without internet",
-                "Owner PIN protects discounts and cancellations",
-                "Built for any type of retail shop",
+                t("register.hero.offline"),
+                t("register.hero.ownerPin"),
+                t("register.hero.anyShop"),
               ].map((item) => (
                 <div key={item} className="flex items-center gap-2.5 rounded-xl bg-white/10 px-3 py-2.5 font-semibold ring-1 ring-white/10">
                   <CheckCircle2 size={15} className="shrink-0 text-sidebar-primary" />
@@ -160,79 +160,77 @@ export default function Register() {
                 <BrandMark size={30} title="Artha" />
               </div>
               <div className="hidden items-center gap-2 text-sm font-bold text-primary lg:flex">
-                <ShieldCheck size={15} />Step 1 of 2 — Shop details
+                <ShieldCheck size={15} />{t("register.step1.badge")}
               </div>
-              <h1 className="mt-1 font-display text-2xl font-black tracking-tight text-foreground sm:text-3xl">Register your shop</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Create the owner account and security PIN.</p>
+              <h1 className="mt-1 font-display text-2xl font-black tracking-tight text-foreground sm:text-3xl">{t("register.step1.title")}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{t("register.step1.subtitle")}</p>
             </div>
 
             <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
               {googlePrefill && (
                 <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-foreground" data-testid="google-signup-banner">
-                  Signing up with Google as <span className="font-bold">{googlePrefill.email}</span> — add your shop
-                  details and choose a password (used when Google is unreachable). Next time, one tap on
-                  &ldquo;Continue with Google&rdquo; signs you straight in.
+                  {t("register.google.banner", { email: googlePrefill.email })}
                 </div>
               )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <Label htmlFor="shopName">Shop Name</Label>
-                  <Input id="shopName" data-testid="input-shopName" className="mt-1 h-11" placeholder="Enter shop name" {...form.register("shopName")} />
+                  <Label htmlFor="shopName">{t("register.field.shopName")}</Label>
+                  <Input id="shopName" data-testid="input-shopName" className="mt-1 h-11" placeholder={t("register.field.shopName.placeholder")} {...form.register("shopName")} />
                   {form.formState.errors.shopName && <p className="mt-1 text-xs text-destructive">{form.formState.errors.shopName.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="ownerName">Owner Name</Label>
-                  <Input id="ownerName" data-testid="input-ownerName" className="mt-1 h-11" placeholder="Enter owner name" {...form.register("ownerName")} />
+                  <Label htmlFor="ownerName">{t("register.field.ownerName")}</Label>
+                  <Input id="ownerName" data-testid="input-ownerName" className="mt-1 h-11" placeholder={t("register.field.ownerName.placeholder")} {...form.register("ownerName")} />
                   {form.formState.errors.ownerName && <p className="mt-1 text-xs text-destructive">{form.formState.errors.ownerName.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="city">City</Label>
-                  <Input id="city" data-testid="input-city" className="mt-1 h-11" placeholder="Enter city" {...form.register("city")} />
+                  <Label htmlFor="city">{t("register.field.city")}</Label>
+                  <Input id="city" data-testid="input-city" className="mt-1 h-11" placeholder={t("register.field.city.placeholder")} {...form.register("city")} />
                   {form.formState.errors.city && <p className="mt-1 text-xs text-destructive">{form.formState.errors.city.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="mobile">Mobile</Label>
-                  <Input id="mobile" data-testid="input-mobile" className="mt-1 h-11" placeholder="Enter 10-digit number" {...form.register("mobile")} />
+                  <Label htmlFor="mobile">{t("register.field.mobile")}</Label>
+                  <Input id="mobile" data-testid="input-mobile" className="mt-1 h-11" placeholder={t("register.field.mobile.placeholder")} {...form.register("mobile")} />
                   {form.formState.errors.mobile && <p className="mt-1 text-xs text-destructive">{form.formState.errors.mobile.message}</p>}
                 </div>
               </div>
               <div>
-                <Label htmlFor="email">Gmail / Email for recovery</Label>
-                <Input id="email" data-testid="input-email" type="email" className="mt-1 h-11" placeholder="Enter email address" {...form.register("email")} />
-                <p className="mt-1 text-xs text-muted-foreground">Used to verify your account and recover your password.</p>
+                <Label htmlFor="email">{t("register.field.email")}</Label>
+                <Input id="email" data-testid="input-email" type="email" className="mt-1 h-11" placeholder={t("register.field.email.placeholder")} {...form.register("email")} />
+                <p className="mt-1 text-xs text-muted-foreground">{t("register.field.email.help")}</p>
                 {form.formState.errors.email && <p className="mt-1 text-xs text-destructive">{form.formState.errors.email.message}</p>}
               </div>
               <div>
-                <Label htmlFor="address">Address</Label>
-                <Input id="address" data-testid="input-address" className="mt-1 h-11" placeholder="Enter shop address" {...form.register("address")} />
+                <Label htmlFor="address">{t("register.field.address")}</Label>
+                <Input id="address" data-testid="input-address" className="mt-1 h-11" placeholder={t("register.field.address.placeholder")} {...form.register("address")} />
                 {form.formState.errors.address && <p className="mt-1 text-xs text-destructive">{form.formState.errors.address.message}</p>}
               </div>
               <div>
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" data-testid="input-password" type="password" className="mt-1 h-11" placeholder="Min. 6 characters" {...form.register("password")} />
+                <Label htmlFor="password">{t("register.field.password")}</Label>
+                <Input id="password" data-testid="input-password" type="password" className="mt-1 h-11" placeholder={t("register.field.password.placeholder")} {...form.register("password")} />
                 {form.formState.errors.password && <p className="mt-1 text-xs text-destructive">{form.formState.errors.password.message}</p>}
               </div>
               <div>
-                <Label htmlFor="ownerPin">4-Digit Owner PIN</Label>
-                <Input id="ownerPin" data-testid="input-ownerPin" type="password" inputMode="numeric" maxLength={4} className="mt-1 h-11" placeholder="e.g. 1234" {...form.register("ownerPin")} />
-                <p className="mt-1 text-xs text-muted-foreground">Used to authorise discounts, cancellations, and sensitive settings.</p>
+                <Label htmlFor="ownerPin">{t("register.field.ownerPin")}</Label>
+                <Input id="ownerPin" data-testid="input-ownerPin" type="password" inputMode="numeric" maxLength={4} className="mt-1 h-11" placeholder={t("register.field.ownerPin.placeholder")} {...form.register("ownerPin")} />
+                <p className="mt-1 text-xs text-muted-foreground">{t("register.field.ownerPin.help")}</p>
                 {form.formState.errors.ownerPin && <p className="mt-1 text-xs text-destructive">{form.formState.errors.ownerPin.message}</p>}
               </div>
               {serverError && (
                 <div className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="status-error">{serverError}</div>
               )}
               <Button type="button" className="mt-2 w-full h-11 text-base rounded-xl" onClick={() => void goToStep2()}>
-                Continue <ArrowRight size={16} className="ml-2" />
+                {t("register.continue")} <ArrowRight size={16} className="ml-2" />
               </Button>
             </form>
             <p className="mt-2 text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
+              {t("register.haveAccount")}{" "}
               <Link
                 href="/login"
                 className="inline-flex min-h-[44px] cursor-pointer items-center px-1 align-middle font-bold text-primary hover:underline"
                 data-testid="link-login"
               >
-                Sign in
+                {t("register.signIn")}
               </Link>
             </p>
           </div>
@@ -247,20 +245,20 @@ export default function Register() {
             onClick={() => { setStep(1); applyAccent("emerald"); }}
             className="mb-5 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ArrowLeft size={15} /> Back to shop details
+            <ArrowLeft size={15} /> {t("register.step2.back")}
           </button>
 
           <div className="overflow-hidden rounded-2xl border bg-card shadow-xl">
             {/* Header */}
             <div className="border-b bg-primary/5 px-6 py-5">
               <div className="flex items-center gap-2 text-sm font-bold text-primary">
-                <ShieldCheck size={15} /> Step 2 of 2 — Choose your business type
+                <ShieldCheck size={15} /> {t("register.step2.badge")}
               </div>
               <h1 className="mt-1 font-display text-2xl font-black tracking-tight text-foreground sm:text-3xl">
-                What kind of shop is this?
+                {t("register.step2.title")}
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                We'll set up the right dashboard, product categories, units, and colour theme for you.
+                {t("register.step2.subtitle")}
               </p>
             </div>
 
@@ -305,7 +303,7 @@ export default function Register() {
                   <div>
                     <p className="font-black text-foreground">{t(def.labelKey)}</p>
                     <p className="text-xs text-muted-foreground">
-                      Dashboard: <span className="font-semibold">{t(def.dashboard.heroTitle)}</span> · Color: <span className="font-semibold capitalize">{def.defaultAccent}</span>
+                      {t("register.step2.dashboardLabel")} <span className="font-semibold">{t(def.dashboard.heroTitle)}</span> · {t("register.step2.colorLabel")} <span className="font-semibold">{t(`register.accent.${def.defaultAccent}` as TranslationKey)}</span>
                     </p>
                   </div>
                 </div>
@@ -317,8 +315,8 @@ export default function Register() {
                   data-testid="button-register"
                 >
                   {registerMutation.isPending
-                    ? <><Loader2 size={16} className="mr-2 animate-spin" />Creating…</>
-                    : <>Set up my shop <ArrowRight size={16} className="ml-2" /></>
+                    ? <><Loader2 size={16} className="mr-2 animate-spin" />{t("register.step2.creating")}</>
+                    : <>{t("register.step2.submit")} <ArrowRight size={16} className="ml-2" /></>
                   }
                 </Button>
               </div>

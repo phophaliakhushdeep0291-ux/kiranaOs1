@@ -197,6 +197,30 @@ interface GroupItem {
 }
 
 type NavItem = LinkItem | GroupItem;
+
+/**
+ * The declared sidebar, whose labels are TranslationKeys.
+ *
+ * `NavItem` above is the RENDERED sidebar: by the time SidebarLink prints
+ * `item.label` it must already be words. Only the trade pack's entries were ever
+ * put through `t()`, so the core spine's plain English labels ("Purchases",
+ * "Returns", "Cash & Payments"…) reached the screen verbatim and a Hindi shop
+ * read a sidebar that was 7/11 English. Separating the two types makes the
+ * compiler insist that every declared label is a real key, and that every key is
+ * translated before it is rendered.
+ */
+type NavSpecSubItem = { href: string; label: TranslationKey };
+
+interface NavSpecLinkItem extends Omit<LinkItem, "label"> {
+  label: TranslationKey;
+}
+
+interface NavSpecGroupItem extends Omit<GroupItem, "label" | "children"> {
+  label: TranslationKey;
+  children: NavSpecSubItem[];
+}
+
+type NavSpecItem = NavSpecLinkItem | NavSpecGroupItem;
 type StoreLocationOption = { id: string; code: string; name: string; city?: string | null; isPrimary: boolean; active: boolean };
 type StoreLocationsResponse = { locations: StoreLocationOption[] };
 
@@ -208,50 +232,50 @@ type StoreLocationsResponse = { locations: StoreLocationOption[] };
  * not here, or naming an entry the core spine already uses, is not visible by
  * reading either file alone — it only shows up when the two are merged.
  */
-export const NAV: NavItem[] = [
-  { kind: "link", href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
-  { kind: "link", href: "/billing", label: "Billing", Icon: ShoppingCart, badge: "F2", emphasis: true },
+export const NAV: NavSpecItem[] = [
+  { kind: "link", href: "/dashboard", label: "nav.dashboard", Icon: LayoutDashboard },
+  { kind: "link", href: "/billing", label: "nav.billing", Icon: ShoppingCart, badge: "F2", emphasis: true },
   {
-    kind: "group", id: "inventory", label: "Inventory", Icon: Package, overviewHref: "/inventory",
+    kind: "group", id: "inventory", label: "nav.inventory", Icon: Package, overviewHref: "/inventory",
     triggerPaths: ["/products", "/categories", "/inventory"],
     children: [
-      { href: "/products", label: "Products" },
-      { href: "/categories", label: "Categories" },
-      { href: "/inventory/stock-in", label: "Stock In" },
-      { href: "/inventory/stock-out", label: "Stock Out" },
-      { href: "/inventory/adjustments", label: "Adjustments" },
-      { href: "/inventory/stock-transfers", label: "Stock Transfers" },
-      { href: "/inventory/stock-counts", label: "Stock Counts" },
-      { href: "/inventory/batches", label: "Batch & Expiry" },
+      { href: "/products", label: "nav.products" },
+      { href: "/categories", label: "page.title.categories" },
+      { href: "/inventory/stock-in", label: "page.title.inventory.stockin" },
+      { href: "/inventory/stock-out", label: "page.title.inventory.stockout" },
+      { href: "/inventory/adjustments", label: "page.title.inventory.adjustments" },
+      { href: "/inventory/stock-transfers", label: "page.title.inventory.stocktransfers" },
+      { href: "/inventory/stock-counts", label: "page.title.inventory.stockcounts" },
+      { href: "/inventory/batches", label: "page.title.inventory.batches" },
     ],
   },
-  { kind: "link", href: "/customers", label: "Customers / Udhar", Icon: Users },
-  { kind: "link", href: "/purchase-bills", label: "Purchases", Icon: Truck },
+  { kind: "link", href: "/customers", label: "page.title.customers", Icon: Users },
+  { kind: "link", href: "/purchase-bills", label: "page.title.purchasebills", Icon: Truck },
   {
-    kind: "group", id: "sales", label: "Sales", Icon: TrendingUp,
+    kind: "group", id: "sales", label: "nav.sales", Icon: TrendingUp,
     triggerPaths: ["/bills", "/orders-received", "/sales-overview"],
     children: [
-      { href: "/bills", label: "Billing History" },
-      { href: "/orders-received", label: "Orders Received" },
-      { href: "/sales-overview", label: "Sales Overview" },
+      { href: "/bills", label: "page.title.bills" },
+      { href: "/orders-received", label: "page.title.ordersreceived" },
+      { href: "/sales-overview", label: "page.title.salesoverview" },
     ],
   },
-  { kind: "link", href: "/returns", label: "Returns", Icon: Undo2 },
-  { kind: "link", href: "/reports", label: "Reports", Icon: BarChart3 },
-  { kind: "link", href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
+  { kind: "link", href: "/returns", label: "page.title.returns", Icon: Undo2 },
+  { kind: "link", href: "/reports", label: "nav.reports", Icon: BarChart3 },
+  { kind: "link", href: "/money-statement", label: "page.title.moneystatement", Icon: Landmark },
   {
-    kind: "group", id: "business-tools", label: "Business Tools", Icon: ShieldCheck,
+    kind: "group", id: "business-tools", label: "nav.businessTools", Icon: ShieldCheck,
     triggerPaths: ["/assurance", "/activity-insights", "/offers", "/loyalty", "/gift-cards"],
     children: [
-      { href: "/activity-insights", label: "Activity & Insights" },
-      { href: "/offers", label: "Offers & Discounts" },
-      { href: "/loyalty", label: "Loyalty" },
-      { href: "/gift-cards", label: "Gift Cards" },
-      { href: "/assurance", label: "Financial Assurance" },
+      { href: "/activity-insights", label: "page.title.activityinsights" },
+      { href: "/offers", label: "page.title.offers" },
+      { href: "/loyalty", label: "nav.loyalty" },
+      { href: "/gift-cards", label: "page.title.giftcards" },
+      { href: "/assurance", label: "nav.assurance" },
     ],
   },
-  { kind: "link", href: "/expenses", label: "Expenses", Icon: Wallet },
-  { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
+  { kind: "link", href: "/expenses", label: "page.title.expenses", Icon: Wallet },
+  { kind: "link", href: "/settings", label: "nav.settings", Icon: Settings },
 ];
 
 /**
@@ -288,7 +312,10 @@ export function buildSidebarNav(
 
   for (const item of NAV) {
     if (item.kind === "link") {
-      if (pathEnabled(item.href)) items.push(item);
+      // Translated HERE, like every pack entry above. The renderer prints
+      // `item.label` as-is, so anything not resolved by this point reaches the
+      // shopkeeper as its raw key — or, as it used to be, as English.
+      if (pathEnabled(item.href)) items.push({ ...item, label: t(item.label) });
       spliceAfter([item.href]);
       continue;
     }
@@ -300,7 +327,8 @@ export function buildSidebarNav(
     if (profileChildren.length === 0) continue;
     items.push({
       ...item,
-      children: profileChildren,
+      label: t(item.label),
+      children: profileChildren.map((child) => ({ ...child, label: t(child.label) })),
       triggerPaths: item.triggerPaths.filter((path) => pathEnabled(path)),
       overviewHref: item.overviewHref && pathEnabled(item.overviewHref) ? item.overviewHref : undefined,
     });

@@ -25,6 +25,41 @@ function mrpForPack(mrp, sellingUnit, defaultSellingUnit) {
 }
 
 /**
+ * The buying price of ONE packaging.
+ *
+ * The exact counterpart of mrpForPack, and it exists for the same reason. A
+ * product's `costPerRateUnit` describes its DEFAULT pack — "Rs 80" on a product
+ * whose default pack is a 1 kg packet means Rs 80 per kilo. Reading that raw
+ * number as the cost of every other pack made each smaller size look like a loss:
+ * a 500 g packet sold at Rs 55 was booked as cost 80, so the bill reported minus
+ * Rs 25 on a sale that actually earned Rs 15, and every profit report inherited it.
+ *
+ * A pack's own `costPrice` always wins — that is what the shopkeeper typed for
+ * THIS size. Blank means "work it out from the product", which is the answer the
+ * product form's cost box shows as its placeholder, so the two agree.
+ */
+export function sellingUnitCostPrice(sellingUnit, product, defaultSellingUnit) {
+  const own = round2(Number(sellingUnit?.costPrice ?? 0));
+  if (own > 0) return own;
+
+  const productCost = round2(Number(product?.costPerRateUnit ?? 0));
+  if (!(productCost > 0)) return 0;
+  if (!sellingUnit || sellingUnit.isDefault) return productCost;
+
+  // A restaurant portion consumes recipe stock rather than holding a pack size,
+  // so scaling its conversion into a rupee cost invents a number. Same carve-out
+  // sellingUnitMaxPrice makes, and for the same reason.
+  if (String(sellingUnit?.unitType ?? "").trim().toLowerCase() === "portion") return productCost;
+
+  const defaultConversion = Number(defaultSellingUnit?.conversionToBase ?? 0);
+  const unitConversion = Number(sellingUnit.conversionToBase ?? 0);
+  if (!(defaultConversion > 0) || !(unitConversion > 0)) return productCost;
+  if (defaultConversion === unitConversion) return productCost;
+
+  return round2((productCost / defaultConversion) * unitConversion);
+}
+
+/**
  * The price ceiling for ONE packaging.
  *
  * Without a batch MRP, the order of preference is unchanged:

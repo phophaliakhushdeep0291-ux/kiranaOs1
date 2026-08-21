@@ -94,6 +94,10 @@ function emptyExtraPack(unitType: string, packSizeUnit: string) {
     // ("exceeds the configured maximum"). Left blank, the product MRP is scaled to
     // this pack's size instead — see sellingUnitMaxPrice.
     mrp: "",
+    // And its own buying price, for the same reason and with the same fallback:
+    // profit on a bill line is rate minus THIS pack's cost, so a 500 g pack charged
+    // the 1 kg product cost reports a loss on every sale — see sellingUnitCostPrice.
+    costPrice: "",
     barcode: "",
     openingQty: "",
   };
@@ -251,19 +255,34 @@ export function ProductFormPanel({
       : (packMeasureUnits[0] ?? "piece"),
   };
 
-  // What actually caps a pack's price at the counter: its own MRP, or — while it
-  // has none — the product MRP scaled from the default pack to this pack's size.
-  // Same rule as billing (sellingUnitMaxPrice), so what is shown here is what the
-  // bill screen will enforce.
-  function packCeiling(conversionToBase: number, ownMaximumPrice?: number | null): number {
-    const own = Number(ownMaximumPrice ?? 0);
+  /**
+   * A product-level rupee figure read against ONE pack.
+   *
+   * Both the MRP ceiling and the buying price work this way: what the shopkeeper
+   * typed for THIS size wins outright, and while that box is empty the product's
+   * own figure — which describes the DEFAULT pack — is scaled to this pack's size.
+   * The same arithmetic the counter applies (sellingUnitMaxPrice and
+   * sellingUnitCostPrice), so what the form shows is what billing will use.
+   */
+  function packFigure(productFigure: number, conversionToBase: number, ownValue?: number | null): number {
+    const own = Number(ownValue ?? 0);
     if (own > 0) return roundMoney(own);
-    if (!(productMrp > 0)) return 0;
+    if (!(productFigure > 0)) return 0;
     const conversion = Number(conversionToBase || 0);
-    if (!(packBaseQuantity > 0) || !(conversion > 0) || conversion === packBaseQuantity) return roundMoney(productMrp);
-    return roundMoney((productMrp / packBaseQuantity) * conversion);
+    if (!(packBaseQuantity > 0) || !(conversion > 0) || conversion === packBaseQuantity) return roundMoney(productFigure);
+    return roundMoney((productFigure / packBaseQuantity) * conversion);
   }
+  const packCeiling = (conversionToBase: number, ownMaximumPrice?: number | null) =>
+    packFigure(productMrp, conversionToBase, ownMaximumPrice);
   const suggestedExtraPackMrp = packCeiling(
+    sellingUnitConversion(Number(extraPackDraft.packSizeValue) || 0, extraPackDraft.packSizeUnit),
+  );
+  // The product's cost belongs to its DEFAULT pack, so a different size costs that
+  // scaled by size — same rule, same arithmetic as the MRP ceiling above.
+  const productCost = Number(form.watch("costPrice") || 0);
+  const packCostFor = (conversionToBase: number, ownCostPrice?: number | null) =>
+    packFigure(productCost, conversionToBase, ownCostPrice);
+  const suggestedExtraPackCost = packCostFor(
     sellingUnitConversion(Number(extraPackDraft.packSizeValue) || 0, extraPackDraft.packSizeUnit),
   );
 
@@ -297,6 +316,7 @@ export function ProductFormPanel({
     const size = Number(extraPackDraft.packSizeValue);
     const price = Number(extraPackDraft.price);
     const packMrp = Number(extraPackDraft.mrp);
+    const packCost = Number(extraPackDraft.costPrice);
     if (!(size > 0) || !(price > 0)) {
       toast({
         title: t("products.form.packSizeRequired"),
@@ -337,7 +357,7 @@ export function ProductFormPanel({
         defaultPrice: price,
         minimumPrice: null,
         maximumPrice: packMrp > 0 ? packMrp : null,
-        costPrice: null,
+        costPrice: packCost > 0 ? packCost : null,
         // In per-pack mode the opening quantity IS this pack's own count and must not
         // also be folded into the shared pool below, or the same goods would be
         // counted twice.
@@ -374,7 +394,7 @@ export function ProductFormPanel({
     setExtraPackOpen(false);
   }
 
-  function updatePackField(unitCode: string, field: "onHandQty" | "lowStockThreshold" | "maximumPrice", raw: string) {
+  function updatePackField(unitCode: string, field: "onHandQty" | "lowStockThreshold" | "maximumPrice" | "costPrice", raw: string) {
     const parsed = raw.trim() === "" ? null : Number(raw);
     form.setValue(
       "sellingUnits",
@@ -799,6 +819,7 @@ export function ProductFormPanel({
                     {alternateSellingUnits.map((row) => {
                       const ceiling = packCeiling(row.conversionToBase, row.maximumPrice);
                       const aboveCeiling = ceiling > 0 && Number(row.defaultPrice) > ceiling + 0.005;
+                      const packCost = packCostFor(row.conversionToBase);
                       return (
                       <div key={row.id ?? row.unitCode} className="rounded-lg border border-[#e3eaf3] bg-white px-3 py-2">
                         <div className="flex items-center justify-between gap-3">
@@ -810,7 +831,7 @@ export function ProductFormPanel({
                         </div>
                         {/* Every size prices itself: its own rate and its own ceiling,
                             so a bigger pack is never measured against a smaller one. */}
-                        <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#eef2f7] pt-2">
+                        <div className="mt-2 grid grid-cols-3 gap-2 border-t border-[#eef2f7] pt-2">
                           <Field label={t("products.form.sellingPriceRs")}>
                             <Input
                               className="h-8"
@@ -821,6 +842,20 @@ export function ProductFormPanel({
                               onChange={(event) => updatePackPrice(row.unitCode, event.target.value)}
                               placeholder="0.00"
                               aria-label={`${row.name} selling price`}
+                            />
+                          </Field>
+                          {/* Blank is a real answer: it means "cost me the product cost
+                              scaled to this size", which is what billing works out. */}
+                          <Field label={t("products.form.packCost")}>
+                            <Input
+                              className="h-8"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.costPrice ?? ""}
+                              onChange={(event) => updatePackField(row.unitCode, "costPrice", event.target.value)}
+                              placeholder={packCost > 0 ? String(packCost) : "0.00"}
+                              aria-label={`${row.name} cost price`}
                             />
                           </Field>
                           <Field label={t("products.form.packMrp")}>
@@ -898,6 +933,18 @@ export function ProductFormPanel({
                       </Field>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
+                      <Field label={t("products.form.packCost")}>
+                        <Input
+                          className="h-9"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          data-testid="input-extra-pack-cost"
+                          value={extraPackDraft.costPrice}
+                          onChange={(event) => setExtraPack((current) => ({ ...current, costPrice: event.target.value }))}
+                          placeholder={suggestedExtraPackCost > 0 ? String(suggestedExtraPackCost) : "0.00"}
+                        />
+                      </Field>
                       <Field label={t("products.form.packMrp")}>
                         <Input
                           className="h-9"
@@ -910,6 +957,8 @@ export function ProductFormPanel({
                           placeholder={suggestedExtraPackMrp > 0 ? String(suggestedExtraPackMrp) : "0.00"}
                         />
                       </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
                       <Field label={t("products.form.openingQuantity")}>
                         <Input
                           className="h-9"
@@ -924,6 +973,7 @@ export function ProductFormPanel({
                       </Field>
                     </div>
                     <p className="text-[10px] font-semibold leading-4 text-[#6d7c98]">{t("products.form.packMrpHint")}</p>
+                    <p className="text-[10px] font-semibold leading-4 text-[#6d7c98]">{t("products.form.packCostHint")}</p>
                     <div className="grid grid-cols-2 gap-2">
                       <Field label={t("products.form.packBarcode")}>
                         <Input className="h-9" value={extraPackDraft.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder={t("products.form.packBarcodePlaceholder")} />
