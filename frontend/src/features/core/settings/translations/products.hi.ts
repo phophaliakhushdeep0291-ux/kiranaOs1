@@ -133,6 +133,8 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.form.measure": "नाप",
   "products.form.openingQuantity": "शुरुआती मात्रा (जरूरी नहीं)",
   "products.form.packBarcode": "पैक का बारकोड (जरूरी नहीं)",
+  "products.form.packBarcodeTaken": "यह बारकोड पहले से किसी दूसरे पैक पर लगा है",
+  "products.form.packBarcodeTakenHint": "एक बारकोड सिर्फ एक ही पैक का हो सकता है, वरना काउंटर पर स्कैन करने से गलत साइज़ आ जाएगी।",
   "products.form.packBarcodePlaceholder": "इस साइज़ का बारकोड",
   "products.form.addPack": "पैक माल में जोड़ें",
   "products.form.addSize": "साइज़ जोड़ें",

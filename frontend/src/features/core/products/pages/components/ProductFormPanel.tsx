@@ -73,6 +73,44 @@ function isContainerUnit(unit: string) {
 }
 
 /**
+ * Why a pack cannot go onto this product — or null when it can.
+ *
+ * Two rows a shopkeeper cannot tell apart are worse than a rejected one, and both
+ * ways of creating that pair used to slip through:
+ *
+ *  - "size": the same physical pack under a different measure. `unitCode` carries
+ *    the measure as typed, so "packet-1-kg" and "packet-1000-gram" are different
+ *    strings for the identical packet. In per-pack mode that is two shelves for
+ *    one pack: the stock splits in half and billing offers two identical lines.
+ *    Compared within one unit type only — a BOX holding 1 kg and a PACKET holding
+ *    1 kg really are different things to stock, and a shop may carry both.
+ *
+ *  - "barcode": one number naming more than one pack. The pack barcode box had no
+ *    check at all, so the same code could sit on the 1 kg packet, the 5 kg bag and
+ *    the product itself; a scan then resolves to whichever row is found first and
+ *    rings up the wrong size at the wrong price.
+ */
+export function packClashReason(
+  candidate: { unitType: string; unitCode: string; conversionToBase: number; barcode?: string | null },
+  existing: Array<{ unitType?: string | null; unitCode?: string | null; conversionToBase?: number | null; barcode?: string | null }>,
+  productBarcode?: string | null,
+): "size" | "barcode" | null {
+  const sameUnitType = (unitType: unknown) =>
+    String(unitType ?? "").trim().toLowerCase() === candidate.unitType.trim().toLowerCase();
+  const sameSize = (other: unknown) =>
+    Number(other ?? 0) > 0 && Math.abs(Number(other) - candidate.conversionToBase) < 0.000_001;
+  const clashes = existing.some((row) => row.unitCode === candidate.unitCode
+    || (sameUnitType(row.unitType) && sameSize(row.conversionToBase)));
+  if (clashes) return "size";
+
+  const barcode = String(candidate.barcode ?? "").trim();
+  if (!barcode) return null;
+  const taken = barcode === String(productBarcode ?? "").trim()
+    || existing.some((row) => String(row.barcode ?? "").trim() === barcode);
+  return taken ? "barcode" : null;
+}
+
+/**
  * A blank "other pack size" row, in units this trade actually has.
  *
  * Never a fixed `500 gram`: the measure select only lists what the trade can
@@ -367,9 +405,30 @@ export function ProductFormPanel({
       return;
     }
     const code = sellingUnitCode(extraPackDraft.unitType, size, extraPackDraft.packSizeUnit);
-    const defaultCode = sellingUnitCode(selectedUnit, packSizeValue, packSizeUnit);
-    if (code === defaultCode || sellingUnits.some((row) => row.unitCode === code)) {
+    const conversion = sellingUnitConversion(size, extraPackDraft.packSizeUnit);
+    const packBarcode = extraPackDraft.barcode.trim();
+    // The default pack is not in `sellingUnits` while the form is open — it is
+    // synthesised from the main fields on save — so it has to be named here or a
+    // shop could add a second row for the pack it is already selling.
+    const clash = packClashReason(
+      { unitType: extraPackDraft.unitType, unitCode: code, conversionToBase: conversion, barcode: packBarcode },
+      [
+        {
+          unitType: selectedUnit,
+          unitCode: sellingUnitCode(selectedUnit, packSizeValue, packSizeUnit),
+          conversionToBase: packBaseQuantity,
+          barcode: form.getValues("barcode"),
+        },
+        ...sellingUnits,
+      ],
+      form.getValues("barcode"),
+    );
+    if (clash === "size") {
       toast({ title: t("products.form.packAlreadyAdded"), description: t("products.form.chooseDifferentPack"), variant: "destructive" });
+      return;
+    }
+    if (clash === "barcode") {
+      toast({ title: t("products.form.packBarcodeTaken"), description: t("products.form.packBarcodeTakenHint"), variant: "destructive" });
       return;
     }
     form.setValue("sellingUnits", [
@@ -380,8 +439,8 @@ export function ProductFormPanel({
         unitCode: code,
         packSizeValue: size,
         packSizeUnit: extraPackDraft.packSizeUnit,
-        conversionToBase: sellingUnitConversion(size, extraPackDraft.packSizeUnit),
-        barcode: extraPackDraft.barcode.trim() || null,
+        conversionToBase: conversion,
+        barcode: packBarcode || null,
         defaultPrice: price,
         minimumPrice: null,
         maximumPrice: packMrp > 0 ? packMrp : null,
@@ -889,8 +948,12 @@ export function ProductFormPanel({
                             />
                           </Field>
                           {/* Blank is a real answer: it means "cost me the product cost
-                              scaled to this size", which is what billing works out. */}
-                          <Field label={t("products.form.packCost")}>
+                              scaled to this size", which is what billing works out.
+                              Short labels here: the card already names the pack, and
+                              three wrapping headings left the inputs on three different
+                              baselines. The add-pack form below keeps the full wording,
+                              where the pack being described is not yet on screen. */}
+                          <Field label={t("products.form.costPrice")}>
                             <Input
                               className="h-8"
                               type="number"
@@ -902,7 +965,7 @@ export function ProductFormPanel({
                               aria-label={`${row.name} cost price`}
                             />
                           </Field>
-                          <Field label={t("products.form.packMrp")}>
+                          <Field label={t("products.form.mrp")}>
                             <Input
                               className="h-8"
                               type="number"

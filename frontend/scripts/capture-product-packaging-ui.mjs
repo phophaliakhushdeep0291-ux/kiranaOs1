@@ -75,7 +75,10 @@ async function waitForPage(client, expression, timeout = 30_000) {
 
 async function navigate(client, url) {
   await client.send("Page.navigate", { url });
-  await waitForPage(client, "document.readyState === 'complete'");
+  // readyState alone is satisfied by about:blank, and reading localStorage there
+  // throws SecurityError — wait until the app's own origin is actually loaded.
+  const origin = new URL(url).origin;
+  await waitForPage(client, `document.readyState === 'complete' && location.origin === ${JSON.stringify(origin)}`);
 }
 
 async function screenshot(client, file) {
@@ -551,6 +554,79 @@ async function main() {
     if (salt && saltByCode["packet-5-kg"] !== 4) problems.push(`switch: 5 kg saved as ${saltByCode["packet-5-kg"]}, expected 4`);
     if (salt && saltByCode["packet-500-gram"] !== 20) problems.push(`switch: 500 g saved as ${saltByCode["packet-500-gram"]}, expected 20`);
     if (salt && saltByCode["packet-1-kg"] !== 10) problems.push(`switch: 1 kg saved as ${saltByCode["packet-1-kg"]}, expected 10`);
+
+    // ── 7. the two ways one pack can be entered twice ───────────────────────
+    // Both end with a shopkeeper unable to tell two rows apart: same physical size
+    // under a different measure, and one barcode naming more than one pack.
+    console.log("packaging-qa: duplicate guards");
+    await navigate(client, `${FRONTEND_URL}/products`);
+    await waitForPage(client, `!!document.body.innerText.includes('Add Product')`);
+    await client.evaluate(HELPERS);
+    await client.evaluate(`__qa.click(document, 'Add Product')`);
+    await waitForPage(client, `!!__qa.panel()`);
+    await client.evaluate(HELPERS);
+    await client.evaluate(`(() => {
+      const p = __qa.panel();
+      __qa.fill(p, 'Product name', 'Duplicate Guard Atta');
+      __qa.click(p, 'packet');
+      return true;
+    })()`);
+    await waitForPage(client, `!!__qa.panel().querySelector('[data-testid="input-pack-size"]')`);
+    await sleep(300);
+    await client.evaluate(`(async () => {
+      const p = __qa.panel();
+      await __qa.pick(p.querySelector('[data-testid="input-pack-size"]').closest('div').querySelector('[role=combobox]'), 'kg');
+      return true;
+    })()`);
+    await sleep(300);
+    await client.evaluate(`(() => {
+      const p = __qa.panel();
+      __qa.set(p.querySelector('[data-testid="input-pack-size"]'), '1');
+      __qa.fill(p, 'MRP', '300');
+      __qa.fill(p, 'Cost Price', '240');
+      __qa.fill(p, 'Selling Price', '280');
+      __qa.fill(p, 'Opening Stock', '5');
+      __qa.set(p.querySelector('input[placeholder*="barcode"], input[placeholder*="Scan"]'), '8901234567890');
+      return true;
+    })()`);
+
+    async function tryPack({ contains, measure, price, barcode = "" }) {
+      await client.evaluate(`(async () => {
+        const box = __qa.packBox();
+        if (!box.textContent.includes('Add pack to product')) __qa.click(box, 'Add size');
+        await new Promise((r) => setTimeout(r, 250));
+        await __qa.pick(__qa.field(__qa.draft(), 'Measure'), ${JSON.stringify(measure)});
+        return true;
+      })()`);
+      await sleep(250);
+      await client.evaluate(`(() => {
+        const b = __qa.draft();
+        __qa.fill(b, 'One packet contains', ${JSON.stringify(String(contains))});
+        __qa.fill(b, 'Selling price', ${JSON.stringify(String(price))});
+        __qa.fill(b, 'Pack barcode', ${JSON.stringify(barcode)});
+        return true;
+      })()`);
+      const before = await client.evaluate(`__qa.packRows().length`);
+      await client.evaluate(`(() => { __qa.click(__qa.packBox(), 'Add pack to product'); return true; })()`);
+      await sleep(500);
+      const after = await client.evaluate(`__qa.packRows()`);
+      return { added: after.length > before, rows: after, toasts: await client.evaluate(`__qa.toasts()`) };
+    }
+
+    // 1000 gram IS the 1 kg packet already on the product, spelled the other way.
+    const sameSize = await tryPack({ contains: 1000, measure: "gram", price: 280 });
+    console.log("packaging-qa:   1000 gram against a 1 kg default ->", JSON.stringify(sameSize));
+    if (sameSize.added) problems.push("duplicate: a 1000 gram packet was added alongside the 1 kg packet — same pack, two shelves");
+
+    // A real second size, but wearing the product's own barcode.
+    const sameBarcode = await tryPack({ contains: 5, measure: "kg", price: 1350, barcode: "8901234567890" });
+    console.log("packaging-qa:   5 kg reusing the product barcode ->", JSON.stringify(sameBarcode));
+    if (sameBarcode.added) problems.push("duplicate: a pack took a barcode already in use — one scan now matches two packs");
+
+    // The same size WITHOUT the clash still has to go on, or the guard is too eager.
+    const genuine = await tryPack({ contains: 5, measure: "kg", price: 1350, barcode: "8909999999999" });
+    console.log("packaging-qa:   5 kg with its own barcode ->", JSON.stringify(genuine.rows));
+    if (!genuine.added) problems.push("duplicate: the guard blocked a genuinely new pack — " + JSON.stringify(genuine.toasts));
 
     const netErrors = await client.evaluate(`window.__qaNetErrors`);
     const pageErrors = await client.evaluate(`window.__qaPageErrors`);

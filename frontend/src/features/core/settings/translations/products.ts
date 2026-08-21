@@ -141,6 +141,8 @@ export const productsEn = {
   "products.form.measure": "Measure",
   "products.form.openingQuantity": "Opening quantity (Optional)",
   "products.form.packBarcode": "Pack barcode (Optional)",
+  "products.form.packBarcodeTaken": "That barcode is already on another pack",
+  "products.form.packBarcodeTakenHint": "One barcode can only name one pack, or a scan at the counter picks the wrong size.",
   "products.form.packBarcodePlaceholder": "Barcode for this size",
   "products.form.addPack": "Add pack to product",
   "products.form.addSize": "Add size",
