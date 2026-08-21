@@ -210,6 +210,29 @@ export async function createPurchaseOrder(shopId, data, actor = {}) {
     const productIds = data.items.map((item) => item.productId);
     const products = await tx.product.findMany({ where: { shopId, id: { in: productIds }, deletedAt: null } });
     if (products.length !== productIds.length) throw new AppError("A purchase-order product was not found", 404, "PRODUCT_NOT_FOUND");
+    /**
+     * A per-packaging product cannot be ordered here, and the shop has to learn
+     * that while it is still writing the order.
+     *
+     * A purchase-order line carries `orderedBaseQty` and nothing else — there is
+     * no field saying how many 1 kg packets and how many 5 kg bags were ordered,
+     * so receiving one cannot attribute the goods to a pack and the movement is
+     * refused. Nothing used to stop such a product being ordered, so the refusal
+     * landed at the RECEIVING DESK: the order had been raised, sent to the
+     * supplier, and the goods were physically standing there unbookable.
+     *
+     * Stock In takes a pack (`sellingUnitId`) and works for these products today,
+     * so the message points at the path that does the job rather than only saying
+     * no. See movePackagingStock in location-context.service.js.
+     */
+    const perPack = products.filter((product) => product.packagingMode === "per_pack");
+    if (perPack.length) {
+      throw new AppError(
+        `${perPack.length === 1 ? `"${perPack[0].name}" is` : `${perPack.length} of these products are`} counted per pack size, which a purchase order cannot express. Receive ${perPack.length === 1 ? "it" : "them"} through Stock In, where the pack size is chosen.`,
+        422,
+        "PURCHASE_ORDER_PER_PACK_UNSUPPORTED",
+      );
+    }
     const byId = new Map(products.map((product) => [product.id, product]));
     const items = data.items.map((item) => {
       const product = byId.get(item.productId);

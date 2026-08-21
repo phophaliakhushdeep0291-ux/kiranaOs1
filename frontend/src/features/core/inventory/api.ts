@@ -77,6 +77,16 @@ export interface StockCountSession {
   appliedAt?: string | null;
   cancelledAt?: string | null;
   lines: StockCountLine[];
+  /**
+   * Products left out because they are counted per pack size.
+   *
+   * A count line holds one total for the product, which says nothing about how
+   * many of each pack are on the shelf, so those products cannot take part. Sent
+   * on the create response only — it describes this selection, not the stored
+   * count — and the shop needs it before it walks the aisle looking for a product
+   * that is not on the list.
+   */
+  excludedPerPackProducts?: Array<{ id: string; name: string }>;
   summary: {
     totalLines: number;
     countedLines: number;

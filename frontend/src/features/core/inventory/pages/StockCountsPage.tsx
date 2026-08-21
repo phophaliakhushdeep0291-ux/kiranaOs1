@@ -106,7 +106,14 @@ export default function StockCountsPage() {
     mutationFn: () => createStockCount({ name: name.trim(), blindCount }),
     onSuccess: (data) => {
       setSelectedId(data.id); setStartOpen(false); setName(""); refresh(data);
-      toast({ title: t("inventory.counts.started"), description: `${data.summary.totalLines} products were snapshotted for ${data.location.name}.` });
+      // Naming what was left out matters more than the count that succeeded: a
+      // per-pack product is missing from the list on purpose, and without this the
+      // shopkeeper walks the aisle looking for a row that is never going to appear.
+      const skipped = data.excludedPerPackProducts ?? [];
+      const skippedNote = skipped.length
+        ? ` ${skipped.length === 1 ? `${skipped[0].name} is` : `${skipped.length} products are`} counted per pack size and must be recounted on the product itself.`
+        : "";
+      toast({ title: t("inventory.counts.started"), description: `${data.summary.totalLines} products were snapshotted for ${data.location.name}.${skippedNote}` });
     },
     onError: (error: Error) => toast({ title: t("inventory.counts.notStarted"), description: error.message, variant: "destructive" }),
   });

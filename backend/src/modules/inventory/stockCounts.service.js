@@ -72,7 +72,36 @@ export async function createStockCount(shopId, locationId, data, actor = {}) {
       });
       if (!products.length) throw new AppError("No active products were selected", 422, "STOCK_COUNT_EMPTY");
       if (data.productIds?.length && products.length !== new Set(data.productIds).size) throw new AppError("One or more selected products are unavailable", 422, "STOCK_COUNT_PRODUCT_INVALID");
-      const snapshots = await Promise.all(products.map(async (product) => ({
+      /**
+       * A per-packaging product cannot be counted as one total, so it must not
+       * enter the count at all.
+       *
+       * A count line carries a single `countedBaseQty`, and applying it calls
+       * setLocationInventory — which refuses a per_pack product outright, because
+       * "34,500 g" says nothing about how many 1 kg packets and how many 5 kg bags
+       * are on the shelf. Nothing used to stop such a product being selected, so
+       * the refusal arrived at APPLY: the shopkeeper had already walked the aisle,
+       * typed every quantity and sent it for approval, and then the whole count was
+       * rejected atomically — the honest pooled products in the same count lost
+       * their figures too. Worse, the session stayed open and the branch's unique
+       * active-count key blocked every future count until somebody found it and
+       * cancelled it, throwing the counting away.
+       *
+       * Leaving them out keeps the count usable for everything else and reports
+       * what was skipped, so the shop knows to recount those per pack instead. An
+       * explicit selection of ONLY per-pack products is an error rather than an
+       * empty count, because silently counting nothing is not what was asked for.
+       */
+      const countable = products.filter((product) => product.packagingMode !== "per_pack");
+      const excluded = products.filter((product) => product.packagingMode === "per_pack");
+      if (!countable.length) {
+        throw new AppError(
+          `${excluded.length === 1 ? `"${excluded[0].name}" is` : `All ${excluded.length} selected products are`} counted per pack size, so ${excluded.length === 1 ? "it" : "they"} cannot be counted as one total. Recount each pack size on the product instead.`,
+          422,
+          "STOCK_COUNT_PER_PACK_ONLY",
+        );
+      }
+      const snapshots = await Promise.all(countable.map(async (product) => ({
         productId: product.id,
         productName: product.name,
         baseUnit: product.baseUnit,
@@ -97,9 +126,16 @@ export async function createStockCount(shopId, locationId, data, actor = {}) {
         entityType: "StockCountSession",
         entityId: created.id,
         after: { status: created.status, name: created.name, blindCount: created.blindCount },
-        metadata: { locationId: location.id, totalLines: created.lines.length },
+        metadata: {
+          locationId: location.id,
+          totalLines: created.lines.length,
+          excludedPerPackProductIds: excluded.map((product) => product.id),
+        },
       }, tx);
-      return created;
+      // Carried on the create response only: it describes this selection, not the
+      // stored session, and the shop needs it while it still has time to plan the
+      // per-pack recount — not on every later read of the count.
+      return { ...created, excludedPerPackProducts: excluded.map(({ id, name }) => ({ id, name })) };
     }));
   } catch (error) {
     if (error?.code === "P2002") throw new AppError("Finish or cancel the active stock count for this branch first", 409, "STOCK_COUNT_ALREADY_ACTIVE");
