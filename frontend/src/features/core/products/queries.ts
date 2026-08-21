@@ -67,10 +67,31 @@ async function readProductsFromIndexedDB(params?: ListProductsParams): Promise<P
   }
 }
 
+/**
+ * Every id this row can be recognised by.
+ *
+ * `clientProductId` is what makes a just-created product one product rather than
+ * two: the device keys its own row by the id it minted, the server answers with
+ * its OWN id, and the only thing tying them together is the client id the server
+ * echoes back. Without it both rows were added, so the catalogue listed the
+ * product twice and `cacheProducts` wrote both copies to IndexedDB, where they
+ * survived a reload until the create was finally acknowledged.
+ */
 function productKeys(product: Product): string[] {
-  const row = product as Product & { productId?: unknown; local_id?: unknown; server_id?: unknown; localId?: unknown; serverId?: unknown };
-  return [product.id, row.productId, row.local_id, row.server_id, row.localId, row.serverId]
-    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  const row = product as Product & {
+    productId?: unknown; local_id?: unknown; server_id?: unknown; localId?: unknown; serverId?: unknown;
+    clientProductId?: unknown; client_product_id?: unknown;
+  };
+  return [
+    product.id,
+    row.productId,
+    row.local_id,
+    row.server_id,
+    row.localId,
+    row.serverId,
+    row.clientProductId,
+    row.client_product_id,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
 }
 
 function isDeviceOwnedProduct(product: Product): boolean {

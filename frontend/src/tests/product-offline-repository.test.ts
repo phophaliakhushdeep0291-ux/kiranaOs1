@@ -28,6 +28,32 @@ describe("product local-first repository", () => {
     expect(rows).toEqual([expect.objectContaining({ id: "local_1", name: "New name", server_id: "server_1" })]);
   });
 
+  /**
+   * A just-created product, before its create has been acknowledged.
+   *
+   * The local row is keyed by the id this device minted; the server answers with
+   * its OWN id and echoes the device's back as `clientProductId` — the only thing
+   * tying the two together. Without matching on it the same product was added
+   * twice, so it appeared twice in the catalogue and both copies were written to
+   * IndexedDB, surviving a reload.
+   */
+  it("collapses a server row onto the local row it was created from", () => {
+    const rows = mergeProducts(
+      [product("cmt2k3rk", "Ashirvaad Atta", { clientProductId: "product_8a3fce21" })],
+      [product("product_8a3fce21", "Ashirvaad Atta", { sync_status: "pending_sync" })],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("Ashirvaad Atta");
+  });
+
+  it("still separates two genuinely different products", () => {
+    const rows = mergeProducts(
+      [product("cmt2k3rk", "Ashirvaad Atta", { clientProductId: "product_aaa" })],
+      [product("product_bbb", "Tata Salt", { sync_status: "pending_sync" })],
+    );
+    expect(rows.map((row) => row.name)).toEqual(["Ashirvaad Atta", "Tata Salt"]);
+  });
+
   it("does not retain stale synced rows after a successful empty server response", () => {
     expect(mergeProducts([], [product("server_1", "Removed", { sync_status: "synced" })])).toEqual([]);
   });
