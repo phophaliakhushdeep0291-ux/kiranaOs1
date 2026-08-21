@@ -48,6 +48,7 @@ export async function restoreEntityFromRecycleBinLocalFirst(type: RecyclableEnti
     updated_at: now,
     sync_status: "pending_sync" as const,
   };
+  const serverId = typeof restored.server_id === "string" && restored.server_id ? restored.server_id : null;
   const restoreOutboxRow = buildOutboxOperation({
     entity_type: type,
     entity_id: restored.id,
@@ -55,8 +56,15 @@ export async function restoreEntityFromRecycleBinLocalFirst(type: RecyclableEnti
     payload: {
       entityType: type,
       entityId: restored.id,
+      // Every restore backend resolves its own id from `serverXId ?? xId ?? localXId ?? id`,
+      // so `id` is the single spelling all three of them accept from this shared builder —
+      // `entityId`/`localId`/`serverId` are names only this file uses. Without it the event
+      // reaches the server carrying no id it recognises and 400s ("productId required for
+      // RESTORE_PRODUCT sync event"): the bin empties and the row comes back on this device
+      // while the server keeps it deleted, and nothing is shown to the shop.
+      id: serverId ?? restored.id,
       localId: String(restored.local_id ?? restored.id),
-      serverId: typeof restored.server_id === "string" ? restored.server_id : null,
+      serverId,
       reason: reason ?? null,
       ownerPin,
       ownerPinProvided: true,

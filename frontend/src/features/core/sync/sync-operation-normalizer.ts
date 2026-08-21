@@ -21,6 +21,13 @@ const BACKEND_OPERATION_TYPE_MAP: Record<string, string> = {
   RESTORE_PRODUCT_PENDING: "RESTORE_PRODUCT",
   DELETE_CUSTOMER_PENDING: "DELETE_CUSTOMER",
   RESTORE_CUSTOMER_PENDING: "RESTORE_CUSTOMER",
+  // Unmapped names fall through as-is and the backend switch has no case for the "_PENDING"
+  // spelling, so it answers 400 "Unsupported sync event type" and the op parks at CONFLICT:
+  // the shop sees the supplier gone (or restored) on this device while the server still
+  // disagrees, and nothing surfaces. Both supplier lifecycle events have to be named here —
+  // canonical spellings live in backend/src/utils/syncRules.js.
+  DELETE_SUPPLIER_PENDING: "DELETE_SUPPLIER",
+  RESTORE_SUPPLIER_PENDING: "RESTORE_SUPPLIER",
   RECORD_PAYMENT: "UDHAR_PAYMENT",
   REVERSE_PAYMENT: "REVERSE_UDHAR_PAYMENT",
   CREATE_LEDGER_ADJUSTMENT: "CREATE_LEDGER_ADJUSTMENT",
