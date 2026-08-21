@@ -126,6 +126,10 @@ export default function ProductsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  // A refused save is shown IN the panel as well as in a toast: toasts here last
+  // five seconds, and the refusals worth reading are the ones telling the shop what
+  // to do before it can save at all.
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -211,18 +215,24 @@ export default function ProductsPage() {
         setPinOpen(false);
         setPendingValues(null);
         form.reset(productToForm());
+        setSaveError(null);
         setOpen(stayOpenRef.current);
         toast(isOnline
           ? { title: t("products.toast.added") }
           : { title: t("products.toast.savedOffline"), description: t("products.toast.willSync") });
       },
-      onError: (err: unknown) => toast({ title: t("products.toast.saveFailed"), description: err instanceof Error ? err.message : t("products.toast.checkRequired"), variant: "destructive" }),
+      onError: (err: unknown) => {
+        const message = err instanceof Error ? err.message : t("products.toast.checkRequired");
+        setSaveError(message);
+        toast({ title: t("products.toast.saveFailed"), description: message, variant: "destructive" });
+      },
     },
   });
 
   const updateProduct = useUpdateProduct({
     mutation: {
       onSuccess: () => {
+        setSaveError(null);
         queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
         setOpen(false);
         setPinOpen(false);
@@ -233,7 +243,11 @@ export default function ProductsPage() {
           ? { title: t("products.toast.updated") }
           : { title: t("products.toast.updatedOffline"), description: t("products.toast.changesWillSync") });
       },
-      onError: (err: unknown) => toast({ title: t("products.toast.updateFailed"), description: err instanceof Error ? err.message : t("products.toast.checkRequired"), variant: "destructive" }),
+      onError: (err: unknown) => {
+        const message = err instanceof Error ? err.message : t("products.toast.checkRequired");
+        setSaveError(message);
+        toast({ title: t("products.toast.updateFailed"), description: message, variant: "destructive" });
+      },
     },
   });
 
@@ -917,8 +931,9 @@ export default function ProductsPage() {
         width={panelWidth}
         onResizeStart={onResizeStart}
         onStayOpenChange={(v) => { setStayOpen(v); stayOpenRef.current = v; }}
-        onOpenChange={setOpen}
+        onOpenChange={(next) => { if (!next) setSaveError(null); setOpen(next); }}
         onSubmit={onSubmit}
+        saveError={saveError}
       />
 
       <ImportProductsDialog

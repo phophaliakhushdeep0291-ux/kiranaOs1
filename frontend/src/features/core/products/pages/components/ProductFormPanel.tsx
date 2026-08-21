@@ -25,6 +25,7 @@ import { VariantLocationSplit } from "./VariantLocationSplit";
 import { convertPackagingMode, type ProductFormData } from "../product-form-state";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { generateInternalEan13 } from "@/lib/barcode/ean13";
+import { lookupKnownProduct } from "@/features/core/products/product-knowledge";
 
 const GST_RATES = [0, 5, 12, 18, 28];
 const PACK_MEASURE_UNITS = ["piece", "tablet", "gram", "kg", "ml", "litre"];
@@ -165,6 +166,8 @@ interface ProductFormPanelProps {
   onStayOpenChange: (value: boolean) => void;
   onOpenChange: (open: boolean) => void;
   onSubmit: (values: ProductFormData) => void;
+  /** Why the last save was refused, kept on screen until the next attempt. */
+  saveError?: string | null;
 }
 
 async function fileToResizedDataUrl(file: File, max = 512): Promise<string> {
@@ -214,6 +217,7 @@ export function ProductFormPanel({
   width,
   onResizeStart,
   onStayOpenChange,
+  saveError,
   onOpenChange,
   onSubmit,
 }: ProductFormPanelProps) {
@@ -229,6 +233,7 @@ export function ProductFormPanel({
   const [imgError, setImgError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [barcodeLookup, setBarcodeLookup] = useState(false);
   const [extraPackOpen, setExtraPackOpen] = useState(false);
   const [extraPack, setExtraPack] = useState(() => emptyExtraPack("packet", "piece"));
   // The product measure the draft was last seeded from, so a later change to the
@@ -301,6 +306,7 @@ export function ProductFormPanel({
   // already has a grid, so switching business type cannot strand one.
   const showVariantGrid = hasCapability("PRODUCT_VARIANTS") || hasVariantGrid;
   const alternateSellingUnits = sellingUnits.filter((row) => !row.isDefault && !row.variantValue1 && !row.variantValue2);
+  const barcodeField = form.register("barcode");
   const err = form.formState.errors;
   const productMrp = Number(form.watch("mrp") || 0);
   /**
@@ -521,6 +527,71 @@ export function ProductFormPanel({
     const next = convertPackagingMode(form.getValues(), mode);
     form.setValue("packagingMode", next.packagingMode, { shouldDirty: true, shouldValidate: true });
     form.setValue("stockQuantity", next.stockQuantity, { shouldDirty: true, shouldValidate: true });
+  }
+
+  /**
+   * Let the packet fill in its own details.
+   *
+   * The shop already has a barcode lookup — scanning an unknown code at the till
+   * offers to create the product with its name, brand and pack size filled in — but
+   * the product form could not use it, so building a catalogue by hand meant typing
+   * everything a scanner could have read. Runs when the box loses focus rather than
+   * per keystroke, and only for a NEW product that has not been named yet, so it
+   * cannot rewrite what the shop is in the middle of typing. Each field is filled
+   * only while it is still blank, for the same reason. Offline it answers from the
+   * cache or not at all, never an error — typing it out still works.
+   */
+  async function fillFromBarcode() {
+    if (editing) return;
+    const code = (form.getValues("barcode") ?? "").trim();
+    if (code.length < 8) return;
+    if ((form.getValues("name") ?? "").trim()) return;
+    setBarcodeLookup(true);
+    try {
+      const known = await lookupKnownProduct(code).catch(() => null);
+      if (!known?.name) return;
+      let filled = 0;
+      const fillBlank = (field: "name" | "brand" | "category" | "description", value?: string | null) => {
+        const next = String(value ?? "").trim();
+        if (!next) return;
+        if (String(form.getValues(field) ?? "").trim()) return;
+        form.setValue(field, next, { shouldDirty: true, shouldValidate: true });
+        filled += 1;
+      };
+      fillBlank("name", known.name);
+      fillBlank("brand", known.brand);
+      fillBlank("description", known.description);
+      // Only a category this shop actually files things under: a lookup's own
+      // wording would otherwise invent one nobody browses by.
+      const match = categories.find((row) => row.toLowerCase() === String(known.category ?? "").trim().toLowerCase());
+      if (match) fillBlank("category", match);
+      // Pack size only while it is still the untouched default, so a size the shop
+      // has already described is never replaced by a general-purpose answer.
+      const size = Number(known.packSizeValue ?? 0);
+      const measure = String(known.packSizeUnit ?? "").trim().toLowerCase();
+      // A lookup says "g" where the select offers "gram". Rather than keep a second
+      // alias table, ask the pricing rules whether the two mean the same thing: same
+      // base unit, same factor. An abbreviation the shop's units cannot express at
+      // all simply leaves the pack size alone.
+      const canonicalMeasure = measure
+        ? packMeasureUnits.find((option) => option === measure
+            || (baseUnitFor(option) === baseUnitFor(measure)
+              && sellingUnitConversion(1, option) === sellingUnitConversion(1, measure)))
+        : undefined;
+      if (size > 0 && canonicalMeasure && Number(form.getValues("packSizeValue")) === 1) {
+        form.setValue("packSizeValue", size, { shouldDirty: true, shouldValidate: true });
+        form.setValue("packSizeUnit", canonicalMeasure, { shouldDirty: true, shouldValidate: true });
+        filled += 1;
+      }
+      if (filled > 0) {
+        toast({
+          title: t("products.form.barcodeFilled"),
+          description: `${known.name}${known.brand ? ` · ${known.brand}` : ""}`,
+        });
+      }
+    } finally {
+      setBarcodeLookup(false);
+    }
   }
 
   function updatePackField(unitCode: string, field: "onHandQty" | "lowStockThreshold" | "maximumPrice" | "costPrice" | "minimumPrice" | "reorderLevel", raw: string) {
@@ -748,8 +819,17 @@ export function ProductFormPanel({
                 <Field label={t(productEntry.identifierLabel)} error={err.barcode?.message}>
                   <div className="flex gap-2">
                     <div className="relative min-w-0 flex-1">
-                      <Input className="h-10 pr-9" placeholder={t(productEntry.identifierPlaceholder)} {...form.register("barcode")} />
-                      <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
+                      <Input
+                        className="h-10 pr-9"
+                        placeholder={t(productEntry.identifierPlaceholder)}
+                        {...barcodeField}
+                        onBlur={(event) => { void barcodeField.onBlur(event); void fillFromBarcode(); }}
+                      />
+                      {barcodeLookup ? (
+                        <Loader2 size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[var(--brand)]" />
+                      ) : (
+                        <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
+                      )}
                     </div>
                     <Button type="button" variant="outline" className="h-10 shrink-0 px-3" onClick={() => form.setValue("barcode", generateInternalEan13(), { shouldDirty: true, shouldValidate: true })}>
                       Generate
@@ -1315,6 +1395,20 @@ export function ProductFormPanel({
 
         {/* Footer */}
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
+          {/*
+            A refused save has to stay on screen next to the button that was pressed.
+            It used to be a toast and nothing else, and toasts here last five seconds:
+            press Save, look at the form rather than the corner, and the panel simply
+            sits there. The refusals that matter most are the ones carrying an
+            instruction — "count this product's stock to zero before changing how it
+            tracks pack-level inventory" — so losing them costs the shop the one
+            sentence that says what to do next.
+          */}
+          {saveError && (
+            <p role="alert" className="mb-3 rounded-[10px] border border-[#f3c2c2] bg-[#fdf2f2] px-3 py-2 text-[12px] font-semibold text-[#96222a]">
+              {saveError}
+            </p>
+          )}
           {!editing && (
             <label className="mb-3 flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-[#45577a]">
               <input type="checkbox" aria-label={t("products.form.keepOpen")} checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[var(--brand)]" />
