@@ -66,6 +66,7 @@ import {
   readProductDraftEventDetail,
   type ProductFormData,
 } from "./product-form-state";
+import { activeInventorySellingUnits, packSizeLabel } from "@/features/core/inventory/stock-display";
 import { ProductFormPanel } from "./components/ProductFormPanel";
 import { ImportProductsDialog } from "./components/ImportProductsDialog";
 import { offlineDB } from "@/lib/offline/db";
@@ -639,6 +640,21 @@ export default function ProductsPage() {
                   // this heading told the shopkeeper an MRP was set when it was
                   // not — and left no way to find the products still missing one.
                   const mrp = product.mrp && product.mrp > 0 ? product.mrp : null;
+                  /**
+                   * The other sizes this product is sold in.
+                   *
+                   * The catalogue showed the default pack and nothing else, so a shop
+                   * selling atta as a 1 kg packet AND a 5 kg bag could not tell the two
+                   * apart from any list — the only way to find out was to open the
+                   * product. Sizes go under the unit; when each size is counted on its
+                   * own, its count goes under the total, because that is the number the
+                   * shelf actually has.
+                   */
+                  const packUnits = activeInventorySellingUnits(product);
+                  const alternatePacks = packUnits.filter((row) => !row.isDefault);
+                  const perPackCounts = product.packagingMode === "per_pack" && packUnits.length > 1
+                    ? packUnits.map((row) => `${Number(row.onHandQty ?? 0)} x ${packSizeLabel(row)}`)
+                    : [];
                   return (
                     <tr key={product.id} className={`border-b border-[#f1f4f8] last:border-0 transition-colors hover:bg-[#f9fbfe] ${selectedIds.has(product.id) ? "bg-[#f3f8ff]" : ""}`} data-testid={`row-product-${product.id}`}>
                       <td className="px-3 py-3">
@@ -672,7 +688,17 @@ export default function ProductsPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3"><span className="font-mono text-[12px] text-[#45577a]">{product.barcode ?? product.sku ?? "—"}</span></td>
-                      <td className="px-3 py-3 capitalize text-[#45577a]">{unit}</td>
+                      <td className="px-3 py-3 capitalize text-[#45577a]">
+                        {unit}
+                        {alternatePacks.length > 0 && (
+                          <p
+                            className="mt-0.5 text-[11px] font-semibold normal-case text-[#8a97ad]"
+                            data-testid={`pack-sizes-${product.id}`}
+                          >
+                            {summariseList(alternatePacks.map(packSizeLabel))}
+                          </p>
+                        )}
+                      </td>
                       <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{mrp === null ? <span className="text-[#93a3bd]">—</span> : rs(mrp)}</td>
                       <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(averageCost(product))}</td>
                       <td className="px-3 py-3 text-right font-extrabold text-[#13274d]">{rs(product.sellingPrice ?? product.defaultPricePerRateUnit)}</td>
@@ -680,6 +706,14 @@ export default function ProductsPage() {
                       <td className="px-3 py-3">
                         <div className="flex flex-col items-center gap-1">
                           <span className={`font-bold ${outOfStock ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{stock}</span>
+                          {perPackCounts.length > 0 && (
+                            <p
+                              className="text-center text-[10.5px] font-semibold leading-tight text-[#8a97ad]"
+                              data-testid={`pack-stock-${product.id}`}
+                            >
+                              {summariseList(perPackCounts)}
+                            </p>
+                          )}
                           {outOfStock ? (
                             <StatusPill tone="rose">{t("products.badge.outOfStock")}</StatusPill>
                           ) : low ? (
@@ -873,6 +907,19 @@ function StatCard({ icon, iconClass, label, value, sub }: { icon: React.ReactNod
       </div>
     </div>
   );
+}
+
+/**
+ * A short list, with the rest counted rather than printed.
+ *
+ * These sit in two of the narrowest columns in the catalogue. A shop selling rice
+ * in four sizes ran the line past the table's width and pushed the actions column
+ * off the side; the point is to show that a product HAS other sizes, which the
+ * first few make just as well as all of them.
+ */
+function summariseList(entries: string[], limit = 3): string {
+  if (entries.length <= limit) return entries.join(" · ");
+  return `${entries.slice(0, limit).join(" · ")} +${entries.length - limit}`;
 }
 
 function StatusPill({ tone, children }: { tone: "emerald" | "amber" | "rose"; children: React.ReactNode }) {
