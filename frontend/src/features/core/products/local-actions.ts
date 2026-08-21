@@ -253,14 +253,39 @@ function normalizeProductName(name = ""): string {
 async function assertNoLocalProductNameConflict(name: string, excludeId?: string): Promise<void> {
   const normalized = normalizeProductName(name);
   if (!normalized) return;
-  const products = await offlineDB.getAll<Product>("products").catch(() => [] as Product[]);
+  const [products, mappings] = await Promise.all([
+    offlineDB.getAll<Product>("products").catch(() => [] as Product[]),
+    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => [] as Record<string, unknown>[]),
+  ]);
+
+  /**
+   * Local ids the sync layer has already re-issued under a server id.
+   *
+   * `replaceLocalEntityId` normally DELETES the optimistic row the moment the push
+   * lands, so this is usually empty of anything still in `products`. It skips the
+   * delete when the row no longer passes `rowMatchesCurrentScope` though — switch
+   * store while a create is in flight and the twin outlives its server copy. The twin
+   * keeps the SAME name, so counting it makes the product permanently uneditable, and
+   * the message tells the owner not to duplicate the very thing they are editing.
+   * The mapping is written in the same breath as the server id, so it is the one
+   * record that always knows a twin is a twin.
+   */
+  const retiredLocalIds = new Set(
+    mappings
+      .filter((row) => (row.entity_type === undefined || row.entity_type === "product")
+        && typeof row.local_id === "string"
+        && typeof row.server_id === "string"
+        && row.local_id !== row.server_id)
+      .map((row) => String(row.local_id)),
+  );
 
   // A row is "gone" if it was deleted (either casing) or is a merged twin — the local
   // optimistic row that reconcile retires once its server copy arrives. Merged twins
   // keep the SAME name, so counting them would make editing any synced product fail.
   const isGone = (row: Record<string, unknown>) =>
     Boolean(row.deletedAt ?? row.deleted_at ?? row.merged_into_id ?? row.mergedIntoId)
-    || row.status === "deleted";
+    || row.status === "deleted"
+    || (typeof row.id === "string" && retiredLocalIds.has(row.id));
 
   // The same logical product can be stored under its local id and its server id.
   // Treat any of them matching excludeId as "this is the product being edited".

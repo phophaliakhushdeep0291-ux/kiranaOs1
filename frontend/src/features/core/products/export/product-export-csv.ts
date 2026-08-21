@@ -1,4 +1,5 @@
 import type { Product } from "@/types/api";
+import { roundMoney } from "@/lib/money";
 import { getStoredBusinessType, type BusinessType } from "@/features/core/settings/business-type-store";
 import { productToForm, type ProductFormData } from "@/features/core/products/pages/product-form-state";
 import {
@@ -21,10 +22,28 @@ import {
  * that belongs to the shop it came from. A pack's cost and MRP stay blank so the new
  * shop scales them from its own product figures — see `formatPackSizesCell`.
  */
+/**
+ * The whole shelf, counted in the pack the importer will count in.
+ *
+ * NOT `form.stockQuantity`: on a "count each size" product that field holds the DEFAULT
+ * pack's own count, because that is what its box on the form means. Exporting it wrote
+ * 30 for a product holding 30x1kg + 6x5kg + 24x500g and quietly left 42 kg behind. The
+ * product's base total divided by the default pack is the same number the form shows for
+ * a pooled product, so one formula serves both modes.
+ */
+function exportOpeningStock(form: ProductFormData, product: Product): number {
+  const units = product.sellingUnits ?? [];
+  const conversion = Number(units.find((unit) => unit.isDefault)?.conversionToBase ?? units[0]?.conversionToBase ?? 0);
+  const baseQuantity = Number(product.stockBaseQty ?? Number.NaN);
+  if (conversion > 0 && Number.isFinite(baseQuantity)) return roundMoney(baseQuantity / conversion);
+  return Number(form.stockQuantity) || 0;
+}
+
 function cellFor(column: ImportColumn, form: ProductFormData, product: Product): string {
   const field = column.field;
   if (field === "skuBarcode") return String(form.barcode ?? product.sku ?? "");
   if (field === "sellingUnits") return formatPackSizesCell(form.sellingUnits ?? []);
+  if (field === "stockQuantity") return String(exportOpeningStock(form, product));
   if (typeof field === "string" && field.startsWith("attr:")) {
     const value = form.attributes?.[field.slice("attr:".length)];
     if (value === undefined || value === null) return "";

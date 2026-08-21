@@ -106,6 +106,31 @@ describe("product export imports back into another shop", () => {
     expect(fiveKg.maximumPrice ?? null).toBeNull();
   });
 
+  it("carries the WHOLE stock of a per-pack product, not just the default pack's count", () => {
+    // A "count each size" product holds its count per pack, and the form's main stock box
+    // shows the DEFAULT pack's count alone — right for the form, wrong for a file that is
+    // supposed to describe the shelf. Reading it straight would export 30 for a product
+    // holding 30x1kg + 6x5kg + 24x500g, silently leaving 42 kg behind.
+    const perPack = {
+      ...atta,
+      packagingMode: "per_pack",
+      stockBaseQty: 72000,
+      sellingUnits: [
+        { ...(atta as unknown as { sellingUnits: Array<Record<string, unknown>> }).sellingUnits[0], onHandQty: 30 },
+        { ...(atta as unknown as { sellingUnits: Array<Record<string, unknown>> }).sellingUnits[1], onHandQty: 6 },
+        { ...(atta as unknown as { sellingUnits: Array<Record<string, unknown>> }).sellingUnits[2], onHandQty: 24 },
+        { ...(atta as unknown as { sellingUnits: Array<Record<string, unknown>> }).sellingUnits[3], onHandQty: 0 },
+      ],
+    } as unknown as Product;
+
+    const { parsed } = roundTrip([perPack]);
+    const input = parsed.rows[0].input!;
+
+    // 72000 g of atta, expressed in the 1 kg pack the import counts in.
+    expect(parsed.rows[0].values.stockQuantity).toBe("72");
+    expect(input.stockBaseQty).toBe(72000);
+  });
+
   it("names the file after the shop and the day", () => {
     expect(productExportFileName("Packaging Walkthrough Store", new Date("2026-08-22T05:00:00.000Z")))
       .toBe("products-packaging-walkthrough-store-2026-08-22.csv");

@@ -4,6 +4,7 @@ import type { ProductInput } from "@/types/api";
 const mockState = vi.hoisted(() => ({
   idCounter: 0,
   products: [] as Array<Record<string, unknown>>,
+  idMappings: [] as Array<Record<string, unknown>>,
   committed: {
     products: [] as Array<Record<string, unknown>>,
     local_audit_logs: [] as Array<Record<string, unknown>>,
@@ -17,6 +18,7 @@ vi.mock("@/lib/offline/db", () => ({
   offlineDB: {
     getAll: vi.fn(async (storeName: string) => {
       if (storeName === "products") return mockState.products;
+      if (storeName === "id_mappings") return mockState.idMappings;
       return [];
     }),
     put: vi.fn(async () => undefined),
@@ -122,6 +124,7 @@ describe("product local-first write safety", () => {
     vi.clearAllMocks();
     mockState.idCounter = 0;
     mockState.products = [{ ...existingProduct }];
+    mockState.idMappings = [];
     mockState.failOnStore = null;
     mockState.lastTables = [];
     resetCommitted();
@@ -191,6 +194,36 @@ describe("product local-first write safety", () => {
 
     await expect(updateProductLocalFirst("cmr_server_1", { ...baseProductInput, defaultPricePerRateUnit: 52 }))
       .resolves.toEqual(expect.objectContaining({ id: "cmr_server_1", name: "Aashirvaad Atta" }));
+  });
+
+  it("edits a synced product even though its twin was left behind UNtombstoned", async () => {
+    // The twin above is the tidy case. `replaceLocalEntityId` normally deletes the
+    // optimistic row outright, but skips it when the row no longer passes
+    // `rowMatchesCurrentScope` — change store while a create is in flight and the twin
+    // survives carrying no deleted_at and no merged_into_id at all, just the same name.
+    // Only `id_mappings`, written in the same breath as the server id, still knows it is
+    // a twin. Without consulting it the product can never be edited again, and the error
+    // tells the owner not to duplicate the very product they are editing.
+    mockState.products = [
+      { ...existingProduct, id: "cmr_server_1", local_id: "product_1", server_id: "cmr_server_1" },
+      { ...existingProduct, id: "product_1", sync_status: "pending_sync" },
+    ];
+    mockState.idMappings = [
+      { local_id: "product_1", server_id: "cmr_server_1", entity_type: "product" },
+    ];
+
+    await expect(updateProductLocalFirst("cmr_server_1", { ...baseProductInput, defaultPricePerRateUnit: 52 }))
+      .resolves.toEqual(expect.objectContaining({ id: "cmr_server_1", name: "Aashirvaad Atta" }));
+  });
+
+  it("does not excuse a duplicate just because another ENTITY was re-issued", async () => {
+    // The mapping table holds every entity. A customer's re-issued id must not retire a
+    // product row that genuinely clashes.
+    mockState.idMappings = [
+      { local_id: "product_1", server_id: "cmr_server_1", entity_type: "customer" },
+    ];
+
+    await expect(createProductLocalFirst(baseProductInput)).rejects.toThrow(/already exists/i);
   });
 
   it("updates product offline with audit log and outbox in the same transaction", async () => {

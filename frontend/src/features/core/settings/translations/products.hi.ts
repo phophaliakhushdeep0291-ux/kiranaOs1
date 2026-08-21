@@ -171,6 +171,7 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.form.update": "माल अपडेट करें",
   "products.form.nameRequired": "माल का नाम जरूरी है",
   "products.form.packSizeRequired": "पैक की साइज़ और रेट जरूरी हैं",
+  "products.form.barcodeFilled": "बारकोड से भर दिया",
   "products.form.packHasStock": "पहले इस पैक का स्टॉक शून्य करें",
   "products.form.packHasStockHint": "इसमें अभी {qty} है। इसका स्टॉक 0 करके सेव करें, फिर हटाएँ — वरना माल का हिसाब कहीं नहीं रहेगा।",
   "products.form.packAlreadyAdded": "यह पैक पहले से जुड़ा है",

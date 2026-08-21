@@ -49,6 +49,10 @@ function scheduleFinancialHardening(): () => void {
   const run = () => {
     if (cancelled || document.visibilityState !== "visible") return;
     void hardenLocalFinancialData().catch(() => undefined);
+    // Owner PINs left in already-settled outbox rows by builds that kept them. Rides the
+    // same idle pass rather than adding a second one — neither is urgent, and both are
+    // one-shot cleanups of history rather than anything this session needs.
+    void offlineDB.scrubSettledOutboxSecrets().catch(() => undefined);
   };
   if ("requestIdleCallback" in window) {
     const id = window.requestIdleCallback(run, { timeout: 8_000 });
