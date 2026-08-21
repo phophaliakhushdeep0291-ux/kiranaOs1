@@ -1,4 +1,6 @@
 import { roundMoney } from "@/lib/money";
+import { resolveBillPaymentMode } from "@/features/core/bills/payment-mode";
+import { useShopBillingWords } from "@/features/core/settings/shop-billing";
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { NearExpiryAlert } from "@/features/core/inventory/components/NearExpiryAlert";
@@ -45,33 +47,7 @@ const DASH_MUTED = "text-[#62708a] dark:text-muted-foreground";
 // Recent-bills payment label: derive the real tender/credit mode from the saved
 // bill instead of assuming cash. A bill with any outstanding credit must read
 // "Udhar" (not "Cash") so the owner can tell collected sales from money owed.
-function recentBillPaymentMode(bill: Record<string, unknown>): string {
-  const num = (value: unknown) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-  const outstanding = Math.max(
-    num(bill.creditAmount ?? bill.credit_amount),
-    num(bill.udharAmount ?? bill.udhar_amount),
-    num(bill.dueAmount ?? bill.due_amount),
-    num(bill.outstandingAmount ?? bill.outstanding_amount),
-  );
-  const status = String(bill.paymentStatus ?? bill.payment_status ?? "").toLowerCase();
-  if (outstanding > 0 || ["credit", "partial", "unpaid", "due"].includes(status)) return "udhar";
-
-  const explicit = String(bill.paymentMode ?? bill.payment_mode ?? "").toLowerCase();
-  if (explicit && explicit !== "credit") return explicit;
-
-  const payments = Array.isArray(bill.payments) ? (bill.payments as Array<Record<string, unknown>>) : [];
-  const tenderModes = [...new Set(
-    payments
-      .filter((payment) => String(payment.mode ?? "").toLowerCase() !== "credit" && num(payment.amount) > 0)
-      .map((payment) => String(payment.mode ?? "").toLowerCase()),
-  )];
-  if (tenderModes.length > 1) return "split";
-  if (tenderModes.length === 1) return tenderModes[0];
-  return "cash";
-}
+const recentBillPaymentMode = resolveBillPaymentMode;
 
 function compactBillNumber(value: unknown): string {
   const billNumber = String(value ?? "").trim();
@@ -538,6 +514,7 @@ type PaymentSlice = { label: string; value: number; color: string; dot: string }
 
 function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
   const { t } = useAppLanguage();
+  const billingWords = useShopBillingWords();
   const { isOnline, isSyncing, pendingCount, failedCount } = useOfflineStatus();
   const [, navigate] = useLocation();
   const insightsPersonalization = usePersonalization();
@@ -721,10 +698,13 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
       { label: t("billing.pay.cash"), value: cash, color: "#2fc45a", dot: "bg-[#2fc45a]" },
       { label: t("billing.pay.upi"), value: upi, color: "#316df4", dot: "bg-[#316df4]" },
       { label: t("billing.pay.bank"), value: bank, color: "#06a4d9", dot: "bg-[#06a4d9]" },
-      { label: t("billing.pay.udhar"), value: credit, color: "#f2a20b", dot: "bg-[#f2a20b]" },
+      // "billing.pay.udhar" is the placeholder "{credit}" in every language, so
+      // each trade can use its own word. Called without the value it renders the
+      // literal "{credit}" — which is what this legend used to show.
+      { label: t("billing.pay.udhar", { credit: billingWords.credit }), value: credit, color: "#f2a20b", dot: "bg-[#f2a20b]" },
       { label: t("inventory.transfers.reason.other"), value: other, color: "#7557e8", dot: "bg-[#7557e8]" },
     ].filter((row) => row.value > 0);
-  }, [activePeriodReport, dashboard.bank, dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi, period, periodBills.length, periodPaymentSummary, periodSales]);
+  }, [activePeriodReport, billingWords.credit, dashboard.bank, dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi, period, periodBills.length, periodPaymentSummary, periodSales, t]);
 
   const recentBills = useMemo(
     () => (dedupeBillsForDisplay([...(recentBillsQuery.data?.bills ?? []), ...localRecentBills]) as unknown as Bill[])
@@ -1598,7 +1578,13 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
         </div>
       </div>
       <div className="mt-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
-        {(rows.length > 0 ? rows : chartRows).map((row) => {
+        {/*
+          Legend from the REAL rows only. `chartRows` may hold a synthetic
+          {value: 1} slice that exists solely to give the empty donut something to
+          draw — rendering it here printed "No sales   ₹1.00" as a money figure on
+          the home screen of every brand-new shop.
+        */}
+        {rows.map((row) => {
           const pct = realTotal > 0 ? Math.round((row.value / realTotal) * 1000) / 10 : 0;
           return (
             <div key={row.label} className="flex min-w-0 items-center justify-between gap-3 text-xs">
