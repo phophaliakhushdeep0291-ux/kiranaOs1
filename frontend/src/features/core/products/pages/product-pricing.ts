@@ -61,6 +61,19 @@ export function sellingUnitConversion(packSizeValue: number, packSizeUnit: strin
   return roundMoney(Number(packSizeValue || 0) * (UNIT_FACTOR_TO_BASE[packSizeUnit] ?? 1));
 }
 
+/**
+ * Is this a measure the pack maths actually knows?
+ *
+ * An unrecognised one is not an error here — `sellingUnitConversion` falls back to
+ * a factor of 1 so a trade unit nobody tabulated still behaves like a count. That
+ * silence is fine for a measure picked from the form's own list, and dangerous for
+ * one typed into a spreadsheet: "500 gm" would build a 500-PIECE pack, and one sale
+ * of it would take 500 off the shelf. Importers ask first.
+ */
+export function isKnownPackUnit(unit: string): boolean {
+  return Object.hasOwn(UNIT_FACTOR_TO_BASE, String(unit ?? "").trim().toLowerCase());
+}
+
 export function sellingUnitName(unitType: string, packSizeValue?: number | null, packSizeUnit?: string | null): string {
   const type = String(unitType || "unit").trim();
   if (!(Number(packSizeValue) > 0) || !packSizeUnit) return type;

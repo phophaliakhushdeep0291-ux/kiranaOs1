@@ -12,6 +12,15 @@ import {
   productToForm,
   type ProductFormData,
 } from "@/features/core/products/pages/product-form-state";
+import {
+  isKnownPackUnit,
+  sellingUnitCode,
+  sellingUnitConversion,
+  sellingUnitName,
+} from "@/features/core/products/pages/product-pricing";
+
+/** One extra pack size, shaped exactly as the product form holds it. */
+type ProductFormSellingUnit = ProductFormData["sellingUnits"][number];
 
 // CSV remains the safest spreadsheet interchange format in the browser. Excel, Google
 // Sheets, Vyapar, myBillBook, and Tally-compatible exports can all produce CSV without
@@ -61,6 +70,11 @@ export const PRODUCT_IMPORT_COLUMNS: ImportColumn[] = [
   { header: "Pack Unit", field: "packSizeUnit", example: "kg" },
   { header: "Loose Item", field: "isLooseItem", example: "no" },
   { header: "Active", field: "isActive", example: "yes" },
+  // Every OTHER size the same stock is sold in. One cell rather than a numbered run of
+  // columns, because the count varies per product and a spreadsheet cannot grow a column
+  // per row; and one row per product rather than one per pack, because a pack is not a
+  // product here — it is a selling unit drawing on the product's single pool of stock.
+  { header: "Pack Sizes", field: "sellingUnits", example: "packet 500 gram @ 30 | packet 5 kg @ 265" },
 ];
 
 const COLUMN_ALIASES: Partial<Record<ProductImportField, string[]>> = {
@@ -83,6 +97,9 @@ const COLUMN_ALIASES: Partial<Record<ProductImportField, string[]>> = {
   packSizeUnit: ["pack unit", "packet unit", "weight unit", "size unit", "net unit"],
   isLooseItem: ["loose item", "is loose", "loose", "item type", "stock type"],
   isActive: ["active", "is active", "status", "enabled"],
+  // Deliberately none of "size"/"pack size" — those belong to the DEFAULT pack above,
+  // and stealing them here would move a product's own size into its extra-sizes list.
+  sellingUnits: ["pack sizes", "other pack sizes", "extra packs", "selling units"],
 };
 
 const NUMERIC_FIELDS = new Set<ProductImportField>([
@@ -98,7 +115,7 @@ const NUMERIC_FIELDS = new Set<ProductImportField>([
 
 const PACKET_UNITS = new Set(["packet", "pack", "pouch"]);
 
-function csvEscape(value: string): string {
+export function csvEscape(value: string): string {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
@@ -269,6 +286,122 @@ function parseImportBoolean(value: string, defaultValue: boolean): boolean {
   return defaultValue;
 }
 
+/* ─── The "Pack Sizes" cell ──────────────────────────────────────────────────
+ *
+ * `packet 5 kg @ 265 #8901234500055 | packet 500 gram @ 30`
+ *
+ * Written and read in one place so the two can never drift apart. The label is the
+ * pack's own display name, so a round-trip through this file is a no-op and a shop
+ * editing the cell by hand types what it already sees on the product screen.
+ *
+ * Deliberately absent: per-pack cost and MRP. Leaving them blank is what makes the
+ * server scale them from the product, which is both the form's default and what a
+ * shop means by "the 5 kg costs five times the 1 kg" — writing them out would freeze
+ * today's arithmetic into every future price change.
+ */
+const PACK_CELL_SEPARATOR = /[|;\n]+/;
+
+function splitOnce(value: string, marker: string): [string, string | undefined] {
+  const index = value.indexOf(marker);
+  return index === -1 ? [value, undefined] : [value.slice(0, index), value.slice(index + 1)];
+}
+
+export function formatPackSizesCell(units: ProductFormSellingUnit[]): string {
+  return units
+    .filter((unit) => !unit.isDefault && unit.isActive !== false)
+    .map((unit) => {
+      const label = sellingUnitName(unit.unitType, unit.packSizeValue, unit.packSizeUnit);
+      const barcode = String(unit.barcode ?? "").trim();
+      return `${label} @ ${Number(unit.defaultPrice) || 0}${barcode ? ` #${barcode}` : ""}`;
+    })
+    .join(" | ");
+}
+
+export interface ParsedPackSizesCell {
+  units: ProductFormSellingUnit[];
+  errors: string[];
+}
+
+/**
+ * `fallbackUnitType` lets a shop write the shorthand `5 kg @ 265` and mean "another
+ * packet of this", which is how a person writing the column by hand thinks of it.
+ */
+export function parsePackSizesCell(cell: string, fallbackUnitType: string): ParsedPackSizesCell {
+  const units: ProductFormSellingUnit[] = [];
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  if (!cell.trim()) return { units, errors };
+
+  for (const rawEntry of cell.split(PACK_CELL_SEPARATOR)) {
+    const entry = rawEntry.trim();
+    if (!entry) continue;
+
+    const [packPart, barcodePart] = splitOnce(entry, "#");
+    const [namePart, pricePart] = splitOnce(packPart, "@");
+    if (pricePart === undefined) {
+      errors.push(`Pack "${entry}" needs a price — write it as "packet 500 gram @ 30"`);
+      continue;
+    }
+    const price = parseImportNumber(pricePart);
+    if (!Number.isFinite(price) || price < 0) {
+      errors.push(`Pack "${entry}" has no valid price`);
+      continue;
+    }
+
+    const tokens = namePart.trim().split(/\s+/).filter(Boolean);
+    let unitType: string;
+    let packSizeValue: number;
+    let packSizeUnit: string;
+    if (tokens.length >= 3 && Number(tokens[1]) > 0) {
+      [unitType, packSizeValue, packSizeUnit] = [tokens[0], Number(tokens[1]), tokens[2]];
+    } else if (tokens.length === 2 && Number(tokens[0]) > 0) {
+      [unitType, packSizeValue, packSizeUnit] = [fallbackUnitType, Number(tokens[0]), tokens[1]];
+    } else if (tokens.length === 1 && !Number.isFinite(Number(tokens[0]))) {
+      [unitType, packSizeValue, packSizeUnit] = [tokens[0], 1, tokens[0]];
+    } else {
+      errors.push(`Pack "${entry}" is not a size — write it as "packet 500 gram @ 30"`);
+      continue;
+    }
+    unitType = unitType.toLowerCase();
+    packSizeUnit = packSizeUnit.toLowerCase();
+
+    // A measure nobody tabulated converts at 1:1, so "500 gm" would quietly build a
+    // 500-PIECE pack. Refuse it by name rather than import a pack that empties a shelf.
+    if (!isKnownPackUnit(packSizeUnit)) {
+      errors.push(`Pack "${entry}" uses an unknown measure "${packSizeUnit}"`);
+      continue;
+    }
+    const conversionToBase = sellingUnitConversion(packSizeValue, packSizeUnit);
+    if (!(conversionToBase > 0)) {
+      errors.push(`Pack "${entry}" has no size`);
+      continue;
+    }
+    const unitCode = sellingUnitCode(unitType, packSizeValue, packSizeUnit);
+    if (seen.has(unitCode)) {
+      errors.push(`Pack "${sellingUnitName(unitType, packSizeValue, packSizeUnit)}" is listed twice`);
+      continue;
+    }
+    seen.add(unitCode);
+
+    units.push({
+      name: sellingUnitName(unitType, packSizeValue, packSizeUnit),
+      unitType,
+      unitCode,
+      packSizeValue,
+      packSizeUnit,
+      conversionToBase,
+      barcode: (barcodePart ?? "").trim() || null,
+      defaultPrice: price,
+      costPrice: null,
+      maximumPrice: null,
+      onHandQty: null,
+      isDefault: false,
+      isActive: true,
+    });
+  }
+  return { units, errors };
+}
+
 /**
  * The trade columns of one row, turned into the product's attribute bag.
  *
@@ -297,13 +430,18 @@ function rowToAttributes(values: Record<string, string>, businessType: BusinessT
   return attributes;
 }
 
-function rowToFormData(values: Record<string, string>, businessType: BusinessType): ProductFormData {
+function rowToFormData(
+  values: Record<string, string>,
+  businessType: BusinessType,
+  sellingUnits: ProductFormSellingUnit[],
+): ProductFormData {
   const numberValue = (field: ProductImportField) => parseImportNumber(values[field] ?? "");
   return {
     attributes: rowToAttributes(values, businessType),
     name: (values.name ?? "").trim(),
-    // Bulk import has no column for per-pack counts, and inventing one pack layout
-    // for every imported row would be worse than the shared pool it already assumes.
+    // The Pack Sizes column carries what a product is SOLD in, never how many of each
+    // are on the shelf: a spreadsheet has one stock figure per row, so every imported
+    // product keeps the shared pool and its sizes all draw on that.
     packagingMode: "pooled",
     // A spreadsheet row is one plain product. A size × colour grid is entered on
     // the product screen, where the shop can see the combinations it is creating.
@@ -313,7 +451,7 @@ function rowToFormData(values: Record<string, string>, businessType: BusinessTyp
     unit: ((values.unit ?? "").trim() || "piece").toLowerCase(),
     packSizeValue: numberValue("packSizeValue") || 1,
     packSizeUnit: ((values.packSizeUnit ?? "").trim() || "piece").toLowerCase(),
-    sellingUnits: [],
+    sellingUnits,
     barcode: (values.skuBarcode ?? "").trim(),
     hsn: (values.hsn ?? "").trim() || undefined,
     aliasesText: (values.aliasesText ?? "").trim(),
@@ -428,7 +566,13 @@ export function parseProductsCsv(
       }
     }
 
-    const formData = rowToFormData(values, businessType);
+    const packSizes = parsePackSizesCell(
+      values.sellingUnits ?? "",
+      ((values.unit ?? "").trim() || "piece").toLowerCase(),
+    );
+    errors.push(...packSizes.errors);
+
+    const formData = rowToFormData(values, businessType, packSizes.units);
     if (!formData.isLooseItem && PACKET_UNITS.has(formData.unit.toLowerCase())) {
       if (!providedFields.includes("packSizeValue") || !providedFields.includes("packSizeUnit")) {
         errors.push("Packed items require Pack Size and Pack Unit (for example 500 g or 1 kg)");

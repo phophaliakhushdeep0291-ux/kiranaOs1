@@ -63,6 +63,10 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.action.createProduct": "नया माल बनाएं",
   "products.action.addNewProduct": "नया माल जोड़ें",
 
+  "products.list.export": "शीट निकालें",
+  "products.toast.exported": "सूची डाउनलोड हो गई",
+  "products.toast.exportedDetail": "{count} सामान उसी रूप में लिखे गए जो आयात पढ़ता है — दूसरी दुकान में लगा सकते हैं।",
+  "products.toast.exportEmpty": "अभी निकालने के लिए कोई माल नहीं है",
   "products.toast.added": "माल जुड़ गया",
   "products.toast.updated": "माल बदल गया",
   "products.toast.savedOffline": "माल ऑफलाइन सेव हुआ",

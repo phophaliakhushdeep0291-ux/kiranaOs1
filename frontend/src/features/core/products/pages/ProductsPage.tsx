@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Download,
   Layers,
   MoreVertical,
   Package,
@@ -70,8 +71,10 @@ import {
 import { activeInventorySellingUnits, packSizeLabel } from "@/features/core/inventory/stock-display";
 import { ProductFormPanel } from "./components/ProductFormPanel";
 import { ImportProductsDialog } from "./components/ImportProductsDialog";
+import { buildProductExportCsv, productExportFileName } from "@/features/core/products/export/product-export-csv";
 import { offlineDB } from "@/lib/offline/db";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAuth } from "@/features/core/auth/useAuth";
 import { TradeFocusStrip } from "@/components/shared";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { getShopProductsProfile } from "@/features/core/settings/shop-products";
@@ -106,6 +109,7 @@ export default function ProductsPage() {
   // search box takes have to agree with that link.
   const tradeProfile = getShopProductsProfile(useBusinessTypeKey());
   const { toast } = useToast();
+  const { shop } = useAuth();
   const [location, setLocation] = useLocation();
   const manageProducts = usePermission("manage_products");
   const belowMinPermission = usePermission("sell_below_minimum_price");
@@ -349,6 +353,33 @@ export default function ProductsPage() {
     setOpen(true);
   }, [form, manageProducts.allowed, manageProducts.reason, toast]);
 
+  /**
+   * The catalogue, in the format this shop's own Import dialog reads.
+   *
+   * Written for the second-branch case: export here, import there, rather than
+   * retyping four hundred items. Nothing shop-specific travels — no ids, no stock
+   * movements — so the file is safe to hand to another shop as-is.
+   */
+  const exportCatalogue = useCallback(() => {
+    if (productRows.length === 0) {
+      toast({ title: t("products.toast.exportEmpty"), variant: "destructive" });
+      return;
+    }
+    // The BOM is what stops Excel reading Hindi aliases as mojibake on a double-click;
+    // the importer already strips one off the first header, so it round-trips.
+    const blob = new Blob([`﻿${buildProductExportCsv(productRows)}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = productExportFileName(shop?.name);
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast({
+      title: t("products.toast.exported"),
+      description: t("products.toast.exportedDetail", { count: productRows.length }),
+    });
+  }, [productRows, shop?.name, t, toast]);
+
   useEffect(() => {
     const [path, query = ""] = location.split("?");
     const browserQuery = typeof window === "undefined" ? "" : window.location.search.replace(/^\?/, "");
@@ -533,6 +564,14 @@ export default function ProductsPage() {
           className="hidden h-11 shrink-0 gap-1.5 rounded-[10px] px-4 text-[13px] font-bold lg:inline-flex"
         >
           <Upload size={16} /> Import
+        </Button>
+        <Button
+          variant="outline"
+          onClick={exportCatalogue}
+          data-testid="button-export-products"
+          className="hidden h-11 shrink-0 gap-1.5 rounded-[10px] px-4 text-[13px] font-bold lg:inline-flex"
+        >
+          <Download size={16} /> {t("products.list.export")}
         </Button>
         <Button
           data-testid="button-add-product"

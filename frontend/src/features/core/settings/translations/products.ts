@@ -69,6 +69,10 @@ export const productsEn = {
   "products.action.addNewProduct": "Add new product",
 
   // ── Toasts ──
+  "products.list.export": "Export",
+  "products.toast.exported": "Catalogue downloaded",
+  "products.toast.exportedDetail": "{count} products written in the same format Import reads, ready for another shop.",
+  "products.toast.exportEmpty": "There are no products to export yet",
   "products.toast.added": "Product added",
   "products.toast.updated": "Product updated",
   "products.toast.savedOffline": "Product saved offline",
