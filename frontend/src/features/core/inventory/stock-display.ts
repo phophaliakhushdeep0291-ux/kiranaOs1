@@ -29,6 +29,20 @@ export function activeInventorySellingUnits(item?: Product | InventoryItem | nul
   return (item?.sellingUnits ?? []).filter((unit) => unit && unit.isActive !== false);
 }
 
+/**
+ * A pack's size, as a shopkeeper says it out loud: "5 kg", "500 gram".
+ *
+ * The stored `name` carries the container too ("packet 5 kg"), which is fine on its
+ * own line but turns a list of sizes into a wall of repeated words. Falls back to
+ * the full name when a pack has no size on it (a restaurant portion, say).
+ */
+export function packSizeLabel(unit: ProductSellingUnit): string {
+  const size = Number(unit.packSizeValue ?? 0);
+  const measure = String(unit.packSizeUnit ?? "").trim();
+  if (size > 0 && measure) return `${size} ${measure}`;
+  return unit.name ?? unit.unitCode;
+}
+
 export function defaultInventorySellingUnit(item?: Product | InventoryItem | null): ProductSellingUnit | undefined {
   const units = activeInventorySellingUnits(item);
   return units.find((unit) => unit.isDefault) ?? units[0];

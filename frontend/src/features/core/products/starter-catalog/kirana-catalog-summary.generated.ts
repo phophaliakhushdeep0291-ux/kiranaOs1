@@ -9,4 +9,4 @@ export const KIRANA_STARTER_CATALOG_LOOSE_COUNT = 48;
 export const KIRANA_STARTER_CATALOG_CATEGORY_COUNT = 40;
 
 /** Same checksum the data module carries, so a stale summary fails the same test. */
-export const KIRANA_STARTER_CATALOG_SUMMARY_CHECKSUM = "3ae08b24402ea252038777356677f7cea8ef76f968e4ed2ea0034fc7da14f036";
+export const KIRANA_STARTER_CATALOG_SUMMARY_CHECKSUM = "0a8cb1e38486ff2a7e5711729161c18755fb47df5daaeacd533b1f1305b59d36";

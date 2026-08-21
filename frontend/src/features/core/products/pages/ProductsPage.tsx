@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Download,
   Layers,
   MoreVertical,
   Package,
@@ -28,6 +29,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Sparkles,
   Tag,
   Trash2,
   Upload,
@@ -66,10 +68,13 @@ import {
   readProductDraftEventDetail,
   type ProductFormData,
 } from "./product-form-state";
+import { activeInventorySellingUnits, packSizeLabel } from "@/features/core/inventory/stock-display";
 import { ProductFormPanel } from "./components/ProductFormPanel";
 import { ImportProductsDialog } from "./components/ImportProductsDialog";
+import { buildProductExportCsv, productExportFileName } from "@/features/core/products/export/product-export-csv";
 import { offlineDB } from "@/lib/offline/db";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAuth } from "@/features/core/auth/useAuth";
 import { TradeFocusStrip } from "@/components/shared";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { getShopProductsProfile } from "@/features/core/settings/shop-products";
@@ -104,6 +109,7 @@ export default function ProductsPage() {
   // search box takes have to agree with that link.
   const tradeProfile = getShopProductsProfile(useBusinessTypeKey());
   const { toast } = useToast();
+  const { shop } = useAuth();
   const [location, setLocation] = useLocation();
   const manageProducts = usePermission("manage_products");
   const belowMinPermission = usePermission("sell_below_minimum_price");
@@ -258,6 +264,11 @@ export default function ProductsPage() {
       .filter((product) => productMatchesSearch(product, q));
   }, [productRows, category, statusFilter, stockFilter, typeFilter, debouncedSearch]);
 
+  // Nothing on screen because a filter is hiding it is a different problem from a
+  // shop that has not started yet, and only the second one needs a way in.
+  const catalogueIsFiltered = Boolean(debouncedSearch)
+    || category !== "all" || statusFilter !== "all" || stockFilter !== "all" || typeFilter !== "all";
+
   const stats = useMemo(() => {
     const all = productRows.filter((product) => !isDeletedProduct(product));
     const categories = new Set<string>();
@@ -341,6 +352,33 @@ export default function ProductsPage() {
     form.reset(productToForm());
     setOpen(true);
   }, [form, manageProducts.allowed, manageProducts.reason, toast]);
+
+  /**
+   * The catalogue, in the format this shop's own Import dialog reads.
+   *
+   * Written for the second-branch case: export here, import there, rather than
+   * retyping four hundred items. Nothing shop-specific travels — no ids, no stock
+   * movements — so the file is safe to hand to another shop as-is.
+   */
+  const exportCatalogue = useCallback(() => {
+    if (productRows.length === 0) {
+      toast({ title: t("products.toast.exportEmpty"), variant: "destructive" });
+      return;
+    }
+    // The BOM is what stops Excel reading Hindi aliases as mojibake on a double-click;
+    // the importer already strips one off the first header, so it round-trips.
+    const blob = new Blob([`﻿${buildProductExportCsv(productRows)}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = productExportFileName(shop?.name);
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast({
+      title: t("products.toast.exported"),
+      description: t("products.toast.exportedDetail", { count: productRows.length }),
+    });
+  }, [productRows, shop?.name, t, toast]);
 
   useEffect(() => {
     const [path, query = ""] = location.split("?");
@@ -528,6 +566,14 @@ export default function ProductsPage() {
           <Upload size={16} /> Import
         </Button>
         <Button
+          variant="outline"
+          onClick={exportCatalogue}
+          data-testid="button-export-products"
+          className="hidden h-11 shrink-0 gap-1.5 rounded-[10px] px-4 text-[13px] font-bold lg:inline-flex"
+        >
+          <Download size={16} /> {t("products.list.export")}
+        </Button>
+        <Button
           data-testid="button-add-product"
           onClick={openAdd}
           disabled={!manageProducts.allowed}
@@ -545,8 +591,15 @@ export default function ProductsPage() {
           ) : pagedRows.length === 0 ? (
             <div className="rounded-[16px] border border-dashed border-[#d8e2f1] px-4 py-12 text-center">
               <Package size={26} className="mx-auto text-[#94a3b8]" />
-              <p className="mt-2 text-sm font-black text-[var(--brand-ink)]">{t("products.list.emptyTitle")}</p>
-              <p className="mt-1 text-xs text-[#64748b]">{t("products.list.emptyHintFilters")}</p>
+              <div className="mt-2">
+                <EmptyCatalogue
+                  filtered={catalogueIsFiltered}
+                  canManage={manageProducts.allowed}
+                  onAdd={openAdd}
+                  onImport={() => setImportOpen(true)}
+                  onStarter={() => setLocation("/settings/setup?focus=products")}
+                />
+              </div>
             </div>
           ) : pagedRows.map((product) => {
             const defaultUnit = product.sellingUnits?.find((row) => row.isDefault) ?? product.sellingUnits?.[0];
@@ -619,8 +672,13 @@ export default function ProductsPage() {
                 <tr><td colSpan={10} className="px-4 py-16 text-center text-sm text-[#536383]">{t("products.list.loading")}</td></tr>
               ) : rows.length === 0 ? (
                 <tr><td colSpan={10} className="px-4 py-16 text-center">
-                  <p className="text-sm font-bold text-[#13274d]">{t("products.list.emptyTitle")}</p>
-                  <p className="mt-1 text-xs text-[#536383]">{t("products.list.emptyHintCatalogue")}</p>
+                  <EmptyCatalogue
+                    filtered={catalogueIsFiltered}
+                    canManage={manageProducts.allowed}
+                    onAdd={openAdd}
+                    onImport={() => setImportOpen(true)}
+                    onStarter={() => setLocation("/settings/setup?focus=products")}
+                  />
                 </td></tr>
               ) : (
                 pagedRows.map((product) => {
@@ -639,6 +697,21 @@ export default function ProductsPage() {
                   // this heading told the shopkeeper an MRP was set when it was
                   // not — and left no way to find the products still missing one.
                   const mrp = product.mrp && product.mrp > 0 ? product.mrp : null;
+                  /**
+                   * The other sizes this product is sold in.
+                   *
+                   * The catalogue showed the default pack and nothing else, so a shop
+                   * selling atta as a 1 kg packet AND a 5 kg bag could not tell the two
+                   * apart from any list — the only way to find out was to open the
+                   * product. Sizes go under the unit; when each size is counted on its
+                   * own, its count goes under the total, because that is the number the
+                   * shelf actually has.
+                   */
+                  const packUnits = activeInventorySellingUnits(product);
+                  const alternatePacks = packUnits.filter((row) => !row.isDefault);
+                  const perPackCounts = product.packagingMode === "per_pack" && packUnits.length > 1
+                    ? packUnits.map((row) => `${Number(row.onHandQty ?? 0)} x ${packSizeLabel(row)}`)
+                    : [];
                   return (
                     <tr key={product.id} className={`border-b border-[#f1f4f8] last:border-0 transition-colors hover:bg-[#f9fbfe] ${selectedIds.has(product.id) ? "bg-[#f3f8ff]" : ""}`} data-testid={`row-product-${product.id}`}>
                       <td className="px-3 py-3">
@@ -672,7 +745,17 @@ export default function ProductsPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3"><span className="font-mono text-[12px] text-[#45577a]">{product.barcode ?? product.sku ?? "—"}</span></td>
-                      <td className="px-3 py-3 capitalize text-[#45577a]">{unit}</td>
+                      <td className="px-3 py-3 capitalize text-[#45577a]">
+                        {unit}
+                        {alternatePacks.length > 0 && (
+                          <p
+                            className="mt-0.5 text-[11px] font-semibold normal-case text-[#8a97ad]"
+                            data-testid={`pack-sizes-${product.id}`}
+                          >
+                            {summariseList(alternatePacks.map(packSizeLabel))}
+                          </p>
+                        )}
+                      </td>
                       <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{mrp === null ? <span className="text-[#93a3bd]">—</span> : rs(mrp)}</td>
                       <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(averageCost(product))}</td>
                       <td className="px-3 py-3 text-right font-extrabold text-[#13274d]">{rs(product.sellingPrice ?? product.defaultPricePerRateUnit)}</td>
@@ -680,6 +763,14 @@ export default function ProductsPage() {
                       <td className="px-3 py-3">
                         <div className="flex flex-col items-center gap-1">
                           <span className={`font-bold ${outOfStock ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{stock}</span>
+                          {perPackCounts.length > 0 && (
+                            <p
+                              className="text-center text-[10.5px] font-semibold leading-tight text-[#8a97ad]"
+                              data-testid={`pack-stock-${product.id}`}
+                            >
+                              {summariseList(perPackCounts)}
+                            </p>
+                          )}
                           {outOfStock ? (
                             <StatusPill tone="rose">{t("products.badge.outOfStock")}</StatusPill>
                           ) : low ? (
@@ -870,6 +961,72 @@ function StatCard({ icon, iconClass, label, value, sub }: { icon: React.ReactNod
         <p className="text-[11px] font-semibold leading-tight text-[#6d7c98] sm:text-[12px]">{label}</p>
         <p className="font-display text-[20px] font-black leading-tight tracking-tight text-[var(--brand-ink)] sm:text-[22px]">{value}</p>
         <p className="hidden text-[11px] text-[#9aa6bb] sm:block">{sub}</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A short list, with the rest counted rather than printed.
+ *
+ * These sit in two of the narrowest columns in the catalogue. A shop selling rice
+ * in four sizes ran the line past the table's width and pushed the actions column
+ * off the side; the point is to show that a product HAS other sizes, which the
+ * first few make just as well as all of them.
+ */
+function summariseList(entries: string[], limit = 3): string {
+  if (entries.length <= limit) return entries.join(" · ");
+  return `${entries.slice(0, limit).join(" · ")} +${entries.length - limit}`;
+}
+
+/**
+ * What to show a shop that has no products yet.
+ *
+ * "Add a product or clear filters" was the only thing on offer here, so the screen
+ * where a shopkeeper feels the pain of typing in a whole shop never mentioned the
+ * two ways out of it: the ready-made list for their trade, and importing a sheet
+ * they already have. Both existed — the starter catalog two levels deep in
+ * Settings, the importer behind a toolbar button — and neither was findable from
+ * the empty catalogue itself. A filtered-to-nothing list is a different problem
+ * and keeps its own wording, since the products are there and the filter is hiding
+ * them.
+ */
+function EmptyCatalogue({
+  filtered,
+  canManage,
+  onAdd,
+  onImport,
+  onStarter,
+}: {
+  filtered: boolean;
+  canManage: boolean;
+  onAdd: () => void;
+  onImport: () => void;
+  onStarter: () => void;
+}) {
+  const { t } = useAppLanguage();
+  if (filtered) {
+    return (
+      <>
+        <p className="text-sm font-black text-[var(--brand-ink)]">{t("products.list.emptyTitle")}</p>
+        <p className="mt-1 text-xs text-[#64748b]">{t("products.list.emptyHintFilters")}</p>
+      </>
+    );
+  }
+  return (
+    <div className="mx-auto max-w-md">
+      <p className="text-sm font-black text-[var(--brand-ink)]">{t("products.list.emptyStartTitle")}</p>
+      <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-[#64748b]">{t("products.list.emptyStartHint")}</p>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        <Button size="sm" onClick={onStarter} disabled={!canManage} data-testid="empty-starter-catalog" className="gap-1.5 font-bold">
+          <Sparkles size={14} /> {t("products.list.emptyStarterCta")}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onImport} disabled={!canManage} data-testid="empty-import" className="gap-1.5 font-bold">
+          <Upload size={14} /> {t("products.list.emptyImportCta")}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onAdd} disabled={!canManage} data-testid="empty-add-one" className="gap-1.5 font-bold">
+          <Plus size={14} /> {t("products.list.emptyAddCta")}
+        </Button>
       </div>
     </div>
   );

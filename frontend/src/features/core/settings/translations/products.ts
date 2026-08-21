@@ -32,6 +32,11 @@ export const productsEn = {
   "products.list.loading": "Loading products…",
   "products.list.emptyTitle": "No products found",
   "products.list.emptyHintFilters": "Add a product or clear the current filters.",
+  "products.list.emptyStartTitle": "Your catalogue is empty",
+  "products.list.emptyStartHint": "Typing in every product takes hours. Start from the ready-made list for your shop type, bring in a spreadsheet you already have, or add them one at a time.",
+  "products.list.emptyStarterCta": "Use the ready-made list",
+  "products.list.emptyImportCta": "Import a spreadsheet",
+  "products.list.emptyAddCta": "Add one product",
   "products.list.emptyHintCatalogue": "Add a product or clear filters to see your catalogue.",
   "products.list.selectAll": "Select all products on this page",
   "products.col.product": "Product",
@@ -64,6 +69,10 @@ export const productsEn = {
   "products.action.addNewProduct": "Add new product",
 
   // ── Toasts ──
+  "products.list.export": "Export",
+  "products.toast.exported": "Catalogue downloaded",
+  "products.toast.exportedDetail": "{count} products written in the same format Import reads, ready for another shop.",
+  "products.toast.exportEmpty": "There are no products to export yet",
   "products.toast.added": "Product added",
   "products.toast.updated": "Product updated",
   "products.toast.savedOffline": "Product saved offline",

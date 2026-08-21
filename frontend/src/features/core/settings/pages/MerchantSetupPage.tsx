@@ -129,6 +129,43 @@ export default function MerchantSetupPage() {
     setLoading(false);
   }, [prefs, shop]);
 
+  /**
+   * Land on the catalogue button, not the top of the checklist.
+   *
+   * The empty Products screen sends a shop here to load the ready-made list, and
+   * that row sits well below the fold behind seven other setup steps — arriving at
+   * the top of the page is arriving nowhere. Waits a frame so the checklist has
+   * rendered, and does nothing at all when the row is not on screen (a shop that
+   * already has products does not see it).
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!new URLSearchParams(window.location.search).get("focus")) return;
+    // The checklist renders after its facts load, so poll briefly rather than
+    // guessing a delay; give up quietly if the row never appears.
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      const target = document.querySelector('[data-testid="starter-catalog-start"]');
+      if (target) {
+        // scrollIntoView does not get there: the checklist card between the button
+        // and the shell's scroller is overflow-hidden, so the request stops at it.
+        // Walk up to whatever actually scrolls and move that instead.
+        let scroller: HTMLElement | null = target.parentElement;
+        while (scroller && scroller.scrollHeight <= scroller.clientHeight + 2) {
+          scroller = scroller.parentElement;
+        }
+        if (scroller) {
+          const delta = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+          scroller.scrollTo({ top: scroller.scrollTop + delta - scroller.clientHeight / 3, behavior: "smooth" });
+        }
+        window.clearInterval(timer);
+        return;
+      }
+      if ((tries += 1) > 20) window.clearInterval(timer);
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     if (!hydrated) return;
     void refresh();
