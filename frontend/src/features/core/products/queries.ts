@@ -68,6 +68,27 @@ async function readProductsFromIndexedDB(params?: ListProductsParams): Promise<P
 }
 
 /**
+ * The whole catalogue, with no display limit — for exports.
+ *
+ * The list query carries a `limit` for the screen, and `filterCachedProducts` slices
+ * the cached seed to the same number. That is right for a paginated table and wrong
+ * for an export, whose entire job is to carry a catalogue to another shop: a shop
+ * with more products than the limit would get a short file and no hint of it, which
+ * is the worst way for a migration tool to fail.
+ *
+ * Server first because it is authoritative and returns everything (the products list
+ * endpoint applies no `take`). The local store when there is no network, so exporting
+ * offline still yields the full catalogue rather than one page of it.
+ */
+export async function loadProductsForExport(): Promise<Product[]> {
+  try {
+    return await productsApi.listProducts();
+  } catch {
+    return await readProductsFromIndexedDB();
+  }
+}
+
+/**
  * Every id this row can be recognised by.
  *
  * `clientProductId` is what makes a just-created product one product rather than

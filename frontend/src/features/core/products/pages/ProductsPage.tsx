@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
   getListProductsQueryKey,
+  loadProductsForExport,
   useCreateProduct,
   useDeleteProduct,
   useListProducts,
@@ -360,14 +361,17 @@ export default function ProductsPage() {
    * retyping four hundred items. Nothing shop-specific travels — no ids, no stock
    * movements — so the file is safe to hand to another shop as-is.
    */
-  const exportCatalogue = useCallback(() => {
-    if (productRows.length === 0) {
+  const exportCatalogue = useCallback(async () => {
+    // Deliberately NOT `productRows`: that list is capped for the screen, so a shop with
+    // more products than the page limit would export a short file with nothing to say so.
+    const rows = await loadProductsForExport();
+    if (rows.length === 0) {
       toast({ title: t("products.toast.exportEmpty"), variant: "destructive" });
       return;
     }
     // The BOM is what stops Excel reading Hindi aliases as mojibake on a double-click;
     // the importer already strips one off the first header, so it round-trips.
-    const blob = new Blob([`﻿${buildProductExportCsv(productRows)}`], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([`﻿${buildProductExportCsv(rows)}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -376,9 +380,9 @@ export default function ProductsPage() {
     URL.revokeObjectURL(url);
     toast({
       title: t("products.toast.exported"),
-      description: t("products.toast.exportedDetail", { count: productRows.length }),
+      description: t("products.toast.exportedDetail", { count: rows.length }),
     });
-  }, [productRows, shop?.name, t, toast]);
+  }, [shop?.name, t, toast]);
 
   useEffect(() => {
     const [path, query = ""] = location.split("?");

@@ -11,7 +11,7 @@ import { offlineDB } from "@/lib/offline/db";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { restoreBillWithOwnerPinLocalFirst } from "@/features/core/bills/local-actions";
 import { isMergedBillTwin } from "@/features/core/sync/bill-reconciliation";
-import { permanentDeleteDisabledMessage, restoreEntityFromRecycleBinLocalFirst, type RecyclableEntityType } from "@/features/core/recycle-bin/local-actions";
+import { auditReasonFor, deleteReasonsByEntity, permanentDeleteDisabledMessage, restoreEntityFromRecycleBinLocalFirst, type RecyclableEntityType } from "@/features/core/recycle-bin/local-actions";
 import { DataTableCard, EmptyState, FilterBar, PageHeader, PageShell, SearchInputWithIcon, SyncBadge } from "@/components/shared";
 
 interface RecycleRow extends Record<string, unknown> {
@@ -43,7 +43,11 @@ function deletedDate(row: Record<string, unknown>) {
   return asString(row.deleted_at, asString(row.deletedAt, asString(row.updated_at, asString(row.updatedAt))));
 }
 
-function toRecycleRow(entityType: RecycleRow["entityType"], row: Record<string, unknown>): RecycleRow {
+function toRecycleRow(
+  entityType: RecycleRow["entityType"],
+  row: Record<string, unknown>,
+  reasons: Map<string, string>,
+): RecycleRow {
   const id = asString(row.id, asString(row.local_id, asString(row.server_id)));
   const label = entityType === "bill"
     ? asString(row.billNumber, asString(row.billNo, id))
@@ -56,25 +60,27 @@ function toRecycleRow(entityType: RecycleRow["entityType"], row: Record<string, 
     deletedAt: deletedDate(row),
     amount: entityType === "bill" ? asNumber(row.grandTotal ?? row.totalAmount ?? row.netAmount, 0) : undefined,
     syncStatus: asString(row.sync_status, "synced"),
-    reason: asString(row.deleteReason ?? row.reason ?? row.note),
+    reason: asString(row.deleteReason ?? row.reason ?? row.note) || auditReasonFor(reasons, row),
   };
 }
 
-async function loadRecycleRows(): Promise<RecycleRow[]> {
-  const [bills, customers, products, suppliers] = await Promise.all([
+export async function loadRecycleRows(): Promise<RecycleRow[]> {
+  const [bills, customers, products, suppliers, audits] = await Promise.all([
     offlineDB.getAll<Record<string, unknown>>("bills").catch(() => []),
     offlineDB.getAll<Record<string, unknown>>("customers").catch(() => []),
     offlineDB.getAll<Record<string, unknown>>("products").catch(() => []),
     offlineDB.getAll<Record<string, unknown>>("suppliers").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("local_audit_logs").catch(() => []),
   ]);
+  const reasons = deleteReasonsByEntity(audits);
   return [
     // A merge twin is the local optimistic row tombstoned once its server copy synced
     // back — a sync artifact, never something the user deleted. Without this filter the
     // bin lists one phantom per synced bill, under its pre-sync PENDING-/LOCAL- number.
-    ...bills.filter((row) => isDeleted(row) && !isMergedBillTwin(row)).map((row) => toRecycleRow("bill", row)),
-    ...customers.filter(isDeleted).map((row) => toRecycleRow("customer", row)),
-    ...products.filter(isDeleted).map((row) => toRecycleRow("product", row)),
-    ...suppliers.filter(isDeleted).map((row) => toRecycleRow("supplier", row)),
+    ...bills.filter((row) => isDeleted(row) && !isMergedBillTwin(row)).map((row) => toRecycleRow("bill", row, reasons)),
+    ...customers.filter(isDeleted).map((row) => toRecycleRow("customer", row, reasons)),
+    ...products.filter(isDeleted).map((row) => toRecycleRow("product", row, reasons)),
+    ...suppliers.filter(isDeleted).map((row) => toRecycleRow("supplier", row, reasons)),
   ].sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
 }
 
