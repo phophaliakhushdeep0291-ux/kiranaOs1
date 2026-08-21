@@ -115,6 +115,7 @@ export const productsEn = {
   "products.form.mrp": "MRP (₹)",
   "products.form.mrpZeroHint": "No MRP means no price ceiling — billing will accept any price for this item.",
   "products.form.costPrice": "Cost Price (₹)",
+  "products.form.minPrice": "Min Price (₹)",
   "products.form.sellingPrice": "Selling Price (₹)",
   "products.form.amountPlaceholder": "0.00",
   "products.form.gstRate": "GST Rate",

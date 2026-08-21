@@ -107,6 +107,7 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.form.mrp": "MRP (₹)",
   "products.form.mrpZeroHint": "MRP नहीं है तो रेट की कोई सीमा नहीं — बिलिंग इस माल का कोई भी रेट मान लेगी।",
   "products.form.costPrice": "खरीद रेट (₹)",
+  "products.form.minPrice": "कम से कम रेट (₹)",
   "products.form.sellingPrice": "बिक्री रेट (₹)",
   "products.form.amountPlaceholder": "0.00",
   "products.form.gstRate": "GST रेट",

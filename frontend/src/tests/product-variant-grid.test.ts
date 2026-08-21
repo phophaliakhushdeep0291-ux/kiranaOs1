@@ -12,7 +12,7 @@ import {
   variantCellName,
   variantCellsToSellingUnits,
 } from "@/features/core/products/pages/variant-grid";
-import { formToInput, productToForm } from "@/features/core/products/pages/product-form-state";
+import { formToInput, productFormSchema, productToForm } from "@/features/core/products/pages/product-form-state";
 import type { Product, ProductSellingUnit } from "@/types/api";
 
 /**
@@ -325,6 +325,57 @@ describe("each size keeps its own cost, MRP and reorder level", () => {
     expect(s).toMatchObject({ costPrice: 0, reorderLevel: 0 });
     const rows = variantCellsToSellingUnits(cells, { unitType: "piece", costPrice: 999 });
     expect(rows.find((r) => r.variantValue1 === "S")?.costPrice).toBe(0);
+  });
+});
+
+describe("a per-row reorder level reaches the server", () => {
+  /**
+   * `sellingUnitFormSchema` is a plain `z.object`, so it STRIPS every key it
+   * does not name. `reorderLevel` was not named, which meant a number typed
+   * against a pack or a size was parsed away between the form and `formToInput`
+   * — present in the UI, in the row object, and nowhere in the payload.
+   *
+   * This is the same trap that once cost `drugSchedule` its prescription check,
+   * and it is invisible from the screen: nothing errors, the value simply never
+   * arrives. Asserting on the parse is the only place it shows.
+   */
+  it("survives the schema parse instead of being stripped", () => {
+    const parsed = productFormSchema.parse({
+      ...productToForm(),
+      name: "Almond Drop",
+      category: "grocery",
+      unit: "piece",
+      packSizeValue: 100,
+      packSizeUnit: "ml",
+      sellingPrice: 70,
+      sellingUnits: [{
+        name: "piece 200 ml", unitType: "piece", unitCode: "piece-200-ml",
+        conversionToBase: 200, defaultPrice: 124, costPrice: 96,
+        minimumPrice: 110, maximumPrice: 138, onHandQty: 20,
+        lowStockThreshold: 4, reorderLevel: 8, isDefault: false, isActive: true,
+      }],
+    });
+    expect(parsed.sellingUnits[0]).toMatchObject({ reorderLevel: 8, costPrice: 96, minimumPrice: 110 });
+  });
+
+  it("carries a pack's own cost, floor and reorder level into the payload", () => {
+    const almond: Product = {
+      id: "p_3",
+      name: "Almond Drop",
+      defaultPricePerRateUnit: 70,
+      packagingMode: "per_pack",
+      sellingUnits: [
+        unit({ unitCode: "piece-100-ml", name: "piece 100 ml", variantValue1: null, variantValue2: null, isDefault: true, onHandQty: 144 }),
+        unit({
+          unitCode: "piece-200-ml", name: "piece 200 ml", variantValue1: null, variantValue2: null, isDefault: false,
+          defaultPrice: 124, costPrice: 96, minimumPrice: 110, maximumPrice: 138, onHandQty: 20, reorderLevel: 8,
+        }),
+      ],
+    };
+    const pack = formToInput(productToForm(almond)).sellingUnits?.find((row) => row.unitCode === "piece-200-ml");
+    // The screenshot that started this: a 200 ml pack saved with costPrice null,
+    // so its margin was measured against the 100 ml pack's cost or nothing at all.
+    expect(pack).toMatchObject({ costPrice: 96, minimumPrice: 110, maximumPrice: 138, reorderLevel: 8 });
   });
 });
 

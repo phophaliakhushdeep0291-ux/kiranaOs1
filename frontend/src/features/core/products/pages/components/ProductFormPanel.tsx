@@ -94,6 +94,10 @@ function emptyExtraPack(unitType: string, packSizeUnit: string) {
     // ("exceeds the configured maximum"). Left blank, the product MRP is scaled to
     // this pack's size instead — see sellingUnitMaxPrice.
     mrp: "",
+    // What this pack costs to buy. A 200 ml bottle does not cost twice the
+    // 100 ml one, and until this existed every pack after the first was saved
+    // with no cost at all — so its margin was unknowable.
+    costPrice: "",
     barcode: "",
     openingQty: "",
   };
@@ -310,6 +314,7 @@ export function ProductFormPanel({
     const size = Number(extraPackDraft.packSizeValue);
     const price = Number(extraPackDraft.price);
     const packMrp = Number(extraPackDraft.mrp);
+    const packCost = Number(extraPackDraft.costPrice);
     if (!(size > 0) || !(price > 0)) {
       toast({
         title: t("products.form.packSizeRequired"),
@@ -350,7 +355,7 @@ export function ProductFormPanel({
         defaultPrice: price,
         minimumPrice: null,
         maximumPrice: packMrp > 0 ? packMrp : null,
-        costPrice: null,
+        costPrice: packCost > 0 ? packCost : null,
         // In per-pack mode the opening quantity IS this pack's own count and must not
         // also be folded into the shared pool below, or the same goods would be
         // counted twice.
@@ -387,7 +392,7 @@ export function ProductFormPanel({
     setExtraPackOpen(false);
   }
 
-  function updatePackField(unitCode: string, field: "onHandQty" | "lowStockThreshold" | "maximumPrice", raw: string) {
+  function updatePackField(unitCode: string, field: "onHandQty" | "lowStockThreshold" | "maximumPrice" | "costPrice" | "minimumPrice" | "reorderLevel", raw: string) {
     const parsed = raw.trim() === "" ? null : Number(raw);
     form.setValue(
       "sellingUnits",
@@ -860,6 +865,37 @@ export function ProductFormPanel({
                         {aboveCeiling ? (
                           <p className="mt-1 text-[10px] font-bold text-rose-600">{t("products.form.packPriceAboveMrp")} ({`Rs ${ceiling.toLocaleString("en-IN")}`})</p>
                         ) : null}
+                        {/* Cost and floor belong to the pack for the same reason the
+                            ceiling above does: a 200 ml bottle is not two 100 ml ones,
+                            so a margin measured against the product's cost is wrong,
+                            and billing already prefers this row's minimum over the
+                            product's when it decides what needs owner approval. */}
+                        <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#eef2f7] pt-2">
+                          <Field label={t("products.form.costPrice")}>
+                            <Input
+                              className="h-8"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.costPrice ?? ""}
+                              onChange={(event) => updatePackField(row.unitCode, "costPrice", event.target.value)}
+                              placeholder="0.00"
+                              aria-label={`${row.name} cost price`}
+                            />
+                          </Field>
+                          <Field label={t("products.form.minPrice")}>
+                            <Input
+                              className="h-8"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.minimumPrice ?? ""}
+                              onChange={(event) => updatePackField(row.unitCode, "minimumPrice", event.target.value)}
+                              placeholder="0.00"
+                              aria-label={`${row.name} minimum price`}
+                            />
+                          </Field>
+                        </div>
                         {packagingMode === "per_pack" ? (
                           <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#eef2f7] pt-2">
                             <Field label={t("products.form.inStock")}>
@@ -884,6 +920,21 @@ export function ProductFormPanel({
                                 onChange={(event) => updatePackField(row.unitCode, "lowStockThreshold", event.target.value)}
                                 placeholder="0"
                                 aria-label={`${row.name} alert level`}
+                              />
+                            </Field>
+                            {/* Only in per-pack mode, where this pack is counted on
+                                its own — a pooled pack has no separate quantity to
+                                reorder against. The dashboard already reads it. */}
+                            <Field label={t("products.form.reorderLevel")}>
+                              <Input
+                                className="h-8"
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={row.reorderLevel ?? ""}
+                                onChange={(event) => updatePackField(row.unitCode, "reorderLevel", event.target.value)}
+                                placeholder="0"
+                                aria-label={`${row.name} reorder level`}
                               />
                             </Field>
                           </div>
@@ -931,6 +982,24 @@ export function ProductFormPanel({
                           placeholder={suggestedExtraPackMrp > 0 ? String(suggestedExtraPackMrp) : "0.00"}
                         />
                       </Field>
+                      <Field label={t("products.form.costPrice")}>
+                        <Input
+                          className="h-9"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          data-testid="input-extra-pack-cost"
+                          value={extraPackDraft.costPrice}
+                          onChange={(event) => setExtraPack((current) => ({ ...current, costPrice: event.target.value }))}
+                          placeholder="0.00"
+                        />
+                      </Field>
+                    </div>
+                    <p className="text-[10px] font-semibold leading-4 text-[#6d7c98]">{t("products.form.packMrpHint")}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label={t("products.form.packBarcode")}>
+                        <Input className="h-9" value={extraPackDraft.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder={t("products.form.packBarcodePlaceholder")} />
+                      </Field>
                       <Field label={t("products.form.openingQuantity")}>
                         <Input
                           className="h-9"
@@ -942,12 +1011,6 @@ export function ProductFormPanel({
                           onChange={(event) => setExtraPack((current) => ({ ...current, openingQty: event.target.value }))}
                           placeholder="0"
                         />
-                      </Field>
-                    </div>
-                    <p className="text-[10px] font-semibold leading-4 text-[#6d7c98]">{t("products.form.packMrpHint")}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Field label={t("products.form.packBarcode")}>
-                        <Input className="h-9" value={extraPackDraft.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder={t("products.form.packBarcodePlaceholder")} />
                       </Field>
                     </div>
                     <p className="text-[10px] font-semibold leading-4 text-[#6d7c98]">
