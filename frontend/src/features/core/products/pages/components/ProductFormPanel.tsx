@@ -525,7 +525,33 @@ export function ProductFormPanel({
     );
   }
 
+  /**
+   * Drop a pack size, unless the shop still has some.
+   *
+   * The server refuses to remove a counted pack that holds stock
+   * (PACKAGING_UNIT_HAS_STOCK) — the goods would be left with nothing counting
+   * them. It compares against the SAVED quantity, so zeroing the row and
+   * removing it in one go is refused too: it genuinely takes two saves.
+   *
+   * Without this the removal looked like it worked — the row vanished, the save
+   * reported "Updated" and the product's stock fell by the pack's worth — and the
+   * refusal only turned up later as a sync conflict, by which time the screen and
+   * the server disagreed about how much atta the shop owned.
+   */
   function removeAlternatePack(unitCode: string) {
+    const saved = editing?.sellingUnits?.find((row) => row.unitCode === unitCode);
+    const savedQty = Number(saved?.onHandQty ?? 0);
+    if (packagingMode === "per_pack" && savedQty !== 0) {
+      toast({
+        title: t("products.form.packHasStock"),
+        description: t("products.form.packHasStockHint").replace(
+          "{qty}",
+          `${savedQty} x ${saved?.name ?? unitCode}`,
+        ),
+        variant: "destructive",
+      });
+      return;
+    }
     form.setValue("sellingUnits", sellingUnits.filter((row) => row.unitCode !== unitCode), {
       shouldDirty: true,
       shouldValidate: true,

@@ -162,6 +162,8 @@ export const productsEn = {
   "products.form.update": "Update Product",
   "products.form.nameRequired": "Product name required",
   "products.form.packSizeRequired": "Pack size and price required",
+  "products.form.packHasStock": "Count this pack to zero first",
+  "products.form.packHasStockHint": "It still holds {qty}. Set its stock to 0, save, then remove it — otherwise the goods would be left with nothing counting them.",
   "products.form.packAlreadyAdded": "Pack already added",
   "products.form.chooseDifferentPack": "Choose a different unit or pack size.",
   "products.form.invalidImage": "Invalid image",
