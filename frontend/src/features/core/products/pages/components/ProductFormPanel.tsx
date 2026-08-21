@@ -119,12 +119,23 @@ export function packClashReason(
  * 500 grams against a product counted in pieces — one sale of it took 500 pieces
  * off the shelf.
  */
-function emptyExtraPack(unitType: string, packSizeUnit: string) {
+/**
+ * What a shop most often types FOR THAT MEASURE.
+ *
+ * 500 only reads as a pack size next to the small measures. The draft inherits the
+ * product's own measure, so on a product described in kg it paired 500 with kg and
+ * opened on "500 kg" — half a tonne — with the scaled cost and MRP hints underneath
+ * it reading ₹11,000 and ₹15,000. Anything not listed here counts in whole units:
+ * nobody adds a pack of 500 boxes either.
+ */
+const DEFAULT_EXTRA_PACK_SIZE: Record<string, string> = { gram: "500", ml: "500" };
+
+export function emptyExtraPack(unitType: string, packSizeUnit: string) {
   return {
     unitType,
     // A counted pack starts at one of something; a measured one at the size a
-    // grocer types most often.
-    packSizeValue: packSizeUnit === "piece" ? "1" : "500",
+    // grocer types most often IN THAT MEASURE.
+    packSizeValue: DEFAULT_EXTRA_PACK_SIZE[packSizeUnit] ?? "1",
     packSizeUnit,
     price: "",
     // Each pack carries its own ceiling. Without one, a bigger pack was priced
