@@ -502,6 +502,51 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Credentials that authorise one action and must not outlive it on the device.
+ *
+ * The owner PIN gates every catalogue and stock change, so it travels in the outbox
+ * payload — it has to, because an op queued offline still needs it whenever the push
+ * finally happens. What it must NOT do is stay there afterwards: a settled op keeps no
+ * secret worth holding, and the PIN was sitting in IndexedDB in the clear for every
+ * gated action a shop had ever performed, readable by anything that reaches the store.
+ */
+const OWNER_SECRET_PAYLOAD_KEYS = new Set(["ownerPin", "ownerPassword", "password", "pin"]);
+
+/**
+ * Strip those keys, returning `null` when there was nothing to strip so callers can
+ * skip a pointless write. Recursive because a payload nests the entity it carries.
+ */
+export function withoutOwnerSecrets(value: unknown): unknown | null {
+  if (Array.isArray(value)) {
+    let changed = false;
+    const next = value.map((item) => {
+      const scrubbed = withoutOwnerSecrets(item);
+      if (scrubbed === null) return item;
+      changed = true;
+      return scrubbed;
+    });
+    return changed ? next : null;
+  }
+  if (!isRecord(value)) return null;
+  let changed = false;
+  const next: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (OWNER_SECRET_PAYLOAD_KEYS.has(key)) {
+      changed = true;
+      continue;
+    }
+    const scrubbed = withoutOwnerSecrets(child);
+    if (scrubbed === null) {
+      next[key] = child;
+      continue;
+    }
+    changed = true;
+    next[key] = scrubbed;
+  }
+  return changed ? next : null;
+}
+
 function getRowId(value: unknown): string {
   if (!isRecord(value))
     return `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -815,8 +860,13 @@ class OfflineDBFacade {
           status === "FAILED"
             ? retryDelayForFailedEvent(row, retryCount)
             : 0;
+        // Only on SYNCED. A FAILED op is retried from this very payload, so the PIN has
+        // to survive until the push actually lands; a CONFLICT may still be re-pushed by
+        // resolution. Once it is synced the authorisation is spent.
+        const scrubbedPayload = status === "SYNCED" ? withoutOwnerSecrets(row.payload) : null;
         await dexieDB.sync_outbox.put({
           ...row,
+          ...(isRecord(scrubbedPayload) ? { payload: scrubbedPayload } : {}),
           status,
           sync_status:
             status === "SYNCING"
@@ -842,6 +892,30 @@ class OfflineDBFacade {
       }
     });
     if (changed > 0) emitSyncQueueUpdated({ action: "status_changed", status, count: changed });
+  }
+
+  /**
+   * Clear owner credentials out of ops that already settled before we started scrubbing.
+   *
+   * Scrubbing on SYNCED only helps ops that settle from now on. Every device already
+   * carries the PIN in the clear for every gated action in its history, and those rows
+   * are never written again, so nothing would ever clean them. Runs on boot; touches
+   * only settled rows, so an op still waiting to push keeps what it needs to push with.
+   */
+  async scrubSettledOutboxSecrets(): Promise<number> {
+    await this.init();
+    let scrubbed = 0;
+    await dexieDB.transaction("rw", dexieDB.sync_outbox, async () => {
+      const settled = await dexieDB.sync_outbox.where("status").equals("SYNCED").toArray();
+      for (const row of settled) {
+        if (!rowMatchesCurrentScope(row)) continue;
+        const payload = withoutOwnerSecrets(row.payload);
+        if (!isRecord(payload)) continue;
+        await dexieDB.sync_outbox.put({ ...row, payload });
+        scrubbed += 1;
+      }
+    });
+    return scrubbed;
   }
 
   async removePendingEvent(clientEventId: string): Promise<void> {
