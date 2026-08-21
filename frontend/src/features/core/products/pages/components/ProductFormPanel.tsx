@@ -22,7 +22,7 @@ import { PRODUCT_ATTRIBUTE_SECTION_TITLE } from "@/features/core/products/produc
 import { ProductAttributesSection } from "./ProductAttributesSection";
 import { VariantGridEditor } from "./VariantGridEditor";
 import { VariantLocationSplit } from "./VariantLocationSplit";
-import type { ProductFormData } from "../product-form-state";
+import { convertPackagingMode, type ProductFormData } from "../product-form-state";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { generateInternalEan13 } from "@/lib/barcode/ean13";
 
@@ -167,6 +167,9 @@ export function ProductFormPanel({
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [extraPackOpen, setExtraPackOpen] = useState(false);
   const [extraPack, setExtraPack] = useState(() => emptyExtraPack("packet", "piece"));
+  // The product measure the draft was last seeded from, so a later change to the
+  // product's own pack can be inherited without overriding a deliberate choice.
+  const seededMeasureRef = useRef<string | null>(null);
   const categories = def.categories.filter((c) => c !== "all");
   const imageUrl = form.watch("imageUrl");
   const description = form.watch("description") ?? "";
@@ -295,11 +298,36 @@ export function ProductFormPanel({
     // — a grocer adding to a 1 kg packet is thinking in grams, a chemist adding
     // to a strip is thinking in tablets.
     const productMeasure = form.getValues("packSizeUnit");
+    seededMeasureRef.current = productMeasure;
     setExtraPack(emptyExtraPack(
       selling.includes("packet") ? "packet" : (selling[0] ?? "piece"),
       measures.includes(productMeasure) ? productMeasure : (measures[0] ?? "piece"),
     ));
   }, [editing?.id, open, def, form]);
+
+  /**
+   * Open the "add a pack" draft, re-inheriting the product's measure if it moved.
+   *
+   * The draft is seeded once, when the panel opens — at which point a new product
+   * is still on the trade's default measure. Describing the product as 1 **kg**
+   * afterwards left the draft on "piece", so "one packet contains 5" became a pack
+   * that removes 5 grams rather than 5 kg, priced off the same wrong conversion.
+   * Only re-seeded when the product's measure has actually changed since, so
+   * picking gram for a run of small packs still sticks.
+   */
+  function toggleExtraPack() {
+    setExtraPackOpen((value) => {
+      if (value) return false;
+      const productMeasure = form.getValues("packSizeUnit");
+      if (productMeasure !== seededMeasureRef.current) {
+        seededMeasureRef.current = productMeasure;
+        if (packMeasureUnits.includes(productMeasure)) {
+          setExtraPack((current) => ({ ...current, packSizeUnit: productMeasure }));
+        }
+      }
+      return true;
+    });
+  }
 
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
@@ -358,12 +386,13 @@ export function ProductFormPanel({
         minimumPrice: null,
         maximumPrice: packMrp > 0 ? packMrp : null,
         costPrice: packCost > 0 ? packCost : null,
-        // In per-pack mode the opening quantity IS this pack's own count and must not
-        // also be folded into the shared pool below, or the same goods would be
-        // counted twice.
-        ...(packagingMode === "per_pack"
-          ? { onHandQty: Number(extraPackDraft.openingQty) || 0, lowStockThreshold: null }
-          : {}),
+        // The pack's own count is recorded whatever the mode. In per-pack it IS the
+        // stock figure; in pooled it is also folded into the shared pool below (and
+        // dropped from the payload by formToInput), so that turning "Count each
+        // size" on afterwards still knows this is 4 bags rather than part of one
+        // undifferentiated pile.
+        onHandQty: Number(extraPackDraft.openingQty) || 0,
+        lowStockThreshold: null,
         isDefault: false,
         isActive: true,
       },
@@ -392,6 +421,21 @@ export function ProductFormPanel({
 
     setExtraPack(emptyExtraPack(extraPackDraft.unitType, extraPackDraft.packSizeUnit));
     setExtraPackOpen(false);
+  }
+
+  /**
+   * Flip "Stock counting" without changing what is on the shelf.
+   *
+   * The two modes keep the stock in different places, so the main Opening Stock box
+   * has to be restated: pooled holds every size's goods, per-pack holds the default
+   * pack's own count. Writing the mode alone left the old number in place, which
+   * silently re-labelled 4 x 5 kg and 20 x 500 g as "40 x 1 kg" one way and threw
+   * them away the other.
+   */
+  function switchPackagingMode(mode: "pooled" | "per_pack") {
+    const next = convertPackagingMode(form.getValues(), mode);
+    form.setValue("packagingMode", next.packagingMode, { shouldDirty: true, shouldValidate: true });
+    form.setValue("stockQuantity", next.stockQuantity, { shouldDirty: true, shouldValidate: true });
   }
 
   function updatePackField(unitCode: string, field: "onHandQty" | "lowStockThreshold" | "maximumPrice" | "costPrice", raw: string) {
@@ -777,7 +821,7 @@ export function ProductFormPanel({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setExtraPackOpen((value) => !value)}
+                    onClick={toggleExtraPack}
                     className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--brand-border)] bg-white px-2.5 text-[10.5px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]"
                   >
                     {extraPackOpen ? <X size={12} /> : <Plus size={12} />}
@@ -799,7 +843,7 @@ export function ProductFormPanel({
                       <button
                         key={mode}
                         type="button"
-                        onClick={() => form.setValue("packagingMode", mode, { shouldDirty: true, shouldValidate: true })}
+                        onClick={() => switchPackagingMode(mode)}
                         aria-pressed={packagingMode === mode}
                         className={`rounded-lg border p-2 text-left transition ${
                           packagingMode === mode
