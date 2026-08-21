@@ -28,6 +28,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Sparkles,
   Tag,
   Trash2,
   Upload,
@@ -258,6 +259,11 @@ export default function ProductsPage() {
       .filter((product) => typeFilter === "all" || (typeFilter === "loose" ? !!product.isLooseItem : !product.isLooseItem))
       .filter((product) => productMatchesSearch(product, q));
   }, [productRows, category, statusFilter, stockFilter, typeFilter, debouncedSearch]);
+
+  // Nothing on screen because a filter is hiding it is a different problem from a
+  // shop that has not started yet, and only the second one needs a way in.
+  const catalogueIsFiltered = Boolean(debouncedSearch)
+    || category !== "all" || statusFilter !== "all" || stockFilter !== "all" || typeFilter !== "all";
 
   const stats = useMemo(() => {
     const all = productRows.filter((product) => !isDeletedProduct(product));
@@ -546,8 +552,15 @@ export default function ProductsPage() {
           ) : pagedRows.length === 0 ? (
             <div className="rounded-[16px] border border-dashed border-[#d8e2f1] px-4 py-12 text-center">
               <Package size={26} className="mx-auto text-[#94a3b8]" />
-              <p className="mt-2 text-sm font-black text-[var(--brand-ink)]">{t("products.list.emptyTitle")}</p>
-              <p className="mt-1 text-xs text-[#64748b]">{t("products.list.emptyHintFilters")}</p>
+              <div className="mt-2">
+                <EmptyCatalogue
+                  filtered={catalogueIsFiltered}
+                  canManage={manageProducts.allowed}
+                  onAdd={openAdd}
+                  onImport={() => setImportOpen(true)}
+                  onStarter={() => setLocation("/settings/setup?focus=products")}
+                />
+              </div>
             </div>
           ) : pagedRows.map((product) => {
             const defaultUnit = product.sellingUnits?.find((row) => row.isDefault) ?? product.sellingUnits?.[0];
@@ -620,8 +633,13 @@ export default function ProductsPage() {
                 <tr><td colSpan={10} className="px-4 py-16 text-center text-sm text-[#536383]">{t("products.list.loading")}</td></tr>
               ) : rows.length === 0 ? (
                 <tr><td colSpan={10} className="px-4 py-16 text-center">
-                  <p className="text-sm font-bold text-[#13274d]">{t("products.list.emptyTitle")}</p>
-                  <p className="mt-1 text-xs text-[#536383]">{t("products.list.emptyHintCatalogue")}</p>
+                  <EmptyCatalogue
+                    filtered={catalogueIsFiltered}
+                    canManage={manageProducts.allowed}
+                    onAdd={openAdd}
+                    onImport={() => setImportOpen(true)}
+                    onStarter={() => setLocation("/settings/setup?focus=products")}
+                  />
                 </td></tr>
               ) : (
                 pagedRows.map((product) => {
@@ -920,6 +938,59 @@ function StatCard({ icon, iconClass, label, value, sub }: { icon: React.ReactNod
 function summariseList(entries: string[], limit = 3): string {
   if (entries.length <= limit) return entries.join(" · ");
   return `${entries.slice(0, limit).join(" · ")} +${entries.length - limit}`;
+}
+
+/**
+ * What to show a shop that has no products yet.
+ *
+ * "Add a product or clear filters" was the only thing on offer here, so the screen
+ * where a shopkeeper feels the pain of typing in a whole shop never mentioned the
+ * two ways out of it: the ready-made list for their trade, and importing a sheet
+ * they already have. Both existed — the starter catalog two levels deep in
+ * Settings, the importer behind a toolbar button — and neither was findable from
+ * the empty catalogue itself. A filtered-to-nothing list is a different problem
+ * and keeps its own wording, since the products are there and the filter is hiding
+ * them.
+ */
+function EmptyCatalogue({
+  filtered,
+  canManage,
+  onAdd,
+  onImport,
+  onStarter,
+}: {
+  filtered: boolean;
+  canManage: boolean;
+  onAdd: () => void;
+  onImport: () => void;
+  onStarter: () => void;
+}) {
+  const { t } = useAppLanguage();
+  if (filtered) {
+    return (
+      <>
+        <p className="text-sm font-black text-[var(--brand-ink)]">{t("products.list.emptyTitle")}</p>
+        <p className="mt-1 text-xs text-[#64748b]">{t("products.list.emptyHintFilters")}</p>
+      </>
+    );
+  }
+  return (
+    <div className="mx-auto max-w-md">
+      <p className="text-sm font-black text-[var(--brand-ink)]">{t("products.list.emptyStartTitle")}</p>
+      <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-[#64748b]">{t("products.list.emptyStartHint")}</p>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        <Button size="sm" onClick={onStarter} disabled={!canManage} data-testid="empty-starter-catalog" className="gap-1.5 font-bold">
+          <Sparkles size={14} /> {t("products.list.emptyStarterCta")}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onImport} disabled={!canManage} data-testid="empty-import" className="gap-1.5 font-bold">
+          <Upload size={14} /> {t("products.list.emptyImportCta")}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onAdd} disabled={!canManage} data-testid="empty-add-one" className="gap-1.5 font-bold">
+          <Plus size={14} /> {t("products.list.emptyAddCta")}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function StatusPill({ tone, children }: { tone: "emerald" | "amber" | "rose"; children: React.ReactNode }) {
