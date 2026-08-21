@@ -662,14 +662,66 @@ async function reconcileChildRows(
   entityType: string,
 ): Promise<void> {
   const table = dexieDB.table(tableName) as Table<MutableRow, string>;
-  const localRows = await getRowsByBillId(tableName, localBillId);
+  // Look under BOTH ids. The first reconcile rewrites each child row's billId to
+  // the server's, so a second echo of the same bill — a re-push, or the same
+  // change arriving again on pull — found nothing under the local bill id,
+  // treated every server row as new, and inserted a full duplicate set beside
+  // the originals. A device ended up holding ten bill_items for five real lines,
+  // every local twin stuck at "pending_sync" forever, and the extra rows showed
+  // up as a phantom second entry in Top Selling Products.
+  const candidateRows = [
+    ...(await getRowsByBillId(tableName, localBillId)),
+    ...(localBillId === serverBillId ? [] : await getRowsByBillId(tableName, serverBillId)),
+  ];
+  const seenRowIds = new Set<string>();
+  const localRows = candidateRows.filter((row) => {
+    const id = getStringFrom(row, ["id"]);
+    if (!id || seenRowIds.has(id)) return false;
+    seenRowIds.add(id);
+    // A row already merged away is settled. It must not be re-matched or re-put:
+    // mergeChildRow stamps `deleted_at: null` unconditionally, so feeding a
+    // tombstone back through it RESURRECTS the twin as a live row — which is how
+    // one bill line became two.
+    if (getStringFrom(row, ["merged_into_id"])) return false;
+    if (getStringFrom(row, ["deleted_at", "deletedAt"])) return false;
+    return true;
+  });
+
+  // A row that already carries a server id is that server row's own record, so
+  // pair it directly rather than by position — index pairing only holds while
+  // the local rows are still in their original order.
+  const byServerId = new Map<string, MutableRow>();
+  for (const row of localRows) {
+    const id = getStringFrom(row, ["id"]);
+    if (id) byServerId.set(id, row);
+    const serverId = getStringFrom(row, ["server_id", "serverId"]);
+    if (serverId && !byServerId.has(serverId)) byServerId.set(serverId, row);
+  }
+  const claimed = new Set<string>();
+  const unclaimedInOrder = localRows.filter((row) => {
+    const serverId = getStringFrom(row, ["server_id", "serverId"]);
+    const id = getStringFrom(row, ["id"]);
+    return !(serverId && serverId === id);
+  });
+  let nextUnclaimed = 0;
   const usedLocalIds = new Set<string>();
 
   for (const [index, serverRow] of serverRows.entries()) {
-    const localRow = localRows[index];
+    const serverRowId = getStringFrom(serverRow, ["id", "server_id", "serverId"]);
+    let localRow = serverRowId ? byServerId.get(serverRowId) : undefined;
+    if (localRow && claimed.has(getStringFrom(localRow, ["id"]) ?? "")) localRow = undefined;
+    while (!localRow && nextUnclaimed < unclaimedInOrder.length) {
+      const candidate = unclaimedInOrder[nextUnclaimed];
+      nextUnclaimed += 1;
+      const candidateId = getStringFrom(candidate, ["id"]) ?? "";
+      if (!claimed.has(candidateId)) localRow = candidate;
+    }
     if (localRow) {
       const localRowId = getStringFrom(localRow, ["id"]);
-      if (localRowId) usedLocalIds.add(localRowId);
+      if (localRowId) {
+        usedLocalIds.add(localRowId);
+        claimed.add(localRowId);
+      }
     }
     const fallbackId =
       getStringFrom(localRow, ["id"]) ??

@@ -560,6 +560,30 @@ describe("bill sync behavior", () => {
     expect(activeRows("inventory_movements")).toEqual([expect.objectContaining({ bill_id: "server_bill_1", billId: "server_bill_1", reference_id: "server_bill_1", sync_status: "synced" })]);
   });
 
+  it("reconciling the same server echo twice does not duplicate the bill's children", async () => {
+    // The first pass rewrites every child row's billId to the server's. A second
+    // echo of the same bill — a re-push, or the same change arriving again on
+    // pull — then looked the children up under the LOCAL bill id, found nothing,
+    // and inserted a whole second set beside them. A live device ended up with
+    // ten bill_items for five real lines, the local twins pinned at
+    // "pending_sync" forever, and a phantom extra row in Top Selling Products.
+    const bill = await createCreditBillForSync();
+    const createBillOutbox = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL");
+    expect(createBillOutbox).toBeDefined();
+
+    await reconcileSyncedBillFromPush(createBillOutbox as never, createServerSuccessResult(createBillOutbox!, bill.id) as never);
+    await reconcileSyncedBillFromPush(createBillOutbox as never, createServerSuccessResult(createBillOutbox!, bill.id) as never);
+
+    expect(activeRows("bill_items")).toHaveLength(1);
+    expect(activeRows("payments")).toHaveLength(1);
+    expect(activeRows("customer_ledger")).toHaveLength(1);
+    expect(activeRows("bill_items")).toEqual([
+      expect.objectContaining({ id: "server_bill_item_1", bill_id: "server_bill_1", sync_status: "synced" }),
+    ]);
+    // Nothing may be left behind claiming it still needs pushing.
+    expect(activeRows("bill_items").every((row) => row.sync_status === "synced")).toBe(true);
+  });
+
   it("push success turns local pending bill into synced server bill without duplicate bill history or duplicate payment", async () => {
     const bill = await createCreditBillForSync();
     const createBillOutbox = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL");

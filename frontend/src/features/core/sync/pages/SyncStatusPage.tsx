@@ -288,24 +288,49 @@ function payloadFromOperation(operation: PendingSyncEvent): Record<string, unkno
   return isRecord(operation.payload) ? operation.payload : {};
 }
 
+/**
+ * The record a sync payload is about, wherever it is carried.
+ *
+ * An outbox payload is an envelope: UPDATE_PRODUCT sends
+ * `{ productId, product: {...} }`, and the conflict row stores that envelope
+ * whole. Reading only the top level meant a failed product backup was announced
+ * as "product - cmt2k3rk1007fmex9tbsclg8f", which names nothing a shopkeeper can
+ * act on — the name was one level down the entire time.
+ */
+function subjectRecords(payload: Record<string, unknown>): Record<string, unknown>[] {
+  const nested = ["product", "bill", "payment", "customer", "supplier", "expense"]
+    .map((key) => payload[key])
+    .filter(isRecord);
+  return [payload, ...nested];
+}
+
+function readSubjectString(records: Record<string, unknown>[], keys: string[]): string | undefined {
+  for (const record of records) {
+    const value = readStringFromRecord(record, keys);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function readSubjectNumber(records: Record<string, unknown>[], keys: string[]): number | null {
+  for (const record of records) {
+    const value = readNumberFromRecord(record, keys);
+    if (value !== null && value !== undefined) return value;
+  }
+  return null;
+}
+
+const SUBJECT_NAME_KEYS = ["customerName", "customer_name", "name", "productName", "product_name"];
+const SUBJECT_BILL_NO_KEYS = ["billNo", "billNumber", "bill_no"];
+const SUBJECT_AMOUNT_KEYS = ["grandTotal", "grand_total", "totalAmount", "amount", "creditAmount", "credit_amount"];
+
 function operationSubject(operation: PendingSyncEvent) {
   const payload = payloadFromOperation(operation);
-  const nestedPayment = isRecord(payload.payment) ? payload.payment : {};
-  const nestedBill = isRecord(payload.bill) ? payload.bill : {};
-  const name =
-    readStringFromRecord(payload, ["customerName", "customer_name", "name", "productName", "product_name"]) ??
-    readStringFromRecord(nestedBill, ["customerName", "customer_name", "name"]) ??
-    readStringFromRecord(nestedPayment, ["customerName", "customer_name", "name"]);
-  const billNo =
-    readStringFromRecord(payload, ["billNo", "billNumber", "bill_no"]) ??
-    readStringFromRecord(nestedBill, ["billNo", "billNumber", "bill_no"]);
-  const amount =
-    readNumberFromRecord(payload, ["grandTotal", "grand_total", "totalAmount", "amount", "creditAmount", "credit_amount"]) ??
-    readNumberFromRecord(nestedPayment, ["amount"]) ??
-    readNumberFromRecord(nestedBill, ["grandTotal", "grand_total", "totalAmount", "amount"]);
-  const mode =
-    readStringFromRecord(payload, ["mode", "paymentMode", "payment_mode"]) ??
-    readStringFromRecord(nestedPayment, ["mode", "paymentMode", "payment_mode"]);
+  const records = subjectRecords(payload);
+  const name = readSubjectString(records, SUBJECT_NAME_KEYS);
+  const billNo = readSubjectString(records, SUBJECT_BILL_NO_KEYS);
+  const amount = readSubjectNumber(records, SUBJECT_AMOUNT_KEYS);
+  const mode = readSubjectString(records, ["mode", "paymentMode", "payment_mode"]);
   const reason =
     readStringFromRecord(operation, ["error_message", "last_error"]) ??
     readStringFromRecord(payload, ["reason", "note", "message"]);
@@ -329,15 +354,11 @@ function operationSubject(operation: PendingSyncEvent) {
 function conflictSubject(conflict: ConflictRow) {
   const local = isRecord(conflict.local_snapshot) ? conflict.local_snapshot : {};
   const server = isRecord(conflict.server_snapshot) ? conflict.server_snapshot : {};
-  const name =
-    readStringFromRecord(local, ["customerName", "customer_name", "name", "productName", "product_name"]) ??
-    readStringFromRecord(server, ["customerName", "customer_name", "name", "productName", "product_name"]);
-  const billNo =
-    readStringFromRecord(local, ["billNo", "billNumber", "bill_no"]) ??
-    readStringFromRecord(server, ["billNo", "billNumber", "bill_no"]);
-  const amount =
-    readNumberFromRecord(local, ["grandTotal", "grand_total", "totalAmount", "amount", "creditAmount", "credit_amount"]) ??
-    readNumberFromRecord(server, ["grandTotal", "grand_total", "totalAmount", "amount", "creditAmount", "credit_amount"]);
+  // A conflict stores the outbox envelope, so the record itself is usually nested.
+  const records = [...subjectRecords(local), ...subjectRecords(server)];
+  const name = readSubjectString(records, SUBJECT_NAME_KEYS);
+  const billNo = readSubjectString(records, SUBJECT_BILL_NO_KEYS);
+  const amount = readSubjectNumber(records, SUBJECT_AMOUNT_KEYS);
   const parts = [name, billNo, moneyLabel(amount)].filter(Boolean);
   return {
     title: parts.length ? parts.join(" - ") : `${safeString(conflict.entity_type)} - ${safeString(conflict.entity_id)}`,
@@ -1115,6 +1136,7 @@ export default function SyncStatusPage() {
   const handleMarkConflictResolved = async (
     conflictId: string,
     resolution: ConflictResolution,
+    isVersionRetry = false,
   ) => {
     if (!snapshot.isBrowserOnline || !snapshot.isBackendReachable) {
       toast({
@@ -1162,6 +1184,15 @@ export default function SyncStatusPage() {
           updated_at: now,
         });
       }
+      // The queue event that produced this conflict is still sitting there as CONFLICT,
+      // and it is what the "N changes need review" banner counts. Leaving it made the
+      // owner clear the same failure twice, in two different places, with the red
+      // banner still up after they had already decided. Postponing keeps it, since the
+      // decision is explicitly "not now".
+      if (resolution !== "ignored_by_owner") {
+        const sourceEventId = typeof row?.source_event_id === "string" ? row.source_event_id : null;
+        if (sourceEventId) await offlineDB.removePendingEvent(sourceEventId).catch(() => undefined);
+      }
       window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
       toast({
         title: resolution === "use_local" ? "Local version selected" : resolution === "use_server" ? "Cloud version selected" : resolution === "resolved_by_owner" ? "Review marked resolved" : "Decision postponed",
@@ -1187,6 +1218,29 @@ export default function SyncStatusPage() {
           description: "Another device recorded a decision for this record. Nothing more is needed here.",
         });
         return;
+      }
+      // A stale expected_version is not something the owner can fix by looking at the
+      // screen: the device keeps sending the number it was handed, so every retry
+      // fails the same way and the review can never be cleared — Ignore included,
+      // since it claims the conflict too. Drop the stored version so the next press
+      // goes in without one and the server uses its own current value.
+      if (
+        error instanceof ApiClientError &&
+        error.data.code === "SYNC_CONFLICT_VERSION_MISMATCH" &&
+        !isVersionRetry
+      ) {
+        const row = await dexieDB.sync_conflicts.get(conflictId).catch(() => undefined);
+        if (row && row.server_record_version != null) {
+          await dexieDB.sync_conflicts
+            .put({ ...row, server_record_version: null, updated_at: new Date().toISOString() })
+            .catch(() => undefined);
+          // Healed, so carry out the decision the owner actually pressed rather than
+          // making them press it a second time. Guarded so a genuine race — another
+          // device resolving this right now — still surfaces instead of looping.
+          setSnapshot((current) => ({ ...current, isSyncing: false }));
+          await handleMarkConflictResolved(conflictId, resolution, true);
+          return;
+        }
       }
       toast({
         title: "Could not update conflict",

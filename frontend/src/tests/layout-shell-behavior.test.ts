@@ -160,7 +160,7 @@ describe("desktop app shell behavior", () => {
     // stock-movement screens, Activity & Insights and the whole assurance
     // section went missing. The drawer is the phone's sidebar: it has to carry
     // the same destinations, whether as a row or inside an expandable section.
-    const desktop = navHrefs(layout, "const NAV: NavItem[] = [");
+    const desktop = navHrefs(layout, "const NAV: NavSpecItem[] = [");
     const mobile = [
       ...navHrefs(mobileChrome, "const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = ["),
       ...navHrefs(mobileChrome, "const TOP_LEVEL_TABS: Array<{ href: string; labelKey: TranslationKey; Icon: NavIcon; matches: string[] }> = ["),

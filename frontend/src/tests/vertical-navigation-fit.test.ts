@@ -52,12 +52,12 @@ function sidebarLabels(businessType: BusinessType, translate: (key: TranslationK
   };
   const core = NAV.flatMap((item) =>
     item.kind === "link"
-      ? [overrides[item.href] ?? item.label]
+      ? [overrides[item.href] ?? translate(item.label)]
       : [
           // A group shows its own heading, which the `/inventory` override renames,
           // and then each child under it.
-          (item.overviewHref && overrides[item.overviewHref]) || item.label,
-          ...item.children.map((child) => overrides[child.href] ?? child.label),
+          (item.overviewHref && overrides[item.overviewHref]) || translate(item.label),
+          ...item.children.map((child) => overrides[child.href] ?? translate(child.label)),
         ],
   );
   return [...core, ...packForBusinessType(businessType).nav.map((entry) => translate(entry.label))];

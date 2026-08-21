@@ -49,7 +49,9 @@ describe("the field is wired safely", () => {
   // folding it into the shared pool as well would count the same goods twice.
   it("does not also fold the opening quantity into the pool when counting per pack", () => {
     const at = source.indexOf("function addAlternatePack");
-    const body = source.slice(at, at + 3200);
+    // Wide enough to reach the pooled branch at the end of the function; the
+    // window has to grow whenever addAlternatePack does.
+    const body = source.slice(at, at + 4200);
     expect(body).toContain('packagingMode === "per_pack"');
     // The pooled branch is skipped entirely by zeroing the quantity it works from.
     // Read off the DRAFT, which is the row clamped to units this trade actually

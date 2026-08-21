@@ -1,5 +1,6 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
+import { sellingUnitCostPrice } from "../products/selling-unit-pricing.js";
 
 const MONEY_EPSILON = 0.005;
 export const LARGE_DISCOUNT_MIN_AMOUNT = 100;
@@ -80,7 +81,7 @@ export async function deriveSensitiveBillActions(shopId, body, client = db) {
   const sellingUnitIds = unique(items.map((item) => item.sellingUnitId ?? item.selling_unit_id));
   const claimedRuleIds = unique(items.map((item) => item.appliedPricingRuleId ?? item.applied_pricing_rule_id));
 
-  const [products, sellingUnits, pricingRules, customer] = await Promise.all([
+  const [products, sellingUnits, defaultUnits, pricingRules, customer] = await Promise.all([
     productIds.length
       ? client.product.findMany({
           where: { shopId, id: { in: productIds }, deletedAt: null },
@@ -90,7 +91,20 @@ export async function deriveSensitiveBillActions(shopId, body, client = db) {
     sellingUnitIds.length
       ? client.productSellingUnit.findMany({
           where: { shopId, id: { in: sellingUnitIds }, isActive: true },
-          select: { id: true, productId: true, unitCode: true, defaultPrice: true, minimumPrice: true, costPrice: true },
+          select: {
+            id: true, productId: true, unitCode: true, defaultPrice: true, minimumPrice: true, costPrice: true,
+            // A pack with no cost of its own is costed from the product, scaled to
+            // its size — which needs to know both how big it is and whether it IS
+            // the default pack. See sellingUnitCostPrice.
+            isDefault: true, conversionToBase: true,
+          },
+        })
+      : [],
+    // The pack the product's own cost figure is quoted in, one row per product.
+    productIds.length
+      ? client.productSellingUnit.findMany({
+          where: { shopId, productId: { in: productIds }, isDefault: true, isActive: true },
+          select: { productId: true, conversionToBase: true },
         })
       : [],
     claimedRuleIds.length
@@ -103,6 +117,7 @@ export async function deriveSensitiveBillActions(shopId, body, client = db) {
 
   const productById = new Map(products.map((product) => [product.id, product]));
   const unitById = new Map(sellingUnits.map((unit) => [unit.id, unit]));
+  const defaultUnitByProduct = new Map(defaultUnits.map((unit) => [unit.productId, unit]));
   const ruleById = new Map(pricingRules.map((rule) => [rule.id, rule]));
   const billDate = body?.businessDate ? new Date(body.businessDate) : new Date();
   const effectiveBillDate = Number.isFinite(billDate.getTime()) ? billDate : new Date();
@@ -128,7 +143,7 @@ export async function deriveSensitiveBillActions(shopId, body, client = db) {
     const recognisedRulePrice = resolveRulePrice(
       applicableRule,
       defaultRate,
-      Math.max(0, number(unit?.costPrice ?? product?.costPerRateUnit)),
+      Math.max(0, sellingUnitCostPrice(unit, product, defaultUnitByProduct.get(product?.id))),
       minimumRate,
     );
     const isRecognisedRuleRate = recognisedRulePrice != null

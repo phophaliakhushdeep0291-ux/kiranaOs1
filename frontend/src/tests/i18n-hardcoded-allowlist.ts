@@ -25,7 +25,7 @@
  */
 export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "app/providers.tsx": 3,
-  "components/layout/Layout.tsx": 53,
+  "components/layout/Layout.tsx": 26,
   "components/layout/MobileAppChrome.tsx": 50,
   "components/security/OwnerPinModal.tsx": 7,
   "components/shared/ErrorBoundary.tsx": 4,
@@ -52,7 +52,7 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/auth/AuthContext.tsx": 2,
   "features/core/auth/pages/ForgotPasswordPage.tsx": 5,
   "features/core/auth/pages/LoginPage.tsx": 21,
-  "features/core/auth/pages/RegisterPage.tsx": 23,
+  "features/core/auth/pages/RegisterPage.tsx": 1,
   "features/core/auth/pages/ResetPasswordPage.tsx": 5,
   "features/core/auth/pages/VerifyEmailPage.tsx": 1,
   "features/core/customer-order/BillingOrderQrButton.tsx": 12,

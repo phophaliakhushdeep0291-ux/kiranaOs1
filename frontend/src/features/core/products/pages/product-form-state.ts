@@ -237,12 +237,22 @@ export function productToForm(product?: Product): ProductFormData {
     retailFromQuantity: product?.retailFromQuantity ?? 1,
     wholesalePrice: product?.wholesalePrice ?? product?.wholesalePricePerRateUnit ?? sellingPrice,
     wholesaleFromQuantity: product?.wholesaleFromQuantity ?? 10,
-    stockQuantity: defaultUnit?.conversionToBase
-      ? roundMoney(Number(product?.stockBaseQty ?? 0) / defaultUnit.conversionToBase)
-      : fromBaseQty(product?.stockBaseQty, unit),
-    lowStockAlert: defaultUnit?.conversionToBase
-      ? roundMoney(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
-      : fromBaseQty(product?.lowStockThreshold, unit),
+    // These two boxes describe the DEFAULT pack, and in per-pack mode that pack
+    // holds its own count — the product's total belongs to every size together.
+    // Dividing the total by the default pack's size instead reported the whole
+    // shelf as if it were all 1 kg packets (10 x 1 kg + 20 x 500 g read back as
+    // "20 packets"), and saving wrote that inflated figure onto the 1 kg row:
+    // opening a per-pack product and pressing Save silently created stock.
+    stockQuantity: packagingMode === "per_pack"
+      ? roundMoney(Number(defaultUnit?.onHandQty ?? 0))
+      : defaultUnit?.conversionToBase
+        ? roundMoney(Number(product?.stockBaseQty ?? 0) / defaultUnit.conversionToBase)
+        : fromBaseQty(product?.stockBaseQty, unit),
+    lowStockAlert: packagingMode === "per_pack" && defaultUnit?.lowStockThreshold != null
+      ? roundMoney(Number(defaultUnit.lowStockThreshold))
+      : defaultUnit?.conversionToBase
+        ? roundMoney(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
+        : fromBaseQty(product?.lowStockThreshold, unit),
     batchTrackingEnabled: product?.batchTrackingEnabled ?? false,
     drugSchedule: product?.drugSchedule ?? null,
     attributes: normalizeProductAttributes(product?.attributes),
@@ -251,6 +261,67 @@ export function productToForm(product?: Product): ProductFormData {
     imageUrl: product?.imageUrl ?? "",
     isLooseItem: product?.isLooseItem ?? false,
     isActive: product?.isActive ?? product?.status !== "inactive",
+  };
+}
+
+/**
+ * Move a half-filled form between the two stock-counting models.
+ *
+ * The "Stock counting" switch sits directly above the pack list, so changing your
+ * mind about it partway through adding a product is ordinary — and it is the one
+ * moment the two models have to be reconciled. They keep the shelf in different
+ * places: pooled holds one number in the main Opening Stock box (each pack's
+ * opening quantity is folded into it as the pack is added), while per-pack holds a
+ * count on every row and the main box describes the DEFAULT pack alone.
+ *
+ * Flipping the switch used to leave both numbers exactly as they were, so the same
+ * form meant two different shelves. Going pooled -> per_pack re-labelled the whole
+ * shelf as default packs (4 x 5 kg and 20 x 500 g became "40 x 1 kg", and both
+ * rows read zero); going the other way dropped every alternate row's count
+ * outright, taking 40 kg of atta down to 10. Neither said anything.
+ *
+ * Total stock is what must survive the switch, so it is the thing computed from:
+ * the base-unit total is read out of the model being left and spread back over the
+ * model being entered.
+ */
+export function convertPackagingMode(
+  values: ProductFormData,
+  nextMode: ProductFormData["packagingMode"],
+): Pick<ProductFormData, "packagingMode" | "stockQuantity" | "sellingUnits"> {
+  const current = values.packagingMode ?? "pooled";
+  const units = values.sellingUnits ?? [];
+  if (nextMode === current) return { packagingMode: current, stockQuantity: values.stockQuantity, sellingUnits: units };
+
+  const defaultConversion = values.isLooseItem
+    ? toBaseQty(1, values.unit)
+    : sellingUnitConversion(values.packSizeValue, values.packSizeUnit);
+  // A grid counts per cell and has no pooled form, so it is left alone.
+  const alternates = units.filter((row) => !row.isDefault && !row.variantValue1 && !row.variantValue2);
+  const alternateBaseQty = alternates.reduce(
+    (sum, row) => (row.isActive === false ? sum : sum + (Number(row.onHandQty) || 0) * (Number(row.conversionToBase) || 0)),
+    0,
+  );
+  const inDefaultPacks = (baseQty: number) => (defaultConversion > 0 ? roundMoney(baseQty / defaultConversion) : 0);
+
+  if (nextMode === "per_pack") {
+    // The pooled box holds the whole shelf. What is left after each size's own
+    // count is taken out belongs to the default pack.
+    const totalBaseQty = roundMoney((Number(values.stockQuantity) || 0) * defaultConversion);
+    return {
+      packagingMode: "per_pack",
+      stockQuantity: Math.max(0, inDefaultPacks(totalBaseQty - alternateBaseQty)),
+      sellingUnits: units,
+    };
+  }
+
+  // per_pack -> pooled: every size draws on one pool, so the pool is the sum of
+  // them all. The counts stay on the rows so switching back is lossless; a pooled
+  // payload drops them (see formToInput).
+  const defaultBaseQty = roundMoney((Number(values.stockQuantity) || 0) * defaultConversion);
+  return {
+    packagingMode: "pooled",
+    stockQuantity: inDefaultPacks(defaultBaseQty + alternateBaseQty),
+    sellingUnits: units,
   };
 }
 
@@ -317,23 +388,58 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
   const variantAxes = values.variantAxes ?? [];
   const hasGrid = variantAxes.length > 0 && variantRows.length > 0;
 
+  /**
+   * A pack's own count is kept in form state whatever the mode, so that flipping
+   * "Stock counting" can carry the goods across (see convertPackagingMode). Pooled
+   * must not SEND it: every size draws on one base-unit pool there, and a per-pack
+   * number nothing decrements on sale drifts from the real stock the moment one is
+   * sold. Undefined rather than 0 — a low-stock report reads 0 as "run out".
+   */
+  const forPooled = (row: ProductSellingUnit): ProductSellingUnit => {
+    const { onHandQty: _onHandQty, lowStockThreshold: _lowStockThreshold, ...rest } = row;
+    return rest;
+  };
+  const alternateUnits = values.sellingUnits.filter((row) => {
+    const isPersistedDefault = Boolean(previousDefault?.id && row.id === previousDefault.id);
+    return !row.isDefault && !isPersistedDefault && row.unitCode !== defaultSellingUnit.unitCode;
+  });
   const sellingUnits = hasGrid
     ? variantRows
     : [
         defaultSellingUnit,
-        ...values.sellingUnits.filter((row) => {
-          const isPersistedDefault = Boolean(previousDefault?.id && row.id === previousDefault.id);
-          return !row.isDefault && !isPersistedDefault && row.unitCode !== defaultSellingUnit.unitCode;
-        }),
+        ...(values.packagingMode === "per_pack" ? alternateUnits : alternateUnits.map(forPooled)),
       ];
 
   // Each cell holds its own pieces, so the product's own figure is their sum.
   // The server does not recompute it, and everything that asks "how many of this
   // shirt are there?" without opening the grid reads this number.
   const gridQty = roundMoney(variantRows.reduce((sum, row) => sum + (Number(row.onHandQty) || 0), 0));
-  const stockQuantity = hasGrid ? gridQty : values.stockQuantity;
+  /**
+   * Per-pack stock is the sum over every pack, never the default pack alone.
+   *
+   * In "count each size" mode each row carries its own count, and the server
+   * requires the product total to equal sum(count x pack size) — anything else
+   * is refused with PACKAGING_STOCK_TOTAL_MISMATCH. This used to be built from
+   * the main stock box only, so the moment a second size was given any count at
+   * all the save failed outright: "Per-pack opening stock totals 20000 base
+   * units, but the product total says 10000." Adding a size and typing how many
+   * you have is the ordinary use of the feature, so it failed on the first try
+   * on both create and edit.
+   */
+  const perPackBaseQty = roundMoney(sellingUnits.reduce((sum, row) => (
+    row.isActive === false ? sum : sum + (Number(row.onHandQty) || 0) * (Number(row.conversionToBase) || 0)
+  ), 0));
+  const perPack = !hasGrid && values.packagingMode === "per_pack";
   // A cell is one piece, never a pack, so the grid's total is already in base units.
-  const stockBaseQty = hasGrid ? gridQty : roundMoney(values.stockQuantity * conversionToBase);
+  const stockBaseQty = hasGrid ? gridQty : perPack ? perPackBaseQty : roundMoney(values.stockQuantity * conversionToBase);
+  // The product's stock counted in its own default pack — a display figure that
+  // must stay the base total's twin, because readers that have no selling unit to
+  // hand multiply it back by the default conversion (see inventoryBaseQuantity).
+  const stockQuantity = hasGrid
+    ? gridQty
+    : perPack && conversionToBase > 0
+      ? roundMoney(perPackBaseQty / conversionToBase)
+      : values.stockQuantity;
 
   return {
     name: values.name.trim(),
