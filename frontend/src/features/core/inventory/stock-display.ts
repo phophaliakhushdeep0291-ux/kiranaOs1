@@ -135,6 +135,32 @@ export function inventoryDisplayQuantity(item: Product | InventoryItem, unit?: s
   return fromInventoryBaseQty(baseQty, item.baseUnit ?? targetUnit, targetUnit);
 }
 
+/**
+ * How much of this product is on the shelf, said in one line: "60 piece 100 ml".
+ *
+ * The count has to be the shopkeeper's, not the database's. Stock is stored in
+ * base units (g/ml/piece), so sixty 100 ml bottles are 6,000 on disk. A caller
+ * that divides by a unit NAME rather than the pack's own conversion gets none of
+ * that back — product-pricing's fromBaseQty falls through to a factor of 1 for
+ * any measure it does not recognise, and a pack name ("piece 100 ml") is never in
+ * its table, so the raw 6,000 was printed under the bottle's own label. A
+ * per-pack product answers with its default pack's own count, because it keeps no
+ * single pooled total that could be divided.
+ *
+ * Negative stock is real and worth seeing: the counter lets a sale through when a
+ * stock-in has not been recorded yet, and the deficit is what tells the owner to
+ * reconcile.
+ */
+export function inventoryStockLabel(item: Product | InventoryItem): string {
+  const label = inventoryUnitLabel(item);
+  const pack = defaultInventorySellingUnit(item);
+  const quantity = item.packagingMode === "per_pack" && pack
+    ? roundInventoryValue(Number(pack.onHandQty ?? 0))
+    : inventoryDisplayQuantity(item);
+  if (!Number.isFinite(quantity)) return label;
+  return `${quantity.toLocaleString("en-IN")} ${label}`;
+}
+
 export function inventoryAverageUnitCost(item?: Product | InventoryItem | null, unit?: string | null): number {
   const sellingUnit = findInventorySellingUnit(item, unit);
   const cost = item?.averageCostPrice

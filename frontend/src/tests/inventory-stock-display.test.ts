@@ -4,6 +4,7 @@ import {
   inventoryAverageUnitCost,
   inventoryDisplayQuantity,
   inventoryQuantityToBase,
+  inventoryStockLabel,
   inventoryStockValue,
   inventoryUnitLabel,
   enrichInventoryRows,
@@ -150,5 +151,91 @@ describe("inventory stock display", () => {
       expect(page).toContain("enrichInventoryRows(lowStock.data, allInventoryRows)");
       expect(page).not.toContain("mergeInventoryRows(allInventoryRows, lowStock.data");
     });
+  });
+});
+
+/**
+ * "Recently added products shows 6000 piece, which is not right."
+ *
+ * The dashboard rail asked product-pricing to convert base units using the pack's
+ * NAME ("piece 100 ml"). That name is in no conversion table, so the lookup took
+ * its fallback factor of 1 and printed 6,000 ml of hair oil as 6,000 bottles —
+ * under the bottle's own label, which made it read as a stock count.
+ */
+describe("stock label for a packed product", () => {
+  const bottle: ProductSellingUnit = {
+    id: "unit_100ml",
+    name: "piece 100 ml",
+    unitType: "piece",
+    unitCode: "piece-100-ml",
+    packSizeValue: 100,
+    packSizeUnit: "ml",
+    conversionToBase: 100,
+    defaultPrice: 70,
+    isDefault: true,
+    isActive: true,
+  } as ProductSellingUnit;
+
+  const hairOil = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
+    id: "product_oil",
+    productId: "product_oil",
+    name: "Almand drop",
+    unit: "piece",
+    displayUnit: "piece 100 ml",
+    rateUnit: "piece",
+    baseUnit: "ml",
+    stockBaseQty: 6_000,
+    sellingUnits: [bottle],
+    ...overrides,
+  } as InventoryItem);
+
+  it("counts bottles, not millilitres", () => {
+    expect(inventoryStockLabel(hairOil())).toBe("60 piece 100 ml");
+  });
+
+  it("leaves a plain measure alone", () => {
+    // 5 kg of tej patta is 5, not 5,000: the old path got these right because
+    // "kg" IS in the table, which is why only packed goods looked wrong.
+    const looseSpice = {
+      id: "product_tajpata",
+      name: "TajPata",
+      unit: "kg",
+      displayUnit: "kg",
+      rateUnit: "kg",
+      baseUnit: "g",
+      stockBaseQty: 5_000,
+    } as InventoryItem;
+    expect(inventoryStockLabel(looseSpice)).toBe("5 kg");
+  });
+
+  it("still shows a deficit", () => {
+    // An oversold shelf is the number the owner most needs to see.
+    expect(inventoryStockLabel(hairOil({ stockBaseQty: -300 }))).toBe("-3 piece 100 ml");
+  });
+
+  it("gives a per-pack product the count that pack actually holds", () => {
+    // Each size is counted on its own shelf here, so there is no pooled total to
+    // divide — dividing one would put a crate's stock under the packet's label.
+    const maggi = {
+      id: "product_maggi",
+      name: "Maggi Noodles",
+      unit: "packet",
+      displayUnit: "70 g packet",
+      baseUnit: "g",
+      packagingMode: "per_pack",
+      stockBaseQty: 6_160,
+      sellingUnits: [
+        { id: "su_pkt", name: "70 g packet", unitType: "packet", unitCode: "pkt70", conversionToBase: 70, onHandQty: 40, isDefault: true, isActive: true },
+        { id: "su_crate", name: "24-pack crate", unitType: "carton", unitCode: "crate24", conversionToBase: 1_680, onHandQty: 2, isDefault: false, isActive: true },
+      ],
+    } as unknown as InventoryItem;
+    expect(inventoryStockLabel(maggi)).toBe("40 70 g packet");
+  });
+
+  it("is what the dashboard rail calls", () => {
+    // The defect was the call site's choice of helper, so pin the call site.
+    const page = readFileSync("src/features/core/dashboard/pages/DashboardPage.tsx", "utf8");
+    expect(page).toContain("{inventoryStockLabel(product)}");
+    expect(page).not.toContain("fromBaseQty");
   });
 });

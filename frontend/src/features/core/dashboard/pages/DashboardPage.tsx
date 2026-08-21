@@ -28,7 +28,7 @@ import { useFeature } from "@/features/core/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/core/sync";
 import { dedupeBillsForDisplay } from "@/features/core/sync/bill-reconciliation";
-import { fromBaseQty, productDisplayUnit } from "@/features/core/products/pages/product-pricing";
+import { inventoryStockLabel } from "@/features/core/inventory/stock-display";
 import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1731,7 +1731,7 @@ function RecentProductsRail({ products }: { products: Product[] }) {
                 <ProductAvatar product={product} compact />
                 <div className="min-w-0">
                   <p className="truncate text-[12px] font-black text-[var(--brand-ink)]">{product.name}</p>
-                  <p className={cn("mt-0.5 text-[11px] font-semibold", DASH_MUTED)}>{productUnitLabel(product)}</p>
+                  <p className={cn("mt-0.5 text-[11px] font-semibold", DASH_MUTED)}>{inventoryStockLabel(product)}</p>
                   <p className="mt-1 text-[12px] font-black text-[var(--brand-ink)]">{fmtRs(productPrice(product))}</p>
                 </div>
               </div>
@@ -1767,20 +1767,6 @@ function ProductAvatar({ product, compact = false }: { product: Product; compact
 
 function productPrice(product: Product): number {
   return money(product.sellingPrice ?? product.defaultPricePerRateUnit ?? product.retailPrice ?? 0);
-}
-
-function productUnitLabel(product: Product): string {
-  const unit = productDisplayUnit(product);
-  // stockBaseQty is in base units (g/ml); convert to the display unit. Falling back to the raw
-  // base value (the old behaviour) showed e.g. 20000 litre instead of 20 litre.
-  const stock = product.stockBaseQty != null
-    ? fromBaseQty(product.stockBaseQty, unit)
-    : Number(product.stockQuantity ?? 0);
-  // Negative stock is real and worth seeing: the counter lets a sale through when
-  // a stock-in has not been recorded yet, and the deficit is what tells the owner
-  // to reconcile. Hiding it left the tile showing a bare unit ("kg") with no number.
-  if (Number.isFinite(stock)) return `${stock.toLocaleString("en-IN")} ${unit}`;
-  return unit;
 }
 
 function fmtRs(n: number | undefined | null) {
