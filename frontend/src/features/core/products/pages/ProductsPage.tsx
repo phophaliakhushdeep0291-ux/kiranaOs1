@@ -634,7 +634,11 @@ export default function ProductsPage() {
                   const low = isLowStock(product) && !outOfStock;
                   const cat = (product.category ?? "general").trim() || "general";
                   const brandLine = product.brand ?? product.aliases?.[0] ?? "";
-                  const mrp = product.mrp && product.mrp > 0 ? product.mrp : productRetailPrice(product);
+                  // No fallback to the selling price. MRP is a printed, legally
+                  // meaningful ceiling, so quietly showing the selling price under
+                  // this heading told the shopkeeper an MRP was set when it was
+                  // not — and left no way to find the products still missing one.
+                  const mrp = product.mrp && product.mrp > 0 ? product.mrp : null;
                   return (
                     <tr key={product.id} className={`border-b border-[#f1f4f8] last:border-0 transition-colors hover:bg-[#f9fbfe] ${selectedIds.has(product.id) ? "bg-[#f3f8ff]" : ""}`} data-testid={`row-product-${product.id}`}>
                       <td className="px-3 py-3">
@@ -669,7 +673,7 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-3 py-3"><span className="font-mono text-[12px] text-[#45577a]">{product.barcode ?? product.sku ?? "—"}</span></td>
                       <td className="px-3 py-3 capitalize text-[#45577a]">{unit}</td>
-                      <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(mrp)}</td>
+                      <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{mrp === null ? <span className="text-[#93a3bd]">—</span> : rs(mrp)}</td>
                       <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(averageCost(product))}</td>
                       <td className="px-3 py-3 text-right font-extrabold text-[#13274d]">{rs(product.sellingPrice ?? product.defaultPricePerRateUnit)}</td>
                       {/* Stock + status underneath, centered */}

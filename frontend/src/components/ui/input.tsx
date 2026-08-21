@@ -2,8 +2,22 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * A numeric box sitting on a default of "0" is a trap: the caret lands after the
+ * zero, so typing a price of 45 leaves "045" and a stock of 5 leaves "05". Every
+ * money and quantity field on the new-product form starts at 0, as does the
+ * billing discount box, so a shopkeeper had to delete the zero six times per
+ * product.
+ *
+ * Only a lone zero is selected. A real value like 45 is left alone, so editing
+ * an existing number still behaves normally.
+ */
+function selectPlaceholderZero(event: React.FocusEvent<HTMLInputElement>) {
+  if (event.target.value === "0") event.target.select()
+}
+
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type, ...props }, ref) => {
+  ({ className, type, onFocus, ...props }, ref) => {
     return (
       <input
         type={type}
@@ -12,6 +26,10 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           className
         )}
         ref={ref}
+        onFocus={(event) => {
+          if (type === "number") selectPlaceholderZero(event)
+          onFocus?.(event)
+        }}
         {...props}
       />
     )

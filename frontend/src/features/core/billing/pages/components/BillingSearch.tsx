@@ -15,6 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { resolveBillPaymentMode } from "@/features/core/bills/payment-mode";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useListBills } from "@/features/core/bills/queries";
@@ -1092,14 +1093,15 @@ function RecentBillsPanel() {
     : (result as { bills?: Bill[]; entries?: Bill[] } | undefined)?.bills ?? (result as { entries?: Bill[] } | undefined)?.entries ?? [];
 
   function paymentLabel(bill: Bill): string {
-    const payments = bill.payments as Array<{ mode?: string }> | undefined;
-    const billAny = bill as { paymentMode?: string };
-    const mode = payments?.[0]?.mode ?? billAny.paymentMode ?? null;
-    if (!mode || mode === "cash") return t("billing.pay.cash");
+    // Reads the outstanding amount first, so a credit bill — which has no
+    // payment rows at all, because nothing was tendered — is not reported as cash.
+    const mode = resolveBillPaymentMode(bill as unknown as Record<string, unknown>);
     if (mode === "upi") return t("billing.pay.upi");
-    if (mode === "credit") return t("billing.search.udhar");
+    if (mode === "udhar" || mode === "credit") return t("billing.search.udhar");
     if (mode === "bank") return t("billing.pay.bank");
+    if (mode === "split") return t("billing.pay.split");
     if (mode === "card") return "Card";
+    if (mode === "cash") return t("billing.pay.cash");
     return mode.charAt(0).toUpperCase() + mode.slice(1);
   }
 
