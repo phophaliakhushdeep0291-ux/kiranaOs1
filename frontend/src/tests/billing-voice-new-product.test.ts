@@ -112,3 +112,53 @@ describe("the name it settles on", () => {
     expect(parseNewProductLine("rusk rate das")?.sellingPrice).toBe(10);
   });
 });
+
+/**
+ * The same command, spoken in Hindi.
+ *
+ * A shop that runs the app in Hindi dictates in Hindi, and until now none of this
+ * reached the parser: `normalizeSearchText` classed every Devanagari matra as
+ * punctuation and deleted it, so "किलो" arrived as "क ल" and matched no vocabulary
+ * word — including the Devanagari numerals that were already in the number table.
+ */
+describe("dictated in Hindi", () => {
+  it("creates the product from a Devanagari command", () => {
+    const draft = parseBillingVoiceCommand("नया रस्क 25 रुपये", CATALOGUE);
+
+    expect(draft.newProducts[0]).toEqual(expect.objectContaining({ name: "रस्क", sellingPrice: 25 }));
+  });
+
+  it("reads a Devanagari quantity and unit", () => {
+    expect(parseNewProductLine("दो पैकेट रस्क 25 रुपये")).toEqual(expect.objectContaining({
+      name: "रस्क",
+      sellingPrice: 25,
+      quantity: 2,
+      unit: "packet",
+    }));
+  });
+
+  it("accepts Devanagari digits", () => {
+    expect(parseNewProductLine("रस्क ४० रुपये")?.sellingPrice).toBe(40);
+  });
+
+  it("does not keep the possessive particle in the name", () => {
+    expect(parseNewProductLine("रस्क का दाम 25")?.name).toBe("रस्क");
+    expect(parseNewProductLine("rusk ka daam 25")?.name).toBe("rusk");
+  });
+
+  it("holds the same line against a quantity, in Hindi too", () => {
+    // "दो पैकेट रस्क" is two packets, not a two-rupee product.
+    expect(parseNewProductLine("दो पैकेट रस्क")).toBeNull();
+  });
+
+  it("still bills a Hindi-named product the shop already has", () => {
+    const draft = parseBillingVoiceCommand("दो किलो चीनी", CATALOGUE);
+
+    // The quantity is the point. The alias matched even before, because query and alias
+    // were shredded identically — but "दो" was not a number any more, so a shop asking
+    // for two kilos was billed for one.
+    expect(draft.lines).toEqual([expect.objectContaining({ quantity: 2, unit: "kg" })]);
+    expect(draft.lines.map((line) => line.product.name)).toEqual(["Sugar"]);
+    expect(draft.newProducts).toEqual([]);
+  });
+});

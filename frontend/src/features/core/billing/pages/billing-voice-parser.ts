@@ -67,6 +67,18 @@ const MONEY_WORDS = new Set([
   "rate",
   "at",
   "₹",
+  // Hindi, in both scripts. A counter dictating in Hindi says the price as often as it
+  // says the item, and without these the number beside it reads as a quantity.
+  "daam",
+  "bhav",
+  "रुपये",
+  "रुपए",
+  "रुपया",
+  "रुपय",
+  "रु",
+  "दाम",
+  "भाव",
+  "रेट",
 ]);
 const UNIT_WORDS = new Set([
   "kg",
@@ -90,6 +102,16 @@ const UNIT_WORDS = new Set([
   "pcs",
   "box",
   "dozen",
+  // Devanagari spellings of the same units.
+  "किलो",
+  "ग्राम",
+  "लीटर",
+  "मिली",
+  "पैकेट",
+  "पैकिट",
+  "पीस",
+  "डिब्बा",
+  "दर्जन",
 ]);
 
 export function parseVoiceNumber(token: string): number | undefined {
@@ -104,14 +126,14 @@ export function normalizeVoiceUnit(
   fallback: string,
 ): string {
   const unit = normalizeSearchText(token ?? "");
-  if (["kg", "kilo", "kilogram", "kilos"].includes(unit)) return "kg";
-  if (["gram", "grams", "g", "gm"].includes(unit)) return "g";
-  if (["litre", "liter", "l", "ltr"].includes(unit)) return "litre";
-  if (unit === "ml") return "ml";
-  if (["packet", "pkt", "pack"].includes(unit)) return "packet";
-  if (["piece", "pc", "pcs"].includes(unit)) return "piece";
-  if (unit === "box") return "box";
-  if (unit === "dozen") return "dozen";
+  if (["kg", "kilo", "kilogram", "kilos", "किलो"].includes(unit)) return "kg";
+  if (["gram", "grams", "g", "gm", "ग्राम"].includes(unit)) return "g";
+  if (["litre", "liter", "l", "ltr", "लीटर"].includes(unit)) return "litre";
+  if (["ml", "मिली"].includes(unit)) return "ml";
+  if (["packet", "pkt", "pack", "पैकेट", "पैकिट"].includes(unit)) return "packet";
+  if (["piece", "pc", "pcs", "पीस"].includes(unit)) return "piece";
+  if (["box", "डिब्बा"].includes(unit)) return "box";
+  if (["dozen", "दर्जन"].includes(unit)) return "dozen";
   return fallback;
 }
 
@@ -269,7 +291,17 @@ export function parseVoiceLine(
 }
 
 /** Words that only ever mean "this is a new item", never part of its name. */
-const NEW_PRODUCT_WORDS = new Set(["add", "new", "naya", "nayi", "naye"]);
+/**
+ * Hindi particles that glue a price to an item ("rusk KA daam 25"). They are grammar,
+ * not part of what the thing is called, so they are dropped from the name — otherwise
+ * the catalogue fills up with "rusk ka".
+ */
+const NAME_FILLER_WORDS = new Set(["ka", "ke", "ki", "का", "के", "की"]);
+
+const NEW_PRODUCT_WORDS = new Set([
+  "add", "new", "naya", "nayi", "naye", "jodo", "daalo", "dalo",
+  "नया", "नई", "नयी", "नए", "जोड़ो", "जोड़", "डालो",
+]);
 
 /**
  * An item the catalogue does not have, priced well enough to bill right now.
@@ -314,7 +346,7 @@ export function parseNewProductLine(segment: string): VoiceNewProductLine | null
     const next = tokens[index + 1] ?? "";
     if (!isUnitWord(next)) return;
     quantity = value;
-    unit = normalizeSearchText(next);
+    unit = normalizeVoiceUnit(next, "piece");
     consumed.add(index);
     consumed.add(index + 1);
   });
@@ -323,6 +355,7 @@ export function parseNewProductLine(segment: string): VoiceNewProductLine | null
     .filter((token, index) =>
       !consumed.has(index)
       && !NEW_PRODUCT_WORDS.has(token)
+      && !NAME_FILLER_WORDS.has(token)
       && !MONEY_WORDS.has(token)
       && !isUnitWord(token)
       && parseVoiceNumber(token) === undefined)

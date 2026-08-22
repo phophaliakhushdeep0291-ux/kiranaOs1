@@ -16,7 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { executeVoiceAction } from "./voice-actions";
 import { parseLocalVoiceIntent } from "./voice-command-parser";
 import { askAiIntent } from "./voice-ai-client";
-import { createOneShotRecognition, getSpeechRecognitionConstructor, shouldAcceptFinalTranscript, voiceTranscriptKey } from "./voice-recognition";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { createOneShotRecognition, getSpeechRecognitionConstructor, shouldAcceptFinalTranscript, speechRecognitionLocale, voiceTranscriptKey } from "./voice-recognition";
 import type { SpeechRecognitionLike, VoiceToastPayload } from "./voice-types";
 import { startBackendTranscription, type BackendTranscriptionSession } from "./backend-transcription";
 
@@ -68,6 +69,7 @@ function saveAssistantPosition(position: AssistantPosition): void {
 export function VoiceAssistant() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
+  const { language } = useAppLanguage();
   const [open, setOpen] = useState(false);
   const [command, setCommand] = useState("");
   const [listening, setListening] = useState(false);
@@ -294,7 +296,7 @@ export function VoiceAssistant() {
         setListening(false);
         recognitionRef.current = null;
       },
-    });
+    }, speechRecognitionLocale(language));
 
     recognitionRef.current = recognition;
     try {

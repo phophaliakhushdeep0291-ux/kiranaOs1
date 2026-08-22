@@ -46,13 +46,14 @@ import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type Bil
 import { createRetailPaymentQr, getRetailPaymentReadiness, verifyRetailPayment, type RetailQrCheckout } from "../retail-payment";
 import { RetailDynamicQrDialog } from "./components/RetailDynamicQrDialog";
 import { CardTerminalDialog } from "./components/CardTerminalDialog";
-import { getCardTerminalReadiness, startCardTerminalCharge, type CardTerminalCharge } from "@/features/core/billing/card-terminal";
+import { getCardTerminalReadiness, newCardTerminalRequestId, startCardTerminalCharge, type CardTerminalCharge, type CardTerminalStatus } from "@/features/core/billing/card-terminal";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/core/loyalty/api";
 import { lookupGiftCard } from "@/features/core/gift-cards/api";
 import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/core/voice/backend-transcription";
 import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity, showCustomerDisplayViaHardwareBridge, type HardwareCustomerDisplayState } from "@/features/core/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { speechRecognitionLocale } from "@/features/core/voice/voice-recognition";
 import {
   ACTIVITY_EVENTS,
   matchSearchSuggestions,
@@ -150,7 +151,7 @@ function saveSettingList<T>(key: string, rows: T[]) {
 }
 
 export default function Billing() {
-  const { t } = useAppLanguage();
+  const { t, language } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { shop, user } = useAuth();
@@ -236,6 +237,7 @@ export default function Billing() {
   const [cardTerminalCharge, setCardTerminalCharge] = useState<CardTerminalCharge | null>(null);
   const [approvedCardPayment, setApprovedCardPayment] = useState<{ intentId: string; amountPaise: number; locationId: string } | null>(null);
   const [cardTerminalLoading, setCardTerminalLoading] = useState(false);
+  const cardTerminalAttemptRef = useRef<{ requestId: string; amountPaise: number; locationId: string | null } | null>(null);
   const [retailPaymentLoading, setRetailPaymentLoading] = useState(false);
   const [loyaltyPointsToRedeem, setLoyaltyPointsToRedeem] = useState(0);
   const [giftCardCode, setGiftCardCodeState] = useState("");
@@ -397,10 +399,20 @@ export default function Billing() {
       return;
     }
     if (cardTenderPaise <= 0) return;
+    const locationId = getActiveLocationId();
+    const previous = cardTerminalAttemptRef.current;
+    const requestId = previous && previous.amountPaise === cardTenderPaise && previous.locationId === locationId
+      ? previous.requestId
+      : newCardTerminalRequestId();
+    cardTerminalAttemptRef.current = { requestId, amountPaise: cardTenderPaise, locationId };
     setCardTerminalLoading(true);
     try {
-      setCardTerminalCharge(await startCardTerminalCharge(cardTenderPaise, getActiveLocationId()));
+      setCardTerminalCharge(await startCardTerminalCharge(cardTenderPaise, locationId, requestId));
     } catch (error) {
+      // Ambiguous provider outcomes are returned as an `uncertain` intent. A
+      // thrown error is therefore a definite local/provider rejection and a
+      // later click may safely start a fresh request.
+      cardTerminalAttemptRef.current = null;
       toast({ title: t("billing.page.paymentNotVerified"), description: error instanceof Error ? error.message : t("billing.page.providerFailed"), variant: "destructive" });
     } finally {
       setCardTerminalLoading(false);
@@ -1220,7 +1232,7 @@ export default function Billing() {
     let autoStopTimer: number | undefined;
     const recognition = new Recognition();
     voiceRecognitionRef.current = recognition;
-    recognition.lang = "en-IN";
+    recognition.lang = speechRecognitionLocale(language);
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.maxAlternatives = 1;
@@ -2319,8 +2331,12 @@ export default function Billing() {
       <CardTerminalDialog
         charge={cardTerminalCharge}
         simulated={cardTerminalReadiness.data?.simulated ?? false}
-        onClose={() => setCardTerminalCharge(null)}
+        onClose={(status: CardTerminalStatus) => {
+          if (status !== "uncertain") cardTerminalAttemptRef.current = null;
+          setCardTerminalCharge(null);
+        }}
         onApproved={(charge) => {
+          cardTerminalAttemptRef.current = null;
           setApprovedCardPayment({ intentId: charge.intentId, amountPaise: charge.amountPaise, locationId: charge.location.id });
           setCustomerDisplayFlash({ state: "paid", totalPaise: charge.amountPaise });
           setCardTerminalCharge(null);

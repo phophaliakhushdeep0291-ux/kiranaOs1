@@ -14,6 +14,19 @@ export type VoiceRecognitionCallbacks = {
 
 export const DUPLICATE_FINAL_TRANSCRIPT_DEBOUNCE_MS = 1500;
 
+/**
+ * Which language the mic listens in.
+ *
+ * This is not cosmetic. Web Speech decodes against ONE language model, so a shop
+ * dictating Hindi into an en-IN recogniser gets English words that sound vaguely
+ * similar — "do kilo chini" comes back as "do kilo cheney" — and no amount of
+ * vocabulary in the parser can recover the sentence that was actually spoken.
+ * The shop already told us which language it works in; the mic should use it.
+ */
+export function speechRecognitionLocale(language: string): string {
+  return language === "hi" ? "hi-IN" : "en-IN";
+}
+
 export function getSpeechRecognitionConstructor() {
   if (typeof window === "undefined") return undefined;
   const speechWindow = window as SpeechWindow;
@@ -79,11 +92,15 @@ export function voiceRecognitionErrorMessage(error: string) {
   return `Mic error: ${error}`;
 }
 
-export function createOneShotRecognition(Recognition: SpeechRecognitionConstructor, callbacks: VoiceRecognitionCallbacks): SpeechRecognitionLike {
+export function createOneShotRecognition(
+  Recognition: SpeechRecognitionConstructor,
+  callbacks: VoiceRecognitionCallbacks,
+  locale = "en-IN",
+): SpeechRecognitionLike {
   const recognition = new Recognition();
   let lastFinal: { key: string; at: number } | null = null;
 
-  recognition.lang = "en-IN";
+  recognition.lang = locale;
   recognition.continuous = false;
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
