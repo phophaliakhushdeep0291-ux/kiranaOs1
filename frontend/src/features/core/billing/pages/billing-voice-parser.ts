@@ -96,6 +96,13 @@ export const VOICE_NUMBER_WORDS: Record<string, number> = {
 const MONEY_WORDS = new Set([
   "rs",
   "rupay",
+  // "rupaye" is how the romanised word is usually written, and it was the one
+  // spelling missing: "naya maggi bees rupaye" returned null even after the number
+  // table learned "bees", because the price marker beside it was not a money word.
+  "rupaye",
+  "rupaya",
+  "rupaiya",
+  "rupaiye",
   "rupee",
   "rupees",
   "price",

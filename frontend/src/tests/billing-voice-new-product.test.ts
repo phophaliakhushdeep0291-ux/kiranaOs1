@@ -163,6 +163,16 @@ describe("dictated in Hindi", () => {
     expect(parseBillingVoiceCommand("customer Ramesh 2 kilo chini", CATALOGUE).customerName).toBe("Ramesh");
   });
 
+  it("accepts the romanised spellings of the price marker", () => {
+    // The number table learning "bees" was only half of it: the sentence that
+    // motivated that fix still returned null, because "rupaye" was not a money word.
+    for (const marker of ["rupaye", "rupaya", "rupay", "rupees", "rs"]) {
+      expect(parseNewProductLine(`naya maggi bees ${marker}`)).toEqual(
+        expect.objectContaining({ name: "maggi", sellingPrice: 20 }),
+      );
+    }
+  });
+
   it("records udhar when the amount is spoken in Hindi", () => {
     // Money. "500 उधार" set no credit at all, so the bill looked settled
     // and the customer's ledger never moved.
