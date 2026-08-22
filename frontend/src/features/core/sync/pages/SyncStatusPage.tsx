@@ -28,6 +28,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { ApiClientError, getApiBaseUrl, setApiBaseUrl } from "@/lib/api/http";
+import { displayDeviceName } from "@/lib/device-identity";
 import { probeBackendConnection, readBackendConnectionSnapshot } from "@/features/core/sync/backend-health";
 import {
   dexieDB,
@@ -578,7 +579,7 @@ function FleetHealthCard({
                     <div className="flex items-center gap-2">
                       <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${device.online ? "bg-emerald-500" : "bg-slate-300"}`} />
                       <p className="truncate font-semibold">
-                        {device.device_name || "Shop terminal"}
+                        {displayDeviceName(device.device_name, isCurrentDevice)}
                       </p>
                     </div>
                     <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
@@ -1295,8 +1296,9 @@ export default function SyncStatusPage() {
   };
 
   return (
-    <PageShell className="space-y-6">
+    <PageShell className="space-y-4 sm:space-y-6">
       <PageHeader
+        className="sync-status-header"
         headingLevel={2}
         title={<span className="flex items-center gap-3"><span className="rounded-full bg-primary/10 p-3 text-primary"><HeroIcon className="h-6 w-6" /></span>Sync Status</span>}
         description={hero.title}
@@ -1305,7 +1307,7 @@ export default function SyncStatusPage() {
           <>
             <Button variant="outline" onClick={() => void handleRetryFailed()} disabled={snapshot.isSyncing || retryableCount === 0}>
               {snapshot.isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
-              Retry blocked
+              Retry failed
             </Button>
             <Button onClick={() => void handleForceSync()} disabled={snapshot.isSyncing}>
               {snapshot.isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
@@ -1352,8 +1354,9 @@ export default function SyncStatusPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Backup did not finish</AlertTitle>
           <AlertDescription>
-            Your data was not deleted. Tap Retry failed after internet/backend
-            is working.
+            {snapshot.isOnline
+              ? "Your local data is safe. Open the item below to see what the server refused — most of these need the record corrected and saved again, not another retry."
+              : "Your local data is safe. This backs up on its own once internet and the backend are working."}
           </AlertDescription>
         </Alert>
       )}

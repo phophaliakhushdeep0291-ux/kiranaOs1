@@ -517,11 +517,26 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
   };
 }
 
+/**
+ * Must stay a superset of the server's `protectedProductFields`, which is duplicated in
+ * products.routes.js and sync.service.js. Anything the server guards but this list omits
+ * is edited with no PIN prompt, queued with `ownerPin: undefined`, and rejected by
+ * applyUpdateProduct with a 403 — which classifySyncError marks non-retryable, so the
+ * outbox item sticks forever and Retry can never clear it. Four retail/wholesale price
+ * fields and `status` were missing, and the form emits all five on every save (it even
+ * defaults retail/wholesale to the selling price), so renaming a product was enough to
+ * strand it. Ordered to match the server list; parity is asserted in
+ * src/tests/product-owner-approval-parity.test.ts.
+ */
 const OWNER_APPROVAL_PRODUCT_FIELDS = [
   "stockBaseQty",
+  "defaultPricePerRateUnit",
+  "retailPricePerRateUnit",
+  "retailFromQuantity",
+  "wholesalePricePerRateUnit",
+  "wholesaleFromQuantity",
   "costPerRateUnit",
   "minPricePerRateUnit",
-  "defaultPricePerRateUnit",
   "gstRate",
   "hsn",
   "mrp",
@@ -533,6 +548,7 @@ const OWNER_APPROVAL_PRODUCT_FIELDS = [
   "batchTrackingEnabled",
   "drugSchedule",
   "isActive",
+  "status",
 ] as const;
 
 function approvalNumber(value: unknown): number {
@@ -541,13 +557,25 @@ function approvalNumber(value: unknown): number {
 }
 
 function normalizedApprovalValue(field: typeof OWNER_APPROVAL_PRODUCT_FIELDS[number], value: unknown): unknown {
-  if (["stockBaseQty", "costPerRateUnit", "minPricePerRateUnit", "defaultPricePerRateUnit", "gstRate", "mrp"].includes(field)) {
+  if ([
+    "stockBaseQty",
+    "defaultPricePerRateUnit",
+    "retailPricePerRateUnit",
+    "retailFromQuantity",
+    "wholesalePricePerRateUnit",
+    "wholesaleFromQuantity",
+    "costPerRateUnit",
+    "minPricePerRateUnit",
+    "gstRate",
+    "mrp",
+  ].includes(field)) {
     return approvalNumber(value);
   }
   if (["hsn", "barcode", "sku", "drugSchedule"].includes(field)) {
     return String(value ?? "").trim().toLowerCase() || null;
   }
   if (["batchTrackingEnabled", "isActive"].includes(field)) return Boolean(value);
+  if (field === "status") return String(value ?? "active").trim().toLowerCase();
   if (field === "packagingMode") return String(value ?? "pooled").trim().toLowerCase();
   if (field === "variantAxes") {
     return (Array.isArray(value) ? value : []).map((axis) => {

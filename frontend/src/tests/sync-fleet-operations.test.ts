@@ -29,6 +29,8 @@ describe("sync fleet operations", () => {
     ]) {
       expect(page).toContain(label);
     }
+    // "This device" is a badge on one terminal, never the name of every terminal.
+    expect(page).toContain("displayDeviceName(device.device_name, isCurrentDevice)");
   });
 
   it("never offers destructive version selection for financial conflicts", () => {

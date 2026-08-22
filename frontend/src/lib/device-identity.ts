@@ -113,6 +113,35 @@ export function getDeviceMetadata(): DeviceMetadata {
   };
 }
 
+/**
+ * Names the terminal this browser runs on. A registered name must describe the
+ * machine ("Chrome on Windows") and never the viewer: the fleet and device lists
+ * show every terminal in the shop side by side, where "This device" is true of
+ * exactly one row and a lie on all the others.
+ */
+export function describeCurrentDevice(): string {
+  const { browser, operatingSystem, deviceName } = getDeviceMetadata();
+  return browser === "Browser" && operatingSystem === "Unknown OS" ? "Shop terminal" : deviceName;
+}
+
+/** Stored names that describe whoever is looking instead of the machine. */
+const VIEWER_RELATIVE_NAME = /^(this|my|current)\s+device$/i;
+
+/**
+ * Name to show for one device row. Terminals registered by older builds are all
+ * stored as "This device", so fall back to something honest instead of repeating
+ * that label down the whole list.
+ */
+export function displayDeviceName(
+  storedName: string | null | undefined,
+  isCurrentDevice: boolean,
+  fallback = "Shop terminal",
+): string {
+  const stored = (storedName ?? "").trim();
+  if (stored && !VIEWER_RELATIVE_NAME.test(stored)) return stored;
+  return isCurrentDevice ? describeCurrentDevice() : fallback;
+}
+
 function detectOperatingSystem(ua: string): string {
   if (/Android/i.test(ua)) return "Android";
   if (/iPhone|iPad|iPod/i.test(ua)) return "iOS";

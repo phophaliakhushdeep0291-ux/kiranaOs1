@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionSnapshot, PlanBadge } from "@/features/core/subscription";
 import { blockDevice, getCurrentDevice, getDevicesHealth, getMyDeviceHealth, listDevices, logoutDevice, reactivateDevice, removeDevice, renameDevice, type DeviceDto, type DeviceHealthDto, type DeviceManagementSnapshot } from "@/features/core/devices/api";
 import { getOfflineScope } from "@/lib/offline/context";
+import { displayDeviceName } from "@/lib/device-identity";
 import { listCachedDevices } from "@/features/core/devices/license";
 import { DEVICE_SESSION_REVOKED_EVENT } from "@/lib/api/client";
 import { useAuth } from "@/features/core/auth/useAuth";
@@ -38,8 +39,8 @@ function deviceIdOf(device: DeviceDto) {
   return device.deviceId || device.device_id || device.id;
 }
 
-function deviceNameOf(device: DeviceDto) {
-  return device.deviceName || device.device_name || "Registered device";
+function deviceNameOf(device: DeviceDto, isCurrentDevice = false) {
+  return displayDeviceName(device.deviceName || device.device_name, isCurrentDevice, "Registered device");
 }
 
 function statusOf(device: DeviceDto) {
@@ -230,8 +231,8 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
 
   const devices = data?.devices ?? [];
   const overLimitBy = Math.max(0, (data?.devicesUsed ?? 0) - (data?.plan.deviceLimit ?? 0));
-  const actionDeviceName = actionTarget ? deviceNameOf(actionTarget) : "device";
   const actionIsCurrent = Boolean(actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId));
+  const actionDeviceName = actionTarget ? deviceNameOf(actionTarget, actionIsCurrent) : "device";
   const actionCopy = actionKind === "remove"
     ? {
         title: `${actionIsCurrent ? "Log out and remove" : "Remove"} \"${actionDeviceName}\"?`,
@@ -282,9 +283,9 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
         <StatCard label="Current plan" value={data?.plan.name || data?.plan.code || "Starter"} description={`${data?.plan.deviceLimit ?? 1} registered device slots`} tone="blue" />
         <StatCard label="Devices used" value={`${data?.devicesUsed ?? 0} / ${data?.plan.deviceLimit ?? 1}`} description={data?.overLimit ? "Above current plan limit" : "Backend verified"} tone={data?.overLimit ? "red" : "green"} />
         <StatCard label="Slots remaining" value={String(data?.remainingSlots ?? 0)} description={(data?.remainingSlots ?? 0) > 0 ? "Ready for a new sign-in" : "All slots are in use"} tone={(data?.remainingSlots ?? 0) > 0 ? "green" : "amber"} />
-        <StatCard label="This device" value={deviceNameOf(devices.find((device) => device.isCurrentDevice) ?? { id: currentDeviceId })} description="Current browser installation" />
+        <StatCard label="This device" value={deviceNameOf(devices.find((device) => device.isCurrentDevice) ?? { id: currentDeviceId }, true)} description="Current browser installation" />
       </StatsGrid> : <StatsGrid>
-        <StatCard label="This device" value={deviceNameOf(devices[0] ?? { id: currentDeviceId })} description="Current browser installation" tone="blue" />
+        <StatCard label="This device" value={deviceNameOf(devices[0] ?? { id: currentDeviceId }, true)} description="Current browser installation" tone="blue" />
         <StatCard label="Status" value={statusOf(devices[0] ?? { id: currentDeviceId }).replace(/_/g, " ")} description="Verified by the backend" tone="green" />
         <StatCard label="Last active" value={relative(devices[0]?.lastSeenAt)} description="Recent authenticated activity" />
       </StatsGrid>}
@@ -328,7 +329,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
                   <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]"><DeviceIcon device={device} /></div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate font-black text-[var(--brand-ink)]">{deviceNameOf(device)}</h3>
+                      <h3 className="truncate font-black text-[var(--brand-ink)]">{deviceNameOf(device, current)}</h3>
                       {current ? <Badge className="bg-[var(--brand)] text-white">This device</Badge> : null}
                       <Badge variant="outline" className={statusStyle(status)}>{status.replace(/_/g, " ")}</Badge>
                     </div>
