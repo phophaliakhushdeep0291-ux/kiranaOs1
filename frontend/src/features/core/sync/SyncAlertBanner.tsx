@@ -80,12 +80,12 @@ export function SyncAlertBanner() {
         type="button"
         onClick={() => void onRetry()}
         disabled={retrying}
-        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-current/30 bg-white/70 px-3 text-[12px] font-bold disabled:opacity-50 dark:bg-black/20"
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-current/30 bg-white/70 px-3 text-[12px] font-bold disabled:opacity-50 dark:bg-black/20"
       >
         <RefreshCw size={13} className={retrying ? "animate-spin" : ""} aria-hidden="true" />
         {retrying ? "Retrying…" : "Retry now"}
       </button>
-      <Link href="/sync-status" className="inline-flex h-9 shrink-0 items-center rounded-lg px-2 text-[12px] font-bold underline-offset-2 hover:underline">View</Link>
+      <Link href="/sync-status" className="inline-flex h-11 shrink-0 items-center rounded-lg px-2 text-[12px] font-bold underline-offset-2 hover:underline">View</Link>
     </div>
   );
 }

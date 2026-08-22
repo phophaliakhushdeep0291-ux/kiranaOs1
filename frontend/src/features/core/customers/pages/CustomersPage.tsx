@@ -402,6 +402,9 @@ export default function CustomersPage() {
   const [deleteTarget, setDeleteTarget] = useState<CustomerWithLedger | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"ledger" | "transactions" | "payments" | "notes">("ledger");
+  const [showKpiCharts, setShowKpiCharts] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
+  );
 
   useEffect(() => {
     const refresh = () => void overviewQuery.refetch();
@@ -412,6 +415,14 @@ export default function CustomersPage() {
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
   }, [overviewQuery.refetch]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const update = () => setShowKpiCharts(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   const dedupedCustomers = useMemo(() => {
     const map = new Map<string, CustomerWithLedger>();
@@ -950,10 +961,10 @@ export default function CustomersPage() {
       <TradeFocusStrip titleKey="customers.trade.title" focusKey={tradeProfile.focusKey} links={tradeProfile.links} />
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4" aria-label={t("customers.accountSummary")}>
-        <CustomerMetricCard label={t("customers.stat.total")} value={String(totals.customers)} change={metricChanges.customers} color="var(--brand)" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[var(--brand)]" spark={metricSparks.customers} />
-        <CustomerMetricCard label={t("customers.trade.outstanding", { credit: creditWord })} value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
-        <CustomerMetricCard label={t("customers.stat.overdueAmount")} value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={18} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
-        <CustomerMetricCard label={t("customers.stat.udharCollected")} value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
+        <CustomerMetricCard showChart={showKpiCharts} label={t("customers.stat.total")} value={String(totals.customers)} change={metricChanges.customers} color="var(--brand)" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[var(--brand)]" spark={metricSparks.customers} />
+        <CustomerMetricCard showChart={showKpiCharts} label={t("customers.trade.outstanding", { credit: creditWord })} value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
+        <CustomerMetricCard showChart={showKpiCharts} label={t("customers.stat.overdueAmount")} value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={18} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
+        <CustomerMetricCard showChart={showKpiCharts} label={t("customers.stat.udharCollected")} value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
       </section>
 
       <section className="grid min-w-0 items-start gap-4 xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[380px_minmax(580px,1fr)_380px]">
@@ -1498,7 +1509,7 @@ export default function CustomersPage() {
   );
 }
 
-function CustomerMetricCard({ label, value, change, color, icon, iconClass, spark, mobileHidden = false }: { label: string; value: string; change: number; color: string; icon: React.ReactNode; iconClass: string; spark: number[]; mobileHidden?: boolean }) {
+function CustomerMetricCard({ label, value, change, color, icon, iconClass, spark, showChart, mobileHidden = false }: { label: string; value: string; change: number; color: string; icon: React.ReactNode; iconClass: string; spark: number[]; showChart: boolean; mobileHidden?: boolean }) {
   const { t } = useAppLanguage();
   const data = spark.map((item, index) => ({ index, value: item }));
   const gradientId = `customer-${useId().replace(/:/g, "")}`;
@@ -1516,20 +1527,22 @@ function CustomerMetricCard({ label, value, change, color, icon, iconClass, spar
         </span>
         <span className="whitespace-nowrap text-[#7a879f]">{t("customers.list.vsLastWeek")}</span>
       </div>
-      <div className="mt-auto hidden h-7 w-full shrink-0 lg:block">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 3, right: 2, left: 2, bottom: 0 }}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={color} stopOpacity={0.26} />
-                <stop offset="65%" stopColor={color} stopOpacity={0.08} />
-                <stop offset="100%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.9} fill={`url(#${gradientId})`} dot={{ r: 1.7, fill: "white", stroke: color, strokeWidth: 1.2 }} isAnimationActive={false} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      {showChart ? (
+        <div className="mt-auto hidden h-7 w-full shrink-0 lg:block">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 3, right: 2, left: 2, bottom: 0 }}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.26} />
+                  <stop offset="65%" stopColor={color} stopOpacity={0.08} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.9} fill={`url(#${gradientId})`} dot={{ r: 1.7, fill: "white", stroke: color, strokeWidth: 1.2 }} isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -1668,9 +1681,9 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
     <section className="min-w-0 space-y-5">
       <article className="min-h-[128px] overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="flex flex-col gap-4 p-[18px] sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{t(risk.labelKey)}</span><button onClick={() => onEdit(customer)} title={t("customers.detail.editCustomer")} className="grid h-7 w-7 place-items-center rounded-[8px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || t("customers.noMobile")}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || t("customers.noAddress")}</span></div></div></div>
+          <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{t(risk.labelKey)}</span><button onClick={() => onEdit(customer)} aria-label={t("customers.detail.editCustomer")} title={t("customers.detail.editCustomer")} className="grid h-11 w-11 place-items-center rounded-[10px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={15} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || t("customers.noMobile")}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || t("customers.noAddress")}</span></div></div></div>
           <div className="flex items-center gap-3">
-            <Link href={`/customers/${customer.id}`} title={t("customers.openLedger")} className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors hover:bg-[var(--brand-strong)]"><BookOpen size={15} />{t("customers.detail.viewLedger")}</Link>
+            <Link href={`/customers/${customer.id}`} title={t("customers.openLedger")} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors hover:bg-[var(--brand-strong)]"><BookOpen size={15} />{t("customers.detail.viewLedger")}</Link>
             <InfoMini label={t("customers.profile.lastPayment")} value={formatShortDate(customer.ledgerMetrics.lastPaymentAt)} />
           </div>
         </div>

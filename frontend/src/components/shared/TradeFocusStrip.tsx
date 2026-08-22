@@ -51,14 +51,14 @@ export function TradeFocusStrip({ titleKey, focusKey, links, className }: TradeF
           <Link
             key={link.href}
             href={link.href}
-            className="inline-flex min-h-11 items-center gap-1 rounded-[8px] border border-[#dfe6ef] bg-white px-2.5 text-[11px] font-semibold text-[#243653] hover:border-[var(--brand-border)] hover:text-[var(--brand)] mouse:min-h-9"
+            className="inline-flex min-h-11 items-center gap-1 rounded-[8px] border border-[#dfe6ef] bg-white px-2.5 text-[11px] font-semibold text-[#243653] hover:border-[var(--brand-border)] hover:text-[var(--brand)]"
           >
             {t(link.labelKey)}<ChevronRight size={13} />
           </Link>
         ))}
         <Link
           href="/settings/store-profile"
-          className="inline-flex min-h-11 items-center px-1 text-[11px] font-semibold text-[var(--brand)] hover:underline mouse:min-h-9"
+          className="inline-flex min-h-11 items-center px-1 text-[11px] font-semibold text-[var(--brand)] hover:underline"
         >
           {t("inventory.trade.changeShopType")}
         </Link>
