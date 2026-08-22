@@ -28,6 +28,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { ApiClientError, getApiBaseUrl, setApiBaseUrl } from "@/lib/api/http";
+import { displayDeviceName } from "@/lib/device-identity";
 import { probeBackendConnection, readBackendConnectionSnapshot } from "@/features/core/sync/backend-health";
 import {
   dexieDB,
@@ -578,7 +579,7 @@ function FleetHealthCard({
                     <div className="flex items-center gap-2">
                       <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${device.online ? "bg-emerald-500" : "bg-slate-300"}`} />
                       <p className="truncate font-semibold">
-                        {device.device_name || "Shop terminal"}
+                        {displayDeviceName(device.device_name, isCurrentDevice)}
                       </p>
                     </div>
                     <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">

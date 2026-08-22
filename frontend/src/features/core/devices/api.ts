@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api/http";
 import { getOfflineScope } from "@/lib/offline/context";
+import { describeCurrentDevice } from "@/lib/device-identity";
 import type { OfflineLicenseToken } from "@/features/core/devices/license";
 import type { DeviceHealthPayload } from "@/lib/device-health/collectDeviceHealth";
 
@@ -88,7 +89,7 @@ export function activateDevice(deviceName: string, deviceId = getOfflineScope().
     method: "POST",
     body: JSON.stringify({
       deviceId,
-      deviceName: deviceName.trim() || "This device",
+      deviceName: deviceName.trim() || describeCurrentDevice(),
       platform: platformName(),
     }),
   });

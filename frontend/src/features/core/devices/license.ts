@@ -4,6 +4,7 @@ import {
   type DeviceLicenseCacheRow,
 } from "@/lib/offline/db";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
+import { describeCurrentDevice } from "@/lib/device-identity";
 import {
   createLocalId,
   emitLocalDataChanged,
@@ -451,7 +452,7 @@ export async function ensureCurrentDeviceRegistered(
         deviceName ??
         (typeof payload.device_name === "string"
           ? payload.device_name
-          : "This device"),
+          : describeCurrentDevice()),
       status,
       activated_at:
         typeof payload.activated_at === "string" ? payload.activated_at : now,

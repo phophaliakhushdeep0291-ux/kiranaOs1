@@ -8,6 +8,7 @@ import { writeAuditLog } from "@/features/core/audit-logs/local-actions";
 import { activateDevice, heartbeatDevice, reportDeviceHealth } from "@/features/core/devices/api";
 import { collectDeviceHealth } from "@/lib/device-health/collectDeviceHealth";
 import { ensureCurrentDeviceRegistered, markCurrentDeviceActivated, writeOfflineLicenseToken } from "@/features/core/devices/license";
+import { describeCurrentDevice } from "@/lib/device-identity";
 import { getOfflineScope } from "@/lib/offline/context";
 import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { clearSessionLockState, markAuthenticatedSessionActive } from "@/features/core/settings/SessionLockGate";
@@ -32,9 +33,9 @@ function persistAuth(data: AuthResponse) {
 async function activateCurrentDeviceSafely() {
   try {
     const scope = getOfflineScope();
-    const deviceName = typeof navigator !== "undefined" && navigator.userAgent
-      ? "This device"
-      : "This device";
+    // The name registered here is what every other terminal in the shop sees in
+    // the fleet and device lists, so it has to describe this machine.
+    const deviceName = describeCurrentDevice();
     await ensureCurrentDeviceRegistered(deviceName);
     const response = await activateDevice(deviceName, scope.device_id);
     await markCurrentDeviceActivated(response.device.device_name ?? response.device.deviceName ?? deviceName);
