@@ -56,6 +56,41 @@ export const VOICE_NUMBER_WORDS: Record<string, number> = {
   नौ: 9,
   दस: 10,
   आधा: 0.5,
+  // Everything above stops at ten, which is the wrong range for a BILLING feature:
+  // counter prices are twenty, thirty, fifty, a hundred. "naya maggi bees rupaye"
+  // returned null and the item was silently never created, while the same sentence
+  // with "das" worked — so the feature appeared to work and failed on real prices.
+  //
+  // Digits are unaffected and always were ("20", "२०" both parse), which is what a
+  // recogniser usually returns; these cover the case where it transcribes the word.
+  gyarah: 11, ग्यारह: 11,
+  barah: 12, बारह: 12,
+  terah: 13, तेरह: 13,
+  chaudah: 14, चौदह: 14,
+  pandrah: 15, पंद्रह: 15,
+  solah: 16, सोलह: 16,
+  satrah: 17, सत्रह: 17,
+  atharah: 18, अठारह: 18,
+  unnis: 19, उन्नीस: 19,
+  bees: 20, बीस: 20,
+  pachchis: 25, pachees: 25, पच्चीस: 25,
+  tees: 30, तीस: 30,
+  chalis: 40, chalees: 40, चालीस: 40,
+  pachas: 50, pachaas: 50, पचास: 50,
+  // 60 is Devanagari-only on purpose: romanised "saath" is how people write BOTH
+  // saath (60) and saat (7), and 7 is already spoken far more often at a counter.
+  // Guessing wrong here misprices a bill, so the ambiguous spelling stays out.
+  साठ: 60,
+  sattar: 70, सत्तर: 70,
+  assi: 80, अस्सी: 80,
+  nabbe: 90, नब्बे: 90,
+  sau: 100, सौ: 100,
+  hazar: 1000, hazaar: 1000, हजार: 1000, "हज़ार": 1000,
+  // Fractions a counter says constantly for weight: "dedh kilo", "dhai kilo".
+  sava: 1.25, सवा: 1.25,
+  dedh: 1.5, "डेढ़": 1.5, डेढ: 1.5,
+  dhai: 2.5, ढाई: 2.5,
+  paun: 0.75, पौन: 0.75,
 };
 
 const MONEY_WORDS = new Set([
@@ -296,7 +331,9 @@ export function parseVoiceLine(
  * not part of what the thing is called, so they are dropped from the name — otherwise
  * the catalogue fills up with "rusk ka".
  */
-const NAME_FILLER_WORDS = new Set(["ka", "ke", "ki", "का", "के", "की"]);
+// "item" is how people actually say it — "add new item sabun" — and without it
+// here the word survives into the name, creating a product called "item sabun".
+const NAME_FILLER_WORDS = new Set(["ka", "ke", "ki", "का", "के", "की", "item", "आइटम", "aitam"]);
 
 const NEW_PRODUCT_WORDS = new Set([
   "add", "new", "naya", "nayi", "naye", "jodo", "daalo", "dalo",

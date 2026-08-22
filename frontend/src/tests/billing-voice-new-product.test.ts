@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { type Product } from "@/lib/api/client";
-import { parseBillingVoiceCommand, parseNewProductLine } from "@/features/core/billing/pages/billing-voice-parser";
+import { parseBillingVoiceCommand, parseNewProductLine, parseVoiceNumber } from "@/features/core/billing/pages/billing-voice-parser";
 
 function product(overrides: Partial<Product> = {}): Product {
   return {
@@ -160,5 +160,47 @@ describe("dictated in Hindi", () => {
     expect(draft.lines).toEqual([expect.objectContaining({ quantity: 2, unit: "kg" })]);
     expect(draft.lines.map((line) => line.product.name)).toEqual(["Sugar"]);
     expect(draft.newProducts).toEqual([]);
+  });
+});
+
+/**
+ * The counter says the price out loud, and prices are not single digits.
+ *
+ * The Hindi number table originally stopped at दस (10), so "naya maggi bees rupaye"
+ * parsed to null and the item was silently never created — while the same sentence
+ * at "das rupaye" worked. The feature therefore looked fine in a demo and failed on
+ * every real price. Digits were never affected, which is what hid it.
+ */
+describe("prices a counter actually says", () => {
+  const prices: Array<[string, number]> = [
+    ["ग्यारह", 11], ["पंद्रह", 15], ["बीस", 20], ["पच्चीस", 25], ["तीस", 30],
+    ["चालीस", 40], ["पचास", 50], ["साठ", 60], ["सौ", 100],
+    ["bees", 20], ["pachas", 50], ["sau", 100],
+  ];
+  it.each(prices)("reads %s as %i", (word, value) => {
+    expect(parseVoiceNumber(word)).toBe(value);
+  });
+
+  // Weight words, which is where these show up rather than in the price.
+  it.each([["डेढ़", 1.5], ["ढाई", 2.5], ["सवा", 1.25], ["पौन", 0.75]] as Array<[string, number]>)(
+    "reads the fraction %s as %f",
+    (word, value) => { expect(parseVoiceNumber(word)).toBe(value); },
+  );
+
+  it("still reads seven as seven, which romanised sixty would have broken", () => {
+    // "saath" is how people write BOTH 60 and 7, so 60 is Devanagari-only on purpose.
+    expect(parseVoiceNumber("saat")).toBe(7);
+    expect(parseVoiceNumber("सात")).toBe(7);
+    expect(parseVoiceNumber("साठ")).toBe(60);
+  });
+
+  it("creates the product at a real price", () => {
+    expect(parseNewProductLine("नया मैगी बीस रुपये")).toMatchObject({ name: "मैगी", sellingPrice: 20 });
+  });
+
+  it("does not name the product after the word 'item'", () => {
+    // "add new item sabun" used to create a product called "item sabun".
+    expect(parseNewProductLine("add new item sabun 45 rupees")).toMatchObject({ name: "sabun" });
+    expect(parseNewProductLine("नया आइटम मैगी बीस रुपये")).toMatchObject({ name: "मैगी" });
   });
 });
