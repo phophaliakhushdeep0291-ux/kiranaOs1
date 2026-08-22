@@ -642,6 +642,14 @@ export default function ProductsPage() {
             const outOfStock = stockBase <= 0;
             const low = isLowStock(product) && !outOfStock;
             const price = product.sellingPrice ?? product.defaultPricePerRateUnit;
+            // The same sizes the table shows. A phone is the screen a counter
+            // actually uses, so leaving them out here is where "how will I know
+            // this comes in a 5 kg bag?" actually bites.
+            const cardPacks = activeInventorySellingUnits(product);
+            const cardAlternates = cardPacks.filter((row) => !row.isDefault);
+            const cardPackCounts = product.packagingMode === "per_pack" && cardPacks.length > 1
+              ? cardPacks.map((row) => `${Number(row.onHandQty ?? 0)} x ${packSizeLabel(row)}`)
+              : [];
             return (
               <article key={product.id} className="rounded-[16px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
                 <div className="flex items-start gap-3">
@@ -658,10 +666,26 @@ export default function ProductsPage() {
                       )}
                     </p>
                     <p className="mt-0.5 truncate text-[11px] font-semibold capitalize text-[#64748b]">{product.category || t("products.filter.general")} · {unit}</p>
+                    {cardAlternates.length > 0 && (
+                      <p
+                        className="mt-0.5 truncate text-[11px] font-semibold normal-case text-[#8a97ad]"
+                        data-testid={`card-pack-sizes-${product.id}`}
+                      >
+                        {summariseList(cardAlternates.map(packSizeLabel))}
+                      </p>
+                    )}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="text-[15px] font-black text-[var(--brand)]">{rs(price)}</span>
                       {outOfStock ? <StatusPill tone="rose">{t("products.badge.outOfStockShort")}</StatusPill> : low ? <StatusPill tone="amber">{t("products.badge.lowStockShort")}</StatusPill> : <StatusPill tone="emerald">{stock} available</StatusPill>}
                     </div>
+                    {cardPackCounts.length > 0 && (
+                      <p
+                        className="mt-1 truncate text-[11px] font-semibold text-[#8a97ad]"
+                        data-testid={`card-pack-stock-${product.id}`}
+                      >
+                        {summariseList(cardPackCounts)}
+                      </p>
+                    )}
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
