@@ -13,9 +13,11 @@
 // Offline is covered by the same path the Hindi chunks already rely on rather
 // than by precaching: neither half is in the service worker's CORE_ASSETS,
 // because that list is walked from the STATIC import graph and a dynamic import
-// is invisible to it. What covers them is `networkFirstStatic`, which writes
-// every successful script response into the runtime cache — so this chunk is
-// held from the first load onward, exactly like a lazy route chunk.
+// is invisible to it. What covers them is `cacheFirstStatic`, which serves this
+// build's cached copy and writes every successful script response into the
+// runtime cache behind it — so this chunk is held from the first load onward,
+// exactly like a lazy route chunk. (It was `networkFirstStatic` until the worker
+// moved to cache-first; the guarantee is the same, the function is not.)
 //
 // Nothing here may be imported statically from shell code — that would defeat
 // the split and put the tables back into the startup download. The test in
