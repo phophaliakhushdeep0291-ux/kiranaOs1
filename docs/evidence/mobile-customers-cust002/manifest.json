@@ -1,0 +1,59 @@
+{
+  "requirement": "CUST-002",
+  "qaId": "MQA-CUST-01",
+  "testedAt": "2026-08-22T09:15:00.000Z",
+  "sourceRevisionBeforeCheckpoint": "167c68c0",
+  "environment": {
+    "frontend": "Vite development server on 127.0.0.1:5173",
+    "backend": "Local KiranaOS API on 127.0.0.1:3000",
+    "database": "Local SQLite development database",
+    "shop": "BILL-004 Mobile QA",
+    "actor": "Synthetic owner QA account"
+  },
+  "liveLedgerFlow": {
+    "customerId": "cmt45s8r8000f13x4bwx11jmg",
+    "customer": "Meera CUST-002 QA",
+    "openingUdhar": 1200,
+    "payment": {
+      "amount": 200,
+      "mode": "upi",
+      "ledgerEntryId": "cmt45vj39001n13x48sjo11cn",
+      "balanceAfter": 1000,
+      "lostAckRetryWasIdempotent": true,
+      "matchingPaymentLedgerRows": 1
+    },
+    "reversal": {
+      "ledgerEntryId": "cmt45vj7a001z13x41ofzh1mz",
+      "matchingCorrectionRows": 1,
+      "derivedBalanceAfter": 1200,
+      "customerProjectionAfter": 1200
+    },
+    "ledgerRowsAfter": 3
+  },
+  "concurrencyProof": {
+    "frontend": "Two simultaneous local reversal attempts produce one success, one refusal, one correction, one audit and one REVERSE_PAYMENT outbox operation.",
+    "backend": "Two simultaneous reversal requests produce HTTP 200/409, one reversal ledger row, one required audit and an exactly restored balance.",
+    "productionLock": "The backend acquires the existing PostgreSQL customer-balance row lock before reading reversal state."
+  },
+  "mobileAndStatementQa": {
+    "paymentTask": "Phone payment capture uses the shared full-screen task contract below 640px, 48px money/mode inputs and a sticky safe-area action footer.",
+    "touchTargets": "Customer payment shortcuts, tender modes, profile actions, ledger menus, receipt and reversal actions are pinned to at least 44px by source regression coverage.",
+    "statement": "Both statement generators escape customer/ledger text, interpolate translated headings and delay printing until layout is ready.",
+    "receipt": "Each payment exposes a printable receipt with amount, mode, date, reference and current balance; reversed payments are visibly marked and retained for audit history.",
+    "freshAuthenticatedScreenCapture": "not claimed; the available browser session required credential/PIN entry and no security bypass was used"
+  },
+  "automatedEvidence": {
+    "focusedFrontendFiles": 7,
+    "focusedFrontendTests": 59,
+    "backendCustomerIntegrationTests": 11,
+    "frontendFiles": 274,
+    "frontendTests": 1748,
+    "frontendIntentionalSkips": 1,
+    "translationKeys": 4744,
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "bundleAndProductionAppChecks": "passed",
+    "backendProductionCheck": "passed"
+  },
+  "scope": "Local correctness and production-readiness evidence. It does not claim an exact-candidate CI run, a fresh authenticated mobile screenshot, external deployment or human release approval."
+}

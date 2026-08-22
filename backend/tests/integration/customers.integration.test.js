@@ -107,6 +107,41 @@ if (ctx.skip) {
       assert.equal(Number(ofType("udhar_credit")[0].amountPaise), 4000, "udhar_credit = ₹40");
     });
 
+    test("concurrent udhar payment reversals append exactly one correction", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { udharAmount: 100, type: "udhar" });
+      assertSuccess(await ctx.post(`/api/customers/${customer.id}/udhar-payment`, {
+        amount: 40,
+        mode: "cash",
+        note: "partial paid",
+      }, { token: ownerAuth.accessToken }));
+      const payment = await ctx.db.udharLedger.findFirstOrThrow({
+        where: { shopId: tenant.shop.id, customerId: customer.id, type: "payment", mode: "cash" },
+      });
+
+      const attempts = await Promise.all([
+        ctx.post(
+          `/api/customers/${customer.id}/udhar-payment/${payment.id}/reverse`,
+          { reason: "duplicate payment" },
+          { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+        ),
+        ctx.post(
+          `/api/customers/${customer.id}/udhar-payment/${payment.id}/reverse`,
+          { reason: "duplicate payment" },
+          { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+        ),
+      ]);
+
+      assert.deepEqual(attempts.map((response) => response.status).sort(), [200, 409]);
+      assert.equal(await ctx.db.udharLedger.count({
+        where: { shopId: tenant.shop.id, customerId: customer.id, reversalOfLedgerId: payment.id },
+      }), 1);
+      assert.equal((await ctx.db.customer.findUniqueOrThrow({ where: { id: customer.id } })).udharAmount, 100);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, entityId: payment.id, action: "UDHAR_PAYMENT_REVERSED" },
+      }), 1);
+    });
+
     test("udhar payment reversal rolls back when its required audit cannot be stored", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { udharAmount: 100, type: "udhar" });

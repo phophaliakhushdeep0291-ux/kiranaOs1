@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync("src/features/core/customers/pages/CustomersPage.tsx", "utf8");
 const syncBanner = readFileSync("src/features/core/sync/SyncAlertBanner.tsx", "utf8");
 const tradeFocus = readFileSync("src/components/shared/TradeFocusStrip.tsx", "utf8");
+const detailSource = readFileSync("src/features/core/customers/pages/CustomerDetailPage.tsx", "utf8");
 
 describe("phone-first customer form", () => {
   it("surfaces an exact mobile duplicate before save and routes to the existing profile", () => {
@@ -33,5 +34,14 @@ describe("phone-first customer form", () => {
     expect(syncBanner).not.toContain('className="inline-flex h-9');
     expect(syncBanner.match(/className="inline-flex h-11/g)).toHaveLength(2);
     expect(tradeFocus).not.toContain("mouse:min-h-9");
+  });
+
+  it("keeps collection shortcuts and the full account flow phone-sized", () => {
+    expect(source).toContain('className="min-h-11 rounded-[8px] border border-[var(--brand)]');
+    expect(source).toContain('className={cn("inline-flex min-h-11 items-center');
+    expect(source).toContain('aria-label={t("customers.ledger.actions")}');
+    expect(detailSource).toContain('className="max-h-[92vh] max-w-md gap-0');
+    expect(detailSource).toContain('className="grid grid-cols-2 gap-2 sm:flex');
+    expect(detailSource).toContain('t("customers.account.receipt")');
   });
 });

@@ -277,6 +277,17 @@ export const customersEn = {
   "customers.statement.title": "Customer Statement",
   "customers.statement.note": "Note",
   "customers.statement.amount": "Amount",
+  "customers.account.receipt": "Receipt",
+  "customers.receipt.title": "Payment Receipt",
+  "customers.receipt.amount": "Amount received",
+  "customers.receipt.mobile": "Customer mobile",
+  "customers.receipt.mode": "Payment mode",
+  "customers.receipt.date": "Payment date",
+  "customers.receipt.reference": "Reference",
+  "customers.receipt.currentBalance": "Current udhar balance",
+  "customers.receipt.recorded": "Payment received and recorded",
+  "customers.receipt.reversed": "Reversed — retained for audit history",
+  "customers.receipt.footer": "This receipt is generated from the customer's append-only ledger.",
 
   // Customer list, profile, payment collection and the udhar ledger.
   "customers.pay.cash": "Cash",
