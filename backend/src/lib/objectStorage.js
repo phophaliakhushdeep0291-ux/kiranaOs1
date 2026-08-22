@@ -230,6 +230,86 @@ export async function deleteObject({ key, filePath }) {
   throw error;
 }
 
+/**
+ * Lists everything stored under one key prefix, newest first.
+ *
+ * Retention for tenant artifacts is driven from the BackupArtifact table, but a
+ * database-level dump has no row behind it — the bucket is the only record that
+ * it exists. Pruning those needs a listing, so this is the one storage read that
+ * answers "what is actually in there?" rather than "give me this exact key".
+ */
+export async function listObjects({ prefix }) {
+  assertObjectStorageProductionSafe();
+  const safePrefix = assertRelativeSafeKey(prefix);
+  const newestFirst = (a, b) => (b.lastModified?.getTime() ?? 0) - (a.lastModified?.getTime() ?? 0);
+  try {
+    if (env.STORAGE_PROVIDER === "local") {
+      const root = localPathForKey(safePrefix);
+      const entries = [];
+      const walk = async (dir) => {
+        let dirents;
+        try {
+          dirents = await fsp.readdir(dir, { withFileTypes: true });
+        } catch (error) {
+          // Nothing has been uploaded under this prefix yet. An empty listing is
+          // the honest answer; a throw here would read as a storage failure.
+          if (error?.code === "ENOENT") return;
+          throw error;
+        }
+        for (const dirent of dirents) {
+          const full = path.join(dir, dirent.name);
+          if (dirent.isDirectory()) {
+            await walk(full);
+            continue;
+          }
+          const stat = await fsp.stat(full);
+          entries.push({
+            key: path.posix.join(safePrefix, path.relative(root, full).split(path.sep).join("/")),
+            sizeBytes: stat.size,
+            lastModified: stat.mtime,
+          });
+        }
+      };
+      await walk(root);
+      return entries.sort(newestFirst);
+    }
+
+    if (S3_COMPATIBLE_PROVIDERS.has(env.STORAGE_PROVIDER)) {
+      const { ListObjectsV2Command } = await import("@aws-sdk/client-s3");
+      const client = await getS3Client();
+      const entries = [];
+      let continuationToken;
+      // Paginate. A truncated first page silently under-reports what is in the
+      // bucket, which would make a retention sweep believe it has fewer copies
+      // than it does.
+      do {
+        const page = await client.send(new ListObjectsV2Command({
+          Bucket: env.STORAGE_BUCKET,
+          Prefix: `${safePrefix}/`,
+          ContinuationToken: continuationToken,
+        }));
+        for (const object of page.Contents || []) {
+          entries.push({
+            key: object.Key,
+            sizeBytes: Number(object.Size || 0),
+            lastModified: object.LastModified ? new Date(object.LastModified) : null,
+          });
+        }
+        continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+      } while (continuationToken);
+      return entries.sort(newestFirst);
+    }
+  } catch (error) {
+    recordStorageError(env.STORAGE_PROVIDER, "listObjects");
+    logger.error({ type: "storage_error", operation: "listObjects", provider: env.STORAGE_PROVIDER, errorCode: error?.code, message: error?.message, key: safePrefix });
+    throw error;
+  }
+
+  const error = new Error(`${env.STORAGE_PROVIDER} object storage listing is not implemented yet`);
+  error.code = "OBJECT_STORAGE_PROVIDER_NOT_IMPLEMENTED";
+  throw error;
+}
+
 export async function getSignedDownloadUrl({ key, expiresInSeconds = env.EXPORT_SIGNED_URL_TTL_SECONDS }) {
   assertObjectStorageProductionSafe();
   const safeKey = assertRelativeSafeKey(key);

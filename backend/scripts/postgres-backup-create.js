@@ -72,3 +72,39 @@ console.log(JSON.stringify({
   bytes: stat.size,
   time: new Date().toISOString(),
 }, null, 2));
+
+// A dump sitting on the container filesystem is not a backup: Railway's disk is
+// ephemeral, so the copy died with the container that made it. Push it to the
+// same object storage the tenant artifacts already use, prove it arrived by
+// reading it back, then age out old copies.
+//
+// The import is lazy because it pulls the validated env schema in with it, and a
+// dry-run plan should not need a fully configured backend to print.
+if (boolEnv("DATABASE_BACKUP_ENABLED")) {
+  const { uploadDatabaseBackup, pruneDatabaseBackups } = await import("../src/modules/backups/database-backup.service.js");
+  const uploaded = await uploadDatabaseBackup({ filePath: outputFile, databaseName: db.database });
+  const pruned = await pruneDatabaseBackups({ databaseName: db.database });
+
+  // Only the worker asks for this. `npm run backup:postgres` and the restore
+  // drill both read the local file afterwards, so it stays where it was written
+  // unless the caller says it has no further use for it.
+  const localDiscarded = boolEnv("DATABASE_BACKUP_DISCARD_LOCAL");
+  if (localDiscarded) fs.rmSync(outputFile, { force: true });
+
+  // One line, not pretty-printed: the worker keeps the last stdout line carrying
+  // a "type" as its proof, and a pretty block would hand it a stray fragment.
+  console.log(JSON.stringify({
+    type: "postgres_backup_offsite",
+    status: "passed",
+    provider: uploaded.provider,
+    key: uploaded.key,
+    bytes: uploaded.sizeBytes,
+    sha256: uploaded.sha256,
+    verified: uploaded.verified,
+    retainedCopies: pruned.retained,
+    deletedCopies: pruned.deleted.length,
+    retentionDays: pruned.retentionDays,
+    localDiscarded,
+    time: new Date().toISOString(),
+  }));
+}
