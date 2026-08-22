@@ -107,6 +107,16 @@ const envSchema = z.object({
   BACKUP_RETENTION_DAYS: z.coerce.number().int().min(7).max(365).default(30),
   BACKUP_CLEANUP_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   BACKUP_ENCRYPTION_KEY: z.string().optional(),
+  // Off-site database backup. The tenant artifact path already reaches object
+  // storage; the database-level dump did not, so a container that died took the
+  // only copy of the dump with it. Enabled explicitly because a shop that has no
+  // bucket configured is better off with a loud daily failure than a silent one.
+  DATABASE_BACKUP_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  DATABASE_BACKUP_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  // Retention never prunes below this many dumps, whatever the age cutoff says.
+  // A backup job that stalls for a month must not also delete the last dump it
+  // managed to take.
+  DATABASE_BACKUP_MIN_RETAINED: z.coerce.number().int().min(1).max(50).default(3),
   DAILY_CLOSING_SCHEDULE_HOUR: z.coerce.number().int().min(0).max(23).default(2),
   DAILY_CLOSING_TIMEZONE: z.string().default("Asia/Kolkata"),
   STORAGE_PROVIDER: z.enum(["local", "s3", "r2", "minio"]).default("local"),

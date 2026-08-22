@@ -43,7 +43,9 @@ async function runDatabaseBackup(payload = {}) {
   // masks it in its own structured output.
   const child = spawn(process.execPath, ["scripts/postgres-backup-create.js"], {
     cwd: process.cwd(),
-    env: { ...process.env, BACKUP_DRY_RUN: "false" },
+    // The worker has no use for the local dump once it is verified in object
+    // storage, and the container disk it lands on is both ephemeral and shared.
+    env: { ...process.env, BACKUP_DRY_RUN: "false", DATABASE_BACKUP_DISCARD_LOCAL: "true" },
     shell: false,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
