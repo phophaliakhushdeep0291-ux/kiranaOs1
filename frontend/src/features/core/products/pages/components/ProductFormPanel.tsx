@@ -1070,11 +1070,11 @@ export function ProductFormPanel({
                             <p className="truncate text-[11.5px] font-black text-[#13274d]">{row.name}</p>
                             <p className="mt-0.5 text-[10px] font-semibold text-[#6d7c98]">removes {row.conversionToBase} {baseUnitFor(row.packSizeUnit ?? packSizeUnit)} · {t("products.form.mrp")} {ceiling > 0 ? `Rs ${ceiling.toLocaleString("en-IN")}` : "—"}{row.maximumPrice == null && ceiling > 0 ? " (auto)" : ""}</p>
                           </div>
-                          <button type="button" onClick={() => removeAlternatePack(row.unitCode)} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-rose-600 hover:bg-rose-50" aria-label={`Remove ${row.name}`}><Trash2 size={13} /></button>
+                          <button type="button" onClick={() => removeAlternatePack(row.unitCode)} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-rose-600 hover:bg-rose-50" aria-label={`Remove ${row.name}`}><Trash2 size={13} /></button>
                         </div>
                         {/* Every size prices itself: its own rate and its own ceiling,
                             so a bigger pack is never measured against a smaller one. */}
-                        <div className="mt-2 grid grid-cols-3 gap-2 border-t border-[#eef2f7] pt-2">
+                        <div className="mt-2 grid grid-cols-3 items-end gap-2 border-t border-[#eef2f7] pt-2">
                           <Field label={t("products.form.sellingPriceRs")}>
                             <Input
                               className="h-8"
