@@ -65,3 +65,14 @@ release-certification-*.md
 /ci[0-9]*/
 # Unrelated prototypes retained outside the product build/test/lint/CI surface.
 archive/
+
+# Throwaway Chrome profiles from the QA capture scripts.
+#
+# Those scripts default their --user-data-dir to a temp directory, but they honour
+# QA_PROFILE_DIR / QA_OFFLINE_PROFILE_DIR, and a run given a RELATIVE name like
+# "-offline-all-routes-final" resolves it inside frontend/. Chrome then writes its
+# whole profile there — caches, cookie databases, crash dumps, service-worker
+# storage. Five such runs had left 151 MB across 2,600 files staged for commit and
+# waiting to be swept into the next one; nothing reads them and they are recreated
+# on every run. A leading dash is not a name any real source file here carries.
+/frontend/-*/
