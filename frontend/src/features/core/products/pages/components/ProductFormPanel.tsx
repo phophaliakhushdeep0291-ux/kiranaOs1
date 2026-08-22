@@ -4,7 +4,6 @@ import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import type { Product } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Package, Plus, Scale, ScanLine, Sparkles, Trash2, Upload, X } from "lucide-react";
@@ -751,6 +750,7 @@ export function ProductFormPanel({
   // inset reads 0 and nothing here applies. This is the iOS Safari path.
   return (
     <aside
+      ref={(node) => node?.toggleAttribute("inert", !open)}
       data-mobile-task-panel="product-form"
       style={keyboardInset > 0 ? { width, height: `calc(100dvh - ${keyboardInset}px)` } : { width }}
       className={`app-slide-panel fixed inset-y-0 right-0 top-0 z-[90] flex h-[100dvh] w-full max-w-[100vw] flex-col border-l-0 border-[#e6ecf4] bg-white shadow-none transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:z-[80] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] lg:border-l lg:shadow-[-12px_0_40px_rgba(15,23,42,0.10)] ${open ? "translate-x-0" : "translate-x-full"}`}
@@ -1477,9 +1477,9 @@ function Field({ label, required, error, children }: { label: string; required?:
 
   return (
     <div ref={fieldRef} role="group" aria-labelledby={labelId}>
-      <Label id={labelId} className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">
+      <span id={labelId} className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">
         {label}{required && <span className="ml-0.5 text-rose-500" aria-hidden="true">*</span>}
-      </Label>
+      </span>
       {children}
       {error && <p id={errorId} role="alert" aria-live="polite" className="mt-1 text-[11px] text-rose-600">{error}</p>}
     </div>

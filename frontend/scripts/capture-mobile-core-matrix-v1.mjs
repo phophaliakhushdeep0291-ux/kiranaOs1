@@ -69,6 +69,7 @@ async function navigate(client, route, expectedPath = route) {
   // An alias route settles on its destination, not on the URL we asked for.
   await waitForPage(client, `document.readyState === "complete" && location.pathname === ${JSON.stringify(expectedPath)}`);
   await waitForPage(client, `document.body && document.body.innerText.trim().length > 30`);
+  await waitForPage(client, `!document.querySelector(".app-loading-surface") && Boolean(document.querySelector(".app-route-ready"))`);
   await sleep(900);
 }
 
@@ -121,6 +122,24 @@ async function auditPage(client, qaId, route, width, height, expectedPath = rout
   await client.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: true });
   await navigate(client, route, expectedPath);
   const metrics = await client.evaluate(`(()=>{const visible=node=>{const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&rect.width>0&&rect.height>0&&rect.bottom>0&&rect.top<innerHeight};const controls=[...document.querySelectorAll("button,input,select,textarea,[role=button],[role=combobox],a[href]")].filter(visible).map(node=>{const rect=node.getBoundingClientRect();return{tag:node.tagName,type:node.getAttribute("type")||"",label:(node.getAttribute("aria-label")||node.textContent||node.getAttribute("placeholder")||"").trim().replace(/\\s+/g," ").slice(0,70),width:Math.round(rect.width),height:Math.round(rect.height)}}).filter(control=>!(["checkbox","radio","hidden"].includes(control.type))&&!(control.width<=2&&control.height<=2));const undersized=controls.filter(control=>control.width<44||control.height<44),text=document.body.innerText;return{path:location.pathname,viewport:[innerWidth,innerHeight],documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,undersized:undersized.slice(0,30),undersizedCount:undersized.length,visibleControlCount:controls.length,desktopSidebarVisible:[...document.querySelectorAll(".app-desktop-sidebar")].some(visible),genericFailure:/something went wrong|unexpected error|page failed to load/i.test(text),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[]}})()`);
+  const accessibility = await client.evaluate(`(()=>{
+    const visible=(node)=>{if(node.closest('[hidden],[inert],[aria-hidden="true"]'))return false;const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&(rect.width>0||rect.height>0)&&rect.bottom>0&&rect.top<innerHeight&&rect.right>0&&rect.left<innerWidth};
+    const text=(node)=>(node?.textContent||"").replace(/\\s+/g," ").trim();
+    const name=(node)=>{const direct=(node.getAttribute("aria-label")||"").trim();if(direct)return direct;const ids=(node.getAttribute("aria-labelledby")||"").trim().split(/\\s+/).filter(Boolean),byIds=ids.map(id=>text(document.getElementById(id))).join(" ").trim();if(byIds)return byIds;if("labels" in node&&node.labels?.length){const byLabels=[...node.labels].map(text).join(" ").trim();if(byLabels)return byLabels}const child=node.querySelector?.("[aria-label]")?.getAttribute("aria-label");return(node.getAttribute("alt")||node.getAttribute("title")||child||text(node)||"").trim()};
+    const issues=[],add=(rule,node,detail)=>issues.push({rule,tag:node?.tagName?.toLowerCase()||"document",text:node?text(node).slice(0,80):"",detail});
+    if(!document.title.trim())add("document-title",null,"missing title");if(!document.documentElement.lang.trim())add("html-lang",document.documentElement,"missing language");
+    const mains=[...document.querySelectorAll("main")].filter(visible);if(mains.length!==1)add("main-landmark",null,"expected 1 visible main, found "+mains.length);
+    const h1s=[...document.querySelectorAll('h1,[role=heading][aria-level="1"]')].filter(visible);if(h1s.length!==1)add("page-h1",null,"expected 1 visible level-1 heading, found "+h1s.length);
+    const headings=[...document.querySelectorAll('h1,h2,h3,h4,h5,h6,[role=heading][aria-level]')].filter(visible);let previous=0;for(const heading of headings){const level=heading.tagName[0]==="H"?Number(heading.tagName.slice(1)):Number(heading.getAttribute("aria-level"));if(previous&&level>previous+1)add("heading-order",heading,"jumped from h"+previous+" to h"+level);previous=level}
+    const ids=new Map();for(const node of document.querySelectorAll("[id]")){if(node.id)ids.set(node.id,(ids.get(node.id)||0)+1)}for(const [id,count] of ids)if(count>1)add("duplicate-id",document.getElementById(id),"#"+id+" appears "+count+" times");
+    for(const node of document.querySelectorAll("[aria-labelledby],[aria-describedby],[aria-controls]")){if(!visible(node))continue;for(const attr of ["aria-labelledby","aria-describedby","aria-controls"]){const value=node.getAttribute(attr);if(value)for(const id of value.trim().split(/\\s+/))if(id&&!document.getElementById(id))add("broken-aria-reference",node,attr+" references #"+id)}}
+    for(const node of document.querySelectorAll("button,a[href],[role=button],[role=link]"))if(visible(node)&&!name(node))add("interactive-name",node,"visible control has no accessible name");
+    for(const node of document.querySelectorAll("input:not([type=hidden]),select,textarea"))if(visible(node)&&!name(node))add("form-label",node,"visible form control has no associated label");
+    for(const node of document.querySelectorAll("img"))if(visible(node)&&!node.hasAttribute("alt"))add("image-alt",node,"visible image has no alt attribute");
+    for(const hidden of document.querySelectorAll('[aria-hidden="true"]')){const focusable=[...hidden.querySelectorAll("button,a[href],input,select,textarea,[tabindex]")].filter(node=>node.tabIndex>=0&&!node.closest("[inert]"));if(focusable.length)add("aria-hidden-focus",hidden,focusable.length+" focusable descendants without inert")}
+    return{issueCount:issues.length,issues:issues.slice(0,40),h1Count:h1s.length,headingCount:headings.length};
+  })()`);
+  metrics.accessibility = accessibility;
   const image = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
   const filename = `${qaId.toLowerCase()}-${width}x${height}.png`;
   // Developers may run build/cleanup tasks alongside this long matrix; recreate
@@ -133,6 +152,7 @@ async function auditPage(client, qaId, route, width, height, expectedPath = rout
   assert(!metrics.genericFailure, `${qaId} ${width}px rendered an error boundary`);
   assert(!metrics.stuckLoading, `${qaId} ${width}px remained in a loading state`);
   assert(metrics.runtimeErrors.length === 0, `${qaId} ${width}px runtime errors: ${metrics.runtimeErrors.join(" | ")}`);
+  assert(metrics.accessibility.issueCount === 0, `${qaId} ${width}px accessibility issues: ${JSON.stringify(metrics.accessibility.issues)}`);
   return { qaId, route, width, height, ...metrics, screenshot: filename };
 }
 

@@ -10,6 +10,7 @@ import { buildOutboxOperation } from "@/features/core/sync/outbox";
 import { makeLocalEntity, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import { normaliseLocalCustomer } from "@/features/core/customers/local-actions";
 import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
+import { buildReturnLineBalances, consumeReturnLine } from "@/features/core/returns/return-math";
 import type { Bill, Customer, Product } from "@/types/api";
 
 const BILL_CACHE_KEY = "bills";
@@ -96,10 +97,68 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
     throw new Error("Select a customer to refund a return to udhar");
   }
 
+  const [storedBills, storedBillItems] = input.originalBillId
+    ? await Promise.all([
+        offlineDB.getAll<Bill & Record<string, unknown>>("bills").catch(() => []),
+        offlineDB.getAll<Record<string, unknown>>("bill_items").catch(() => []),
+      ])
+    : [[], []];
   const originalBill = input.originalBillId
-    ? await offlineDB.getAll<Bill & Record<string, unknown>>("bills").then((rows) => rows.find((row) => row.id === input.originalBillId || row.local_id === input.originalBillId || row.server_id === input.originalBillId)).catch(() => undefined)
+    ? storedBills.find((row) => row.id === input.originalBillId || row.local_id === input.originalBillId || row.server_id === input.originalBillId)
     : undefined;
   const gstMode = originalBill?.billType === "estimate" ? "none" : originalBill?.gstMode ?? input.gstMode ?? "inclusive";
+  const recordIds = (record: Record<string, unknown>) => new Set([
+    record.id, record.local_id, record.localId, record.server_id, record.serverId,
+    record.localBillId, record.local_bill_id, record.clientBillId, record.client_bill_id,
+  ].map((value) => String(value ?? "")).filter(Boolean));
+  const originalIds = originalBill ? recordIds(originalBill) : new Set<string>();
+  const originalRows = originalBill
+    ? storedBillItems.filter((row) => originalIds.has(String(row.billId ?? row.bill_id ?? row.localBillId ?? row.local_bill_id ?? "")))
+    : [];
+  const activePreviousReturns = originalBill
+    ? storedBills.filter((row) => {
+        const returnOf = String(row.returnOfBillId ?? row.return_of_bill_id ?? "");
+        return originalIds.has(returnOf)
+          && String(row.billType ?? row.bill_type ?? "") === "sales_return"
+          && String(row.status ?? "").toLowerCase() !== "cancelled";
+      })
+    : [];
+  const returnBalances = originalBill && originalRows.length > 0
+    ? buildReturnLineBalances({
+        lines: originalRows.map((row) => {
+          const quantity = Math.abs(readNumber(row.quantity, 0));
+          const product = findCachedProduct(String(row.productId ?? row.product_id ?? "") || undefined);
+          return {
+            id: String(row.id),
+            quantity,
+            lineTotal: Math.abs(readNumber(row.lineTotal ?? row.line_total ?? row.line_subtotal, 0)),
+            lineDiscount: Math.abs(readNumber(row.lineDiscount ?? row.line_discount, 0)),
+            lineCost: Math.abs(readNumber(row.lineCost ?? row.line_cost, quantity * readNumber(product?.costPerRateUnit, 0))),
+            gstRate: readNumber(row.gstRate ?? row.gst_rate ?? product?.gstRate, 0),
+          };
+        }),
+        discount: Math.abs(readNumber(originalBill.discount, 0)),
+        gst: Math.abs(readNumber(originalBill.gst, 0)),
+        gstMode,
+        previousReturns: activePreviousReturns.map((returnBill) => {
+          const returnIds = recordIds(returnBill);
+          return {
+            gst: Math.abs(readNumber(returnBill.gst, 0)),
+            gstMode: (returnBill.gstMode ?? returnBill.gst_mode ?? gstMode) as "inclusive" | "exclusive" | "none",
+            items: storedBillItems
+              .filter((row) => returnIds.has(String(row.billId ?? row.bill_id ?? row.localBillId ?? row.local_bill_id ?? "")))
+              .map((row) => ({
+                originalBillItemId: String(row.originalBillItemId ?? row.original_bill_item_id ?? "") || null,
+                quantity: Math.abs(readNumber(row.quantity, 0)),
+                lineTotal: Math.abs(readNumber(row.lineTotal ?? row.line_total, 0)),
+                lineDiscount: Math.abs(readNumber(row.lineDiscount ?? row.line_discount, 0)),
+                lineCost: Math.abs(readNumber(row.lineCost ?? row.line_cost, 0)),
+                gstRate: readNumber(row.gstRate ?? row.gst_rate, 0),
+              })),
+          };
+        }),
+      })
+    : new Map();
   // "Cash-like" = an immediate tender refund (money goes back out now) vs. reducing udhar.
   const isCashLike = refundMode === "cash" || refundMode === "upi" || refundMode === "bank";
   const now = new Date().toISOString();
@@ -117,13 +176,17 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
     const rate = readNumber(item.ratePerRateUnit, 0);
     const gstRate = readNumber(item.gstRate ?? product?.gstRate, 0);
     const cost = readNumber((product as { costPerRateUnit?: number } | undefined)?.costPerRateUnit, 0);
-    const grossLineTotal = roundMoney(qty * rate);
-    const lineDiscount = Math.min(Math.max(readNumber(item.lineDiscount, 0), 0), grossLineTotal);
-    const lineTotal = roundMoney(grossLineTotal - lineDiscount);
-    const lineCost = roundMoney(qty * cost);
+    const linkedBalance = item.originalBillItemId ? returnBalances.get(item.originalBillItemId) : undefined;
+    const linkedAmounts = linkedBalance ? consumeReturnLine(linkedBalance, qty) : null;
+    const grossLineTotal = linkedAmounts?.gross ?? roundMoney(qty * rate);
+    const lineDiscount = linkedAmounts?.lineDiscount
+      ?? Math.min(Math.max(readNumber(item.lineDiscount, 0), 0), grossLineTotal);
+    const lineTotal = linkedAmounts?.subtotal ?? roundMoney(grossLineTotal - lineDiscount);
+    const lineCost = linkedAmounts?.cost ?? roundMoney(qty * cost);
+    const lineGst = linkedAmounts?.gst ?? lineGstAmount(lineTotal, gstRate, gstMode);
     const lineProfit = roundMoney(lineTotal - lineCost);
     subtotal = roundMoney(subtotal + lineTotal);
-    totalGst = roundMoney(totalGst + lineGstAmount(lineTotal, gstRate, gstMode));
+    totalGst = roundMoney(totalGst + lineGst);
     itemProfit = roundMoney(itemProfit + lineProfit);
     return makeLocalEntity({
       id: createLocalId("bill_item"),
@@ -146,6 +209,12 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
       line_discount: -lineDiscount,
       lineTotal: -lineTotal,
       line_total: -lineTotal,
+      lineCost: -lineCost,
+      line_cost: -lineCost,
+      lineProfit: -lineProfit,
+      line_profit: -lineProfit,
+      lineGst: -lineGst,
+      line_gst: -lineGst,
       damaged: item.damaged === true,
       createdAt: now,
     }, "bill_item", "pending_sync");

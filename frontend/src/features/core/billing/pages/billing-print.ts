@@ -46,6 +46,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
     bill.items.map((item) => ({ price: cartItemUnitRate(item), quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })),
     getTaxConfigSync().mode,
     { sellerStateCode: gstStateCode(bill.shop?.gstNumber), buyerStateCode: bill.buyerStateCode },
+    bill.discount,
   );
   return {
     billNo: bill.billNo,

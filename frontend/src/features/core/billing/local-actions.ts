@@ -6,6 +6,7 @@ import { createLocalId, emitLocalDataChanged, normaliseInstantCacheValue, readIn
 import { buildOutboxOperation } from "@/features/core/sync/outbox";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import { applyRoundOff } from "@/lib/money";
+import { allocateInvoiceDiscount, computeGstBreakdown } from "@/lib/gst";
 import { normaliseLocalCustomer } from "@/features/core/customers/local-actions";
 import type { Bill, BillInput, BillInputItem, BillPayment, Customer, Product } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/features/core/audit-logs/local-actions";
@@ -210,18 +211,21 @@ function billItemNet(item: BillInputItem) {
   return roundMoney(gross - Math.min(Math.max(readNumber(item.lineDiscount, 0), 0), gross));
 }
 
-function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode = "inclusive") {
+function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode = "inclusive", billDiscount = 0) {
   const now = new Date().toISOString();
-  return items.map((item) => {
+  const lineSubtotals = items.map(billItemNet);
+  const discountedLines = allocateInvoiceDiscount(lineSubtotals, billDiscount).discountedLineTotals;
+  return items.map((item, index) => {
     const gross = roundMoney(item.quantity * item.ratePerRateUnit);
-    const subtotal = billItemNet(item);
+    const subtotal = lineSubtotals[index];
+    const taxableLineValue = discountedLines[index];
     const lineDiscount = roundMoney(gross - subtotal);
     const rate = readNumber(item.gstRate, 0);
     // Inclusive (default): tax is extracted from the entered price, line total
     // stays the entered amount. Exclusive: tax is added on top.
     const gst = gstMode === "exclusive"
-      ? roundMoney(subtotal * rate / 100)
-      : rate > 0 ? roundMoney(subtotal - subtotal / (1 + rate / 100)) : 0;
+      ? roundMoney(taxableLineValue * rate / 100)
+      : rate > 0 ? roundMoney(taxableLineValue - taxableLineValue / (1 + rate / 100)) : 0;
     return makeLocalEntity({
       id: createLocalId("bill_item"),
       billId,
@@ -279,7 +283,10 @@ function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode
       hsn: item.hsn ?? null,
       line_subtotal: subtotal,
       line_gst: gst,
-      line_total: gstMode === "exclusive" ? roundMoney(subtotal + gst) : subtotal,
+      // Match the server BillItem contract: line_total is the entered line net
+      // before any invoice-level discount and excludes exclusive GST. Keeping a
+      // different local shape made receipts/totals visibly change after sync.
+      line_total: subtotal,
       createdAt: now,
     }, "bill_item", "pending_sync");
   });
@@ -448,16 +455,21 @@ function calculateBillAmounts(data: BillInput) {
   const rawGstMode = String((data as { gstMode?: string }).gstMode ?? "inclusive");
   const gstMode: GstMode = rawGstMode === "exclusive" || rawGstMode === "none" ? rawGstMode : "inclusive";
   const subtotal = roundMoney(data.items.reduce((sum, item) => sum + billItemNet(item), 0));
-  const gst = roundMoney(data.items.reduce((sum, item) => {
-    const lineTotal = billItemNet(item);
-    const rate = readNumber(item.gstRate, 0);
-    if (rate <= 0 || lineTotal <= 0 || gstMode === "none") return sum;
-    if (gstMode === "exclusive") return sum + lineTotal * rate / 100;
-    return sum + (lineTotal - lineTotal / (1 + rate / 100));
-  }, 0));
   const discount = roundMoney(readNumber(data.discount, 0));
-  const payableBase = gstMode === "exclusive" ? roundMoney(subtotal + gst) : subtotal;
-  const rawTotal = roundMoney(Math.max(0, payableBase - discount));
+  const breakdown = computeGstBreakdown(
+    data.items.map((item) => ({
+      price: readNumber(item.ratePerRateUnit, 0),
+      quantity: readNumber(item.quantity, 0),
+      gstRate: readNumber(item.gstRate, 0),
+      lineDiscount: readNumber(item.lineDiscount, 0),
+    })),
+    gstMode,
+    {},
+    discount,
+  );
+  const gst = breakdown.gst;
+  const payableBase = roundMoney(breakdown.discountedLineTotal + breakdown.gstToAdd);
+  const rawTotal = payableBase;
   // Nearest-rupee round-off rides on the bill (shop's Taxes → "Round off" setting).
   // Applying it here keeps the stored total, the paid-vs-total guards, and the drawer
   // all on the rounded figure the counter actually collected.
@@ -471,7 +483,7 @@ function hasCustomerReference(data: BillInput) {
 }
 
 function validateBillCreationBusinessRules(data: BillInput) {
-  const { total, discount, payableBase } = calculateBillAmounts(data);
+  const { total, discount, subtotal } = calculateBillAmounts(data);
   const cashPaid = data.payments.filter((payment) => payment.mode === BillPaymentMode.cash).reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
   const upiPaid = data.payments.filter((payment) => payment.mode === BillPaymentMode.upi).reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
   const bankPaid = data.payments.filter((payment) => payment.mode === BillPaymentMode.bank).reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
@@ -480,7 +492,7 @@ function validateBillCreationBusinessRules(data: BillInput) {
   const hasSplitTender = [cashPaid, upiPaid, bankPaid].filter((amount) => amount > 0).length > 1;
   const creditAmount = getCreditAmount(data.payments);
 
-  if (discount > payableBase) {
+  if (discount > subtotal) {
     throw new Error("Discount cannot exceed bill total");
   }
 
@@ -598,7 +610,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const paid = roundMoney(readNumber(billData.buyerPaidAmount, billData.payments
     .filter((payment) => payment.mode !== BillPaymentMode.credit)
     .reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0)));
-  const billItems = buildBillItems(billId, billData.items, calculatedAmounts.gstMode);
+  const billItems = buildBillItems(billId, billData.items, calculatedAmounts.gstMode, calculatedAmounts.discount);
   const billPayments = buildPayments(billId, billData.customerId, billData.payments);
   const saleMovements = buildSaleMovements(billId, billData.items, productsById);
   const updatedProducts = buildStockProjection(billData.items, productsById);
@@ -639,7 +651,10 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     buyerGstin: billData.buyerGstin ?? null,
     buyerStateCode: billData.buyerStateCode ?? null,
     buyerAddress: billData.buyerAddress ?? null,
-    subtotal: calculatedAmounts.payableBase,
+    // Keep the same accounting fields before and after sync. Subtotal is the
+    // sum after line discounts but before invoice discount/GST; payableBase is
+    // the final pre-round-off amount and must not be stored in its place.
+    subtotal: calculatedAmounts.subtotal,
     discount: calculatedAmounts.discount,
     discountReason: billData.discountReason ?? null,
     gst: calculatedAmounts.gst,

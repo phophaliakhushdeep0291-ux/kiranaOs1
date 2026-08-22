@@ -173,11 +173,16 @@ function receiptRows(rows: ReceiptLine[], showHsn = false, showMrp = false) {
 function a4InvoiceRows(snapshot: ReceiptSnapshot) {
   if (snapshot.rows.length === 0) return `<tr><td class="empty" colspan="8">No items recorded</td></tr>`;
   const gstMode = snapshot.gst?.mode ?? "none";
+  const invoiceDiscount = allocateInvoiceDiscount(
+    snapshot.rows.map((item) => Math.max(0, Number(item.total) || 0)),
+    snapshot.discount,
+  );
   return snapshot.rows.map((item, index) => {
     const gross = Number(item.rate) * Number(item.quantity);
-    const discount = Math.max(0, Number(item.lineDiscount) || Math.max(0, gross - Number(item.total)));
+    const lineDiscount = Math.max(0, Number(item.lineDiscount) || Math.max(0, gross - Number(item.total)));
+    const discount = lineDiscount + (invoiceDiscount.allocations[index] ?? 0);
     const rate = Math.max(0, Number(item.gstRate) || 0);
-    const lineTotal = Number(item.total) || 0;
+    const lineTotal = invoiceDiscount.discountedLineTotals[index] ?? 0;
     const taxable = gstMode === "inclusive" && rate > 0 ? lineTotal / (1 + rate / 100) : lineTotal;
     const tax = gstMode === "none" ? 0 : gstMode === "inclusive" ? Math.max(0, lineTotal - taxable) : taxable * rate / 100;
     const invoiceLineTotal = gstMode === "exclusive" ? taxable + tax : lineTotal;
@@ -744,3 +749,4 @@ export function openConfiguredReceiptWindow(snapshot: ReceiptSnapshot, options: 
   writeConfiguredReceiptWindow(popup, snapshot, options);
   return true;
 }
+import { allocateInvoiceDiscount } from "@/lib/gst";

@@ -159,5 +159,6 @@ describe("bill input reconstruction helpers", () => {
     expect(computeBillInputTotal(items, 0, "inclusive")).toBe(100);
     expect(computeBillInputTotal(items, 0, "exclusive")).toBe(118);
     expect(computeBillInputTotal(items, 10, "inclusive")).toBe(90);
+    expect(computeBillInputTotal(items, 10, "exclusive")).toBe(106.2);
   });
 });

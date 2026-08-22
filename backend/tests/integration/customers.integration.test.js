@@ -24,11 +24,42 @@ if (ctx.skip) {
       assert.equal(data.name, "Ramesh");
     });
 
+    test("customer create rejects an active customer mobile already used in the shop", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      await createCustomer(ctx.db, tenant.shop.id, { name: "Existing Buyer", mobile: "9876543210" });
+
+      const response = await ctx.post(
+        "/api/customers",
+        customerPayload({ name: "Duplicate Buyer", mobile: "9876543210" }),
+        { token: ownerAuth.accessToken },
+      );
+
+      assertFailure(response, 409);
+      assert.match(String(response.body.error), /mobile already exists/i);
+      assert.equal(await ctx.db.customer.count({ where: { shopId: tenant.shop.id, mobile: "9876543210", deletedAt: null } }), 1);
+    });
+
     test("customer update works", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Old Customer" });
       const updated = assertSuccess(await ctx.patch(`/api/customers/${customer.id}`, { name: "New Customer" }, { token: ownerAuth.accessToken }));
       assert.equal(updated.name, "New Customer");
+    });
+
+    test("customer update cannot take another active customer's mobile", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const existing = await createCustomer(ctx.db, tenant.shop.id, { name: "Existing Buyer", mobile: "9876543210" });
+      const edited = await createCustomer(ctx.db, tenant.shop.id, { name: "Edited Buyer", mobile: "9123456789" });
+
+      const response = await ctx.patch(
+        `/api/customers/${edited.id}`,
+        { mobile: existing.mobile },
+        { token: ownerAuth.accessToken },
+      );
+
+      assertFailure(response, 409);
+      assert.match(String(response.body.error), /mobile already exists/i);
+      assert.equal((await ctx.db.customer.findUnique({ where: { id: edited.id } })).mobile, "9123456789");
     });
 
     test("customer list is shop-scoped", async () => {

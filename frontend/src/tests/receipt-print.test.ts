@@ -3,6 +3,7 @@ import { BillInputBillType, BillPaymentMode, type Bill, type Product } from "@/l
 import { buildBillingReceiptHtml } from "@/features/core/billing/pages/billing-print";
 import type { PrintableBill } from "@/features/core/billing/pages/billing-types";
 import { buildBillPrintHtml, buildPrintableBillSnapshot } from "@/features/core/bills/print";
+import { buildReceiptHtml, type ReceiptSnapshot } from "@/features/core/receipts/receipt-print";
 
 function product(overrides: Partial<Product> = {}): Product {
   return {
@@ -113,6 +114,61 @@ describe("receipt printing", () => {
     expect(html).toContain("Duplicate copy");
     expect(html).toContain("Rs 500");
     expect(html).not.toContain("Rs 1,000");
+  });
+
+  it("prints GST on the invoice-discounted taxable value", () => {
+    const bill = {
+      id: "bill_discounted_gst",
+      billNo: "KOS-1003",
+      billNumber: "KOS-1003",
+      billType: "gst_invoice",
+      status: "paid",
+      customerName: "Walk-in",
+      subtotal: 100,
+      discount: 10,
+      gst: 16.2,
+      gstMode: "exclusive",
+      grandTotal: 106.2,
+      paidAmount: 106.2,
+      creditAmount: 0,
+      createdAt: "2026-06-09T11:30:00.000Z",
+    } as Bill;
+    const snapshot = buildPrintableBillSnapshot(bill, [{
+      name: "Taxable item",
+      quantity: 1,
+      enteredUnit: "piece",
+      ratePerRateUnit: 100,
+      lineTotal: 100,
+      gstRate: 18,
+    }]);
+    const html = buildBillPrintHtml(snapshot);
+
+    expect(snapshot.subtotal).toBe(100);
+    expect(snapshot.discount).toBe(10);
+    expect(snapshot.total).toBe(106.2);
+    expect(html).toContain("@18% on Rs 90");
+    expect(html).toContain("Total GST");
+    expect(html).toContain("Rs 16.20");
+  });
+
+  it("allocates the invoice discount before tax in every A4 line", () => {
+    const snapshot: ReceiptSnapshot = {
+      billNo: "KOS-A4-1",
+      billTypeLabel: "GST invoice",
+      rows: [{ name: "Taxable item", quantity: 1, unit: "piece", rate: 100, total: 100, lineDiscount: 0, gstRate: 18 }],
+      subtotal: 100,
+      discount: 10,
+      total: 106.2,
+      paid: 106.2,
+      credit: 0,
+      gst: { mode: "exclusive", gst: 16.2, cgst: 8.1, sgst: 8.1, igst: 0, supplyType: "intrastate", byRate: [{ rate: 18, taxable: 90, cgst: 8.1, sgst: 8.1, igst: 0 }] },
+    };
+    const html = buildReceiptHtml(snapshot, { paperSize: "A4" });
+
+    expect(html).toContain("Rs 10");
+    expect(html).toContain("Rs 90");
+    expect(html).toContain("Rs 16.20");
+    expect(html).toContain("Rs 106.20");
   });
 
   it("keeps finalized restaurant options on duplicate receipts", () => {

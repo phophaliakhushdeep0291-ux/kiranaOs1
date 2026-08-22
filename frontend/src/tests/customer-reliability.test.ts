@@ -198,6 +198,40 @@ describe("customer reliability", () => {
     ]));
   });
 
+  it("blocks an exact-mobile duplicate before any offline write is committed", async () => {
+    await expect(createCustomerLocalFirst({
+      ...baseCustomerInput,
+      name: "Another Ramesh",
+      mobile: "+91 98765 43210",
+    })).rejects.toThrow(/belongs to Ramesh Kirana Store/i);
+
+    expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
+    expect(mockState.committed.customers).toHaveLength(0);
+    expect(mockState.committed.local_audit_logs).toHaveLength(0);
+    expect(mockState.committed.sync_outbox).toHaveLength(0);
+  });
+
+  it("blocks an edit that takes another customer's mobile without changing local data", async () => {
+    mockState.customers.push({
+      ...existingCustomer,
+      id: "customer_second",
+      local_id: "customer_second",
+      server_id: "server_customer_second",
+      name: "Second Customer",
+      mobile: "9123456789",
+    });
+
+    await expect(updateCustomerLocalFirst("customer_second", {
+      ...baseCustomerInput,
+      name: "Second Customer",
+      mobile: "9876543210",
+    })).rejects.toThrow(/belongs to Ramesh Kirana Store/i);
+
+    expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
+    expect(mockState.committed.customers).toHaveLength(0);
+    expect(mockState.committed.sync_outbox).toHaveLength(0);
+  });
+
   it("possible duplicate detected by name + address similarity", () => {
     const warnings = findDuplicateCustomerWarnings(
       { name: "Ramesh Kirana", mobile: "9123456789", address: "Sardarpura Jodhpur Shop 12" },

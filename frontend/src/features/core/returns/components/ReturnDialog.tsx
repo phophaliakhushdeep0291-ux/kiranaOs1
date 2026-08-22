@@ -13,6 +13,7 @@ import { apiRequest } from "@/lib/api/http";
 import { useOfflineStatus } from "@/features/core/sync";
 import { BillPaymentMode, type BillInput } from "@/types/api";
 import { ArrowLeftRight, Copy, Gift, Plus, Trash2 } from "lucide-react";
+import { consumeReturnLine, type ReturnLineBalance } from "@/features/core/returns/return-math";
 
 type ReturnRefundMode = RefundMode | "gift_card";
 /** Exchanges settle in immediate tender only — udhar/store-credit stay plain returns. */
@@ -58,6 +59,9 @@ export interface ReturnLineInput {
   hsn?: string;
   lineDiscount?: number;
   soldLineTotal?: number;
+  linkedToOriginal?: boolean;
+  /** Exact remaining financial balance when this line is linked to its original bill. */
+  returnBalance?: ReturnLineBalance;
 }
 
 interface ReturnDialogProps {
@@ -90,6 +94,10 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
   const refundTotal = useMemo(
     () => roundMoney(lines.reduce((sum, line, i) => {
       const returnQty = getQty(i);
+      if (line.returnBalance) {
+        const linked = consumeReturnLine({ ...line.returnBalance }, returnQty);
+        return sum + linked.subtotal + (gstMode === "exclusive" ? linked.gst : 0);
+      }
       const fraction = line.soldQty > 0 ? returnQty / line.soldQty : 1;
       const soldNet = typeof line.soldLineTotal === "number" && Number.isFinite(line.soldLineTotal) ? Math.abs(line.soldLineTotal) : Math.max(0, line.soldQty * Number(line.ratePerRateUnit || 0) - Number(line.lineDiscount || 0));
       const net = roundMoney(soldNet * fraction);
@@ -112,8 +120,8 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
   // the difference on its own, so daily close and reports stay double-entry clean.
   const settleMode: ExchangeSettleMode = refundMode === "upi" || refundMode === "bank" ? refundMode : "cash";
 
-  function setLineQty(i: number, value: number, max: number) {
-    const capped = max > 0 ? Math.max(0, Math.min(value, max)) : Math.max(0, value);
+  function setLineQty(i: number, value: number, max: number, limited: boolean) {
+    const capped = limited || max > 0 ? Math.max(0, Math.min(value, max)) : Math.max(0, value);
     setQty((prev) => ({ ...prev, [i]: roundMoney(capped) }));
   }
 
@@ -313,13 +321,13 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setLineQty(i, getQty(i) - 1, max)}>−</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setLineQty(i, getQty(i) - 1, max, line.linkedToOriginal === true)}>−</Button>
                     <ReturnLineQuantity
                       quantity={getQty(i)}
-                      max={max}
-                      onChange={(quantity) => setLineQty(i, quantity, max)}
+                      max={line.linkedToOriginal === true || max > 0 ? max : undefined}
+                      onChange={(quantity) => setLineQty(i, quantity, max, line.linkedToOriginal === true)}
                     />
-                    <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setLineQty(i, getQty(i) + 1, max)}>+</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" disabled={line.linkedToOriginal === true && max <= 0} onClick={() => setLineQty(i, getQty(i) + 1, max, line.linkedToOriginal === true)}>+</Button>
                   </div>
                 </div>
                 <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">

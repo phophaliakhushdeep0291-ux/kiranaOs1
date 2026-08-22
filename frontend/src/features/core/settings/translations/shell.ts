@@ -215,6 +215,7 @@ export const shellEn = {
   "plans.selfServeBody": "Create your shop, import your catalog and start billing without an installation visit.",
   "plans.softwareSelfServe": "Self-serve software",
   "plans.softwareBundled": "Software inside the serviced bundle",
+  "plans.viewAll": "View all plans",
   "chrome.subscription.activeShort": "Subscription active",
 
   // Dashboard prose passed as props rather than written between tags.

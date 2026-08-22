@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { validateGstin } from "@/lib/gstin";
+import { computeGstBreakdown } from "@/lib/gst";
 
 // Treat empty string AND null as "no value" → undefined. Hydrated rows from the server carry
 // null for unset optional fields; without this, re-validating one (e.g. editing a synced customer
@@ -244,21 +245,20 @@ export const billCreationSchema = z
     const lineNet = (item: { quantity: number; ratePerRateUnit: number; lineDiscount: number }) =>
       Math.max(0, item.quantity * item.ratePerRateUnit - item.lineDiscount);
     const subtotal = bill.items.reduce((sum, item) => sum + lineNet(item), 0);
-    // Inclusive mode (kirana MRP default): tax lives inside the entered prices,
-    // so the payable base is the subtotal itself. Exclusive adds tax on top —
-    // on the discounted line value, since a discount reduces taxable value.
-    const gstToAdd = bill.gstMode === "exclusive"
-      ? bill.items.reduce((sum, item) => sum + lineNet(item) * (item.gstRate / 100), 0)
-      : 0;
-    const payableBase = subtotal + gstToAdd;
-    const rawTotal = Math.max(0, payableBase - bill.discount);
+    const breakdown = computeGstBreakdown(
+      bill.items.map((item) => ({ price: item.ratePerRateUnit, quantity: item.quantity, gstRate: item.gstRate, lineDiscount: item.lineDiscount })),
+      bill.gstMode,
+      {},
+      bill.discount,
+    );
+    const rawTotal = Math.max(0, breakdown.discountedLineTotal + breakdown.gstToAdd);
     // When round-off is on the counter collects (and tenders) the nearest rupee, so
     // the paid-vs-total guard below must compare against that same rounded figure —
     // otherwise a legitimate ₹248 tender on a ₹247.60 bill is wrongly rejected.
     const total = bill.roundOff ? Math.round(rawTotal) : rawTotal;
     const paid = bill.payments.reduce((sum, payment) => sum + payment.amount, 0);
 
-    if (bill.discount > payableBase) {
+    if (bill.discount > subtotal) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["discount"],

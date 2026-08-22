@@ -14,6 +14,9 @@ import {
 } from "@/features/core/products/starter-catalog/kirana-catalog-summary.generated";
 import { PRODUCT_IMPORT_COLUMNS, parseProductsCsv } from "@/features/core/products/import/product-import-csv";
 import { UNITS } from "@/features/core/products/pages/product-pricing";
+import { BUSINESS_TYPE_IDS } from "@/features/core/settings/business-types";
+import { tradeStarterCatalog } from "@/features/core/products/starter-catalog/trade-catalogs";
+import { tradeStarterCatalogCount } from "@/features/core/products/starter-catalog/trade-catalog-summary";
 
 const csvPath = fileURLToPath(new URL("../../../catalog/kirana-starter-catalog.csv", import.meta.url));
 const csvText = readFileSync(csvPath, "utf8");
@@ -97,5 +100,18 @@ describe("starter catalog data", () => {
     expect(parsed.validCount).toBe(560);
     // Auto-detected as a native file: every column maps with no manual work.
     expect(parsed.headers).toEqual(PRODUCT_IMPORT_COLUMNS.map((column) => column.header));
+  });
+});
+
+describe("trade starter catalogs", () => {
+  it.each(BUSINESS_TYPE_IDS.filter((type) => type !== "kirana"))("gives %s a valid one-click catalog", (businessType) => {
+    const catalog = tradeStarterCatalog(businessType);
+    const parsed = parseProductsCsv(starterCatalogToCsv(catalog), undefined, businessType);
+    expect(catalog.length).toBeGreaterThan(0);
+    expect(catalog).toHaveLength(tradeStarterCatalogCount(businessType));
+    expect(parsed.headerError).toBeUndefined();
+    expect(parsed.errorCount).toBe(0);
+    expect(parsed.validCount).toBe(catalog.length);
+    expect(catalog.every((item) => item.stockQuantity === 0 && item.skuBarcode === "")).toBe(true);
   });
 });

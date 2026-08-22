@@ -13,6 +13,7 @@ import { buildPrintableBillSnapshot, openPrintableBill } from "@/features/core/b
 import { cancelBillWithOwnerPinLocalFirst, restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/core/bills/local-actions";
 import { EditBillDialog } from "@/features/core/bills/components/EditBillDialog";
 import { ReturnDialog, type ReturnLineInput } from "@/features/core/returns/components/ReturnDialog";
+import { buildReturnLineBalances, remainingReturnQuantity } from "@/features/core/returns/return-math";
 import type { Bill, Customer } from "@/types/api";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { usePermission } from "@/features/core/staff/permissions";
@@ -127,9 +128,9 @@ async function loadBillDetail(id: string) {
   if (!bill) return null;
   const ids = asIdSet(bill);
   const itemExpectedTotal = readNumber(bill.subtotal ?? bill.subtotalAmount ?? bill.subtotal_amount, billTotal(bill) + readNumber(bill.discount, 0));
+  const allBillItems = await offlineDB.getAll<AnyRow>("bill_items").catch(() => []);
   const items = dedupeBillItemsForDisplay(
-    (await offlineDB.getAll<AnyRow>("bill_items").catch(() => []))
-      .filter((row) => ids.has(String(row.bill_id ?? row.billId ?? ""))),
+    allBillItems.filter((row) => ids.has(String(row.bill_id ?? row.billId ?? ""))),
     itemExpectedTotal,
   );
   const payments = dedupePaymentsForDisplay((await offlineDB.getAll<AnyRow>("payments").catch(() => []))
@@ -147,7 +148,46 @@ async function loadBillDetail(id: string) {
     return typeof customerId === "string" && customerIds.has(customerId);
   }));
   const customerLedgerBalance = Math.max(0, calculateLedgerBalance(customerLedger));
-  return { bill, items, payments, ledger, audit, customer, customerLedgerBalance };
+  const activeReturns = allBills.filter((row) => {
+    const returnOf = String(row.returnOfBillId ?? row.return_of_bill_id ?? "");
+    return ids.has(returnOf)
+      && String(row.billType ?? row.bill_type ?? "") === "sales_return"
+      && String(row.status ?? "").toLowerCase() !== "cancelled";
+  });
+  const gstMode = (bill.gstMode ?? bill.gst_mode ?? "inclusive") as "inclusive" | "exclusive" | "none";
+  const returnBalances = buildReturnLineBalances({
+    lines: items.map((item) => ({
+      id: String(item.id),
+      quantity: Math.abs(readNumber(item.quantity, 0)),
+      lineTotal: Math.abs(readNumber(item.lineTotal ?? item.line_total ?? item.line_subtotal, 0)),
+      lineDiscount: Math.abs(readNumber(item.lineDiscount ?? item.line_discount, 0)),
+      lineCost: Math.abs(readNumber(item.lineCost ?? item.line_cost, 0)),
+      gstRate: readNumber(item.gstRate ?? item.gst_rate, 0),
+    })),
+    discount: Math.abs(readNumber(bill.discount, 0)),
+    gst: Math.abs(readNumber(bill.gst, 0)),
+    gstMode,
+    previousReturns: activeReturns.map((returnBill) => {
+      const returnIds = asIdSet(returnBill);
+      const returnItems = dedupeBillItemsForDisplay(
+        allBillItems.filter((row) => returnIds.has(String(row.bill_id ?? row.billId ?? ""))),
+        Math.abs(readNumber(returnBill.subtotal, 0)),
+      );
+      return {
+        gst: Math.abs(readNumber(returnBill.gst, 0)),
+        gstMode: (returnBill.gstMode ?? returnBill.gst_mode ?? gstMode) as "inclusive" | "exclusive" | "none",
+        items: returnItems.map((item) => ({
+          originalBillItemId: String(item.originalBillItemId ?? item.original_bill_item_id ?? "") || null,
+          quantity: Math.abs(readNumber(item.quantity, 0)),
+          lineTotal: Math.abs(readNumber(item.lineTotal ?? item.line_total, 0)),
+          lineDiscount: Math.abs(readNumber(item.lineDiscount ?? item.line_discount, 0)),
+          lineCost: Math.abs(readNumber(item.lineCost ?? item.line_cost, 0)),
+          gstRate: readNumber(item.gstRate ?? item.gst_rate, 0),
+        })),
+      };
+    }),
+  });
+  return { bill, items, payments, ledger, audit, customer, customerLedgerBalance, returnBalances };
 }
 
 function useBillDetail(id: string) {
@@ -198,15 +238,19 @@ export default function BillDetailPage() {
   const billTypeStr = String(bill?.billType ?? "normal_sale");
   const isCancelled = String(bill?.status ?? "").toLowerCase() === "cancelled";
   const canReturn = Boolean(bill) && bill?.status !== "cancelled" && billTypeStr !== "sales_return";
-  const returnLines: ReturnLineInput[] = useMemo(() => visibleItems.map((item) => ({
-    billItemId: String(item.id ?? "") || undefined,
+  const returnLines: ReturnLineInput[] = useMemo(() => visibleItems.map((item) => {
+    const billItemId = String(item.id ?? "");
+    const returnBalance = data?.returnBalances.get(billItemId);
+    return {
+    billItemId: billItemId || undefined,
     productId: (item.productId ?? item.product_id) as string | undefined,
     sellingUnitId: String(item.sellingUnitId ?? item.selling_unit_id ?? "") || undefined,
     sellingUnitCode: String(item.sellingUnitCode ?? item.selling_unit_code ?? "") || undefined,
     sellingUnitLabel: String(item.sellingUnitLabel ?? item.selling_unit_label ?? "") || undefined,
     conversionToBase: readNumber(item.conversionToBase ?? item.conversion_to_base, 0) || undefined,
     name: String(item.name ?? item.productName ?? t("billing.bills.item")),
-    soldQty: Math.abs(readNumber(item.quantity, 0)),
+    soldQty: returnBalance ? remainingReturnQuantity(returnBalance) : Math.abs(readNumber(item.quantity, 0)),
+    linkedToOriginal: true,
     enteredUnit: String(item.enteredUnit ?? item.entered_unit ?? "piece"),
     ratePerRateUnit: readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0),
     costPerRateUnit: readNumber(item.costPerRateUnit ?? item.cost_per_rate_unit, 0) || undefined,
@@ -215,7 +259,8 @@ export default function BillDetailPage() {
     hsn: String(item.hsn ?? "") || undefined,
     lineDiscount: readNumber(item.lineDiscount ?? item.line_discount, 0),
     soldLineTotal: Math.abs(readNumber(item.lineTotal ?? item.line_total, 0)),
-  })), [visibleItems]);
+    returnBalance,
+  }; }), [data?.returnBalances, visibleItems]);
 
   function printBill() {
     if (!bill) return;

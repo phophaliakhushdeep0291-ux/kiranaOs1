@@ -6,6 +6,7 @@ function read(file) {
 }
 
 assert.ok(fs.existsSync("scripts/production-check.js"), "production-check script must exist");
+assert.ok(fs.existsSync("scripts/check-app-module-graph.js"), "production module-graph check must exist");
 const productionCheck = read("scripts/production-check.js");
 
 for (const required of [
@@ -43,6 +44,7 @@ assert.ok(productionCheck.includes("Mutation-test artifact must not ship"), "pro
 const pkg = JSON.parse(read("package.json"));
 assert.ok(pkg.scripts.test, "npm test must exist");
 assert.ok(pkg.scripts["prod:check"], "prod:check script must exist");
+assert.ok(pkg.scripts["prod:check"].includes("check-app-module-graph.js"), "prod:check must import the production application module graph");
 assert.ok(pkg.scripts["test:billing"].includes("final-production-check.examples.js"), "test:billing must include final production checks");
 
 const deploy = read("DEPLOY.md");

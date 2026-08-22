@@ -183,6 +183,27 @@ describe("billing business rules", () => {
     expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
   });
 
+  it("stores the same discounted exclusive-GST totals offline that the server confirms", async () => {
+    const bill = await createBillLocalFirst(baseInput({
+      items: [{ productId: "product_1", name: "Sugar", quantity: 1, enteredUnit: "kg", ratePerRateUnit: 100, gstRate: 18 }],
+      gstMode: "exclusive",
+      discount: 10,
+      actualAmount: 106.2,
+      buyerPaidAmount: 106.2,
+      payments: [{ mode: BillPaymentMode.cash, amount: 106.2 }],
+    }));
+
+    expect(bill.subtotal).toBe(100);
+    expect(bill.discount).toBe(10);
+    expect(bill.gst).toBe(16.2);
+    expect(bill.grandTotal).toBe(106.2);
+    expect(tableRows("bill_items")[0]).toEqual(expect.objectContaining({
+      line_subtotal: 100,
+      line_total: 100,
+      line_gst: 16.2,
+    }));
+  });
+
   it("requires owner PIN before saving below-minimum selling price bills", async () => {
     await expect(createBillLocalFirst(baseInput({
       sensitiveActions: ["selling_below_minimum_price"],

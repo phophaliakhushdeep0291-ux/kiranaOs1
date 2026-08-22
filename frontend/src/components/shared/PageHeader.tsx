@@ -6,9 +6,11 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLDivElement>, "t
   description?: ReactNode;
   eyebrow?: ReactNode;
   actions?: ReactNode;
+  headingLevel?: 1 | 2;
 }
 
-export function PageHeader({ title, description, eyebrow, actions, className, ...props }: PageHeaderProps) {
+export function PageHeader({ title, description, eyebrow, actions, headingLevel = 1, className, ...props }: PageHeaderProps) {
+  const Heading = headingLevel === 2 ? "h2" : "h1";
   return (
     <header
       className={cn(
@@ -18,7 +20,7 @@ export function PageHeader({ title, description, eyebrow, actions, className, ..
       {...props}
     >
       <div className="min-w-0 flex-1 space-y-1.5">
-        <h1 className="text-balance break-words font-display text-[clamp(1.35rem,1.1rem+0.9vw,1.9rem)] font-black leading-tight tracking-tight text-foreground">{title}</h1>
+        <Heading className="text-balance break-words font-display text-[clamp(1.35rem,1.1rem+0.9vw,1.9rem)] font-black leading-tight tracking-tight text-foreground">{title}</Heading>
         {description ? <div className="max-w-3xl break-words text-sm leading-6 text-muted-foreground">{description}</div> : null}
         {eyebrow ? <div className="text-xs text-muted-foreground">{eyebrow}</div> : null}
       </div>

@@ -520,6 +520,7 @@ export function BillingSearch({
                 <Input
                   ref={searchInputRef}
                   data-testid="input-product-search"
+                  aria-label={isNarrow ? t("billing.search.placeholderShort") : t("billing.search.placeholder")}
                   className="h-full flex-1 border-0 bg-transparent p-0 text-[14px] font-semibold text-[var(--brand-ink)] placeholder:font-medium placeholder:text-[#6b7a9a] focus-visible:ring-0 focus-visible:ring-offset-0"
                   placeholder={isNarrow ? t("billing.search.placeholderShort") : t("billing.search.placeholder")}
                   value={search}

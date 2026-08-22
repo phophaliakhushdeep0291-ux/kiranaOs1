@@ -114,10 +114,9 @@ export const confirmBillSchema = z.object({
   }
   const declaredLineNet = (item) => Math.max(0, Number(item.quantity) * Number(item.ratePerRateUnit) - Number(item.lineDiscount || 0));
   const declaredSubtotal = data.items.reduce((sum, item) => sum + declaredLineNet(item), 0);
-  const declaredGstToAdd = data.gstMode === "exclusive"
-    ? data.items.reduce((sum, item) => sum + declaredLineNet(item) * Number(item.gstRate || 0) / 100, 0)
-    : 0;
-  if (Number(data.discount || 0) > declaredSubtotal + declaredGstToAdd + 0.005) {
+  // An invoice discount reduces taxable value; it cannot be used to discount
+  // the tax component independently of the goods/services value.
+  if (Number(data.discount || 0) > declaredSubtotal + 0.005) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["discount"], message: "Discount cannot exceed bill total" });
   }
   if (data.billType !== "estimate" && data.payments.length === 0 && Number(data.creditAmount ?? 0) <= 0) {

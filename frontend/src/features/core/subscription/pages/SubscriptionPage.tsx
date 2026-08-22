@@ -46,7 +46,7 @@ export default function SubscriptionPage() {
 
   if (loading || !snapshot) return (
     <PageShell className="space-y-5">
-      <PageHeader title="Subscription" description="Your plan, billing cycle, and store protection in one place." />
+      <PageHeader headingLevel={2} title="Subscription" description="Your plan, billing cycle, and store protection in one place." />
       <LoadingSkeleton variant="detail" rows={2} className="rounded-[18px] border border-[#e2eaf5] bg-white p-5" />
     </PageShell>
   );
@@ -69,6 +69,7 @@ export default function SubscriptionPage() {
   return (
     <PageShell className="app-data-reveal space-y-5">
       <PageHeader
+        headingLevel={2}
         title="Subscription"
         description="Your plan, billing cycle, and store protection in one place."
         actions={<PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}

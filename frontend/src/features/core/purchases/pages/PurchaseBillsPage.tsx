@@ -630,11 +630,11 @@ export default function PurchaseBillsPage() {
         {/* Purchase Bills table */}
         <div id="purchase-table" className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
           <div className="flex flex-col gap-3 border-b border-[#eef2f8] px-5 py-3.5 xl:flex-row xl:items-center xl:justify-between">
-            <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">Purchase Bills</h3>
+            <h2 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">Purchase Bills</h2>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative w-full sm:w-64">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
-                <Input className="h-9 pl-8 text-[12.5px]" placeholder="Search by bill no., supplier or product…" value={search} onChange={(event) => setSearch(event.target.value)} />
+                <Input aria-label="Search purchase bills" className="h-9 pl-8 text-[12.5px]" placeholder="Search by bill no., supplier or product…" value={search} onChange={(event) => setSearch(event.target.value)} />
               </div>
               <Button variant="outline" className={cn("h-9 gap-1.5 rounded-[9px] text-[12px] font-bold", showFilters && "border-[var(--brand)] text-[var(--brand)]")} onClick={() => setShowFilters((s) => !s)}>
                 <Filter size={13} /> Filters
@@ -1300,6 +1300,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
 
   return (
     <aside
+      ref={(node) => node?.toggleAttribute("inert", !open)}
       style={{ width }}
       className={`app-slide-panel purchase-panel ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog" aria-label="Add purchase" aria-hidden={!open}
@@ -1458,7 +1459,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
             onChange={(event) => setScanValue(event.target.value)}
             onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); acceptBarcode(); } }}
             placeholder="Scan barcode"
-            aria-label="Purchase product barcode"
+            aria-label={t("billing.search.scanBarcode")}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setScanOpen(false)}>Done</Button>

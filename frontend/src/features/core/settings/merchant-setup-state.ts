@@ -1,6 +1,7 @@
 // Counts only — the catalog itself is loaded with a dynamic import when the shop taps
 // the action. Importing the data module here would put 560 rows in the settings chunk.
 import { KIRANA_STARTER_CATALOG_COUNT } from "@/features/core/products/starter-catalog/kirana-catalog-summary.generated";
+import { tradeStarterCatalogCount } from "@/features/core/products/starter-catalog/trade-catalog-summary";
 import type { Translate } from "@/features/core/settings/i18n";
 
 export const MERCHANT_SETUP_KEY = "onboarding:merchant-setup:v1";
@@ -29,7 +30,7 @@ export interface MerchantSetupFacts {
   customerCount: number;
   supplierCount: number;
   billCount: number;
-  /** Which trade this shop is. Only `kirana` is offered the built-in kirana catalog. */
+  /** Which trade this shop is, used to offer the matching built-in catalog. */
   businessTypeKey?: string;
 }
 
@@ -95,18 +96,18 @@ function countLabel(count: number, singular: string, plural: string) {
 }
 
 /**
- * Offered to a kirana shop that has no products yet, and to nobody else.
- *
- * A chemist or a garage would have to delete all 560 rows, so the offer would cost them
- * time rather than save it. A shop that already has products has already made its own
- * decisions about names and prices, and the catalog's starting prices are not better
- * information than the ones the shop typed in.
+ * Offered to an empty shop with the starter list for its own trade. Existing shops keep
+ * using CSV migration so a ready-made list never mixes silently into a live catalogue.
  */
 function starterCatalogQuickAction(facts: MerchantSetupFacts, t: Translate): MerchantSetupQuickAction | undefined {
-  if (facts.businessTypeKey !== "kirana" || facts.productCount !== 0) return undefined;
+  if (!facts.businessTypeKey || facts.productCount !== 0) return undefined;
+  const count = facts.businessTypeKey === "kirana"
+    ? KIRANA_STARTER_CATALOG_COUNT
+    : tradeStarterCatalogCount(facts.businessTypeKey);
+  if (count === 0) return undefined;
   return {
     id: "load-starter-catalog",
-    label: t("setup.starterCatalog.label", { count: KIRANA_STARTER_CATALOG_COUNT }),
+    label: t("setup.starterCatalog.label", { count }),
     hint: t("setup.starterCatalog.hint"),
   };
 }

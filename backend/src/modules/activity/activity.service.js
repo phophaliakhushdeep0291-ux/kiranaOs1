@@ -220,6 +220,16 @@ async function persistEvent(raw, context, client) {
   };
   if (!data.eventId) return null;
 
+  // Most duplicates are normal at-least-once retries (another open POS tab,
+  // an ambiguous network response, or an offline queue replay). Checking first
+  // keeps those expected retries out of Prisma's error log. The unique index and
+  // P2002 fallback below still close the race between this read and the insert.
+  const existing = await client.activityEvent.findUnique({
+    where: { eventId: data.eventId },
+    select: { eventId: true },
+  });
+  if (existing) return "duplicate";
+
   try {
     await client.activityEvent.create({ data });
   } catch (error) {

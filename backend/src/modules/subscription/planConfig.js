@@ -197,21 +197,21 @@ export const PLAN_CONFIGS = {
   },
 };
 
-// New-sale pricing by trade, benchmarked against Indian POS list prices on
-// 2026-08-08. Existing subscriptions never read this matrix: their price and
+// New-sale pricing by trade, benchmarked against Indian POS list prices and
+// reviewed in the 2026-08-22 revenue plan. Existing subscriptions never read this matrix: their price and
 // feature snapshots remain authoritative until an explicit plan change.
 export const BUSINESS_TYPE_PLAN_PRICING = Object.freeze({
-  kirana:      { starter: [24900, 249900], growth: [59900, 499900], pro: [99900, 899900] },
+  kirana:      { starter: [9900, 99900], growth: [59900, 499900], pro: [99900, 899900] },
   stationery:  { starter: [24900, 249900], growth: [59900, 499900], pro: [99900, 899900] },
   other:       { starter: [24900, 249900], growth: [59900, 499900], pro: [99900, 899900] },
   clothing:    { starter: [34900, 349900], growth: [69900, 599900], pro: [109900, 999900] },
   footwear:    { starter: [34900, 349900], growth: [69900, 599900], pro: [109900, 999900] },
   cosmetics:   { starter: [34900, 349900], growth: [69900, 599900], pro: [109900, 999900] },
-  auto_parts:  { starter: [39900, 399900], growth: [79900, 699900], pro: [119900, 1099900] },
+  auto_parts:  { starter: [39900, 399900], growth: [99900, 899900], pro: [119900, 1099900] },
   electronics: { starter: [39900, 399900], growth: [79900, 699900], pro: [119900, 1099900] },
   furniture:   { starter: [39900, 399900], growth: [79900, 699900], pro: [119900, 1099900] },
   pharmacy:    { starter: [49900, 499900], growth: [89900, 799900], pro: [129900, 1199900] },
-  restaurant:  { starter: [59900, 599900], growth: [99900, 899900], pro: [149900, 1399900] },
+  restaurant:  { starter: [59900, 599900], growth: [149900, 1499900], pro: [199900, 1999900] },
 });
 
 export function normalizeBusinessType(businessType) {
@@ -240,6 +240,10 @@ export const FIRST_YEAR_ONBOARDING_SKU = Object.freeze({
   amountPaise: 499900,
   includes: ["in_person_installation", "starter_catalog_entry", "owner_and_staff_training", "supported_hardware_setup", "first_year_support"],
 });
+
+export function isOnboardingServiceAvailable(businessType) {
+  return normalizeBusinessType(businessType) !== "kirana";
+}
 
 export function validatePlanCode(planCode) {
   return PLAN_CODES.includes(planCode);

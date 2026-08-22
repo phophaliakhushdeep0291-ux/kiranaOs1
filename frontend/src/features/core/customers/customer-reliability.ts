@@ -27,8 +27,15 @@ export function normaliseCustomerText(value: unknown): string {
 
 export function normaliseCustomerMobile(value: unknown): string {
   const digits = String(value ?? "").replace(/\D/g, "");
-  if (digits.length > 10 && digits.endsWith(digits.slice(-10))) return digits.slice(-10);
+  // Cashiers commonly paste +91-prefixed or spaced Indian numbers. Customer
+  // identity is the final ten digits everywhere so those formats cannot create
+  // separate local records that later collide during sync.
+  if (digits.length > 10) return digits.slice(-10);
   return digits;
+}
+
+export function isValidIndianCustomerMobile(value: unknown): boolean {
+  return /^[6-9]\d{9}$/.test(normaliseCustomerMobile(value));
 }
 
 function tokenise(value: unknown): string[] {

@@ -7,6 +7,7 @@ import {
   BUSINESS_TYPE_PLAN_PRICING,
   getPlanConfigForBusinessType,
   hasLegacyShopTypeFeatureAccess,
+  isOnboardingServiceAvailable,
   SHOP_TYPE_ENTITLEMENTS_V1,
 } from "../src/modules/subscription/planConfig.js";
 
@@ -26,7 +27,15 @@ for (const businessType of Object.keys(BUSINESS_TYPE_PLAN_PRICING)) {
   );
   assert.deepEqual(starter.features.filter((feature) => !growth.features.includes(feature)), [], `${businessType} Growth inherits Starter`);
   assert.deepEqual(growth.features.filter((feature) => !business.features.includes(feature)), [], `${businessType} Business inherits Growth`);
+  assert.ok(starter.priceYearlyPaise < growth.priceYearlyPaise, `${businessType} Growth costs more than Starter`);
+  assert.ok(growth.priceYearlyPaise < business.priceYearlyPaise, `${businessType} Business costs more than Growth`);
 }
+
+assert.equal(getPlanConfigForBusinessType("growth", "restaurant").priceYearlyPaise, 1499900);
+assert.equal(getPlanConfigForBusinessType("growth", "auto_parts").priceYearlyPaise, 899900);
+assert.equal(getPlanConfigForBusinessType("starter", "kirana").priceYearlyPaise, 99900);
+assert.equal(isOnboardingServiceAvailable("kirana"), false);
+assert.equal(isOnboardingServiceAvailable("restaurant"), true);
 
 assert.ok(!getPlanConfigForBusinessType("starter", "clothing").features.includes("clothing_rentals"));
 assert.ok(getPlanConfigForBusinessType("growth", "clothing").features.includes("clothing_rentals"));

@@ -201,6 +201,7 @@ export const shellHi: Record<keyof typeof shellEn, string> = {
   "plans.selfServeBody": "अपनी दुकान बनाएँ, कैटलॉग आयात करें और बिना इंस्टॉलेशन विज़िट के बिलिंग शुरू करें।",
   "plans.softwareSelfServe": "खुद सेटअप सॉफ़्टवेयर",
   "plans.softwareBundled": "सर्विस बंडल में शामिल सॉफ़्टवेयर",
+  "plans.viewAll": "सभी प्लान देखें",
   "chrome.subscription.activeShort": "सदस्यता चालू",
   "dashboard.step.addProducts": "सामान जोड़ें",
   "dashboard.step.addProductsHelp": "नाम, कीमत और स्टॉक",

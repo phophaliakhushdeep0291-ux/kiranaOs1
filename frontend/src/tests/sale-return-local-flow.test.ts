@@ -133,6 +133,60 @@ describe("sale return local-first", () => {
     expect((op?.payload as Record<string, unknown>)?.refundMode).toBe("bank");
   });
 
+  it("linked partial returns immediately reverse invoice discount and exact stored GST", async () => {
+    dbState.committed.bills = [{
+      id: "bill_discounted_gst",
+      billType: "gst_invoice",
+      status: "active",
+      subtotal: 200,
+      discount: 20,
+      gst: 32.4,
+      gstMode: "exclusive",
+      grandTotal: 212.4,
+    }];
+    dbState.committed.bill_items = [{
+      id: "bill_item_discounted_gst",
+      bill_id: "bill_discounted_gst",
+      productId: "product_sugar",
+      name: "Sugar",
+      quantity: 2,
+      enteredUnit: "piece",
+      ratePerRateUnit: 100,
+      lineTotal: 200,
+      lineDiscount: 0,
+      lineCost: 120,
+      gstRate: 18,
+    }];
+
+    const input = {
+      items: [{
+        originalBillItemId: "bill_item_discounted_gst",
+        productId: "product_sugar",
+        name: "Sugar",
+        quantity: 1,
+        enteredUnit: "piece",
+        ratePerRateUnit: 100,
+        gstRate: 18,
+      }],
+      refundMode: "cash" as const,
+      ownerPin: "4321",
+      originalBillId: "bill_discounted_gst",
+    };
+
+    const first = await createSaleReturnLocalFirst(input);
+    expect(first).toEqual(expect.objectContaining({ subtotal: -90, gst: -16.2, grandTotal: -106.2 }));
+    expect(rows("bill_items").find((row) => row.billId === first.id)).toEqual(expect.objectContaining({
+      lineTotal: -90,
+      lineDiscount: -10,
+      lineGst: -16.2,
+    }));
+
+    const second = await createSaleReturnLocalFirst(input);
+    expect(second).toEqual(expect.objectContaining({ subtotal: -90, gst: -16.2, grandTotal: -106.2 }));
+    const returns = rows("bills").filter((row) => row.billType === "sales_return");
+    expect(returns.reduce((sum, row) => sum + Number(row.grandTotal), 0)).toBe(-212.4);
+  });
+
   it("damaged refund: no restock, damage movement recorded", async () => {
     await createSaleReturnLocalFirst({
       items: [{ productId: "product_sugar", name: "Sugar", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 25, gstRate: 0, damaged: true }],

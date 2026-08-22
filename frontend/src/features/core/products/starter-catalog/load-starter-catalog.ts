@@ -6,6 +6,7 @@ import {
 import { importProductsLocalFirst, type ProductImportOperation } from "@/features/core/products/local-actions";
 import { offlineDB } from "@/lib/offline/db";
 import type { Product } from "@/types/api";
+import type { BusinessType } from "@/features/core/settings/business-type-store";
 import { starterCatalogToCsv, type StarterCatalogItem } from "./starter-catalog";
 
 /** Reads as a built-in in the audit trail, not as a spreadsheet someone happened to upload. */
@@ -58,9 +59,10 @@ export interface LoadStarterCatalogOptions {
 export async function importStarterCatalogItems(
   items: readonly StarterCatalogItem[],
   { signal, onProgress, batchSize = DEFAULT_BATCH_SIZE, ownerPin, ownerPinReason }: LoadStarterCatalogOptions = {},
+  businessType?: BusinessType,
 ): Promise<StarterCatalogLoadResult> {
   const csv = starterCatalogToCsv(items);
-  const parsed = parseProductsCsv(csv);
+  const parsed = parseProductsCsv(csv, undefined, businessType);
   if (parsed.headerError) throw new Error(`The built-in catalog did not parse: ${parsed.headerError}`);
 
   /*
@@ -120,4 +122,13 @@ export async function loadKiranaStarterCatalog(
 ): Promise<StarterCatalogLoadResult> {
   const { KIRANA_STARTER_CATALOG } = await import("./kirana-catalog.generated");
   return importStarterCatalogItems(KIRANA_STARTER_CATALOG, options);
+}
+
+export async function loadStarterCatalogForBusinessType(
+  businessType: BusinessType,
+  options: LoadStarterCatalogOptions = {},
+): Promise<StarterCatalogLoadResult> {
+  if (businessType === "kirana") return loadKiranaStarterCatalog(options);
+  const { tradeStarterCatalog } = await import("./trade-catalogs");
+  return importStarterCatalogItems(tradeStarterCatalog(businessType), options, businessType);
 }

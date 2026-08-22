@@ -305,7 +305,7 @@ export default function Billing() {
   const lineDiscountTotal = useMemo(() => calculateLineDiscountTotal(cart), [cart]);
   // GST: one engine for UI, local record and server. Inclusive (kirana MRP
   // default) extracts tax from the entered prices without changing the payable;
-  // exclusive adds it on top — and then the discount cap must include it.
+  // exclusive adds it on top after reducing the taxable base by the discount.
   // Seller/buyer state decides CGST+SGST vs IGST. Omitting the jurisdiction made the
   // counter always show CGST+SGST, even when billing an out-of-state buyer — the printed
   // tax invoice already resolved this correctly, so the two disagreed. The engine treats a
@@ -316,26 +316,30 @@ export default function Billing() {
     const explicit = String(record?.stateCode ?? "").trim();
     return explicit || gstStateCode(record?.gstNumber);
   })();
-  const gstBreakdown = useMemo(
-    () => computeGstBreakdown(
-      cart.map((item) => ({ price: cartItemUnitRate(item), quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })),
-      getTaxConfigSync().mode,
-      { sellerStateCode, buyerStateCode },
-    ),
-    [cart, sellerStateCode, buyerStateCode],
-  );
-  const payableBase = roundMoney(subtotal + gstBreakdown.gstToAdd);
-  const safeDiscount = Math.min(Math.max(Number(discount) || 0, 0), payableBase);
+  // An invoice discount reduces taxable value (CGST Act section 15(3)), so it
+  // is capped against the entered line subtotal, not subtotal + GST. Loyalty is
+  // another invoice discount and follows the same rule.
+  const safeDiscount = Math.min(Math.max(Number(discount) || 0, 0), subtotal);
   const redemptionPaisePerPoint = Number(loyaltyProgram.data?.redemptionPaisePerPoint || 0);
   const loyaltyBalance = Number(loyaltyAccount.data?.account.pointsBalance || 0);
   const loyaltyMaxByBill = redemptionPaisePerPoint > 0
-    ? Math.floor((Math.max(0, payableBase - safeDiscount) * 100) / redemptionPaisePerPoint)
+    ? Math.floor((Math.max(0, subtotal - safeDiscount) * 100) / redemptionPaisePerPoint)
     : 0;
   const loyaltyMaxPoints = Math.max(0, Math.min(loyaltyBalance, loyaltyMaxByBill));
   const effectiveLoyaltyPoints = Math.min(Math.max(0, Math.floor(loyaltyPointsToRedeem)), loyaltyMaxPoints);
   const loyaltyDiscount = roundMoney((effectiveLoyaltyPoints * redemptionPaisePerPoint) / 100);
   const totalDiscount = roundMoney(safeDiscount + loyaltyDiscount);
-  const rawGrandTotal = roundMoney(Math.max(0, payableBase - totalDiscount));
+  const gstBreakdown = useMemo(
+    () => computeGstBreakdown(
+      cart.map((item) => ({ price: cartItemUnitRate(item), quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })),
+      getTaxConfigSync().mode,
+      { sellerStateCode, buyerStateCode },
+      totalDiscount,
+    ),
+    [cart, sellerStateCode, buyerStateCode, totalDiscount],
+  );
+  const payableBase = roundMoney(gstBreakdown.discountedLineTotal + gstBreakdown.gstToAdd);
+  const rawGrandTotal = payableBase;
   // Nearest-rupee round-off (shop's Taxes → "Round off" setting). grandTotal becomes
   // the whole-rupee figure the counter collects, so every downstream tender/split/
   // credit/change-due and the stored total stay consistent with the cash in the drawer.
@@ -1371,7 +1375,7 @@ export default function Billing() {
       toast({ title: t("billing.page.gstModeRequired"), description: t("billing.page.gstModeRequiredDetail"), variant: "destructive" });
       return false;
     }
-    if (totalDiscount > payableBase) {
+    if (totalDiscount > subtotal) {
       toast({ title: t("billing.page.discountTooHigh"), description: t("billing.page.discountTooHighDetail"), variant: "destructive" });
       return false;
     }

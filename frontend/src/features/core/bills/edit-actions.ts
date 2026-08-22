@@ -6,6 +6,7 @@ import { parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/util
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
 import { createBillLocalFirst } from "@/features/core/billing/local-actions";
 import { cancelBillWithOwnerPinLocalFirst } from "@/features/core/bills/local-actions";
+import { computeGstBreakdown } from "@/lib/gst";
 
 /**
  * "Edit after finalize" WITHOUT making finalized bills mutable.
@@ -73,8 +74,8 @@ export function billItemsToInput(itemRows: AnyRow[]): BillInputItem[] {
 
 /**
  * Payable total for a set of input items, mirroring billing/local-actions and the
- * backend GST engine: inclusive keeps the payable at the entered prices, exclusive
- * adds tax on top, then the discount is subtracted (never below zero).
+ * backend GST engine: invoice discount is allocated before tax, inclusive keeps
+ * tax inside the discounted value, and exclusive adds tax on that reduced base.
  */
 export function computeBillInputTotal(items: BillInputItem[], discount: number, gstMode: GstMode): number {
   const lineNet = (item: BillInputItem) => {
@@ -82,10 +83,19 @@ export function computeBillInputTotal(items: BillInputItem[], discount: number, 
     return Math.max(0, gross - Math.min(Math.max(readNumber(item.lineDiscount, 0), 0), gross));
   };
   const subtotal = items.reduce((sum, item) => sum + lineNet(item), 0);
-  const gstToAdd = gstMode === "exclusive"
-    ? items.reduce((sum, item) => sum + lineNet(item) * (readNumber(item.gstRate, 0) / 100), 0)
-    : 0;
-  return roundMoney(Math.max(0, subtotal + gstToAdd - roundMoney(readNumber(discount, 0))));
+  const appliedDiscount = roundMoney(Math.min(Math.max(readNumber(discount, 0), 0), subtotal));
+  const breakdown = computeGstBreakdown(
+    items.map((item) => ({
+      price: readNumber(item.ratePerRateUnit, 0),
+      quantity: readNumber(item.quantity, 0),
+      gstRate: readNumber(item.gstRate, 0),
+      lineDiscount: readNumber(item.lineDiscount, 0),
+    })),
+    gstMode,
+    {},
+    appliedDiscount,
+  );
+  return roundMoney(Math.max(0, breakdown.discountedLineTotal + breakdown.gstToAdd));
 }
 
 /**

@@ -35,12 +35,13 @@ const discounted = buildInvoiceTaxSnapshot({
     { lineTotal: 105, gstRate: 5 },
   ],
 }, "27");
-assert.equal(discounted.taxableValue, 200);
-assert.equal(discounted.tax, 23);
+assert.equal(discounted.taxableValue, 191.03);
+assert.equal(discounted.tax, 21.97);
 assert.equal(discounted.grossInvoiceValue, 223);
 assert.equal(discounted.discount, 10);
 assert.equal(discounted.netInvoiceValue, 213);
 assert.equal(discounted.lines.reduce((sum, row) => sum + row.discount, 0), 10);
+assert.equal(discounted.lines.reduce((sum, row) => sum + row.tax.taxableValue, 0), 191.03);
 
 assert.equal(validateGstin("27AAPFU0939F1ZV").valid, true);
 assert.equal(validateHsn("1905").valid, true);

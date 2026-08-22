@@ -40,6 +40,8 @@ function stampServiceWorkerBuild() {
         imports?: string[];
         css?: string[];
         assets?: string[];
+        name?: string;
+        isDynamicEntry?: boolean;
       }>;
       const criticalEntries = [
         "index.html",
@@ -112,11 +114,28 @@ function stampServiceWorkerBuild() {
       ];
       const coreAssets = new Set<string>();
       const visited = new Set<string>();
+      const resolveManifestKey = (requestedKey: string) => {
+        if (manifest[requestedKey]) return requestedKey;
+
+        // Rollup can turn a lazy route into a shared dynamic chunk when another
+        // route starts importing one of its helpers. Vite then records the
+        // chunk under an internal key (for example `_MerchantSetupPage-*.js`)
+        // while retaining its unique source component name. Treat that as the
+        // same entry, but keep ambiguity and genuinely missing routes fatal.
+        const expectedName = path.basename(requestedKey, path.extname(requestedKey));
+        const matches = Object.entries(manifest)
+          .filter(([, record]) => record.isDynamicEntry && record.name === expectedName)
+          .map(([key]) => key);
+        if (matches.length === 1) return matches[0];
+
+        const suffix = matches.length > 1 ? ` (${matches.length} matching dynamic entries)` : "";
+        throw new Error(`Critical offline entry is missing or ambiguous in Vite manifest: ${requestedKey}${suffix}`);
+      };
       const includeRecord = (key: string, assets = coreAssets, seen = visited) => {
-        if (seen.has(key)) return;
-        seen.add(key);
-        const record = manifest[key];
-        if (!record) throw new Error(`Critical offline entry is missing from Vite manifest: ${key}`);
+        const resolvedKey = resolveManifestKey(key);
+        if (seen.has(resolvedKey)) return;
+        seen.add(resolvedKey);
+        const record = manifest[resolvedKey];
         if (record.file) assets.add(`/${record.file}`);
         for (const file of [...(record.css ?? []), ...(record.assets ?? [])]) assets.add(`/${file}`);
         for (const imported of record.imports ?? []) includeRecord(imported, assets, seen);
@@ -143,7 +162,7 @@ function stampServiceWorkerBuild() {
         const seen = new Set<string>();
         entries.forEach((key) => includeRecord(key, assets, seen));
         for (const key of entries) {
-          const file = manifest[key]?.file;
+          const file = manifest[resolveManifestKey(key)]?.file;
           if (file && coreAssets.has(`/${file}`)) throw new Error(`Vertical page leaked into the core offline cache: ${key}`);
         }
         return [id, [...assets].sort()];
