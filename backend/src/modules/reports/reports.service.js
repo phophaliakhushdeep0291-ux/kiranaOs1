@@ -594,8 +594,8 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
 
 // ─────────────────────────────────────────────────────────────
 // GST REPORT — taxable sales + jurisdiction-aware GST collected for a period.
-// Taxable value depends on the bill's gstMode: exclusive bills carry tax on
-// top of the subtotal; inclusive bills carry it inside (taxable = subtotal − gst).
+// Invoice discounts reduce the taxable base first. Exclusive bills then carry
+// tax on top; inclusive bills carry it inside the discounted entered value.
 // ─────────────────────────────────────────────────────────────
 export async function getGstReport(shopId, { range, from, to, locationId } = {}) {
   const { start, end } = getDateRange(range, from, to, env.DAILY_CLOSING_TIMEZONE);
@@ -604,7 +604,7 @@ export async function getGstReport(shopId, { range, from, to, locationId } = {})
     db.shop.findUnique({ where: { id: shopId }, select: { gstNumber: true } }),
     db.bill.findMany({
       where: { shopId, ...(locationId && { locationId }), ...GST_BILL_FILTER, businessDate: { gte: start, lte: end } },
-      select: { subtotal: true, gst: true, gstMode: true, buyerStateCode: true },
+      select: { subtotal: true, discount: true, gst: true, gstMode: true, buyerStateCode: true },
     }),
   ]);
   const sellerStateCode = validateGstin(shop?.gstNumber).stateCode || "";
@@ -618,9 +618,10 @@ export async function getGstReport(shopId, { range, from, to, locationId } = {})
   for (const bill of bills) {
     const gst = Number(bill.gst) || 0;
     gstCollected = addMoney(gstCollected, gst);
+    const discountedEnteredValue = subtractMoney(Number(bill.subtotal) || 0, Number(bill.discount) || 0);
     const taxable = bill.gstMode === "exclusive"
-      ? Number(bill.subtotal) || 0
-      : subtractMoney(Number(bill.subtotal) || 0, gst);
+      ? discountedEnteredValue
+      : subtractMoney(discountedEnteredValue, gst);
     taxableSales = addMoney(taxableSales, taxable);
     if (gst !== 0) gstBills += 1;
     const buyerStateCode = String(bill.buyerStateCode || "");

@@ -129,7 +129,7 @@ describe("customer local-first write safety", () => {
   });
 
   it("creates customer offline with customer row, audit log, and outbox in one transaction", async () => {
-    const customer = await createCustomerLocalFirst(baseCustomerInput);
+    const customer = await createCustomerLocalFirst({ ...baseCustomerInput, mobile: "9123456789" });
 
     expect(customer).toEqual(expect.objectContaining({ name: "Ramesh", sync_status: "pending_sync" }));
     expect(mockedOfflineDB.transaction).toHaveBeenCalledTimes(1);
@@ -240,7 +240,7 @@ describe("customer local-first write safety", () => {
   it("rolls back customer write when audit or outbox insert fails", async () => {
     mockState.failOnStore = "local_audit_logs";
 
-    await expect(createCustomerLocalFirst(baseCustomerInput)).rejects.toThrow(/forced local_audit_logs failure/i);
+    await expect(createCustomerLocalFirst({ ...baseCustomerInput, mobile: "9123456789" })).rejects.toThrow(/forced local_audit_logs failure/i);
 
     expect(mockState.committed.customers).toHaveLength(0);
     expect(mockState.committed.local_audit_logs).toHaveLength(0);

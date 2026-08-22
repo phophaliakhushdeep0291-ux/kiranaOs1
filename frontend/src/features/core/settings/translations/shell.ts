@@ -143,7 +143,7 @@ export const shellEn = {
   "setup.count.bills": "bills",
 
   // Starter catalog action
-  "setup.starterCatalog.label": "Load {count} common kirana items",
+  "setup.starterCatalog.label": "Load {count} common starter items",
   "setup.starterCatalog.hint": "You can delete what you don't sell.",
   "setup.starterCatalog.progress": "Adding {created} of {total}...",
   "setup.starterCatalog.preparing": "Preparing the catalog...",
@@ -156,6 +156,7 @@ export const shellEn = {
   "setup.starterCatalog.reviewHint": "Review them by category and delete anything you don't sell.",
   "setup.starterCatalog.alreadyComplete": "This shop already has every item in the starter catalog.",
   "setup.starterCatalog.failed": "Could not load the starter catalog",
+  "setup.starterCatalog.chooseTrade": "Choose the shop type before loading a starter catalog.",
   "setup.tryAgain": "Please try again.",
 
   // Checklist rows
@@ -210,6 +211,11 @@ export const shellEn = {
   "chrome.subscription.expiredShort": "Subscription expired — you can still bill and export",
   "chrome.subscription.paymentFailedShort": "Payment failed — sales and exports still work",
   "chrome.subscription.graceShort": "Offline grace — billing works, sync is limited",
+  "plans.selfServeTitle": "Self-serve setup · no launch fee",
+  "plans.selfServeBody": "Create your shop, import your catalog and start billing without an installation visit.",
+  "plans.softwareSelfServe": "Self-serve software",
+  "plans.softwareBundled": "Software inside the serviced bundle",
+  "plans.viewAll": "View all plans",
   "chrome.subscription.activeShort": "Subscription active",
 
   // Dashboard prose passed as props rather than written between tags.

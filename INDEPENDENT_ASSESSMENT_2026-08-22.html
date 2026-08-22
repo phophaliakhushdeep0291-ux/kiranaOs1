@@ -1,0 +1,529 @@
+<title>KiranaOS Assessment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#F1F4F2;
+  --surface:#FFFFFF;
+  --surface-2:#E7ECE9;
+  --line:#D2DAD6;
+  --line-soft:#E2E8E5;
+  --ink:#111A17;
+  --ink-2:#3D4B46;
+  --ink-3:#68766F;
+  --accent:#0F6E63;
+  --accent-soft:#DDEBE8;
+  --accent-ink:#0A4B43;
+  --amber:#9A6510;
+  --amber-soft:#F5E9D4;
+  --good:#2C6E4E;
+  --good-soft:#DCEBE1;
+  --bad:#9E3229;
+  --bad-soft:#F3DEDB;
+  --shadow:0 1px 2px rgba(17,26,23,.05), 0 8px 24px -16px rgba(17,26,23,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0C1311;
+    --surface:#131C19;
+    --surface-2:#1A2521;
+    --line:#2A3833;
+    --line-soft:#212D29;
+    --ink:#E8EEEB;
+    --ink-2:#B2C0BA;
+    --ink-3:#7F8F88;
+    --accent:#4FBFAE;
+    --accent-soft:#16302C;
+    --accent-ink:#8FDACD;
+    --amber:#D9A055;
+    --amber-soft:#33260F;
+    --good:#63BE8C;
+    --good-soft:#16301F;
+    --bad:#E08078;
+    --bad-soft:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0C1311;
+  --surface:#131C19;
+  --surface-2:#1A2521;
+  --line:#2A3833;
+  --line-soft:#212D29;
+  --ink:#E8EEEB;
+  --ink-2:#B2C0BA;
+  --ink-3:#7F8F88;
+  --accent:#4FBFAE;
+  --accent-soft:#16302C;
+  --accent-ink:#8FDACD;
+  --amber:#D9A055;
+  --amber-soft:#33260F;
+  --good:#63BE8C;
+  --good-soft:#16301F;
+  --bad:#E08078;
+  --bad-soft:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:"Public Sans","Helvetica Neue",Arial,sans-serif;
+  font-size:16.5px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px 96px}
+.col{max-width:70ch}
+
+/* ---------- masthead ---------- */
+.mast{
+  border-bottom:1px solid var(--line);
+  padding:56px 0 34px;
+  margin-bottom:44px;
+}
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);
+  display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;
+}
+.eyebrow b{color:var(--accent);font-weight:500}
+h1{
+  font-family:"Fraunces",Georgia,serif;
+  font-optical-sizing:auto;
+  font-weight:600;
+  font-size:clamp(2.4rem,5.4vw,3.7rem);
+  line-height:1.02;
+  letter-spacing:-.022em;
+  margin:20px 0 0;
+  text-wrap:balance;
+}
+h1 em{font-style:italic;font-weight:400;color:var(--accent)}
+.dek{
+  margin:16px 0 0;max-width:64ch;
+  font-size:1.14rem;color:var(--ink-2);
+}
+
+/* ---------- scorecard ---------- */
+.score{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--line);border:1px solid var(--line);
+  border-radius:3px;overflow:hidden;margin:38px 0 0;
+  box-shadow:var(--shadow);
+}
+.score>div{background:var(--surface);padding:20px 20px 22px;display:flex;flex-direction:column;gap:7px}
+.score .k{
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.score .v{
+  font-family:"Fraunces",Georgia,serif;font-weight:600;
+  font-size:1.62rem;line-height:1.12;letter-spacing:-.015em;
+  font-variant-numeric:tabular-nums;
+}
+.score .n{font-size:.83rem;color:var(--ink-3);line-height:1.42}
+.score .v.warn{color:var(--amber)}
+.score .v.bad{color:var(--bad)}
+.score .v.ok{color:var(--good)}
+@media(max-width:860px){.score{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.score{grid-template-columns:1fr}}
+
+/* ---------- sections ---------- */
+section{margin-top:76px;scroll-margin-top:20px}
+.shead{display:flex;gap:20px;align-items:baseline;border-top:2px solid var(--ink);padding-top:16px;margin-bottom:26px}
+.snum{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:500;
+  color:var(--accent);letter-spacing:.1em;padding-top:9px;flex:none;
+}
+h2{
+  font-family:"Fraunces",Georgia,serif;font-weight:600;
+  font-size:clamp(1.6rem,3.2vw,2.15rem);line-height:1.14;
+  letter-spacing:-.018em;margin:0;text-wrap:balance;
+}
+.qsub{font-size:.9rem;color:var(--ink-3);margin:5px 0 0;font-family:"IBM Plex Mono",monospace}
+h3{
+  font-family:"Public Sans",sans-serif;font-weight:700;
+  font-size:1.02rem;letter-spacing:-.005em;
+  margin:38px 0 12px;
+}
+h3:first-child{margin-top:0}
+p{margin:0 0 16px}
+.col p:last-child{margin-bottom:0}
+strong{font-weight:700;color:var(--ink)}
+a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:2px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;margin:24px 0 8px;border:1px solid var(--line);border-radius:3px;background:var(--surface);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:.895rem;min-width:560px}
+th,td{padding:11px 15px;text-align:left;border-bottom:1px solid var(--line-soft);vertical-align:top}
+thead th{
+  background:var(--surface-2);
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:500;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);
+  border-bottom:1px solid var(--line);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:"IBM Plex Mono",monospace;white-space:nowrap}
+tr.hi td{background:var(--accent-soft)}
+tr.hi td:first-child{font-weight:600}
+.cap{font-size:.8rem;color:var(--ink-3);margin:9px 0 0;max-width:72ch}
+
+.pill{
+  display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10px;
+  letter-spacing:.08em;text-transform:uppercase;padding:2.5px 7px;border-radius:2px;
+  font-weight:500;white-space:nowrap;
+}
+.p-ok{background:var(--good-soft);color:var(--good)}
+.p-warn{background:var(--amber-soft);color:var(--amber)}
+.p-bad{background:var(--bad-soft);color:var(--bad)}
+.p-neu{background:var(--surface-2);color:var(--ink-3)}
+
+/* ---------- finding list ---------- */
+.findings{list-style:none;padding:0;margin:22px 0 0;display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.findings li{background:var(--surface);padding:16px 18px;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:start}
+.findings .t{font-weight:600;font-size:.97rem;grid-column:2}
+.findings .b{grid-column:2;font-size:.895rem;color:var(--ink-2);line-height:1.55}
+.findings .sev{grid-row:span 2;padding-top:3px}
+.findings code,.tw code,.col code{
+  font-family:"IBM Plex Mono",monospace;font-size:.84em;
+  background:var(--surface-2);padding:1px 5px;border-radius:2px;color:var(--ink-2);
+}
+
+/* ---------- callout ---------- */
+.note{
+  border-left:3px solid var(--accent);
+  background:var(--surface);
+  padding:18px 22px;margin:28px 0;border-radius:0 3px 3px 0;
+  box-shadow:var(--shadow);
+}
+.note .lab{
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:7px;
+}
+.note p{margin:0;font-size:.97rem}
+.note.warn{border-left-color:var(--amber)}
+.note.warn .lab{color:var(--amber)}
+
+/* ---------- two-col ---------- */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin:26px 0 0}
+@media(max-width:760px){.duo{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:20px 22px;box-shadow:var(--shadow)}
+.card h4{margin:0 0 12px;font-size:.95rem;font-weight:700;display:flex;align-items:center;gap:9px}
+.card ul{margin:0;padding-left:19px;font-size:.9rem;color:var(--ink-2);line-height:1.55}
+.card li{margin-bottom:8px}
+.card li:last-child{margin-bottom:0}
+
+/* ---------- roadmap ---------- */
+.tier{margin-top:30px}
+.tierhead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.tierhead .tn{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.tierhead h3{margin:0;font-size:1.08rem}
+.tierhead .goal{font-size:.85rem;color:var(--ink-3)}
+
+/* ---------- footer ---------- */
+footer{margin-top:84px;border-top:1px solid var(--line);padding-top:26px;font-size:.86rem;color:var(--ink-3)}
+footer h4{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px;font-weight:500}
+footer ul{margin:0;padding-left:18px;line-height:1.7}
+footer .grid{display:grid;grid-template-columns:1.3fr 1fr;gap:34px}
+@media(max-width:760px){footer .grid{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">
+    <span>Independent review</span><span>·</span>
+    <span>22 August 2026</span><span>·</span>
+    <span><b>KiranaOS</b> + restaurant-pos fork</span>
+  </div>
+  <h1>An unusually well-built product<br><em>with nobody using it yet</em></h1>
+  <p class="dek">274,000 lines, 133 data models, 526 test files, 1,090 commits in 74 days, written by one person. The engineering discipline is real and measurable. Everything holding back its value is outside the code.</p>
+
+  <div class="score">
+    <div>
+      <div class="k">Asset value today</div>
+      <div class="v">₹8–25 L</div>
+      <div class="n">Code asset, zero customers, single author. Sale value to a buyer who already has distribution.</div>
+    </div>
+    <div>
+      <div class="k">Cost to rebuild</div>
+      <div class="v">₹1.0–1.6 Cr</div>
+      <div class="n">A 5-person team, ~14 months. Not what it sells for — what it would cost to recreate.</div>
+    </div>
+    <div>
+      <div class="k">Engineering quality</div>
+      <div class="v ok">Top decile</div>
+      <div class="n">For a solo build. Money, sync and audit correctness are better than most funded competitors.</div>
+    </div>
+    <div>
+      <div class="k">Ship readiness</div>
+      <div class="v bad">NO-GO</div>
+      <div class="n">Your own release gate, dated 20 Aug. Five specific blockers, none of them large.</div>
+    </div>
+  </div>
+</header>
+
+<section id="worth">
+  <div class="shead">
+    <div class="snum">01</div>
+    <div>
+      <h2>What it's worth</h2>
+      <p class="qsub">Three lenses, three very different numbers</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <p>There is no single number, because "worth" means three unrelated things and this product sits in a different place on each one. Worth stating plainly up front: <strong>none of the value is currently blocked by missing code.</strong> It is blocked by having zero shops on the system.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Lens</th><th class="num">Value</th><th>What it actually measures</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Replacement cost</strong></td>
+          <td class="num">₹1.0–1.6 Cr</td>
+          <td>Five engineers (2 backend, 2 frontend, 1 QA) for ~14 months at Indian loaded rates. At US contract rates the same build is $700k–1.2M. This number is <em>falling</em> — you built it in 74 days with AI assistance, and so can the next person.</td>
+        </tr>
+        <tr class="hi">
+          <td><strong>Asset sale, today</strong></td>
+          <td class="num">₹8–25 L</td>
+          <td>What a buyer with existing distribution — a POS reseller, a payments company, a CA-software firm — would pay for the codebase plus your involvement. No revenue, no users, one author. Below that band, the maintenance liability makes it worth roughly nothing to a buyer without a team.</td>
+        </tr>
+        <tr>
+          <td><strong>As a business, 500 shops</strong></td>
+          <td class="num">₹0.9–1.5 Cr</td>
+          <td>At your own pricing, 500 mixed-vertical shops ≈ ₹30 L ARR. Indian SMB SaaS below $1M ARR trades at roughly 1–3× revenue, not the 2.5–4× the US bands quote.</td>
+        </tr>
+        <tr>
+          <td><strong>As a business, 2,000 shops</strong></td>
+          <td class="num">₹3.5–6 Cr</td>
+          <td>≈ ₹1.2 Cr ARR with retention proven over two renewal cycles. This is the first point where the product's engineering advantage starts being something a buyer pays for.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="cap">Not financial advice — I'm not a valuer, and any real number depends on retention, churn and a diligence process none of us have run. These are ranges to argue with, not a price.</p>
+
+  <div class="note warn">
+    <div class="lab">The multiple trap</div>
+    <p>Your ₹4,999 first-year launch service is <strong>services revenue, not SaaS</strong>. It carries a person's time and gets an EBITDA multiple (2–4×), not a revenue multiple. If it ends up as a large share of turnover, the whole business gets valued as a services firm. Keep it visible and separate in the books, and keep it under ~30% of total revenue at scale.</p>
+  </div>
+
+  <div class="col">
+    <h3>What moves each number</h3>
+    <p>The asset number moves on <strong>proof</strong>: one green CI certification, printer certification on the two supported models, and 5 pilot shops running for 60 days would roughly double it, because it converts "impressive repository" into "de-risked product." The business number moves only on <strong>distribution</strong>: shops signed, renewed, and referring. Nothing in the codebase moves either one right now.</p>
+  </div>
+</section>
+
+<section id="reliable">
+  <div class="shead">
+    <div class="snum">02</div>
+    <div>
+      <h2>Is it reliable</h2>
+      <p class="qsub">Strong build, unproven in the field — two different questions</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <p>Reliability in a POS means two things and they need separating. <strong>Correctness</strong> — does the money add up, does an offline bill survive a reload, does a retry duplicate a ledger entry. On this, the code is genuinely strong, and I verified the mechanisms rather than taking the docs' word. <strong>Field reliability</strong> — does it survive a real shop, a real printer, a real power cut, for real months. Here there is no evidence at all, because it has never been in a shop.</p>
+  </div>
+
+  <div class="duo">
+    <div class="card">
+      <h4><span class="pill p-ok">Verified strong</span></h4>
+      <ul>
+        <li><strong>Money arithmetic runs in integer paise.</strong> <code>utils/money.js</code> converts to paise, sums, and rounds once — no accumulating float drift in calculations.</li>
+        <li><strong>Conflicts are classified by entity, not last-write-wins.</strong> Products, customers and suppliers allow an owner-audited resolution; bills, payments, udhar and stock ledgers are forced through reversal entries. Money can't be overwritten.</li>
+        <li><strong>Idempotency is bound to payload content.</strong> A purchase-receipt retry key is tied to the PO, payment, invoice and line quantities; a print job is bound to the SHA-256 of its receipt. A reused key with changed content is rejected, not replayed.</li>
+        <li><strong>Audits commit inside the mutation's transaction</strong>, with fault-injection tests proving the mutation rolls back when the audit insert fails.</li>
+        <li><strong>Restore drill reconciles exactly.</strong> 1,781 records across 81 tables restored in 0.6s at 0 paise and 0 stock-unit variance; tamper and truncation are refused.</li>
+        <li><strong>Owner PINs are recursively redacted</strong> from conflict snapshots before they're persisted or displayed.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4><span class="pill p-bad">Genuinely open</span></h4>
+      <ul>
+        <li><strong>No CI certification exists for any commit.</strong> Run #316 was refused by GitHub over a failed account payment. Every green result you have is local, from a dirty working tree.</li>
+        <li><strong>No printer has been physically certified.</strong> Two models are targeted; neither has a paper-out, disconnect, power-cut or retry artifact. This is the single most common way a POS fails in a shop.</li>
+        <li><strong>No automated daily backup</strong>, so the ≤24h recovery objective isn't met in production.</li>
+        <li><strong>BUG-040 is "Fixed", not "Verified"</strong> — the cashier-versus-owner approval flow hasn't been run live. It's a P0 about discount authorisation, which is exactly where staff fraud happens.</li>
+        <li><strong>Bus factor is one.</strong> 274k lines, one author, no external contributors. This is the biggest single discount any buyer will apply.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Two findings the documentation doesn't flag</h3>
+  <ul class="findings">
+    <li>
+      <span class="sev"><span class="pill p-warn">Medium</span></span>
+      <span class="t">85 money columns are still stored as floats</span>
+      <span class="b">The schema has 197 <code>Float</code> fields, of which ~85 hold money — <code>Bill.grandTotal</code>, <code>paidAmount</code>, <code>lineTotal</code>, tax fields, supplier dues. The "Phase 27 paise migration" added shadow <code>BigInt</code> columns to only four of them plus the snapshot and subscription tables. Your own code comment is honest about it: <em>"DB columns remain Float for now."</em> In practice the risk is low — a double holds 2-decimal rupee values exactly well past any shop's lifetime turnover, and all arithmetic already routes through paise. But it blocks any audit-grade claim, and any raw <code>SUM()</code> in SQL bypasses your paise helpers entirely. Finish the migration before you sell to anyone whose accountant asks.</span>
+    </li>
+    <li>
+      <span class="sev"><span class="pill p-warn">Medium</span></span>
+      <span class="t">The bundle is too heavy for the phones you're targeting</span>
+      <span class="b">Your own production check reports 4,719.6 kB of JavaScript raw / 1,314.1 kB gzipped, with the restaurant vertical's offline payload at 3,416.6 kB raw / 1,011.6 kB gzipped across 181 files. That is a slow, memory-hungry first install on a ₹7,000 Android over a 3G connection — which is precisely the hardware a kirana counter runs. The tests all pass on your laptop. Aim for ≤150 kB gzipped at startup and ≤400 kB per vertical payload.</span>
+    </li>
+  </ul>
+
+  <div class="note">
+    <div class="lab">The honest summary</div>
+    <p>If I were buying this, I'd believe the correctness work — the paise reconciliation, the entity-classified conflict handling and the transaction-bound audits are better than what I'd expect from a Series-A team, let alone one person. I would <em>not</em> yet believe it's reliable, because reliability is a claim about shops, and there are none. Those are compatible statements, and the gap between them is about six weeks of unglamorous work, not a rewrite.</p>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="shead">
+    <div class="snum">03</div>
+    <div>
+      <h2>How it compares</h2>
+      <p class="qsub">Priced wrong for kirana, priced brilliantly for restaurants</p>
+    </div>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Product</th><th class="num">Price</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr class="hi"><td>KiranaOS — kirana Starter</td><td class="num">₹2,499/yr<br>+ ₹4,999 setup</td><td>Year one lands at ~₹7,500</td></tr>
+        <tr class="hi"><td>KiranaOS — kirana Growth</td><td class="num">₹4,999/yr</td><td>Staff, multi-device, advanced pricing</td></tr>
+        <tr class="hi"><td>KiranaOS — restaurant Growth</td><td class="num">₹8,999/yr</td><td>Tables, KOT, menu 86, recipe stock depletion, QR dine-in</td></tr>
+        <tr><td>Vyapar — mobile</td><td class="num">₹0</td><td>Permanent free tier. GST invoicing, ledgers, offline. <strong>This is your real competitor.</strong></td></tr>
+        <tr><td>Vyapar — Desktop Silver</td><td class="num">~₹3,399/yr</td><td>GSTR-1/3B reports, barcode, backup</td></tr>
+        <tr><td>Vyapar — Desktop + Mobile</td><td class="num">~₹4,010/yr</td><td>Adds cross-device sync</td></tr>
+        <tr><td>myBillBook — Diamond</td><td class="num">₹3,490/yr</td><td>1 business, 1 user + CA, online store, barcode</td></tr>
+        <tr><td>myBillBook — Platinum</td><td class="num">₹3,990/yr</td><td>Desktop app, WhatsApp marketing, unlimited godowns</td></tr>
+        <tr><td>myBillBook — Enterprise</td><td class="num">₹570/mo</td><td>E-invoicing, e-way bills, loyalty, POS billing, Tally export</td></tr>
+        <tr><td>GoFrugal — retail</td><td class="num">from ₹8,999/yr</td><td>Full retail ERP, established field-support network</td></tr>
+        <tr><td>Petpooja — restaurant</td><td class="num">₹36,000–₹1.44 L/yr</td><td>₹3–12k/month, unpublished. Plus ₹5–15k setup, ₹2–5k Zomato/Swiggy integration, ₹1–3k/mo per add-on module</td></tr>
+        <tr><td>Square (US)</td><td class="num">$0 / $49 / $149 per mo</td><td>Plus 2.4–2.6% + 15¢ per swipe. No contract.</td></tr>
+        <tr><td>Toast (US)</td><td class="num">$0 / $69 / $110+ per mo</td><td>Plus 2.49–3.09% + 15¢. Two-year contract with termination fees.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <h3>Three things this table says</h3>
+    <p><strong>In kirana, you are priced above the market anchor.</strong> Starter at ₹2,499 undercuts Vyapar and myBillBook — but Growth at ₹4,999 plus the ₹4,999 install puts year one near ₹10,000, roughly 2.5–3× what a shopkeeper has been told billing software costs. And the honest competitor isn't myBillBook's ₹3,490; it's Vyapar's <em>permanently free</em> mobile tier, which already does GST invoicing, ledgers and offline billing. Your offline-correctness engineering is far better than theirs. Shopkeepers cannot see that, and won't pay for it.</p>
+
+    <p><strong>In restaurants, the picture completely inverts.</strong> Petpooja runs ₹36,000–₹1.44 lakh a year before add-ons, doesn't publish its pricing, and charges again for Zomato/Swiggy integration. Restaurant Growth at ₹8,999/yr is a 4–16× undercut against an incumbent whose customers routinely complain about hidden fees. <strong>This is the strongest commercial position in the entire product</strong> — and you've already instinctively acted on it by forking <code>restaurant-pos</code> out on its own. That instinct is right. I'd go further and make it the primary product.</p>
+
+    <p><strong>Square and Toast aren't comparators, they're a warning.</strong> They can give software away at $0 because they earn 2.4–3.09% on every payment. That model is structurally unavailable to you: UPI merchant transactions in India carry effectively zero MDR. Software plus services is your only revenue line, which permanently caps ARPU and makes the ₹4,999 install fee necessary rather than optional. It also means the interesting money has to come from somewhere else — see the udhar ledger idea below.</p>
+
+    <h3>Where you genuinely beat everyone in your price band</h3>
+    <p>Nobody selling at ₹3,500/year does entity-classified conflict resolution, paise-exact restore drills, transaction-bound audit trails, or an eleven-vertical pack system. Nobody at ₹36,000/year does either. That is a real and defensible engineering lead.</p>
+    <p>The problem is that it's invisible at the point of sale. A shopkeeper evaluates: how fast can I bill, will my CA accept the GST output, and will someone answer the phone at 9pm. Your answers to the first two are strong; the third is the ₹4,999 launch service, which is the right idea and also the thing that doesn't scale without people on the ground.</p>
+
+    <h3>Where you're behind</h3>
+    <p>Against myBillBook Enterprise: <strong>no e-invoicing (IRN) and no e-way bills</strong>. That's a hard ceiling on the size of shop you can sell to, and the mandatory turnover threshold keeps dropping. Against Petpooja: Zomato/Swiggy channel integrations exist only partially (there's channel-settlement and Flipkart plumbing), and there's no KDS hardware story. Against everyone: field support, brand, and a reference customer.</p>
+  </div>
+</section>
+
+<section id="add">
+  <div class="shead">
+    <div class="snum">04</div>
+    <div>
+      <h2>What to add</h2>
+      <p class="qsub">Ordered by what actually changes the numbers in section 01</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <p>The instinct at this point is to build more features. I'd argue hard against it. You have 38 backend modules, 43 frontend feature areas and 11 verticals maintained by one person — the constraint is no longer capability, it's the QA surface area that's already the stated release blocker. The list below is ordered so that nothing in Tier 1 is a feature at all.</p>
+  </div>
+
+  <div class="tier">
+    <div class="tierhead">
+      <span class="tn">Tier 1</span>
+      <h3>Close the release gate</h3>
+      <span class="goal">— no new features · ~6 weeks · doubles the asset number</span>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Do this</th><th class="num">Effort</th><th>Why it's first</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Fix the GitHub billing, tag a commit, get one green certification run</strong></td><td class="num">1 day</td><td>Every other gate row is downstream of this. It is the cheapest single unlock in the whole project and it's currently blocked on an unpaid invoice.</td></tr>
+          <tr><td><strong>Physically certify both printers</strong> — paper-out, disconnect, power-cut mid-print, retry, no-duplicate, drawer kick</td><td class="num">1 week<br>₹15–20k</td><td>Closes BUG-005 and HW-001. Printer failure is the #1 way a POS loses a shop's trust, and it's the one thing you cannot simulate.</td></tr>
+          <tr><td><strong>Automated daily backup to object storage + one managed-Postgres restore drill</strong></td><td class="num">1 week</td><td>Meets the ≤24h recovery objective. Your local drill already proves the mechanism works; this proves it works where the data actually lives.</td></tr>
+          <tr><td><strong>Run BUG-040's cashier-versus-owner flow live</strong></td><td class="num">1 day</td><td>Moves the last P0 from Fixed to Verified. Discount authorisation is where staff fraud happens.</td></tr>
+          <tr><td><strong>Get the accountant's ruling on BUG-003</strong> (exclusive-GST discount tax base)</td><td class="num">1 call</td><td>It's a compliance decision, not a code problem, and it's been sitting open.</td></tr>
+          <tr><td><strong>Then freeze features and put it in 5 shops for 60 days</strong></td><td class="num">60 days</td><td>Everything you now know about this product comes from your own laptop. Nothing else on this page matters as much as this line.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tier">
+    <div class="tierhead">
+      <span class="tn">Tier 2</span>
+      <h3>Build the revenue engine</h3>
+      <span class="goal">— the things that raise ARPU or open a market</span>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Add this</th><th class="num">Impact</th><th>Reasoning</th></tr></thead>
+        <tbody>
+          <tr class="hi"><td><strong>Monetise the udhar ledger, not the payment</strong> — lending / BNPL referral on receivables data</td><td class="num">Very high</td><td>You can't earn on UPI. But you're accumulating a shop's complete receivables book, repayment behaviour and purchase history — a credit-underwriting dataset nobody else in your price band has. Referral revenue per shop can exceed the entire subscription. <em>This is the one idea here that could be worth more than the software.</em> It also needs real care: lending data carries consent, DPDP and RBI-adjacent obligations, so scope it with a lawyer before a line of code.</td></tr>
+          <tr><td><strong>E-invoicing (IRN/IRP) and e-way bills</strong></td><td class="num">High</td><td>Removes the hard ceiling on shop size and closes the only clear feature gap against myBillBook Enterprise. The threshold keeps dropping; this becomes table stakes, not a differentiator.</td></tr>
+          <tr><td><strong>ONDC for the restaurant fork</strong></td><td class="num">High</td><td>Differentiates against Petpooja rather than copying it, and gives restaurants a commission story that Zomato/Swiggy integration alone can't. Pair it with the Zomato/Swiggy channel work already half-built.</td></tr>
+          <tr><td><strong>WhatsApp order → payment link → reminder loop</strong></td><td class="num">Medium-high</td><td>Single-bill sharing already exists with durable send states; bulk is Business-gated. Closing the loop into ordering is a small step from where you are and it's how Indian shops actually transact.</td></tr>
+          <tr><td><strong>Cut startup JS to ≤150 kB gzipped, vertical payloads to ≤400 kB</strong></td><td class="num">Medium-high</td><td>Not cosmetic. On the ₹7,000 Android your customer actually owns, this is the difference between "fast" and "the new software is slow."</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tier">
+    <div class="tierhead">
+      <span class="tn">Tier 3</span>
+      <h3>Durability</h3>
+      <span class="goal">— what a buyer's diligence will ask about</span>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Do this</th><th class="num">Horizon</th><th>Reasoning</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Finish the paise migration</strong> — integer columns authoritative, floats derived</td><td class="num">6–12 mo</td><td>Turns "our arithmetic is careful" into "our storage is exact." Required before any accountant-facing or audit-grade claim.</td></tr>
+          <tr><td><strong>Ship a CA/accountant portal</strong>, deepen Tally and Busy export</td><td class="num">6–12 mo</td><td>In India the chartered accountant is the distribution channel, not the shopkeeper. One CA can bring twenty shops. This is a go-to-market feature disguised as an integration.</td></tr>
+          <tr><td><strong>Cut to three shipped verticals</strong> — kirana, restaurant, pharmacy — park the other eight behind the custom pack</td><td class="num">Now</td><td>Eleven verticals across 133 models is the QA matrix that's blocking your release. You already proved the reduction pattern works when you forked <code>restaurant-pos</code>. Breadth you can't certify is a liability, not an asset.</td></tr>
+          <tr><td><strong>Fix the bus factor</strong> — architecture docs, an onboarding path, eventually a second engineer</td><td class="num">Ongoing</td><td>The largest discount any acquirer applies. It's also the largest personal risk: 274k lines that only one person understands is a hard thing to take a holiday from.</td></tr>
+          <tr><td><strong>Close the dependency drift</strong> — Prisma 5.14, Express 4, React 18 are each one major behind</td><td class="num">6 mo</td><td>Harmless today, compounding. Cheaper to do in one deliberate pass than under a security advisory.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note">
+    <div class="lab">If I could pick one thing</div>
+    <p>Pay the GitHub bill, get the printers certified, and put <code>restaurant-pos</code> into five restaurants for sixty days at ₹8,999 a year against a Petpooja quote of ₹60,000. That single sequence converts every number on this page — and it doesn't require you to write another feature.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="grid">
+    <div>
+      <h4>How this was assessed</h4>
+      <p style="margin:0 0 12px">Read directly from your two repositories on this machine: <code>Desktop/app</code> (KiranaOS, 2,092 tracked files, 1,090 commits from 9 Jun to 22 Aug 2026) and <code>Desktop/restaurant-pos</code> (the forked restaurant build). Scale, schema, money handling, middleware and dependency claims were measured against the source rather than taken from the documentation. Release status, bug states and QA evidence come from <code>RELEASE_GATE.md</code> and <code>BUG_BACKLOG.md</code> as of your 20 August triage. Competitor pricing was checked live today; Petpooja does not publish rates, so those figures are reported ranges, not vendor-confirmed.</p>
+      <p style="margin:0">Valuation ranges are estimates for discussion, not a professional appraisal or financial advice.</p>
+    </div>
+    <div>
+      <h4>Sources</h4>
+      <ul>
+        <li><a href="https://mybillbook.in/pricing-plans">myBillBook pricing plans</a></li>
+        <li><a href="https://www.itforsme.in/pricing/vyapar-india">Vyapar price India 2026</a></li>
+        <li><a href="https://www.dineopen.com/blog/petpooja-pricing-plans-2026.html">Petpooja pricing 2026</a></li>
+        <li><a href="https://www.posusa.com/toast-vs-square/">Toast vs Square 2026</a></li>
+        <li><a href="https://windsordrake.com/saas-valuation-multiples/">SaaS valuation multiples by ARR band</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+</div>

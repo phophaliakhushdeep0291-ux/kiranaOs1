@@ -1,7 +1,7 @@
 import { roundMoney } from "@/lib/money";
 import { resolveBillPaymentMode } from "@/features/core/bills/payment-mode";
 import { useShopBillingWords } from "@/features/core/settings/shop-billing";
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { NearExpiryAlert } from "@/features/core/inventory/components/NearExpiryAlert";
 import { format } from "date-fns";
@@ -1424,7 +1424,7 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
   const isNegative = (delta ?? 0) < 0;
   const isBad = deltaPositiveIsBad ? isPositive : isNegative;
   const DeltaIcon = delta === null || delta === undefined || delta === 0 ? Minus : isPositive ? ArrowUpRight : ArrowDownRight;
-  const gradientId = `dashboard-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const gradientId = `dashboard-kpi-${useId().replace(/:/g, "")}`;
   return (
     <div
       role={onClick ? "button" : undefined}

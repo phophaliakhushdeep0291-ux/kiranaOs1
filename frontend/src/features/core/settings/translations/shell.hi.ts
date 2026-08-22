@@ -133,7 +133,7 @@ export const shellHi: Record<keyof typeof shellEn, string> = {
   "setup.count.bill": "बिल",
   "setup.count.bills": "बिल",
 
-  "setup.starterCatalog.label": "{count} आम किराना आइटम जोड़ें",
+  "setup.starterCatalog.label": "{count} आम शुरुआती आइटम जोड़ें",
   "setup.starterCatalog.hint": "जो आप नहीं बेचते उसे हटा सकते हैं।",
   "setup.starterCatalog.progress": "{total} में से {created} जुड़ रहे हैं...",
   "setup.starterCatalog.preparing": "कैटलॉग तैयार हो रहा है...",
@@ -146,6 +146,7 @@ export const shellHi: Record<keyof typeof shellEn, string> = {
   "setup.starterCatalog.reviewHint": "कैटेगरी से देखकर जो नहीं बेचते उसे हटा दें।",
   "setup.starterCatalog.alreadyComplete": "इस दुकान में स्टार्टर कैटलॉग का सारा माल पहले से है।",
   "setup.starterCatalog.failed": "स्टार्टर कैटलॉग नहीं जुड़ा",
+  "setup.starterCatalog.chooseTrade": "स्टार्टर कैटलॉग जोड़ने से पहले दुकान का प्रकार चुनें।",
   "setup.tryAgain": "दोबारा कोशिश करें।",
 
   "setup.step.storeProfile.title": "दुकान की जानकारी",
@@ -196,6 +197,11 @@ export const shellHi: Record<keyof typeof shellEn, string> = {
   "chrome.subscription.expiredShort": "सदस्यता खत्म — बिल और एक्सपोर्ट अब भी चालू हैं",
   "chrome.subscription.paymentFailedShort": "पेमेंट फेल — बिक्री और एक्सपोर्ट अब भी चालू हैं",
   "chrome.subscription.graceShort": "ऑफलाइन छूट — बिलिंग चालू, सिंक सीमित",
+  "plans.selfServeTitle": "खुद सेटअप · कोई शुरुआती शुल्क नहीं",
+  "plans.selfServeBody": "अपनी दुकान बनाएँ, कैटलॉग आयात करें और बिना इंस्टॉलेशन विज़िट के बिलिंग शुरू करें।",
+  "plans.softwareSelfServe": "खुद सेटअप सॉफ़्टवेयर",
+  "plans.softwareBundled": "सर्विस बंडल में शामिल सॉफ़्टवेयर",
+  "plans.viewAll": "सभी प्लान देखें",
   "chrome.subscription.activeShort": "सदस्यता चालू",
   "dashboard.step.addProducts": "सामान जोड़ें",
   "dashboard.step.addProductsHelp": "नाम, कीमत और स्टॉक",

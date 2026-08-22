@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { offlineDB } from "@/lib/offline/db";
 import type { Shop } from "@/types/api";
+import type { BusinessType } from "@/features/core/settings/business-type-store";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -235,8 +236,10 @@ export default function MerchantSetupPage() {
     setStarterCatalogRun({ created: 0, total: 0 });
     try {
       // Dynamic: the catalog rows are fetched when the shop asks for them, never at startup.
-      const { loadKiranaStarterCatalog } = await import("@/features/core/products/starter-catalog/load-starter-catalog");
-      const result = await loadKiranaStarterCatalog({
+      const { loadStarterCatalogForBusinessType } = await import("@/features/core/products/starter-catalog/load-starter-catalog");
+      const businessType = facts.businessTypeKey as BusinessType | undefined;
+      if (!businessType) throw new Error(t("setup.starterCatalog.chooseTrade"));
+      const result = await loadStarterCatalogForBusinessType(businessType, {
         signal: controller.signal,
         ownerPin,
         ownerPinReason: reason || "Approved built-in starter catalog",
@@ -270,7 +273,7 @@ export default function MerchantSetupPage() {
       starterCatalogAbort.current = null;
       setStarterCatalogRun(null);
     }
-  }, [navigate, refresh, starterCatalogRun, toast]);
+  }, [facts.businessTypeKey, navigate, refresh, starterCatalogRun, toast]);
 
   return (
     <SettingsShell>

@@ -114,13 +114,12 @@ describe("built-in starter catalog offer", () => {
     expect(action?.id).toBe("load-starter-catalog");
     // The number comes from the generated summary, so the label cannot promise 560 items
     // while the CSV ships a different count.
-    expect(action?.label).toBe(`Load ${KIRANA_STARTER_CATALOG_COUNT} common kirana items`);
+    expect(action?.label).toBe(`Load ${KIRANA_STARTER_CATALOG_COUNT} common starter items`);
   });
 
-  it("does not offer a grocery catalog to another trade", () => {
-    // A chemist would have to delete all of it, so the offer would cost time, not save it.
-    expect(quickActionFor({ businessTypeKey: "pharmacy" })).toBeUndefined();
-    expect(quickActionFor({ businessTypeKey: "clothing" })).toBeUndefined();
+  it("offers each trade its own smaller starter catalog", () => {
+    expect(quickActionFor({ businessTypeKey: "pharmacy" })?.label).toBe("Load 10 common starter items");
+    expect(quickActionFor({ businessTypeKey: "clothing" })?.label).toBe("Load 11 common starter items");
   });
 
   it("does not offer it before the shop has chosen a trade", () => {

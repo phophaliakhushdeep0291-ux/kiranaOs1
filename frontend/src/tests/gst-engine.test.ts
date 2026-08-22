@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { computeGstBreakdown, gstGrandTotal } from "@/lib/gst";
+import { allocateAmountByWeights, computeGstBreakdown, gstGrandTotal } from "@/lib/gst";
 import { buildReceiptHtml, type ReceiptSnapshot } from "@/features/core/receipts/receipt-print";
 import { validateGstin } from "@/lib/gstin";
 
 describe("GST engine", () => {
+  it("allocates an exact stored tax amount without losing a paise", () => {
+    const allocated = allocateAmountByWeights([16.2, 5, 0], 32.41);
+    expect(allocated).toEqual([24.77, 7.64, 0]);
+    expect(allocated.reduce((sum, value) => sum + value, 0)).toBe(32.41);
+  });
+
   it("inclusive mode extracts tax without changing the payable", () => {
     // ₹118 MRP at 18% → taxable ₹100, GST ₹18, customer still pays ₹118.
     const b = computeGstBreakdown([{ price: 118, quantity: 1, gstRate: 18 }], "inclusive");
@@ -48,10 +54,39 @@ describe("GST engine", () => {
     expect(b.byRate).toEqual([]);
   });
 
-  it("discount caps at the payable base including exclusive gst", () => {
-    const b = computeGstBreakdown([{ price: 100, quantity: 1, gstRate: 18 }], "exclusive");
-    expect(gstGrandTotal(100, 150, b)).toBe(0); // clamped, never negative
-    expect(gstGrandTotal(100, 18, b)).toBe(100);
+  it("reduces the exclusive taxable value before calculating GST", () => {
+    const b = computeGstBreakdown([{ price: 100, quantity: 1, gstRate: 18 }], "exclusive", {}, 10);
+    expect(b.discountedLineTotal).toBe(90);
+    expect(b.taxable).toBe(90);
+    expect(b.gst).toBe(16.2);
+    expect(gstGrandTotal(100, 10, b)).toBe(106.2);
+  });
+
+  it("reduces inclusive taxable value and extracted GST on an invoice discount", () => {
+    const b = computeGstBreakdown([{ price: 118, quantity: 1, gstRate: 18 }], "inclusive", {}, 11.8);
+    expect(b.discountedLineTotal).toBe(106.2);
+    expect(b.taxable).toBe(90);
+    expect(b.gst).toBe(16.2);
+    expect(gstGrandTotal(118, 11.8, b)).toBe(106.2);
+  });
+
+  it("allocates a mixed-rate discount to the exact paisa without negative lines", () => {
+    const b = computeGstBreakdown([
+      { price: 100, quantity: 1, gstRate: 5 },
+      { price: 200, quantity: 1, gstRate: 18 },
+      { price: 0.01, quantity: 1, gstRate: 0 },
+    ], "exclusive", {}, 100.01);
+    expect(b.discount).toBe(100.01);
+    expect(b.discountedLineTotal).toBe(200);
+    expect(b.byRate.reduce((sum, row) => sum + row.taxable, 0)).toBeLessThanOrEqual(200);
+    expect(gstGrandTotal(300.01, 100.01, b)).toBe(227.33);
+  });
+
+  it("caps an invoice discount at the pre-tax subtotal", () => {
+    const b = computeGstBreakdown([{ price: 100, quantity: 1, gstRate: 18 }], "exclusive", {}, 150);
+    expect(b.discount).toBe(100);
+    expect(b.gst).toBe(0);
+    expect(gstGrandTotal(100, 150, b)).toBe(0);
   });
 
   it("uses IGST when valid seller and buyer state codes differ", () => {

@@ -218,6 +218,32 @@ const MAX_SHOP_OFFLINE_JS_BYTES = 3.5 * 1024 * 1024;
 // budgets the complete shop UI (plus one active vertical), while startup keeps
 // its independent 300 kB gate above. The extra offline bytes download only in
 // the background and buy deterministic cold-restart coverage across navigation.
+// ── 2026-08-22: two more attempts, both measured, both rejected ────────────
+//
+//   - The sync BARREL was the obvious suspect: 19 pages import the small
+//     `useOfflineStatus` hook from "@/features/core/sync", which also re-exports
+//     sync-engine, and features/core/sync is 261.9 kB of the shell's source (its
+//     single largest contributor, by sourcemap). Rewriting all 19 to the direct
+//     module path moved startup 262.7 -> 262.8 kB gzip: nothing. Rollup was
+//     already shaking the barrel correctly, so sync is in the shell because
+//     something genuinely needs it before paint, not because of the import
+//     style. Reverted. Do not spend the afternoon on this again.
+//   - @tailwindcss/typography generated 12.3 kB raw of `.prose` rules and the
+//     class is used NOWHERE — all 41 "prose" hits in src/ are the English word in
+//     a comment or a test variable. Removing the plugin: CSS 379.1 -> 366.8 kB
+//     raw, 56.50 -> 54.85 kB gzip. Kept. Note vite's console gzip figure
+//     disagreed (it reported an increase) because it compresses at a different
+//     level; measure with the same method on both sides before believing a
+//     delta.
+//
+// For anyone asked to reach a startup target well under the 300 kB line here:
+// the closure is react 43.8 + dexie/react-query 43.2 + lucide 16.7 + zod 11.9 kB
+// gzip of vendors, plus a 147.3 kB app shell whose largest parts are sync
+// (261.9 kB source), settings (176.3), tailwind-merge (72.5), subscription
+// (60.1) and products (50.4). Deleting every vendor chunk still leaves the
+// shell. Anything much below ~250 kB is a startup-sequencing change — booting
+// the till before the sync engine, settings and subscription — not a chunking
+// one.
 const MAX_SHOP_OFFLINE_GZIP_BYTES = 1.15 * 1024 * 1024;
 
 

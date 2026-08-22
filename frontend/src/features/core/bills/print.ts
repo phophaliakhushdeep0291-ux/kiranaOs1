@@ -73,6 +73,7 @@ function toReceiptSnapshot(snapshot: PrintableBillSnapshot): ReceiptSnapshot {
     snapshot.rows.map((row) => ({ price: row.rate, quantity: row.quantity, gstRate: row.gstRate ?? 0, lineDiscount: row.lineDiscount ?? 0 })),
     snapshot.gstMode ?? "inclusive",
     { sellerStateCode: gstStateCode(snapshot.shop?.gstNumber), buyerStateCode: snapshot.buyerStateCode },
+    snapshot.discount,
   );
   return {
     billNo: snapshot.billNo,

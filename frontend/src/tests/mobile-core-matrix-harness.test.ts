@@ -32,6 +32,15 @@ describe("mobile core QA matrix harness", () => {
     expect(source).toContain("undersized.length === 0");
   });
 
+  it("fails the live matrix on core semantic accessibility regressions", () => {
+    for (const rule of [
+      "document-title", "html-lang", "main-landmark", "page-h1", "heading-order",
+      "duplicate-id", "broken-aria-reference", "interactive-name", "form-label",
+      "image-alt", "aria-hidden-focus",
+    ]) expect(source).toContain(rule);
+    expect(source).toContain("metrics.accessibility.issueCount === 0");
+  });
+
   it("reuses a valid QA browser session instead of exhausting auth registration limits", () => {
     expect(source).toContain("PROFILE_DIR");
     expect(source).toContain('manifest.webmanifest');

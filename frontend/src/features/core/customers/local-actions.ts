@@ -5,6 +5,7 @@ import { buildOutboxOperation, type EnqueueOutboxOperationInput } from "@/featur
 import { makeLocalEntity, parseOrThrow, touchLocalEntity, readNumber } from "@/lib/offline/actions/utils";
 import type { Customer, CustomerInput } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/features/core/audit-logs/local-actions";
+import { findDuplicateCustomerWarnings, normaliseCustomerMobile } from "@/features/core/customers/customer-reliability";
 
 const CACHE_KEY = "customers";
 
@@ -73,7 +74,14 @@ async function commitCustomerWrite(input: {
 }
 
 export async function createCustomerLocalFirst(data: CustomerInput): Promise<Customer> {
-  const validated = parseOrThrow(customerCreationSchema, { ...data, name: data.name ?? "" }) as unknown as CustomerInput;
+  const mobile = normaliseCustomerMobile(data.mobile);
+  const validated = parseOrThrow(customerCreationSchema, { ...data, name: data.name ?? "", mobile }) as unknown as CustomerInput;
+  const existingCustomers = await offlineDB.getAll<CustomerLocalRecord>("customers").catch(() => []);
+  const exactMobileDuplicate = findDuplicateCustomerWarnings(validated, existingCustomers)
+    .find((warning) => warning.reason === "mobile");
+  if (exactMobileDuplicate) {
+    throw new Error(`Mobile number already belongs to ${exactMobileDuplicate.customerName}. Open that customer instead.`);
+  }
   const customer = makeLocalEntity(toCustomer(validated), "customer", "pending_sync") as CustomerLocalRecord;
 
   await commitCustomerWrite({
@@ -101,12 +109,18 @@ export async function createCustomerLocalFirst(data: CustomerInput): Promise<Cus
 }
 
 export async function updateCustomerLocalFirst(id: string, data: CustomerInput): Promise<Customer> {
-  const existing = await offlineDB.getAll<CustomerLocalRecord>("customers").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
+  const allCustomers = await offlineDB.getAll<CustomerLocalRecord>("customers").catch(() => []);
+  const existing = allCustomers.find((row) => row.id === id);
   const baseUpdatedAt = existing?.sync_status === "synced"
     ? existing.updatedAt ?? existing.updated_at
     : existing?.base_updated_at ?? existing?.updatedAt ?? existing?.updated_at;
-  const candidate = { ...existing, ...data, name: data.name ?? existing?.name ?? "" };
+  const candidate = { ...existing, ...data, name: data.name ?? existing?.name ?? "", mobile: normaliseCustomerMobile(data.mobile ?? existing?.mobile) };
   const validated = parseOrThrow(customerCreationSchema, candidate) as unknown as CustomerInput;
+  const exactMobileDuplicate = findDuplicateCustomerWarnings(validated, allCustomers, id)
+    .find((warning) => warning.reason === "mobile");
+  if (exactMobileDuplicate) {
+    throw new Error(`Mobile number already belongs to ${exactMobileDuplicate.customerName}. Open that customer instead.`);
+  }
   const customer = {
     ...touchLocalEntity(toCustomer(validated, id, existing), "pending_sync"),
     ...(baseUpdatedAt ? { base_updated_at: baseUpdatedAt } : {}),

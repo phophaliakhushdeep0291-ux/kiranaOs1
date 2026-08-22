@@ -546,6 +546,7 @@ export default function ProductsPage() {
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" aria-hidden="true" />
           <Input
             data-testid="input-search"
+            aria-label={t(tradeProfile.searchPlaceholderKey)}
             className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
             placeholder={t(tradeProfile.searchPlaceholderKey)}
             value={search}

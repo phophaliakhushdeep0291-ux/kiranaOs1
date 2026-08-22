@@ -918,6 +918,84 @@ if (ctx.skip) {
       assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "SALE_RETURN_CREATED" } }), 0);
     });
 
+    test("partial returns reverse invoice discount and GST exactly without refresh-era drift", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, {
+        stockBaseQty: 10,
+        defaultPricePerRateUnit: 100,
+        costPerRateUnit: 60,
+        gstRate: 18,
+      });
+      const sale = assertSuccess(await ctx.post("/api/bills/confirm", {
+        ...billPayload(product, {
+          quantity: 2,
+          ratePerRateUnit: 100,
+          gstMode: "exclusive",
+          gstRate: 18,
+          discount: 20,
+          actualAmount: 212.4,
+          buyerPaidAmount: 212.4,
+          payments: [{ mode: "cash", amount: 212.4 }],
+        }),
+        reason: "Invoice discount GST return proof",
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+
+      assert.equal(sale.subtotal, 200);
+      assert.equal(sale.discount, 20);
+      assert.equal(sale.gst, 32.4);
+      assert.equal(sale.grandTotal, 212.4);
+
+      const returnPayload = (identity) => ({
+        refundMode: "cash",
+        returnOfBillId: sale.id,
+        reason: "Partial discounted sale return",
+        idempotencyKey: identity,
+        clientBillId: identity,
+        items: [{
+          originalBillItemId: sale.items[0].id,
+          productId: product.id,
+          name: product.name,
+          quantity: 1,
+          enteredUnit: "piece",
+          ratePerRateUnit: 100,
+          gstRate: 18,
+          damaged: false,
+        }],
+      });
+
+      const firstReturn = assertSuccess(await ctx.post(
+        "/api/bills/returns",
+        returnPayload("discounted-gst-return-1"),
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      ), 201);
+      assert.equal(firstReturn.subtotal, -90);
+      assert.equal(firstReturn.discount, 0);
+      assert.equal(firstReturn.gst, -16.2);
+      assert.equal(firstReturn.grandTotal, -106.2);
+      assert.equal(firstReturn.items[0].lineTotal, -90);
+      assert.equal(firstReturn.items[0].lineDiscount, -10);
+
+      const secondReturn = assertSuccess(await ctx.post(
+        "/api/bills/returns",
+        returnPayload("discounted-gst-return-2"),
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      ), 201);
+      assert.equal(secondReturn.subtotal, -90);
+      assert.equal(secondReturn.gst, -16.2);
+      assert.equal(secondReturn.grandTotal, -106.2);
+
+      const activeReturns = await ctx.db.bill.findMany({
+        where: { shopId: tenant.shop.id, returnOfBillId: sale.id, billType: "sales_return", status: "active" },
+      });
+      assert.equal(activeReturns.reduce((sum, row) => sum + row.subtotal, 0), -sale.subtotal + sale.discount);
+      assert.equal(activeReturns.reduce((sum, row) => sum + row.gst, 0), -sale.gst);
+      assert.equal(activeReturns.reduce((sum, row) => sum + row.grandTotal, 0), -sale.grandTotal);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10);
+      const gstReport = assertSuccess(await ctx.get("/api/reports/gst?range=monthly", { token: ownerAuth.accessToken }));
+      assert.equal(gstReport.taxableSales, 0, "full returns must reverse the discounted taxable base exactly");
+      assert.equal(gstReport.gstCollected, 0, "full returns must reverse the stored GST exactly");
+    });
+
     test("concurrent cancels restore stock only once", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });

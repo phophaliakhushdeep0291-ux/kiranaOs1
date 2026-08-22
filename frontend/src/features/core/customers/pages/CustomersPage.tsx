@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -83,6 +83,11 @@ import { escapeHtml } from "@/lib/escape-html";
 import { isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { cacheCustomers, mergeCustomers } from "@/features/core/customers/queries";
 import { listCustomers as listCustomersFromServer } from "@/features/core/customers/api";
+import {
+  findDuplicateCustomerWarnings,
+  isValidIndianCustomerMobile,
+  normaliseCustomerMobile,
+} from "@/features/core/customers/customer-reliability";
 
 interface CustomerFormState {
   name: string;
@@ -419,6 +424,20 @@ export default function CustomersPage() {
     return Array.from(map.values()).sort((a, b) => b.ledgerBalance - a.ledgerBalance || a.name.localeCompare(b.name));
   }, [customers]);
 
+  const customerDuplicateWarnings = useMemo(() => findDuplicateCustomerWarnings(
+    {
+      name: customerForm.name,
+      mobile: customerForm.mobile,
+      address: customerForm.address,
+    },
+    dedupedCustomers,
+    editing?.id,
+  ), [customerForm.address, customerForm.mobile, customerForm.name, dedupedCustomers, editing?.id]);
+  const exactMobileDuplicate = customerDuplicateWarnings.find((warning) => warning.reason === "mobile") ?? null;
+  const possibleDuplicate = customerDuplicateWarnings.find((warning) => warning.reason === "name_address_similarity") ?? null;
+  const customerMobile = normaliseCustomerMobile(customerForm.mobile);
+  const customerMobileIsValid = isValidIndianCustomerMobile(customerMobile);
+
   const totals = useMemo(() => {
     const totalUdhar = dedupedCustomers.reduce((sum, customer) => sum + Math.max(0, customer.ledgerBalance), 0);
     return {
@@ -691,8 +710,20 @@ export default function CustomersPage() {
       toast({ title: t("customers.toast.nameRequired"), variant: "destructive" });
       return;
     }
-    if (!customerForm.mobile.trim()) {
+    if (!customerMobile) {
       toast({ title: t("customers.toast.mobileRequired"), description: t("customers.field.mobileHint"), variant: "destructive" });
+      return;
+    }
+    if (!customerMobileIsValid) {
+      toast({ title: t("customers.form.phoneInvalid"), description: t("customers.form.phoneHint"), variant: "destructive" });
+      return;
+    }
+    if (exactMobileDuplicate) {
+      toast({
+        title: t("customers.form.duplicateTitle"),
+        description: t("customers.form.duplicateBody", { name: exactMobileDuplicate.customerName }),
+        variant: "destructive",
+      });
       return;
     }
     const gstin = customerForm.gstNumber.trim() ? validateGstin(customerForm.gstNumber) : null;
@@ -704,7 +735,7 @@ export default function CustomersPage() {
     try {
       const data: CustomerInput = {
         name: customerForm.name.trim(),
-        mobile: customerForm.mobile.trim(),
+        mobile: customerMobile,
         address: customerForm.address.trim() || undefined,
         gstNumber: gstin?.normalized || undefined,
         stateCode: gstin?.stateCode || customerForm.stateCode || undefined,
@@ -724,6 +755,13 @@ export default function CustomersPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function openExistingDuplicate(customerId: string) {
+    setSearch("");
+    setFilter("all");
+    setSelectedId(customerId);
+    setCustomerOpen(false);
   }
 
   function requestDeleteCustomer(customer: CustomerWithLedger) {
@@ -1315,29 +1353,116 @@ export default function CustomersPage() {
       </div>}
 
       <Dialog open={customerOpen} onOpenChange={setCustomerOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{editing ? t("customers.detail.editCustomer") : t("customers.list.addCustomer")}</DialogTitle>
-            <DialogDescription>{t("customers.form.help")}</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div><Label>{t("customers.form.name")}</Label><Input className="mt-1" value={customerForm.name} onChange={(event) => setCustomerForm((form) => ({ ...form, name: event.target.value }))} /></div>
-            <div><Label>{t("customers.form.phone")}</Label><Input className="mt-1" value={customerForm.mobile} onChange={(event) => setCustomerForm((form) => ({ ...form, mobile: event.target.value }))} /></div>
-            <div className="md:col-span-2"><Label>{t("customers.form.billingAddress")}</Label><Input className="mt-1" value={customerForm.address} onChange={(event) => setCustomerForm((form) => ({ ...form, address: event.target.value }))} placeholder={t("customers.field.gstinHint")} /></div>
-            <div className="md:col-span-2 rounded-xl border border-[#dce7f6] bg-[#f8fbff] p-3">
-              <div className="mb-3"><p className="text-[12px] font-bold text-[#19345f]">{t("customers.form.gstDetails")}</p><p className="mt-0.5 text-[11px] text-[#64748b]">{t("customers.form.gstHelp")}</p></div>
-              <div className="grid gap-3 md:grid-cols-[1fr_120px]">
-                <div><Label>{t("customers.form.gstin")}</Label><Input className="mt-1 uppercase" maxLength={15} autoCapitalize="characters" value={customerForm.gstNumber} onChange={(event) => { const gstNumber = event.target.value.toUpperCase().replace(/\s/g, ""); setCustomerForm((form) => ({ ...form, gstNumber, stateCode: /^\d{2}/.test(gstNumber) ? gstNumber.slice(0, 2) : form.stateCode })); }} placeholder="22AAAAA0000A1Z5" /></div>
-                <div><Label>{t("customers.form.stateCode")}</Label><Input className="mt-1 bg-white" value={customerForm.stateCode} readOnly placeholder="--" aria-label={t("customers.gstStateCode")} /></div>
+        <DialogContent
+          data-customer-form-dialog="true"
+          className="grid max-h-[92vh] max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-[#dbe5f2] bg-[#f6f9fd] p-0 shadow-[0_30px_90px_rgba(14,35,71,0.28)]"
+        >
+          <DialogHeader className="border-b border-[#dfe8f3] bg-[linear-gradient(135deg,#ffffff_0%,#f2f7ff_58%,#eaf2ff_100%)] px-5 py-5 pr-16 text-left sm:px-6">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[var(--brand)] text-white shadow-[0_10px_24px_var(--brand-shadow)]">
+                <UserRound size={21} />
+              </span>
+              <div className="min-w-0">
+                <DialogTitle className="font-display text-[20px] font-black tracking-[-0.02em] text-[var(--brand-ink)]">
+                  {editing ? t("customers.detail.editCustomer") : t("customers.list.addCustomer")}
+                </DialogTitle>
+                <DialogDescription className="mt-1 text-[12px] leading-5 text-[#5e6f8e]">{t("customers.form.help")}</DialogDescription>
               </div>
             </div>
-            <div><Label>{t("customers.form.customerType")}</Label><Select value={customerForm.type} onValueChange={(value) => setCustomerForm((form) => ({ ...form, type: value as "regular" | "udhar" }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">{t("customers.form.regular")}</SelectItem><SelectItem value="udhar">{t("customers.form.udharAllowed")}</SelectItem></SelectContent></Select></div>
-            <div><Label>{t("customers.form.udharLimit")}</Label><Input type="number" className="mt-1" value={customerForm.udharLimit} onChange={(event) => setCustomerForm((form) => ({ ...form, udharLimit: event.target.value }))} /></div>
-            <div><Label>{t("customers.form.dueDate")}</Label><Input type="date" className="mt-1" value={customerForm.dueDate} onChange={(event) => setCustomerForm((form) => ({ ...form, dueDate: event.target.value }))} /></div>
-            <div><Label>{t("customers.form.promiseDate")}</Label><Input type="date" className="mt-1" value={customerForm.promiseToPayDate} onChange={(event) => setCustomerForm((form) => ({ ...form, promiseToPayDate: event.target.value }))} /></div>
-            <div className="md:col-span-2"><Label>{t("customers.form.notes")}</Label><Textarea className="mt-1" value={customerForm.notes} onChange={(event) => setCustomerForm((form) => ({ ...form, notes: event.target.value }))} placeholder={t("customers.field.pricingExample")} /></div>
+          </DialogHeader>
+
+          <div className="app-scrollbar min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+            <div className="space-y-4">
+              <section className="rounded-[18px] border border-[#e0e8f3] bg-white p-4 shadow-[0_10px_28px_rgba(26,53,96,0.055)] sm:p-5">
+                <div className="mb-4 flex items-start gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[var(--brand-soft)] text-[var(--brand)]"><UserCheck size={17} /></span>
+                  <div><h3 className="text-[13px] font-black text-[var(--brand-ink)]">{t("customers.form.contactSection")}</h3><p className="mt-0.5 text-[11px] leading-4 text-[#6a7892]">{t("customers.form.contactHelp")}</p></div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="customer-name" className="text-[11px] font-bold text-[#435474]">{t("customers.form.name")}</Label>
+                    <Input id="customer-name" autoComplete="name" autoFocus className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe] px-3.5 text-[14px] font-semibold focus-visible:bg-white" value={customerForm.name} onChange={(event) => setCustomerForm((form) => ({ ...form, name: event.target.value }))} />
+                  </div>
+                  <div>
+                    <Label htmlFor="customer-mobile" className="text-[11px] font-bold text-[#435474]">{t("customers.form.phone")}</Label>
+                    <div className={cn("mt-1.5 flex h-12 overflow-hidden rounded-[12px] border bg-[#fbfcfe] transition-colors focus-within:ring-2 focus-within:ring-[var(--brand)]/20", exactMobileDuplicate ? "border-rose-400" : customerMobile && !customerMobileIsValid ? "border-amber-400" : "border-[#dce5f0] focus-within:border-[var(--brand)]")}>
+                      <span className="grid w-12 shrink-0 place-items-center border-r border-[#e2e8f1] bg-[#f2f6fb] text-[12px] font-black text-[#50617f]">+91</span>
+                      <Input
+                        id="customer-mobile"
+                        aria-describedby="customer-mobile-status"
+                        aria-invalid={Boolean(exactMobileDuplicate || (customerMobile && !customerMobileIsValid))}
+                        autoComplete="tel"
+                        inputMode="numeric"
+                        maxLength={10}
+                        type="tel"
+                        className="h-full rounded-none border-0 bg-transparent px-3.5 text-[15px] font-bold tracking-[0.08em] shadow-none focus-visible:ring-0"
+                        value={customerForm.mobile}
+                        onChange={(event) => setCustomerForm((form) => ({ ...form, mobile: normaliseCustomerMobile(event.target.value) }))}
+                        placeholder="98765 43210"
+                      />
+                    </div>
+                    <div id="customer-mobile-status" className="mt-1.5 min-h-4 text-[10.5px] font-semibold">
+                      {!customerMobile ? <span className="text-[#7b879b]">{t("customers.form.phoneHint")}</span> : null}
+                      {customerMobile && customerMobile.length < 10 ? <span className="text-amber-700">{t("customers.form.phoneRemaining", { count: 10 - customerMobile.length })}</span> : null}
+                      {customerMobile.length === 10 && !customerMobileIsValid ? <span className="text-rose-700">{t("customers.form.phoneInvalid")}</span> : null}
+                      {customerMobileIsValid && !exactMobileDuplicate ? <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 size={12} />{t("customers.form.phoneReady")}</span> : null}
+                    </div>
+                  </div>
+                </div>
+
+                {exactMobileDuplicate ? (
+                  <div data-customer-duplicate-warning="mobile" className="mt-4 rounded-[14px] border border-rose-200 bg-rose-50 p-3.5 text-rose-950" role="alert">
+                    <div className="flex items-start gap-3"><span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-rose-100 text-rose-700"><AlertTriangle size={16} /></span><div className="min-w-0"><p className="text-[12px] font-black">{t("customers.form.duplicateTitle")}</p><p className="mt-1 text-[11px] leading-4 text-rose-800">{t("customers.form.duplicateBody", { name: exactMobileDuplicate.customerName })}</p></div></div>
+                    <Button type="button" variant="outline" onClick={() => openExistingDuplicate(exactMobileDuplicate.customerId)} className="mt-3 h-11 w-full rounded-[11px] border-rose-300 bg-white text-[11px] font-black text-rose-800 hover:bg-rose-100 sm:w-auto">{t("customers.form.openExisting")}<ChevronRight size={14} className="ml-1" /></Button>
+                  </div>
+                ) : possibleDuplicate ? (
+                  <div data-customer-duplicate-warning="similar" className="mt-4 rounded-[14px] border border-amber-200 bg-amber-50 p-3.5 text-amber-950" role="status">
+                    <div className="flex items-start gap-3"><span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-amber-100 text-amber-700"><Info size={16} /></span><div className="min-w-0"><p className="text-[12px] font-black">{t("customers.form.possibleDuplicateTitle")}</p><p className="mt-1 text-[11px] leading-4 text-amber-800">{t("customers.form.possibleDuplicateBody", { name: possibleDuplicate.customerName })}</p></div></div>
+                    <Button type="button" variant="outline" onClick={() => openExistingDuplicate(possibleDuplicate.customerId)} className="mt-3 h-11 w-full rounded-[11px] border-amber-300 bg-white text-[11px] font-black text-amber-900 hover:bg-amber-100 sm:w-auto">{t("customers.form.openExisting")}<ChevronRight size={14} className="ml-1" /></Button>
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="rounded-[18px] border border-[#e0e8f3] bg-white p-4 shadow-[0_10px_28px_rgba(26,53,96,0.055)] sm:p-5">
+                <div className="mb-4 flex items-start gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[#ecfdf5] text-emerald-700"><Wallet size={17} /></span>
+                  <div><h3 className="text-[13px] font-black text-[var(--brand-ink)]">{t("customers.form.creditSection")}</h3><p className="mt-0.5 text-[11px] leading-4 text-[#6a7892]">{t("customers.form.creditHelp")}</p></div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div><Label className="text-[11px] font-bold text-[#435474]">{t("customers.form.customerType")}</Label><Select value={customerForm.type} onValueChange={(value) => setCustomerForm((form) => ({ ...form, type: value as "regular" | "udhar" }))}><SelectTrigger className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">{t("customers.form.regular")}</SelectItem><SelectItem value="udhar">{t("customers.form.udharAllowed")}</SelectItem></SelectContent></Select></div>
+                  <div><Label htmlFor="customer-udhar-limit" className="text-[11px] font-bold text-[#435474]">{t("customers.form.udharLimit")}</Label><Input id="customer-udhar-limit" type="number" inputMode="decimal" min="0" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.udharLimit} onChange={(event) => setCustomerForm((form) => ({ ...form, udharLimit: event.target.value }))} /></div>
+                  <div><Label htmlFor="customer-due-date" className="text-[11px] font-bold text-[#435474]">{t("customers.form.dueDate")}</Label><Input id="customer-due-date" type="date" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.dueDate} onChange={(event) => setCustomerForm((form) => ({ ...form, dueDate: event.target.value }))} /></div>
+                  <div><Label htmlFor="customer-promise-date" className="text-[11px] font-bold text-[#435474]">{t("customers.form.promiseDate")}</Label><Input id="customer-promise-date" type="date" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.promiseToPayDate} onChange={(event) => setCustomerForm((form) => ({ ...form, promiseToPayDate: event.target.value }))} /></div>
+                </div>
+              </section>
+
+              <section className="rounded-[18px] border border-[#e0e8f3] bg-white p-4 shadow-[0_10px_28px_rgba(26,53,96,0.055)] sm:p-5">
+                <div className="mb-4 flex items-start gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[#f5f3ff] text-violet-700"><FileText size={17} /></span>
+                  <div><h3 className="text-[13px] font-black text-[var(--brand-ink)]">{t("customers.form.billingSection")}</h3><p className="mt-0.5 text-[11px] leading-4 text-[#6a7892]">{t("customers.form.billingHelp")}</p></div>
+                </div>
+                <div className="space-y-4">
+                  <div><Label htmlFor="customer-address" className="text-[11px] font-bold text-[#435474]">{t("customers.form.billingAddress")}</Label><Textarea id="customer-address" className="mt-1.5 min-h-[78px] resize-y rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.address} onChange={(event) => setCustomerForm((form) => ({ ...form, address: event.target.value }))} /></div>
+                  <div className="rounded-[14px] border border-[#dce7f6] bg-[#f8fbff] p-3.5">
+                    <div className="mb-3"><p className="text-[12px] font-black text-[#19345f]">{t("customers.form.gstDetails")}</p><p className="mt-0.5 text-[10.5px] leading-4 text-[#64748b]">{t("customers.form.gstHelp")}</p></div>
+                    <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+                      <div><Label htmlFor="customer-gstin" className="text-[11px] font-bold text-[#435474]">{t("customers.form.gstin")}</Label><Input id="customer-gstin" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-white uppercase" maxLength={15} autoCapitalize="characters" value={customerForm.gstNumber} onChange={(event) => { const gstNumber = event.target.value.toUpperCase().replace(/\s/g, ""); setCustomerForm((form) => ({ ...form, gstNumber, stateCode: /^\d{2}/.test(gstNumber) ? gstNumber.slice(0, 2) : form.stateCode })); }} placeholder="22AAAAA0000A1Z5" /></div>
+                      <div><Label htmlFor="customer-state-code" className="text-[11px] font-bold text-[#435474]">{t("customers.form.stateCode")}</Label><Input id="customer-state-code" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-white" value={customerForm.stateCode} readOnly placeholder="--" aria-label={t("customers.gstStateCode")} /></div>
+                    </div>
+                  </div>
+                  <div><Label htmlFor="customer-notes" className="text-[11px] font-bold text-[#435474]">{t("customers.form.notes")}</Label><Textarea id="customer-notes" className="mt-1.5 min-h-[88px] resize-y rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.notes} onChange={(event) => setCustomerForm((form) => ({ ...form, notes: event.target.value }))} placeholder={t("customers.field.pricingExample")} /></div>
+                </div>
+              </section>
+            </div>
           </div>
-          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setCustomerOpen(false)}>{t("customers.form.cancel")}</Button><Button onClick={() => void saveCustomer()} disabled={saving}>{saving ? t("customers.detail.saving") : t("customers.detail.saveLocally")}</Button></div>
+
+          <div data-customer-form-footer="true" className="border-t border-[#dfe8f3] bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pb-4">
+            <p className="mb-3 flex items-center justify-center gap-1.5 text-center text-[10.5px] font-semibold text-[#64748b]"><CheckCircle2 size={13} className="text-emerald-600" />{t("customers.form.localFirst")}</p>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)] gap-2.5">
+              <Button variant="outline" className="h-12 rounded-[12px] border-[#d8e1ed] text-[12px] font-black" onClick={() => setCustomerOpen(false)}>{t("customers.form.cancel")}</Button>
+              <Button data-customer-save="true" className="h-12 rounded-[12px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] text-[12px] font-black shadow-[0_10px_24px_var(--brand-shadow)]" onClick={() => void saveCustomer()} disabled={saving || Boolean(exactMobileDuplicate)}>{saving ? t("customers.detail.saving") : editing ? t("customers.form.updateAction") : t("customers.form.createAction")}</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1376,7 +1501,7 @@ export default function CustomersPage() {
 function CustomerMetricCard({ label, value, change, color, icon, iconClass, spark, mobileHidden = false }: { label: string; value: string; change: number; color: string; icon: React.ReactNode; iconClass: string; spark: number[]; mobileHidden?: boolean }) {
   const { t } = useAppLanguage();
   const data = spark.map((item, index) => ({ index, value: item }));
-  const gradientId = `customer-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const gradientId = `customer-${useId().replace(/:/g, "")}`;
   return (
     <article className={cn("h-[126px] flex-col overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white p-3.5 shadow-[0_10px_30px_rgba(15,35,80,0.05)] lg:h-[154px] lg:p-4", mobileHidden ? "hidden md:flex" : "flex")}>
       <div className="flex shrink-0 items-center gap-3">
@@ -1416,7 +1541,7 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
     <section className="min-h-0 overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white shadow-[0_10px_30px_rgba(15,35,80,0.05)]">
       <header className="flex h-[58px] items-center justify-between px-[18px]"><h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">{t("customers.list.title")}</h2><span className="rounded-full bg-[#f2f5f9] px-2.5 py-1 text-[9px] font-black text-[#60708e]">{t("customers.list.shownCount", { count: customers.length })}</span></header>
       <div className="border-y border-[#e8edf4] p-3.5">
-        <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input value={search} onChange={(event) => onSearch(event.target.value)} placeholder={t("customers.searchShort")} className="h-10 rounded-[10px] border-[#dfe7f2] pl-10 text-[12px]" /></div>
+        <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input aria-label={t("customers.searchShort")} value={search} onChange={(event) => onSearch(event.target.value)} placeholder={t("customers.searchShort")} className="h-11 rounded-[10px] border-[#dfe7f2] pl-10 text-[12px]" /></div>
         <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", t("customers.filter.allCustomers")], ["udhar", t("customers.filter.withBalanceTitle")], ["due", t("customers.list.overdue")], ["cleared", t("customers.list.cleared")]] as const).map(([key, label]) => <button key={key} onClick={() => onFilter(key)} className={cn("h-11 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
       </div>
       <div className="app-scrollbar max-h-[610px] overflow-y-auto p-3">

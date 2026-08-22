@@ -10,6 +10,7 @@ import {
   validatePlanCode,
   deserializeFeatures,
   FIRST_YEAR_ONBOARDING_SKU,
+  isOnboardingServiceAvailable,
   getPlanConfigForBusinessType,
 } from "./planConfig.js";
 import { businessTypeFromSettings, parseShopSettings } from "../shops/businessProfiles.js";
@@ -414,6 +415,12 @@ export async function grantFoundingCustomer(shopId, intendedPaidPlanCode = "star
 }
 
 export async function recordOnboardingPurchase(shopId, userId, input = {}, actor = {}) {
+  const businessType = await getShopBusinessType(shopId);
+  if (!isOnboardingServiceAvailable(businessType)) {
+    const error = new AppError("Kirana Starter is self-serve and has no paid launch service", 422);
+    error.code = "ONBOARDING_NOT_SOLD_FOR_KIRANA";
+    throw error;
+  }
   const includes = input.includes ?? FIRST_YEAR_ONBOARDING_SKU.includes;
   return db.$transaction(async (tx) => {
     const purchase = await tx.onboardingPurchase.create({ data: {

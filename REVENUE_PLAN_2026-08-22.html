@@ -1,0 +1,415 @@
+<title>Revenue Plan by Shop Type</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#F1F4F2; --surface:#FFFFFF; --surface-2:#E7ECE9;
+  --line:#D2DAD6; --line-soft:#E2E8E5;
+  --ink:#111A17; --ink-2:#3D4B46; --ink-3:#68766F;
+  --accent:#0F6E63; --accent-soft:#DDEBE8; --accent-ink:#0A4B43;
+  --amber:#9A6510; --amber-soft:#F5E9D4;
+  --good:#2C6E4E; --good-soft:#DCEBE1;
+  --bad:#9E3229; --bad-soft:#F3DEDB;
+  --shadow:0 1px 2px rgba(17,26,23,.05), 0 8px 24px -16px rgba(17,26,23,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0C1311; --surface:#131C19; --surface-2:#1A2521;
+    --line:#2A3833; --line-soft:#212D29;
+    --ink:#E8EEEB; --ink-2:#B2C0BA; --ink-3:#7F8F88;
+    --accent:#4FBFAE; --accent-soft:#16302C; --accent-ink:#8FDACD;
+    --amber:#D9A055; --amber-soft:#33260F;
+    --good:#63BE8C; --good-soft:#16301F;
+    --bad:#E08078; --bad-soft:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0C1311; --surface:#131C19; --surface-2:#1A2521;
+  --line:#2A3833; --line-soft:#212D29;
+  --ink:#E8EEEB; --ink-2:#B2C0BA; --ink-3:#7F8F88;
+  --accent:#4FBFAE; --accent-soft:#16302C; --accent-ink:#8FDACD;
+  --amber:#D9A055; --amber-soft:#33260F;
+  --good:#63BE8C; --good-soft:#16301F;
+  --bad:#E08078; --bad-soft:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"Public Sans","Helvetica Neue",Arial,sans-serif;
+  font-size:16.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px 96px}
+.col{max-width:70ch}
+
+.mast{border-bottom:1px solid var(--line);padding:56px 0 34px;margin-bottom:44px}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
+  display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.eyebrow b{color:var(--accent);font-weight:500}
+h1{font-family:"Fraunces",Georgia,serif;font-optical-sizing:auto;font-weight:600;
+  font-size:clamp(2.4rem,5.4vw,3.7rem);line-height:1.02;letter-spacing:-.022em;
+  margin:20px 0 0;text-wrap:balance}
+h1 em{font-style:italic;font-weight:400;color:var(--accent)}
+.dek{margin:16px 0 0;max-width:64ch;font-size:1.14rem;color:var(--ink-2)}
+
+.score{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:3px;overflow:hidden;margin:38px 0 0;box-shadow:var(--shadow)}
+.score>div{background:var(--surface);padding:20px;display:flex;flex-direction:column;gap:7px}
+.score .k{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3)}
+.score .v{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:1.62rem;
+  line-height:1.12;letter-spacing:-.015em;font-variant-numeric:tabular-nums}
+.score .n{font-size:.83rem;color:var(--ink-3);line-height:1.42}
+.score .v.ok{color:var(--good)} .score .v.warn{color:var(--amber)} .score .v.bad{color:var(--bad)}
+@media(max-width:860px){.score{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.score{grid-template-columns:1fr}}
+
+section{margin-top:76px}
+.shead{display:flex;gap:20px;align-items:baseline;border-top:2px solid var(--ink);padding-top:16px;margin-bottom:26px}
+.snum{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:500;color:var(--accent);
+  letter-spacing:.1em;padding-top:9px;flex:none}
+h2{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:clamp(1.6rem,3.2vw,2.15rem);
+  line-height:1.14;letter-spacing:-.018em;margin:0;text-wrap:balance}
+.qsub{font-size:.9rem;color:var(--ink-3);margin:5px 0 0;font-family:"IBM Plex Mono",monospace}
+h3{font-weight:700;font-size:1.02rem;letter-spacing:-.005em;margin:38px 0 12px}
+h3:first-child{margin-top:0}
+p{margin:0 0 16px} .col p:last-child{margin-bottom:0}
+strong{font-weight:700;color:var(--ink)}
+code{font-family:"IBM Plex Mono",monospace;font-size:.84em;background:var(--surface-2);
+  padding:1px 5px;border-radius:2px;color:var(--ink-2)}
+
+.tw{overflow-x:auto;margin:24px 0 8px;border:1px solid var(--line);border-radius:3px;
+  background:var(--surface);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:.895rem;min-width:600px}
+th,td{padding:11px 15px;text-align:left;border-bottom:1px solid var(--line-soft);vertical-align:top}
+thead th{background:var(--surface-2);font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  font-weight:500;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);
+  border-bottom:1px solid var(--line);white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",monospace;white-space:nowrap}
+tr.hi td{background:var(--accent-soft)}
+tr.dim td{color:var(--ink-3)}
+.cap{font-size:.8rem;color:var(--ink-3);margin:9px 0 0;max-width:72ch}
+
+.pill{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10px;
+  letter-spacing:.08em;text-transform:uppercase;padding:2.5px 7px;border-radius:2px;
+  font-weight:500;white-space:nowrap}
+.p-ok{background:var(--good-soft);color:var(--good)}
+.p-warn{background:var(--amber-soft);color:var(--amber)}
+.p-bad{background:var(--bad-soft);color:var(--bad)}
+.p-neu{background:var(--surface-2);color:var(--ink-3)}
+
+.note{border-left:3px solid var(--accent);background:var(--surface);padding:18px 22px;
+  margin:28px 0;border-radius:0 3px 3px 0;box-shadow:var(--shadow)}
+.note .lab{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:7px}
+.note p{margin:0;font-size:.97rem}
+.note p + p{margin-top:12px}
+.note.warn{border-left-color:var(--amber)} .note.warn .lab{color:var(--amber)}
+.note.bad{border-left-color:var(--bad)} .note.bad .lab{color:var(--bad)}
+
+.phases{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:3px;overflow:hidden;margin:28px 0 0;box-shadow:var(--shadow)}
+.phase{background:var(--surface);padding:22px}
+.phase .when{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.phase h4{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:1.18rem;
+  margin:0 0 10px;letter-spacing:-.01em}
+.phase p{font-size:.89rem;color:var(--ink-2);margin:0 0 12px;line-height:1.55}
+.phase ul{margin:0;padding-left:18px;font-size:.87rem;color:var(--ink-2);line-height:1.5}
+.phase li{margin-bottom:6px}
+.phase li:last-child{margin-bottom:0}
+@media(max-width:820px){.phases{grid-template-columns:1fr}}
+
+footer{margin-top:84px;border-top:1px solid var(--line);padding-top:26px;font-size:.86rem;color:var(--ink-3)}
+footer h4{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--ink-3);margin:0 0 10px;font-weight:500}
+footer ul{margin:0;padding-left:18px;line-height:1.7}
+footer .grid{display:grid;grid-template-columns:1.3fr 1fr;gap:34px}
+@media(max-width:760px){footer .grid{grid-template-columns:1fr}}
+a{color:var(--accent);text-underline-offset:2px}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">
+    <span>Revenue plan</span><span>·</span><span>22 August 2026</span><span>·</span>
+    <span>Companion to <b>KiranaOS_Revenue_Model.xlsx</b></span>
+  </div>
+  <h1>Sell to restaurants first,<br><em>and stop selling to kiranas</em></h1>
+  <p class="dek">Eleven trades, ranked on price headroom, retention and how hard each one is to reach. The ranking puts your namesake market dead last — and the arithmetic behind that is not close.</p>
+
+  <div class="score">
+    <div><div class="k">Best trade</div><div class="v ok">Restaurant</div>
+      <div class="n">6.8× LTV/CAC, highest price, 4–16× undercut against Petpooja, product already forked.</div></div>
+    <div><div class="k">Worst trade</div><div class="v bad">Kirana</div>
+      <div class="n">1.7× LTV/CAC. Field sales does not pay back. Vyapar's mobile tier is free.</div></div>
+    <div><div class="k">Base case, year 3</div><div class="v">₹57 L</div>
+      <div class="n">652 shops, ₹45 L exit ARR, ~₹39 L cumulative cash need. Self-fundable at a stretch.</div></div>
+    <div><div class="k">Funded case, year 3</div><div class="v">₹3.9 Cr</div>
+      <div class="n">4,501 shops, ₹3.0 Cr exit ARR, needs a ₹2.5–3 Cr raise.</div></div>
+  </div>
+</header>
+
+<section>
+  <div class="shead"><div class="snum">01</div><div>
+    <h2>The ranking</h2>
+    <p class="qsub">Weighted on price headroom, pain, readiness, whitespace, reach and retention</p>
+  </div></div>
+
+  <div class="col">
+    <p>Each trade is scored 1–5 on six dimensions and weighted. The weights are inputs in the workbook — change what you care about and the order re-sorts. What follows is the ranking as it stands, with the unit economics that matter most beside each row.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th class="num">#</th><th>Shop type</th><th class="num">Score</th>
+        <th class="num">Blended price</th><th class="num">Churn</th><th class="num">LTV/CAC</th>
+        <th>Verdict</th>
+      </tr></thead>
+      <tbody>
+        <tr class="hi"><td class="num">1</td><td><strong>Restaurant / café</strong></td><td class="num">4.35</td>
+          <td class="num">₹7,999</td><td class="num">20%</td><td class="num">6.8×</td>
+          <td>Attack now. Highest price, biggest undercut, product already built and forked.</td></tr>
+        <tr class="hi"><td class="num">2</td><td><strong>Auto parts / hardware</strong></td><td class="num">4.20</td>
+          <td class="num">₹5,899</td><td class="num">15%</td><td class="num">6.7×</td>
+          <td>The sleeper. Fitment lookup is a hard problem you already solved, and nobody serves this trade properly.</td></tr>
+        <tr class="hi"><td class="num">3</td><td><strong>Pharmacy / medical</strong></td><td class="num">4.00</td>
+          <td class="num">₹6,899</td><td class="num">12%</td><td class="num">8.9×</td>
+          <td>Best retention and best payback of any trade. Marg is entrenched, so expect a slow, high-quality grind.</td></tr>
+        <tr><td class="num">4</td><td>Electronics / mobiles</td><td class="num">3.50</td>
+          <td class="num">₹5,899</td><td class="num">20%</td><td class="num">5.0×</td>
+          <td>Serial/IMEI tracking built; AIMRA is a real channel. Year 2.</td></tr>
+        <tr><td class="num">5</td><td>Clothing / fashion</td><td class="num">3.35</td>
+          <td class="num">₹5,149</td><td class="num">20%</td><td class="num">3.7×</td>
+          <td>Size-runs built, but crowded and CAC is higher. Year 2–3.</td></tr>
+        <tr><td class="num">6</td><td>Footwear</td><td class="num">3.15</td>
+          <td class="num">₹5,149</td><td class="num">22%</td><td class="num">3.3×</td>
+          <td>Same engine as clothing. Take it as a free adjacency, never as a campaign.</td></tr>
+        <tr><td class="num">7</td><td>Furniture / home</td><td class="num">3.10</td>
+          <td class="num">₹5,899</td><td class="num">18%</td><td class="num">4.3×</td>
+          <td>Sticky once installed, but too few outlets and too long a sales cycle to lead with.</td></tr>
+        <tr><td class="num">8</td><td>Cosmetics / beauty</td><td class="num">3.00</td>
+          <td class="num">₹5,149</td><td class="num">22%</td><td class="num">3.3×</td>
+          <td>Adjacency to clothing. No association to sell through.</td></tr>
+        <tr class="dim"><td class="num">9</td><td>Stationery / books</td><td class="num">2.55</td>
+          <td class="num">₹4,149</td><td class="num">25%</td><td class="num">2.2×</td>
+          <td>Below the 3× line. Inbound only — but see the seasonal pricing note in section 03.</td></tr>
+        <tr class="dim"><td class="num">10</td><td>Other / custom retail</td><td class="num">2.15</td>
+          <td class="num">₹4,149</td><td class="num">28%</td><td class="num">1.8×</td>
+          <td>Fallback pack. Accept inbound, never campaign.</td></tr>
+        <tr class="dim"><td class="num">11</td><td><strong>Kirana / general store</strong></td><td class="num">2.05</td>
+          <td class="num">₹4,149</td><td class="num">30%</td><td class="num">1.7×</td>
+          <td>Self-serve funnel only. Every rupee of field sales here loses money.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="cap">LTV/CAC uses a base CAC of ₹5,000 with a per-trade difficulty multiplier, and excludes the ₹4,999 launch service on purpose — that fee roughly covers its own delivery cost and should not be used to make acquisition look profitable. Below 3.0×, paid field acquisition does not pay for itself.</p>
+</section>
+
+<section>
+  <div class="shead"><div class="snum">02</div><div>
+    <h2>The kirana problem</h2>
+    <p class="qsub">Your product is named after your weakest market</p>
+  </div></div>
+
+  <div class="col">
+    <p>This is the finding I'd most expect you to push back on, so here is the whole argument in one place.</p>
+    <p>Kirana has the <strong>largest market and the worst economics</strong> of the eleven. Thirteen million shops sounds like the prize, but every input that turns a shop into revenue points the wrong way. Willingness to pay is the lowest of any trade, so blended price lands at ₹4,149. Engagement is the lowest, so churn is the highest at 30%. And it is the hardest trade to reach — no association, no cluster, no distributor relationship, thirteen million individual doors — so CAC carries the highest difficulty multiplier in the model, ₹7,000 a shop.</p>
+    <p>That yields an LTV of ₹11,756 against a CAC of ₹7,000. <strong>1.7×.</strong> Payback takes 24 months on a customer who is 30% likely to leave inside twelve. A field rep selling kirana destroys value on every close.</p>
+    <p>And the competitor isn't myBillBook at ₹3,490. It's <strong>Vyapar's mobile tier, which is permanently free</strong> and already does GST invoicing, ledgers, payment reminders and offline billing. Your offline-correctness engineering is far better than theirs. A kirana owner cannot see that difference and will not pay ₹4,999 a year for it.</p>
+  </div>
+
+  <div class="note bad">
+    <div class="lab">What to do instead</div>
+    <p>Keep kirana, but change what it is. Make it a <strong>free or ₹999 self-serve tier with no install fee and no field sales</strong> — sign-up, import a catalogue, start billing, all without a human. Let it earn its keep three other ways: as the top of the funnel for shops that grow into a paid trade, as the volume that makes your catalogue and credit data valuable, and as the reference base that makes the other ten trades believable.</p>
+    <p>What it must not be is a line item in anybody's sales target. The model has kirana at 3–5% of new shops throughout, all inbound. That is deliberate.</p>
+  </div>
+
+  <div class="col">
+    <p>One consequence worth naming: if kirana becomes a free tier, <strong>"KiranaOS" is the wrong name for the paying product.</strong> A restaurant owner being sold ₹14,999 software called KiranaOS is being told, in the first three seconds, that they are not the customer. That's a cheap thing to fix now and an expensive one to fix at 2,000 shops.</p>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><div class="snum">03</div><div>
+    <h2>What to charge</h2>
+    <p class="qsub">The single highest-leverage change in this plan</p>
+  </div></div>
+
+  <div class="col">
+    <p>Your current price list is internally consistent and externally mispriced. It was built as a ladder off the kirana anchor — every trade priced as a premium over ₹2,499 — when it should have been built off each trade's own incumbent. Here is what the market comparison implies.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th>Shop type</th><th class="num">Now (Growth)</th><th class="num">Proposed</th>
+        <th>Why, against whom</th>
+      </tr></thead>
+      <tbody>
+        <tr class="hi"><td><strong>Restaurant / café</strong></td><td class="num">₹8,999</td>
+          <td class="num">₹14,999</td>
+          <td><strong>Raise, substantially.</strong> Petpooja runs ₹36,000–₹1,44,000 a year plus setup plus per-module add-ons. At ₹14,999 you are still a 2.4× undercut on their cheapest tier, and you look like a serious product rather than a suspiciously cheap one. This one change lifts restaurant blended price from ₹7,999 to ₹13,499 and LTV/CAC from 6.8× to 11.5×.</td></tr>
+        <tr><td>Auto parts / hardware</td><td class="num">₹6,999</td><td class="num">₹8,999</td>
+          <td>Raise. No credible vertical competitor, high pain, and fitment lookup is worth real money to a shop that currently loses sales to wrong-part returns.</td></tr>
+        <tr><td>Pharmacy / medical</td><td class="num">₹7,999</td><td class="num">₹7,999</td>
+          <td>Hold. Correctly placed against Marg. Compete on migration pain and support responsiveness, not price.</td></tr>
+        <tr><td>Electronics / mobiles</td><td class="num">₹6,999</td><td class="num">₹6,999</td>
+          <td>Hold. Thin-margin retailers with real price sensitivity.</td></tr>
+        <tr><td>Clothing, footwear, cosmetics</td><td class="num">₹5,999</td><td class="num">₹5,999</td>
+          <td>Hold. Mid-market is crowded; there's no headroom to take and no reason to give any away.</td></tr>
+        <tr><td>Furniture / home</td><td class="num">₹6,999</td><td class="num">₹6,999</td>
+          <td>Hold.</td></tr>
+        <tr><td>Stationery / books</td><td class="num">₹4,999</td><td class="num">₹4,999<br><span style="font-size:.85em;color:var(--ink-3)">billed Apr–Jun</span></td>
+          <td>Hold the price, change the <em>timing</em>. This trade earns its year in school-list season. Bill annually in April–June when the cash is in the till, and churn stops looking like churn.</td></tr>
+        <tr class="dim"><td><strong>Kirana / general store</strong></td><td class="num">₹4,999</td>
+          <td class="num">₹0–999</td>
+          <td><strong>Cut to self-serve.</strong> Drop the install fee entirely. See section 02.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <div class="lab">Test it before you believe it</div>
+    <p>The proposed prices are not in the workbook — the model ships with your current price list so the baseline is yours, not mine. To see the effect, edit columns C, D and E on the <code>Unit Economics</code> sheet. Everything downstream, including both three-year cases, recalculates.</p>
+  </div>
+
+  <div class="col">
+    <h3>On the ₹4,999 launch service</h3>
+    <p>Keep it for restaurant, pharmacy, auto parts and electronics — those shops genuinely need catalogue entry, printer setup and training, and they'll pay for it. Drop it entirely for kirana self-serve, where it's the single largest barrier to a free signup.</p>
+    <p>But watch its share of revenue. In the base case it is <strong>57% of year-one revenue and still 38% by year three</strong>. That is services income carrying a person's day, at roughly 40% margin, and an acquirer will value that part of your business on an EBITDA multiple rather than a revenue multiple. The Summary sheet tracks the ratio; keep it heading down.</p>
+  </div>
+</section>
+
+<section>
+  <div class="shead"><div class="snum">04</div><div>
+    <h2>The sequence</h2>
+    <p class="qsub">Three phases, and what each one has to prove before the next starts</p>
+  </div></div>
+
+  <div class="phases">
+    <div class="phase">
+      <div class="when">Now → Q1 2027</div>
+      <h4>Prove it in restaurants</h4>
+      <p>One trade, one city, no new features. The goal is not revenue — it is five reference shops that have run a full month of service without you in the room.</p>
+      <ul>
+        <li>Close the release gate: CI run, printer certification, automated backups</li>
+        <li>5 pilot restaurants, discounted, in one cluster you can drive to</li>
+        <li>Instrument everything: bill time, print failures, sync conflicts, support calls</li>
+        <li>Then raise restaurant pricing to ₹14,999 and sell the next 20 at full price</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="when">2027</div>
+      <h4>Add pharmacy and auto parts</h4>
+      <p>Two trades with the best retention and the least competition, sold through channels rather than door-to-door.</p>
+      <ul>
+        <li>Pharmacy via AIOCD district associations and pharma distributors</li>
+        <li>Auto parts via the physical clusters — one market at a time</li>
+        <li>Ship e-invoicing and e-way bills; without them you cannot sell to larger shops</li>
+        <li>Launch kirana self-serve as a free funnel with zero sales cost</li>
+        <li>Target: ~300 active shops, ₹21 L exit ARR</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="when">2028 →</div>
+      <h4>Widen, or raise</h4>
+      <p>The fork in the plan. At roughly 600 shops your engineering and support base pays for itself, and you choose whether to grow on your own cash or somebody else's.</p>
+      <ul>
+        <li>Base: 5 reps, add electronics and clothing, ~650 shops by end of 2029</li>
+        <li>Funded: raise ₹2.5–3 Cr, 40+ reps, ~4,500 shops, ₹3 Cr ARR</li>
+        <li>Either way: monetise the udhar ledger through lending referral</li>
+        <li>Either way: cut to the trades you can actually certify</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="col">
+    <h3>How you actually reach each trade</h3>
+    <p>This is the part most POS plans skip, and it's the part that decides whether the CAC numbers hold. The trades differ enormously in how reachable they are, and that difference is already priced into the model's CAC multipliers.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Shop type</th><th>Channel that actually works</th><th class="num">CAC</th></tr></thead>
+      <tbody>
+        <tr class="hi"><td><strong>Restaurant</strong></td><td>Walk the food streets. Restaurants cluster, display their menus publicly, and talk to each other. A visible Petpooja bill is a qualified lead. Aggregator partner lists are a second source.</td><td class="num">₹5,000</td></tr>
+        <tr class="hi"><td><strong>Pharmacy</strong></td><td>District AIOCD associations and pharma distributors. The distributor's field rep already visits every chemist weekly — that route is the channel. Slower to open, then very high conversion.</td><td class="num">₹5,500</td></tr>
+        <tr class="hi"><td><strong>Auto parts</strong></td><td>Physical clusters. One market at a time, on foot. Shops are dense, referrals travel fast within a market, and fitment demos sell themselves.</td><td class="num">₹5,000</td></tr>
+        <tr><td>Electronics / mobiles</td><td>AIMRA and brand distributor networks; mobile retailers are organised and vocal about margin pressure.</td><td class="num">₹5,000</td></tr>
+        <tr><td>Clothing, footwear, cosmetics</td><td>Market associations and mall/high-street clusters. Less organised, longer cycle, higher cost.</td><td class="num">₹6,000</td></tr>
+        <tr><td>Furniture, stationery</td><td>Inbound and referral only. Too few outlets and too dispersed to justify a route.</td><td class="num">₹6,500</td></tr>
+        <tr class="dim"><td><strong>Kirana</strong></td><td>Self-serve. There is no channel — that is the entire problem. Thirteen million individual doors, no association, no distributor with software authority.</td><td class="num">₹7,000</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="cap">Note the pattern: the three trades at the top of the ranking are exactly the three with a real channel. That is not coincidence — reachability is one of the six scoring dimensions, and it is doing a lot of the work.</p>
+</section>
+
+<section>
+  <div class="shead"><div class="snum">05</div><div>
+    <h2>The two cases</h2>
+    <p class="qsub">What each needs, and what each is worth</p>
+  </div></div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Year 3 outcome</th><th class="num">Base case</th><th class="num">Funded case</th><th>Difference</th></tr></thead>
+      <tbody>
+        <tr><td>Sales reps at exit</td><td class="num">5</td><td class="num">42</td><td>The entire divergence is a hiring decision.</td></tr>
+        <tr><td>New shops signed in year 3</td><td class="num">432</td><td class="num">3,360</td><td>Same close rate per rep; more reps.</td></tr>
+        <tr class="hi"><td><strong>Active shops at exit</strong></td><td class="num">652</td><td class="num">4,501</td><td>After churn.</td></tr>
+        <tr><td>Total revenue, year 3</td><td class="num">₹57 L</td><td class="num">₹3.9 Cr</td><td>Includes launch service income.</td></tr>
+        <tr class="hi"><td><strong>Exit ARR</strong></td><td class="num">₹45 L</td><td class="num">₹3.0 Cr</td><td>The number an acquirer prices off.</td></tr>
+        <tr><td>Cumulative EBITDA</td><td class="num">−₹39 L</td><td class="num">−₹2.4 Cr</td><td>Roughly the cash you must have.</td></tr>
+        <tr><td>Shops needed to cover fixed cost</td><td class="num">584</td><td class="num">3,804</td><td>Both cases cross this line in year 3 — the base pays for itself, sales spend is then optional.</td></tr>
+        <tr><td>Implied enterprise value</td><td class="num">₹0.9–1.4 Cr</td><td class="num">₹9–12 Cr</td><td>At 2–3× and 3–4× ARR respectively.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Two things worth reading off this rather than past it.</p>
+    <p><strong>The base case is not comfortable.</strong> ₹39 lakh of cumulative burn over three years is real money for a solo founder, even with your own draw modelled at ₹40,000 a month rather than market rate. If that runway doesn't exist, the lever is the hiring plan on the Base Case sheet — fewer reps means slower growth and a smaller hole, and the model will show you the exact trade.</p>
+    <p><strong>Neither case is EBITDA-positive by year three</strong>, and that's correct rather than a modelling error. Both cross the point where engineering and support are covered by subscription revenue; both are then deliberately spending the surplus on sales because LTV/CAC in the lead trades is 6–9×. Spending into that ratio is the right decision, and it's what makes the year-four picture very different from the year-three one.</p>
+  </div>
+
+  <div class="note warn">
+    <div class="lab">Where this model is most likely wrong</div>
+    <p><strong>Closes per rep.</strong> Everything scales off 8 closes per rep per month. That's achievable in a dense restaurant cluster and optimistic almost everywhere else. If the real number is 5, every revenue figure falls by around 40%. Measure it with your own first rep before hiring a second.</p>
+    <p><strong>Churn.</strong> All eleven rates are estimates — you have no renewal data, because you have no customers. Pharmacy at 12% and kirana at 30% are directional judgements about how embedded the software becomes, not observations. Your first renewal cohort will move these more than any other input.</p>
+    <p><strong>Outlet counts.</strong> Kirana and pharmacy are well sourced; restaurant is a defensible industry estimate; the other eight are order-of-magnitude guesses flagged Low on the Market Sizing sheet. This matters less than it looks, because the ranking is driven by price headroom and retention rather than by market size — and because sales capacity, not market size, is what actually limits revenue in every scenario here.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="grid">
+    <div>
+      <h4>About the model</h4>
+      <p style="margin:0 0 12px">The workbook is fully live — 1,106 formulas, no hardcoded outputs, verified to recalculate without errors. Blue cells are inputs, yellow cells are the assumptions that move the answer most. Pricing comes from your own <code>docs/PRICING_BUNDLE.md</code>; competitor pricing was checked on 22 August 2026. Petpooja does not publish rates, so those are reported ranges rather than vendor-confirmed figures.</p>
+      <p style="margin:0">Revenue is built bottom-up from headcount and close rates, not top-down from market size. Every market figure here exists to rank trades against each other. This is a planning model for arguing with, not a forecast, and not financial advice.</p>
+    </div>
+    <div>
+      <h4>Sources</h4>
+      <ul>
+        <li><a href="https://www.dineopen.com/blog/petpooja-pricing-plans-2026.html">Petpooja pricing 2026</a></li>
+        <li><a href="https://mybillbook.in/pricing-plans">myBillBook pricing plans</a></li>
+        <li><a href="https://www.itforsme.in/pricing/vyapar-india">Vyapar price India 2026</a></li>
+        <li><a href="https://www.restaurantindia.in/article/india-to-be-the-3rd-largest-food-service-market-by-2028-overtaking-japan-nrai-ifsr-2024">NRAI food services report</a></li>
+        <li><a href="https://www.etvbharat.com/en/health/pharmacies-across-india-shut-may-20-epharmacy-concerns-enn26051305103">AIOCD pharmacy count</a></li>
+        <li><a href="https://www.ibef.org/industry/retail-india">IBEF India retail overview</a></li>
+        <li><a href="https://windsordrake.com/saas-valuation-multiples/">SaaS valuation multiples by ARR band</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+</div>

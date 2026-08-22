@@ -263,17 +263,17 @@ export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
 };
 
 const BUSINESS_TYPE_PRICES: Record<BusinessType, Record<Exclude<PlanCode, "standard">, [number, number]>> = {
-  kirana:      { starter: [249, 2499], growth: [599, 4999], pro: [999, 8999] },
+  kirana:      { starter: [99, 999], growth: [599, 4999], pro: [999, 8999] },
   stationery:  { starter: [249, 2499], growth: [599, 4999], pro: [999, 8999] },
   other:       { starter: [249, 2499], growth: [599, 4999], pro: [999, 8999] },
   clothing:    { starter: [349, 3499], growth: [699, 5999], pro: [1099, 9999] },
   footwear:    { starter: [349, 3499], growth: [699, 5999], pro: [1099, 9999] },
   cosmetics:   { starter: [349, 3499], growth: [699, 5999], pro: [1099, 9999] },
-  auto_parts:  { starter: [399, 3999], growth: [799, 6999], pro: [1199, 10999] },
+  auto_parts:  { starter: [399, 3999], growth: [999, 8999], pro: [1199, 10999] },
   electronics: { starter: [399, 3999], growth: [799, 6999], pro: [1199, 10999] },
   furniture:   { starter: [399, 3999], growth: [799, 6999], pro: [1199, 10999] },
   pharmacy:    { starter: [499, 4999], growth: [899, 7999], pro: [1299, 11999] },
-  restaurant:  { starter: [599, 5999], growth: [999, 8999], pro: [1499, 13999] },
+  restaurant:  { starter: [599, 5999], growth: [1499, 14999], pro: [1999, 19999] },
   manufacturing: { starter: [999, 9999], growth: [1999, 18999], pro: [3499, 32999] },
 };
 
@@ -390,6 +390,9 @@ export function getPlanForBusinessType(code: PlanCode, businessType: BusinessTyp
     ...base,
     price,
     annualPrice,
+    headline: businessType === "kirana" && code === "starter"
+      ? "Self-serve billing and stock control for an owner-run shop."
+      : base.headline,
     features: shopTypeFeatures(code, businessType),
     bullets: shopTypeBullets(code, businessType),
   };

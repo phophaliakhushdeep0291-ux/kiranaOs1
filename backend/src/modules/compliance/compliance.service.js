@@ -5,7 +5,7 @@ import { AppError } from "../../middleware/error.js";
 import { getDateRange } from "../../utils/dates.js";
 import { gspHttpReadiness, submitEInvoiceToGsp, submitEWayBillToGsp } from "./gsp-http.provider.js";
 import { createAuditLog } from "../audit/audit.service.js";
-import { validateGstin, validateHsn } from "../../utils/gst.js";
+import { allocateInvoiceDiscount, validateGstin, validateHsn } from "../../utils/gst.js";
 import { billSellerIdentity } from "../../utils/gstIdentity.js";
 
 export { validateGstin, validateHsn } from "../../utils/gst.js";
@@ -159,39 +159,41 @@ export function calculateLineTaxBreakdown(line, gstMode, sellerStateCode = "", b
   };
 }
 
-/**
- * Reconcile invoice-level post-tax concessions across lines without changing the GST liability.
- * The billing engine intentionally treats the counter's bill discount as a post-tax concession;
- * exports must therefore show both gross value and the allocated concession so their net values
- * reconcile exactly to Bill.grandTotal instead of silently overstating the invoice value.
- */
+/** Allocate an invoice-recorded discount before calculating every GST rate bucket. */
 export function buildInvoiceTaxSnapshot(bill, sellerStateCode = "") {
-  const grossLines = bill.items.map((item) => ({
-    item,
-    tax: calculateLineTaxBreakdown(item, bill.gstMode, sellerStateCode, bill.buyerStateCode),
-  }));
-  const grossInvoiceValue = Number(grossLines.reduce((sum, row) => sum + row.tax.lineTotal, 0).toFixed(2));
-  const allocatableGrossValue = Math.max(0, grossInvoiceValue);
-  let remainingDiscount = Math.min(Math.max(Number(bill.discount ?? 0), 0), allocatableGrossValue);
-  const lines = grossLines.map((row, index) => {
-    const allocatedDiscount = index === grossLines.length - 1
-      ? remainingDiscount
-      : Math.min(remainingDiscount, Number((Number(bill.discount ?? 0) * Math.max(0, row.tax.lineTotal) / Math.max(allocatableGrossValue, 0.01)).toFixed(2)));
-    remainingDiscount = Number((remainingDiscount - allocatedDiscount).toFixed(2));
+  const enteredValues = bill.items.map((item) => Math.abs(Number(item.lineTotal) || 0));
+  const allocation = allocateInvoiceDiscount(enteredValues, Math.abs(Number(bill.discount ?? 0)));
+  const lines = bill.items.map((item, index) => {
+    const sign = Number(item.lineTotal) < 0 ? -1 : 1;
+    const discountedLineTotal = (allocation.discountedLineTotals[index] ?? 0) * sign;
+    const tax = calculateLineTaxBreakdown(
+      { ...item, lineTotal: discountedLineTotal },
+      bill.gstMode,
+      sellerStateCode,
+      bill.buyerStateCode,
+    );
+    const allocatedDiscount = (allocation.allocations[index] ?? 0) * sign;
     return {
-      ...row,
-      grossLineTotal: row.tax.lineTotal,
+      item,
+      tax,
+      grossLineTotal: Number((tax.lineTotal + allocatedDiscount).toFixed(2)),
       discount: Number(allocatedDiscount.toFixed(2)),
-      netLineTotal: Number((row.tax.lineTotal - allocatedDiscount).toFixed(2)),
+      netLineTotal: tax.lineTotal,
     };
   });
+  const netInvoiceValue = Number(lines.reduce((sum, row) => sum + row.netLineTotal, 0).toFixed(2));
+  const discount = Number(lines.reduce((sum, row) => sum + row.discount, 0).toFixed(2));
+  const calculatedTax = Number(lines.reduce((sum, row) => sum + row.tax.tax, 0).toFixed(2));
+  const recordedTax = Number(Number(bill.gst ?? calculatedTax).toFixed(2));
   return {
     lines,
     taxableValue: Number(lines.reduce((sum, row) => sum + row.tax.taxableValue, 0).toFixed(2)),
-    tax: Number(lines.reduce((sum, row) => sum + row.tax.tax, 0).toFixed(2)),
-    discount: Number(lines.reduce((sum, row) => sum + row.discount, 0).toFixed(2)),
-    grossInvoiceValue,
-    netInvoiceValue: Number(lines.reduce((sum, row) => sum + row.netLineTotal, 0).toFixed(2)),
+    tax: calculatedTax,
+    recordedTax,
+    taxDifference: Number((recordedTax - calculatedTax).toFixed(2)),
+    discount,
+    grossInvoiceValue: Number((netInvoiceValue + discount).toFixed(2)),
+    netInvoiceValue,
   };
 }
 
@@ -306,7 +308,7 @@ function csvCell(value) {
 
 export function registerToCsv(register) {
   const keys = ["invoiceNumber", "invoiceDate", "invoiceType", "documentType", "originalInvoiceNumber", "originalInvoiceDate", "sellerGstin", "sellerLegalName", "sellerTradeName", "customerName", "buyerGstin", "sellerStateCode", "placeOfSupply", "supplyType", "hsn", "description", "quantity", "unit", "gstRate", "taxableValue", "cgst", "sgst", "igst", "grossLineTotal", "discount", "lineTotal", "paymentModes"];
-  const labels = ["Document Number", "Document Date", "Bill Type", "Document Type", "Original Invoice Number", "Original Invoice Date", "Seller GSTIN", "Seller Legal Name", "Seller Trade Name", "Customer", "Buyer GSTIN", "Seller State", "Place of Supply", "Supply Type", "HSN", "Description", "Quantity", "Unit", "GST Rate", "Taxable Value", "CGST", "SGST", "IGST", "Gross Line Total", "Post-tax Discount", "Net Line Total", "Payment Modes"];
+  const labels = ["Document Number", "Document Date", "Bill Type", "Document Type", "Original Invoice Number", "Original Invoice Date", "Seller GSTIN", "Seller Legal Name", "Seller Trade Name", "Customer", "Buyer GSTIN", "Seller State", "Place of Supply", "Supply Type", "HSN", "Description", "Quantity", "Unit", "GST Rate", "Taxable Value", "CGST", "SGST", "IGST", "Gross Line Total", "Invoice Discount", "Net Line Total", "Payment Modes"];
   return [labels.join(","), ...register.rows.map((row) => keys.map((key) => csvCell(row[key])).join(","))].join("\r\n");
 }
 
@@ -800,8 +802,8 @@ function canonicalPayload(bill, shop) {
   return {
     schemaVersion: "kiranaos-gst-sandbox-v1",
     seller: { legalName: seller.sellerLegalName, tradeName: seller.sellerTradeName, gstin: seller.sellerGstin, stateCode: seller.sellerStateCode, address: seller.sellerAddress, city: seller.sellerCity },
-    invoice: { number: bill.billNo, date: bill.businessDate.toISOString(), type: bill.billType, documentType: bill.billType === "sales_return" ? "credit_note" : "invoice", documentTypeCode: bill.billType === "sales_return" ? "CRN" : "INV", originalInvoiceId: bill.returnOfBillId ?? null, customerName: bill.customerName, buyerGstin: bill.buyerGstin, buyerStateCode: bill.buyerStateCode, buyerAddress: bill.buyerAddress, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
-    items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.hsn || item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
+    invoice: { number: bill.billNo, date: bill.businessDate.toISOString(), type: bill.billType, documentType: bill.billType === "sales_return" ? "credit_note" : "invoice", documentTypeCode: bill.billType === "sales_return" ? "CRN" : "INV", originalInvoiceId: bill.returnOfBillId ?? null, customerName: bill.customerName, buyerGstin: bill.buyerGstin, buyerStateCode: bill.buyerStateCode, buyerAddress: bill.buyerAddress, taxableValue: snapshot.taxableValue, tax: snapshot.tax, invoiceDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
+    items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.hsn || item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, invoiceDiscount: discount, total: netLineTotal })),
   };
 }
 
@@ -895,7 +897,7 @@ function canonicalEWayPayload(bill, shop, transport) {
     supplyType: "outward",
     seller: { legalName: seller.sellerLegalName, tradeName: seller.sellerTradeName, gstin: seller.sellerGstin, stateCode: seller.sellerStateCode, address: seller.sellerAddress, city: seller.sellerCity },
     buyer: { name: bill.customerName, gstin: bill.buyerGstin, stateCode: bill.buyerStateCode, address: bill.buyerAddress },
-    invoice: { number: bill.billNo, date: bill.businessDate.toISOString(), type: bill.billType, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
+    invoice: { number: bill.billNo, date: bill.businessDate.toISOString(), type: bill.billType, taxableValue: snapshot.taxableValue, tax: snapshot.tax, invoiceDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
     transport: {
       mode: transport.transportMode,
       transporterId: transport.transporterId || null,
@@ -907,7 +909,7 @@ function canonicalEWayPayload(bill, shop, transport) {
       documentDate: transport.transportDocumentDate || null,
       deliveryAddress: transport.deliveryAddress,
     },
-    items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.hsn || item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
+    items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.hsn || item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, invoiceDiscount: discount, total: netLineTotal })),
   };
 }
 

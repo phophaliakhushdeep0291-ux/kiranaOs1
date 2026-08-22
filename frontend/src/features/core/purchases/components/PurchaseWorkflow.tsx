@@ -24,7 +24,7 @@ export function PurchaseWorkflow({ children }: { children: ReactNode }) {
             className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold"
             onClick={() => setShowPlanning((open) => !open)}
             aria-expanded={showPlanning}
-            aria-controls="purchase-planning-panel"
+            aria-controls={showPlanning ? "purchase-planning-panel" : undefined}
           >
             Planning & insights
             <ChevronDown size={14} className={cn("transition-transform", showPlanning && "rotate-180")} />

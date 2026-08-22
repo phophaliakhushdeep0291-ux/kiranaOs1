@@ -17,6 +17,7 @@ const requiredFiles = [
   "docs/MONEY_MIGRATION.md",
   "docs/PAISE_SHADOW_COLUMNS.md",
   "scripts/production-check.js",
+  "scripts/check-app-module-graph.js",
   "scripts/migration-column-parser.js",
   "scripts/backup-postgres.sh",
   "prisma/schema.prisma",

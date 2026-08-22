@@ -748,7 +748,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
           >
             <Menu size={19} aria-hidden="true" />
           </button>
-          <div className="min-w-0 flex-1">
+          <div className="app-topbar-heading">
             <h1 className="app-topbar-title">{resolvedPageTitle}</h1>
             {getPageSubtitle(loc) && (
               <p className="app-topbar-subtitle">{getPageSubtitle(loc)}</p>
@@ -799,16 +799,13 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
 
           {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
 
-          <Link href="/sync-status">
-            <div aria-label="Open sync alerts"
-              className="app-topbar-icon-button app-topbar-alerts">
-              <Bell size={18} aria-hidden="true" />
-              {attentionCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
-                  {attentionCount}
-                </span>
-              )}
-            </div>
+          <Link href="/sync-status" aria-label="Open sync alerts" className="app-topbar-icon-button app-topbar-alerts">
+            <Bell size={18} aria-hidden="true" />
+            {attentionCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
+                {attentionCount}
+              </span>
+            )}
           </Link>
 
           <DropdownMenu>

@@ -99,7 +99,7 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/core/subscription/components/SubscriptionStatusBanner.tsx": 5,
   "features/core/subscription/components/UpgradeModal.tsx": 20,
   "features/core/subscription/components/UpgradePrompt.tsx": 2,
-  "features/core/subscription/pages/PlansPage.tsx": 19,
+  "features/core/subscription/pages/PlansPage.tsx": 18,
   "features/core/subscription/pages/SubscriptionPage.tsx": 22,
   "features/core/support/ReportIssueButton.tsx": 6,
   "features/core/support/pages/AskArthaPage.tsx": 5,
