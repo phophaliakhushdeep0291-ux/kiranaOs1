@@ -15,6 +15,21 @@ describe("shared touch-target primitives", () => {
     expect(readFileSync("src/components/ui/select.tsx", "utf8")).toContain("h-11 min-h-11");
   });
 
+  it("keeps every dropdown row 44px, including the destructive ones", () => {
+    // The row menu on a product card stacks five actions — Edit, Duplicate,
+    // Customer pricing, Print label and Recycle — and at py-1.5 they measured 30px
+    // on a phone. Recycle sitting one 30px row below Print label is a mis-tap that
+    // deletes a product. This was the one interactive primitive this file did not
+    // pin, which is why it drifted.
+    const source = readFileSync("src/components/ui/dropdown-menu.tsx", "utf8");
+    // Counted rather than split, so no escape sequences are involved: every
+    // interactive row carries select-none, and each must also carry min-h-11.
+    const interactiveRows = source.split("select-none").length - 1;
+    const pinnedRows = source.split("min-h-11").length - 1;
+    expect(interactiveRows).toBeGreaterThan(0);
+    expect(pinnedRows).toBeGreaterThanOrEqual(interactiveRows);
+  });
+
   it("keeps the shared dialog close affordance 44px at every breakpoint", () => {
     const source = readFileSync("src/components/ui/dialog.tsx", "utf8");
     expect(source).toContain("grid h-11 w-11 place-items-center");
