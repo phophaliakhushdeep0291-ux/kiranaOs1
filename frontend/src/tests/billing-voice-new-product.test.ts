@@ -151,6 +151,42 @@ describe("dictated in Hindi", () => {
     expect(parseNewProductLine("दो पैकेट रस्क")).toBeNull();
   });
 
+  it("names the customer when the command says so in Hindi", () => {
+    // "ke naam" was matched only in Latin, so a Hindi shop putting a bill on a
+    // customer's account got no customer — and with it no udhar ledger entry.
+    expect(parseBillingVoiceCommand("रमेश के नाम दो किलो चीनी", CATALOGUE).customerName).toBe("रमेश");
+    expect(parseBillingVoiceCommand("ग्राहक रमेश दो किलो चीनी", CATALOGUE).customerName).toBe("रमेश");
+  });
+
+  it("still names the customer in Hinglish", () => {
+    expect(parseBillingVoiceCommand("Ramesh ke naam 2 kilo chini", CATALOGUE).customerName).toBe("Ramesh");
+    expect(parseBillingVoiceCommand("customer Ramesh 2 kilo chini", CATALOGUE).customerName).toBe("Ramesh");
+  });
+
+  it("records udhar when the amount is spoken in Hindi", () => {
+    // Money. "500 उधार" set no credit at all, so the bill looked settled
+    // and the customer's ledger never moved.
+    const draft = parseBillingVoiceCommand("रमेश के नाम दो किलो चीनी, 500 उधार", CATALOGUE);
+
+    expect(draft.customerName).toBe("रमेश");
+    expect(draft.udharAmount).toBe(500);
+    expect(draft.paymentMode).toBe("credit");
+    expect(draft.lines).toEqual([expect.objectContaining({ quantity: 2, unit: "kg" })]);
+  });
+
+  it("reads a Hindi cash tender", () => {
+    const draft = parseBillingVoiceCommand("दो किलो चीनी, 100 नकद", CATALOGUE);
+
+    expect(draft.paymentMode).toBe("cash");
+  });
+
+  it("still reads the English tender words", () => {
+    const draft = parseBillingVoiceCommand("Ramesh ke naam 2 kilo chini, 500 udhar", CATALOGUE);
+
+    expect(draft.udharAmount).toBe(500);
+    expect(draft.paymentMode).toBe("credit");
+  });
+
   it("still bills a Hindi-named product the shop already has", () => {
     const draft = parseBillingVoiceCommand("दो किलो चीनी", CATALOGUE);
 
