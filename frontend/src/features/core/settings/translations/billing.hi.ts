@@ -42,6 +42,13 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.voice.parse": "कमांड पढ़ें",
   "billing.voice.draftTitle": "AI ड्राफ्ट जांचें",
   "billing.voice.addToCart": "आइटम कार्ट में डालें",
+  "billing.voice.newProductsTitle": "नई चीज़ें — आपकी सूची में जुड़ेंगी",
+  "billing.page.newProductApproval": "नई चीज़ें सूची में जोड़ें?",
+  "billing.page.newProductApprovalDetail": "{count} चीज़ें अभी सूची में नहीं हैं। ओनर PIN से ये आपके बताए दाम पर सेव हो जाएंगी और बिल चलता रहेगा।",
+  "billing.page.newProductApprove": "सेव करके बिल में जोड़ें",
+  "billing.page.newProductReason": "बिल बनाते समय काउंटर से जोड़ा गया",
+  "billing.page.newProductFailed": "यह चीज़ नहीं जुड़ सकी",
+  "billing.voice.newProductsHint": "आपके बताए दाम पर सेव होंगी। लागत और पैक की जानकारी बाद में Products में भरें।",
   "billing.voice.customer": "ग्राहक: {name}",
   "billing.voice.udharDetected": "उधार मिला: ₹{amount}",
 

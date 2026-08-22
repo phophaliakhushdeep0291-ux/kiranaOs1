@@ -97,6 +97,18 @@ const CATEGORY_BADGE = [
   "bg-indigo-50 text-indigo-700",
   "bg-teal-50 text-teal-700",
 ];
+/**
+ * A product that was filed in a hurry and still needs finishing.
+ *
+ * Read from the data rather than a flag: an item added at the counter carries the price
+ * it was sold at and nothing else, and a cost of zero is what every margin, profit and
+ * valuation report will quietly get wrong until someone fills it in. That also catches
+ * a typed-in product whose cost was skipped, which is the same job for the same reason.
+ */
+function needsDetails(product: Product): boolean {
+  return averageCost(product) <= 0;
+}
+
 function categoryBadge(name: string) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
@@ -637,7 +649,14 @@ export default function ProductsPage() {
                     {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(product.name, product.category)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14px] font-black text-[var(--brand-ink)]">{product.name}</p>
+                    <p className="truncate text-[14px] font-black text-[var(--brand-ink)]">
+                      {product.name}
+                      {needsDetails(product) && (
+                        <span className="ml-1.5 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-[10px] font-bold text-amber-800">
+                          {t("products.badge.needsDetails")}
+                        </span>
+                      )}
+                    </p>
                     <p className="mt-0.5 truncate text-[11px] font-semibold capitalize text-[#64748b]">{product.category || t("products.filter.general")} · {unit}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="text-[15px] font-black text-[var(--brand)]">{rs(price)}</span>
@@ -753,7 +772,14 @@ export default function ProductsPage() {
                             )}
                           </span>
                           <div className="min-w-0">
-                            <p className="truncate font-extrabold text-[#14284e]">{product.name}</p>
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <p className="truncate font-extrabold text-[#14284e]">{product.name}</p>
+                              {needsDetails(product) && (
+                                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                                  {t("products.badge.needsDetails")}
+                                </span>
+                              )}
+                            </div>
                             {brandLine && <p className="truncate text-[11px] text-[#8a97ad]">{brandLine}</p>}
                           </div>
                         </div>

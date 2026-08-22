@@ -5,6 +5,7 @@ import {
 } from "@/lib/api/client";
 import type {
   PaymentSelection,
+  VoiceNewProductLine,
   VoiceParsedDraft,
   VoiceParsedLine,
 } from "./billing-types";
@@ -267,6 +268,72 @@ export function parseVoiceLine(
   };
 }
 
+/** Words that only ever mean "this is a new item", never part of its name. */
+const NEW_PRODUCT_WORDS = new Set(["add", "new", "naya", "nayi", "naye"]);
+
+/**
+ * An item the catalogue does not have, priced well enough to bill right now.
+ *
+ * Only ever called for a segment that matched no product. The bar for proposing one is
+ * a stated PRICE — "parle biscuit forty rupees", "add rusk at 25" — because that is the
+ * one thing a bill line cannot be invented without, and because a bare trailing number
+ * is far more likely to be a quantity ("do packet rusk") than a price. Getting that
+ * wrong would quietly put a ₹2 product in the catalogue, so a number with no money word
+ * beside it is left alone and the segment stays unmatched.
+ *
+ * The name is whatever is left once the quantity, the price and the words that carried
+ * them are removed, so "add 2 packet rusk at 25 rupees" names the product "rusk".
+ */
+export function parseNewProductLine(segment: string): VoiceNewProductLine | null {
+  const tokens = normalizeSearchText(segment).split(" ").filter(Boolean);
+  if (tokens.length === 0) return null;
+  const consumed = new Set<number>();
+
+  let sellingPrice: number | undefined;
+  tokens.forEach((token, index) => {
+    if (sellingPrice !== undefined) return;
+    const value = parseVoiceNumber(token);
+    if (value === undefined) return;
+    const previous = tokens[index - 1] ?? "";
+    const next = tokens[index + 1] ?? "";
+    // A money word on either side is what separates a price from a count.
+    if (!MONEY_WORDS.has(previous) && !MONEY_WORDS.has(next)) return;
+    sellingPrice = value;
+    consumed.add(index);
+    if (MONEY_WORDS.has(previous)) consumed.add(index - 1);
+    if (MONEY_WORDS.has(next)) consumed.add(index + 1);
+  });
+  if (sellingPrice === undefined || !(sellingPrice > 0)) return null;
+
+  let quantity = 1;
+  let unit = "piece";
+  tokens.forEach((token, index) => {
+    if (consumed.has(index)) return;
+    const value = parseVoiceNumber(token);
+    if (value === undefined || !(value > 0)) return;
+    const next = tokens[index + 1] ?? "";
+    if (!isUnitWord(next)) return;
+    quantity = value;
+    unit = normalizeSearchText(next);
+    consumed.add(index);
+    consumed.add(index + 1);
+  });
+
+  const name = tokens
+    .filter((token, index) =>
+      !consumed.has(index)
+      && !NEW_PRODUCT_WORDS.has(token)
+      && !MONEY_WORDS.has(token)
+      && !isUnitWord(token)
+      && parseVoiceNumber(token) === undefined)
+    .join(" ")
+    .trim();
+  // One stray syllable is a mishearing, not a product worth creating.
+  if (name.length < 2) return null;
+
+  return { name, sellingPrice, quantity, unit, source: segment.trim() };
+}
+
 function parseCustomerName(command: string) {
   const patterns = [
     /^\s*(.+?)\s+ke\s+naam\b/i,
@@ -420,6 +487,7 @@ export function parseBillingVoiceCommand(
   const segments = rawSegments.length > 0 ? rawSegments : [];
   const matchedProductIds = new Set<string>();
   const lines: VoiceParsedLine[] = [];
+  const newProducts: VoiceNewProductLine[] = [];
 
   for (const segment of segments) {
     const normalizedSegment = normalizeSearchText(segment);
@@ -430,7 +498,15 @@ export function parseBillingVoiceCommand(
           normalizedSegment.includes(alias),
         ),
     );
-    if (candidates.length === 0) continue;
+    if (candidates.length === 0) {
+      // Nothing in the catalogue answers to this. If the counter priced it, offer it as
+      // a product to create rather than dropping the item and stalling the bill.
+      const proposed = parseNewProductLine(segment);
+      if (proposed && !newProducts.some((row) => row.name === proposed.name)) {
+        newProducts.push(proposed);
+      }
+      continue;
+    }
     const product = candidates.sort(
       (a, b) =>
         voiceProductAliases(b)[0].length - voiceProductAliases(a)[0].length,
@@ -450,7 +526,7 @@ export function parseBillingVoiceCommand(
     paymentAmounts.upiAmount !== undefined ||
     paymentAmounts.paidAmount !== undefined,
   );
-  if (lines.length === 0 && !hasNonItemDraft && (segments.length > 0 || hasCartLikeWords(normalized)))
+  if (lines.length === 0 && newProducts.length === 0 && !hasNonItemDraft && (segments.length > 0 || hasCartLikeWords(normalized)))
     warnings.push(
       "No saved product matched this command. Add aliases/Hindi names in Products, then try again.",
     );
@@ -467,6 +543,7 @@ export function parseBillingVoiceCommand(
     );
 
   const draftWithoutFingerprint = {
+    newProducts,
     customerName,
     udharAmount,
     paymentMode,

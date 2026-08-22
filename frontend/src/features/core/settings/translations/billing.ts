@@ -46,6 +46,13 @@ export const billingEn = {
   "billing.voice.parse": "Parse command",
   "billing.voice.draftTitle": "AI draft review",
   "billing.voice.addToCart": "Add parsed items to cart",
+  "billing.voice.newProductsTitle": "New items — will be added to your catalogue",
+  "billing.page.newProductApproval": "Add new items to your catalogue?",
+  "billing.page.newProductApprovalDetail": "{count} item(s) are not in your catalogue yet. Owner PIN saves them at the price you said, and the bill carries on.",
+  "billing.page.newProductApprove": "Save and add to bill",
+  "billing.page.newProductReason": "Added from the counter while billing",
+  "billing.page.newProductFailed": "Could not add that item",
+  "billing.voice.newProductsHint": "Saved with the price you said. Fill in cost and pack details later from Products.",
   "billing.voice.customer": "Customer: {name}",
   "billing.voice.udharDetected": "Udhar detected: ₹{amount}",
 

@@ -41,6 +41,7 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.col.unit": "यूनिट",
   "products.col.mrp": "MRP",
   "products.col.costPrice": "खरीद रेट",
+  "products.badge.needsDetails": "जानकारी अधूरी",
   "products.col.sellingPrice": "बिक्री रेट",
   "products.col.stock": "स्टॉक",
   "products.col.action": "काम",

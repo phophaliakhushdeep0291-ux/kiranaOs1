@@ -45,6 +45,7 @@ export const productsEn = {
   "products.col.unit": "Unit",
   "products.col.mrp": "MRP",
   "products.col.costPrice": "Cost Price",
+  "products.badge.needsDetails": "Needs details",
   "products.col.sellingPrice": "Selling Price",
   "products.col.stock": "Stock",
   "products.col.action": "Action",
