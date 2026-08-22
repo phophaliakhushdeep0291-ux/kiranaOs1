@@ -302,6 +302,85 @@ if (ctx.skip) {
       assert.equal(paymentModes.mixedPayments.length, 1);
     });
 
+    test("udhar ageing settles oldest debt first and restores its age after a payment reversal", async () => {
+      const tenant = await createTenant(ctx.db);
+      const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const customer = await createCustomer(ctx.db, tenant.shop.id, {
+        name: "Ageing allocation customer",
+        type: "udhar",
+        udharAmount: 30,
+      });
+      const now = Date.now();
+      const oldDebit = await ctx.db.udharLedger.create({
+        data: {
+          shopId: tenant.shop.id,
+          customerId: customer.id,
+          customerName: customer.name,
+          type: "debit",
+          mode: "credit",
+          amount: 100,
+          businessDate: new Date(now - 70 * 86_400_000),
+        },
+      });
+      await ctx.db.udharLedger.create({
+        data: {
+          shopId: tenant.shop.id,
+          customerId: customer.id,
+          customerName: customer.name,
+          type: "debit",
+          mode: "credit",
+          amount: 50,
+          businessDate: new Date(now - 20 * 86_400_000),
+        },
+      });
+      const payment = await ctx.db.udharLedger.create({
+        data: {
+          shopId: tenant.shop.id,
+          customerId: customer.id,
+          customerName: customer.name,
+          type: "payment",
+          mode: "cash",
+          amount: 120,
+          businessDate: new Date(now - 5 * 86_400_000),
+        },
+      });
+
+      const afterPayment = assertSuccess(await ctx.get("/api/reports/udhar-ageing", { token: auth.accessToken }));
+      assert.equal(afterPayment.totalPendingUdharPaise, 3000);
+      assert.equal(afterPayment.buckets["60_plus_days"].amountPaise, 0);
+      assert.equal(afterPayment.buckets["8_30_days"].amountPaise, 3000);
+      assert.equal(afterPayment.customers[0].oldestPendingDate.slice(0, 10), new Date(now - 20 * 86_400_000).toISOString().slice(0, 10));
+
+      await ctx.db.$transaction([
+        ctx.db.udharLedger.update({ where: { id: payment.id }, data: { reversedAt: new Date() } }),
+        ctx.db.udharLedger.create({
+          data: {
+            shopId: tenant.shop.id,
+            customerId: customer.id,
+            customerName: customer.name,
+            type: "debit",
+            mode: "reversal",
+            amount: 120,
+            reversalOfLedgerId: payment.id,
+            businessDate: new Date(),
+          },
+        }),
+        ctx.db.customer.update({ where: { id: customer.id }, data: { udharAmount: 150 } }),
+      ]);
+
+      const afterReversal = assertSuccess(await ctx.get("/api/reports/udhar-ageing", { token: auth.accessToken }));
+      assert.equal(afterReversal.totalPendingUdharPaise, 15000);
+      assert.equal(afterReversal.buckets["60_plus_days"].amountPaise, 10000);
+      assert.equal(afterReversal.buckets["8_30_days"].amountPaise, 5000);
+      assert.equal(afterReversal.customers[0].oldestPendingDate.slice(0, 10), oldDebit.businessDate.toISOString().slice(0, 10));
+      assert.deepEqual(afterReversal.customers[0].ageingPaise, {
+        "0_7_days": 0,
+        "8_30_days": 5000,
+        "31_60_days": 0,
+        "60_plus_days": 10000,
+      });
+    });
+
     test("inventory health and top products are shop scoped", async () => {
       const a = await createTenant(ctx.db);
       const b = await createTenant(ctx.db);

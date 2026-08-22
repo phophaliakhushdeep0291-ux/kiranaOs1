@@ -196,4 +196,32 @@ describe("customer ledger accounting", () => {
     expect(ageing.zeroToSeven).toBe(500);
     expect(ageing.total).toBe(700);
   });
+
+  it("restores the original debt age when a payment is reversed", () => {
+    const now = new Date(Date.UTC(2026, 5, 5));
+    const originalPayment = {
+      ...entry("ledger_payment", "PAYMENT", 800, 1),
+      source_type: "payment",
+      source_id: "payment_1",
+      payment_id: "payment_1",
+      mode: "cash",
+    };
+    const reversal = {
+      ...entry("ledger_reversal", "CORRECTION", 800, 0),
+      source_type: "payment_reversal",
+      source_id: "payment_1",
+      payment_id: "payment_1",
+    };
+    const ageing = calculateUdharAgeing([
+      entry("old", "BILL", 1000, 35),
+      entry("new", "BILL", 500, 3),
+      originalPayment,
+      reversal,
+    ], now);
+
+    expect(calculateLedgerBalance([entry("old", "BILL", 1000, 35), entry("new", "BILL", 500, 3), originalPayment, reversal])).toBe(1500);
+    expect(ageing.thirtyPlus).toBe(1000);
+    expect(ageing.zeroToSeven).toBe(500);
+    expect(ageing.total).toBe(1500);
+  });
 });
