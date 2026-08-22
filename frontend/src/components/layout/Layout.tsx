@@ -876,7 +876,10 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
             pageHasOwnTopbarActions ? "bg-[#ffffff]" : "bg-white",
           )}
         >
-          <SyncAlertBanner />
+          {/* The banner exists to point at this page — "open Sync Status to review", plus a
+              View link. On the page itself that is a loop, and on a phone it spends scarce
+              vertical space above the very failure the owner opened the page to read. */}
+          {cleanPath(loc) !== "/sync-status" && <SyncAlertBanner />}
           <DemoModeBanner />
           {children}
         </main>

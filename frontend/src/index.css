@@ -725,6 +725,16 @@
     gap: 0.5rem;
   }
 
+  /* Sync Status carries two short actions. Stacked full-width they cost ~110px at the top
+     of a phone — above the failure they refer to — and the compact flex row only starts at
+     420px, which most handsets never reach. Two columns from 360px covers every common
+     phone width; below that the labels would clip, and this shell clips silently. */
+  @media (min-width: 360px) {
+    .sync-status-header .responsive-action-row {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
   .pos-filter-card {
     @apply rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-sm;
   }
