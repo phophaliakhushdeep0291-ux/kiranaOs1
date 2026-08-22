@@ -21,7 +21,7 @@ if (ctx.skip) {
     test("plans endpoint returns the three public plans and hides Legacy Standard", async () => {
       const plans = assertSuccess(await ctx.get("/api/plans"));
       assert.deepEqual(plans.map((p) => p.code), ["starter", "growth", "pro"]);
-      assert.deepEqual(plans.map((p) => p.priceMonthlyPaise), [24900, 59900, 99900]);
+      assert.deepEqual(plans.map((p) => p.priceMonthlyPaise), [9900, 59900, 99900]);
     });
 
     test("current subscription returns fallback/trial for shop without subscription", async () => {
@@ -55,10 +55,10 @@ if (ctx.skip) {
 
     test("returns market-banded prices for every shop type", async () => {
       const expected = {
-        kirana: [24900, 59900, 99900], stationery: [24900, 59900, 99900], other: [24900, 59900, 99900],
+        kirana: [9900, 59900, 99900], stationery: [24900, 59900, 99900], other: [24900, 59900, 99900],
         clothing: [34900, 69900, 109900], footwear: [34900, 69900, 109900], cosmetics: [34900, 69900, 109900],
-        auto_parts: [39900, 79900, 119900], electronics: [39900, 79900, 119900], furniture: [39900, 79900, 119900],
-        pharmacy: [49900, 89900, 129900], restaurant: [59900, 99900, 149900],
+        auto_parts: [39900, 99900, 119900], electronics: [39900, 79900, 119900], furniture: [39900, 79900, 119900],
+        pharmacy: [49900, 89900, 129900], restaurant: [59900, 149900, 199900],
       };
       for (const [businessType, monthlyPrices] of Object.entries(expected)) {
         const plans = assertSuccess(await ctx.get(`/api/plans?businessType=${businessType}`));

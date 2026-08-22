@@ -99,7 +99,7 @@ export default function SettingsPage() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-100">{t("settings.hub.eyebrow")}</p>
-              <h1 className="mt-1 font-display text-[24px] font-black tracking-tight">{t("settings.hub.title")}</h1>
+              <h2 className="mt-1 font-display text-[24px] font-black tracking-tight">{t("settings.hub.title")}</h2>
               <p className="mt-1 max-w-[260px] text-[12px] leading-5 text-blue-100">{t("settings.hub.subtitle")}</p>
             </div>
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/20"><Settings2 size={22} /></span>

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { billPayload, createCustomer, createProduct, createTenant, login } from "./factories.js";
+import { ensurePrimaryLocation } from "../../src/modules/stores/stores.service.js";
 
 const ctx = await createIntegrationContext();
 
@@ -27,6 +28,19 @@ if (ctx.skip) {
   }
 
   describe("retail operations foundation", () => {
+    test("initializes one primary location under concurrent first requests", async () => {
+      const tenant = await createTenant(ctx.db, { planCode: "pro" });
+      await ctx.db.storeLocation.deleteMany({ where: { shopId: tenant.shop.id } });
+
+      const locations = await Promise.all(
+        Array.from({ length: 12 }, () => ensurePrimaryLocation(tenant.shop.id, ctx.db)),
+      );
+
+      assert.equal(new Set(locations.map((location) => location.id)).size, 1);
+      assert.equal(await ctx.db.storeLocation.count({ where: { shopId: tenant.shop.id, code: "MAIN" } }), 1);
+      assert.equal(locations[0].isPrimary, true);
+    });
+
     test("creates a second store and atomically transfers location stock", async () => {
       const { tenant, auth } = await ownerContext();
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Branch Rice", stockBaseQty: 20 });

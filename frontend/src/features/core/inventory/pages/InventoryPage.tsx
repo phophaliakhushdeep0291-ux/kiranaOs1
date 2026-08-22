@@ -25,7 +25,6 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   AlertTriangle,
@@ -772,14 +771,14 @@ export default function InventoryPage() {
         </DropdownMenu>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)} className="space-y-4">
+      <div className="space-y-4">
         {activeTab !== "dashboard" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 py-3">
             <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? t("inventory.page.movementHistory") : activeTab === "purchase-bills" ? t("inventory.page.purchaseBills") : t("inventory.page.insights")}</p><p className="text-[11px] text-[#718096]">{t("inventory.page.detailRecords")}</p></div>
             <Button variant="outline" className="h-9 rounded-[8px] text-[11px]" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />{t("inventory.page.backToStock")}</Button>
           </div>
         ) : null}
-        <TabsContent value="dashboard" className="mt-0 space-y-4">
+        {activeTab === "dashboard" ? <div className="mt-0 space-y-4">
           {/* `min-w-0` on the grid child: a grid item defaults to `min-width:auto`,
               so it refuses to shrink below its content's intrinsic width. The
               240px search box below made that 384px, which pushed this card nine
@@ -800,7 +799,7 @@ export default function InventoryPage() {
                         "Search by". */}
                     <div className="relative min-w-0 flex-1 basis-full sm:basis-0 sm:min-w-[240px] lg:w-[340px]">
                       <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7a89a3]" />
-                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("inventory.page.search")} className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
+                      <Input aria-label={t("inventory.page.search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("inventory.page.search")} className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
                     </div>
                     <Button variant="outline" className="h-10 rounded-[8px] px-3 text-[12px]" onClick={() => setStockFilter(stockFilter === "all" ? "low" : "all")}><SlidersHorizontal size={14} className="mr-1.5" />{t("inventory.page.filters")}</Button>
                     <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_var(--brand-shadow)] hover:bg-[var(--brand-strong)]" onClick={exportInventory}><Download size={14} className="mr-1.5" />{t("inventory.page.export")}</Button>
@@ -941,9 +940,9 @@ export default function InventoryPage() {
               </section>
             </aside>
           </div>
-        </TabsContent>
+        </div> : null}
 
-        <TabsContent value="movements" className="space-y-4">
+        {activeTab === "movements" ? <div className="space-y-4">
           <StatsGrid columns={3}>
             <StatCard label={t("inventory.page.purchases")} value={movementSummary.purchases} />
             <StatCard label={t("inventory.page.sales")} value={movementSummary.sales} tone="blue" />
@@ -970,11 +969,11 @@ export default function InventoryPage() {
               </tbody>
             </table>
           </div>
-        </TabsContent>
+        </div> : null}
 
 
 
-        <TabsContent value="purchase-bills" className="space-y-4">
+        {activeTab === "purchase-bills" ? <div className="space-y-4">
           <StatsGrid columns={3}>
             <StatCard label={t("inventory.page.purchaseBills")} value={movementSummary.purchases} />
             <StatCard label={t("inventory.page.supplierPaid")} value={fmtMoney(movementSummary.purchasePaidTotal)} tone="green" />
@@ -1015,17 +1014,17 @@ export default function InventoryPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">{t("inventory.page.purchaseBillsHelp")}</p>
-        </TabsContent>
+        </div> : null}
 
-        <TabsContent value="reports" className="space-y-4">
+        {activeTab === "reports" ? <div className="space-y-4">
           <div className="grid md:grid-cols-3 gap-3">
             <div className="rounded-lg border bg-card p-4"><TrendingUp size={18} className="mb-2" /><p className="font-semibold">{t("inventory.page.fastMovers")}</p><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.fastMoversHelp")}</p></div>
             <div className="rounded-lg border bg-card p-4"><TrendingDown size={18} className="mb-2" /><p className="font-semibold">{t("inventory.page.slowMovers")}</p><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.slowMoversHelp")}</p></div>
             <div className="rounded-lg border bg-card p-4"><BarChart3 size={18} className="mb-2" /><p className="font-semibold">{t("inventory.page.deadStock")}</p><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.deadStockHelp")}</p></div>
           </div>
-        </TabsContent>
+        </div> : null}
 
-      </Tabs>
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

@@ -11,7 +11,7 @@ const DEBUG_PORT = Number(process.env.QA_DEBUG_PORT || 9482);
 const OUTPUT_DIR = path.resolve(process.env.QA_OUTPUT_DIR || "qa-artifacts/mobile-core-matrix");
 const PROFILE_DIR = path.resolve(process.env.QA_PROFILE_DIR || path.join(tmpdir(), "artha-mobile-core-matrix-profile"));
 const VIEWPORTS = [[375, 667], [390, 844], [430, 932], [768, 1024]];
-const ROUTES = [
+const ALL_ROUTES = [
   ["MQA-BILL-01", "/billing"], ["MQA-PROD-01", "/products"],
   ["MQA-CUST-01", "/customers"], ["MQA-INV-01", "/inventory"],
   ["MQA-PUR-01", "/purchase-bills"], ["MQA-RPT-01", "/reports"],
@@ -21,6 +21,10 @@ const ROUTES = [
   // because ?filter=udhar renders a different list (only customers who owe).
   ["MQA-UDHAR-01", "/udhar", "/customers"],
 ];
+const ROUTE_FILTER = String(process.env.QA_ROUTE_FILTER || "").split(",").map((value) => value.trim()).filter(Boolean);
+const ROUTES = ROUTE_FILTER.length
+  ? ALL_ROUTES.filter(([qaId, route]) => ROUTE_FILTER.includes(qaId) || ROUTE_FILTER.includes(route))
+  : ALL_ROUTES;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const assert = (value, message) => { if (!value) throw new Error(message); };
 
