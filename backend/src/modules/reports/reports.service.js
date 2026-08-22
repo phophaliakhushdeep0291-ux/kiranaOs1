@@ -136,6 +136,78 @@ function riskLevelForBucket(bucket) {
   return "low";
 }
 
+function applyUdharCredit(debts, creditPaise) {
+  let remainingCredit = Math.max(0, Number(creditPaise || 0));
+  while (remainingCredit > 0 && debts.length > 0) {
+    const oldest = debts[0];
+    const applied = Math.min(oldest.remainingPaise, remainingCredit);
+    oldest.remainingPaise -= applied;
+    remainingCredit -= applied;
+    if (oldest.remainingPaise <= 0) debts.shift();
+  }
+}
+
+/**
+ * Allocate an append-only udhar ledger into receivable-age buckets.
+ *
+ * Payments settle the oldest debit first. A reversed manual payment and its
+ * linked counter-entry are removed as a pair, which restores the age of the
+ * original debt instead of presenting the reversal as brand-new udhar.
+ */
+export function allocateUdharAgeing(ledgerRows = [], fallback = {}, now = new Date()) {
+  const rows = [...ledgerRows].sort((a, b) => {
+    const aDate = new Date(a.businessDate ?? a.createdAt ?? 0).getTime();
+    const bDate = new Date(b.businessDate ?? b.createdAt ?? 0).getTime();
+    return aDate - bDate || String(a.id ?? "").localeCompare(String(b.id ?? ""));
+  });
+  const reversedPaymentIds = new Set(
+    rows
+      .filter((row) => row.type === "debit" && row.mode === "reversal" && row.reversalOfLedgerId)
+      .map((row) => row.reversalOfLedgerId),
+  );
+  const debts = [];
+
+  for (const row of rows) {
+    const amountPaise = Math.max(0, toPaise(row.amount));
+    if (amountPaise <= 0) continue;
+    if (row.type === "payment" && reversedPaymentIds.has(row.id)) continue;
+    if (row.type === "debit" && row.mode === "reversal" && row.reversalOfLedgerId) continue;
+    if (row.type === "payment") {
+      applyUdharCredit(debts, amountPaise);
+      continue;
+    }
+    const date = new Date(row.businessDate ?? row.createdAt ?? fallback.date ?? now);
+    debts.push({ date: Number.isFinite(date.getTime()) ? date : new Date(now), remainingPaise: amountPaise });
+  }
+
+  // Legacy customers can predate the append-only ledger. Keep their saved
+  // opening balance visible until the normal lazy migration writes its debit.
+  if (rows.length === 0) {
+    const legacyPaise = Math.max(0, toPaise(fallback.balance ?? 0));
+    if (legacyPaise > 0) {
+      const date = new Date(fallback.date ?? now);
+      debts.push({ date: Number.isFinite(date.getTime()) ? date : new Date(now), remainingPaise: legacyPaise });
+    }
+  }
+
+  const buckets = {
+    "0_7_days": 0,
+    "8_30_days": 0,
+    "31_60_days": 0,
+    "60_plus_days": 0,
+  };
+  for (const debt of debts) {
+    const ageDays = Math.max(0, Math.floor((now.getTime() - debt.date.getTime()) / 86_400_000));
+    buckets[resolveBucket(ageDays)] += debt.remainingPaise;
+  }
+  const totalPaise = Object.values(buckets).reduce((sum, amount) => sum + amount, 0);
+  return {
+    totalPaise,
+    buckets,
+    oldestPendingDate: debts.length > 0 ? debts[0].date : null,
+  };
+}
+
 function sumPaymentsByMode(payments, mode) {
   return sumMoney(payments.filter((payment) => payment.mode === mode && payment.status === "confirmed").map((payment) => payment.amount));
 }
@@ -437,12 +509,16 @@ export async function getPaymentModeReport(shopId, { from, to, locationId } = {}
 // ─────────────────────────────────────────────────────────────
 export async function getUdharAgeing(shopId) {
   const customers = await db.customer.findMany({
-    where: { shopId, udharAmount: { gt: 0 } },
+    where: {
+      shopId,
+      OR: [
+        { udharAmount: { gt: 0 } },
+        { udharLedger: { some: {} } },
+      ],
+    },
     include: {
       udharLedger: {
-        where: { type: "debit" },
-        orderBy: { businessDate: "asc" },
-        take: 1,
+        orderBy: [{ businessDate: "asc" }, { id: "asc" }],
       },
     },
     orderBy: { udharAmount: "desc" },
@@ -457,29 +533,33 @@ export async function getUdharAgeing(shopId) {
   };
 
   const rows = customers.map((c) => {
-    const oldest = c.udharLedger[0]?.businessDate ?? c.createdAt;
-    const ageDays = Math.max(0, Math.floor((now.getTime() - new Date(oldest).getTime()) / 86_400_000));
+    const allocation = allocateUdharAgeing(c.udharLedger, { balance: c.udharAmount, date: c.createdAt }, now);
+    if (allocation.totalPaise <= 0 || !allocation.oldestPendingDate) return null;
+    const ageDays = Math.max(0, Math.floor((now.getTime() - allocation.oldestPendingDate.getTime()) / 86_400_000));
     const bucket = resolveBucket(ageDays);
-    const amountPaise = toPaise(c.udharAmount);
-    buckets[bucket].count += 1;
-    buckets[bucket].amountPaise += amountPaise;
+    for (const [bucketName, amountPaise] of Object.entries(allocation.buckets)) {
+      if (amountPaise <= 0) continue;
+      buckets[bucketName].count += 1;
+      buckets[bucketName].amountPaise += amountPaise;
+    }
     return {
       customerId: c.id,
       name: c.name,
       phone: maskPhone(c.mobile),
       deleted: Boolean(c.deletedAt),
-      balancePaise: amountPaise,
-      oldestPendingDate: oldest.toISOString(),
+      balancePaise: allocation.totalPaise,
+      ageingPaise: allocation.buckets,
+      oldestPendingDate: allocation.oldestPendingDate.toISOString(),
       bucket,
       dueDate: null,
       promiseToPayDate: c.reminderOverrideUntil?.toISOString?.() ?? null,
       riskLevel: riskLevelForBucket(bucket),
-      whatsappReminderEligible: amountPaise > 0,
+      whatsappReminderEligible: allocation.totalPaise > 0 && Boolean(c.mobile),
     };
-  });
+  }).filter(Boolean).sort((a, b) => b.balancePaise - a.balancePaise || a.name.localeCompare(b.name));
 
   return {
-    totalPendingUdharPaise: toPaise(sumMoney(customers.map((c) => c.udharAmount))),
+    totalPendingUdharPaise: rows.reduce((sum, row) => sum + row.balancePaise, 0),
     buckets,
     customers: rows,
     generatedAt: new Date().toISOString(),

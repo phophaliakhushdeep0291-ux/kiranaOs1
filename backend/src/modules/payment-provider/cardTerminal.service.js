@@ -16,6 +16,15 @@ import { cardTerminalReadiness, getCardTerminalProvider } from "./terminal.provi
  */
 
 const OPEN_STATUSES = ["creating", "pending"];
+const AMBIGUOUS_START_CODES = new Set([
+  "CARD_TERMINAL_PROVIDER_TIMEOUT",
+  "CARD_TERMINAL_PROVIDER_UNAVAILABLE",
+  "CARD_TERMINAL_INVALID_RESPONSE",
+]);
+
+export function isAmbiguousTerminalStartError(error) {
+  return AMBIGUOUS_START_CODES.has(error?.code);
+}
 
 function terminalIntentResponse(intent, extra = {}) {
   return {
@@ -31,6 +40,7 @@ function terminalIntentResponse(intent, extra = {}) {
     confirmedAt: intent.confirmedAt?.toISOString?.() ?? null,
     confirmationSource: intent.confirmationSource ?? null,
     failureReason: intent.failureReason ?? null,
+    requiresReconciliation: intent.status === "uncertain",
     cardNetwork: extra.cardNetwork ?? null,
     authCode: extra.authCode ?? null,
   };
@@ -46,12 +56,56 @@ export function retailCardTerminalReadiness() {
   };
 }
 
-export async function startCardTerminalCharge({ shopId, requestedLocationId, userId, amountPaise }) {
+export function assertCardTerminalLocation(location, terminalLocationCode) {
+  if (!terminalLocationCode) return;
+  if (String(terminalLocationCode).trim().toLowerCase() === String(location?.code ?? "").trim().toLowerCase()) return;
+  throw new AppError(
+    `This card terminal is assigned to branch ${terminalLocationCode}, not ${location?.code || "the selected branch"}`,
+    409,
+    "CARD_TERMINAL_LOCATION_MISMATCH",
+  );
+}
+
+function assertMatchingTerminalRetry(intent, { locationId, amountPaise }) {
+  if (
+    intent.checkoutMode !== "terminal"
+    || intent.locationId !== locationId
+    || Number(intent.amountPaise) !== Number(amountPaise)
+    || intent.provider !== env.CARD_TERMINAL_PROVIDER
+  ) {
+    throw new AppError("This card-terminal request ID was already used for a different charge", 409, "CARD_TERMINAL_REQUEST_REUSED");
+  }
+}
+
+export async function startCardTerminalCharge({ shopId, requestedLocationId, userId, amountPaise, requestId }) {
   const provider = getCardTerminalProvider();
   const location = await resolveOperationalLocation(shopId, requestedLocationId);
+  const terminalLocationCode = provider.describe()?.locationCode;
+  assertCardTerminalLocation(location, terminalLocationCode);
+
+  if (requestId) {
+    const retriedIntent = await db.retailPaymentIntent.findFirst({ where: { id: requestId, shopId } });
+    if (retriedIntent) {
+      assertMatchingTerminalRetry(retriedIntent, { locationId: location.id, amountPaise });
+      return terminalIntentResponse(retriedIntent, { locationName: location.name });
+    }
+  }
+
+  // One physical terminal cannot safely accept another bill while a previous
+  // upload may already have reached the provider. The owner must reconcile the
+  // unknown outcome against the terminal/provider record first.
+  const unresolved = await db.retailPaymentIntent.findFirst({
+    where: { shopId, locationId: location.id, checkoutMode: "terminal", status: "uncertain" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (unresolved) {
+    return terminalIntentResponse(unresolved, { locationName: location.name });
+  }
+
   const expiresAt = new Date(Date.now() + env.CARD_TERMINAL_CHARGE_TIMEOUT_SECONDS * 1_000);
   const intent = await db.retailPaymentIntent.create({
     data: {
+      ...(requestId ? { id: requestId } : {}),
       shopId,
       locationId: location.id,
       amountPaise,
@@ -72,10 +126,15 @@ export async function startCardTerminalCharge({ shopId, requestedLocationId, use
     });
     return terminalIntentResponse(updated, { locationName: location.name });
   } catch (error) {
-    await db.retailPaymentIntent.update({
+    const ambiguous = isAmbiguousTerminalStartError(error);
+    const updated = await db.retailPaymentIntent.update({
       where: { id: intent.id },
-      data: { status: "failed", failureReason: String(error?.message || "Card terminal charge could not be started").slice(0, 500) },
-    }).catch(() => {});
+      data: {
+        status: ambiguous ? "uncertain" : "failed",
+        failureReason: String(error?.message || "Card terminal charge could not be started").slice(0, 500),
+      },
+    }).catch(() => null);
+    if (ambiguous && updated) return terminalIntentResponse(updated, { locationName: location.name });
     throw error;
   }
 }
@@ -142,12 +201,66 @@ export async function cancelCardTerminalCharge({ shopId, intentId, userId, userR
     throw new AppError("Only the cashier who started this charge can cancel it", 403, "RETAIL_PAYMENT_INTENT_FORBIDDEN");
   }
   if (intent.status === "confirmed") throw new AppError("An approved card payment cannot be cancelled from checkout", 409, "RETAIL_PAYMENT_ALREADY_CONFIRMED");
+  if (intent.status === "uncertain") {
+    throw new AppError("This charge may already have reached the bank. Reconcile it instead of cancelling or retrying.", 409, "CARD_TERMINAL_RECONCILIATION_REQUIRED");
+  }
   if (intent.providerOrderId && OPEN_STATUSES.includes(intent.status)) {
-    await getCardTerminalProvider().cancelCharge(intent.providerOrderId);
+    await getCardTerminalProvider().cancelCharge(intent.providerOrderId, { amountPaise: intent.amountPaise });
   }
   const updated = await db.retailPaymentIntent.update({
     where: { id: intent.id },
     data: { status: "cancelled", failureReason: "Cancelled by cashier before approval" },
   });
   return terminalIntentResponse(updated);
+}
+
+export async function reconcileCardTerminalCharge({ shopId, intentId, userId, deviceId, outcome, providerPaymentId, reason }) {
+  const intent = await db.retailPaymentIntent.findFirst({ where: { id: intentId, shopId } });
+  if (!intent) throw new AppError("Card terminal charge not found", 404, "CARD_TERMINAL_CHARGE_NOT_FOUND");
+  if (intent.checkoutMode !== "terminal") throw new AppError("This payment is not a card terminal charge", 409, "CARD_TERMINAL_WRONG_MODE");
+  if (intent.status !== "uncertain") throw new AppError("Only a charge with an unknown bank outcome can be reconciled", 409, "CARD_TERMINAL_NOT_UNCERTAIN");
+
+  const cleanReason = String(reason || "").trim();
+  const cleanPaymentId = String(providerPaymentId || "").trim();
+  if (outcome === "charged" && !cleanPaymentId) {
+    throw new AppError("Provider payment reference is required when the card was charged", 400, "CARD_TERMINAL_PAYMENT_REFERENCE_REQUIRED");
+  }
+
+  return db.$transaction(async (tx) => {
+    if (outcome === "charged") {
+      const duplicate = await tx.retailPaymentIntent.findFirst({ where: { providerPaymentId: cleanPaymentId, id: { not: intent.id } }, select: { id: true } });
+      if (duplicate) throw new AppError("That provider payment reference is already attached to another charge", 409, "CARD_TERMINAL_PAYMENT_REFERENCE_REUSED");
+    }
+    const updated = await tx.retailPaymentIntent.update({
+      where: { id: intent.id },
+      data: outcome === "charged"
+        ? {
+            status: "confirmed",
+            providerPaymentId: cleanPaymentId,
+            confirmedAt: new Date(),
+            confirmationSource: "owner_provider_reconciliation",
+            failureReason: null,
+          }
+        : {
+            status: "failed",
+            failureReason: `Owner verified not charged: ${cleanReason}`.slice(0, 500),
+          },
+    });
+    await tx.auditLog.create({
+      data: {
+        shopId,
+        userId: userId ?? null,
+        deviceId: deviceId ?? null,
+        module: "payments",
+        action: "CARD_TERMINAL_UNCERTAIN_RECONCILED",
+        entityType: "RetailPaymentIntent",
+        entityId: intent.id,
+        beforeJson: JSON.stringify({ status: intent.status, amountPaise: intent.amountPaise, locationId: intent.locationId }),
+        afterJson: JSON.stringify({ status: updated.status, confirmationSource: updated.confirmationSource }),
+        metadataJson: JSON.stringify({ outcome, reason: cleanReason, providerPaymentId: cleanPaymentId || null }),
+        result: "success",
+      },
+    });
+    return terminalIntentResponse(updated);
+  });
 }

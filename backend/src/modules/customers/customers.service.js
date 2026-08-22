@@ -476,6 +476,10 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
   const customer = await getCustomer(shopId, customerId);
 
   return db.$transaction(async (tx) => {
+    // Serialize the read-before-append decision with payments and adjustments.
+    // Without this row lock, two application instances can both observe an
+    // unreversed payment and each append a correction under READ COMMITTED.
+    await lockCustomerUdharBalance(tx, shopId, customerId);
     const payment = await tx.udharLedger.findFirst({
       where: {
         id: ledgerEntryId,

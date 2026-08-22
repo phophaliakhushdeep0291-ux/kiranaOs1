@@ -1,6 +1,6 @@
 /* Artha service worker: app-shell only. Business data stays in IndexedDB, not Cache Storage. */
 const BUILD_ID = "__KIRANA_BUILD_ID__";
-const CACHE_VERSION = `kiranaos-shell-v8-${BUILD_ID}`;
+const CACHE_VERSION = `kiranaos-shell-v9-${BUILD_ID}`;
 const CORE_ASSETS = __KIRANA_CORE_ASSETS__;
 const VERTICAL_ASSETS = __KIRANA_VERTICAL_ASSETS__;
 const APP_SHELL = [
@@ -76,11 +76,23 @@ function shouldBypass(request, url) {
   return NEVER_CACHE_PATTERNS.some((pattern) => pattern.test(url.pathname + url.search));
 }
 
-async function networkFirstNavigation(request) {
+async function cacheFirstNavigation(request) {
   const cache = await caches.open(CACHE_VERSION);
+  // Keep the HTML shell and its content-hashed chunks on the same installed
+  // release. Serving a newer network index through an older active worker can
+  // mix builds if connectivity drops halfway through startup. The app's normal
+  // service-worker update flow installs the next complete cache and asks the
+  // cashier before activating it.
+  const installedShell =
+    (await cache.match("/index.html")) ||
+    (await cache.match("/")) ||
+    (await cache.match("/offline.html"));
+  if (installedShell) return installedShell;
+
   try {
     const response = await fetch(request);
-    // Keep the freshest app shell so client-side routes still render offline.
+    // Recovery path for a damaged/evicted cache. A normally installed worker
+    // always returns above because install publishes atomically.
     if (response && response.ok && response.type === "basic") {
       cache.put("/index.html", response.clone()).catch(() => undefined);
     }
@@ -91,16 +103,19 @@ async function networkFirstNavigation(request) {
       (await cache.match("/index.html")) ||
       (await cache.match("/")) ||
       (await cache.match("/offline.html"));
-    // Same rule as networkFirstStatic: a navigation that resolves undefined is a
-    // hard failure and shows a blank page instead of the browser's own error.
+    // A navigation that resolves undefined is a hard failure and shows a blank
+    // page instead of the browser's own error.
     if (!shell) throw error;
     return shell;
   }
 }
 
 async function cacheFirstStatic(request) {
-  const cached = await caches.match(request);
   const cache = await caches.open(CACHE_VERSION);
+  // Only read from this worker's build-scoped cache. During an atomic upgrade an
+  // older cache can briefly coexist, and a global caches.match() could otherwise
+  // mix files from two releases.
+  const cached = await cache.match(request);
   const fetchAndStore = fetch(request).then((response) => {
     if (response && response.ok && response.type === "basic") cache.put(request, response.clone()).catch(() => undefined);
     return response;
@@ -112,37 +127,23 @@ async function cacheFirstStatic(request) {
   return fetchAndStore;
 }
 
-async function networkFirstStatic(request) {
-  const cache = await caches.open(CACHE_VERSION);
-  try {
-    const response = await fetch(request);
-    if (response && response.ok && response.type === "basic") cache.put(request, response.clone()).catch(() => undefined);
-    return response;
-  } catch (error) {
-    const cached = await cache.match(request);
-    if (cached) return cached;
-    // Never resolve undefined. respondWith(undefined) is a hard failure, and for a
-    // module script that makes the dynamic import() reject — which React caches
-    // forever, so the route is dead until a full reload. Lazy route chunks are not
-    // precached, so a single dropped request used to be enough to brick the page.
-    // Re-throwing lets the browser treat it as an ordinary network error it can retry.
-    throw error;
-  }
-}
-
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (shouldBypass(request, url)) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(networkFirstNavigation(request));
+    event.respondWith(cacheFirstNavigation(request));
     return;
   }
 
-  // App code is fetched network-first so users never run stale JS/CSS/workers.
+  // App code uses this build's complete, atomically installed cache. Network-first
+  // can hang indefinitely during a hard disconnect, leaving React lazy routes on
+  // their loading screen even though the exact chunk is already cached. Filenames
+  // are content-hashed and CACHE_VERSION is build-scoped, so serving the installed
+  // copy first cannot mix releases; the background request still refreshes it.
   if (["style", "script", "worker"].includes(request.destination)) {
-    event.respondWith(networkFirstStatic(request));
+    event.respondWith(cacheFirstStatic(request));
     return;
   }
 

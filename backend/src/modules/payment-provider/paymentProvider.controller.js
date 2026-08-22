@@ -74,7 +74,7 @@ export async function cardTerminalReadiness(req, res, next) {
 
 export async function startCardTerminalCharge(req, res, next) {
   try {
-    res.json({ success: true, data: await terminalService.startCardTerminalCharge({ shopId: req.shopId, requestedLocationId: req.body.locationId, userId: req.user?.userId, amountPaise: req.body.amountPaise }) });
+    res.json({ success: true, data: await terminalService.startCardTerminalCharge({ shopId: req.shopId, requestedLocationId: req.body.locationId, userId: req.user?.userId, amountPaise: req.body.amountPaise, requestId: req.body.requestId }) });
   } catch (err) { next(err); }
 }
 
@@ -85,6 +85,23 @@ export async function cardTerminalChargeStatus(req, res, next) {
 export async function cancelCardTerminalCharge(req, res, next) {
   try {
     res.json({ success: true, data: await terminalService.cancelCardTerminalCharge({ shopId: req.shopId, intentId: req.params.id, userId: req.user?.userId, userRole: req.user?.role }) });
+  } catch (err) { next(err); }
+}
+
+export async function reconcileCardTerminalCharge(req, res, next) {
+  try {
+    res.json({
+      success: true,
+      data: await terminalService.reconcileCardTerminalCharge({
+        shopId: req.shopId,
+        intentId: req.params.id,
+        userId: req.user?.userId,
+        deviceId: req.device?.id ?? req.headers?.["x-device-id"] ?? null,
+        outcome: req.body.outcome,
+        providerPaymentId: req.body.providerPaymentId,
+        reason: req.body.reason,
+      }),
+    });
   } catch (err) { next(err); }
 }
 

@@ -1366,10 +1366,18 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           ? Math.max(0, subtractMoney(grossLineTotal, lineTotal))
           : Math.min(round2(Math.max(0, Number(item.lineDiscount ?? 0))), grossLineTotal);
         const rate = Number(originalItem?.gstRate ?? item.gstRate ?? product?.gstRate ?? 0);
+        const remainingOriginalGst = originalFinancial
+          ? Math.max(0, subtractMoney(originalFinancial.gst, originalFinancial.returnedGst))
+          : 0;
+        const proportionalReturnGst = effectiveGstMode === "exclusive"
+          ? multiplyMoney(lineTotal, rate / 100)
+          : effectiveGstMode === "none" || rate <= 0
+            ? 0
+            : subtractMoney(lineTotal, round2(lineTotal / (1 + rate / 100)));
         const gstAmount = originalItem
           ? isFinalLinkedReturn
-            ? Math.max(0, subtractMoney(originalFinancial.gst, originalFinancial.returnedGst))
-            : round2(originalFinancial.gst * returnFraction)
+            ? remainingOriginalGst
+            : Math.min(remainingOriginalGst, proportionalReturnGst)
           : effectiveGstMode === "exclusive"
             ? multiplyMoney(lineTotal, rate / 100)
             : effectiveGstMode === "none" || rate <= 0

@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { cardTerminalReadiness, getCardTerminalProvider, simulatedTerminalProvider, TERMINAL_STATUSES } from "../src/modules/payment-provider/terminal.provider.js";
+import { createPineLabsTerminalProvider } from "../src/modules/payment-provider/pineLabsTerminal.provider.js";
+import { assertCardTerminalLocation, isAmbiguousTerminalStartError } from "../src/modules/payment-provider/cardTerminal.service.js";
 
 /**
- * The card terminal seam. No vendor SDK, credentials or physical device exist
- * yet, so what is proven here is the contract every vendor plugs into and the
- * guards that stop the development simulator from ever confirming real money.
+ * The card terminal seam. Pine Labs is contract-tested without credentials or
+ * a physical device; the suite also proves the guards that stop the development
+ * simulator from ever confirming real money.
  *
  * Each env scenario runs in its own process because config/env.js parses
  * process.env once at import.
@@ -53,6 +55,48 @@ assert.match(
   "a vendor terminal without credentials must not boot",
 );
 
+const wrongPineLabsOrigin = bootEnv({
+  CARD_TERMINAL_PROVIDER: "pine_labs",
+  CARD_TERMINAL_BASE_URL: "https://terminal.example.com",
+  CARD_TERMINAL_API_KEY: "secret-token",
+  CARD_TERMINAL_MERCHANT_ID: "merchant",
+  CARD_TERMINAL_ID: "TERM-1",
+  CARD_TERMINAL_STORE_ID: "STORE-1",
+  CARD_TERMINAL_LOCATION_CODE: "MAIN",
+});
+assert.match(
+  `${wrongPineLabsOrigin.stdout}${wrongPineLabsOrigin.stderr}`,
+  /official Pine Labs production cloud origin/,
+  "production must not send terminal credentials to a lookalike host",
+);
+
+const pineLabsProduction = bootEnv({
+  CARD_TERMINAL_PROVIDER: "pine_labs",
+  CARD_TERMINAL_BASE_URL: "https://www.plutuscloudservice.in:8201",
+  CARD_TERMINAL_API_KEY: "secret-token",
+  CARD_TERMINAL_MERCHANT_ID: "merchant",
+  CARD_TERMINAL_ID: "TERM-1",
+  CARD_TERMINAL_STORE_ID: "STORE-1",
+  CARD_TERMINAL_LOCATION_CODE: "MAIN",
+});
+assert.match(`${pineLabsProduction.stdout}`, /BOOTED/, "a complete Pine Labs production configuration must boot");
+
+const unavailableEzetapProduction = bootEnv({
+  CARD_TERMINAL_PROVIDER: "ezetap",
+  CARD_TERMINAL_BASE_URL: "https://terminal.example.com",
+  CARD_TERMINAL_API_KEY: "secret-token",
+  CARD_TERMINAL_MERCHANT_ID: "merchant",
+  CARD_TERMINAL_ID: "TERM-1",
+  CARD_TERMINAL_STORE_ID: "STORE-1",
+  CARD_TERMINAL_LOCATION_CODE: "MAIN",
+});
+assert.match(
+  `${unavailableEzetapProduction.stdout}${unavailableEzetapProduction.stderr}`,
+  /ezetap cannot run in production/i,
+  "an unavailable provider must fail at deployment, not at a cashier's first charge",
+);
+assert.doesNotMatch(unavailableEzetapProduction.stdout, /BOOTED/);
+
 // ── The interface every vendor implementation must satisfy ───────────────────
 for (const call of ["createCharge", "fetchCharge", "cancelCharge", "describe"]) {
   assert.equal(typeof simulatedTerminalProvider[call], "function", `a terminal provider must expose ${call}`);
@@ -94,13 +138,139 @@ assert.equal(simulatedTerminalProvider.fetchCharge(declined.chargeId).failureRea
 
 assert.throws(() => simulatedTerminalProvider.fetchCharge("sim_missing"), /not found/i);
 
+// ── Pine Labs documented cloud contract ─────────────────────────────────────
+const pineCalls = [];
+const pineResponses = [
+  { ResponseCode: 0, ResponseMessage: "APPROVED", PlutusTransactionReferenceID: 501 },
+  {
+    ResponseCode: 0,
+    ResponseMessage: "TXN APPROVED",
+    PlutusTransactionReferenceID: 501,
+    TransactionData: [
+      { Tag: "PaymentMode", Value: "CARD" },
+      { Tag: "AmountInPaisa", Value: "12500" },
+      { Tag: "RRN", Value: "000792514130" },
+      { Tag: "ApprovalCode", Value: "849035" },
+      { Tag: "Card Type", Value: "VISA" },
+    ],
+  },
+  { ResponseCode: 0, ResponseMessage: "APPROVED" },
+];
+const pineLabs = createPineLabsTerminalProvider({
+  baseUrl: "https://www.plutuscloudserviceuat.in:8201",
+  securityToken: "secret-token",
+  merchantId: "1234",
+  terminalId: "318462",
+  storeId: "61607",
+  locationCode: "MAIN",
+  requestTimeoutMs: 1_000,
+  fetchImpl: async (url, init) => {
+    pineCalls.push({ url, body: JSON.parse(init.body) });
+    return { ok: true, status: 200, json: async () => pineResponses.shift() };
+  },
+});
+
+const pineCharge = await pineLabs.createCharge({ amountPaise: 12_500, reference: "intent-1", idempotencyKey: "intent-1" });
+assert.deepEqual(pineCharge, { chargeId: "501", status: "pending" }, "an upload acknowledgement must remain pending");
+assert.match(pineCalls[0].url, /UploadBilledTransaction$/);
+assert.equal(pineCalls[0].body.Amount, 12_500, "Pine Labs receives integer paise");
+assert.equal(pineCalls[0].body.TransactionNumber, "intent1", "the idempotency key is the stable vendor transaction number");
+assert.equal(pineCalls[0].body.StoreId, "61607", "the charge must be pinned to the configured store");
+
+const pineApproved = await pineLabs.fetchCharge("501");
+assert.equal(pineApproved.status, "approved");
+assert.equal(pineApproved.amountPaise, 12_500, "the provider amount must be returned for the service-level exact-amount check");
+assert.equal(pineApproved.paymentId, "000792514130", "the acquirer reference must be persisted");
+assert.equal(pineApproved.cardNetwork, "VISA");
+assert.equal(pineApproved.authCode, "849035");
+assert.match(pineCalls[1].url, /GetCloudBasedTxnStatus$/);
+
+await pineLabs.cancelCharge("501", { amountPaise: 12_500 });
+assert.match(pineCalls[2].url, /CancelTransaction$/);
+assert.equal(pineCalls[2].body.Amount, 12_500, "cancellation must repeat the exact original amount");
+await assert.rejects(() => pineLabs.cancelCharge("501"), /original paise amount is required/i);
+
+const pendingPineLabs = createPineLabsTerminalProvider({
+  baseUrl: "https://www.plutuscloudserviceuat.in:8201",
+  securityToken: "token",
+  merchantId: "1234",
+  terminalId: "318462",
+  storeId: "61607",
+  locationCode: "MAIN",
+  fetchImpl: async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ ResponseCode: 1, ResponseMessage: "INVALID PLUTUS TXN REF ID" }),
+  }),
+});
+assert.equal((await pendingPineLabs.fetchCharge("new-ptrid")).status, "pending", "eventual-consistency misses must wait for the bounded local expiry");
+
+const rejectedPineLabs = createPineLabsTerminalProvider({
+  baseUrl: "https://www.plutuscloudserviceuat.in:8201",
+  securityToken: "token",
+  merchantId: "1234",
+  terminalId: "318462",
+  storeId: "61607",
+  locationCode: "MAIN",
+  fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ ResponseCode: 1, ResponseMessage: "INVALID SOURCE DEVICE" }) }),
+});
+await assert.rejects(
+  () => rejectedPineLabs.createCharge({ amountPaise: 500, reference: "intent-2", idempotencyKey: "intent-2" }),
+  (error) => error?.code === "CARD_TERMINAL_PROVIDER_REJECTED",
+  "a rejected upload must fail without creating a payable local intent",
+);
+
+const timedOutPineLabs = createPineLabsTerminalProvider({
+  baseUrl: "https://www.plutuscloudserviceuat.in:8201",
+  securityToken: "token",
+  merchantId: "1234",
+  terminalId: "318462",
+  storeId: "61607",
+  locationCode: "MAIN",
+  requestTimeoutMs: 5,
+  fetchImpl: async (_url, init) => new Promise((_resolve, reject) => {
+    init.signal.addEventListener("abort", () => {
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      reject(error);
+    }, { once: true });
+  }),
+});
+await assert.rejects(
+  () => timedOutPineLabs.createCharge({ amountPaise: 500, reference: "intent-timeout", idempotencyKey: "intent-timeout" }),
+  (error) => error?.code === "CARD_TERMINAL_PROVIDER_TIMEOUT" && isAmbiguousTerminalStartError(error),
+  "a lost upload response must be classified as an unknown money outcome, not a definite failure",
+);
+
+const definiteHttpRejection = createPineLabsTerminalProvider({
+  baseUrl: "https://www.plutuscloudserviceuat.in:8201",
+  securityToken: "token",
+  merchantId: "1234",
+  terminalId: "318462",
+  storeId: "61607",
+  locationCode: "MAIN",
+  fetchImpl: async () => ({ ok: false, status: 400 }),
+});
+await assert.rejects(
+  () => definiteHttpRejection.createCharge({ amountPaise: 500, reference: "intent-bad", idempotencyKey: "intent-bad" }),
+  (error) => error?.code === "CARD_TERMINAL_PROVIDER_REJECTED" && !isAmbiguousTerminalStartError(error),
+  "a provider 4xx remains a definite rejection and does not block the branch for reconciliation",
+);
+
+assert.doesNotThrow(() => assertCardTerminalLocation({ code: "main" }, "MAIN"), "branch codes compare canonically");
+assert.throws(
+  () => assertCardTerminalLocation({ code: "DELHI" }, "MAIN"),
+  (error) => error?.code === "CARD_TERMINAL_LOCATION_MISMATCH" && error?.statusCode === 409,
+  "a terminal assigned to MAIN must never receive DELHI's bill",
+);
+
 // With no terminal configured, asking for one is a clear 503 rather than a
 // crash halfway through a sale.
 assert.equal(cardTerminalReadiness().provider, "none", "no terminal is configured by default");
 assert.equal(cardTerminalReadiness().configured, false);
 assert.throws(() => getCardTerminalProvider(), /No card terminal is configured/i);
 
-// An unimplemented vendor names exactly what has to be built, and a readiness
+// The remaining unimplemented vendor names exactly what has to be built, and a readiness
 // probe reports it as unconfigured instead of throwing on every billing load.
 const vendorProbe = spawnSync(process.execPath, ["-e", `
   const { getCardTerminalProvider, cardTerminalReadiness } = await import("./src/modules/payment-provider/terminal.provider.js");
@@ -112,17 +282,19 @@ const vendorProbe = spawnSync(process.execPath, ["-e", `
   cwd: process.cwd(),
   env: {
     ...process.env,
-    CARD_TERMINAL_PROVIDER: "pine_labs",
+    CARD_TERMINAL_PROVIDER: "ezetap",
     CARD_TERMINAL_BASE_URL: "https://terminal.example.com",
     CARD_TERMINAL_API_KEY: "key",
     CARD_TERMINAL_MERCHANT_ID: "merchant",
     CARD_TERMINAL_ID: "TERM-1",
+    CARD_TERMINAL_STORE_ID: "STORE-1",
+    CARD_TERMINAL_LOCATION_CODE: "MAIN",
   },
   timeout: 30_000,
 });
 const vendorOutput = `${vendorProbe.stdout}${vendorProbe.stderr}`;
 assert.match(vendorOutput, /CARD_TERMINAL_PROVIDER_NOT_IMPLEMENTED/, "an unbuilt vendor must fail with a specific code");
-assert.match(vendorOutput, /Pine Labs/, "the error must name the vendor still to be implemented");
+assert.match(vendorOutput, /Ezetap/, "the error must name the vendor still to be implemented");
 assert.match(vendorOutput, /terminal\.provider\.js/, "the error must point at where the implementation goes");
 assert.match(vendorOutput, /"configured":false/, "an unbuilt vendor must read as unconfigured, not crash a readiness probe");
 
@@ -130,16 +302,27 @@ assert.match(vendorOutput, /"configured":false/, "an unbuilt vendor must read as
 const service = fs.readFileSync("src/modules/payment-provider/cardTerminal.service.js", "utf8");
 const routes = fs.readFileSync("src/modules/payment-provider/paymentProvider.routes.js", "utf8");
 const terminal = fs.readFileSync("src/modules/payment-provider/terminal.provider.js", "utf8");
+const schemas = fs.readFileSync("src/modules/payment-provider/paymentProvider.schemas.js", "utf8");
 
 assert.match(service, /CARD_TERMINAL_AMOUNT_MISMATCH/, "a terminal settling a different amount must fail closed");
+assert.match(service, /CARD_TERMINAL_LOCATION_MISMATCH/, "a globally configured terminal must refuse another branch's bill");
 assert.match(service, /status: \{ in: OPEN_STATUSES \}, providerPaymentId: null/, "confirmation must be claimed atomically once");
 assert.match(service, /confirmationSource: "terminal_provider_api"/, "confirmation provenance must be persisted");
 assert.match(service, /RETAIL_PAYMENT_ALREADY_CONFIRMED/, "an approved card payment must not be cancellable");
 assert.match(service, /checkoutMode: "terminal"/, "terminal charges must be distinguishable from QR and checkout intents");
 assert.match(service, /tenderMode: "bank"/, "a card charge settles to the bank, never the cash drawer");
 assert.match(service, /idempotencyKey: intent\.id/, "a retried charge must not double-present the card");
+assert.match(service, /status: ambiguous \? "uncertain" : "failed"/, "a lost upload response must never be recorded as a definite failure");
+assert.match(service, /status: "uncertain"/, "a branch must detect unresolved terminal money outcomes");
+assert.match(service, /return terminalIntentResponse\(unresolved/, "a later cashier must be taken back to the unresolved charge instead of creating another one");
+assert.match(service, /CARD_TERMINAL_RECONCILIATION_REQUIRED/, "unknown outcomes must not be cancellable like unpaid charges");
+assert.match(service, /confirmationSource: "owner_provider_reconciliation"/, "manual charged resolution must retain its weaker provenance");
+assert.match(service, /CARD_TERMINAL_UNCERTAIN_RECONCILED/, "every owner resolution must be audited");
+assert.match(service, /CARD_TERMINAL_PAYMENT_REFERENCE_REUSED/, "one acquirer reference must not confirm two intents");
+assert.match(schemas, /requestId: z\.string\(\)\.uuid\(\)\.optional\(\)/, "the client retry key must be a validated UUID");
 assert.match(routes, /terminal\/charges\/:id\/status/, "a cashier must be able to poll the terminal");
 assert.match(routes, /terminal\/charges\/:id\/cancel/, "a cashier must be able to abandon an unpaid charge");
+assert.match(routes, /terminal\/charges\/:id\/reconcile.*requireOwnerPin/, "only an owner-PIN decision may reconcile unknown money");
 assert.match(terminal, /CARD_TERMINAL_PROVIDER_NOT_IMPLEMENTED/, "an unbuilt vendor must fail loudly and specifically");
 
 console.log("Card terminal seam examples passed");

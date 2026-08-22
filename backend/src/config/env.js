@@ -87,6 +87,11 @@ const envSchema = z.object({
   CARD_TERMINAL_API_KEY: z.string().optional(),
   CARD_TERMINAL_MERCHANT_ID: z.string().optional(),
   CARD_TERMINAL_ID: z.string().optional(),
+  CARD_TERMINAL_STORE_ID: z.string().optional(),
+  // Exact KiranaOS StoreLocation.code served by this physical terminal. A
+  // globally configured EDC device must never be pushed a different branch's bill.
+  CARD_TERMINAL_LOCATION_CODE: z.string().optional(),
+  CARD_TERMINAL_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(8000),
   // How long a cashier may leave a charge sitting on the terminal before the
   // intent expires and the card must be presented again.
   CARD_TERMINAL_CHARGE_TIMEOUT_SECONDS: z.coerce.number().int().min(30).max(600).default(180),
@@ -294,6 +299,16 @@ if (parsed.data.NODE_ENV === "production" && parsed.data.QUEUES_ENABLED && !pars
   process.exit(1);
 }
 
+if (parsed.data.EVENT_BUS_PROVIDER === "redis" && !parsed.data.REDIS_URL) {
+  console.error("❌ REDIS_URL is required when EVENT_BUS_PROVIDER=redis");
+  process.exit(1);
+}
+
+if (parsed.data.NODE_ENV === "production" && parsed.data.EVENT_BUS_PROVIDER === "kafka") {
+  console.error("❌ EVENT_BUS_PROVIDER=kafka cannot run in production until the Kafka transport is installed and certified");
+  process.exit(1);
+}
+
 if (parsed.data.NODE_ENV === "production" && parsed.data.EXPORT_DOWNLOADS_PUBLIC && parsed.data.STORAGE_PROVIDER === "local") {
   console.error("❌ STORAGE_PROVIDER=local is not production-safe when EXPORT_DOWNLOADS_PUBLIC=true");
   process.exit(1);
@@ -422,11 +437,29 @@ if (parsed.data.NODE_ENV === "production" && parsed.data.CARD_TERMINAL_PROVIDER 
 }
 
 if (["pine_labs", "ezetap"].includes(parsed.data.CARD_TERMINAL_PROVIDER)) {
-  const missing = ["CARD_TERMINAL_BASE_URL", "CARD_TERMINAL_API_KEY", "CARD_TERMINAL_MERCHANT_ID", "CARD_TERMINAL_ID"].filter((key) => !parsed.data[key]);
+  const missing = ["CARD_TERMINAL_BASE_URL", "CARD_TERMINAL_API_KEY", "CARD_TERMINAL_MERCHANT_ID", "CARD_TERMINAL_ID", "CARD_TERMINAL_STORE_ID", "CARD_TERMINAL_LOCATION_CODE"].filter((key) => !parsed.data[key]);
   if (missing.length) {
     console.error(`❌ ${missing.join(", ")} required when CARD_TERMINAL_PROVIDER=${parsed.data.CARD_TERMINAL_PROVIDER}`);
     process.exit(1);
   }
+}
+
+if (parsed.data.NODE_ENV === "production" && parsed.data.CARD_TERMINAL_PROVIDER === "pine_labs") {
+  try {
+    const baseUrl = new URL(parsed.data.CARD_TERMINAL_BASE_URL);
+    if (baseUrl.origin !== "https://www.plutuscloudservice.in:8201" || !["", "/"].includes(baseUrl.pathname)) {
+      console.error("❌ CARD_TERMINAL_BASE_URL must be the official Pine Labs production cloud origin");
+      process.exit(1);
+    }
+  } catch {
+    console.error("❌ CARD_TERMINAL_BASE_URL must be a valid Pine Labs production URL");
+    process.exit(1);
+  }
+}
+
+if (parsed.data.NODE_ENV === "production" && parsed.data.CARD_TERMINAL_PROVIDER === "ezetap") {
+  console.error("❌ CARD_TERMINAL_PROVIDER=ezetap cannot run in production until the provider adapter is implemented and certified");
+  process.exit(1);
 }
 
 if (parsed.data.NODE_ENV === "production" && (!parsed.data.INTEGRATION_SIGNING_SECRET || parsed.data.INTEGRATION_SIGNING_SECRET.length < 32)) {

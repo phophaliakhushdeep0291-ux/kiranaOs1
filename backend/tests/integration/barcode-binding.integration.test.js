@@ -9,7 +9,7 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
-import { activateDeviceViaApi, createProduct, createTenant, login } from "./factories.js";
+import { activateDeviceViaApi, createProduct, createTenant, login, productPayload } from "./factories.js";
 
 const ctx = await createIntegrationContext();
 
@@ -82,6 +82,68 @@ if (ctx.skip) {
       await createProduct(ctx.db, tenant.shop.id, { name: "Blank Two" });
       const blanks = await ctx.db.product.count({ where: { shopId: tenant.shop.id, barcode: null } });
       assert.equal(blanks, 2, "a catalogue of unbarcoded products must be storable");
+    });
+
+    test("create and edit enforce one case-insensitive code namespace across products and packs", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const owner = await createProduct(ctx.db, tenant.shop.id, { name: "SKU Owner", sku: "case-128-abc" });
+      const rejectedCreate = assertFailure(await ctx.post("/api/products", {
+        ...productPayload({ name: "Duplicate Product Code" }),
+        barcode: "CASE-128-ABC",
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin, headers: deviceHeaders }), 409);
+      assert.equal(rejectedCreate.code, "PRODUCT_BARCODE_DUPLICATE");
+      assert.match(JSON.stringify(rejectedCreate), /SKU Owner/);
+      assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id, name: "Duplicate Product Code" } }), 0);
+
+      const packed = assertSuccess(await ctx.post("/api/products", {
+        ...productPayload({ name: "Packed Owner", stockBaseQty: 0 }),
+        sellingUnits: [
+          { name: "piece", unitType: "piece", unitCode: "piece", conversionToBase: 1, barcode: null, defaultPrice: 20, isDefault: true, isActive: true },
+          { name: "box", unitType: "box", unitCode: "box-12", conversionToBase: 12, barcode: "PACK-CASE-12", defaultPrice: 220, isDefault: false, isActive: true },
+        ],
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin, headers: deviceHeaders }), 201);
+      assert.ok(packed.sellingUnits.some((unit) => unit.unitCode === "box-12"));
+
+      const editable = await createProduct(ctx.db, tenant.shop.id, { name: "Editable Code" });
+      const rejectedEdit = assertFailure(await ctx.patch(`/api/products/${editable.id}`, {
+        barcode: "pack-case-12",
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin, headers: deviceHeaders }), 409);
+      assert.equal(rejectedEdit.code, "PRODUCT_BARCODE_DUPLICATE");
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: editable.id } })).barcode, null);
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: owner.id } })).sku, "case-128-abc");
+    });
+
+    test("create refuses one code assigned to two physical packs without partial data", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const name = "Ambiguous Pack Product";
+      const response = assertFailure(await ctx.post("/api/products", {
+        ...productPayload({ name, stockBaseQty: 0 }),
+        barcode: "8901234567890",
+        sellingUnits: [
+          { name: "piece", unitType: "piece", unitCode: "piece", conversionToBase: 1, barcode: "8901234567890", defaultPrice: 20, isDefault: true, isActive: true },
+          { name: "box", unitType: "box", unitCode: "box-12", conversionToBase: 12, barcode: "8901234567890", defaultPrice: 220, isDefault: false, isActive: true },
+        ],
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin, headers: deviceHeaders }), 409);
+      assert.equal(response.code, "PRODUCT_BARCODE_DUPLICATE");
+      assert.match(response.error, /box-12/);
+      assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id, name } }), 0);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, entityType: "Product" } }), 0);
+    });
+
+    test("concurrent case variants produce one owner and one explicit conflict", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const attempts = await Promise.all([
+        ctx.post("/api/products", { ...productPayload({ name: "Case Winner A" }), barcode: "CASE-RACE-128" }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin, headers: deviceHeaders }),
+        ctx.post("/api/products", { ...productPayload({ name: "Case Winner B" }), barcode: "case-race-128" }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin, headers: deviceHeaders }),
+      ]);
+      assert.deepEqual(attempts.map((response) => response.status).sort(), [201, 409]);
+      assert.equal(attempts.find((response) => response.status === 409)?.body?.code, "PRODUCT_BARCODE_DUPLICATE");
+      const rows = await ctx.db.product.findMany({
+        where: { shopId: tenant.shop.id, name: { in: ["Case Winner A", "Case Winner B"] } },
+        select: { barcode: true },
+      });
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].barcode.toLowerCase(), "case-race-128");
     });
 
     test("two devices binding the same code concurrently resolve without data loss", async () => {

@@ -6,6 +6,8 @@ import { useListProducts } from "@/features/core/products/queries";
 import { bindProductBarcodeLocalFirst } from "@/features/core/products/local-actions";
 import type { KnownProductDetails } from "@/features/core/products/product-knowledge";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import { createProductLocalFirst } from "@/features/core/products/local-actions";
+import { formToInput, productToForm } from "@/features/core/products/pages/product-form-state";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/core/sync";
@@ -40,17 +42,18 @@ import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { billingSlotsFor } from "@/features/core/billing/billing-slots";
 import { productConfiguratorFor, type ProductConfigurator } from "@/features/core/billing/product-configurators";
-import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
+import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceNewProductLine, type VoiceParsedDraft } from "./billing-types";
 import { createRetailPaymentQr, getRetailPaymentReadiness, verifyRetailPayment, type RetailQrCheckout } from "../retail-payment";
 import { RetailDynamicQrDialog } from "./components/RetailDynamicQrDialog";
 import { CardTerminalDialog } from "./components/CardTerminalDialog";
-import { getCardTerminalReadiness, startCardTerminalCharge, type CardTerminalCharge } from "@/features/core/billing/card-terminal";
+import { getCardTerminalReadiness, newCardTerminalRequestId, startCardTerminalCharge, type CardTerminalCharge, type CardTerminalStatus } from "@/features/core/billing/card-terminal";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/core/loyalty/api";
 import { lookupGiftCard } from "@/features/core/gift-cards/api";
 import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/core/voice/backend-transcription";
 import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity, showCustomerDisplayViaHardwareBridge, type HardwareCustomerDisplayState } from "@/features/core/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { speechRecognitionLocale } from "@/features/core/voice/voice-recognition";
 import {
   ACTIVITY_EVENTS,
   matchSearchSuggestions,
@@ -148,7 +151,7 @@ function saveSettingList<T>(key: string, rows: T[]) {
 }
 
 export default function Billing() {
-  const { t } = useAppLanguage();
+  const { t, language } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { shop, user } = useAuth();
@@ -219,6 +222,8 @@ export default function Billing() {
     document.body.setAttribute("data-app-mobile-task-open", "true");
     return () => document.body.removeAttribute("data-app-mobile-task-open");
   }, [mobileCheckoutOpen]);
+  // Unlisted items the voice draft priced, held while the owner approves creating them.
+  const [pendingNewProducts, setPendingNewProducts] = useState<VoiceNewProductLine[] | null>(null);
   const [sensitiveApproval, setSensitiveApproval] = useState<{ ownerPin: string; reason: string; actions: BillingSensitiveAction[]; fingerprint: string } | null>(null);
   const [pendingSensitiveBillType, setPendingSensitiveBillType] = useState<BillTypeSelection | null>(null);
   const [voiceCommand, setVoiceCommand] = useState("");
@@ -232,6 +237,7 @@ export default function Billing() {
   const [cardTerminalCharge, setCardTerminalCharge] = useState<CardTerminalCharge | null>(null);
   const [approvedCardPayment, setApprovedCardPayment] = useState<{ intentId: string; amountPaise: number; locationId: string } | null>(null);
   const [cardTerminalLoading, setCardTerminalLoading] = useState(false);
+  const cardTerminalAttemptRef = useRef<{ requestId: string; amountPaise: number; locationId: string | null } | null>(null);
   const [retailPaymentLoading, setRetailPaymentLoading] = useState(false);
   const [loyaltyPointsToRedeem, setLoyaltyPointsToRedeem] = useState(0);
   const [giftCardCode, setGiftCardCodeState] = useState("");
@@ -393,10 +399,20 @@ export default function Billing() {
       return;
     }
     if (cardTenderPaise <= 0) return;
+    const locationId = getActiveLocationId();
+    const previous = cardTerminalAttemptRef.current;
+    const requestId = previous && previous.amountPaise === cardTenderPaise && previous.locationId === locationId
+      ? previous.requestId
+      : newCardTerminalRequestId();
+    cardTerminalAttemptRef.current = { requestId, amountPaise: cardTenderPaise, locationId };
     setCardTerminalLoading(true);
     try {
-      setCardTerminalCharge(await startCardTerminalCharge(cardTenderPaise));
+      setCardTerminalCharge(await startCardTerminalCharge(cardTenderPaise, locationId, requestId));
     } catch (error) {
+      // Ambiguous provider outcomes are returned as an `uncertain` intent. A
+      // thrown error is therefore a definite local/provider rejection and a
+      // later click may safely start a fresh request.
+      cardTerminalAttemptRef.current = null;
       toast({ title: t("billing.page.paymentNotVerified"), description: error instanceof Error ? error.message : t("billing.page.providerFailed"), variant: "destructive" });
     } finally {
       setCardTerminalLoading(false);
@@ -1024,8 +1040,63 @@ export default function Billing() {
     toast({ title: t("billing.page.voiceDraftReady"), description: draft.lines.length === 1 ? t("billing.page.voiceDraftReadyDetail", { count: draft.lines.length }) : t("billing.page.voiceDraftReadyDetailPlural", { count: draft.lines.length }) });
   }
 
+  /**
+   * Turn the voice draft's unlisted items into real products, then bill them.
+   *
+   * Built through the product form's own pipeline rather than a hand-rolled input, so a
+   * voice-created product is shaped exactly like a typed one — same defaults, same paise
+   * mirrors, same default pack. Only the name and the spoken price are ours; cost, pack
+   * size and the rest stay empty on purpose, which is what marks it as needing details.
+   */
+  async function createVoiceProducts(rows: VoiceNewProductLine[], ownerPin: string, reason: string) {
+    const created: Product[] = [];
+    const failed: string[] = [];
+    for (const row of rows) {
+      try {
+        const form = { ...productToForm(), name: row.name, sellingPrice: row.sellingPrice };
+        created.push(await createProductLocalFirst(formToInput(form, ownerPin, reason)));
+      } catch (error) {
+        failed.push(error instanceof Error ? error.message : row.name);
+      }
+    }
+    if (created.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      setCart((previous) => {
+        let next = [...previous];
+        for (const product of created) {
+          const row = rows.find((candidate) => candidate.name === normalizeSearchText(product.name)) ?? rows[created.indexOf(product)];
+          const sellingUnit = defaultSellingUnit(product);
+          next = [...next, {
+            product,
+            quantity: row?.quantity ?? 1,
+            rate: row?.sellingPrice ?? 0,
+            unit: sellingUnit?.name ?? product.rateUnit ?? "piece",
+            sellingUnit,
+            manualRate: true,
+          }];
+          rememberRecentProduct(product.id);
+          trackEvent(ACTIVITY_EVENTS.PRODUCT_ADDED_TO_BILL, { productId: product.id, productName: product.name, via: "voice_new_product" });
+        }
+        return next;
+      });
+      if (billingStartedAtRef.current === null) billingStartedAtRef.current = Date.now();
+    }
+    if (failed.length > 0) {
+      toast({ title: t("billing.page.newProductFailed"), description: failed[0], variant: "destructive" });
+    }
+    return created.length;
+  }
+
   function addVoiceDraftToCart() {
-    if (!voiceDraft || voiceDraft.lines.length === 0) return;
+    if (!voiceDraft) return;
+    // Creating a catalogue entry is owner-approved everywhere else in the app, and the
+    // till is not the place to make an exception: the approval happens here instead of
+    // sending the cashier to the Products screen, so the half-built bill survives it.
+    if (voiceDraft.newProducts.length > 0) {
+      setPendingNewProducts(voiceDraft.newProducts);
+      return;
+    }
+    if (voiceDraft.lines.length === 0) return;
     setCart((previous) => {
       let next = [...previous];
       for (const line of voiceDraft.lines) {
@@ -1161,7 +1232,7 @@ export default function Billing() {
     let autoStopTimer: number | undefined;
     const recognition = new Recognition();
     voiceRecognitionRef.current = recognition;
-    recognition.lang = "en-IN";
+    recognition.lang = speechRecognitionLocale(language);
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.maxAlternatives = 1;
@@ -2227,6 +2298,24 @@ export default function Billing() {
         }}
       />
 
+      <OwnerPinModal
+        open={pendingNewProducts !== null}
+        onCancel={() => setPendingNewProducts(null)}
+        title={t("billing.page.newProductApproval")}
+        description={t("billing.page.newProductApprovalDetail", { count: pendingNewProducts?.length ?? 0 })}
+        confirmLabel={t("billing.page.newProductApprove")}
+        onConfirm={async ({ ownerPin, reason }) => {
+          const rows = pendingNewProducts ?? [];
+          setPendingNewProducts(null);
+          const madeCount = await createVoiceProducts(rows, ownerPin, reason || t("billing.page.newProductReason"));
+          if (madeCount === 0) return;
+          // The matched lines still have to reach the cart; re-running the normal path
+          // now that the draft has nothing left to create.
+          setVoiceDraft((previous) => (previous ? { ...previous, newProducts: [] } : previous));
+          window.setTimeout(() => addVoiceDraftToCart(), 0);
+        }}
+      />
+
       <RetailDynamicQrDialog
         checkout={retailQrCheckout}
         onClose={() => setRetailQrCheckout(null)}
@@ -2242,8 +2331,12 @@ export default function Billing() {
       <CardTerminalDialog
         charge={cardTerminalCharge}
         simulated={cardTerminalReadiness.data?.simulated ?? false}
-        onClose={() => setCardTerminalCharge(null)}
+        onClose={(status: CardTerminalStatus) => {
+          if (status !== "uncertain") cardTerminalAttemptRef.current = null;
+          setCardTerminalCharge(null);
+        }}
         onApproved={(charge) => {
+          cardTerminalAttemptRef.current = null;
           setApprovedCardPayment({ intentId: charge.intentId, amountPaise: charge.amountPaise, locationId: charge.location.id });
           setCustomerDisplayFlash({ state: "paid", totalPaise: charge.amountPaise });
           setCardTerminalCharge(null);

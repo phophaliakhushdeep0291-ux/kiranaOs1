@@ -47,7 +47,12 @@ export function normalizeSearchText(value: string): string {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[०-९]/g, (digit) => String("०१२३४५६७८९".indexOf(digit)))
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    // \p{M} keeps Indic combining marks. A Devanagari matra is a MARK, not a letter, so
+    // without this the class ate every vowel sign: "किलो" came out "क ल" and "चीनी" "च न".
+    // Product search survived only because both sides were shredded identically; the voice
+    // vocabularies did not, being written with their matras intact and compared against
+    // text that had lost them. Latin accents are already gone by the line above.
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
     .trim();
 }
 

@@ -25,7 +25,6 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   AlertTriangle,
@@ -772,14 +771,14 @@ export default function InventoryPage() {
         </DropdownMenu>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)} className="space-y-4">
+      <div className="space-y-4">
         {activeTab !== "dashboard" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 py-3">
             <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? t("inventory.page.movementHistory") : activeTab === "purchase-bills" ? t("inventory.page.purchaseBills") : t("inventory.page.insights")}</p><p className="text-[11px] text-[#718096]">{t("inventory.page.detailRecords")}</p></div>
             <Button variant="outline" className="h-9 rounded-[8px] text-[11px]" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />{t("inventory.page.backToStock")}</Button>
           </div>
         ) : null}
-        <TabsContent value="dashboard" className="mt-0 space-y-4">
+        {activeTab === "dashboard" ? <div className="mt-0 space-y-4">
           {/* `min-w-0` on the grid child: a grid item defaults to `min-width:auto`,
               so it refuses to shrink below its content's intrinsic width. The
               240px search box below made that 384px, which pushed this card nine
@@ -800,7 +799,7 @@ export default function InventoryPage() {
                         "Search by". */}
                     <div className="relative min-w-0 flex-1 basis-full sm:basis-0 sm:min-w-[240px] lg:w-[340px]">
                       <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7a89a3]" />
-                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("inventory.page.search")} className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
+                      <Input aria-label={t("inventory.page.search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("inventory.page.search")} className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
                     </div>
                     <Button variant="outline" className="h-10 rounded-[8px] px-3 text-[12px]" onClick={() => setStockFilter(stockFilter === "all" ? "low" : "all")}><SlidersHorizontal size={14} className="mr-1.5" />{t("inventory.page.filters")}</Button>
                     <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_var(--brand-shadow)] hover:bg-[var(--brand-strong)]" onClick={exportInventory}><Download size={14} className="mr-1.5" />{t("inventory.page.export")}</Button>
@@ -811,7 +810,7 @@ export default function InventoryPage() {
                   <InventoryFilterSelect value={brandFilter} onChange={setBrandFilter} placeholder={t("inventory.page.allBrands")} options={filterOptions.brands} />
                   <InventoryFilterSelect value={unitFilter} onChange={setUnitFilter} placeholder={t("inventory.page.allUnits")} options={filterOptions.units} />
                   <Select value={stockFilter} onValueChange={setStockFilter}>
-                    <SelectTrigger className="h-9 rounded-[8px] border-[#dfe6ef] text-[11px] font-medium"><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label={t("inventory.page.allStockStatus")} className="h-9 rounded-[8px] border-[#dfe6ef] text-[11px] font-medium"><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="all">{t("inventory.page.allStockStatus")}</SelectItem><SelectItem value="in">{t("inventory.stock.inStock")}</SelectItem><SelectItem value="low">{t("inventory.stock.lowStock")}</SelectItem><SelectItem value="out">{t("inventory.stock.outOfStock")}</SelectItem></SelectContent>
                   </Select>
                 </div>
@@ -919,7 +918,21 @@ export default function InventoryPage() {
               <section className="min-w-0 rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
                 <h2 className="text-[14px] font-semibold text-[#13223f]">{t("inventory.page.locationOverview")}</h2><p className="mt-0.5 text-[11px] text-[#718096]">{t("inventory.page.locationOverviewHelp")}</p>
                 <div className="mt-2 grid grid-cols-[minmax(0,110px)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[132px_1fr]">
-                  <div className="h-[128px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{ name: t("inventory.page.mainStore"), value: Math.max(stockStats.stockValue, 1) }]} dataKey="value" innerRadius={36} outerRadius={56} strokeWidth={0}><Cell fill="var(--brand)" /></Pie></PieChart></ResponsiveContainer></div>
+                  <div
+                    className="h-[128px]"
+                    role="img"
+                    aria-label={`${t("inventory.page.locationOverview")}: ${t("inventory.page.mainStore")}, ${t("inventory.page.totalValue")} ${fmtMoney(stockStats.stockValue)}`}
+                  >
+                    <div aria-hidden="true" className="h-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie rootTabIndex={-1} data={[{ name: t("inventory.page.mainStore"), value: Math.max(stockStats.stockValue, 1) }]} dataKey="value" innerRadius={36} outerRadius={56} strokeWidth={0}>
+                            <Cell fill="var(--brand)" />
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
                   <div><div className="flex items-center gap-2 text-[11px]"><span className="h-2 w-2 rounded-full bg-[var(--brand)]" /><span className="font-semibold text-[#243653]">{t("inventory.page.mainStore")}</span></div><p className="ml-4 mt-1 text-[11px] text-[#718096]">{t("inventory.page.allTrackedStock")}</p></div>
                 </div>
                 <div className="flex items-center justify-between border-t border-[#edf1f6] pt-3 text-[11px]"><span className="text-[#718096]">{t("inventory.page.totalValue")}</span><span className="font-bold text-[#13223f]">{fmtMoney(stockStats.stockValue)}</span></div>
@@ -941,9 +954,9 @@ export default function InventoryPage() {
               </section>
             </aside>
           </div>
-        </TabsContent>
+        </div> : null}
 
-        <TabsContent value="movements" className="space-y-4">
+        {activeTab === "movements" ? <div className="space-y-4">
           <StatsGrid columns={3}>
             <StatCard label={t("inventory.page.purchases")} value={movementSummary.purchases} />
             <StatCard label={t("inventory.page.sales")} value={movementSummary.sales} tone="blue" />
@@ -970,11 +983,11 @@ export default function InventoryPage() {
               </tbody>
             </table>
           </div>
-        </TabsContent>
+        </div> : null}
 
 
 
-        <TabsContent value="purchase-bills" className="space-y-4">
+        {activeTab === "purchase-bills" ? <div className="space-y-4">
           <StatsGrid columns={3}>
             <StatCard label={t("inventory.page.purchaseBills")} value={movementSummary.purchases} />
             <StatCard label={t("inventory.page.supplierPaid")} value={fmtMoney(movementSummary.purchasePaidTotal)} tone="green" />
@@ -1015,34 +1028,34 @@ export default function InventoryPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">{t("inventory.page.purchaseBillsHelp")}</p>
-        </TabsContent>
+        </div> : null}
 
-        <TabsContent value="reports" className="space-y-4">
+        {activeTab === "reports" ? <div className="space-y-4">
           <div className="grid md:grid-cols-3 gap-3">
             <div className="rounded-lg border bg-card p-4"><TrendingUp size={18} className="mb-2" /><p className="font-semibold">{t("inventory.page.fastMovers")}</p><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.fastMoversHelp")}</p></div>
             <div className="rounded-lg border bg-card p-4"><TrendingDown size={18} className="mb-2" /><p className="font-semibold">{t("inventory.page.slowMovers")}</p><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.slowMoversHelp")}</p></div>
             <div className="rounded-lg border bg-card p-4"><BarChart3 size={18} className="mb-2" /><p className="font-semibold">{t("inventory.page.deadStock")}</p><p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.deadStockHelp")}</p></div>
           </div>
-        </TabsContent>
+        </div> : null}
 
-      </Tabs>
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{t("inventory.page.movementEntryTitle", { movement: movementLabel(form.movementType, t) })}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-2">
             <div className="grid md:grid-cols-2 gap-3">
-              <div><Label>{t("inventory.page.movementType")}</Label><Select value={form.movementType} onValueChange={(value) => setForm((current) => ({ ...current, movementType: value as MovementType }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="purchase">{t("inventory.page.purchase")}</SelectItem><SelectItem value="sale">{t("inventory.page.manualSale")}</SelectItem><SelectItem value="damage">{t("inventory.page.damage")}</SelectItem><SelectItem value="correction">{t("inventory.page.correction")}</SelectItem></SelectContent></Select></div>
-              <div><Label>{t("inventory.page.productRequired")}</Label><Select value={form.productId} onValueChange={(value) => { const product = (products.data ?? []).find((row: Product) => row.id === value); setForm((current) => ({ ...current, productId: value, unit: product ? inventoryMovementUnit(product) : current.unit, costPrice: String(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? current.costPrice), minPrice: String(product?.minimumSellingPrice ?? product?.minPricePerRateUnit ?? current.minPrice), sellingPrice: String(product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? current.sellingPrice) })); }}><SelectTrigger className="mt-1"><SelectValue placeholder={t("inventory.page.selectProduct")} /></SelectTrigger><SelectContent>{(products.data ?? []).map((product: Product) => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}</SelectContent></Select></div>
+              <div><Label>{t("inventory.page.movementType")}</Label><Select value={form.movementType} onValueChange={(value) => setForm((current) => ({ ...current, movementType: value as MovementType }))}><SelectTrigger aria-label={t("inventory.page.movementType")} className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="purchase">{t("inventory.page.purchase")}</SelectItem><SelectItem value="sale">{t("inventory.page.manualSale")}</SelectItem><SelectItem value="damage">{t("inventory.page.damage")}</SelectItem><SelectItem value="correction">{t("inventory.page.correction")}</SelectItem></SelectContent></Select></div>
+              <div><Label>{t("inventory.page.productRequired")}</Label><Select value={form.productId} onValueChange={(value) => { const product = (products.data ?? []).find((row: Product) => row.id === value); setForm((current) => ({ ...current, productId: value, unit: product ? inventoryMovementUnit(product) : current.unit, costPrice: String(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? current.costPrice), minPrice: String(product?.minimumSellingPrice ?? product?.minPricePerRateUnit ?? current.minPrice), sellingPrice: String(product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? current.sellingPrice) })); }}><SelectTrigger aria-label={t("inventory.page.productRequired")} className="mt-1"><SelectValue placeholder={t("inventory.page.selectProduct")} /></SelectTrigger><SelectContent>{(products.data ?? []).map((product: Product) => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}</SelectContent></Select></div>
             </div>
             <div className="grid md:grid-cols-3 gap-3">
               <div><Label>{form.movementType === "correction" ? t("inventory.page.newStockDelta") : t("inventory.col.quantity")}</Label><Input type="number" step="0.01" className="mt-1" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))} /></div>
-              <div><Label>{t("inventory.col.unit")}</Label><Select value={form.unit} onValueChange={(value) => setForm((current) => ({ ...current, unit: value }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{movementUnitOptions.map((unit) => <SelectItem key={unit.value} value={unit.value}>{unit.label}</SelectItem>)}</SelectContent></Select>{unitMismatchWarning ? <p className="mt-1 text-xs text-orange-700">{unitMismatchWarning}</p> : null}</div>
+              <div><Label>{t("inventory.col.unit")}</Label><Select value={form.unit} onValueChange={(value) => setForm((current) => ({ ...current, unit: value }))}><SelectTrigger aria-label={t("inventory.col.unit")} className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{movementUnitOptions.map((unit) => <SelectItem key={unit.value} value={unit.value}>{unit.label}</SelectItem>)}</SelectContent></Select>{unitMismatchWarning ? <p className="mt-1 text-xs text-orange-700">{unitMismatchWarning}</p> : null}</div>
               <div><Label>{t("inventory.page.totalBillAmount")}</Label><Input type="number" step="0.01" className="mt-1" value={form.billAmount} onChange={(event) => setForm((current) => ({ ...current, billAmount: event.target.value }))} disabled={form.movementType !== "purchase"} /></div>
             </div>
             {form.movementType === "purchase" ? (
               <div className="grid md:grid-cols-2 gap-3">
-                <div><Label>{t("inventory.movement.supplier")}</Label><Select value={form.supplierId} onValueChange={(value) => setForm((current) => ({ ...current, supplierId: value }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">{t("inventory.page.noSupplier")}</SelectItem>{(suppliers.data ?? []).map((supplier: Supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}</SelectContent></Select></div>
+                <div><Label>{t("inventory.movement.supplier")}</Label><Select value={form.supplierId} onValueChange={(value) => setForm((current) => ({ ...current, supplierId: value }))}><SelectTrigger aria-label={t("inventory.movement.supplier")} className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">{t("inventory.page.noSupplier")}</SelectItem>{(suppliers.data ?? []).map((supplier: Supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}</SelectContent></Select></div>
                 <div><Label>{t("inventory.page.supplierNameIfUnsaved")}</Label><Input className="mt-1" value={form.supplierName} onChange={(event) => setForm((current) => ({ ...current, supplierName: event.target.value }))} /></div>
               </div>
             ) : null}
@@ -1051,8 +1064,8 @@ export default function InventoryPage() {
                 <div className="flex items-center gap-2"><Wallet size={16} /><p className="font-medium text-sm">{t("inventory.page.supplierPaymentTracking")}</p></div>
                 <div className="grid md:grid-cols-3 gap-3">
                   <div><Label>{t("inventory.page.supplierBillNo")}</Label><Input className="mt-1" value={form.supplierBillNo} onChange={(event) => setForm((current) => ({ ...current, supplierBillNo: event.target.value }))} placeholder={t("restaurant.addons.optional")} /></div>
-                  <div><Label>{t("inventory.page.paymentStatus")}</Label><Select value={form.purchasePaymentStatus} onValueChange={(value) => setForm((current) => ({ ...current, purchasePaymentStatus: value as MovementForm["purchasePaymentStatus"], purchasePaidAmount: value === "paid" ? String(purchaseBillAmount || "") : value === "due" ? "0" : current.purchasePaidAmount }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="paid">{t("inventory.page.paid")}</SelectItem><SelectItem value="partial">{t("inventory.page.partial")}</SelectItem><SelectItem value="due">{t("inventory.page.due")}</SelectItem></SelectContent></Select></div>
-                  <div><Label>{t("inventory.page.paymentMode")}</Label><Select value={form.purchasePaymentMode} onValueChange={(value) => setForm((current) => ({ ...current, purchasePaymentMode: value as MovementForm["purchasePaymentMode"] }))} disabled={form.purchasePaymentStatus === "due"}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">{t("inventory.page.cash")}</SelectItem><SelectItem value="upi">{t("inventory.page.upiBank")}</SelectItem></SelectContent></Select></div>
+                  <div><Label>{t("inventory.page.paymentStatus")}</Label><Select value={form.purchasePaymentStatus} onValueChange={(value) => setForm((current) => ({ ...current, purchasePaymentStatus: value as MovementForm["purchasePaymentStatus"], purchasePaidAmount: value === "paid" ? String(purchaseBillAmount || "") : value === "due" ? "0" : current.purchasePaidAmount }))}><SelectTrigger aria-label={t("inventory.page.paymentStatus")} className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="paid">{t("inventory.page.paid")}</SelectItem><SelectItem value="partial">{t("inventory.page.partial")}</SelectItem><SelectItem value="due">{t("inventory.page.due")}</SelectItem></SelectContent></Select></div>
+                  <div><Label>{t("inventory.page.paymentMode")}</Label><Select value={form.purchasePaymentMode} onValueChange={(value) => setForm((current) => ({ ...current, purchasePaymentMode: value as MovementForm["purchasePaymentMode"] }))} disabled={form.purchasePaymentStatus === "due"}><SelectTrigger aria-label={t("inventory.page.paymentMode")} className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">{t("inventory.page.cash")}</SelectItem><SelectItem value="upi">{t("inventory.page.upiBank")}</SelectItem></SelectContent></Select></div>
                 </div>
                 <div className="grid md:grid-cols-3 gap-3">
                   <div><Label>{t("inventory.page.paidAmount")}</Label><Input type="number" step="0.01" className="mt-1" value={form.purchasePaymentStatus === "paid" ? String(purchaseBillAmount || "") : form.purchasePaidAmount} onChange={(event) => setForm((current) => ({ ...current, purchasePaidAmount: event.target.value, purchasePaymentStatus: current.purchasePaymentStatus === "paid" ? "partial" : current.purchasePaymentStatus }))} disabled={form.purchasePaymentStatus !== "partial"} /></div>
@@ -1131,7 +1144,7 @@ function InventoryMetricCard({ label, value, detail, tone, icon }: { label: stri
   return (
     <div className="min-h-[108px] rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
       <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-medium text-[#6d7c98]">{label}</p><p className="mt-2 text-[21px] font-bold leading-none text-[#13223f]">{value}</p></div><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border ${INVENTORY_TONES[tone]}`}>{icon}</span></div>
-      <p className={`mt-3 text-[10px] font-medium ${tone === "green" ? "text-[#16a34a]" : "text-[#718096]"}`}>{detail}</p>
+      <p className={`mt-3 text-[10px] font-medium ${tone === "green" ? "text-[#15803d]" : "text-[#718096]"}`}>{detail}</p>
     </div>
   );
 }
@@ -1148,7 +1161,7 @@ function InventoryActionCard({ label, detail, tone, icon, onClick }: { label: st
 function InventoryFilterSelect({ value, onChange, placeholder, options }: { value: string; onChange: (value: string) => void; placeholder: string; options: string[] }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-9 rounded-[8px] border-[#dfe6ef] text-[11px] font-medium"><SelectValue /></SelectTrigger>
+      <SelectTrigger aria-label={placeholder} className="h-9 rounded-[8px] border-[#dfe6ef] text-[11px] font-medium"><SelectValue /></SelectTrigger>
       <SelectContent><SelectItem value="all">{placeholder}</SelectItem>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
     </Select>
   );
@@ -1198,7 +1211,7 @@ function RecentMovementRow({ entry }: { entry: MovementEntry }) {
     <div className="flex items-center gap-2.5 py-2.5">
       <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border ${INVENTORY_TONES[tone]}`}>{icon}</span>
       <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{movementLabel(type, t)}</p><p className="truncate text-[10px] text-[#718096]">{entry.productName ?? t("inventory.page.inventoryItem")} - {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p></div>
-      <span className={`text-[11px] font-semibold ${positive ? "text-[#16a34a]" : "text-[#ff304f]"}`}>{positive ? "+" : ""}{quantity} {entry.unit ?? ""}</span>
+      <span className={`text-[11px] font-semibold ${positive ? "text-[#15803d]" : "text-[#be123c]"}`}>{positive ? "+" : ""}{quantity} {entry.unit ?? ""}</span>
     </div>
   );
 }

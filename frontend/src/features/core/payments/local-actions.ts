@@ -653,22 +653,55 @@ export function recordPaymentLocalFirst(
     recordPaymentLocalFirstUnlocked(customerId, data, options));
 }
 
-export async function reversePaymentWithOwnerPinLocalFirst(input: {
+interface ReversePaymentInput {
   paymentId: string;
   ownerPin: string;
   reason?: string;
-}): Promise<{
+}
+
+interface ReversePaymentResult {
   success: true;
   paymentId: string;
   correctionId: string;
   pendingSync: true;
-}> {
+}
+
+export async function reversePaymentWithOwnerPinLocalFirst(
+  input: ReversePaymentInput,
+): Promise<ReversePaymentResult> {
   parseOrThrow(ownerPinRequiredActionSchema, {
     action: "reverse_payment",
     ownerPin: input.ownerPin,
     entityId: input.paymentId,
     reason: input.reason,
   });
+  const initialPayments = await offlineDB
+    .getAll<Record<string, unknown>>("payments")
+    .catch(() => []);
+  const initialPayment = initialPayments.find(
+    (row) =>
+      row.id === input.paymentId ||
+      row.local_id === input.paymentId ||
+      row.server_id === input.paymentId,
+  );
+  if (!initialPayment) throw new Error("Payment not found in local records");
+
+  const customerId = String(
+    initialPayment.customerId ?? initialPayment.customer_id ?? "",
+  );
+  if (!customerId) throw new Error("Payment is not linked to a customer");
+
+  return withCustomerFinancialLock(customerId, () =>
+    reversePaymentWithOwnerPinLocalFirstUnlocked(input, customerId));
+}
+
+async function reversePaymentWithOwnerPinLocalFirstUnlocked(
+  input: ReversePaymentInput,
+  customerId: string,
+): Promise<ReversePaymentResult> {
+  // Re-read after acquiring the customer lock. Two taps/tabs can reach the
+  // preliminary lookup together, but only the first is allowed to append the
+  // correction; the second must observe the committed reversed marker.
   const now = new Date().toISOString();
   const payments = await offlineDB
     .getAll<Record<string, unknown>>("payments")
@@ -682,9 +715,8 @@ export async function reversePaymentWithOwnerPinLocalFirst(input: {
   if (!payment) throw new Error("Payment not found in local records");
   if (payment.reversed_at || payment.reversedAt)
     throw new Error("Payment is already reversed");
-
-  const customerId = String(payment.customerId ?? payment.customer_id ?? "");
-  if (!customerId) throw new Error("Payment is not linked to a customer");
+  if (String(payment.customerId ?? payment.customer_id ?? "") !== customerId)
+    throw new Error("Payment customer changed before reversal");
 
   const existingCustomer = await findCustomer(customerId);
   if (!existingCustomer) throw new Error("Customer not found in local records");

@@ -126,12 +126,18 @@ describe("frontend security hardening", () => {
     expect(source).toContain("/sw.js?build=");
   });
 
-  it("fetches app code through the service worker with network-first freshness", () => {
+  it("serves app code from the atomic build cache without mixing releases", () => {
     const source = readFileSync("public/sw.js", "utf8");
 
     expect(source).toContain('const BUILD_ID = "__KIRANA_BUILD_ID__"');
     expect(source).toMatch(/const CACHE_VERSION = `kiranaos-shell-v\d+-\$\{BUILD_ID\}`/);
-    expect(source).toContain("async function networkFirstStatic");
+    expect(source).toContain("async function cacheFirstStatic");
+    expect(source).toContain("async function cacheFirstNavigation");
+    expect(source).toContain("const cached = await cache.match(request)");
+    expect(source).toContain("event.respondWith(cacheFirstStatic(request))");
+    expect(source).toContain("event.respondWith(cacheFirstNavigation(request))");
+    expect(source).not.toContain("async function networkFirstStatic");
+    expect(source).not.toContain("async function networkFirstNavigation");
     expect(source).toContain('["style", "script", "worker"].includes(request.destination)');
     expect(source).toContain('["font", "image"].includes(request.destination)');
     expect(source).toContain("CORE_ASSETS");

@@ -25,6 +25,16 @@ describe("customer statement printing", () => {
     expect(detailPage).toContain("const safeCustomerName = escapeHtml(customerName)");
   });
 
+  it("prints an escaped payment receipt and makes reversal status explicit", () => {
+    const detailPage = source("../features/core/customers/pages/CustomerDetailPage.tsx");
+
+    expect(detailPage).toContain('escapeHtml(t("customers.receipt.title"))');
+    expect(detailPage).toContain("escapeHtml(customerName)");
+    expect(detailPage).toContain('escapeHtml(customerMobile || "—")');
+    expect(detailPage).toContain('reversed ? t("customers.receipt.reversed")');
+    expect(detailPage).toContain('setTimeout(function(){window.print()},300)');
+  });
+
   it("sanitizes public order and product names on other generated print surfaces", () => {
     const ordersPage = source("../features/core/orders/pages/OrdersReceivedPage.tsx");
     const closingPage = source("../features/core/reports/pages/DailyClosingPage.tsx");

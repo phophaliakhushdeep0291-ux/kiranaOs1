@@ -1,0 +1,60 @@
+{
+  "requirement": "CUST-001",
+  "qaId": "MQA-CUST-01",
+  "testedAt": "2026-08-22T08:42:00.000Z",
+  "sourceRevisionBeforeCheckpoint": "b9f4a03c",
+  "environment": {
+    "frontend": "Vite development server on 127.0.0.1:5173",
+    "backend": "Local KiranaOS API on 127.0.0.1:3001",
+    "database": "Local SQLite development database",
+    "shop": "BILL-004 Mobile QA",
+    "actor": "Synthetic owner QA account"
+  },
+  "liveFlow": {
+    "create": "Created Aarav CUST-001 QA with mobile 9812345670 and Jodhpur Mobile QA address from the 390x844 full-screen form.",
+    "search": "Searching for phone fragment 45670 returned the single expected customer.",
+    "duplicate": "A second create attempt with mobile 9812345670 rendered an inline alert naming the existing account, disabled Create customer, and Open existing account selected the original profile.",
+    "edit": "Edited the same customer to Aarav CUST-001 Verified; the existing row was updated rather than duplicated.",
+    "persistence": {
+      "activeRowsForMobile": 1,
+      "customerId": "cmt44juo6003zfytzaeljhtnn",
+      "finalName": "Aarav CUST-001 Verified",
+      "createdAudits": 1,
+      "updatedAudits": 1
+    }
+  },
+  "responsiveMatrix": [
+    { "viewport": "375x812", "clientWidth": 375, "scrollWidth": 375, "undersizedRenderedControls": 0 },
+    { "viewport": "390x844", "clientWidth": 390, "scrollWidth": 390, "undersizedRenderedControls": 0 },
+    { "viewport": "430x932", "clientWidth": 430, "scrollWidth": 430, "undersizedRenderedControls": 0 },
+    { "viewport": "768x1024", "clientWidth": 768, "scrollWidth": 768, "undersizedRenderedControls": 0 }
+  ],
+  "console": {
+    "fresh390WarningsOrErrors": 0,
+    "fresh1024WarningsOrErrors": 0,
+    "note": "Desktop-only KPI charts are not mounted below 1024px, preventing hidden 0x0 Recharts containers."
+  },
+  "automatedEvidence": {
+    "customerFrontendFiles": 16,
+    "customerFrontendTests": 103,
+    "customerBackendIntegrationTests": 10,
+    "frontendFiles": 273,
+    "frontendTests": 1738,
+    "frontendIntentionalSkips": 1,
+    "translationKeys": 4733,
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "bundleAndProductionAppChecks": "passed",
+    "backendProductionCheck": "passed"
+  },
+  "artifacts": [
+    { "file": "customer-create-valid-390x844.png", "sha256": "eb8213b2eebb2e0788c149d7f40c3643251c5fd2e61688585865e98d8083a8c2" },
+    { "file": "customer-duplicate-warning-390x844.png", "sha256": "f0c00a2383e375f8bdb832cf66731688c0a0925039db9ed2652d85e29415a5d1" },
+    { "file": "customer-edit-ready-390x844.png", "sha256": "8c570abba9a1cb91b9421d0812d7ed440cd3d9dce16684758b334f3386c63d9a" },
+    { "file": "customer-edit-saved-390x844.png", "sha256": "b5ab92a1513ff1fe291e46b542bdc0f393f654375c059d6b1ca4fad357d75050" },
+    { "file": "customer-phone-search-390x844.png", "sha256": "136c3ed2e2ad62b66189d749335f622e8e07d2ddc828dd40323d2e638fab31dd" },
+    { "file": "customer-list-375x812.png", "sha256": "4fac14c72e3cf8a6d6379b006b9f8b2c99060ad759e71724a8c515d429fcbc7a" },
+    { "file": "customer-list-768x1024.png", "sha256": "0358f3ab05778771b7f5573fc3a6bfb83c025e0cd0a95a1a3ed47e989af76ddb" }
+  ],
+  "scope": "Local production-readiness evidence. It does not claim exact-candidate CI or external production deployment."
+}

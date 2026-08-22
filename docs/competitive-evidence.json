@@ -239,14 +239,14 @@
       "weight": 25,
       "status": "partial",
       "proofKind": "external_runtime",
-      "summary": "Provider-confirmed Razorpay dynamic UPI QR is implemented behind a separate on-demand account capability flag with single-use fixed-amount creation, exact tenant/branch binding, provider polling, signed qr_code.credited handling, mismatch rejection, cancellation and one-bill consumption. A provider-neutral card-terminal intent lifecycle, exact-amount confirmation, cancellation, cashier UI and deterministic simulator are also implemented; production refuses the simulator. Pine Labs and Ezetap provider calls intentionally fail as not implemented, and neither live QR traffic nor a physical terminal run is certified.",
+      "summary": "Provider-confirmed Razorpay dynamic UPI QR is implemented behind a separate on-demand account capability flag with single-use fixed-amount creation, exact tenant/branch binding, provider polling, signed qr_code.credited handling, mismatch rejection, cancellation and one-bill consumption. The provider-neutral card-terminal lifecycle includes a documented Pine Labs Plutus cloud adapter for bill upload, status polling and cancellation; it pins one terminal to an exact KiranaOS branch, verifies provider paise and acquirer references before confirmation, rejects lookalike production hosts, and passes mocked contract tests. Client request IDs make HTTP retries idempotent. A lost upload response becomes branch-blocking `uncertain` money—not a false failure—and requires an owner-PIN, reasoned provider reconciliation with a unique acquirer reference and atomic audit before it can enter a bill. Production refuses the simulator. Credentialed Pine Labs UAT/physical certification and Ezetap remain outstanding.",
       "competitorEvidence": [
         { "product": "Zoho POS", "url": "https://www.zoho.com/pos/integrations.html", "claim": "Pine Labs, Paytm, PhonePe and terminal-linked payments are benchmark integrations." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/src/modules/payment-provider/razorpay.provider.js", "backend/src/modules/payment-provider/retailPayment.service.js", "backend/src/modules/payment-provider/retailPayment.validation.js", "backend/src/modules/payment-provider/terminal.provider.js", "backend/src/modules/payment-provider/cardTerminal.service.js", "frontend/src/features/core/billing/pages/components/RetailDynamicQrDialog.tsx", "frontend/src/features/core/billing/pages/components/CardTerminalDialog.tsx"],
-        "testCommands": ["cd backend && npm run test:retail-payment", "cd backend && npm run test:card-terminal", "cd backend && npm run test:integration", "cd frontend && npm test"],
-        "externalProofRequirements": ["Razorpay account with QR Codes feature enabled", "Credentialed fixed-amount QR creation and captured payment trace", "Signed qr_code.credited delivery and retry trace", "Physical integrated terminal certification"],
+        "sourcePaths": ["backend/src/modules/payment-provider/razorpay.provider.js", "backend/src/modules/payment-provider/retailPayment.service.js", "backend/src/modules/payment-provider/retailPayment.validation.js", "backend/src/modules/payment-provider/terminal.provider.js", "backend/src/modules/payment-provider/pineLabsTerminal.provider.js", "backend/src/modules/payment-provider/cardTerminal.service.js", "backend/tests/integration/card-terminal-reconciliation.integration.test.js", "frontend/src/features/core/billing/card-terminal.ts", "frontend/src/features/core/billing/pages/components/RetailDynamicQrDialog.tsx", "frontend/src/features/core/billing/pages/components/CardTerminalDialog.tsx"],
+        "testCommands": ["cd backend && npm run test:retail-payment", "cd backend && npm run test:card-terminal", "cd backend && npm run test:integration", "cd frontend && npm test -- --run src/tests/card-terminal-ui.test.ts"],
+        "externalProofRequirements": ["Razorpay account with QR Codes feature enabled", "Credentialed fixed-amount QR creation and captured payment trace", "Signed qr_code.credited delivery and retry trace", "Credentialed Pine Labs UAT validation and sign-off", "Retained physical Pine Labs terminal charge/cancel/timeout evidence"],
         "runtimeProof": { "status": "missing", "artifact": null }
       },
       "lastVerifiedAt": "2026-08-22"
@@ -439,41 +439,46 @@
         { "product": "Lightspeed Retail", "url": "https://www.lightspeedhq.com/pos/retail/features/", "claim": "Fast, usable retail workflows across operational surfaces are a product benchmark." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["frontend/src/tests/mobile-core-matrix-harness.test.ts", "frontend/src/tests/subscription-ui-stability.test.ts"],
-        "testCommands": ["cd frontend && npm run typecheck", "cd frontend && npm test", "cd frontend && npm run build"]
+        "sourcePaths": ["frontend/scripts/capture-mobile-core-matrix-v1.mjs", "frontend/src/tests/mobile-core-matrix-harness.test.ts", "frontend/src/tests/subscription-ui-stability.test.ts"],
+        "testCommands": ["cd frontend && npm run typecheck", "cd frontend && npm test", "cd frontend && npm run build", "cd frontend && npm run qa:mobile-core-matrix"]
       },
-      "lastVerifiedAt": "2026-08-08"
+      "lastVerifiedAt": "2026-08-22"
     },
     {
       "id": "live_ui_matrix",
       "domain": "ux_accessibility",
       "weight": 30,
-      "status": "partial",
+      "status": "verified",
       "proofKind": "runtime_required",
-      "summary": "A 32-capture mobile matrix harness exists, but a current complete screenshot report has not been attached to this evidence set.",
+      "summary": "A current authenticated matrix passed 36/36 responsive captures and sequential keyboard traversal on 9/9 core routes, with zero undersized targets, horizontal overflow, route failures, loading stalls, runtime errors, missed controls, unnamed focus stops, invisible focus indicators or hidden/inert focus leaks.",
       "competitorEvidence": [
         { "product": "Lightspeed Retail", "url": "https://www.lightspeedhq.com/pos/retail/features/", "claim": "Polished cross-device workflows are part of the leading retail UX benchmark." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["frontend/scripts/capture-mobile-core-matrix-v1.mjs", "frontend/src/tests/mobile-core-matrix-harness.test.ts"],
-        "testCommands": ["cd frontend && npm test"],
-        "externalProofRequirements": ["Current 32-viewport screenshot report", "Zero undersized controls, overflow, redirects and runtime errors"],
-        "runtimeProof": { "status": "missing", "artifact": null }
+        "sourcePaths": ["frontend/scripts/capture-mobile-core-matrix-v1.mjs", "frontend/src/tests/mobile-core-matrix-harness.test.ts", "docs/evidence/mobile-core-accessibility-2026-08-22.json", "docs/evidence/core-route-keyboard-2026-08-22.json"],
+        "testCommands": ["cd frontend && npm run qa:mobile-core-matrix"],
+        "externalProofRequirements": [],
+        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/core-route-keyboard-2026-08-22.json" }
       },
-      "lastVerifiedAt": "2026-08-08"
+      "lastVerifiedAt": "2026-08-22"
     },
     {
       "id": "formal_accessibility_audit",
       "domain": "ux_accessibility",
       "weight": 20,
-      "status": "absent",
+      "status": "partial",
       "proofKind": "runtime_required",
-      "summary": "A current WCAG-oriented keyboard, screen-reader and automated accessibility audit artifact is absent.",
+      "summary": "The live matrix fails on missing titles, language, landmarks, heading order, duplicate IDs, broken ARIA references, unnamed controls, unlabeled forms, missing image alternatives or hidden focus traps. The current run passed 36/36 captures and 9/9 settled-route keyboard traversals. Manual screen-reader, measured contrast and keyboard-only end-to-end mutation-task certification remain outstanding.",
       "competitorEvidence": [
         { "product": "Lightspeed Retail", "url": "https://www.lightspeedhq.com/pos/retail/features/", "claim": "Usable employee and customer workflows form the comparison baseline." }
       ],
-      "kiranaEvidence": { "sourcePaths": [], "testCommands": [] },
-      "lastVerifiedAt": "2026-08-08"
+      "kiranaEvidence": {
+        "sourcePaths": ["frontend/scripts/capture-mobile-core-matrix-v1.mjs", "frontend/src/tests/mobile-core-matrix-harness.test.ts", "docs/evidence/mobile-core-accessibility-2026-08-22.json", "docs/evidence/core-route-keyboard-2026-08-22.json"],
+        "testCommands": ["cd frontend && npm run qa:mobile-core-matrix"],
+        "externalProofRequirements": ["Manual NVDA/TalkBack/VoiceOver task walkthrough", "Keyboard-only end-to-end mutation-task audit", "Measured WCAG color-contrast audit"],
+        "runtimeProof": { "status": "passed-automated-only", "artifact": "docs/evidence/core-route-keyboard-2026-08-22.json" }
+      },
+      "lastVerifiedAt": "2026-08-22"
     }
   ],
   "caps": [

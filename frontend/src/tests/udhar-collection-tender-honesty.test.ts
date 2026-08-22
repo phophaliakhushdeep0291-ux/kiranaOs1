@@ -16,12 +16,12 @@ describe("udhar collection records the tender the shopkeeper actually took", () 
   });
 
   it("defaults udhar collection to a single tender, not split", () => {
-    expect(customersSource).toContain(`amount: "", mode: "cash"`);
-    expect(customersSource).not.toContain(`amount: "", mode: "split"`);
+    expect(customersSource).toMatch(/amount:\s*"",\s*mode:\s*"cash"/);
+    expect(customersSource).not.toMatch(/amount:\s*"",\s*mode:\s*"split"/);
   });
 
   it("seeds split mode with the full amount in cash and zero UPI", () => {
-    expect(customersSource).toContain(`cashAmount: String(value), upiAmount: "0"`);
+    expect(customersSource).toMatch(/cashAmount:\s*String\(value\),\s*upiAmount:\s*"0"/);
   });
 });
 

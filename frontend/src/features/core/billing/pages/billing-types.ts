@@ -190,6 +190,24 @@ export interface VoiceParsedLine {
   source: string;
 }
 
+/**
+ * An item the counter named that the catalogue has never heard of.
+ *
+ * A shop sells things before it lists them — a new biscuit, a one-off carton — and the
+ * bill is the moment that shows up. The command carried a price ("parle biscuit forty
+ * rupees"), which is the whole of what billing needs, so the item is offered as a product
+ * to create rather than dropped with "no saved product matched". Everything else about
+ * it (cost, pack size, HSN) is filled in later, away from the queue.
+ */
+export interface VoiceNewProductLine {
+  /** Spoken name, with the quantity and price words taken out. */
+  name: string;
+  sellingPrice: number;
+  quantity: number;
+  unit: string;
+  source: string;
+}
+
 export interface VoiceParsedDraft {
   customerName?: string;
   udharAmount?: number;
@@ -199,6 +217,8 @@ export interface VoiceParsedDraft {
   cashAmount?: number;
   upiAmount?: number;
   lines: VoiceParsedLine[];
+  /** Unlisted items the command priced; empty unless the shop asked to add one. */
+  newProducts: VoiceNewProductLine[];
   warnings: string[];
   sourceCommand: string;
   fingerprint: string;

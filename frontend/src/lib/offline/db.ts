@@ -514,6 +514,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const OWNER_SECRET_PAYLOAD_KEYS = new Set(["ownerPin", "ownerPassword", "password", "pin"]);
 
 /**
+ * How long a CONFLICT keeps its credentials before they are cleared too.
+ *
+ * A conflict is not finished the way a SYNCED op is: `sync-status-repair` rescues some
+ * of them by putting the event back to PENDING, and the re-push is built from THIS
+ * stored payload — so stripping the PIN the moment a conflict appears would re-send a
+ * bill cancellation with no owner approval on it. Those repairs run at boot and are
+ * capped at MAX_REPAIR_REQUEUES, so a conflict still sitting here days later is one no
+ * repair will ever collect.
+ *
+ * Time rather than a list of "repairable" op types on purpose: that list lives in the
+ * sync feature, which imports this module, and duplicating it here would leave the copy
+ * to rot silently — the day someone taught repair a new trick, the credential it needed
+ * would already have been deleted. Waiting costs a few days of exposure on a rare row
+ * and cannot break a legitimate retry.
+ */
+const CONFLICT_SECRET_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function isStaleConflict(row: PendingSyncEvent, before: number): boolean {
+  const stamp = row.last_attempt_at ?? row.client_created_at ?? row.createdAt;
+  const at = stamp ? new Date(stamp).getTime() : Number.NaN;
+  // An unreadable or missing timestamp is treated as old: the row cannot be shown to be
+  // within the retention window, and keeping a credential on that basis is the worse bet.
+  return !Number.isFinite(at) || at <= before;
+}
+
+/**
  * Strip those keys, returning `null` when there was nothing to strip so callers can
  * skip a pointless write. Recursive because a payload nests the entity it carries.
  */
@@ -904,11 +930,16 @@ class OfflineDBFacade {
    */
   async scrubSettledOutboxSecrets(): Promise<number> {
     await this.init();
+    const staleConflictBefore = Date.now() - CONFLICT_SECRET_RETENTION_MS;
     let scrubbed = 0;
     await dexieDB.transaction("rw", dexieDB.sync_outbox, async () => {
-      const settled = await dexieDB.sync_outbox.where("status").equals("SYNCED").toArray();
-      for (const row of settled) {
+      const rows = await dexieDB.sync_outbox
+        .where("status")
+        .anyOf(["SYNCED", "CONFLICT"])
+        .toArray();
+      for (const row of rows) {
         if (!rowMatchesCurrentScope(row)) continue;
+        if (row.status === "CONFLICT" && !isStaleConflict(row, staleConflictBefore)) continue;
         const payload = withoutOwnerSecrets(row.payload);
         if (!isRecord(payload)) continue;
         await dexieDB.sync_outbox.put({ ...row, payload });

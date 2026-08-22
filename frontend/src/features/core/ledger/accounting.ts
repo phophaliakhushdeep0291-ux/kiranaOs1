@@ -391,10 +391,69 @@ interface DebtBucket {
   remaining: number;
 }
 
+function paymentReversalTargets(entry: Partial<CustomerLedgerEntry>): string[] {
+  const record = entry as Record<string, unknown>;
+  const source = String(record.source_type ?? record.sourceType ?? "").toLowerCase();
+  const mode = String(record.mode ?? "").toLowerCase();
+  const rawType = String(record.type ?? "").toUpperCase();
+  const linkedReversal = Boolean(record.reversalOfLedgerId ?? record.reversal_of_ledger_id);
+  const isReversal = linkedReversal || source === "payment_reversal" || rawType === "PAYMENT_REVERSAL" ||
+    (rawType === "CORRECTION" && mode !== "adjustment");
+  if (!isReversal) return [];
+  return [
+    record.reversalOfLedgerId,
+    record.reversal_of_ledger_id,
+    record.source_id,
+    record.sourceId,
+    record.payment_id,
+    record.paymentId,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function paymentIdentityTokens(entry: Partial<CustomerLedgerEntry>): Set<string> {
+  const record = entry as Record<string, unknown>;
+  return new Set([
+    record.id,
+    record.server_id,
+    record.serverId,
+    record.source_id,
+    record.sourceId,
+    record.payment_id,
+    record.paymentId,
+    record.localPaymentId,
+    record.local_payment_id,
+    record.clientPaymentId,
+    record.client_payment_id,
+    record.ledgerEntryId,
+    record.ledger_entry_id,
+    record.localLedgerEntryId,
+    record.local_ledger_entry_id,
+    record.clientLedgerId,
+    record.client_ledger_id,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0));
+}
+
+function entriesForUdharAgeing(entries: CustomerLedgerEntry[]): CustomerLedgerEntry[] {
+  const paymentIndexes = entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => normaliseLedgerType(entry.type, entry.source_type) === "PAYMENT")
+    .map(({ entry, index }) => ({ index, tokens: paymentIdentityTokens(entry) }));
+  const excluded = new Set<number>();
+  entries.forEach((entry, reversalIndex) => {
+    const targets = paymentReversalTargets(entry);
+    if (targets.length === 0) return;
+    const payment = paymentIndexes.find(({ index, tokens }) => !excluded.has(index) && targets.some((target) => tokens.has(target)));
+    if (!payment) return;
+    excluded.add(payment.index);
+    excluded.add(reversalIndex);
+  });
+  return entries.filter((_entry, index) => !excluded.has(index));
+}
+
 export function calculateUdharAgeing(entries: CustomerLedgerEntry[], now = new Date()): UdharAgeingBuckets {
   const debts: DebtBucket[] = [];
   let creditPool = 0;
-  for (const entry of sortLedgerEntries(entries)) {
+  for (const entry of sortLedgerEntries(entriesForUdharAgeing(entries))) {
     const signed = ledgerSignedAmount(entry);
     if (signed > 0) debts.push({ date: getLedgerDate(entry), remaining: signed });
     if (signed < 0) creditPool += Math.abs(signed);
@@ -424,7 +483,7 @@ export function calculateUdharAgeing(entries: CustomerLedgerEntry[], now = new D
 export function calculateTrustScore(customer: Partial<Customer>, entries: CustomerLedgerEntry[]): LedgerMetrics {
   const balance = calculateLedgerBalance(entries);
   const ageing = calculateUdharAgeing(entries);
-  const sorted = sortLedgerEntries(entries);
+  const sorted = sortLedgerEntries(entriesForUdharAgeing(entries));
   const payments = sorted.filter((entry) => normaliseLedgerType(entry.type, entry.source_type) === "PAYMENT");
   const bills = sorted.filter((entry) => normaliseLedgerType(entry.type, entry.source_type) === "BILL");
   const limit = readNumber((customer as Record<string, unknown>).udharLimit, 0);

@@ -51,7 +51,7 @@ export function BillingVoicePanel({
         <div className="mt-3 rounded-xl border bg-background p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="font-semibold">{t("billing.voice.draftTitle")}</div>
-            <Button type="button" size="sm" onClick={onAddVoiceDraftToCart} disabled={voiceDraft.lines.length === 0}>{t("billing.voice.addToCart")}</Button>
+            <Button type="button" size="sm" onClick={onAddVoiceDraftToCart} disabled={voiceDraft.lines.length === 0 && voiceDraft.newProducts.length === 0}>{t("billing.voice.addToCart")}</Button>
           </div>
           {voiceDraft.customerName && <p className="mt-2 text-xs text-muted-foreground">{t("billing.voice.customer", { name: voiceDraft.customerName })}</p>}
           {voiceDraft.udharAmount !== undefined && <p className="text-xs text-muted-foreground">{t("billing.voice.udharDetected", { amount: voiceDraft.udharAmount.toLocaleString("en-IN") })}</p>}
@@ -63,6 +63,23 @@ export function BillingVoicePanel({
               </div>
             ))}
           </div>
+          {/*
+            Items the catalogue does not have yet. Shown apart from the priced lines and
+            labelled as new, because confirming this writes to the shop's catalogue —
+            the counter should see that it is creating something, not just billing it.
+          */}
+          {voiceDraft.newProducts.length > 0 && (
+            <div className="mt-2 space-y-1">
+              <p className="text-xs font-semibold text-amber-700">{t("billing.voice.newProductsTitle")}</p>
+              {voiceDraft.newProducts.map((row) => (
+                <div key={row.source} className="flex flex-wrap justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs">
+                  <span className="font-medium text-amber-900">{row.name}</span>
+                  <span className="text-amber-900">{row.quantity} {row.unit} × ₹{row.sellingPrice} = ₹{(row.quantity * row.sellingPrice).toLocaleString("en-IN")}</span>
+                </div>
+              ))}
+              <p className="text-[11px] text-muted-foreground">{t("billing.voice.newProductsHint")}</p>
+            </div>
+          )}
           {voiceDraft.warnings.map((warning) => <p key={warning} className="mt-2 text-xs text-destructive">{warning}</p>)}
         </div>
       )}

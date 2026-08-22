@@ -1,7 +1,7 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
-import { createCustomer, createTenant, login } from "./factories.js";
+import { createCustomer, createStaff, createTenant, login } from "./factories.js";
 
 const ctx = await createIntegrationContext();
 
@@ -115,7 +115,7 @@ if (ctx.skip) {
     });
 
     test("persists reminder requests atomically and claims provider dispatch at most once", async () => {
-      const { claimReminderForDispatch, markReminderFromProvider } = await import("../../src/modules/reminders/reminders.service.js");
+      const { claimReminderForDispatch, markReminderFromProvider, __remindersInternals } = await import("../../src/modules/reminders/reminders.service.js");
       const tenant = await createTenant(ctx.db, { planCode: "pro" });
       const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Reminder Customer", udharAmount: 500, mobile: "9876543210" });
@@ -128,6 +128,23 @@ if (ctx.skip) {
       ));
       assert.equal(assertFailure(failedRequest, 503).code, "AUDIT_WRITE_FAILED");
       assert.equal(await ctx.db.reminderLog.count({ where: { shopId: tenant.shop.id, customerId: customer.id } }), 0);
+
+      const reservationInput = {
+        customerId: customer.id,
+        channel: "whatsapp",
+        template: null,
+        templateText: "Namaste {{customerName}}, ₹{{balance}} pending hai. - {{shopName}}",
+        overrideCooldown: false,
+      };
+      const reservations = await Promise.all([
+        __remindersInternals.reserveReminderDecision(tenant.shop.id, { userId: tenant.owner.id, role: "owner" }, reservationInput),
+        __remindersInternals.reserveReminderDecision(tenant.shop.id, { userId: tenant.owner.id, role: "owner" }, reservationInput),
+      ]);
+      assert.deepEqual(reservations.map((row) => row.code).sort(), [null, "REMINDER_COOLDOWN_ACTIVE"].sort());
+      assert.equal(reservations.filter((row) => row.log.status === "queued").length, 1);
+      assert.equal(reservations.filter((row) => row.log.error === "REMINDER_COOLDOWN_ACTIVE").length, 1);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "REMINDER_REQUESTED" } }), 1);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "REMINDER_SKIPPED_COOLDOWN" } }), 1);
 
       const log = await ctx.db.reminderLog.create({
         data: {
@@ -172,6 +189,50 @@ if (ctx.skip) {
       });
       assert.equal(accepted.status, "accepted");
       assert.equal(accepted.providerMessageId, "wamid-atomic-reminder-proof");
+    });
+
+    test("enforces reminder plan, phone, balance and owner-only cooldown override gates", async () => {
+      const starter = await createTenant(ctx.db, { planCode: "starter" });
+      const starterAuth = await login(ctx, starter.ownerMobile, starter.ownerPassword);
+      const starterCustomer = await createCustomer(ctx.db, starter.shop.id, { udharAmount: 500, mobile: "9876543210" });
+      const unavailable = await ctx.post(
+        "/api/reminders/send",
+        { customerId: starterCustomer.id, channel: "whatsapp" },
+        { token: starterAuth.accessToken },
+      );
+      assert.equal(assertFailure(unavailable, 403).code, "FEATURE_NOT_AVAILABLE");
+      assert.equal(await ctx.db.reminderLog.count({ where: { shopId: starter.shop.id } }), 0);
+
+      const pro = await createTenant(ctx.db, { planCode: "pro" });
+      const ownerAuth = await login(ctx, pro.ownerMobile, pro.ownerPassword);
+      const noPhone = await createCustomer(ctx.db, pro.shop.id, { udharAmount: 500, mobile: null });
+      const missingPhone = await ctx.post(
+        "/api/reminders/send",
+        { customerId: noPhone.id, channel: "whatsapp" },
+        { token: ownerAuth.accessToken },
+      );
+      assert.equal(assertFailure(missingPhone, 400).code, "CUSTOMER_PHONE_REQUIRED");
+
+      const paidUp = await createCustomer(ctx.db, pro.shop.id, { udharAmount: 0, mobile: "9876543211" });
+      const noBalance = assertSuccess(await ctx.post(
+        "/api/reminders/send",
+        { customerId: paidUp.id, channel: "whatsapp" },
+        { token: ownerAuth.accessToken },
+      ), 202);
+      assert.equal(noBalance.code, "CUSTOMER_HAS_NO_PENDING_UDHAR");
+      assert.equal(noBalance.queued, false);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: pro.shop.id, action: "REMINDER_SKIPPED_NO_BALANCE" } }), 1);
+
+      const staff = await createStaff(ctx.db, pro.shop.id);
+      const staffAuth = await login(ctx, staff.staffMobile, staff.staffPassword);
+      const due = await createCustomer(ctx.db, pro.shop.id, { udharAmount: 500, mobile: "9876543212" });
+      const forbiddenOverride = await ctx.post(
+        "/api/reminders/send",
+        { customerId: due.id, channel: "whatsapp", overrideCooldown: true },
+        { token: staffAuth.accessToken },
+      );
+      assert.equal(assertFailure(forbiddenOverride, 403).code, "REMINDER_COOLDOWN_OVERRIDE_FORBIDDEN");
+      assert.equal(await ctx.db.reminderLog.count({ where: { shopId: pro.shop.id, customerId: due.id } }), 0);
     });
   });
 }

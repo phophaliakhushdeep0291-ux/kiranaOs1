@@ -274,6 +274,30 @@ describe("payment reversal transaction safety", () => {
     );
   });
 
+  it("serializes concurrent reversal attempts and appends exactly one correction", async () => {
+    const attempts = await Promise.allSettled([
+      reversePaymentWithOwnerPinLocalFirst({
+        paymentId: "payment_local_1",
+        ownerPin: "1234",
+        reason: "Duplicate payment",
+      }),
+      reversePaymentWithOwnerPinLocalFirst({
+        paymentId: "payment_local_1",
+        ownerPin: "1234",
+        reason: "Duplicate payment",
+      }),
+    ]);
+
+    expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
+    expect(attempts.filter((attempt) => attempt.status === "rejected")).toHaveLength(1);
+    expect(tableRows("customer_ledger").filter((row) => row.type === "CORRECTION")).toHaveLength(1);
+    expect(tableRows("local_audit_logs").filter((row) => row.action === "payment_reversed")).toHaveLength(1);
+    expect(tableRows("sync_outbox").filter((row) => row.operation_type === "REVERSE_PAYMENT")).toHaveLength(1);
+    expect(tableRows("customers")[0]).toEqual(
+      expect.objectContaining({ udharAmount: 500, totalUdhar: 500 }),
+    );
+  });
+
   it("rolls back the whole reversal when any transactional write fails", async () => {
     dbState.failOnTable = "sync_outbox";
 

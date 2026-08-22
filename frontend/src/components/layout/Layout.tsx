@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   useCallback,
@@ -591,6 +592,20 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
     window.addEventListener("pointerup", onUp, { once: true });
   }, [collapsed, sidebarWidth]);
 
+  const handleResizeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (collapsed) return;
+    let nextWidth: number | null = null;
+    if (event.key === "ArrowLeft") nextWidth = clampW(sidebarWidth - 8);
+    if (event.key === "ArrowRight") nextWidth = clampW(sidebarWidth + 8);
+    if (event.key === "Home") nextWidth = MIN_WIDTH;
+    if (event.key === "End") nextWidth = MAX_WIDTH;
+    if (nextWidth === null) return;
+    event.preventDefault();
+    liveW.current = nextWidth;
+    shellRef.current?.style.setProperty("--app-sidebar-width", `${nextWidth}px`);
+    setSidebarWidth(nextWidth);
+  }, [collapsed, sidebarWidth]);
+
   const storeName = shop?.name ?? user?.name ?? "My Store";
   const storeLocation = activeStoreLocation
     ? `${activeStoreLocation.name}${activeStoreLocation.city ? ` · ${activeStoreLocation.city}` : ""}`
@@ -624,7 +639,12 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
         }}
       >
         {/* resize handle */}
-        <button type="button" aria-label="Resize sidebar" disabled={collapsed} onPointerDown={handleResize}
+        <button type="button"
+          aria-label={`Resize sidebar, ${sidebarWidth} pixels. Use left and right arrow keys.`}
+          title="Drag, use arrow keys, or press Home/End to resize the sidebar"
+          disabled={collapsed}
+          onPointerDown={handleResize}
+          onKeyDown={handleResizeKeyDown}
           className={cn("app-sidebar-resizer", collapsed ? "is-disabled" : "is-ready")}>
           <span className="mx-auto block h-full w-1 rounded-full bg-sidebar-primary/35" />
         </button>

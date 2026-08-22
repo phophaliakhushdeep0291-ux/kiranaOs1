@@ -10,6 +10,7 @@ import { getWhatsAppProviderStatus } from "./whatsapp.provider.js";
 import { reconcileReminderDeliveryEvents } from "./whatsapp.webhook.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { getReminderTemplate } from "./reminderTemplates.service.js";
+import { calculateCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 import {
   DEFAULT_REMINDER_TEMPLATES,
   maskPhone,
@@ -19,6 +20,31 @@ import {
   sanitizeTemplateValue,
   validateTemplateVariables,
 } from "./reminderFormatter.js";
+
+const reminderDecisionLocks = new Map();
+
+async function withReminderDecisionLock(key, task) {
+  const previous = reminderDecisionLocks.get(key) ?? Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  reminderDecisionLocks.set(key, current);
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+    if (reminderDecisionLocks.get(key) === current) reminderDecisionLocks.delete(key);
+  }
+}
+
+async function lockReminderCustomer(tx, shopId, customerId) {
+  if (!/^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL || "")) return;
+  await tx.$queryRawUnsafe(
+    'SELECT "id" FROM "Customer" WHERE "id" = $1 AND "shopId" = $2 FOR UPDATE',
+    customerId,
+    shopId,
+  );
+}
 
 function appError(message, statusCode, code) {
   const err = new AppError(message, statusCode);
@@ -42,18 +68,18 @@ function canOverrideCooldown(user) {
   return ["owner", "admin"].includes(user?.role);
 }
 
-async function getShopAndCustomer(shopId, customerId) {
+async function getShopAndCustomer(shopId, customerId, client = db) {
   const [shop, customer] = await Promise.all([
-    db.shop.findUnique({ where: { id: shopId }, select: { id: true, name: true } }),
-    db.customer.findFirst({ where: { id: customerId, shopId, deletedAt: null } }),
+    client.shop.findUnique({ where: { id: shopId }, select: { id: true, name: true } }),
+    client.customer.findFirst({ where: { id: customerId, shopId, deletedAt: null } }),
   ]);
   if (!shop) throw appError("Shop not found", 404, "SHOP_NOT_FOUND");
   if (!customer) throw appError("Customer not found", 404, "CUSTOMER_NOT_FOUND");
   return { shop, customer };
 }
 
-async function lastPaymentDate(shopId, customerId) {
-  const payment = await db.udharLedger.findFirst({
+async function lastPaymentDate(shopId, customerId, client = db) {
+  const payment = await client.udharLedger.findFirst({
     // Real customer payments only: cancellation reversals are type "payment" with
     // mode "reversal" and must not read as "last paid on ...".
     where: { shopId, customerId, type: "payment", mode: { not: "reversal" }, reversedAt: null },
@@ -63,22 +89,22 @@ async function lastPaymentDate(shopId, customerId) {
   return payment?.createdAt ? payment.createdAt.toISOString().slice(0, 10) : "N/A";
 }
 
-async function buildVariables(shop, customer, extra = {}) {
+async function buildVariables(shop, customer, extra = {}, client = db) {
   return {
     customerName: customer.name,
     shopName: shop.name,
     balance: moneyForReminder(customer.udharAmount),
     dueDate: customer.reminderOverrideUntil ? customer.reminderOverrideUntil.toISOString().slice(0, 10) : "N/A",
-    lastPaymentDate: await lastPaymentDate(customer.shopId, customer.id),
+    lastPaymentDate: await lastPaymentDate(customer.shopId, customer.id, client),
     billCount: extra.billCount ?? 0,
     paidAmount: moneyForReminder(extra.paidAmount ?? 0),
     statementPeriod: extra.statementPeriod ?? "",
   };
 }
 
-async function checkCooldown(shopId, customerId, channel) {
+async function checkCooldown(shopId, customerId, channel, client = db) {
   const since = nowMinusHours(env.REMINDER_COOLDOWN_HOURS);
-  return db.reminderLog.findFirst({
+  return client.reminderLog.findFirst({
     where: {
       shopId,
       customerId,
@@ -96,18 +122,16 @@ async function createReminderLog({ shopId, customerId, channel, templateId = nul
   });
 }
 
-async function createAuditedReminderLog(logData, auditData) {
-  return db.$transaction(async (tx) => {
-    const log = await createReminderLog(logData, tx);
-    await writeRequiredReminderAudit(tx, {
-      shopId: log.shopId,
-      userId: log.requestedByUserId,
-      entityType: "ReminderLog",
-      entityId: log.id,
-      ...auditData,
-    });
-    return log;
-  }, { isolationLevel: "Serializable" });
+async function createAuditedReminderLog(logData, auditData, client) {
+  const log = await createReminderLog(logData, client);
+  await writeRequiredReminderAudit(client, {
+    shopId: log.shopId,
+    userId: log.requestedByUserId,
+    entityType: "ReminderLog",
+    entityId: log.id,
+    ...auditData,
+  });
+  return log;
 }
 
 export async function listReminderLogs(shopId, filters = {}, user = {}) {
@@ -204,61 +228,85 @@ async function enqueueOrSkip(log, userId, req) {
   return { log, queued: true, queueJobId: queueResult.jobId };
 }
 
-export async function sendReminder(shopId, user, input, { req = null } = {}) {
+async function reserveReminderDecision(shopId, user, input, { req = null, variables: extraVariables = {} } = {}) {
+  const { customerId, channel, template, templateText, overrideCooldown } = input;
+  const lockKey = `${shopId}:${customerId}:${channel}`;
+  return withReminderDecisionLock(lockKey, () => db.$transaction(async (tx) => {
+    // PostgreSQL's row lock closes the same race across app instances. The
+    // in-process lock above provides deterministic parity for local SQLite.
+    await lockReminderCustomer(tx, shopId, customerId);
+    const { shop, customer } = await getShopAndCustomer(shopId, customerId, tx);
+    if (!customer.mobile) throw appError("Customer phone/mobile is required for WhatsApp reminder", 400, "CUSTOMER_PHONE_REQUIRED");
+    const derivedBalance = await calculateCustomerUdharBalance(tx, shopId, customerId);
+    customer.udharAmount = derivedBalance.balance;
+    const variables = await buildVariables(shop, customer, extraVariables, tx);
+    const message = renderReminderTemplate(templateText, variables);
+
+    if (Number(customer.udharAmount || 0) <= 0) {
+      const log = await createAuditedReminderLog(
+        { shopId, customerId, channel, templateId: template?.id ?? null, message, status: "skipped", provider: "disabled", error: "CUSTOMER_HAS_NO_PENDING_UDHAR", requestedByUserId: user?.userId },
+        { action: "REMINDER_SKIPPED_NO_BALANCE", metadata: { customerId, channel, status: "skipped", reason: "CUSTOMER_HAS_NO_PENDING_UDHAR" }, req },
+        tx,
+      );
+      return { log, message, code: "CUSTOMER_HAS_NO_PENDING_UDHAR", queued: false };
+    }
+
+    const cooldown = await checkCooldown(shopId, customerId, channel, tx);
+    if (cooldown && !overrideCooldown) {
+      const log = await createAuditedReminderLog(
+        { shopId, customerId, channel, templateId: template?.id ?? null, message, status: "skipped", provider: "disabled", error: "REMINDER_COOLDOWN_ACTIVE", requestedByUserId: user?.userId },
+        { action: "REMINDER_SKIPPED_COOLDOWN", metadata: { customerId, channel, cooldownHours: env.REMINDER_COOLDOWN_HOURS, blockingReminderLogId: cooldown.id }, req },
+        tx,
+      );
+      return { log, message, code: "REMINDER_COOLDOWN_ACTIVE", queued: false };
+    }
+
+    const log = await createAuditedReminderLog(
+      { shopId, customerId, channel, templateId: template?.id ?? null, message, status: "queued", provider: "disabled", requestedByUserId: user?.userId },
+      { action: "REMINDER_REQUESTED", metadata: { customerId, templateId: template?.id ?? null, channel, status: "queued", overrideCooldown: Boolean(overrideCooldown) }, req },
+      tx,
+    );
+    return { log, message, code: null, queued: true };
+  }, { isolationLevel: "Serializable" }));
+}
+
+export async function sendReminder(shopId, user, input, { req = null, variables = {} } = {}) {
   const { customerId, channel = "whatsapp", templateId, customMessage, overrideCooldown = false } = input;
   if (channel !== "whatsapp") throw appError("Only WhatsApp reminders are enabled in this phase", 400, "CHANNEL_NOT_SUPPORTED");
   if (overrideCooldown && !canOverrideCooldown(user)) throw appError("Only owner/admin can override reminder cooldown", 403, "REMINDER_COOLDOWN_OVERRIDE_FORBIDDEN");
 
-  const { shop, customer } = await getShopAndCustomer(shopId, customerId);
-  if (!customer.mobile) throw appError("Customer phone/mobile is required for WhatsApp reminder", 400, "CUSTOMER_PHONE_REQUIRED");
-
   let template = null;
-  let message;
+  let templateText = customMessage;
   if (customMessage) {
     validateTemplateVariables(customMessage);
-    const variables = await buildVariables(shop, customer);
-    message = renderReminderTemplate(customMessage, variables);
   } else {
     template = templateId
       ? await getReminderTemplate(shopId, templateId)
       : { id: null, templateText: DEFAULT_REMINDER_TEMPLATES[0].templateText };
     if (template.channel && template.channel !== channel) throw appError("Template channel mismatch", 400, "TEMPLATE_CHANNEL_MISMATCH");
-    const variables = await buildVariables(shop, customer);
-    message = renderReminderTemplate(template.templateText, variables);
+    templateText = template.templateText;
   }
 
-  if (Number(customer.udharAmount || 0) <= 0) {
-    const log = await createAuditedReminderLog(
-      { shopId, customerId, channel, templateId: template?.id ?? null, message, status: "skipped", provider: "disabled", error: "CUSTOMER_HAS_NO_PENDING_UDHAR", requestedByUserId: user?.userId },
-      { action: "REMINDER_FAILED", metadata: { customerId, channel, status: "skipped", reason: "CUSTOMER_HAS_NO_PENDING_UDHAR" }, req },
-    );
-    recordReminderMetric({ status: "skipped", provider: log.provider, channel });
-    return { reminderLogId: log.id, status: log.status, code: "CUSTOMER_HAS_NO_PENDING_UDHAR", messagePreview: messagePreview(message), providerConfigured: getWhatsAppProviderStatus().configured, queued: false };
-  }
-
-  const cooldown = await checkCooldown(shopId, customerId, channel);
-  if (cooldown && !overrideCooldown) {
-    const log = await createAuditedReminderLog(
-      { shopId, customerId, channel, templateId: template?.id ?? null, message, status: "skipped", provider: "disabled", error: "REMINDER_COOLDOWN_ACTIVE", requestedByUserId: user?.userId },
-      { action: "REMINDER_SKIPPED_COOLDOWN", metadata: { customerId, channel, cooldownHours: env.REMINDER_COOLDOWN_HOURS }, req },
-    );
-    recordReminderMetric({ status: "skipped", provider: log.provider, channel });
-    return { reminderLogId: log.id, status: "skipped", code: "REMINDER_COOLDOWN_ACTIVE", messagePreview: messagePreview(message), providerConfigured: getWhatsAppProviderStatus().configured, queued: false };
-  }
-
-  const log = await createAuditedReminderLog(
-    { shopId, customerId, channel, templateId: template?.id ?? null, message, status: "queued", provider: "disabled", requestedByUserId: user?.userId },
-    { action: "REMINDER_REQUESTED", metadata: { customerId, templateId: template?.id ?? null, channel, status: "queued", overrideCooldown: Boolean(overrideCooldown) }, req },
+  const decision = await reserveReminderDecision(
+    shopId,
+    user,
+    { customerId, channel, template, templateText, overrideCooldown },
+    { req, variables },
   );
-  logger.info({ type: "reminder_request", shopId, userId: user?.userId, customerId, channel, reminderLogId: log.id, customerPhone: "[REDACTED]" });
-  const result = await enqueueOrSkip(log, user?.userId, req);
-  return { reminderLogId: result.log.id, status: result.log.status, code: result.code, messagePreview: messagePreview(message), providerConfigured: getWhatsAppProviderStatus().configured, queued: result.queued, queueJobId: result.queueJobId };
+  if (!decision.queued) {
+    recordReminderMetric({ status: "skipped", provider: decision.log.provider, channel });
+    return { reminderLogId: decision.log.id, status: decision.log.status, code: decision.code, messagePreview: messagePreview(decision.message), providerConfigured: getWhatsAppProviderStatus().configured, queued: false };
+  }
+
+  logger.info({ type: "reminder_request", shopId, userId: user?.userId, customerId, channel, reminderLogId: decision.log.id, customerPhone: "[REDACTED]" });
+  const result = await enqueueOrSkip(decision.log, user?.userId, req);
+  return { reminderLogId: result.log.id, status: result.log.status, code: result.code, messagePreview: messagePreview(decision.message), providerConfigured: getWhatsAppProviderStatus().configured, queued: result.queued, queueJobId: result.queueJobId };
 }
 
 export async function sendStatementReminder(shopId, user, input, { req = null } = {}) {
   const { customerId, channel = "whatsapp", from, to, overrideCooldown = false } = input;
   if (channel !== "whatsapp") throw appError("Only WhatsApp statement reminders are enabled in this phase", 400, "CHANNEL_NOT_SUPPORTED");
-  const { shop, customer } = await getShopAndCustomer(shopId, customerId);
+  const { customer } = await getShopAndCustomer(shopId, customerId);
   if (!customer.mobile) throw appError("Customer phone/mobile is required for WhatsApp reminder", 400, "CUSTOMER_PHONE_REQUIRED");
 
   const where = { shopId, customerId, ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
@@ -268,13 +316,12 @@ export async function sendStatementReminder(shopId, user, input, { req = null } 
     // statement message doesn't tell the customer they paid more than they did.
     db.udharLedger.aggregate({ where: { ...where, type: "payment", mode: { not: "reversal" }, reversedAt: null }, _sum: { amount: true } }),
   ]);
-  const variables = await buildVariables(shop, customer, {
+  const variables = {
     billCount,
     paidAmount: paymentAgg._sum.amount || 0,
     statementPeriod: `${from || "start"} to ${to || "today"}`,
-  });
-  const message = renderReminderTemplate(DEFAULT_REMINDER_TEMPLATES[2].templateText, variables);
-  return sendReminder(shopId, user, { customerId, channel, customMessage: message, overrideCooldown }, { req });
+  };
+  return sendReminder(shopId, user, { customerId, channel, customMessage: DEFAULT_REMINDER_TEMPLATES[2].templateText, overrideCooldown }, { req, variables });
 }
 
 /**
@@ -354,4 +401,4 @@ export async function markReminderFromProvider(reminderLogId, result, { req = nu
   return updated;
 }
 
-export const __remindersInternals = { checkCooldown, createReminderLog, enqueueOrSkip, sanitizeTemplateValue };
+export const __remindersInternals = { checkCooldown, createReminderLog, enqueueOrSkip, reserveReminderDecision, sanitizeTemplateValue, withReminderDecisionLock };

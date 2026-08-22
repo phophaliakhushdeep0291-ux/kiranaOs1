@@ -14,7 +14,7 @@ const BUILD_DIR = path.resolve(process.env.QA_OFFLINE_BUILD_DIR || path.join(OUT
 const PROFILE_DIR = path.resolve(process.env.QA_OFFLINE_PROFILE_DIR || path.join(tmpdir(), "artha-offline-core-restart-profile"));
 const BUILD_ID = process.env.QA_OFFLINE_BUILD_ID || "offline-core-restart-qa";
 const VIEWPORT = { width: 390, height: 844 };
-const ROUTES = [
+const ALL_ROUTES = [
   ["OQA-DASH-01", "/dashboard", false],
   ["OQA-BILL-01", "/billing", false],
   ["OQA-IMPORT-01", "/import-order", false],
@@ -68,6 +68,13 @@ const ROUTES = [
   ["OQA-SMART-01", "/smart-tools", false],
   ["OQA-REC-01", "/recovery-mode", false],
 ];
+const ROUTE_FILTER = String(process.env.QA_OFFLINE_ROUTE_FILTER || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const ROUTES = ROUTE_FILTER.length
+  ? ALL_ROUTES.filter(([qaId, route]) => ROUTE_FILTER.includes(qaId) || ROUTE_FILTER.includes(route))
+  : ALL_ROUTES;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const assert = (value, message) => { if (!value) throw new Error(message); };
 
@@ -298,7 +305,10 @@ async function auditOfflineRoute(client, qaId, route, expectsInternetRequired = 
   // navigator.onLine is only a network-interface hint and can remain true while
   // every request is blocked. Prove the cut with an uncached cross-origin fetch.
   const networkBlocked = await client.evaluate(`fetch(${JSON.stringify(API_HEALTH_URL)}+"?offlineProbe="+Date.now(),{cache:"no-store"}).then(()=>false).catch(()=>true)`);
-  const metrics = await client.evaluate(`(()=>{const text=document.body.innerText,main=document.getElementById("main-content");return{path:location.pathname,online:navigator.onLine,controlled:Boolean(navigator.serviceWorker?.controller),windowScrollTop:Math.round(window.scrollY),mainScrollTop:Math.round(main?.scrollTop||0),documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,genericFailure:/something went wrong|unexpected error|page failed to load|application failed to start/i.test(text),localDbProblem:text.includes("Local database problem detected"),internetRequired:Boolean(document.querySelector('[data-testid="internet-required-route"]')),stuckLoading:Boolean(document.querySelector('.app-loading-surface[aria-busy="true"]')),runtimeErrors:window.__arthaQaErrors||[],hasSeedProduct:text.includes("Offline Matrix Rice"),hasSeedCustomer:text.includes("Offline Matrix Customer"),hasLocalBackupTool:text.includes("Encrypted local emergency backup")&&text.includes("Export local backup")&&text.includes("Works offline")}})()`);
+  const metrics = await client.evaluate(`(()=>{const text=document.body.innerText,main=document.getElementById("main-content"),loading=document.querySelector('.app-loading-surface[aria-busy="true"]');return{path:location.pathname,online:navigator.onLine,controlled:Boolean(navigator.serviceWorker?.controller),windowScrollTop:Math.round(window.scrollY),mainScrollTop:Math.round(main?.scrollTop||0),documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,genericFailure:/something went wrong|unexpected error|page failed to load|application failed to start/i.test(text),localDbProblem:text.includes("Local database problem detected"),internetRequired:Boolean(document.querySelector('[data-testid="internet-required-route"]')),stuckLoading:Boolean(loading),loadingText:loading?.textContent?.replace(/\\s+/g," ").trim().slice(0,300)||null,runtimeErrors:window.__arthaQaErrors||[],resources:performance.getEntriesByType("resource").map(entry=>new URL(entry.name).pathname).filter(path=>path.endsWith(".js")||path.endsWith(".css")).slice(-40),hasSeedProduct:text.includes("Offline Matrix Rice"),hasSeedCustomer:text.includes("Offline Matrix Customer"),hasLocalBackupTool:text.includes("Encrypted local emergency backup")&&text.includes("Export local backup")&&text.includes("Works offline")}})()`);
+  const cacheDiagnostics = metrics.stuckLoading
+    ? await client.evaluate(`(async()=>{const keys=(await caches.keys()).filter(key=>key.startsWith("kiranaos-shell")),paths=[];for(const key of keys){const cache=await caches.open(key);paths.push(...(await cache.keys()).map(request=>new URL(request.url).pathname))}const assets=[...new Set(paths.filter(path=>path.endsWith(".js")||path.endsWith(".css")))];return{keys,assetCount:assets.length,pageAssets:assets.filter(path=>/Page-|Dialog-/i.test(path)).slice(-80)}})()`)
+    : null;
   const screenshot = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
   const filename = `${qaId.toLowerCase()}-${VIEWPORT.width}x${VIEWPORT.height}.png`;
   await mkdir(OUTPUT_DIR, { recursive: true });
@@ -310,7 +320,7 @@ async function auditOfflineRoute(client, qaId, route, expectsInternetRequired = 
   assert(metrics.windowScrollTop <= 1 && metrics.mainScrollTop <= 1, `${qaId} opened at a stale scroll position: ${JSON.stringify(metrics)}`);
   assert(metrics.documentWidth <= VIEWPORT.width + 1 && metrics.bodyWidth <= VIEWPORT.width + 1, `${qaId} overflowed offline: ${JSON.stringify(metrics)}`);
   assert(!metrics.genericFailure, `${qaId} rendered a fatal offline error`);
-  assert(!metrics.stuckLoading, `${qaId} remained stuck loading offline: ${JSON.stringify(metrics)}`);
+  assert(!metrics.stuckLoading, `${qaId} remained stuck loading offline: ${JSON.stringify({ ...metrics, cacheDiagnostics })}`);
   assert(metrics.runtimeErrors.length === 0, `${qaId} runtime errors offline: ${metrics.runtimeErrors.join(" | ")}`);
   assert(metrics.internetRequired === expectsInternetRequired, `${qaId} offline capability label mismatch: ${JSON.stringify(metrics)}`);
   if (route === "/products") assert(metrics.hasSeedProduct, `${qaId} did not restore cached product data`);

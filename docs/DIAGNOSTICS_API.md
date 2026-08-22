@@ -493,7 +493,9 @@ await publishEvent(EVENT_TOPICS.SYNC_FAILED, shopId, { failed: 3 });
   with ids, ranges and consumer groups, the closest available Kafka analogue.
   Needs `REDIS_URL` and nothing else — in particular it does **not** require
   `QUEUES_ENABLED`, since BullMQ job queues are a separate concern.
-- **`kafka`** — reserved. Returns `KAFKA_PROVIDER_NOT_INSTALLED` rather than
+- **`kafka`** — reserved. Production startup rejects this value until a transport
+  adapter and broker certification exist; non-production publishing returns
+  `KAFKA_PROVIDER_NOT_INSTALLED` rather than
   pulling a broker client into the tree before the platform needs one.
 
 The record is Kafka's producer shape — `{ topic, key, value, headers, timestamp }` —

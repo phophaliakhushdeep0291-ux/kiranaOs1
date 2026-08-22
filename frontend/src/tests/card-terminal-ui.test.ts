@@ -21,6 +21,28 @@ describe("counter card terminal checkout", () => {
     expect(dialog).toContain('t("billing.pay.cardTerminal.waitingHelp")');
   });
 
+  it("reuses a client request id and blocks blind retries when the bank outcome is unknown", () => {
+    expect(api).toContain("newCardTerminalRequestId");
+    expect(api).toContain("requestId");
+    expect(api).toContain('"uncertain"');
+    expect(page).toContain("cardTerminalAttemptRef");
+    expect(page).toContain("previous.requestId");
+    expect(page).toContain('status !== "uncertain"');
+    expect(dialog).toContain('status === "uncertain"');
+    expect(dialog).toContain('t("billing.pay.cardTerminal.uncertainHelp")');
+    expect(dialog).toContain('onClose("uncertain")');
+  });
+
+  it("requires an owner-audited provider reconciliation before uncertain money can enter a bill", () => {
+    expect(api).toContain("reconcileCardTerminalCharge");
+    expect(api).toContain("/reconcile");
+    expect(dialog).toContain("OwnerPinModal");
+    expect(dialog).toContain('reconcileOutcome === "charged"');
+    expect(dialog).toContain("providerPaymentId.trim()");
+    expect(dialog).toContain('t("billing.pay.cardTerminal.notCharged")');
+    expect(dialog).toContain('t("billing.pay.cardTerminal.charged")');
+  });
+
   it("settles an approved card charge into the bank tender, not the cash drawer", () => {
     // "bank" is where the acquirer actually credits the shop; inventing a new
     // payment mode would silently break reports, closing and the audit rules.

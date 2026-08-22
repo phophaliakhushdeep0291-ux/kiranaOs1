@@ -138,9 +138,13 @@ export async function ensurePrimaryLocation(shopId, client = db) {
   const shop = await client.shop.findUnique({ where: { id: shopId } });
   if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
   const registration = normalizeLocationRegistration({}, shop, { inheritWhenOmitted: true });
-  try {
-    return await client.storeLocation.create({
-      data: {
+  // Several freshly opened tabs can request the location list together. A
+  // find-then-create sequence makes all of them observe "missing" and turns the
+  // expected loser into a noisy P2002 (or, with SQLite, a fatal concurrent-write
+  // edge). The shop/code unique key makes this initialization atomic.
+  return client.storeLocation.upsert({
+    where: { shopId_code: { shopId, code: "MAIN" } },
+    create: {
         shopId,
         code: "MAIN",
         name: `${shop.name} - Main`,
@@ -153,12 +157,9 @@ export async function ensurePrimaryLocation(shopId, client = db) {
         gstRegistrationType: registration.gstRegistrationType ?? (shop.gstNumber ? "regular" : "unregistered"),
         phone: shop.phone,
         isPrimary: true,
-      },
-    });
-  } catch (error) {
-    if (error?.code !== "P2002") throw error;
-    return client.storeLocation.findFirst({ where: { shopId, isPrimary: true } });
-  }
+    },
+    update: {},
+  });
 }
 
 export async function listLocations(shopId, user = null) {

@@ -1,0 +1,79 @@
+{
+  "requirement": "CUST-003",
+  "qaId": "MQA-CUST-01",
+  "testedAt": "2026-08-22T09:43:00.000Z",
+  "sourceRevisionBeforeCheckpoint": "c9c7bca1",
+  "environment": {
+    "frontend": "Vite development server on 127.0.0.1:5173",
+    "backend": "Local KiranaOS API on 127.0.0.1:3000",
+    "database": "Local SQLite development database",
+    "shop": "BILL-004 Mobile QA",
+    "actor": "Synthetic owner QA account"
+  },
+  "ageingProof": {
+    "integrationScenario": "A 70-day INR 100 debt and a 20-day INR 50 debt receive an INR 120 FIFO payment. The report retains only INR 30 in 8-30 days; reversing that payment restores INR 100 to 60+ days and INR 50 to 8-30 days.",
+    "implementation": "Ageing is allocated from append-only ledger rows in paise. Payments settle the oldest open debt first, and a linked payment/reversal pair is removed before allocation so the original debt age is restored.",
+    "liveApi": {
+      "customer": "Meera CUST-002 QA",
+      "balancePaise": 120000,
+      "ageingPaise": {
+        "0_7_days": 120000,
+        "8_30_days": 0,
+        "31_60_days": 0,
+        "60_plus_days": 0
+      },
+      "maskedPhone": "******5680",
+      "reminderEligible": true
+    }
+  },
+  "collectionProof": {
+    "amountPolicy": "Collection totals include only live customer payments through cash, UPI or bank. Reversed payments, reversal entries, adjustments, returns and bill tender rows are excluded.",
+    "progressPolicy": "Collection progress handles zero targets and clamps the displayed result to 0-100 percent.",
+    "datePolicy": "Daily grouping uses local calendar fields and does not shift the business day through UTC conversion."
+  },
+  "reminderSafety": {
+    "featureGate": "The Starter QA shop returned FEATURE_NOT_AVAILABLE before any reminder log was created.",
+    "temporaryEntitlement": "The synthetic shop was locally activated on Business with the explicit development-only manual override, without a purchase, and restored to Starter immediately after verification.",
+    "providerStatus": {
+      "provider": "disabled",
+      "providerConfigured": false,
+      "queueEnabled": false,
+      "workerHealthy": false,
+      "operational": false,
+      "code": "PROVIDER_SETUP_REQUIRED"
+    },
+    "liveRequest": {
+      "reminderLogId": "cmt46wasc0027e4btet7bareq",
+      "status": "skipped",
+      "code": "JOB_QUEUE_DISABLED",
+      "provider": "disabled",
+      "maskedPhone": "******5680",
+      "messagePreview": "Namaste Meera CUST-002 QA, aapka INR 1,200 udhar pending hai. Kripya payment kar dein. - BILL-004 Mobile QA",
+      "externalSendOccurred": false
+    },
+    "concurrency": "Two simultaneous reservation attempts produce exactly one queued decision and one REMINDER_COOLDOWN_ACTIVE refusal with matching requested/cooldown audits. PostgreSQL also locks the customer row before the balance/cooldown decision.",
+    "authority": "Business-plan access, customer mobile, positive ledger-derived balance and owner/admin-only cooldown override are enforced by the server. Zero balance is recorded as an audited skip."
+  },
+  "mobileUx": {
+    "ageing": "The customer insight surface renders substantiated 0-7, 8-30 and 30+ amounts instead of fabricating sub-buckets from one due date.",
+    "reminder": "The primary action calls the audited reminders API, exposes queued/skipped/error truthfully, disables invalid or in-flight actions and no longer opens an unaudited wa.me link.",
+    "touchTargets": "Collection, reminder and insight actions use a minimum 44px target contract.",
+    "freshAuthenticatedScreenCapture": "not claimed; browser credential/PIN entry was avoided and correctness was proved through the local API and automated UI contracts"
+  },
+  "automatedEvidence": {
+    "focusedFrontendFiles": 3,
+    "focusedFrontendTests": 15,
+    "backendReportIntegrationTests": 13,
+    "backendReminderIntegrationTests": 4,
+    "combinedAffectedIntegrationTests": 17,
+    "frontendFiles": 276,
+    "frontendTests": 1769,
+    "frontendIntentionalSkips": 1,
+    "translationKeys": 4768,
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "bundleAndProductionAppChecks": "passed",
+    "backendProductionCheck": "passed"
+  },
+  "scope": "Local correctness and production-readiness evidence. It does not claim a real external reminder delivery, fresh authenticated mobile screenshots, exact-candidate CI, external deployment or human release approval."
+}
