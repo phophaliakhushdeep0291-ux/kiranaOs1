@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { runSyncCycle } from "@/features/core/sync/engine";
 import { runManualSyncCycle } from "@/features/core/sync/manual-sync";
-import { readSyncQueueCounts, type SyncQueueCounts } from "@/features/core/sync/sync-status-repair";
+import { clearRetryBackoffAfterReconnect, readSyncQueueCounts, type SyncQueueCounts } from "@/features/core/sync/sync-status-repair";
 import {
   probeBackendConnection,
   readBackendConnectionSnapshot,
@@ -70,7 +70,19 @@ function setSyncing(value: boolean) {
 // A probe returns a fresh object every time and checkedAt always differs, so
 // comparing by reference would re-render every subscriber every eight seconds
 // forever. Only the fields anyone renders count as a change.
+// The connection coming back is the one moment a retry backoff is provably
+// meaningless — the thing it was protecting against is gone. Clearing it here,
+// rather than on the browser `online` event, is deliberate: `online` only says a
+// network interface exists, while this fires when the backend actually answers.
+function noteReachabilityTransition(next: BackendConnectionSnapshot) {
+  const wasReachable = state.backendStatus.browserOnline && state.backendStatus.backendReachable;
+  const isReachable = next.browserOnline && next.backendReachable;
+  if (wasReachable || !isReachable) return;
+  void clearRetryBackoffAfterReconnect().catch(() => 0);
+}
+
 function setBackendStatus(next: BackendConnectionSnapshot) {
+  noteReachabilityTransition(next);
   const current = state.backendStatus;
   if (
     current.browserOnline === next.browserOnline &&

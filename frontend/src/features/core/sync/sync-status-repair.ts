@@ -1,5 +1,5 @@
 import { roundMoney } from "@/lib/money";
-import { dexieDB, filterRowsForCurrentScope, offlineDB, rowMatchesCurrentScope, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
+import { dexieDB, filterRowsForCurrentScope, MAX_AUTOMATIC_RETRY_ATTEMPTS, offlineDB, rowMatchesCurrentScope, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
 import { nowIso } from "@/lib/offline/context";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
 import { buildBackendSyncOperation } from "@/features/core/sync/sync-operation-normalizer";
@@ -599,6 +599,45 @@ async function repairResolvedStoredConflicts(): Promise<number> {
     repaired += 1;
   }
   return repaired;
+}
+
+/**
+ * Drops the retry backoff on failed operations when the connection comes back.
+ *
+ * Backoff exists to stop a client hammering a server that is failing. It is the
+ * wrong tool for a client whose *network* dropped: the schedule for a non-bill
+ * operation runs 2.5s, 5, 10, 20, 40, 80 and then two minutes between attempts,
+ * so a product edit made just before the wifi blinked can sit for two minutes
+ * after the wifi is fine again. That is the shop watching a warning bar and
+ * reaching for the Sync button — the queue is not stuck, it is serving a
+ * sentence for an outage that is already over.
+ *
+ * Only `next_retry_at` is cleared. `retry_count` is deliberately preserved, so
+ * the twelve-attempt cap still retires an operation the server genuinely refuses
+ * (a validation failure, a missing owner PIN) instead of letting it loop forever
+ * across a flapping connection.
+ */
+export async function clearRetryBackoffAfterReconnect(): Promise<number> {
+  await dexieDB.open();
+  const rows = filterRowsForCurrentScope(
+    await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
+  );
+  const now = Date.now();
+  let cleared = 0;
+  for (const event of rows) {
+    if (!isFailedOutbox(event)) continue;
+    if ((event.retry_count ?? event.attempts ?? 0) >= MAX_AUTOMATIC_RETRY_ATTEMPTS) continue;
+    const waitingUntil = event.next_retry_at ? new Date(event.next_retry_at).getTime() : 0;
+    if (!Number.isFinite(waitingUntil) || waitingUntil <= now) continue;
+    await dexieDB.sync_outbox.put({ ...event, next_retry_at: null });
+    cleared += 1;
+  }
+  if (cleared > 0 && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated", {
+      detail: { reason: "reconnect-backoff-cleared", cleared },
+    }));
+  }
+  return cleared;
 }
 
 export async function repairResolvedSyncStatusNoise(): Promise<number> {

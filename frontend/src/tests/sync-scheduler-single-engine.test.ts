@@ -62,6 +62,28 @@ describe("sync scheduling runs one engine, not one per caller", () => {
     expect(throttleAt).toBeGreaterThan(guardAt);
   });
 
+  it("frees failed work from its backoff when the connection returns", () => {
+    const repair = readFileSync("src/features/core/sync/sync-status-repair.ts", "utf8");
+    const engine = readFileSync("src/features/core/sync/useOfflineStatus.ts", "utf8");
+    // A non-bill operation backs off 2.5s, 5, 10, 20, 40, 80 then 120s between
+    // attempts, and nothing used to reset that when the network came back — so a
+    // product edit made just before a wifi blink sat for two minutes after the
+    // wifi was fine. Backoff protects a failing SERVER; it is the wrong penalty
+    // for a client that was merely offline.
+    expect(repair).toContain("export async function clearRetryBackoffAfterReconnect");
+    expect(engine).toContain("clearRetryBackoffAfterReconnect");
+    // Fires on the backend actually answering, not on the `online` event, which
+    // only claims a network interface exists.
+    expect(engine).toContain("function noteReachabilityTransition");
+    expect(engine).toContain("if (wasReachable || !isReachable) return;");
+    // retry_count must survive, or the twelve-attempt cap stops retiring an
+    // operation the server genuinely refuses and it loops across a flapping link.
+    const body = repair.slice(repair.indexOf("export async function clearRetryBackoffAfterReconnect"));
+    expect(body).toContain("MAX_AUTOMATIC_RETRY_ATTEMPTS) continue;");
+    expect(body).toContain("next_retry_at: null");
+    expect(body).not.toContain("retry_count: 0");
+  });
+
   it("keeps the two schedulers on their documented intervals", () => {
     const offline = readFileSync("src/features/core/sync/useOfflineStatus.ts", "utf8");
     const multi = readFileSync("src/lib/realtime/useMultiDeviceSync.tsx", "utf8");
