@@ -122,7 +122,6 @@ const STATUS_CLS: Record<string, string> = {
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
-  const { t } = useAppLanguage();
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
@@ -399,6 +398,9 @@ export default function BillsPage() {
   const { data: bills = [], isLoading, refetch } = useLocalBills();
   const [period, setPeriod] = useState<BillPeriod>("all");
   const initialRange = useMemo(() => periodRange("all"), []);
+  const [showKpiCharts, setShowKpiCharts] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
+  );
   const [fromDate, setFromDate] = useState(initialRange.from);
   const [toDate, setToDate] = useState(initialRange.to);
   const [search, setSearch] = useState("");
@@ -452,9 +454,16 @@ export default function BillsPage() {
         filter === "deleted" ? deleted : true;
       return matchesSearch && matchesDate && matchesMode && matchesStaff && matchesFilter;
     });
-  }, [bills, filter, fromDate, modeFilter, search, staffFallback, staffFilter, toDate]);
+  }, [bills, filter, fromDate, modeFilter, search, staffFallback, staffFilter, t, toDate]);
 
   useEffect(() => { setPage(1); }, [search, filter, modeFilter, staffFilter, fromDate, toDate, perPage]);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const update = () => setShowKpiCharts(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     const handler = (event: Event) => {
       const query = String((event as CustomEvent<{ query?: unknown }>).detail?.query ?? "").trim();
@@ -514,7 +523,7 @@ export default function BillsPage() {
         cancelledBills: sparkFromRows(periodBills, sparkEnd, (rows) => rows.filter((bill) => bill.status === "cancelled").length),
       },
     };
-  }, [bills, fromDate, period, periodBills, toDate]);
+  }, [bills, fromDate, period, periodBills, t, toDate]);
 
   const counts = useMemo(() => ({
     pending: bills.filter((bill) => ["pending_sync", "syncing", "failed", "conflict"].includes(syncStatusOf(bill)) && !isDeleted(bill)).length,
@@ -534,7 +543,7 @@ export default function BillsPage() {
     return order
       .map((key) => ({ key, value: totals.get(key) ?? 0, ...modeMeta(t)[key] }))
       .filter((row) => row.value > 0);
-  }, [periodBills]);
+  }, [periodBills, t]);
 
   const recentActivities = useMemo(() => filtered.filter((bill) => !isDeleted(bill)).slice(0, 4).map((bill) => {
     const status = paymentStatusOf(bill, t);
@@ -557,7 +566,7 @@ export default function BillsPage() {
       tone: isEstimateBill(bill) ? "violet" : bill.status === "cancelled" ? "rose" : mode === "udhar" ? "orange" : "emerald",
       bill,
     };
-  }), [filtered]);
+  }), [filtered, t]);
 
   const topCustomers = useMemo(() => {
     const groups = new Map<string, { name: string; bills: number; total: number }>();
@@ -569,7 +578,7 @@ export default function BillsPage() {
       groups.set(name, current);
     }
     return Array.from(groups.values()).sort((a, b) => b.total - a.total).slice(0, 5);
-  }, [periodBills]);
+  }, [periodBills, t]);
 
   const backupStatus = isOnline
     ? { icon: Wifi, label: isSyncing ? "Syncing" : "Synced", sub: isSyncing ? "Backing up now" : "Just now", cls: "border-[#c9efd5] bg-[#eaf9ef] text-[#119447]" }
@@ -741,12 +750,12 @@ export default function BillsPage() {
       </div>
 
       <div className="grid grid-cols-2 items-stretch gap-2.5 lg:grid-cols-3 lg:gap-3 xl:grid-cols-6">
-        <BillKpiCard label={t("billing.bills.totalBills")} value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
-        <BillKpiCard label={t("billing.bills.totalSales")} value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
-        <BillKpiCard mobileHidden label={t("billing.bills.stats.paid")} value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
-        <BillKpiCard label={t("billing.bills.stats.udhar")} value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} deltaPositiveIsBad />
-        <BillKpiCard mobileHidden label={t("billing.bills.stats.average")} value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
-        <BillKpiCard label={t("billing.bills.stats.cancelled")} value={String(analytics.cancelledBills)} delta={analytics.cancelledBillsDelta} data={analytics.sparks.cancelledBills} color={RED} icon={<Ban size={17} />} iconClass="border-[#ffcfd8] bg-[#ffecef] text-[#ff314f] shadow-[0_10px_22px_rgba(255,49,79,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} deltaPositiveIsBad />
+        <BillKpiCard showChart={showKpiCharts} label={t("billing.bills.totalBills")} value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
+        <BillKpiCard showChart={showKpiCharts} label={t("billing.bills.totalSales")} value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
+        <BillKpiCard showChart={showKpiCharts} mobileHidden label={t("billing.bills.stats.paid")} value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
+        <BillKpiCard showChart={showKpiCharts} label={t("billing.bills.stats.udhar")} value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} deltaPositiveIsBad />
+        <BillKpiCard showChart={showKpiCharts} mobileHidden label={t("billing.bills.stats.average")} value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} />
+        <BillKpiCard showChart={showKpiCharts} label={t("billing.bills.stats.cancelled")} value={String(analytics.cancelledBills)} delta={analytics.cancelledBillsDelta} data={analytics.sparks.cancelledBills} color={RED} icon={<Ban size={17} />} iconClass="border-[#ffcfd8] bg-[#ffecef] text-[#ff314f] shadow-[0_10px_22px_rgba(255,49,79,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? t("billing.bills.allTime") : t("billing.bills.vsLastWeek")} deltaPositiveIsBad />
       </div>
 
       <section id="billing-history-table" className={cn(CARD, "overflow-hidden")}>
@@ -1027,7 +1036,7 @@ export default function BillsPage() {
   );
 }
 
-function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loading, comparisonLabel, deltaPositiveIsBad, mobileHidden = false }: {
+function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loading, comparisonLabel, deltaPositiveIsBad, mobileHidden = false, showChart }: {
   label: string;
   value: string;
   delta: number;
@@ -1039,6 +1048,7 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
   comparisonLabel?: string;
   deltaPositiveIsBad?: boolean;
   mobileHidden?: boolean;
+  showChart: boolean;
 }) {
   const { t } = useAppLanguage();
   const positive = delta > 0;
@@ -1059,18 +1069,20 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
         <span className="font-semibold text-[#7a879f]">{comparisonLabel ?? t("billing.bills.vsLastWeek")}</span>
       </div>
       <div className="mt-auto hidden h-9 pt-2 lg:block">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={color} stopOpacity={0.30} />
-                <stop offset="68%" stopColor={color} stopOpacity={0.08} />
-                <stop offset="100%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.9} fill={`url(#${gradientId})`} dot={{ r: 1.8, fill: "white", stroke: color, strokeWidth: 1.2 }} isAnimationActive={false} />
-          </AreaChart>
-        </ResponsiveContainer>
+        {showChart ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.30} />
+                  <stop offset="68%" stopColor={color} stopOpacity={0.08} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.9} fill={`url(#${gradientId})`} dot={{ r: 1.8, fill: "white", stroke: color, strokeWidth: 1.2 }} isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : null}
       </div>
     </article>
   );

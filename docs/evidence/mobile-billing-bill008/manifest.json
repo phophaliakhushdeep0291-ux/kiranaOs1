@@ -1,0 +1,115 @@
+{
+  "checkpoint": "BILL-008 cashier-versus-owner approval",
+  "capturedAt": "2026-08-22T08:15:00.000Z",
+  "scope": "Local rendered QA and database proof; not exact-candidate CI or external provider/hardware certification.",
+  "environment": {
+    "frontend": "http://localhost:5173",
+    "backend": "http://localhost:3001/api",
+    "browser": "Codex in-app Chromium",
+    "baseHeadAtStart": "854d28aebaf0eedec5650ebfe158884cdf2c250d",
+    "baseHeadAfterConcurrentWorkspaceCommit": "f04ceff7",
+    "workingTreeWasDirty": true,
+    "shop": "BILL-004 Mobile QA",
+    "actorRole": "staff"
+  },
+  "flow": {
+    "product": "GST Test Item",
+    "quantity": 1,
+    "subtotalRupees": 118,
+    "discountRupees": 100,
+    "discountReason": "BILL-008 cashier discount QA",
+    "billType": "estimate",
+    "approvalPromptRendered": true,
+    "approvalReason": "BILL-008 owner approved cashier discount",
+    "localConfirmation": "EST-2026-LOCAL-B1A603",
+    "serverBillNo": "EST-2026-000002",
+    "serverBillId": "cmt43kwic000pnx439lv3493h",
+    "createdByStaffUserId": "cmt1hkqek02nzpi9ldhblnt5c",
+    "serverRowCountForRun": 1,
+    "duplicateServerRows": 0,
+    "auditAction": "BILL_LARGE_DISCOUNT_APPROVED",
+    "auditResult": "success",
+    "auditEntityMatchesBill": true,
+    "auditReasonMatchesApproval": true,
+    "syncObservation": "The first concurrent replay reported retryable SYNC_EVENT_IN_PROGRESS; automatic retry then recorded SYNC_COMPLETED with one applied event and the final database retained exactly one bill."
+  },
+  "responsiveChecks": [
+    {
+      "viewport": "375x812",
+      "documentWidth": 375,
+      "bodyWidth": 375,
+      "undersizedVisibleInteractiveControls": 0
+    },
+    {
+      "viewport": "390x844",
+      "documentWidth": 390,
+      "bodyWidth": 390,
+      "undersizedVisibleInteractiveControls": 0
+    },
+    {
+      "viewport": "430x932",
+      "documentWidth": 430,
+      "bodyWidth": 430,
+      "undersizedVisibleInteractiveControls": 0
+    },
+    {
+      "viewport": "768x1024",
+      "documentWidth": 768,
+      "bodyWidth": 768,
+      "undersizedVisibleInteractiveControls": 0
+    }
+  ],
+  "runtimeChecks": {
+    "approvalHandoffFixed": true,
+    "billingHistoryHookWarningFixed": true,
+    "hiddenMobileChartWarningFixed": true,
+    "freshPhoneWarningsOrErrorsAfterFix": 0,
+    "freshDesktopWarningsOrErrorsAfterFix": 0
+  },
+  "automatedChecks": [
+    "frontend focused approval/calculation/business-rule set: 19/19",
+    "backend sensitive-approval unit: 1/1",
+    "backend estimate examples: passed",
+    "backend bill-counter examples: passed",
+    "frontend BILL-008 plus billing-history safety set: 12/12"
+  ],
+  "exactCurrentGates": {
+    "headObservedAtCompletion": "dda3647ac4dd2d250928de1ee39d48e345a01058",
+    "frontendTypecheck": "passed",
+    "frontendTranslationParity": "4714 keys across 14 modules; 0 problems",
+    "frontendTests": "1726 passed; 1 intentional skip",
+    "frontendProductionBuild": "passed",
+    "frontendBundleAndProductionAppChecks": "passed",
+    "backendFullHarnessIncludingDatabasePosttests": "passed",
+    "backendProductionCheck": "passed",
+    "migrationSafety": "passed; 0 warnings",
+    "releaseGate": "passed; 1 expected warning because RELEASE_APPROVED is not a human approval record"
+  },
+  "screenshots": [
+    {
+      "file": "cashier-owner-approval-required-postfix-390x844.png",
+      "sha256": "7DEA561BC3634F0F1EC82C01CB9845B13D6DE63DE63D8F6E8CE801F33853C918",
+      "proves": "Cashier receives the owner-PIN and mandatory audit-reason gate at 390x844."
+    },
+    {
+      "file": "approved-estimate-history-390x844.png",
+      "sha256": "60FA624AA00D894D565D42F4B94A6CAED347E2D9C61F414E605B9FDFA31FD8C2",
+      "proves": "Premium phone Billing History layout after the approved estimate synced."
+    },
+    {
+      "file": "approved-estimate-history-768x1024.png",
+      "sha256": "0EA314496750806EE679BF8C8DA49C12FCCB64FCD2D58C79D105AFCBE4C9401D",
+      "proves": "Tablet history table with EST-2026-000002, Estimate badge and INR 18 amount."
+    },
+    {
+      "file": "approved-estimate-detail-390x844-full.png",
+      "sha256": "74782D360027CEA1A99C75D411E7FA005E8EB08CA79BC53C62CBB7185DA6212D",
+      "proves": "Synced estimate detail, INR 118 subtotal, INR 100 discount and INR 18 final amount."
+    },
+    {
+      "file": "approved-estimate-audit-390x844.png",
+      "sha256": "25E94CDAD1A72BB50FCC4D146823308842C5904638ACA3A6A0AA60A41C6B9795",
+      "proves": "Rendered large-discount audit and owner approval reason on the phone detail page."
+    }
+  ]
+}
