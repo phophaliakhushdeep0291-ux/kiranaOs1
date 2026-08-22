@@ -104,8 +104,21 @@ function checkServiceWorker() {
   const sw = readText("public/sw.js");
   if (!sw) return;
 
-  for (const marker of ["CACHE_VERSION", "APP_SHELL", "offline.html", "networkFirstNavigation", "NEVER_CACHE_PATTERNS"]) {
+  for (const marker of ["CACHE_VERSION", "APP_SHELL", "offline.html", "NEVER_CACHE_PATTERNS"]) {
     if (!sw.includes(marker)) fail(`service worker is missing ${marker}`);
+  }
+
+  // What matters is that navigations are ANSWERED by the worker, so the till opens
+  // with no network. This used to name the handler function instead, and when the
+  // navigation strategy was renamed (network-first to cache-first) the marker went
+  // stale: the gate failed for three commits on a rename, while the service-worker
+  // tests — which pin the real behaviour — stayed green the whole time. Asserting the
+  // wiring keeps the guard and survives the next rename.
+  const navigationIndex = sw.indexOf('request.mode === "navigate"');
+  if (navigationIndex === -1) {
+    fail("service worker does not branch on navigation requests");
+  } else if (!sw.slice(navigationIndex, navigationIndex + 200).includes("event.respondWith(")) {
+    fail("service worker does not answer navigation requests");
   }
 
   for (const sensitivePattern of ["/api", "/auth", "/sync", "password", "token"]) {

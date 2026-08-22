@@ -96,6 +96,13 @@ export const VOICE_NUMBER_WORDS: Record<string, number> = {
 const MONEY_WORDS = new Set([
   "rs",
   "rupay",
+  // "rupaye" is how the romanised word is usually written, and it was the one
+  // spelling missing: "naya maggi bees rupaye" returned null even after the number
+  // table learned "bees", because the price marker beside it was not a money word.
+  "rupaye",
+  "rupaya",
+  "rupaiya",
+  "rupaiye",
   "rupee",
   "rupees",
   "price",
@@ -406,8 +413,12 @@ export function parseNewProductLine(segment: string): VoiceNewProductLine | null
 
 function parseCustomerName(command: string) {
   const patterns = [
-    /^\s*(.+?)\s+ke\s+naam\b/i,
-    /\b(?:customer|naam|name)\s+([a-zA-Z\u0900-\u097f][a-zA-Z\u0900-\u097f\s]{1,40}?)(?:\s+(?:paid|cash|upi|udhar|bill|ke|\d)|$)/i,
+    /^\s*(.+?)\s+(?:ke\s+naam|के\s+नाम)(?=\s|$)/i,
+    /\b(?:customer|naam|name)\s+([a-zA-Z\u0900-\u097f][a-zA-Z\u0900-\u097f\s]{1,40}?)(?:\s+(?:paid|cash|upi|udhar|bill|ke|के|उधार|नकद|\d)|$)/i,
+    // A Devanagari label takes exactly one word. The pattern above ends a name at a
+    // digit and Hindi counts in words, so "ग्राहक रमेश दो किलो" ran past the
+    // name and would have filed a customer called "रमेश दो किलो".
+    /(?:^|\s)(?:नाम|ग्राहक)\s+([\u0900-\u097f]{2,20})(?=\s|$)/,
   ];
   for (const pattern of patterns) {
     const match = command.match(pattern);
@@ -503,11 +514,12 @@ function buildFingerprint(
 
 function stripBillingDirectives(command: string) {
   return command
-    .replace(/^\s*[^,]+?\s+ke\s+naam\b/i, "")
+    .replace(/^\s*[^,]+?\s+(?:ke\s+naam|के\s+नाम)(?=\s|$)/i, "")
     .replace(
-      /\b(?:customer|naam|name)\s+[a-zA-Z\u0900-\u097f][a-zA-Z\u0900-\u097f\s]{1,40}?(?=\s+(?:paid|cash|upi|udhar|bill|\d)|$)/gi,
+      /\b(?:customer|naam|name)\s+[a-zA-Z\u0900-\u097f][a-zA-Z\u0900-\u097f\s]{1,40}?(?=\s+(?:paid|cash|upi|udhar|bill|के|उधार|नकद|\d)|$)/gi,
       "",
     )
+    .replace(/(?:^|\s)(?:नाम|ग्राहक)\s+[\u0900-\u097f]{2,20}(?=\s|$)/g, "")
     .replace(/\bmake\s+(?:cash|upi|udhar)\s+bill\b/gi, "")
     .replace(
       /\b(?:paid|pay|payment)\s*(?:rs|rupay|rupee|rupees)?\s*\d+(?:\.\d+)?\b/gi,
@@ -526,12 +538,40 @@ function hasCartLikeWords(normalized: string) {
   );
 }
 
+/**
+ * Hindi tender words, mapped onto the English labels the payment rules already read.
+ *
+ * The alternative was Devanagari alternatives inside a dozen separate regexes, each of
+ * which ends its label on an ASCII word boundary that never fires after "उधार" — so
+ * every one of them would have needed its terminator rewritten too. Translating the
+ * handful of tender words once, up front, leaves those rules exactly as they are.
+ *
+ * Plain string swaps rather than a regex: these are whole words in a script with no
+ * case, and the money they decide is real.
+ */
+const TENDER_WORD_PAIRS: Array<[string, string]> = [
+  ["उधारी", "udhar"],
+  ["उधार", "udhar"],
+  ["नकद", "cash"],
+  ["नक़द", "cash"],
+  ["दिया", "paid"],
+  ["दिये", "paid"],
+  ["दिए", "paid"],
+];
+
+export function withEnglishTenderWords(text: string): string {
+  let out = text;
+  for (const [hindi, english] of TENDER_WORD_PAIRS) out = out.split(hindi).join(english);
+  return out;
+}
+
 export function parseBillingVoiceCommand(
   command: string,
   products: Product[],
 ): VoiceParsedDraft {
   const warnings: string[] = [];
-  const normalized = normalizeSearchText(command);
+  const tenderCommand = withEnglishTenderWords(command);
+  const normalized = normalizeSearchText(tenderCommand);
   const customerName = parseCustomerName(command);
   const udharAmount = amountBeforeLabel(normalized, "udhar");
   const paymentAmounts = parsePaymentAmounts(normalized);
@@ -546,7 +586,7 @@ export function parseBillingVoiceCommand(
       ? BillInputBillType.udhar_entry
       : undefined;
 
-  const itemCommand = stripBillingDirectives(command)
+  const itemCommand = stripBillingDirectives(tenderCommand)
     .replace(/\b(?:and|aur)\b/gi, ",")
     .replace(/\s+/g, " ")
     .trim();
