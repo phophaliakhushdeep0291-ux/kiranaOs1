@@ -118,6 +118,13 @@ describe("desktop app shell behavior", () => {
     expect(layout).toContain("transition-none");
     expect(styles).toContain("will-change: width");
     expect(layout).toContain("Resize sidebar");
+    expect(layout).toContain("handleResizeKeyDown");
+    expect(layout).toContain('event.key === "ArrowLeft"');
+    expect(layout).toContain('event.key === "ArrowRight"');
+    expect(layout).toContain('event.key === "Home"');
+    expect(layout).toContain('event.key === "End"');
+    expect(layout).toContain("onKeyDown={handleResizeKeyDown}");
+    expect(styles).toContain("opacity: .35");
     // Collapse: dedicated collapse/expand controls backed by a persisted flag.
     expect(layout).toContain("setCollapsed");
     expect(layout).toContain("Collapse sidebar");

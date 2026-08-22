@@ -1618,7 +1618,7 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
         <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", t("customers.filter.allCustomers")], ["udhar", t("customers.filter.withBalanceTitle")], ["due", t("customers.list.overdue")], ["cleared", t("customers.list.cleared")]] as const).map(([key, label]) => <button key={key} type="button" data-customer-filter={key} aria-pressed={filter === key} onClick={() => onFilter(key)} className={cn("h-11 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
       </div>
       <div className="app-scrollbar max-h-[610px] overflow-y-auto p-3">
-        {loading ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">{t("customers.list.loadingCustomers")}</p> : customers.length === 0 ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">{t("customers.list.none")}</p> : customers.map((customer, index) => {
+        {loading ? <p className="py-10 text-center text-[12px] text-[#52617c]">{t("customers.list.loadingCustomers")}</p> : customers.length === 0 ? <p className="py-10 text-center text-[12px] text-[#52617c]">{t("customers.list.none")}</p> : customers.map((customer, index) => {
           const risk = riskInfo(customer);
           const active = selectedId === customer.id;
           const ageing = customer.ledgerMetrics.ageing;
@@ -1877,7 +1877,7 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
             );
           })}
         </div>
-        <div className="hidden overflow-x-auto md:block">
+        <div tabIndex={0} role="region" aria-label={t("customers.ledger.title")} className="hidden overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2 md:block">
           <table className="w-full min-w-[1020px] text-[12.5px]">
             <thead><tr className="h-10 bg-[#f7f9fc] text-[10px] text-[#52617c]">{['Date','Entry Type','Reference','Description','Debit (₹)','Credit (₹)','Running Balance (₹)','Mode','Status','Action'].map((label) => <th key={label} className="px-3 text-left font-bold">{label}</th>)}</tr></thead>
             <tbody className="divide-y divide-[#e8edf4]">

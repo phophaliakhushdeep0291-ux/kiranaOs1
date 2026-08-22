@@ -14,11 +14,12 @@ export interface CardTerminalReadiness {
   configured: boolean;
   simulated: boolean;
   terminalId: string | null;
+  locationCode: string | null;
   tenderMode: "bank";
   chargeTimeoutSeconds: number;
 }
 
-export type CardTerminalStatus = "creating" | "pending" | "confirmed" | "failed" | "expired" | "cancelled";
+export type CardTerminalStatus = "creating" | "pending" | "uncertain" | "confirmed" | "failed" | "expired" | "cancelled";
 
 export interface CardTerminalCharge {
   intentId: string;
@@ -33,6 +34,7 @@ export interface CardTerminalCharge {
   confirmedAt?: string | null;
   confirmationSource?: string | null;
   failureReason?: string | null;
+  requiresReconciliation?: boolean;
   cardNetwork?: string | null;
   authCode?: string | null;
 }
@@ -41,8 +43,15 @@ export function getCardTerminalReadiness() {
   return apiRequest<CardTerminalReadiness>("/payment-provider/terminal/readiness", { method: "GET", background: true });
 }
 
-export function startCardTerminalCharge(amountPaise: number) {
-  return apiRequest<CardTerminalCharge>("/payment-provider/terminal/charges", { method: "POST", body: JSON.stringify({ amountPaise }) });
+export function newCardTerminalRequestId() {
+  return crypto.randomUUID();
+}
+
+export function startCardTerminalCharge(amountPaise: number, locationId: string | null | undefined, requestId: string) {
+  return apiRequest<CardTerminalCharge>("/payment-provider/terminal/charges", {
+    method: "POST",
+    body: JSON.stringify({ amountPaise, requestId, ...(locationId ? { locationId } : {}) }),
+  });
 }
 
 export function getCardTerminalChargeStatus(intentId: string) {
@@ -51,4 +60,16 @@ export function getCardTerminalChargeStatus(intentId: string) {
 
 export function cancelCardTerminalCharge(intentId: string) {
   return apiRequest<CardTerminalCharge>(`/payment-provider/terminal/charges/${encodeURIComponent(intentId)}/cancel`, { method: "POST", body: "{}" });
+}
+
+export function reconcileCardTerminalCharge(intentId: string, input: {
+  outcome: "charged" | "not_charged";
+  providerPaymentId?: string;
+  ownerPin: string;
+  reason: string;
+}) {
+  return apiRequest<CardTerminalCharge>(`/payment-provider/terminal/charges/${encodeURIComponent(intentId)}/reconcile`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }

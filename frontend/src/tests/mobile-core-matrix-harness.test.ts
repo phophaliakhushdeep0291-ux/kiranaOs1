@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync("scripts/capture-mobile-core-matrix-v1.mjs", "utf8");
+const inventorySource = readFileSync("src/features/core/inventory/pages/InventoryPage.tsx", "utf8");
 
 describe("mobile core QA matrix harness", () => {
   it("covers every required core flow at the complete viewport matrix", () => {
@@ -23,6 +24,17 @@ describe("mobile core QA matrix harness", () => {
     expect(source).toContain("desktopSidebarVisible");
     expect(source).toContain("remained in a loading state");
     expect(source).toContain("runtime errors");
+    expect(source).toContain('"?filter=udhar"');
+    expect(source).toContain("lost the expected query");
+    expect(source).toContain("technicalDetails");
+  });
+
+  it("proves the Udhar deep link selects the credit filter without a page reload", () => {
+    expect(source).toContain("auditUdharSpaTransition");
+    expect(source).toContain('history.pushState(null,"","/udhar")');
+    expect(source).toContain('data-customer-filter="udhar"');
+    expect(source).toContain('state.activeFilter === "udhar"');
+    expect(source).toContain("statefulChecks");
   });
 
   it("retains screenshots and machine-readable measurements and enforces 44px targets", () => {
@@ -39,6 +51,28 @@ describe("mobile core QA matrix harness", () => {
       "image-alt", "aria-hidden-focus",
     ]) expect(source).toContain(rule);
     expect(source).toContain("metrics.accessibility.issueCount === 0");
+    expect(source).toContain("node_modules/axe-core/axe.min.js");
+    expect(source).toContain('"wcag22aa"');
+    expect(source).toContain("axe WCAG violations");
+    expect(source).toContain("metrics.axe.violationCount === 0");
+  });
+
+  it("proves every core route is operable with visible, named keyboard focus", () => {
+    expect(source).toContain("auditKeyboardRoute");
+    expect(source).toContain('Input.dispatchKeyEvent');
+    expect(source).toContain('node.matches(\":focus-visible\")');
+    expect(source).toContain("keyboard focus entered hidden or inert content");
+    expect(source).toContain("keyboard focus reached an unnamed control");
+    expect(source).toContain("has no visible keyboard focus indicator");
+    expect(source).toContain("keyboard traversal missed");
+    expect(source).toContain("keyboardResults");
+  });
+
+  it("keeps the decorative inventory chart out of the tab order and names its summary", () => {
+    expect(inventorySource).toContain("rootTabIndex={-1}");
+    expect(inventorySource).toContain('role="img"');
+    expect(inventorySource).toContain("inventory.page.locationOverview");
+    expect(inventorySource).toContain("fmtMoney(stockStats.stockValue)");
   });
 
   it("reuses a valid QA browser session instead of exhausting auth registration limits", () => {

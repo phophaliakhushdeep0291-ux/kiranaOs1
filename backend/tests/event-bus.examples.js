@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   EVENT_TOPICS,
   buildRecord,
@@ -67,5 +68,38 @@ assert.equal(new Set(topics).size, topics.length, "no duplicate topic strings");
 for (const topic of topics) {
   assert.match(topic, /^artha\.[a-z]+\.[a-z]+$/, `${topic} must follow artha.<domain>.<event>`);
 }
+
+// 7) A production process must never claim an unavailable transport. Redis
+// needs a real URL and Kafka remains a reserved contract, not a working broker.
+const productionEnv = {
+  ...process.env,
+  NODE_ENV: "production",
+  DATABASE_URL: "postgresql://u:p@localhost:5432/db",
+  JWT_SECRET: "event-bus-test-jwt-secret-long-enough-1234567890",
+  OWNER_PIN_REQUIRED: "true",
+  LICENSE_SIGNING_SECRET: "event-bus-license-secret-long-enough-1234567890",
+  INTEGRATION_SIGNING_SECRET: "event-bus-integration-secret-long-enough-12345",
+  ALLOWED_ORIGINS: "https://pos.example.com",
+  METRICS_ENABLED: "false",
+};
+function boot(overrides) {
+  return spawnSync(process.execPath, ["-e", "import('./src/config/env.js').then(() => console.log('BOOTED'))"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: { ...productionEnv, ...overrides },
+    timeout: 30_000,
+  });
+}
+
+const redisWithoutUrl = boot({ EVENT_BUS_PROVIDER: "redis", REDIS_URL: "" });
+assert.match(`${redisWithoutUrl.stdout}${redisWithoutUrl.stderr}`, /REDIS_URL is required when EVENT_BUS_PROVIDER=redis/);
+assert.doesNotMatch(redisWithoutUrl.stdout, /BOOTED/);
+
+const kafkaWithoutAdapter = boot({ EVENT_BUS_PROVIDER: "kafka" });
+assert.match(`${kafkaWithoutAdapter.stdout}${kafkaWithoutAdapter.stderr}`, /kafka cannot run in production/);
+assert.doesNotMatch(kafkaWithoutAdapter.stdout, /BOOTED/);
+
+const redisConfigured = boot({ EVENT_BUS_PROVIDER: "redis", REDIS_URL: "redis:\/\/127.0.0.1:6379" });
+assert.match(redisConfigured.stdout, /BOOTED/, "configured Redis is accepted without requiring BullMQ queues");
 
 console.log("event-bus.examples.js OK");

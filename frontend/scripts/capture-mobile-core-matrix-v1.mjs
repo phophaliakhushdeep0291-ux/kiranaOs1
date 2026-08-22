@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -19,7 +19,7 @@ const ALL_ROUTES = [
   // /udhar is the one-tap khata entry point. It is an alias, so the third element is
   // where it must land — measuring it still earns its place next to MQA-CUST-01
   // because ?filter=udhar renders a different list (only customers who owe).
-  ["MQA-UDHAR-01", "/udhar", "/customers"],
+  ["MQA-UDHAR-01", "/udhar", "/customers", "?filter=udhar"],
 ];
 const ROUTE_FILTER = String(process.env.QA_ROUTE_FILTER || "").split(",").map((value) => value.trim()).filter(Boolean);
 const ROUTES = ROUTE_FILTER.length
@@ -64,14 +64,14 @@ async function waitFor(url, timeout = 25_000) {
 async function waitForPage(client, expression, timeout = 30_000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) { if (await client.evaluate(expression)) return; await sleep(150); }
-  const state = await client.evaluate(`({href:location.href,text:document.body?.innerText?.slice(0,1200),errors:window.__arthaQaErrors||[]})`).catch(() => null);
+  const state = await client.evaluate(`({href:location.href,text:document.body?.innerText?.slice(0,1200),technicalDetails:[...document.querySelectorAll("details pre")].map(node=>node.textContent?.trim()).filter(Boolean).slice(0,5),errors:window.__arthaQaErrors||[]})`).catch(() => null);
   throw new Error(`Page condition timed out: ${expression}; ${JSON.stringify(state)}`);
 }
 
-async function navigate(client, route, expectedPath = route) {
+async function navigate(client, route, expectedPath = route, expectedSearch = "") {
   await client.send("Page.navigate", { url: `${FRONTEND_URL}${route}` });
   // An alias route settles on its destination, not on the URL we asked for.
-  await waitForPage(client, `document.readyState === "complete" && location.pathname === ${JSON.stringify(expectedPath)}`);
+  await waitForPage(client, `document.readyState === "complete" && location.pathname === ${JSON.stringify(expectedPath)} && location.search === ${JSON.stringify(expectedSearch)}`);
   await waitForPage(client, `document.body && document.body.innerText.trim().length > 30`);
   await waitForPage(client, `!document.querySelector(".app-loading-surface") && Boolean(document.querySelector(".app-route-ready"))`);
   await sleep(900);
@@ -122,9 +122,9 @@ async function closeChrome(client, chrome) {
   if (chrome.exitCode === null) chrome.kill();
 }
 
-async function auditPage(client, qaId, route, width, height, expectedPath = route) {
+async function auditPage(client, qaId, route, width, height, expectedPath = route, expectedSearch = "") {
   await client.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: true });
-  await navigate(client, route, expectedPath);
+  await navigate(client, route, expectedPath, expectedSearch);
   const metrics = await client.evaluate(`(()=>{const visible=node=>{const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&rect.width>0&&rect.height>0&&rect.bottom>0&&rect.top<innerHeight};const controls=[...document.querySelectorAll("button,input,select,textarea,[role=button],[role=combobox],a[href]")].filter(visible).map(node=>{const rect=node.getBoundingClientRect();return{tag:node.tagName,type:node.getAttribute("type")||"",label:(node.getAttribute("aria-label")||node.textContent||node.getAttribute("placeholder")||"").trim().replace(/\\s+/g," ").slice(0,70),width:Math.round(rect.width),height:Math.round(rect.height)}}).filter(control=>!(["checkbox","radio","hidden"].includes(control.type))&&!(control.width<=2&&control.height<=2));const undersized=controls.filter(control=>control.width<44||control.height<44),text=document.body.innerText;return{path:location.pathname,viewport:[innerWidth,innerHeight],documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,undersized:undersized.slice(0,30),undersizedCount:undersized.length,visibleControlCount:controls.length,desktopSidebarVisible:[...document.querySelectorAll(".app-desktop-sidebar")].some(visible),genericFailure:/something went wrong|unexpected error|page failed to load/i.test(text),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[]}})()`);
   const accessibility = await client.evaluate(`(()=>{
     const visible=(node)=>{if(node.closest('[hidden],[inert],[aria-hidden="true"]'))return false;const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&(rect.width>0||rect.height>0)&&rect.bottom>0&&rect.top<innerHeight&&rect.right>0&&rect.left<innerWidth};
@@ -144,6 +144,11 @@ async function auditPage(client, qaId, route, width, height, expectedPath = rout
     return{issueCount:issues.length,issues:issues.slice(0,40),h1Count:h1s.length,headingCount:headings.length};
   })()`);
   metrics.accessibility = accessibility;
+  const axe = await client.evaluate(`axe.run(document,{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21a","wcag21aa","wcag22aa"]},resultTypes:["violations"]}).then(result=>({
+    violationCount:result.violations.length,
+    violations:result.violations.map(rule=>({id:rule.id,impact:rule.impact,help:rule.help,nodes:rule.nodes.slice(0,12).map(node=>({target:node.target,html:node.html.slice(0,240),failureSummary:node.failureSummary}))}))
+  }))`);
+  metrics.axe = axe;
   const image = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
   const filename = `${qaId.toLowerCase()}-${width}x${height}.png`;
   // Developers may run build/cleanup tasks alongside this long matrix; recreate
@@ -151,13 +156,81 @@ async function auditPage(client, qaId, route, width, height, expectedPath = rout
   await mkdir(OUTPUT_DIR, { recursive: true });
   await writeFile(path.join(OUTPUT_DIR, filename), Buffer.from(image.data, "base64"));
   assert(metrics.path === expectedPath, `${qaId} redirected from ${route} to ${metrics.path}`);
+  assert(await client.evaluate(`location.search`) === expectedSearch, `${qaId} lost the expected query ${expectedSearch}`);
   assert(metrics.documentWidth <= width + 1 && metrics.bodyWidth <= width + 1, `${qaId} ${width}px horizontal overflow: ${JSON.stringify(metrics)}`);
   assert(!metrics.desktopSidebarVisible, `${qaId} ${width}px shows desktop sidebar`);
   assert(!metrics.genericFailure, `${qaId} ${width}px rendered an error boundary`);
   assert(!metrics.stuckLoading, `${qaId} ${width}px remained in a loading state`);
   assert(metrics.runtimeErrors.length === 0, `${qaId} ${width}px runtime errors: ${metrics.runtimeErrors.join(" | ")}`);
   assert(metrics.accessibility.issueCount === 0, `${qaId} ${width}px accessibility issues: ${JSON.stringify(metrics.accessibility.issues)}`);
+  assert(metrics.axe.violationCount === 0, `${qaId} ${width}px axe WCAG violations: ${JSON.stringify(metrics.axe.violations)}`);
   return { qaId, route, width, height, ...metrics, screenshot: filename };
+}
+
+async function auditUdharSpaTransition(client) {
+  await client.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await navigate(client, "/customers");
+  await waitForPage(client, `document.querySelector('[data-customer-filter="all"]')?.getAttribute("aria-pressed") === "true"`);
+  // Wouter's navigation function uses this same patched history method. This
+  // proves the alias transition without Page.navigate/full reload hiding a
+  // stale CustomersPage state initializer.
+  await client.evaluate(`history.pushState(null,"","/udhar")`);
+  await waitForPage(client, `location.pathname === "/customers" && location.search === "?filter=udhar"`);
+  await waitForPage(client, `document.querySelector('[data-customer-filter="udhar"]')?.getAttribute("aria-pressed") === "true"`);
+  const state = await client.evaluate(`({path:location.pathname,search:location.search,activeFilter:document.querySelector('[data-customer-filter][aria-pressed="true"]')?.getAttribute("data-customer-filter")||null})`);
+  assert(state.activeFilter === "udhar", `SPA transition left the wrong customer filter active: ${JSON.stringify(state)}`);
+  return state;
+}
+
+async function pressTab(client, shift = false) {
+  const modifiers = shift ? 8 : 0;
+  await client.send("Input.dispatchKeyEvent", {
+    type: "keyDown", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9,
+    nativeVirtualKeyCode: 9, modifiers,
+  });
+  await client.send("Input.dispatchKeyEvent", {
+    type: "keyUp", key: "Tab", code: "Tab", windowsVirtualKeyCode: 9,
+    nativeVirtualKeyCode: 9, modifiers,
+  });
+  await sleep(25);
+}
+
+async function auditKeyboardRoute(client, qaId, route, expectedPath = route, expectedSearch = "") {
+  await client.send("Emulation.setDeviceMetricsOverride", {
+    width: 1280, height: 800, deviceScaleFactor: 1, mobile: false,
+  });
+  await navigate(client, route, expectedPath, expectedSearch);
+  const expected = await client.evaluate(`(()=>{
+    const visible=(node)=>{if(node.closest('[hidden],[inert],[aria-hidden="true"]'))return false;const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&rect.width>0&&rect.height>0};
+    const candidates=[...document.querySelectorAll('a[href],button,input,select,textarea,summary,[contenteditable]:not([contenteditable="false"]),[tabindex]')].filter(node=>visible(node)&&!node.disabled&&node.getAttribute('aria-disabled')!=="true"&&node.tabIndex>=0);
+    const radios=new Map();for(const node of candidates){if(node instanceof HTMLInputElement&&node.type==="radio"&&node.name){const key=(node.form?.id||"")+"::"+node.name;if(!radios.has(key))radios.set(key,[]);radios.get(key).push(node)}}
+    const sequential=candidates.filter(node=>{if(!(node instanceof HTMLInputElement)||node.type!=="radio"||!node.name)return true;const key=(node.form?.id||"")+"::"+node.name,group=radios.get(key)||[];return group.find(item=>item.checked)===node||(!group.some(item=>item.checked)&&group[0]===node)});
+    return sequential.map((node,index)=>{node.dataset.qaKeyboardId=${JSON.stringify(qaId)}+"-"+index;return{id:node.dataset.qaKeyboardId,tag:node.tagName.toLowerCase(),type:node.getAttribute("type")||"",role:node.getAttribute("role")||"",name:(node.getAttribute("aria-label")||node.getAttribute("title")||node.textContent||node.getAttribute("placeholder")||"").replace(/\\s+/g," ").trim().slice(0,100),html:node.outerHTML.slice(0,240)}});
+  })()`);
+  assert(expected.length > 0, `${qaId} exposes no keyboard-reachable controls`);
+  const expectedIds = expected.map((control) => control.id);
+  await client.evaluate(`document.activeElement instanceof HTMLElement&&document.activeElement.blur()`);
+  const visited = [], focusStates = [];
+  let browserBoundaryCount = 0;
+  for (let index = 0; index < Math.min(expected.length + 30, 280); index += 1) {
+    await pressTab(client);
+    const state = await client.evaluate(`(()=>{const node=document.activeElement;if(!(node instanceof HTMLElement))return null;const text=(value)=>(value||"").replace(/\\s+/g," ").trim();const ids=text(node.getAttribute("aria-labelledby")).split(/\\s+/).filter(Boolean),labelled=ids.map(id=>text(document.getElementById(id)?.textContent)).join(" ").trim(),labels="labels" in node&&node.labels?[...node.labels].map(label=>text(label.textContent)).join(" ").trim():"",name=text(node.getAttribute("aria-label"))||labelled||labels||text(node.getAttribute("alt"))||text(node.getAttribute("title"))||text(node.textContent)||text(node.getAttribute("placeholder"));const style=getComputedStyle(node),rect=node.getBoundingClientRect(),hidden=Boolean(node.closest('[hidden],[inert],[aria-hidden="true"]'))||style.display==="none"||style.visibility==="hidden"||Number(style.opacity||1)===0;const indicator=(style.outlineStyle!=="none"&&parseFloat(style.outlineWidth)>0)||style.boxShadow!=="none";if(!node.dataset.qaKeyboardId)node.dataset.qaKeyboardId=${JSON.stringify(qaId)}+"-runtime-"+Math.random().toString(36).slice(2);return{id:node.dataset.qaKeyboardId,tag:node.tagName.toLowerCase(),role:node.getAttribute("role")||"",name:name.slice(0,100),hidden,focusVisible:node.matches(":focus-visible"),indicator,rect:{width:Math.round(rect.width),height:Math.round(rect.height)}}})()`);
+    // Headless Chromium exposes BODY while Tab moves through browser chrome.
+    // Keep traversing until focus returns to the page, then use a repeat of the
+    // first control as the real cycle boundary.
+    if (!state || state.tag === "body") { browserBoundaryCount += 1; continue; }
+    assert(!state.hidden, `${qaId} keyboard focus entered hidden or inert content: ${JSON.stringify(state)}`);
+    assert(state.name, `${qaId} keyboard focus reached an unnamed control: ${JSON.stringify(state)}`);
+    assert(state.focusVisible && state.indicator, `${qaId} has no visible keyboard focus indicator: ${JSON.stringify(state)}`);
+    if (visited.length > 1 && state.id === visited[0]) break;
+    if (!visited.includes(state.id)) visited.push(state.id);
+    focusStates.push(state);
+  }
+  const missing = expected.filter((control) => !visited.includes(control.id));
+  assert(missing.length === 0, `${qaId} keyboard traversal missed ${missing.length}/${expected.length} controls: ${JSON.stringify(missing.slice(0,20))}`);
+  assert(await client.evaluate(`location.pathname`) === expectedPath, `${qaId} keyboard traversal changed route unexpectedly`);
+  assert(await client.evaluate(`location.search`) === expectedSearch, `${qaId} keyboard traversal changed query unexpectedly`);
+  return { qaId, route, expectedControlCount: expectedIds.length, visitedControlCount: visited.length, browserBoundaryCount, focusStates };
 }
 
 async function main() {
@@ -171,16 +244,25 @@ async function main() {
     const targets = await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json`)).json(), target = targets.find((item) => item.type === "page" && item.url.startsWith(FRONTEND_URL));
     assert(target, "Chrome did not create the application page");
     client = new CdpClient(target.webSocketDebuggerUrl); await client.connect(); await client.send("Page.enable"); await client.send("Runtime.enable");
+    const axeSource = await readFile(path.resolve("node_modules/axe-core/axe.min.js"), "utf8");
+    await client.send("Page.addScriptToEvaluateOnNewDocument", { source: axeSource });
     await client.send("Page.addScriptToEvaluateOnNewDocument", { source: `window.__arthaQaErrors=[];window.addEventListener("error",event=>window.__arthaQaErrors.push(String(event.error?.stack||event.message||event.error)));window.addEventListener("unhandledrejection",event=>window.__arthaQaErrors.push(String(event.reason?.stack||event.reason)));` });
     await prepareAppOrigin(client);
     await ensureSession(client);
     const results = [];
-    for (const [qaId, route, expectedPath] of ROUTES) for (const [width, height] of VIEWPORTS) results.push(await auditPage(client, qaId, route, width, height, expectedPath ?? route));
+    for (const [qaId, route, expectedPath, expectedSearch] of ROUTES) for (const [width, height] of VIEWPORTS) results.push(await auditPage(client, qaId, route, width, height, expectedPath ?? route, expectedSearch ?? ""));
+    const statefulChecks = ROUTES.some(([, route]) => route === "/customers" || route === "/udhar")
+      ? { udharSpaTransition: await auditUdharSpaTransition(client) }
+      : {};
+    const keyboardResults = [];
+    for (const [qaId, route, expectedPath, expectedSearch] of ROUTES) {
+      keyboardResults.push(await auditKeyboardRoute(client, qaId, route, expectedPath ?? route, expectedSearch ?? ""));
+    }
     await mkdir(OUTPUT_DIR, { recursive: true });
-    await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), frontendUrl: FRONTEND_URL, apiUrl: API_URL, results }, null, 2));
+    await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), frontendUrl: FRONTEND_URL, apiUrl: API_URL, results, statefulChecks, keyboardResults }, null, 2));
     const undersized = results.filter((result) => result.undersizedCount > 0);
     assert(undersized.length === 0, `${undersized.length}/${results.length} captures contain controls below 44x44; inspect ${path.join(OUTPUT_DIR, "report.json")}`);
-    console.log(`Mobile core matrix passed ${results.length}/${results.length} captures. Artifacts: ${OUTPUT_DIR}`);
+    console.log(`Mobile core matrix passed ${results.length}/${results.length} captures and ${keyboardResults.length}/${keyboardResults.length} keyboard routes. Artifacts: ${OUTPUT_DIR}`);
   } finally { await closeChrome(client, chrome); }
 }
 

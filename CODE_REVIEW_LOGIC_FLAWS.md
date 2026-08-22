@@ -17,11 +17,11 @@ The original review below was a 2026-06-16 snapshot. Most items have since been 
 | 3 | Grace period never applied on organic expiry | **FIXED** — `isSubscriptionActive` honors `graceEndsAt` for active rows (`subscription.service.js:311-318`) |
 | 4 | `FinancialLedger` written but never read | **RESOLVED (architecture + reconciliation)** — operational tables/locked snapshots remain report authority; the ledger is an append-only journal and future read-model candidate with an owner/admin zero-variance gate. |
 | 5 | Inclusive GST counted as gross profit | **INTENTIONAL** — correct for unregistered/composition kirana shops (full MRP = revenue). Revisit only for GST-registered tenants. |
-| 6 | Exclusive-GST discount applied after GST | **OPEN (minor, by-design)** — exclusive-mode + discount only; tax-treatment choice, not changed without a compliance decision. |
+| 6 | Exclusive-GST discount applied after GST | **FIXED** — invoice discount is allocated across lines before GST in inclusive and exclusive modes; receipts, reports, offline bills and partial/final returns use the same paise-safe policy. |
 | 7 | `getMonthlyBreakdown` buckets by server month | **FIXED** — shop-tz via `dateRangeForDateOnly` + `monthInShopTz` (`reports.service.js:40,526-530`) |
 | 8 | Expense overview boundaries server-local | **FIXED** — all boundaries via `DAILY_CLOSING_TIMEZONE` (`expenses.service.js:82-98`) |
 | 9 | `requireShop` trusts `x-shop-id` header | **FIXED** — shopId taken only from `req.user` (`middleware/permissions.js:18-25`) |
-| 10 | `looksLikeClientLocalId` treats all UUIDs as local | **OPEN (dormant/low)** — harmless while server ids are cuid; revisit only if server ids become UUIDs. |
+| 10 | `looksLikeClientLocalId` treats all UUIDs as local | **FIXED** — only explicit client-local prefixes are local; CUID, UUIDv4, UUIDv7 and ULID server identities stay resolvable, guarded by `sync-id-format.examples.js`. |
 | 11 | Razorpay webhook id `Date.now()` fallback | **FIXED** — deterministic SHA-256 fingerprint when no provider id (`paymentProvider.service.js:755-768`) |
 | 12 | `7d`/`30d` range start in server-local time | **FIXED** — shop-tz date math via `zonedDayStartDaysAgo` (`reports.service.js:47-51`) |
 
@@ -121,9 +121,8 @@ Profit never subtracts the embedded GST.
 
 ## LOW / minor
 
-### 6. Exclusive-GST discount is applied after GST, so GST is charged on the pre-discount amount
-**File:** `backend/src/modules/bills/bills.service.js:152-156, 210-212`
-GST (exclusive) is computed on the full `lineTotal`; `grandTotal = (subtotal − discount) + totalGst`. A discount reduces the base but not the tax, so the customer is taxed on the undiscounted price. Standard Indian practice is GST on the discounted (net) value. Only affects exclusive-mode bills with a discount.
+### 6. Exclusive-GST discount applied after GST — fixed 2026-08-22
+Invoice discount is now paise-allocated across entered line values before calculating GST in both inclusive and exclusive modes. The same allocation is used by billing, offline storage, receipts, GST reports/registers and sale returns. Linked partial returns calculate the tax for the returned value, while the final return receives any remaining paise so all returns exactly reverse the stored invoice tax.
 
 ### 7. `getMonthlyBreakdown` buckets by the server's local month, not the shop timezone
 **File:** `backend/src/modules/reports/reports.service.js:515-532`

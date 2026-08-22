@@ -32,6 +32,31 @@ async function writeRequiredProductAudit(entry, client) {
   return audit;
 }
 
+// Product codes form one shop-wide namespace even though legacy storage keeps
+// them across Product.barcode, Product.sku and ProductSellingUnit. A scanner
+// cannot distinguish those columns, so mutation decisions must be serialized
+// across all three or two concurrent writes can make the same scan ambiguous.
+const productCodeDecisionLocks = new Map();
+
+async function withProductCodeDecisionLock(shopId, task) {
+  const previous = productCodeDecisionLocks.get(shopId) ?? Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  productCodeDecisionLocks.set(shopId, current);
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+    if (productCodeDecisionLocks.get(shopId) === current) productCodeDecisionLocks.delete(shopId);
+  }
+}
+
+async function lockProductCodeNamespace(tx, shopId) {
+  if (!/^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL || "")) return;
+  await tx.$queryRawUnsafe('SELECT "id" FROM "Shop" WHERE "id" = $1 FOR UPDATE', shopId);
+}
+
 export const SENSITIVE_PRODUCT_FIELDS = Object.freeze([
   "stockBaseQty",
   "costPerRateUnit",
@@ -291,8 +316,10 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
     rest.stockBaseQty = unitTotal;
   }
   try {
-    const product = await db.$transaction(async (tx) => {
+    const product = await withProductCodeDecisionLock(shopId, () => db.$transaction(async (tx) => {
+      await lockProductCodeNamespace(tx, shopId);
       await assertNoActiveProductNameConflict(shopId, data.name, null, tx);
+      await assertProductCodeNamespaceAvailable(shopId, rest, normalizedUnits, null, tx);
       const created = await tx.product.create({
         data: {
           ...rest,
@@ -408,7 +435,7 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
         req: actor.req ?? null,
       }, tx);
       return hydrated;
-    }, { isolationLevel: "Serializable" });
+    }, { isolationLevel: "Serializable" }));
     return deserializeProduct(product);
   } catch (error) {
     // Race backstop: two concurrent creates with the same client identity collide on the
@@ -566,13 +593,21 @@ export async function updateProduct(shopId, id, data, { actor = {}, locationId =
     updateData.packagingMode = packagingModeForAxes(variantAxes, rest.packagingMode ?? existing.packagingMode);
   }
 
-  const updated = await db.$transaction(async (tx) => {
+  const updated = await withProductCodeDecisionLock(shopId, () => db.$transaction(async (tx) => {
+    await lockProductCodeNamespace(tx, shopId);
     const current = await tx.product.findFirst({
       where: { id, shopId, deletedAt: null },
       include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
     });
     if (!current) throw new AppError("Product not found", 404);
     if (data.name) await assertNoActiveProductNameConflict(shopId, data.name, id, tx);
+    await assertProductCodeNamespaceAvailable(
+      shopId,
+      { ...current, ...rest },
+      normalizedUnits ?? current.sellingUnits,
+      id,
+      tx,
+    );
     const targetPackagingMode = updateData.packagingMode ?? current.packagingMode ?? "pooled";
     if (targetPackagingMode !== current.packagingMode && round2(Number(current.stockBaseQty ?? 0)) !== 0) {
       throw new AppError(
@@ -638,7 +673,7 @@ export async function updateProduct(shopId, id, data, { actor = {}, locationId =
       req: actor.req ?? null,
     }, tx);
     return hydrated;
-  }, { isolationLevel: "Serializable" });
+  }, { isolationLevel: "Serializable" }));
   return deserializeProduct(updated);
 }
 
@@ -945,44 +980,93 @@ async function assertNoActiveProductNameConflict(shopId, name, excludeId = null,
   }
 }
 
+function normalizedScanCode(value) {
+  return compactText(value)?.toLocaleLowerCase("en-US") ?? "";
+}
+
+function productCodeAssignments(product, sellingUnits = []) {
+  const assignments = [];
+  const add = (value, ownerKey, label) => {
+    const code = compactText(value);
+    if (code) assignments.push({ code, normalized: normalizedScanCode(code), ownerKey, label });
+  };
+  add(product?.barcode, "default", "product barcode");
+  add(product?.sku, "default", "product SKU");
+  for (const [index, unit] of (sellingUnits ?? []).entries()) {
+    const ownerKey = unit?.isDefault ? "default" : `unit:${unit?.unitCode || index}`;
+    const label = unit?.isDefault ? "default selling unit" : `${unit?.unitCode || unit?.name || `pack ${index + 1}`} pack`;
+    add(unit?.barcode, ownerKey, `${label} barcode`);
+    add(unit?.sku, ownerKey, `${label} SKU`);
+  }
+  return assignments;
+}
+
+function duplicateProductCodeError(code, message, details = {}) {
+  const error = new AppError(message, 409, "PRODUCT_BARCODE_DUPLICATE");
+  error.code = "PRODUCT_BARCODE_DUPLICATE";
+  error.details = details;
+  return error;
+}
+
 /**
- * Refuse a barcode that any product in this shop already answers to.
+ * Refuse a code that would make any scanner lookup ambiguous.
  *
- * Wider than the database constraint on purpose. `Product_shopId_barcode_key` covers
- * Product.barcode only, but a scan resolves against three columns — resolveScanMatch()
- * on the till matches Product.barcode OR Product.sku, and per-pack codes live on
- * ProductSellingUnit.barcode. Binding a code that already sits in one of the other two
- * would pass the constraint and still make the next scan of it ambiguous, which is the
- * exact failure this feature exists to prevent.
+ * The namespace spans product barcode/SKU plus every pack barcode/SKU. Comparisons are
+ * case-insensitive because the till normalizes scans the same way. Soft-deleted products
+ * and inactive packs keep their codes reserved so restoring them stays safe.
  */
-async function assertBarcodeAvailable(shopId, code, excludeProductId = null, client = db) {
-  const exclude = excludeProductId ? { NOT: { id: excludeProductId } } : {};
-  // Soft-deleted products are included: they hold their code until they are purged,
-  // because restoring one from the recycle bin would otherwise create a real duplicate.
-  const owner = await client.product.findFirst({
-    where: { shopId, ...exclude, OR: [{ barcode: code }, { sku: code }] },
-    select: { id: true, name: true, deletedAt: true },
-  });
-  if (owner) {
+async function assertProductCodeNamespaceAvailable(shopId, product, sellingUnits, excludeProductId = null, client = db) {
+  const requested = productCodeAssignments(product, sellingUnits);
+  const requestedByCode = new Map();
+  for (const assignment of requested) {
+    const previous = requestedByCode.get(assignment.normalized);
+    if (previous && previous.ownerKey !== assignment.ownerKey) {
+      throw duplicateProductCodeError(
+        assignment.code,
+        `Code ${assignment.code} is assigned to both ${previous.label} and ${assignment.label}`,
+        { first: previous.label, second: assignment.label },
+      );
+    }
+    if (!previous) requestedByCode.set(assignment.normalized, assignment);
+  }
+  if (requestedByCode.size === 0) return;
+
+  const [products, units] = await Promise.all([
+    client.product.findMany({
+      where: { shopId, ...(excludeProductId ? { NOT: { id: excludeProductId } } : {}) },
+      select: { id: true, name: true, barcode: true, sku: true, deletedAt: true },
+    }),
+    client.productSellingUnit.findMany({
+      where: { shopId, ...(excludeProductId ? { NOT: { productId: excludeProductId } } : {}) },
+      select: { productId: true, unitCode: true, barcode: true, sku: true, product: { select: { name: true } } },
+    }),
+  ]);
+
+  for (const owner of products) {
+    const matched = [owner.barcode, owner.sku]
+      .map((value) => ({ raw: compactText(value), normalized: normalizedScanCode(value) }))
+      .find(({ normalized }) => normalized && requestedByCode.has(normalized));
+    if (!matched) continue;
+    const requestedCode = requestedByCode.get(matched.normalized)?.code ?? matched.raw;
     const where = owner.deletedAt ? " (in the recycle bin)" : "";
-    const err = new AppError(`Barcode ${code} already belongs to "${owner.name}"${where}`, 409);
-    err.code = "PRODUCT_BARCODE_DUPLICATE";
-    err.details = { productId: owner.id, productName: owner.name, inRecycleBin: Boolean(owner.deletedAt) };
-    throw err;
+    throw duplicateProductCodeError(
+      requestedCode,
+      `Code ${requestedCode} already belongs to "${owner.name}"${where}`,
+      { productId: owner.id, productName: owner.name, inRecycleBin: Boolean(owner.deletedAt) },
+    );
   }
 
-  const unitOwner = await client.productSellingUnit.findFirst({
-    where: { shopId, barcode: code, ...(excludeProductId ? { NOT: { productId: excludeProductId } } : {}) },
-    select: { productId: true, unitCode: true, product: { select: { name: true } } },
-  });
-  if (unitOwner) {
-    const err = new AppError(
-      `Barcode ${code} already belongs to the ${unitOwner.unitCode} pack of "${unitOwner.product?.name ?? "another product"}"`,
-      409,
+  for (const owner of units) {
+    const matched = [owner.barcode, owner.sku]
+      .map((value) => ({ raw: compactText(value), normalized: normalizedScanCode(value) }))
+      .find(({ normalized }) => normalized && requestedByCode.has(normalized));
+    if (!matched) continue;
+    const requestedCode = requestedByCode.get(matched.normalized)?.code ?? matched.raw;
+    throw duplicateProductCodeError(
+      requestedCode,
+      `Code ${requestedCode} already belongs to the ${owner.unitCode} pack of "${owner.product?.name ?? "another product"}"`,
+      { productId: owner.productId, productName: owner.product?.name ?? null, unitCode: owner.unitCode },
     );
-    err.code = "PRODUCT_BARCODE_DUPLICATE";
-    err.details = { productId: unitOwner.productId, productName: unitOwner.product?.name ?? null, unitCode: unitOwner.unitCode };
-    throw err;
   }
 }
 
@@ -1006,7 +1090,10 @@ async function assertBarcodeAvailable(shopId, code, excludeProductId = null, cli
 export async function bindProductBarcode(shopId, productId, barcode, options = {}) {
   const client = options.client ?? db;
   if (client === db) {
-    return db.$transaction((tx) => bindProductBarcodeWithClient(shopId, productId, barcode, { ...options, client: tx }));
+    return withProductCodeDecisionLock(shopId, () => db.$transaction(
+      (tx) => bindProductBarcodeWithClient(shopId, productId, barcode, { ...options, client: tx }),
+      { isolationLevel: "Serializable" },
+    ));
   }
   return bindProductBarcodeWithClient(shopId, productId, barcode, { ...options, client });
 }
@@ -1019,7 +1106,11 @@ async function bindProductBarcodeWithClient(shopId, productId, barcode, { identi
     throw err;
   }
 
-  const product = await client.product.findFirst({ where: { id: productId, shopId, deletedAt: null } });
+  await lockProductCodeNamespace(client, shopId);
+  const product = await client.product.findFirst({
+    where: { id: productId, shopId, deletedAt: null },
+    include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
+  });
   if (!product) throw new AppError("Product not found", 404);
 
   const current = compactText(product.barcode);
@@ -1035,7 +1126,13 @@ async function bindProductBarcodeWithClient(shopId, productId, barcode, { identi
     throw err;
   }
 
-  await assertBarcodeAvailable(shopId, code, productId, client);
+  await assertProductCodeNamespaceAvailable(
+    shopId,
+    { ...product, barcode: code, sku: compactText(product.sku) ?? code },
+    product.sellingUnits,
+    productId,
+    client,
+  );
 
   let updated;
   try {

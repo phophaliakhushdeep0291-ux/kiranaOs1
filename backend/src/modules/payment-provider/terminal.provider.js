@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
+import { createPineLabsTerminalProvider } from "./pineLabsTerminal.provider.js";
 
 /**
  * Card/EDC terminal seam.
@@ -26,17 +27,15 @@ import { AppError } from "../../middleware/error.js";
  *     status is one of TERMINAL_STATUSES. Return the acquirer's own amount so
  *     the caller can refuse a charge that settled for the wrong money.
  *
- *   cancelCharge(chargeId) -> void
+ *   cancelCharge(chargeId, { amountPaise }) -> void
  *     Best effort. Cancelling an already-approved charge must throw, never
  *     silently succeed, or a paid bill would look cancellable.
  *
  *   describe() -> { provider, terminalId, requiresSignature }
  *
  * Vendor notes for whoever wires this up:
- *   - Pine Labs Plutus: cloud API is POST /UploadBilledTransaction then
- *     GetCloudBasedTxnStatus polling; the local Plutus Smart variant is an HTTP
- *     call to the terminal's own IP on the shop LAN, which would belong in the
- *     hardware bridge rather than here.
+ *   - Pine Labs Plutus cloud is implemented in pineLabsTerminal.provider.js.
+ *     The local Plutus Smart variant belongs in the hardware bridge instead.
  *   - Ezetap: /api/2.0/payment/start then /api/2.0/payment/status.
  * Both are cloud-polled, which is why this seam lives backend-side alongside
  * the Razorpay flow and reuses RetailPaymentIntent.
@@ -138,9 +137,22 @@ export const simulatedTerminalProvider = {
   },
 };
 
+const pineLabsTerminalProvider = env.CARD_TERMINAL_PROVIDER === "pine_labs"
+  ? createPineLabsTerminalProvider({
+    baseUrl: env.CARD_TERMINAL_BASE_URL,
+    securityToken: env.CARD_TERMINAL_API_KEY,
+    merchantId: env.CARD_TERMINAL_MERCHANT_ID,
+    terminalId: env.CARD_TERMINAL_ID,
+    storeId: env.CARD_TERMINAL_STORE_ID,
+    locationCode: env.CARD_TERMINAL_LOCATION_CODE,
+    chargeTimeoutSeconds: env.CARD_TERMINAL_CHARGE_TIMEOUT_SECONDS,
+    requestTimeoutMs: env.CARD_TERMINAL_REQUEST_TIMEOUT_MS,
+  })
+  : null;
+
 const PROVIDERS = new Map([
   ["simulated", simulatedTerminalProvider],
-  ["pine_labs", unimplementedProvider("Pine Labs")],
+  ["pine_labs", pineLabsTerminalProvider],
   ["ezetap", unimplementedProvider("Ezetap")],
 ]);
 
@@ -156,12 +168,19 @@ export function getCardTerminalProvider() {
 }
 
 export function cardTerminalReadiness() {
-  if (!cardTerminalConfigured()) return { provider: "none", configured: false, simulated: false, terminalId: null };
+  if (!cardTerminalConfigured()) return { provider: "none", configured: false, simulated: false, terminalId: null, locationCode: null };
   const provider = PROVIDERS.get(env.CARD_TERMINAL_PROVIDER);
   const simulated = env.CARD_TERMINAL_PROVIDER === "simulated";
   let terminalId = null;
   // An unimplemented vendor still reports as unconfigured rather than throwing
   // during a readiness probe the billing screen makes on every load.
-  try { terminalId = provider?.describe()?.terminalId ?? null; } catch { return { provider: env.CARD_TERMINAL_PROVIDER, configured: false, simulated, terminalId: null }; }
-  return { provider: env.CARD_TERMINAL_PROVIDER, configured: true, simulated, terminalId };
+  let locationCode = null;
+  try {
+    const description = provider?.describe();
+    terminalId = description?.terminalId ?? null;
+    locationCode = description?.locationCode ?? null;
+  } catch {
+    return { provider: env.CARD_TERMINAL_PROVIDER, configured: false, simulated, terminalId: null, locationCode: null };
+  }
+  return { provider: env.CARD_TERMINAL_PROVIDER, configured: true, simulated, terminalId, locationCode };
 }

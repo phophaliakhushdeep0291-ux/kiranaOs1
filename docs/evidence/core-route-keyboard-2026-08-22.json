@@ -1,0 +1,49 @@
+{
+  "generatedAt": "2026-08-22T09:36:28.819Z",
+  "scope": "Authenticated core-route responsive, semantic and keyboard traversal gate",
+  "sourceArtifact": "frontend/qa-artifacts/mobile-core-matrix-keyboard-20260822/report.json",
+  "sourceArtifactSha256": "729B98DAE949F68076BFCD2AB796B252C60E8103C69B41104FA357EA9BEB2044",
+  "responsiveCaptures": {
+    "passed": 36,
+    "total": 36,
+    "routes": 9,
+    "viewports": ["375x667", "390x844", "430x932", "768x1024"],
+    "horizontalOverflowFindings": 0,
+    "undersizedTargetFindings": 0,
+    "automatedSemanticFindings": 0,
+    "runtimeErrors": 0
+  },
+  "keyboardTraversal": {
+    "passedRoutes": 9,
+    "totalRoutes": 9,
+    "precomputedSequentialControls": 416,
+    "observedFocusStops": 421,
+    "unnamedFocusStops": 0,
+    "invisibleFocusIndicators": 0,
+    "hiddenOrInertFocusLeaks": 0,
+    "missedSequentialControls": 0,
+    "routes": [
+      { "qaId": "MQA-BILL-01", "route": "/billing", "expected": 39, "visited": 39 },
+      { "qaId": "MQA-PROD-01", "route": "/products", "expected": 45, "visited": 45 },
+      { "qaId": "MQA-CUST-01", "route": "/customers", "expected": 38, "visited": 39 },
+      { "qaId": "MQA-INV-01", "route": "/inventory", "expected": 51, "visited": 52 },
+      { "qaId": "MQA-PUR-01", "route": "/purchase-bills", "expected": 45, "visited": 45 },
+      { "qaId": "MQA-RPT-01", "route": "/reports", "expected": 52, "visited": 53 },
+      { "qaId": "MQA-SET-01", "route": "/settings", "expected": 72, "visited": 72 },
+      { "qaId": "MQA-SYNC-01", "route": "/sync-status", "expected": 36, "visited": 37 },
+      { "qaId": "MQA-UDHAR-01", "route": "/udhar", "expected": 38, "visited": 39 }
+    ]
+  },
+  "statefulChecks": {
+    "udharSpaTransition": {
+      "path": "/customers",
+      "search": "?filter=udhar",
+      "activeFilter": "udhar"
+    }
+  },
+  "limitations": [
+    "This proves sequential keyboard reachability and focus quality on settled core routes, not every end-to-end mutation task.",
+    "It is automated browser evidence, not an NVDA, TalkBack or VoiceOver certification.",
+    "It does not replace measured WCAG color-contrast certification."
+  ]
+}

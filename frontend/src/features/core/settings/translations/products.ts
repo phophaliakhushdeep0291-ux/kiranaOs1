@@ -16,6 +16,7 @@ export const productsEn = {
   "products.stats.categoriesHint": "Active categories",
   "products.search.placeholder": "Search by product name, barcode or SKU",
   "products.filter.allCategories": "All Categories",
+  "products.filter.categoryLabel": "Filter products by category",
   "products.filter.title": "Filters",
   "products.filter.clearAll": "Clear all",
   "products.filter.stock": "Stock",

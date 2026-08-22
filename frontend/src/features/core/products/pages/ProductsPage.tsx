@@ -566,11 +566,11 @@ export default function ProductsPage() {
           />
         </div>
         <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold capitalize lg:w-52" data-testid="select-category">
+          <SelectTrigger aria-label={t("products.filter.categoryLabel")} className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold capitalize lg:w-52" data-testid="select-category">
             {/* Render the label ourselves so the trigger reads "Home Care" like the
                 option does, instead of echoing the raw stored value ("home-care"). */}
             <SelectValue placeholder={t("products.filter.allCategories")}>
-              {category === "all" ? "All Categories" : category.replace(/[_-]/g, " ")}
+              {category === "all" ? t("products.filter.allCategories") : category.replace(/[_-]/g, " ")}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>

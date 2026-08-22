@@ -13,6 +13,11 @@ const panelSource = readFileSync(new URL("../features/core/products/pages/compon
  * phone — measured — for the whole time any field was focused.
  */
 describe("mobile keyboard handling for full-screen panels", () => {
+  it("keeps pinch zoom available while asking the keyboard to resize content", () => {
+    expect(indexHtml).toContain("interactive-widget=resizes-content");
+    expect(indexHtml).not.toContain("maximum-scale");
+    expect(indexHtml).not.toContain("user-scalable=no");
+  });
   it("asks the browser to resize the layout viewport when the keyboard opens", () => {
     // The declarative half of the fix. Chrome honours this, which shrinks `dvh`
     // for every full-screen panel in the app at once rather than one at a time.

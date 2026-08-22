@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2026-08-22T08:48:42.956Z",
+  "status": "passed",
+  "scope": "Authenticated mobile core-route visual, interaction and semantic accessibility matrix",
+  "sourceReport": "frontend/qa-artifacts/mobile-core-a11y/report.json",
+  "routes": [
+    "/billing",
+    "/products",
+    "/customers",
+    "/inventory",
+    "/purchase-bills",
+    "/reports",
+    "/settings",
+    "/sync-status",
+    "/udhar"
+  ],
+  "viewports": ["375x667", "390x844", "430x932", "768x1024"],
+  "captures": { "passed": 36, "failed": 0 },
+  "results": {
+    "semanticAccessibilityIssues": 0,
+    "undersizedInteractiveTargets": 0,
+    "horizontalOverflowPixels": 0,
+    "runtimeErrors": 0,
+    "routeRedirectFailures": 0,
+    "loadingStalls": 0
+  },
+  "semanticRules": [
+    "document-title",
+    "html-lang",
+    "main-landmark",
+    "page-h1",
+    "heading-order",
+    "duplicate-id",
+    "broken-aria-reference",
+    "interactive-name",
+    "form-label",
+    "image-alt",
+    "aria-hidden-focus"
+  ],
+  "limitations": [
+    "This is an automated WCAG-oriented semantic and interaction gate, not a third-party accessibility certification.",
+    "Manual screen-reader testing, full keyboard task walkthroughs and measured color-contrast certification remain required."
+  ]
+}

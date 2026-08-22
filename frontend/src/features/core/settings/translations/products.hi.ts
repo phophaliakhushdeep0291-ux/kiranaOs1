@@ -13,6 +13,7 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.stats.categoriesHint": "चालू कैटेगरी",
   "products.search.placeholder": "माल का नाम, बारकोड या SKU से खोजें",
   "products.filter.allCategories": "सभी कैटेगरी",
+  "products.filter.categoryLabel": "कैटेगरी से प्रोडक्ट छांटें",
   "products.filter.title": "छांटें",
   "products.filter.clearAll": "सब हटाएं",
   "products.filter.stock": "स्टॉक",

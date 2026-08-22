@@ -51,7 +51,12 @@ function fakeClient({ products = [], sellingUnits = [], onUpdate = null } = {}) 
   return {
     state,
     product: {
-      findFirst: async ({ where }) => state.products.find((row) => matchesProduct(row, where)) ?? null,
+      findFirst: async ({ where, include }) => {
+        const row = state.products.find((candidate) => matchesProduct(candidate, where)) ?? null;
+        if (!row || !include?.sellingUnits) return row;
+        return { ...row, sellingUnits: state.sellingUnits.filter((unit) => unit.productId === row.id) };
+      },
+      findMany: async ({ where }) => state.products.filter((row) => matchesProduct(row, where)),
       update: async ({ where, data }) => {
         state.updates.push({ where, data });
         if (onUpdate) await onUpdate({ where, data, state });
@@ -66,6 +71,11 @@ function fakeClient({ products = [], sellingUnits = [], onUpdate = null } = {}) 
         if (where.NOT?.productId && row.productId === where.NOT.productId) return false;
         return row.barcode === where.barcode;
       }) ?? null,
+      findMany: async ({ where }) => state.sellingUnits.filter((row) => {
+        if (where.shopId && row.shopId !== where.shopId) return false;
+        if (where.NOT?.productId && row.productId === where.NOT.productId) return false;
+        return true;
+      }),
     },
     auditLog: {
       create: async ({ data }) => {
@@ -161,6 +171,35 @@ async function run() {
       'a code owned by another product\'s pack',
     );
     assert.match(error.message, /bag-10kg/, 'the message names the pack that owns it');
+  }
+
+  /* ── Scan matching is case-insensitive, so uniqueness must be too ── */
+  {
+    const client = fakeClient({
+      products: [
+        { id: 'p1', shopId: SHOP, name: 'Parle-G' },
+        { id: 'p2', shopId: SHOP, name: 'Good Day', sku: 'case-128-abc' },
+      ],
+    });
+    await expectRejection(
+      bindProductBarcode(SHOP, 'p1', 'CASE-128-ABC', { client }),
+      'PRODUCT_BARCODE_DUPLICATE',
+      'a differently-cased code that resolves to another product',
+    );
+  }
+
+  /* ── A product cannot reuse one code for two of its own physical packs ── */
+  {
+    const client = fakeClient({
+      products: [{ id: 'p1', shopId: SHOP, name: 'Atta' }],
+      sellingUnits: [{ productId: 'p1', shopId: SHOP, barcode: '8901234567890', unitCode: 'bag-10kg', isDefault: false }],
+    });
+    const error = await expectRejection(
+      bindProductBarcode(SHOP, 'p1', '8901234567890', { client }),
+      'PRODUCT_BARCODE_DUPLICATE',
+      'one code assigned to both the default product and its alternate pack',
+    );
+    assert.match(error.message, /bag-10kg/, 'the owner is told which pack conflicts');
   }
 
   /* ── A product in the recycle bin keeps its code reserved: restoring it would

@@ -412,8 +412,26 @@ if (ctx.skip) {
         where: { shopId_eventId: { shopId: tenant.shop.id, eventId: "pin-strip-1" } },
       });
       assert.ok(stored);
-      assert.doesNotMatch(stored.requestJson || "", /1234|ownerPin/i);
-      assert.doesNotMatch(stored.resultJson || "", /1234|ownerPin/i);
+      const assertPinStripped = (raw, label) => {
+        const visit = (value, path = label) => {
+          if (value == null) return;
+          if (Array.isArray(value)) {
+            value.forEach((item, index) => visit(item, `${path}[${index}]`));
+            return;
+          }
+          if (typeof value === "object") {
+            for (const [key, item] of Object.entries(value)) {
+              assert.notEqual(key.toLowerCase(), "ownerpin", `${path} retained an ownerPin key`);
+              visit(item, `${path}.${key}`);
+            }
+            return;
+          }
+          assert.notEqual(String(value), String(tenant.ownerPin), `${path} retained the owner PIN value`);
+        };
+        visit(raw ? JSON.parse(raw) : null);
+      };
+      assertPinStripped(stored.requestJson, "requestJson");
+      assertPinStripped(stored.resultJson, "resultJson");
     });
   });
 }

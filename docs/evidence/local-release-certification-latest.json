@@ -3,12 +3,12 @@
   "type": "kiranaos_release_certification",
   "status": "local-passed",
   "mode": "local",
-  "startedAt": "2026-08-22T07:49:08.141Z",
-  "completedAt": "2026-08-22T07:54:53.052Z",
-  "durationMs": 344911,
+  "startedAt": "2026-08-22T09:12:19.108Z",
+  "completedAt": "2026-08-22T09:20:09.207Z",
+  "durationMs": 470099,
   "repository": {
-    "commit": "2d907958b50db3991ecbfb2edeec72e643b9854f",
-    "branch": "main",
+    "commit": "167c68c0c94314c3821df6b73833e3264cf51239",
+    "branch": "fix/plans-i18n-and-unused-css",
     "dirty": true
   },
   "runtime": {
@@ -45,120 +45,120 @@
       "label": "Validate SQLite Prisma schema",
       "status": "passed",
       "required": true,
-      "durationMs": 843,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\02-prisma-sqlite-validate.log"
+      "durationMs": 532,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\02-prisma-sqlite-validate.log"
     },
     {
       "id": "prisma-postgres-validate",
       "label": "Validate PostgreSQL Prisma schema",
       "status": "passed",
       "required": true,
-      "durationMs": 444,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\03-prisma-postgres-validate.log"
+      "durationMs": 496,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\03-prisma-postgres-validate.log"
     },
     {
       "id": "migration-safety",
       "label": "Migration safety and sequence",
       "status": "passed",
       "required": true,
-      "durationMs": 459,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\04-migration-safety.log"
+      "durationMs": 500,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\04-migration-safety.log"
     },
     {
       "id": "release-gate",
       "label": "Release documentation and rollback gate",
       "status": "passed",
       "required": true,
-      "durationMs": 398,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\05-release-gate.log"
+      "durationMs": 472,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\05-release-gate.log"
     },
     {
       "id": "backend-source-db",
       "label": "Prepare isolated database for source-level tests",
       "status": "passed",
       "required": true,
-      "durationMs": 5801,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\06-backend-source-db.log"
+      "durationMs": 7690,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\06-backend-source-db.log"
     },
     {
       "id": "backend-tests",
       "label": "Backend source and calculation tests",
       "status": "passed",
       "required": true,
-      "durationMs": 71504,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\07-backend-tests.log"
+      "durationMs": 80869,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\07-backend-tests.log"
     },
     {
       "id": "backend-warehouse",
       "label": "Warehouse bins, repack, and replenishment workflows",
       "status": "passed",
       "required": true,
-      "durationMs": 4628,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\08-backend-warehouse.log"
+      "durationMs": 5367,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\08-backend-warehouse.log"
     },
     {
       "id": "backend-integration-sqlite",
       "label": "Backend regression and integration tests (isolated SQLite)",
       "status": "passed",
       "required": true,
-      "durationMs": 195263,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\09-backend-integration-sqlite.log"
+      "durationMs": 274831,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\09-backend-integration-sqlite.log"
     },
     {
       "id": "backend-production-check",
       "label": "Backend production readiness checks",
       "status": "passed",
       "required": true,
-      "durationMs": 1104,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\10-backend-production-check.log"
+      "durationMs": 2764,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\10-backend-production-check.log"
     },
     {
       "id": "ai-safety",
       "label": "AI command and diagnostic hallucination safety gates",
       "status": "passed",
       "required": true,
-      "durationMs": 3539,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\11-ai-safety.log"
+      "durationMs": 3603,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\11-ai-safety.log"
     },
     {
       "id": "api-contract",
       "label": "Static API contract proof",
       "status": "passed",
       "required": true,
-      "durationMs": 397,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\12-api-contract.log"
+      "durationMs": 426,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\12-api-contract.log"
     },
     {
       "id": "razorpay-fixtures",
       "label": "Razorpay signature fixture proof",
       "status": "passed",
       "required": true,
-      "durationMs": 1066,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\13-razorpay-fixtures.log"
+      "durationMs": 1099,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\13-razorpay-fixtures.log"
     },
     {
       "id": "hardware-bridge-contracts",
       "label": "Paired hardware bridge protocol, pairing, recovery, and installer contracts",
       "status": "passed",
       "required": true,
-      "durationMs": 1009,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\14-hardware-bridge-contracts.log"
+      "durationMs": 1125,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\14-hardware-bridge-contracts.log"
     },
     {
       "id": "frontend-production-check",
       "label": "Frontend typecheck, tests, build, and security checks",
       "status": "passed",
       "required": true,
-      "durationMs": 57911,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\15-frontend-production-check.log"
+      "durationMs": 89760,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\15-frontend-production-check.log"
     },
     {
       "id": "local-storage-proof",
       "label": "Local object storage read/write/delete proof",
       "status": "passed",
       "required": true,
-      "durationMs": 432,
-      "logPath": "release-artifacts\\logs\\2026-08-22T07-49-08-139Z\\16-local-storage-proof.log"
+      "durationMs": 431,
+      "logPath": "release-artifacts\\logs\\2026-08-22T09-12-19-106Z\\16-local-storage-proof.log"
     },
     {
       "id": "postgres-production-proof",
