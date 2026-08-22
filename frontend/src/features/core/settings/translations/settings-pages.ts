@@ -48,6 +48,8 @@ export const settingsPagesEn = {
   "settings.sync.deviceStoppedReceiving": "This device stopped receiving updates.",
   "settings.sync.deviceStoppedReceivingHelp": "Bills you make here are still being backed up, but changes from your other devices are not arriving — prices, stock and bills may be out of date.",
   "settings.sync.lastAttempt": "Last attempt {when}: {reason}",
+  "settings.sync.deviceNotConfirming": "This device is not confirming what it has applied.",
+  "settings.sync.deviceNotConfirmingHelp": "Everything received here is saved. Until the confirmation goes through, the shop's device list keeps showing this terminal as behind.",
   "settings.sync.allClean": "Everything is syncing cleanly — no failures or conflicts.",
   "settings.hub.eyebrow": "Store control centre",
   "settings.hub.title": "Settings",

@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, RefreshCcw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getSyncDiagnostics, type SyncDiagnostics, type SyncFailureExplanation } from "@/features/core/sync/api";
-import { readLastPullFailure, type PullFailureRecord } from "@/features/core/sync/sync-pull";
+import { readLastAckFailure, readLastPullFailure, type AckFailureRecord, type PullFailureRecord } from "@/features/core/sync/sync-pull";
 import { useAppLanguage, type AppLanguage, type Translate } from "@/features/core/settings/i18n";
 
 // Diagnostics §3: surfaces the consolidated sync health with a plain-language
@@ -54,11 +54,16 @@ export function SyncDiagnosticsSection() {
   // The server's diagnostics only describe pushes. Whether this device is still
   // RECEIVING data is something only the device knows.
   const [pullFailure, setPullFailure] = useState<PullFailureRecord | null>(null);
+  // Nor can the server say that this device stopped CONFIRMING what it applied —
+  // it only knows it has not heard, which it reports to the owner as a lagging
+  // terminal rather than to the operator standing in front of it.
+  const [ackFailure, setAckFailure] = useState<AckFailureRecord | null>(null);
 
   function load() {
     setLoading(true);
     setFailed(false);
     void readLastPullFailure().then(setPullFailure).catch(() => setPullFailure(null));
+    void readLastAckFailure().then(setAckFailure).catch(() => setAckFailure(null));
     getSyncDiagnostics({ background: true })
       .then((result) => setData(result))
       .catch(() => setFailed(true))
@@ -115,7 +120,20 @@ export function SyncDiagnosticsSection() {
               </div>
             ) : null}
 
-            {issues.length === 0 && !pullFailure ? (
+            {ackFailure ? (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="font-semibold">{t("settings.sync.deviceNotConfirming")}</span>{" "}
+                  {t("settings.sync.deviceNotConfirmingHelp")}
+                  <span className="mt-1 block text-xs text-amber-800">
+                    {t("settings.sync.lastAttempt", { when: timeAgo(ackFailure.at, t, language), reason: ackFailure.reason })}
+                  </span>
+                </span>
+              </div>
+            ) : null}
+
+            {issues.length === 0 && !pullFailure && !ackFailure ? (
               <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                 <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {t("settings.sync.allClean")}

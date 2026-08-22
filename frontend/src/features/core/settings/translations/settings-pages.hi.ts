@@ -45,6 +45,8 @@ export const settingsPagesHi: Record<keyof typeof settingsPagesEn, string> = {
   "settings.sync.deviceStoppedReceiving": "इस डिवाइस पर अपडेट आना बंद हो गया है।",
   "settings.sync.deviceStoppedReceivingHelp": "यहां बनाए गए बिल अभी भी बैकअप हो रहे हैं, लेकिन दूसरे डिवाइस के बदलाव नहीं आ रहे — कीमत, स्टॉक और बिल पुराने हो सकते हैं।",
   "settings.sync.lastAttempt": "पिछली कोशिश {when}: {reason}",
+  "settings.sync.deviceNotConfirming": "यह डिवाइस अपनी स्थिति की पुष्टि नहीं कर पा रहा है।",
+  "settings.sync.deviceNotConfirmingHelp": "यहाँ आया सारा डेटा सुरक्षित है। जब तक पुष्टि नहीं होती, दुकान की डिवाइस सूची में यह टर्मिनल पीछे दिखता रहेगा।",
   "settings.sync.allClean": "सब कुछ ठीक से सिंक हो रहा है — कोई असफल बदलाव या टकराव नहीं।",
   "settings.hub.eyebrow": "दुकान नियंत्रण केंद्र",
   "settings.hub.title": "सेटिंग",
