@@ -17,26 +17,35 @@ export default function PlansPage() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("yearly");
   const [, navigate] = useLocation();
   const businessType = useBusinessTypeKey();
-  // Only the trade NAME is translated here; the rest of this page is still
-  // English and listed as such in the i18n allowlist.
+  // The trade name and the self-serve copy are translated; the rest of this page
+  // is still English and carries its remaining count in the i18n allowlist.
   const { t } = useAppLanguage();
 
   return (
     <PageShell className="space-y-5">
       <PageHeader
         title="Plans"
-        description={`${t(BUSINESS_TYPE_DEFS[businessType].labelKey)} pricing: in-person setup, supported hardware configuration, training, support and software.`}
+        description={businessType === "kirana"
+          ? `${t(BUSINESS_TYPE_DEFS[businessType].labelKey)} pricing: self-serve software with no setup fee.`
+          : `${t(BUSINESS_TYPE_DEFS[businessType].labelKey)} pricing: in-person setup, supported hardware configuration, training, support and software.`}
         actions={snapshot ? <PlanBadge planCode={snapshot.planCode} status={snapshot.status} /> : null}
       />
 
-      <Card className="border-primary/30 bg-primary/5">
+      {businessType === "kirana" ? (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-5">
+            <p className="font-bold">{t("plans.selfServeTitle")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("plans.selfServeBody")}</p>
+          </CardContent>
+        </Card>
+      ) : <Card className="border-primary/30 bg-primary/5">
         <CardContent className="grid gap-3 p-5 md:grid-cols-4">
           <div><p className="font-bold">One-time shop setup</p><p className="text-2xl font-black">Rs 4,999</p></div>
           <div><p className="font-semibold">Installation</p><p className="text-sm text-muted-foreground">In-person launch and supported hardware setup</p></div>
           <div><p className="font-semibold">Catalog + training</p><p className="text-sm text-muted-foreground">Starter catalog entry and owner/staff training</p></div>
           <div><p className="font-semibold">Ongoing support</p><p className="text-sm text-muted-foreground">First-year service plus the plan below; hardware is quoted for the shop</p></div>
         </CardContent>
-      </Card>
+      </Card>}
 
       <div className="flex justify-center">
         <div className="inline-flex rounded-lg border bg-muted/40 p-1" aria-label="Billing cycle">
@@ -58,7 +67,7 @@ export default function PlansPage() {
                 </div>
                 <CardDescription>{plan.headline}</CardDescription>
                 <div className="pt-2">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-primary">Software inside the serviced bundle</p>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-primary">{businessType === "kirana" ? t("plans.softwareSelfServe") : t("plans.softwareBundled")}</p>
                   <span className="text-3xl font-bold">Rs {billingCycle === "yearly" ? plan.annualPrice : plan.price}</span>
                   <span className="text-sm text-muted-foreground">/{billingCycle === "yearly" ? "year" : "month"}</span>
                   {billingCycle === "yearly" && <p className="mt-1 text-xs text-emerald-700">Rs {Math.round(plan.annualPrice / 12)}/month, billed annually</p>}
