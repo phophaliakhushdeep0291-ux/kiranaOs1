@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@plugin "@tailwindcss/typography";
+/* @tailwindcss/typography removed 2026-08-22: it generates 12.3 kB raw of
+   .prose rules and the class is used nowhere — every "prose" in src/ is the
+   English word in a comment or a test variable. Measured at 1.7 kB gzip of
+   first paint. Re-add it the moment something actually renders markdown. */
 
 @custom-variant dark (&:is(.dark *));
 
