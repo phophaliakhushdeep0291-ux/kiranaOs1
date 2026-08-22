@@ -53,6 +53,70 @@ export async function readLastPullFailure(): Promise<PullFailureRecord | null> {
     .catch(() => null);
   return stored && typeof stored.reason === "string" ? stored : null;
 }
+
+/**
+ * Last acknowledgement outcome, kept next to the pull outcome for the same
+ * reason. `/sync/ack` is the only thing that moves this device's position in the
+ * shop's device list, and the server answers 200 with `stale_ack_ignored` when
+ * it refuses one — so a terminal could receive everything, show its own operator
+ * a clean "Synced", and still be reported to the owner as days behind, with
+ * nothing anywhere saying why.
+ */
+export const LAST_ACK_FAILURE_SETTING = "sync:last_ack_failure";
+
+export interface AckFailureRecord {
+  reason: string;
+  at: string;
+  /** Position this device tried to confirm. */
+  acknowledged: string;
+  /** Position the server already has recorded for it, when it said so. */
+  serverApplied: string | null;
+}
+
+async function recordAckOutcome(failure: Omit<AckFailureRecord, "at"> | null): Promise<void> {
+  try {
+    await offlineDB.setSetting<AckFailureRecord | null>(
+      LAST_ACK_FAILURE_SETTING,
+      failure === null ? null : { ...failure, at: nowIso() },
+    );
+  } catch {
+    // Recording the outcome must never be the thing that breaks a sync cycle.
+  }
+}
+
+export async function readLastAckFailure(): Promise<AckFailureRecord | null> {
+  const stored = await offlineDB
+    .getSetting<AckFailureRecord | null>(LAST_ACK_FAILURE_SETTING)
+    .catch(() => null);
+  return stored && typeof stored.reason === "string" ? stored : null;
+}
+
+/**
+ * Confirms the position this device has applied. A rejected or failed
+ * acknowledgement must not discard applied data or block paging — the next cycle
+ * retries the same monotonic position — but it must not disappear either.
+ */
+async function acknowledgeApplied(serverSequence: string | number): Promise<void> {
+  try {
+    const response = await acknowledgeSyncSequence(serverSequence, { background: true });
+    const acknowledgement = response?.acknowledgement;
+    await recordAckOutcome(
+      acknowledgement?.stale_ack_ignored
+        ? {
+            reason: "the shop already has a later position recorded for this device",
+            acknowledged: String(serverSequence),
+            serverApplied: acknowledgement.applied_server_seq ?? null,
+          }
+        : null,
+    );
+  } catch (error) {
+    await recordAckOutcome({
+      reason: error instanceof Error ? error.message : String(error),
+      acknowledged: String(serverSequence),
+      serverApplied: null,
+    });
+  }
+}
 const ENTITY_CURSOR_KEYS = [
   "products",
   "customers",
@@ -255,7 +319,7 @@ export async function pullServerChanges(): Promise<{
       // A failed acknowledgement must not discard applied data or block paging;
       // the next cycle retries the same monotonic position.
       if (latestServerSequence !== undefined && latestServerSequence !== null) {
-        await acknowledgeSyncSequence(latestServerSequence, { background: true }).catch(() => undefined);
+        await acknowledgeApplied(latestServerSequence);
       }
       hasMore = responseHasMore(response);
 

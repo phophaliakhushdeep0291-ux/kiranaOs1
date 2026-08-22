@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SyncDiagnosticsSection } from "./SyncDiagnosticsSection";
 import { formatDistanceToNow } from "date-fns";
+import { hi as hiDateLocale } from "date-fns/locale";
 import {
   AlertCircle,
   Cloud,
@@ -53,6 +54,14 @@ import { repairResolvedSyncStatusNoise } from "@/features/core/sync/sync-status-
 import { tableNameForEntity } from "@/features/core/sync/sync-types";
 import { isSensitiveSyncKey, sanitizeSyncDiagnostic } from "@/features/core/sync/sensitive-data";
 import { PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
+import { useAppLanguage, type Translate, type TranslationKey } from "@/features/core/settings/i18n";
+
+/**
+ * What this page's pure helpers need to speak the owner's language. The context
+ * object returned by useAppLanguage satisfies it structurally, so a component can
+ * pass itself straight through.
+ */
+type Loc = { t: Translate; language: string };
 
 interface ConflictRow extends OfflineRow {
   entity_type?: string;
@@ -108,24 +117,79 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function getSimpleOperationName(operationType: string) {
+/**
+ * A queued change is stored under a machine key ("UPDATE_PRODUCT"), so a name the
+ * owner can read needs a table rather than a string transform. A type missing from
+ * it falls back to the humanised English — a new sync event must never surface as a
+ * raw dictionary key on the one screen people open when something is already wrong.
+ */
+const OPERATION_NAME_KEYS: Record<string, TranslationKey> = {
+  CREATE_CUSTOMER: "sync.op.CREATE_CUSTOMER",
+  UPDATE_CUSTOMER: "sync.op.UPDATE_CUSTOMER",
+  DELETE_CUSTOMER_PENDING: "sync.op.DELETE_CUSTOMER_PENDING",
+  CREATE_PRODUCT: "sync.op.CREATE_PRODUCT",
+  UPDATE_PRODUCT: "sync.op.UPDATE_PRODUCT",
+  BIND_PRODUCT_BARCODE: "sync.op.BIND_PRODUCT_BARCODE",
+  DELETE_PRODUCT_PENDING: "sync.op.DELETE_PRODUCT_PENDING",
+  CREATE_BILL: "sync.op.CREATE_BILL",
+  CREATE_SALE_RETURN: "sync.op.CREATE_SALE_RETURN",
+  CANCEL_BILL_PENDING: "sync.op.CANCEL_BILL_PENDING",
+  SOFT_DELETE_BILL_PENDING: "sync.op.SOFT_DELETE_BILL_PENDING",
+  RESTORE_BILL_PENDING: "sync.op.RESTORE_BILL_PENDING",
+  RECORD_PAYMENT: "sync.op.RECORD_PAYMENT",
+  REVERSE_PAYMENT: "sync.op.REVERSE_PAYMENT",
+  CREATE_LEDGER_ADJUSTMENT: "sync.op.CREATE_LEDGER_ADJUSTMENT",
+  STOCK_PURCHASE: "sync.op.STOCK_PURCHASE",
+  STOCK_PURCHASE_BATCH: "sync.op.STOCK_PURCHASE_BATCH",
+  STOCK_SALE: "sync.op.STOCK_SALE",
+  STOCK_DAMAGE: "sync.op.STOCK_DAMAGE",
+  STOCK_CORRECTION: "sync.op.STOCK_CORRECTION",
+  UPDATE_PURCHASE_BILL: "sync.op.UPDATE_PURCHASE_BILL",
+  DELETE_PURCHASE_BILL: "sync.op.DELETE_PURCHASE_BILL",
+  RECORD_SUPPLIER_PAYMENT: "sync.op.RECORD_SUPPLIER_PAYMENT",
+  REVERSE_SUPPLIER_PAYMENT: "sync.op.REVERSE_SUPPLIER_PAYMENT",
+  CREATE_SUPPLIER: "sync.op.CREATE_SUPPLIER",
+  UPDATE_SUPPLIER: "sync.op.UPDATE_SUPPLIER",
+  DELETE_SUPPLIER_PENDING: "sync.op.DELETE_SUPPLIER_PENDING",
+  UPDATE_SETTINGS: "sync.op.UPDATE_SETTINGS",
+  STAFF_ACTION: "sync.op.STAFF_ACTION",
+  SUBSCRIPTION_REFRESH: "sync.op.SUBSCRIPTION_REFRESH",
+  DEVICE_ADD_PENDING: "sync.op.DEVICE_ADD_PENDING",
+  DEVICE_REMOVE_PENDING: "sync.op.DEVICE_REMOVE_PENDING",
+  AUDIT_LOG_APPEND: "sync.op.AUDIT_LOG_APPEND",
+  RESTORE_CUSTOMER_PENDING: "sync.op.RESTORE_CUSTOMER_PENDING",
+  RESTORE_PRODUCT_PENDING: "sync.op.RESTORE_PRODUCT_PENDING",
+  RESTORE_SUPPLIER_PENDING: "sync.op.RESTORE_SUPPLIER_PENDING",
+  CREATE_EXPENSE: "sync.op.CREATE_EXPENSE",
+  UPDATE_EXPENSE: "sync.op.UPDATE_EXPENSE",
+  DELETE_EXPENSE: "sync.op.DELETE_EXPENSE",
+};
+
+function getSimpleOperationName(t: Translate, operationType: string) {
+  const key = OPERATION_NAME_KEYS[operationType];
+  if (key) return t(key);
   const normalized = operationType.replace(/_/g, " ").toLowerCase();
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
-function getFriendlyFailureMessage(operation: PendingSyncEvent) {
+function getFriendlyFailureMessage(t: Translate, operation: PendingSyncEvent) {
   if (!operation.error_message && !operation.last_error)
-    return "Cloud backup could not finish. Retry is needed.";
+    return t("sync.failure.generic");
   if (!navigator.onLine)
-    return "Internet is offline. This change will retry when internet returns.";
-  return "Cloud backup failed for this change. Retry is needed.";
+    return t("sync.failure.offline");
+  return t("sync.failure.retryNeeded");
 }
 
-function formatTimeAgo(value: string | null) {
-  if (!value) return "No cloud backup yet";
+function formatTimeAgo(loc: Loc, value: string | null) {
+  if (!value) return loc.t("sync.time.never");
   const time = new Date(value).getTime();
-  if (!Number.isFinite(time)) return "Backup time unavailable";
-  return `${formatDistanceToNow(new Date(time), { addSuffix: true })}`;
+  if (!Number.isFinite(time)) return loc.t("sync.time.unavailable");
+  // date-fns writes the relative part itself, so without its Hindi locale the one
+  // number on the card ("2 hours ago") stays English inside a Hindi sentence.
+  return formatDistanceToNow(new Date(time), {
+    addSuffix: true,
+    ...(loc.language === "hi" ? { locale: hiDateLocale } : {}),
+  });
 }
 
 function safeString(value: unknown, fallback = "-") {
@@ -244,21 +308,22 @@ function mergeServerConflictRows(
   );
 }
 
-function userSafeSyncReason(rawReason: unknown, fallback = "Something went wrong while backing this up. Please try sync again."): string {
+function userSafeSyncReason(t: Translate, rawReason: unknown, fallback?: string): string {
+  const fallbackText = fallback ?? t("sync.reason.fallback");
   const text = typeof rawReason === "string" ? rawReason.trim() : "";
-  if (!text) return fallback;
+  if (!text) return fallbackText;
   const lower = text.toLowerCase();
   if (lower.includes("purchase") || lower.includes("stockledgerid") || lower.includes("purchasehistoryid") || lower.includes("purchasebillid")) {
-    return "Purchase backup needs one more retry. Your purchase is safe on this device.";
+    return t("sync.reason.purchase");
   }
   if (lower.includes("ledger") || (lower.includes("amount") && (lower.includes("too_small") || lower.includes("greater than or equal")))) {
-    return "Udhar backup needs one more retry. Your local ledger is safe on this device.";
+    return t("sync.reason.ledger");
   }
   if (lower.includes("payment") || lower.includes("udhar")) {
-    return "Payment backup needs one more retry. Your local payment is safe on this device.";
+    return t("sync.reason.payment");
   }
   if (lower.includes("server changed") || lower.includes("unsynced local changes")) {
-    return "This record changed on another device before backup finished. Review it when you are free.";
+    return t("sync.reason.changedElsewhere");
   }
   if (
     lower.includes("validation") ||
@@ -269,9 +334,12 @@ function userSafeSyncReason(rawReason: unknown, fallback = "Something went wrong
     text.startsWith("[") ||
     text.startsWith("{")
   ) {
-    return fallback;
+    return fallbackText;
   }
-  return text.length > 160 ? fallback : text;
+  // Anything that survives to here is the server's own sentence, which arrives in
+  // English whatever the app language is. Showing it beats hiding the only clue the
+  // owner has; the classified cases above are what keep that rare.
+  return text.length > 160 ? fallbackText : text;
 }
 
 function recordPath(entityType: string | undefined, entityId?: string | null) {
@@ -325,7 +393,7 @@ const SUBJECT_NAME_KEYS = ["customerName", "customer_name", "name", "productName
 const SUBJECT_BILL_NO_KEYS = ["billNo", "billNumber", "bill_no"];
 const SUBJECT_AMOUNT_KEYS = ["grandTotal", "grand_total", "totalAmount", "amount", "creditAmount", "credit_amount"];
 
-function operationSubject(operation: PendingSyncEvent) {
+function operationSubject(loc: Loc, operation: PendingSyncEvent) {
   const payload = payloadFromOperation(operation);
   const records = subjectRecords(payload);
   const name = readSubjectString(records, SUBJECT_NAME_KEYS);
@@ -342,17 +410,17 @@ function operationSubject(operation: PendingSyncEvent) {
   return {
     title: parts.length ? parts.join(" - ") : `${operation.entity_type} - ${entityId}`,
     reason: reason
-      ? userSafeSyncReason(reason)
+      ? userSafeSyncReason(loc.t, reason)
       : (pendingUpload
-        ? "Waiting for cloud backup. Press Force sync when backend is online."
-        : "No detailed reason received from backend yet."),
+        ? loc.t("sync.reason.waitingForce")
+        : loc.t("sync.reason.noDetail")),
     amount,
     mode,
     entityId,
   };
 }
 
-function conflictSubject(conflict: ConflictRow) {
+function conflictSubject(loc: Loc, conflict: ConflictRow) {
   const local = isRecord(conflict.local_snapshot) ? conflict.local_snapshot : {};
   const server = isRecord(conflict.server_snapshot) ? conflict.server_snapshot : {};
   // A conflict stores the outbox envelope, so the record itself is usually nested.
@@ -363,7 +431,7 @@ function conflictSubject(conflict: ConflictRow) {
   const parts = [name, billNo, moneyLabel(amount)].filter(Boolean);
   return {
     title: parts.length ? parts.join(" - ") : `${safeString(conflict.entity_type)} - ${safeString(conflict.entity_id)}`,
-    reason: userSafeSyncReason(conflict.error_message, "Something went wrong while backing this up. Please try sync again."),
+    reason: userSafeSyncReason(loc.t, conflict.error_message),
   };
 }
 
@@ -529,11 +597,13 @@ function FleetHealthCard({
   fleet: SyncFleetResponse;
   currentDeviceId: string;
 }) {
+  const loc = useAppLanguage();
+  const { t } = loc;
   const stateMeta = {
-    current: { label: "Current", variant: "secondary" as const, dot: "bg-emerald-500" },
-    behind: { label: "Catching up", variant: "outline" as const, dot: "bg-amber-500" },
-    stale: { label: "Needs attention", variant: "destructive" as const, dot: "bg-red-500" },
-    never_acknowledged: { label: "Not initialized", variant: "outline" as const, dot: "bg-slate-400" },
+    current: { label: t("sync.fleet.state.current"), variant: "secondary" as const, dot: "bg-emerald-500" },
+    behind: { label: t("sync.fleet.state.behind"), variant: "outline" as const, dot: "bg-amber-500" },
+    stale: { label: t("sync.fleet.state.stale"), variant: "destructive" as const, dot: "bg-red-500" },
+    never_acknowledged: { label: t("sync.fleet.state.neverAcknowledged"), variant: "outline" as const, dot: "bg-slate-400" },
   };
   const formatLag = (value: string) => {
     try {
@@ -549,18 +619,18 @@ function FleetHealthCard({
         <div>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Smartphone className="h-5 w-5 text-primary" />
-            Device sync health
+            {t("sync.fleet.title")}
           </CardTitle>
           <CardDescription className="mt-1">
-            Server-confirmed progress for every active terminal in this shop.
+            {t("sync.fleet.subtitle")}
           </CardDescription>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary">{fleet.summary.current} current</Badge>
+          <Badge variant="secondary">{t("sync.fleet.summaryCurrent", { count: fleet.summary.current })}</Badge>
           {fleet.summary.attention > 0 ? (
-            <Badge variant="destructive">{fleet.summary.attention} need attention</Badge>
+            <Badge variant="destructive">{t("sync.fleet.summaryAttention", { count: fleet.summary.attention })}</Badge>
           ) : (
-            <Badge variant="outline">Fleet healthy</Badge>
+            <Badge variant="outline">{t("sync.fleet.healthy")}</Badge>
           )}
         </div>
       </CardHeader>
@@ -593,24 +663,24 @@ function FleetHealthCard({
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded-xl bg-muted/60 p-3">
-                    <p className="text-muted-foreground">Sequence lag</p>
+                    <p className="text-muted-foreground">{t("sync.fleet.lag")}</p>
                     <p className="mt-1 text-base font-bold">{formatLag(device.lag)}</p>
                   </div>
                   <div className="rounded-xl bg-muted/60 p-3">
-                    <p className="text-muted-foreground">Presence</p>
-                    <p className="mt-1 text-base font-bold">{device.online ? "Online" : "Offline"}</p>
+                    <p className="text-muted-foreground">{t("sync.fleet.presence")}</p>
+                    <p className="mt-1 text-base font-bold">{device.online ? t("sync.fleet.online") : t("sync.fleet.offline")}</p>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                  <span>{device.acknowledged_at ? `Applied ${formatTimeAgo(device.acknowledged_at)}` : "No applied cursor yet"}</span>
-                  {isCurrentDevice && <Badge variant="outline">This device</Badge>}
+                  <span>{device.acknowledged_at ? t("sync.fleet.applied", { time: formatTimeAgo(loc, device.acknowledged_at) }) : t("sync.fleet.noCursor")}</span>
+                  {isCurrentDevice && <Badge variant="outline">{t("sync.fleet.thisDevice")}</Badge>}
                 </div>
               </div>
             );
           })}
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          A terminal becomes current only after it applies data locally and acknowledges sequence {fleet.server_seq}.
+          {t("sync.fleet.footnote", { seq: String(fleet.server_seq) })}
         </p>
       </CardContent>
     </Card>
@@ -634,6 +704,8 @@ function OperationList({
   onRetryOperation?: (clientEventId: string) => void;
   onIgnoreOperation?: (clientEventId: string) => void;
 }) {
+  const loc = useAppLanguage();
+  const { t } = loc;
   return (
     <Card>
       <CardHeader>
@@ -641,7 +713,9 @@ function OperationList({
         <CardDescription>
           {operations.length === 0
             ? emptyText
-            : `${operations.length} change${operations.length === 1 ? "" : "s"} listed here.`}
+            : operations.length === 1
+              ? t("sync.ops.listedOne")
+              : t("sync.ops.listedMany", { count: operations.length })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -658,15 +732,15 @@ function OperationList({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="font-medium">
-                    {getSimpleOperationName(operation.operation_type)}
+                    {getSimpleOperationName(t, operation.operation_type)}
                   </div>
                   <div className="mt-1 text-sm font-medium text-foreground">
-                    {operationSubject(operation).title}
+                    {operationSubject(loc, operation).title}
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">
                     {kind === "failed"
-                      ? getFriendlyFailureMessage(operation)
-                      : "Waiting for cloud backup."}
+                      ? getFriendlyFailureMessage(t, operation)
+                      : t("sync.ops.waiting")}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -682,13 +756,13 @@ function OperationList({
                       disabled={isSyncing}
                       onClick={() => onRetryOperation(operation.clientEventId)}
                     >
-                      Retry this
+                      {t("sync.ops.retryThis")}
                     </Button>
                   ) : null}
                   <Button asChild size="sm" variant="outline">
-                    <a href={recordPath(operation.entity_type, operationSubject(operation).entityId)}>
+                    <a href={recordPath(operation.entity_type, operationSubject(loc, operation).entityId)}>
                       <ExternalLink className="h-3.5 w-3.5" />
-                      Open
+                      {t("sync.ops.open")}
                     </a>
                   </Button>
                   {onIgnoreOperation ? (
@@ -698,24 +772,24 @@ function OperationList({
                       disabled={isSyncing}
                       onClick={() => onIgnoreOperation(operation.clientEventId)}
                     >
-                      Ignore
+                      {t("sync.ops.ignore")}
                     </Button>
                   ) : null}
                 </div>
               </div>
               <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
-                <div>Entity: {operation.entity_type}</div>
-                <div>Operation: {operation.operation_type}</div>
-                <div>Item: {operationSubject(operation).entityId}</div>
-                <div>Amount: {moneyLabel(operationSubject(operation).amount) ?? "-"}</div>
-                <div>Retries: {operation.retry_count}</div>
-                <div>Created: {formatTimeAgo(operation.client_created_at)}</div>
-                <div>Reason: {operationSubject(operation).reason}</div>
+                <div>{t("sync.ops.entity")} {operation.entity_type}</div>
+                <div>{t("sync.ops.operation")} {operation.operation_type}</div>
+                <div>{t("sync.ops.item")} {operationSubject(loc, operation).entityId}</div>
+                <div>{t("sync.ops.amount")} {moneyLabel(operationSubject(loc, operation).amount) ?? "-"}</div>
+                <div>{t("sync.ops.retries")} {operation.retry_count}</div>
+                <div>{t("sync.ops.created")} {formatTimeAgo(loc, operation.client_created_at)}</div>
+                <div>{t("sync.ops.reason")} {operationSubject(loc, operation).reason}</div>
               </div>
               {(operation.error_message || operation.last_error) && (
                 <details className="mt-3 rounded-md bg-muted/60 p-3 text-xs">
                   <summary className="cursor-pointer font-medium text-muted-foreground">
-                    Show technical details
+                    {t("sync.ops.technical")}
                   </summary>
                   <pre className="mt-2 max-h-56 overflow-auto rounded-md bg-background px-3 py-2 whitespace-pre-wrap text-muted-foreground">
                     {operation.error_message ?? operation.last_error}
@@ -783,20 +857,22 @@ function ConflictList({
   conflicts: ConflictRow[];
   onMarkResolved?: (conflictId: string, resolution: ConflictResolution) => void;
 }) {
+  const loc = useAppLanguage();
+  const { t } = loc;
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Backup review</CardTitle>
+        <CardTitle className="text-lg">{t("sync.conflict.title")}</CardTitle>
         <CardDescription>
           {conflicts.length === 0
-            ? "No cloud backup item needs review."
-            : "These items are safe locally and need a retry or quick review."}
+            ? t("sync.conflict.empty")
+            : t("sync.conflict.some")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {conflicts.length === 0 ? (
           <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            No review items. Data is clean for backup.
+            {t("sync.conflict.emptyBox")}
           </div>
         ) : (
           conflicts.slice(0, 25).map((conflict) => (
@@ -807,10 +883,10 @@ function ConflictList({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="font-medium">
-                    Backup needs attention
+                    {t("sync.conflict.needsAttention")}
                   </div>
                   <div className="mt-1 text-sm font-medium text-foreground">
-                    {conflictSubject(conflict).title}
+                    {conflictSubject(loc, conflict).title}
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">
                     {safeString(conflict.entity_type)} -{" "}
@@ -818,40 +894,40 @@ function ConflictList({
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">Retry / review</Badge>
+                  <Badge variant="outline">{t("sync.conflict.retryReview")}</Badge>
                   <Button asChild size="sm" variant="outline">
                     <a href={recordPath(conflict.entity_type, conflict.entity_id)}>
                       <ExternalLink className="h-3.5 w-3.5" />
-                      Open
+                      {t("sync.conflict.open")}
                     </a>
                   </Button>
                   {onMarkResolved && allowsDirectConflictChoice(conflict.entity_type) && !requiresPackagingMigration(conflict) ? (
                     <>
                       <Button size="sm" onClick={() => onMarkResolved(conflict.id, "use_local")}>
-                        Keep local
+                        {t("sync.conflict.keepLocal")}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => onMarkResolved(conflict.id, "use_server")}>
-                        Keep cloud
+                        {t("sync.conflict.keepCloud")}
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => onMarkResolved(conflict.id, "ignored_by_owner")}>
-                        Decide later
+                        {t("sync.conflict.decideLater")}
                       </Button>
                     </>
-                  ) : onMarkResolved ? <Badge variant="outline">Use reversal / correction workflow</Badge> : null}
+                  ) : onMarkResolved ? <Badge variant="outline">{t("sync.conflict.useReversal")}</Badge> : null}
                 </div>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
-                {conflictSubject(conflict).reason} You can keep billing; local data has not been deleted.
+                {conflictSubject(loc, conflict).reason} {t("sync.conflict.safeSuffix")}
               </p>
               {!allowsDirectConflictChoice(conflict.entity_type) ? (
                 <p className="mt-2 rounded-md border border-amber-300 bg-amber-100/70 p-2 text-xs font-semibold text-amber-950">
-                  Financial and stock history is immutable. Open the record and use its reversal, return, or correction action instead of overwriting either version.
+                  {t("sync.conflict.immutable")}
                 </p>
               ) : null}
               {conflictFieldDiff(conflict).length > 0 && (
                 <div className="mt-3 overflow-x-auto rounded-md border bg-background text-xs">
                   <div className="grid min-w-[560px] grid-cols-[140px_1fr_1fr] border-b bg-muted/50 font-semibold">
-                    <div className="p-2">Field</div><div className="border-l p-2">This device</div><div className="border-l p-2">Cloud</div>
+                    <div className="p-2">{t("sync.conflict.field")}</div><div className="border-l p-2">{t("sync.conflict.thisDevice")}</div><div className="border-l p-2">{t("sync.conflict.cloud")}</div>
                   </div>
                   {conflictFieldDiff(conflict).map((field) => (
                     <div key={field.key} className="grid min-w-[560px] grid-cols-[140px_1fr_1fr] border-b last:border-b-0">
@@ -863,7 +939,7 @@ function ConflictList({
                 </div>
               )}              <details className="mt-3 rounded-md bg-background/70 p-3 text-xs">
                 <summary className="cursor-pointer font-medium text-muted-foreground">
-                  Show technical details
+                  {t("sync.conflict.technical")}
                 </summary>
                 <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-muted-foreground">
                   {compactJson({
@@ -885,6 +961,7 @@ function ServerUrlEditor({ currentUrl, onSaved }: { currentUrl: string; onSaved:
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(currentUrl);
   const { toast } = useToast();
+  const { t } = useAppLanguage();
 
   function save() {
     const trimmed = value.trim().replace(/\/$/, "");
@@ -892,18 +969,18 @@ function ServerUrlEditor({ currentUrl, onSaved }: { currentUrl: string; onSaved:
     setApiBaseUrl(trimmed);
     onSaved();
     setEditing(false);
-    toast({ title: "Server URL saved", description: "Reload the page for changes to take full effect." });
+    toast({ title: t("sync.toast.serverUrlSaved"), description: t("sync.toast.serverUrlSavedBody") });
   }
 
   return (
     <div className="rounded-xl border bg-background p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Cloud className="h-4 w-4" /> Server URL
+          <Cloud className="h-4 w-4" /> {t("sync.settings.serverUrl")}
         </div>
         {!editing && (
           <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setValue(currentUrl); setEditing(true); }}>
-            Edit
+            {t("sync.settings.edit")}
           </Button>
         )}
       </div>
@@ -917,8 +994,8 @@ function ServerUrlEditor({ currentUrl, onSaved }: { currentUrl: string; onSaved:
             onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
             autoFocus
           />
-          <Button size="sm" className="h-9 text-xs" onClick={save}>Save</Button>
-          <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
+          <Button size="sm" className="h-9 text-xs" onClick={save}>{t("sync.settings.save")}</Button>
+          <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => setEditing(false)}>{t("sync.settings.cancel")}</Button>
         </div>
       ) : (
         <div className="mt-3 min-h-11 rounded-xl bg-muted/70 p-3 font-mono text-xs leading-relaxed break-all">
@@ -931,6 +1008,8 @@ function ServerUrlEditor({ currentUrl, onSaved }: { currentUrl: string; onSaved:
 
 export default function SyncStatusPage() {
   const { toast } = useToast();
+  const loc = useAppLanguage();
+  const { t } = loc;
   const [snapshot, setSnapshot] = useState<SyncStatusSnapshot>(initialSnapshot);
 
   const refresh = useCallback(async () => {
@@ -974,42 +1053,42 @@ export default function SyncStatusPage() {
   const hero = useMemo(() => {
     if (!snapshot.isBrowserOnline)
       return {
-        title: "Internet offline, billing still works",
+        title: t("sync.hero.internetOffline"),
         tone: "offline" as const,
         icon: WifiOff,
       };
     if (!snapshot.isBackendReachable)
       return {
-        title: "Backend offline, billing still works locally",
+        title: t("sync.hero.backendOffline"),
         tone: "offline" as const,
         icon: CloudOff,
       };
     if (failedCount > 0)
       return {
-        title: "Sync failed, retry needed",
+        title: t("sync.hero.failed"),
         tone: "failed" as const,
         icon: AlertCircle,
       };
     if (conflictCount > 0)
       return {
-        title: "Backup needs retry or review",
+        title: t("sync.hero.conflict"),
         tone: "conflict" as const,
         icon: AlertCircle,
       };
     if (pendingCount > 0)
       return {
-        title: `${pendingCount} changes pending cloud backup`,
+        title: t("sync.hero.pending", { count: pendingCount }),
         tone: "pending" as const,
         icon: Cloud,
       };
     if (neverBackedUp)
       return {
-        title: "Data safe locally, cloud backup not done yet",
+        title: t("sync.hero.neverBackedUp"),
         tone: "pending" as const,
         icon: Database,
       };
     return {
-      title: "Data safe locally and backed up",
+      title: t("sync.hero.ok"),
       tone: "ok" as const,
       icon: ShieldCheck,
     };
@@ -1018,6 +1097,7 @@ export default function SyncStatusPage() {
     failedCount,
     neverBackedUp,
     pendingCount,
+    t,
     snapshot.isOnline,
     snapshot.isBrowserOnline,
     snapshot.isBackendReachable,
@@ -1028,17 +1108,15 @@ export default function SyncStatusPage() {
   const handleForceSync = async () => {
     if (!snapshot.isBrowserOnline) {
       toast({
-        title: "Internet offline",
-        description:
-          "Billing still works. Cloud backup will start when internet returns.",
+        title: t("sync.toast.internetOffline"),
+        description: t("sync.toast.internetOfflineForce"),
       });
       return;
     }
     if (!snapshot.isBackendReachable) {
       toast({
-        title: "Backend offline",
-        description:
-          "Billing still works locally. Start backend server, then press Force sync.",
+        title: t("sync.toast.backendOffline"),
+        description: t("sync.toast.backendOfflineForce"),
       });
       return;
     }
@@ -1046,14 +1124,13 @@ export default function SyncStatusPage() {
     try {
       const result = await runSyncCycle();
       toast({
-        title: "Sync checked",
-        description: `${result.pushed} backed up, ${result.pulled} downloaded, ${result.failed} failed.`,
+        title: t("sync.toast.syncChecked"),
+        description: t("sync.toast.syncCycleResult", { pushed: result.pushed, pulled: result.pulled, failed: result.failed }),
       });
     } catch {
       toast({
-        title: "Sync failed",
-        description:
-          "Could not complete cloud backup. Your data is still safe locally.",
+        title: t("sync.toast.syncFailed"),
+        description: t("sync.toast.syncFailedBody"),
       });
     } finally {
       setSnapshot((current) => ({ ...current, isSyncing: false }));
@@ -1063,24 +1140,24 @@ export default function SyncStatusPage() {
 
   const handleRetryOne = async (clientEventId: string) => {
     if (!snapshot.isBrowserOnline) {
-      toast({ title: "Internet offline", description: "This failed change will retry when internet returns." });
+      toast({ title: t("sync.toast.internetOffline"), description: t("sync.toast.internetOfflineRetryOne") });
       return;
     }
     if (!snapshot.isBackendReachable) {
-      toast({ title: "Backend offline", description: "Start backend server, then retry this change." });
+      toast({ title: t("sync.toast.backendOffline"), description: t("sync.toast.backendOfflineRetryOne") });
       return;
     }
     setSnapshot((current) => ({ ...current, isSyncing: true }));
     try {
       const result = await retryFailedSyncOperations([clientEventId]);
       toast({
-        title: "Retry checked",
-        description: `${result.pushed} backed up, ${result.failed} still failed.`,
+        title: t("sync.toast.retryChecked"),
+        description: t("sync.toast.retryResult", { pushed: result.pushed, failed: result.failed }),
       });
     } catch {
       toast({
-        title: "Retry failed",
-        description: "Could not retry this change. Your local data was not removed.",
+        title: t("sync.toast.retryFailed"),
+        description: t("sync.toast.retryFailedOneBody"),
       });
     } finally {
       setSnapshot((current) => ({ ...current, isSyncing: false }));
@@ -1093,13 +1170,13 @@ export default function SyncStatusPage() {
     try {
       await offlineDB.removePendingEvent(clientEventId);
       toast({
-        title: "Queue item ignored",
-        description: "The local business record was kept; only the stale backup queue item was removed.",
+        title: t("sync.toast.ignored"),
+        description: t("sync.toast.ignoredBody"),
       });
     } catch {
       toast({
-        title: "Could not ignore queue item",
-        description: "Please retry after the local database is available.",
+        title: t("sync.toast.ignoreFailed"),
+        description: t("sync.toast.ignoreFailedBody"),
         variant: "destructive",
       });
     } finally {
@@ -1113,25 +1190,25 @@ export default function SyncStatusPage() {
   // can act on instead.
   const conflictFailureDescription = (error: unknown) => {
     if (!(error instanceof ApiClientError)) {
-      return "The decision was not recorded on this device. Please try again.";
+      return t("sync.conflictError.notRecorded");
     }
     const code = typeof error.data.code === "string" ? error.data.code : "";
     if (code === "SYNC_CONFLICT_COMPENSATING_ENTRY_REQUIRED") {
-      return "Money records cannot be overwritten from here. Use the record's own reversal or correction entry.";
+      return t("sync.conflictError.compensating");
     }
     if (code === "SYNC_CONFLICT_VERSION_MISMATCH") {
-      return "This review changed on another device while you were deciding. Refresh and choose again.";
+      return t("sync.conflictError.versionMismatch");
     }
     if (code === "SYNC_CONFLICT_SNAPSHOT_MISSING" || code === "SYNC_CONFLICT_ENTITY_ID_MISSING") {
-      return "The selected version is incomplete, so it cannot be restored. Open the record and set it by hand.";
+      return t("sync.conflictError.snapshotMissing");
     }
     if (error.status === 404) {
-      return "This review is no longer on the server. Refresh to see the current list.";
+      return t("sync.conflictError.notOnServer");
     }
     const message = typeof error.data.message === "string" ? error.data.message : error.message;
     return message
-      ? `${message} Refresh in case another device resolved it first.`
-      : "The server decision was not recorded. Refresh in case another device resolved it first.";
+      ? t("sync.conflictError.serverMessage", { message })
+      : t("sync.conflictError.serverGeneric");
   };
 
   const handleMarkConflictResolved = async (
@@ -1141,8 +1218,8 @@ export default function SyncStatusPage() {
   ) => {
     if (!snapshot.isBrowserOnline || !snapshot.isBackendReachable) {
       toast({
-        title: "Server connection required",
-        description: "Reconnect before recording this owner decision so every device receives the same result.",
+        title: t("sync.toast.connectionRequired"),
+        description: t("sync.toast.connectionRequiredBody"),
         variant: "destructive",
       });
       return;
@@ -1196,8 +1273,8 @@ export default function SyncStatusPage() {
       }
       window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
       toast({
-        title: resolution === "use_local" ? "Local version selected" : resolution === "use_server" ? "Cloud version selected" : resolution === "resolved_by_owner" ? "Review marked resolved" : "Decision postponed",
-        description: resolution === "ignored_by_owner" ? "The conflict remains available for later review." : "The owner decision was recorded for all devices.",
+        title: resolution === "use_local" ? t("sync.toast.keptLocal") : resolution === "use_server" ? t("sync.toast.keptCloud") : resolution === "resolved_by_owner" ? t("sync.toast.markedResolved") : t("sync.toast.postponed"),
+        description: resolution === "ignored_by_owner" ? t("sync.toast.postponedBody") : t("sync.toast.decisionRecorded"),
       });
     } catch (error) {
       // Another device getting there first is a finished review, not a failure: clear it
@@ -1215,8 +1292,8 @@ export default function SyncStatusPage() {
         }
         window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
         toast({
-          title: "Already reviewed",
-          description: "Another device recorded a decision for this record. Nothing more is needed here.",
+          title: t("sync.toast.alreadyReviewed"),
+          description: t("sync.toast.alreadyReviewedBody"),
         });
         return;
       }
@@ -1244,7 +1321,7 @@ export default function SyncStatusPage() {
         }
       }
       toast({
-        title: "Could not update conflict",
+        title: t("sync.toast.conflictFailed"),
         description: conflictFailureDescription(error),
         variant: "destructive",
       });
@@ -1257,22 +1334,22 @@ export default function SyncStatusPage() {
   const handleRetryFailed = async () => {
     if (retryableCount === 0) {
       toast({
-        title: "No blocked changes",
-        description: "There is nothing to retry right now.",
+        title: t("sync.toast.noBlocked"),
+        description: t("sync.toast.noBlockedBody"),
       });
       return;
     }
     if (!snapshot.isBrowserOnline) {
       toast({
-        title: "Internet offline",
-        description: "Failed changes will retry after internet returns.",
+        title: t("sync.toast.internetOffline"),
+        description: t("sync.toast.internetOfflineRetryAll"),
       });
       return;
     }
     if (!snapshot.isBackendReachable) {
       toast({
-        title: "Backend offline",
-        description: "Start backend server, then retry failed cloud backup.",
+        title: t("sync.toast.backendOffline"),
+        description: t("sync.toast.backendOfflineRetryAll"),
       });
       return;
     }
@@ -1280,14 +1357,13 @@ export default function SyncStatusPage() {
     try {
       const result = await retryFailedSyncOperations();
       toast({
-        title: "Retry started",
-        description: `${result.pushed} backed up, ${result.failed} still need retry.`,
+        title: t("sync.toast.retryStarted"),
+        description: t("sync.toast.syncResult", { pushed: result.pushed, failed: result.failed }),
       });
     } catch {
       toast({
-        title: "Retry failed",
-        description:
-          "Could not retry cloud backup. Your local data was not removed.",
+        title: t("sync.toast.retryFailed"),
+        description: t("sync.toast.retryFailedAllBody"),
       });
     } finally {
       setSnapshot((current) => ({ ...current, isSyncing: false }));
@@ -1300,18 +1376,18 @@ export default function SyncStatusPage() {
       <PageHeader
         className="sync-status-header"
         headingLevel={2}
-        title={<span className="flex items-center gap-3"><span className="rounded-full bg-primary/10 p-3 text-primary"><HeroIcon className="h-6 w-6" /></span>Sync Status</span>}
+        title={<span className="flex items-center gap-3"><span className="rounded-full bg-primary/10 p-3 text-primary"><HeroIcon className="h-6 w-6" /></span>{t("sync.title")}</span>}
         description={hero.title}
-        eyebrow={<SyncBadge status={snapshot.isOnline ? (failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced") : "offline"} label={snapshot.isOnline ? (failedCount > 0 ? `${failedCount} failed cloud backup` : `${pendingCount} pending cloud backup`) : "Offline"} />}
+        eyebrow={<SyncBadge status={snapshot.isOnline ? (failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced") : "offline"} label={snapshot.isOnline ? (failedCount > 0 ? t("sync.badge.failed", { count: failedCount }) : t("sync.badge.pending", { count: pendingCount })) : t("sync.badge.offline")} />}
         actions={(
           <>
             <Button variant="outline" onClick={() => void handleRetryFailed()} disabled={snapshot.isSyncing || retryableCount === 0}>
               {snapshot.isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
-              Retry failed
+              {t("sync.action.retryFailed")}
             </Button>
             <Button onClick={() => void handleForceSync()} disabled={snapshot.isSyncing}>
               {snapshot.isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-              Force sync
+              {t("sync.action.forceSync")}
             </Button>
           </>
         )}
@@ -1320,43 +1396,33 @@ export default function SyncStatusPage() {
       {neverBackedUp && (
         <Alert>
           <Database className="h-4 w-4" />
-          <AlertTitle>Local data has never been backed up</AlertTitle>
-          <AlertDescription>
-            Data safe locally. Connect internet and press Force sync to create
-            the first cloud backup.
-          </AlertDescription>
+          <AlertTitle>{t("sync.alert.neverBackedUp.title")}</AlertTitle>
+          <AlertDescription>{t("sync.alert.neverBackedUp.body")}</AlertDescription>
         </Alert>
       )}
 
       {!snapshot.isBrowserOnline && (
         <Alert>
           <WifiOff className="h-4 w-4" />
-          <AlertTitle>Internet offline, billing still works</AlertTitle>
-          <AlertDescription>
-            You can keep making bills. Changes will stay on this device until
-            internet returns.
-          </AlertDescription>
+          <AlertTitle>{t("sync.alert.internetOffline.title")}</AlertTitle>
+          <AlertDescription>{t("sync.alert.internetOffline.body")}</AlertDescription>
         </Alert>
       )}
 
       {snapshot.isBrowserOnline && !snapshot.isBackendReachable && (
         <Alert>
           <CloudOff className="h-4 w-4" />
-          <AlertTitle>Backend offline, billing still works locally</AlertTitle>
-          <AlertDescription>
-            Your internet is available, but the Artha backend is not reachable at {snapshot.apiBaseUrl}. Start backend, then press Force sync.
-          </AlertDescription>
+          <AlertTitle>{t("sync.alert.backendOffline.title")}</AlertTitle>
+          <AlertDescription>{t("sync.alert.backendOffline.body", { url: snapshot.apiBaseUrl })}</AlertDescription>
         </Alert>
       )}
 
       {failedCount > 0 && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Backup did not finish</AlertTitle>
+          <AlertTitle>{t("sync.alert.failed.title")}</AlertTitle>
           <AlertDescription>
-            {snapshot.isOnline
-              ? "Your local data is safe. Open the item below to see what the server refused — most of these need the record corrected and saved again, not another retry."
-              : "Your local data is safe. This backs up on its own once internet and the backend are working."}
+            {snapshot.isOnline ? t("sync.alert.failed.online") : t("sync.alert.failed.offline")}
           </AlertDescription>
         </Alert>
       )}
@@ -1364,43 +1430,44 @@ export default function SyncStatusPage() {
       {(failedCount > 0 || conflictCount > 0 || pendingCount > 0) && (
         <Card className="border-amber-200 bg-amber-50/60 dark:bg-amber-950/10">
           <CardHeader>
-            <CardTitle className="text-lg">Needs attention</CardTitle>
-            <CardDescription>
-              Local changes are safe on this device. Retry backup when ready.
-            </CardDescription>
+            <CardTitle className="text-lg">{t("sync.attention.title")}</CardTitle>
+            <CardDescription>{t("sync.attention.body")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
               {groupOperationsByType([...snapshot.pendingOperations, ...snapshot.failedOperations]).map(([group, count]) => (
-                <Badge key={group} variant="outline">{group.replace(":", " - ")} x {count}</Badge>
+                // The group key is `entity:OPERATION`, and both halves were printed raw
+                // ("product - UPDATE_PRODUCT"). The operation name already carries the
+                // entity, so the readable half alone says more, in either language.
+                <Badge key={group} variant="outline">{getSimpleOperationName(t, group.split(":")[1] ?? group)} x {count}</Badge>
               ))}
-              {conflictCount > 0 && <Badge variant="destructive">review needed x {conflictCount}</Badge>}
+              {conflictCount > 0 && <Badge variant="destructive">{t("sync.attention.reviewBadge", { count: conflictCount })}</Badge>}
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               {[...snapshot.failedOperations, ...snapshot.pendingOperations].slice(0, 6).map((operation) => (
                 <div key={operation.clientEventId} className="rounded-lg border bg-background p-3 text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">{getSimpleOperationName(operation.operation_type)}</span>
+                    <span className="font-semibold">{getSimpleOperationName(t, operation.operation_type)}</span>
                     <Badge variant={operation.status === "FAILED" ? "destructive" : "secondary"}>{operation.status}</Badge>
                   </div>
-                  <div className="mt-1 text-muted-foreground">{operationSubject(operation).title}</div>
+                  <div className="mt-1 text-muted-foreground">{operationSubject(loc, operation).title}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {formatTimeAgo(operation.client_created_at)} - {operationSubject(operation).reason}
+                    {formatTimeAgo(loc, operation.client_created_at)} - {operationSubject(loc, operation).reason}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {operation.status === "FAILED" ? (
                       <Button size="sm" variant="outline" disabled={snapshot.isSyncing} onClick={() => void handleRetryOne(operation.clientEventId)}>
-                        Retry
+                        {t("sync.attention.retry")}
                       </Button>
                     ) : null}
                     <Button asChild size="sm" variant="outline">
-                      <a href={recordPath(operation.entity_type, operationSubject(operation).entityId)}>
+                      <a href={recordPath(operation.entity_type, operationSubject(loc, operation).entityId)}>
                         <ExternalLink className="h-3.5 w-3.5" />
-                        Open record
+                        {t("sync.attention.openRecord")}
                       </a>
                     </Button>
                     <Button size="sm" variant="ghost" disabled={snapshot.isSyncing} onClick={() => void handleIgnoreOperation(operation.clientEventId)}>
-                      Ignore
+                      {t("sync.attention.ignore")}
                     </Button>
                   </div>
                 </div>
@@ -1408,24 +1475,24 @@ export default function SyncStatusPage() {
               {snapshot.conflicts.slice(0, 4).map((conflict) => (
                 <div key={conflict.id} className="rounded-lg border border-amber-300/70 bg-background p-3 text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">Backup review</span>
-                    <Badge variant="outline">Retry / review</Badge>
+                    <span className="font-semibold">{t("sync.conflict.title")}</span>
+                    <Badge variant="outline">{t("sync.stat.retryReview")}</Badge>
                   </div>
-                  <div className="mt-1 text-muted-foreground">{conflictSubject(conflict).title}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{conflictSubject(conflict).reason}</div>
+                  <div className="mt-1 text-muted-foreground">{conflictSubject(loc, conflict).title}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{conflictSubject(loc, conflict).reason}</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button asChild size="sm" variant="outline">
                       <a href={recordPath(conflict.entity_type, conflict.entity_id)}>
                         <ExternalLink className="h-3.5 w-3.5" />
-                        Open record
+                        {t("sync.attention.openRecord")}
                       </a>
                     </Button>
                     {allowsDirectConflictChoice(conflict.entity_type) && !requiresPackagingMigration(conflict) ? <>
-                      <Button size="sm" onClick={() => void handleMarkConflictResolved(conflict.id, "use_local")}>Keep local</Button>
-                      <Button size="sm" variant="outline" onClick={() => void handleMarkConflictResolved(conflict.id, "use_server")}>Keep cloud</Button>
-                    </> : <Badge variant="outline">Correction required</Badge>}
+                      <Button size="sm" onClick={() => void handleMarkConflictResolved(conflict.id, "use_local")}>{t("sync.conflict.keepLocal")}</Button>
+                      <Button size="sm" variant="outline" onClick={() => void handleMarkConflictResolved(conflict.id, "use_server")}>{t("sync.conflict.keepCloud")}</Button>
+                    </> : <Badge variant="outline">{t("sync.conflict.correctionRequired")}</Badge>}
                     <Button size="sm" variant="ghost" onClick={() => void handleMarkConflictResolved(conflict.id, "ignored_by_owner")}>
-                      Ignore
+                      {t("sync.attention.ignore")}
                     </Button>
                   </div>
                 </div>
@@ -1436,11 +1503,11 @@ export default function SyncStatusPage() {
       )}
 
       <StatsGrid>
-        <StatCard label="Internet" value={snapshot.isBrowserOnline ? "Online" : "Offline"} description={snapshot.isBrowserOnline ? "Internet available." : "Billing still works locally."} icon={snapshot.isBrowserOnline ? <Wifi className="h-5 w-5" /> : <WifiOff className="h-5 w-5" />} tone={snapshot.isBrowserOnline ? "green" : "amber"} />
-        <StatCard label="Backend" value={snapshot.isBackendReachable ? "Online" : "Offline"} description={snapshot.isBackendReachable ? "Cloud backup can run." : "Cloud backup paused; local billing works."} icon={snapshot.isBackendReachable ? <Cloud className="h-5 w-5" /> : <CloudOff className="h-5 w-5" />} tone={snapshot.isBackendReachable ? "green" : "amber"} />
-        <StatCard label="Last backup" value={formatTimeAgo(snapshot.lastSuccessfulSyncAt)} description={snapshot.lastSuccessfulSyncAt ? "Last successful cloud backup." : "No successful backup found."} icon={<Cloud className="h-5 w-5" />} />
-        <StatCard label="Pending" value={pendingCount} description={pendingCount === 1 ? "1 change pending cloud backup." : `${pendingCount} changes pending cloud backup.`} icon={<Database className="h-5 w-5" />} tone={pendingCount > 0 ? "amber" : "green"} />
-        <StatCard label="Retry / review" value={`${failedCount} / ${conflictCount}`} description="Retry failed backup items. Review only if it remains blocked." icon={<AlertCircle className="h-5 w-5" />} tone={failedCount || conflictCount ? "red" : "green"} />
+        <StatCard label={t("sync.stat.internet")} value={snapshot.isBrowserOnline ? t("sync.stat.online") : t("sync.stat.offline")} description={snapshot.isBrowserOnline ? t("sync.stat.internetAvailable") : t("sync.stat.billingStillWorks")} icon={snapshot.isBrowserOnline ? <Wifi className="h-5 w-5" /> : <WifiOff className="h-5 w-5" />} tone={snapshot.isBrowserOnline ? "green" : "amber"} />
+        <StatCard label={t("sync.stat.backend")} value={snapshot.isBackendReachable ? t("sync.stat.online") : t("sync.stat.offline")} description={snapshot.isBackendReachable ? t("sync.stat.backupCanRun") : t("sync.stat.backupPaused")} icon={snapshot.isBackendReachable ? <Cloud className="h-5 w-5" /> : <CloudOff className="h-5 w-5" />} tone={snapshot.isBackendReachable ? "green" : "amber"} />
+        <StatCard label={t("sync.stat.lastBackup")} value={formatTimeAgo(loc, snapshot.lastSuccessfulSyncAt)} description={snapshot.lastSuccessfulSyncAt ? t("sync.stat.lastBackupYes") : t("sync.stat.lastBackupNo")} icon={<Cloud className="h-5 w-5" />} />
+        <StatCard label={t("sync.stat.pending")} value={pendingCount} description={pendingCount === 1 ? t("sync.stat.pendingOne") : t("sync.stat.pendingMany", { count: pendingCount })} icon={<Database className="h-5 w-5" />} tone={pendingCount > 0 ? "amber" : "green"} />
+        <StatCard label={t("sync.stat.retryReview")} value={`${failedCount} / ${conflictCount}`} description={t("sync.stat.retryReviewHint")} icon={<AlertCircle className="h-5 w-5" />} tone={failedCount || conflictCount ? "red" : "green"} />
       </StatsGrid>
 
       {snapshot.fleet && (
@@ -1451,16 +1518,14 @@ export default function SyncStatusPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Device and cloud settings</CardTitle>
-          <CardDescription>
-            Useful for checking which shop device is backing up data.
-          </CardDescription>
+          <CardTitle className="text-lg">{t("sync.settings.title")}</CardTitle>
+          <CardDescription>{t("sync.settings.subtitle")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border bg-background p-4">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <Smartphone className="h-4 w-4" /> Device ID
+                <Smartphone className="h-4 w-4" /> {t("sync.settings.deviceId")}
               </div>
               <div className="mt-3 min-h-11 rounded-xl bg-muted/70 p-3 font-mono text-xs leading-relaxed break-all">
                 {snapshot.deviceId}
@@ -1469,7 +1534,7 @@ export default function SyncStatusPage() {
             <ServerUrlEditor currentUrl={snapshot.apiBaseUrl} onSaved={() => setSnapshot((prev) => ({ ...prev, apiBaseUrl: getApiBaseUrl() }))} />
             <div className="rounded-xl border bg-background p-4 lg:col-span-2">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <ShieldCheck className="h-4 w-4" /> Subscription sync
+                <ShieldCheck className="h-4 w-4" /> {t("sync.settings.subscription")}
               </div>
               <div className="mt-3 rounded-xl bg-muted/70 p-3">
                 <Badge
@@ -1480,10 +1545,10 @@ export default function SyncStatusPage() {
                   }
                 >
                   {snapshot.subscriptionSyncAllowed === false
-                    ? "Sync not allowed"
+                    ? t("sync.settings.subscriptionNotAllowed")
                     : snapshot.subscriptionSyncAllowed === true
-                      ? "Sync allowed"
-                      : "Checking"}
+                      ? t("sync.settings.subscriptionAllowed")
+                      : t("sync.settings.subscriptionChecking")}
                 </Badge>
               </div>
             </div>
@@ -1491,7 +1556,7 @@ export default function SyncStatusPage() {
           {snapshot.serverStatus && (
             <details className="mt-4 rounded-xl border bg-muted/50 p-4 text-xs">
               <summary className="cursor-pointer font-medium text-muted-foreground">
-                Show server status details
+                {t("sync.settings.serverDetails")}
               </summary>
               <pre className="mt-3 max-h-72 overflow-auto rounded-xl bg-background p-4 whitespace-pre-wrap leading-relaxed text-muted-foreground">
                 {compactJson(snapshot.serverStatus)}
@@ -1505,16 +1570,16 @@ export default function SyncStatusPage() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <OperationList
-          title="Pending operations"
-          emptyText="No pending changes. Cloud backup queue is clear."
+          title={t("sync.ops.pendingTitle")}
+          emptyText={t("sync.ops.pendingEmpty")}
           operations={snapshot.pendingOperations}
           kind="pending"
           isSyncing={snapshot.isSyncing}
           onIgnoreOperation={(clientEventId) => void handleIgnoreOperation(clientEventId)}
         />
         <OperationList
-          title="Failed operations"
-          emptyText="No failed changes right now."
+          title={t("sync.ops.failedTitle")}
+          emptyText={t("sync.ops.failedEmpty")}
           operations={snapshot.failedOperations}
           kind="failed"
           isSyncing={snapshot.isSyncing}
@@ -1530,8 +1595,7 @@ export default function SyncStatusPage() {
 
       {snapshot.isLoading && (
         <div className="fixed bottom-4 right-4 rounded-full border bg-background px-4 py-2 text-sm shadow">
-          <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Checking sync
-          status...
+          <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> {t("sync.loading")}
         </div>
       )}
     </PageShell>

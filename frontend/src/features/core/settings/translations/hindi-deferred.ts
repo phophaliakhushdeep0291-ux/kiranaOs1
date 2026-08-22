@@ -21,6 +21,7 @@ import { settingsPagesHi } from "./settings-pages.hi";
 import { suppliersHi } from "./suppliers.hi";
 import { ordersHi } from "./orders.hi";
 import { shopTypesHi } from "./shop-types.hi";
+import { syncHi } from "./sync.hi";
 import { workflowsHi } from "./workflows.hi";
 
 export const hindiDeferredTranslations = {
@@ -35,6 +36,7 @@ export const hindiDeferredTranslations = {
   ...suppliersHi,
   ...ordersHi,
   ...shopTypesHi,
+  ...syncHi,
   ...workflowsHi,
 };
 
@@ -51,5 +53,6 @@ export const HI_DEFERRED_MODULES = {
   suppliers: suppliersHi,
   orders: ordersHi,
   shopTypes: shopTypesHi,
+  sync: syncHi,
   workflows: workflowsHi,
 } as const;

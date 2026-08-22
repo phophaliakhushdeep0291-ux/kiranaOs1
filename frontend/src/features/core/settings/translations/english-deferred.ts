@@ -33,6 +33,7 @@ import { restaurantEn } from "./restaurant";
 import { settingsPagesEn } from "./settings-pages";
 import { shopTypesEn } from "./shop-types";
 import { suppliersEn } from "./suppliers";
+import { syncEn } from "./sync";
 import { workflowsEn } from "./workflows";
 
 export const englishDeferredTranslations = {
@@ -47,6 +48,7 @@ export const englishDeferredTranslations = {
   ...suppliersEn,
   ...ordersEn,
   ...shopTypesEn,
+  ...syncEn,
   ...workflowsEn,
 };
 
@@ -63,5 +65,6 @@ export const EN_DEFERRED_MODULES = {
   suppliers: suppliersEn,
   orders: ordersEn,
   shopTypes: shopTypesEn,
+  sync: syncEn,
   workflows: workflowsEn,
 } as const;
