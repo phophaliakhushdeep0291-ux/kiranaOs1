@@ -12,7 +12,7 @@
 import { freezeStarterCatalog, type StarterCatalogItem } from "./starter-catalog";
 
 /** sha256 of the source CSV, line-ending and BOM normalised. Pins this file to that one. */
-export const KIRANA_STARTER_CATALOG_CHECKSUM = "0a8cb1e38486ff2a7e5711729161c18755fb47df5daaeacd533b1f1305b59d36";
+export const KIRANA_STARTER_CATALOG_CHECKSUM = "717e3aad4797e05b935c924beaed6e95fcd02e3ccf1eeba96f95cd0e04a7f43b";
 
 export const KIRANA_STARTER_CATALOG: readonly StarterCatalogItem[] = freezeStarterCatalog([
   { name: "Aashirvaad Shudh Chakki Atta 5kg", category: "Atta & Flour", unit: "packet", skuBarcode: "", mrp: 340, costPrice: 319.6, sellingPrice: 340, gstRate: 0, stockQuantity: 0, lowStockAlert: 5, reorderLevel: 10, hsn: "1101", brand: "Aashirvaad", aliases: ["atta", "आटा", "gehu atta", "wheat flour"], description: "", packSizeValue: 5, packSizeUnit: "kg", isLooseItem: false, isActive: true },

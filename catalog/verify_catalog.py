@@ -18,7 +18,11 @@ CSV = "kirana-starter-catalog.csv"
 
 EXPECTED_HEADERS = ["Name","Category","Unit","SKU/Barcode","MRP","Cost Price","Selling Price",
                     "GST %","Opening Stock","Low Stock Alert","Reorder Level","HSN","Brand",
-                    "Aliases","Description","Pack Size","Pack Unit","Loose Item","Active"]
+                    "Aliases","Description","Pack Size","Pack Unit","Loose Item","Active",
+                    # Appended as the importer gained them. "Pack Sizes" arrived
+                    # without this list being updated, so the verifier had been
+                    # failing on the committed CSV before "Image URL" was added.
+                    "Pack Sizes","Image URL"]
 
 UNITS = {"piece","dozen","set","pair","bundle","roll","sheet","kg","gram","litre","ml",
          "meter","yard","packet","pack","pouch","box","carton","bottle","jar","can","sachet",

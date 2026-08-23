@@ -33,8 +33,14 @@ export type ProductDraft = {
   name?: string;
   productName?: string;
   category?: string;
+  brand?: string;
   unit?: string;
+  packSizeValue?: number;
+  packSizeUnit?: string;
   barcode?: string;
+  hsn?: string;
+  mrp?: number;
+  gstRate?: number;
   aliases?: string[];
   costPrice?: number;
   sellingPrice?: number;
