@@ -437,4 +437,28 @@ export const customersEn = {
   "customers.trade.focus.restaurant": "A tab is meant to close the same day. One that is still open tomorrow needs a phone call, not another entry.",
   "customers.trade.focus.manufacturing": "Receivables here are on agreed terms, so ageing beyond those terms is the number that matters, not the total outstanding.",
   "customers.trade.focus.other": "Work the oldest balances first: money owed gets harder to collect with every week it stays on the books.",
+
+  // Voice dictation in the add/edit customer form. Questions a shopkeeper would
+  // actually ask across a counter, not field labels read aloud.
+  "customers.voice.start": "Fill by voice",
+  "customers.voice.listening": "Listening...",
+  "customers.voice.starting": "Starting the mic...",
+  "customers.voice.stop": "Stop",
+  "customers.voice.speakToggle": "Read the questions aloud",
+  "customers.voice.heard": "Heard: {text}",
+  "customers.voice.ready": "Everything needed is filled. Check it and press Save.",
+  "customers.voice.notUnderstood": "Did not catch that. Say it again, or say skip.",
+  "customers.voice.unsupported": "This browser cannot listen. Type the details instead.",
+  "customers.voice.hint": "Say it all at once, like Ramesh Kumar mobile 98765 43210 udhar limit 5000, or answer one question at a time.",
+  "customers.voice.controls": "Say skip to pass a question, save when you are done.",
+  "customers.voice.filled": "{count} details filled by voice.",
+  "customers.voice.ask.name": "What is the customer called?",
+  "customers.voice.ask.mobile": "Mobile number?",
+  "customers.voice.ask.address": "Address?",
+  "customers.voice.ask.udharLimit": "How much udhar can they take?",
+  "customers.voice.ask.gstNumber": "GST number?",
+  "customers.voice.ask.dueDate": "Payment due by when?",
+  "customers.voice.ask.promiseToPayDate": "When did they promise to pay?",
+  "customers.voice.ask.notes": "Anything to note about them?",
+  "customers.voice.ask.type": "Cash customer or khata?",
 } as const;
