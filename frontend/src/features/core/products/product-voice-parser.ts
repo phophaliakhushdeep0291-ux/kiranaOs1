@@ -421,6 +421,54 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
     }
   }
 
+  // Pass 2a — "tata salt 50 stock". Pass 1 only ever looks for a value AFTER its
+  // label, so a figure spoken BEFORE one was lost twice over: the number went
+  // nowhere and the stranded label word fell through into the name, which came
+  // out as "tata salt stock". Deliberately requires an actual number in front:
+  // claiming a bare label with no value would let this swallow a word that is
+  // genuinely part of what the thing is called.
+  for (const { field, tokens: label } of SORTED_LABELS) {
+    if (!NUMERIC_FIELDS.has(field) || explicit.has(field)) continue;
+    for (let index = 1; index < tokens.length; index += 1) {
+      if (!labelMatchesAt(tokens, index, label, consumed)) continue;
+      const valueAt = index - 1;
+      if (consumed.has(valueAt)) continue;
+      const value = spokenNumber(tokens[valueAt]);
+      if (value === undefined) continue;
+      applyNumeric(fields, field, value, undefined);
+      explicit.add(field);
+      claim(valueAt, index + label.length - 1);
+      break;
+    }
+  }
+
+  // Pass 2b — "chini 45 rupaye". A currency word IS the label; a shopkeeper
+  // saying a price out loud rarely also says "selling price". Both tokens were
+  // already being filtered out of the name, so the number simply vanished and the
+  // product saved with no price at all — silently, which is the worst way for a
+  // price to be wrong. Only fills a selling price nobody stated outright.
+  if (fields.sellingPrice === undefined && !explicit.has("sellingPrice")) {
+    for (let index = 0; index < tokens.length; index += 1) {
+      if (consumed.has(index)) continue;
+      const value = spokenNumber(tokens[index]);
+      if (value === undefined || value <= 0) continue;
+      // The currency word can lead or follow: "45 rupaye" and "rs 45" both occur.
+      const after = tokens[index + 1];
+      const before = index > 0 ? tokens[index - 1] : undefined;
+      const moneyAt = after !== undefined && MONEY_WORDS.has(after) && !consumed.has(index + 1)
+        ? index + 1
+        : before !== undefined && MONEY_WORDS.has(before) && !consumed.has(index - 1)
+          ? index - 1
+          : undefined;
+      if (moneyAt === undefined) continue;
+      // A figure already read as a pack size is a size, not a price.
+      if (unitOf(tokens[index + 1])) continue;
+      fields.sellingPrice = value;
+      claim(Math.min(index, moneyAt), Math.max(index, moneyAt));
+      break;
+    }
+  }
+
   // Pass 3 — the name is the residue: whatever no field claimed, minus the words
   // that only ever open a command. This is the whole point of the design; a field
   // this parser cannot read costs its own value and never pollutes the name.

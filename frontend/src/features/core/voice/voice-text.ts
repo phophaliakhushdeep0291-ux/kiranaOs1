@@ -109,6 +109,15 @@ export const NUMBER_WORDS: Record<string, number> = {
   thousand: 1000,
   aadha: 0.5,
   half: 0.5,
+  // Fractions a counter says constantly for weight. billing-voice-parser has had
+  // these for a while; this table did not, so the same shopkeeper saying
+  // "डेढ़ किलो चीनी" was understood at the till but filed a PRODUCT literally named
+  // "डेढ़ किलो चीनी" — the word fell through to the name because nothing read it as
+  // a quantity. They also make readSpokenAmount right for free: "डेढ़ सौ" is 150.
+  sava: 1.25, सवा: 1.25,
+  dedh: 1.5, "डेढ़": 1.5, डेढ: 1.5,
+  dhai: 2.5, ढाई: 2.5,
+  paun: 0.75, पौन: 0.75,
   एक: 1,
   दो: 2,
   तीन: 3,
