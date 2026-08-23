@@ -9,7 +9,6 @@ import {
   shouldRunScheduledNetworkWork,
 } from "@/lib/browser/multiTabCoordinator";
 
-const SYNC_INTERVAL_MS = 8_000;
 const SNAPSHOT_INTERVAL_MS = 60_000;
 const FOCUS_THROTTLE_MS = 2_000;
 const LOCAL_WRITE_SYNC_DELAY_MS = 250;
@@ -164,9 +163,17 @@ export function useMultiDeviceSync() {
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
 
-    intervalRef.current = window.setInterval(() => {
-      void run("interval");
-    }, SYNC_INTERVAL_MS);
+    // No interval of its own any more. This hook used to run a second full sync
+    // cycle every 8s alongside `useOfflineStatus`'s own loop; two schedulers with
+    // separate re-entrancy flags meant overlapping cycles pushing the same outbox
+    // rows. `useOfflineStatus` now owns the cadence for the whole tab (and adapts
+    // it to whether there is work), so what stays here is the part only this hook
+    // does: cross-tab BroadcastChannel notification, focus/online catch-up, and
+    // the periodic authoritative snapshot below.
+    const snapshotOnly = window.setInterval(() => {
+      void run("snapshot", { snapshot: true });
+    }, SNAPSHOT_INTERVAL_MS);
+    intervalRef.current = snapshotOnly;
 
     // First visible run after login/hydration. This is intentionally force=true so the
     // second device does not wait for the interval before catching up.

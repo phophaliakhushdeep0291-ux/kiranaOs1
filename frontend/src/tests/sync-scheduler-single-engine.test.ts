@@ -84,10 +84,38 @@ describe("sync scheduling runs one engine, not one per caller", () => {
     expect(body).not.toContain("retry_count: 0");
   });
 
-  it("keeps the two schedulers on their documented intervals", () => {
+  it("paces the sync loop by whether there is work, not by a fixed clock", () => {
     const offline = readFileSync("src/features/core/sync/useOfflineStatus.ts", "utf8");
+    // A till with a queued sale wants the next attempt in seconds; a till idle
+    // since breakfast should stop waking the radio. The ladder steps down only on
+    // a quiet tick and any queued work snaps it back to the top, so the busy case
+    // is FASTER than the old fixed 18s while the idle case is much cheaper.
+    // The ladder itself is real logic with its own behavioural test — see
+    // sync-cadence-ladder.test.ts. What this file pins is that the engine
+    // actually uses it rather than reintroducing a fixed clock.
+    expect(offline).toContain("syncDelayForStep(idleStep)");
+    expect(offline).toContain("idleStep = nextIdleStep(idleStep, hadWork);");
+    expect(offline).toContain("function resetSyncCadence()");
+    expect(offline).not.toContain("window.setInterval(() => {\n    void refreshCount();");
+    // Reset must be wired to both new local work and regaining the network.
+    const queueHandler = offline.slice(offline.indexOf("function handleQueueUpdated"));
+    expect(queueHandler.slice(0, queueHandler.indexOf("\n}"))).toContain("resetSyncCadence()");
+    const onlineHandler = offline.slice(offline.indexOf("function handleOnline"));
+    expect(onlineHandler.slice(0, onlineHandler.indexOf("\n}"))).toContain("resetSyncCadence()");
+  });
+
+  it("leaves exactly one scheduler owning the sync cadence", () => {
     const multi = readFileSync("src/lib/realtime/useMultiDeviceSync.tsx", "utf8");
-    expect(offline).toContain("const SYNC_INTERVAL_MS = 18_000");
-    expect(multi).toContain("const SYNC_INTERVAL_MS = 8_000");
+    // This hook used to run a second full cycle every 8s next to the engine's own
+    // loop. It keeps the jobs only it does — cross-tab broadcast, focus/online
+    // catch-up, and the periodic authoritative snapshot — but no sync interval.
+    expect(multi).not.toContain("SYNC_INTERVAL_MS");
+    expect(multi).toContain("const SNAPSHOT_INTERVAL_MS = 60_000");
+    expect(multi).toContain("BroadcastChannel");
+    // The one remaining timer is the snapshot, and it must stay on the snapshot
+    // interval rather than quietly becoming a sync loop again.
+    const timers = multi.split("window.setInterval").length - 1;
+    expect(timers).toBe(1);
+    expect(multi).toContain("}, SNAPSHOT_INTERVAL_MS);");
   });
 });

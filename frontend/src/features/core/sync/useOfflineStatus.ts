@@ -8,8 +8,8 @@ import {
   type BackendConnectionSnapshot,
 } from "@/features/core/sync/backend-health";
 import { shouldPassSharedThrottle, shouldRunScheduledNetworkWork } from "@/lib/browser/multiTabCoordinator";
+import { nextIdleStep, syncDelayForStep } from "@/features/core/sync/sync-cadence";
 
-const SYNC_INTERVAL_MS = 18_000;
 const BACKEND_STATUS_INTERVAL_MS = 8_000;
 const LOCAL_QUEUE_RECOVERY_THROTTLE_MS = 3_000;
 const LOCAL_QUEUE_RECOVERY_THROTTLE_KEY = "kirana.sync.localQueueRecovery.lastRun";
@@ -98,9 +98,48 @@ let scheduledSyncTimer: number | null = null;
 let bootSyncTimer: number | null = null;
 let bootRecoveryTimer: number | null = null;
 let queueRecoveryTimer: number | null = null;
-let syncIntervalId: number | null = null;
+let syncTimer: number | null = null;
 let backendIntervalId: number | null = null;
 let running = false;
+let idleStep = 0;
+
+function scheduledSyncDelay() {
+  return syncDelayForStep(idleStep);
+}
+
+// Called whenever work appears or the connection changes, so the next attempt is
+// the fast one rather than whatever the idle ramp had drifted to.
+function resetSyncCadence() {
+  if (idleStep === 0) return;
+  idleStep = 0;
+  if (running) armScheduledSync();
+}
+
+function armScheduledSync() {
+  if (!running) return;
+  if (syncTimer !== null) window.clearTimeout(syncTimer);
+  syncTimer = window.setTimeout(() => {
+    syncTimer = null;
+    void runScheduledTick();
+  }, scheduledSyncDelay());
+}
+
+async function runScheduledTick() {
+  try {
+    const counts = await refreshCount();
+    const hadWork = Boolean(counts && counts.totalBlocking > 0);
+    const canRun = navigator.onLine && document.visibilityState === "visible";
+    if (canRun && shouldRunScheduledNetworkWork()) await syncNow();
+    if (canRun) await recoverLocalQueueIfNeeded();
+    // Step down only on a genuinely quiet tick. A tick that found work stays at
+    // the top of the ladder so a queue that needs several passes gets them.
+    idleStep = nextIdleStep(idleStep, hadWork);
+  } catch {
+    // A failed tick must not stop the loop — that is how a queue goes quiet.
+  } finally {
+    armScheduledSync();
+  }
+}
 
 async function refreshCount(): Promise<SyncQueueCounts | null> {
   try {
@@ -156,6 +195,7 @@ function scheduleSync(delayMs: number) {
 }
 
 function handleOnline() {
+  resetSyncCadence();
   if (shouldRunScheduledNetworkWork()) void probeBackendConnection({ force: true }).then(setBackendStatus);
   scheduleSync(500);
 }
@@ -173,6 +213,9 @@ function handleQueueUpdated(event?: Event) {
   // only the follow-up cycle is skipped.
   const detail = (event as CustomEvent | undefined)?.detail as { type?: string } | undefined;
   if (detail?.type === "sync") return;
+  // New local work: whatever the idle ramp had drifted to, the next scheduled
+  // attempt should be the fast one.
+  resetSyncCadence();
   if (navigator.onLine && document.visibilityState === "visible") {
     scheduleSync(450);
     if (queueRecoveryTimer !== null) window.clearTimeout(queueRecoveryTimer);
@@ -219,11 +262,8 @@ function start() {
     void recoverLocalQueueIfNeeded();
   }, 1_000);
 
-  syncIntervalId = window.setInterval(() => {
-    void refreshCount();
-    if (navigator.onLine && document.visibilityState === "visible" && shouldRunScheduledNetworkWork()) void syncNow();
-    if (navigator.onLine && document.visibilityState === "visible") void recoverLocalQueueIfNeeded();
-  }, SYNC_INTERVAL_MS);
+  idleStep = 0;
+  armScheduledSync();
   backendIntervalId = window.setInterval(() => {
     if (document.visibilityState === "visible" && shouldRunScheduledNetworkWork()) void probeBackendConnection().then(setBackendStatus);
   }, BACKEND_STATUS_INTERVAL_MS);
@@ -240,16 +280,16 @@ function stop() {
   window.removeEventListener("kirana:backend-status-changed", handleBackendStatus);
   document.removeEventListener("visibilitychange", handleVisibility);
 
-  for (const timer of [scheduledSyncTimer, bootSyncTimer, bootRecoveryTimer, queueRecoveryTimer]) {
+  for (const timer of [scheduledSyncTimer, bootSyncTimer, bootRecoveryTimer, queueRecoveryTimer, syncTimer]) {
     if (timer !== null) window.clearTimeout(timer);
   }
   scheduledSyncTimer = null;
   bootSyncTimer = null;
   bootRecoveryTimer = null;
   queueRecoveryTimer = null;
-  if (syncIntervalId !== null) window.clearInterval(syncIntervalId);
+  syncTimer = null;
+  idleStep = 0;
   if (backendIntervalId !== null) window.clearInterval(backendIntervalId);
-  syncIntervalId = null;
   backendIntervalId = null;
 }
 

@@ -50,6 +50,63 @@ Two consequences worth holding on to:
   two rows — anything that dedupes products must match on it (see `mergeProducts`
   in `features/core/products/queries.ts`).
 
+#### How a sync actually gets scheduled
+
+Worth knowing before you touch anything in `features/core/sync`, because the
+shape is not obvious and reading one file will mislead you.
+
+**One scheduler owns the cadence.** `useOfflineStatus` paces the loop; manual
+retries, the queue-recovery path and `useMultiDeviceSync`'s focus/reconnect
+catch-up all funnel into the same `runSyncCycle()`. It used to be two schedulers
+— an 18s one here and an 8s one in `useMultiDeviceSync` — whose separate
+re-entrancy flags did not compose, so they ran overlapping cycles over the same
+outbox rows.
+
+**Cadence adapts to whether there is work.** The ladder is 2.5s → 8s → 20s → 45s
+(`sync-cadence.ts`), stepping down one rung per genuinely quiet tick and snapping
+back to the top the moment anything is queued or the network returns. So a queued
+sale is retried faster than the old fixed interval managed, while an idle till
+stops waking the radio. `useMultiDeviceSync` keeps only what is uniquely its own:
+the cross-tab BroadcastChannel, focus/online catch-up, and the 60s authoritative
+snapshot.
+
+**The incremental pull is currently inert.** Nothing in the backend writes
+`changeLog` — `sync.service.js` only ever reads it — so `/sync/pull` always
+returns an empty page and the stored cursor stays `"0"`. Real device-to-device
+propagation therefore rides on the 60s snapshot hydration, not the pull. Wiring
+`changeLog` on every mutation path is the change that would make cross-device
+sync genuinely incremental. Note the ack must keep firing regardless: it is what
+writes `lastSeenAt`/`lastActiveAt` on the device row, which device health and
+remote support read.
+
+- `useOfflineStatus` is a **subscription to one module-level engine**, not an
+  engine per caller. Twenty components call it and most only want `isOnline`; when
+  the interval and listeners lived in the hook body, each mount ran its own engine
+  and the `useRef` re-entrancy guard was private to each, so they overlapped.
+- `runSyncCycle` is **serialised in `sync-engine.ts`**. Callers arriving mid-cycle
+  are coalesced, not dropped — one of them is the shopkeeper pressing Retry — and
+  at most one follow-up is chained.
+- Scheduled work is gated on `shouldRunScheduledNetworkWork()`: **visible AND
+  background leader**. A hidden tab does no scheduled sync, by design. Manual
+  calls bypass the gate.
+
+**Traps that have already cost time:**
+
+- A finished sync announces itself on `kirana:local-data-changed`, the same
+  channel a local edit uses. Treating that as fresh work schedules another sync,
+  which announces itself — a loop. Filter on `detail.type === "sync"`.
+- `shouldPassSharedThrottle` **consumes** its token when it passes. Take it only
+  once you know you will do the work, or you lock every other tab out for the
+  interval having done nothing.
+- An outbox row is eligible for push only when `PENDING`, or `FAILED` under the
+  retry cap with its backoff elapsed. **`SYNCING` is not eligible** — a stranded
+  row waits for `repairStaleSyncingOutboxEvents` (2 min), and that margin is
+  deliberate: repairing sooner risks re-pushing an operation the server is still
+  processing.
+- The retry ladder is 2.5s, 5, 10, 20, 40, 80 then 120s for ordinary work, capped
+  at 30s for bills, and retires at 12 attempts. Reconnecting clears the backoff
+  but **not** the count, so a genuinely refused operation still retires.
+
 ### 2. Money is paise, and storage is not yet exact
 
 Arithmetic routes through paise helpers. **Storage does not**: most money columns
