@@ -180,7 +180,9 @@ describe("tenant/store isolation", () => {
     );
     expect(
       vi.mocked(offlineDB.updatePendingEventStatus),
-    ).toHaveBeenNthCalledWith(1, ["op_current"], "SYNCING", undefined);
+    // Trailing arg is the optional `deferMs` bag used to hold a row back after a
+    // transient failure without spending one of its twelve retry attempts.
+    ).toHaveBeenNthCalledWith(1, ["op_current"], "SYNCING", undefined, undefined);
   });
 
   it("reports ignore other tenant/store data", async () => {

@@ -31,7 +31,51 @@ async function emptySyncResult(cursor?: string | number | null): Promise<SyncRun
   };
 }
 
-export async function runSyncCycle(): Promise<SyncRunResult> {
+let inFlightCycle: Promise<SyncRunResult> | null = null;
+let queuedCycle: Promise<SyncRunResult> | null = null;
+
+/**
+ * Only one sync cycle runs at a time in a tab, whoever asks.
+ *
+ * Two independent schedulers drive this: `useOfflineStatus` on an 18s interval
+ * and `useMultiDeviceSync` on an 8s one, plus manual retries and the recovery
+ * path. Each kept its own re-entrancy flag, and separate flags do not compose —
+ * they ran overlapping cycles that pushed the same outbox rows and re-pulled the
+ * same pages. Measured on an idle Products page: cycles arriving in threes on the
+ * same millisecond.
+ *
+ * Callers are coalesced rather than dropped, which matters because one of them is
+ * the shopkeeper pressing Retry. Asking while a cycle runs chains exactly one
+ * follow-up, so work enqueued after the running cycle already read the queue
+ * still gets a pass, and a hundred callers still only cost one extra cycle.
+ */
+export function runSyncCycle(): Promise<SyncRunResult> {
+  if (!inFlightCycle) {
+    inFlightCycle = runExclusiveSyncCycle();
+    return inFlightCycle;
+  }
+  if (!queuedCycle) {
+    queuedCycle = inFlightCycle
+      .catch(() => undefined)
+      .then(() => {
+        queuedCycle = null;
+        return runSyncCycle();
+      });
+  }
+  return queuedCycle;
+}
+
+async function runExclusiveSyncCycle(): Promise<SyncRunResult> {
+  try {
+    return await runSyncCycleBody();
+  } finally {
+    // Cleared before this promise settles, so a queued follow-up always finds the
+    // slot free and starts a genuinely fresh cycle.
+    inFlightCycle = null;
+  }
+}
+
+async function runSyncCycleBody(): Promise<SyncRunResult> {
   await offlineDB.init();
   if (typeof window !== "undefined" && !getStoredAccessToken() && !getStoredRefreshToken()) return emptySyncResult();
 

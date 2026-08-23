@@ -265,7 +265,7 @@ vi.mock("@/lib/offline/db", () => {
       scopedRows("sync_outbox").filter(isRetryable).length,
     ),
     updatePendingEventStatus: vi.fn(
-      async (clientEventIds: string[], status: string, errorMessage?: string) => {
+      async (clientEventIds: string[], status: string, errorMessage?: string, options?: { deferMs?: number }) => {
         const idSet = new Set(clientEventIds);
         for (const event of dbState.rows("sync_outbox")) {
           if (!idSet.has(String(event.clientEventId)) || !dbState.matchesScope(event)) {
@@ -285,7 +285,9 @@ vi.mock("@/lib/offline/db", () => {
                   ? "failed"
                   : status === "CONFLICT"
                     ? "conflict"
-                    : event.sync_status;
+                    : status === "PENDING"
+                      ? "pending_sync"
+                      : event.sync_status;
           event.retry_count = retryCount;
           event.attempts = retryCount;
           event.error_message = status === "SYNCED" ? null : (errorMessage ?? null);
@@ -386,22 +388,27 @@ describe("sync failure handling", () => {
     listSyncConflictsMock.mockResolvedValue({ conflicts: [], summary: { open: 0, resolved: 0, dismissed: 0 }, pagination: { hasMore: false, nextCursor: null, limit: 100 } });
   });
 
-  it("failed bill sync keeps bill and marks operation FAILED", async () => {
+  it("keeps the bill and leaves the operation queued when the backend is unreachable", async () => {
     seedEntity("bills", "bill_local_fail", { total: 320, billNo: "B-FAIL" });
     const event = seedOutbox("CREATE_BILL", "bill", "bill_local_fail");
     mockedSyncPush.mockRejectedValueOnce(new Error("backend down"));
 
     const result = await pushPendingOutboxOperations();
 
-    expect(result).toEqual(expect.objectContaining({ pushed: 0, failed: 1 }));
+    // The bill was never judged — the backend simply was not there. Marking it
+    // FAILED would spend one of the twelve attempts that retire an operation
+    // from automatic sync, so an unreachable backend could permanently strand a
+    // day of takings. It stays queued, with the error recorded for diagnosis.
+    expect(result).toEqual(expect.objectContaining({ pushed: 0, failed: 0, skipped: 1 }));
     expect(scopedRows("bills")).toEqual([
       expect.objectContaining({ id: "bill_local_fail", total: 320 }),
     ]);
     expect(scopedRows("sync_outbox")).toEqual([
       expect.objectContaining({
         clientEventId: event.clientEventId,
-        status: "FAILED",
-        sync_status: "failed",
+        status: "PENDING",
+        sync_status: "pending_sync",
+        retry_count: 0,
         error_message: "backend down",
       }),
     ]);

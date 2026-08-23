@@ -265,7 +265,7 @@ vi.mock("@/lib/offline/db", () => {
       ).length,
     ),
     updatePendingEventStatus: vi.fn(
-      async (clientEventIds: string[], status: string, errorMessage?: string) => {
+      async (clientEventIds: string[], status: string, errorMessage?: string, options?: { deferMs?: number }) => {
         const idSet = new Set(clientEventIds);
         for (const event of dbState.rows("sync_outbox")) {
           if (!idSet.has(String(event.clientEventId)) || !dbState.matchesScope(event)) {
@@ -285,14 +285,22 @@ vi.mock("@/lib/offline/db", () => {
                   ? "failed"
                   : status === "CONFLICT"
                     ? "conflict"
-                    : event.sync_status;
+                    : status === "PENDING"
+                      ? "pending_sync"
+                      : event.sync_status;
           event.retry_count = retryCount;
           event.attempts = retryCount;
           event.error_message = status === "SYNCED" ? null : (errorMessage ?? null);
           event.last_error = status === "SYNCED" ? null : (errorMessage ?? null);
           event.last_attempt_at = "2026-06-06T11:00:00.000Z";
           event.next_retry_at =
-            status === "FAILED" ? "2026-06-06T10:59:00.000Z" : null;
+            status === "FAILED"
+              ? "2026-06-06T10:59:00.000Z"
+              // A transient failure defers the row without marking it FAILED, so
+              // the double has to model that or it cannot tell the two apart.
+              : (options?.deferMs ?? 0) > 0
+                ? "2026-06-06T11:00:30.000Z"
+                : null;
         }
       },
     ),
@@ -450,22 +458,49 @@ describe("sync engine reliability", () => {
     expect(request.events[0]?.idempotency_key).toBe("idem-product-1");
   });
 
-  it("failed operations become FAILED, not deleted", async () => {
+  it("keeps a network-failed operation queued and retryable, not deleted and not penalised", async () => {
     seedOutbox();
     mockedSyncPush.mockRejectedValueOnce(new Error("network down"));
 
     const result = await pushPendingOutboxOperations();
 
-    expect(result).toEqual(expect.objectContaining({ pushed: 0, failed: 1 }));
+    // This used to assert FAILED with retry_count 1. It no longer does, and the
+    // change is the point: retry_count only rises on FAILED, and twelve of those
+    // retire an operation from automatic sync for good. A dropped connection is
+    // not the operation's fault, so a shop on patchy wifi could otherwise strand
+    // a morning of sales in about a dozen blips. The row stays PENDING — still
+    // queued, still retried, no attempt spent — and is reported as skipped rather
+    // than failed so a wifi blip does not light the "needs review" banner.
+    expect(result).toEqual(expect.objectContaining({ pushed: 0, failed: 0, skipped: 1 }));
     expect(scopedRows("sync_outbox")).toHaveLength(1);
     expect(scopedRows("sync_outbox")[0]).toEqual(
       expect.objectContaining({
         clientEventId: "op_product_1",
-        status: "FAILED",
-        sync_status: "failed",
-        retry_count: 1,
+        status: "PENDING",
+        sync_status: "pending_sync",
+        retry_count: 0,
         idempotency_key: "idem-product-1",
       }),
+    );
+    // Deferred rather than hammered: a server that is 500ing should not be hit
+    // again on the very next cycle.
+    expect(scopedRows("sync_outbox")[0].next_retry_at).toBeTruthy();
+  });
+
+  it("still parks an operation the server actually refused", async () => {
+    // The other half of the contract: a definite verdict (a 4xx) means retrying
+    // the same bytes can never succeed, so it must stop and wait for a human
+    // instead of burning twelve attempts against an endpoint saying no.
+    seedOutbox();
+    mockedSyncPush.mockRejectedValueOnce(
+      Object.assign(new Error("Validation failed"), { status: 400 }),
+    );
+
+    const result = await pushPendingOutboxOperations();
+
+    expect(result).toEqual(expect.objectContaining({ pushed: 0, failed: 1 }));
+    expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({ status: "FAILED", sync_status: "failed", retry_count: 1 }),
     );
   });
 

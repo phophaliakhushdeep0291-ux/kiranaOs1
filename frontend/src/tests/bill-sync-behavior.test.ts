@@ -233,19 +233,21 @@ vi.mock("@/lib/offline/db", () => {
     }),
     getPendingEvents: vi.fn(async () => dbState.clone(scopedRows("sync_outbox").filter(isPendingNow).sort((a, b) => Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0)))),
     getPendingCount: vi.fn(async () => scopedRows("sync_outbox").filter((event) => ["PENDING", "FAILED"].includes(String(event.status))).length),
-    updatePendingEventStatus: vi.fn(async (clientEventIds: string[], status: string, errorMessage?: string) => {
+    updatePendingEventStatus: vi.fn(async (clientEventIds: string[], status: string, errorMessage?: string, options?: { deferMs?: number }) => {
       const idSet = new Set(clientEventIds);
       for (const event of dbState.rows("sync_outbox")) {
         if (!idSet.has(String(event.clientEventId)) || !dbState.matchesScope(event)) continue;
         const retryCount = status === "FAILED" ? Number(event.retry_count ?? 0) + 1 : Number(event.retry_count ?? 0);
         event.status = status;
-        event.sync_status = status === "SYNCING" ? "syncing" : status === "SYNCED" ? "synced" : status === "FAILED" ? "failed" : status === "CONFLICT" ? "conflict" : event.sync_status;
+        event.sync_status = status === "SYNCING" ? "syncing" : status === "SYNCED" ? "synced" : status === "FAILED" ? "failed" : status === "CONFLICT" ? "conflict" : status === "PENDING" ? "pending_sync" : event.sync_status;
         event.retry_count = retryCount;
         event.attempts = retryCount;
         event.error_message = status === "SYNCED" ? null : errorMessage ?? null;
         event.last_error = status === "SYNCED" ? null : errorMessage ?? null;
         event.last_attempt_at = "2026-06-06T09:30:00.000Z";
-        event.next_retry_at = status === "FAILED" ? "2026-06-06T09:29:00.000Z" : null;
+        // A transient failure defers without marking FAILED, so the double must
+        // model that too or it cannot tell a wifi blip from a rejection.
+        event.next_retry_at = status === "FAILED" ? "2026-06-06T09:29:00.000Z" : (options?.deferMs ?? 0) > 0 ? "2026-06-06T09:30:30.000Z" : null;
       }
     }),
   };
@@ -614,12 +616,16 @@ describe("bill sync behavior", () => {
 
     const result = await pushPendingOutboxOperations();
 
-    expect(result).toEqual(expect.objectContaining({ pushed: 0, failed: 1, skipped: 0 }));
-    expect(scopedRows("bills")).toContainEqual(expect.objectContaining({ id: bill.id, local_id: bill.id, sync_status: "failed", deleted_at: null, isSynced: false }));
+    // "backend offline" is a transient failure: the bill was never judged, so it
+    // stays queued rather than being marked failed and counted toward the twelve
+    // attempts that retire an operation. A bill is the one thing that must never
+    // quietly stop trying to reach the cloud.
+    expect(result).toEqual(expect.objectContaining({ pushed: 0, failed: 0, skipped: 1 }));
+    expect(scopedRows("bills")).toContainEqual(expect.objectContaining({ id: bill.id, local_id: bill.id, sync_status: "pending_sync", deleted_at: null, isSynced: false }));
     expect(activeRows("bill_items")).toEqual([expect.objectContaining({ bill_id: bill.id })]);
     expect(activeRows("payments")).toEqual([expect.objectContaining({ bill_id: bill.id })]);
     expect(activeRows("inventory_movements")).toEqual([expect.objectContaining({ billId: bill.id, reference_id: bill.id })]);
-    expect(scopedRows("sync_outbox")).toContainEqual(expect.objectContaining({ clientEventId: createBillOutbox?.clientEventId, operation_type: "CREATE_BILL", status: "FAILED", sync_status: "failed", retry_count: 1, entity_id: bill.id }));
+    expect(scopedRows("sync_outbox")).toContainEqual(expect.objectContaining({ clientEventId: createBillOutbox?.clientEventId, operation_type: "CREATE_BILL", status: "PENDING", sync_status: "pending_sync", retry_count: 0, entity_id: bill.id }));
     expect(scopedRows("sync_outbox").find((row) => row.clientEventId === createBillOutbox?.clientEventId)?.payload).toEqual(expect.objectContaining({ localBillId: bill.id }));
   });
 
