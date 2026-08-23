@@ -75,6 +75,13 @@ export const PRODUCT_IMPORT_COLUMNS: ImportColumn[] = [
   // per row; and one row per product rather than one per pack, because a pack is not a
   // product here — it is a selling unit drawing on the product's single pool of stock.
   { header: "Pack Sizes", field: "sellingUnits", example: "packet 500 gram @ 30 | packet 5 kg @ 265" },
+  // A link, never image bytes. A pasted data URL would put ~24 kB of base64 into
+  // the product row for every line of the sheet, and that row is carried in full
+  // by every sync payload and every catalogue re-download. Scanning a barcode
+  // fills this automatically from the product lookup; the column exists so a shop
+  // that already has its own photo URLs can bring them, and so the starter
+  // catalogue can carry them once barcodes are sourced for it.
+  { header: "Image URL", field: "imageUrl", example: "https://example.com/tata-salt.jpg" },
 ];
 
 const COLUMN_ALIASES: Partial<Record<ProductImportField, string[]>> = {
@@ -278,6 +285,27 @@ function parseImportNumber(rawValue: string): number {
   return Number.isFinite(number) ? (parenthesised ? -number : number) : Number.NaN;
 }
 
+/**
+ * A link to a picture, or nothing.
+ *
+ * Deliberately refuses a `data:` URL. Someone exporting from another tool can
+ * easily produce a sheet with base64 images inlined, and accepting those would
+ * put ~24 kB into every product row — a cost paid again in each device's
+ * IndexedDB, in every sync payload, and in every catalogue re-download. An
+ * unusable value is dropped rather than failing the row: a bad image link is not
+ * a reason to reject a product someone is trying to stock.
+ */
+function importedImageUrl(value: string | undefined): string {
+  const raw = (value ?? "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 function parseImportBoolean(value: string, defaultValue: boolean): boolean {
   const normalised = value.trim().toLowerCase();
   if (!normalised) return defaultValue;
@@ -472,7 +500,7 @@ function rowToFormData(
     drugSchedule: null,
     reorderLevel: numberValue("reorderLevel"),
     description: (values.description ?? "").trim() || undefined,
-    imageUrl: "",
+    imageUrl: importedImageUrl(values.imageUrl),
     isLooseItem: parseImportBoolean(values.isLooseItem ?? "", false),
     isActive: parseImportBoolean(values.isActive ?? "", true),
   };

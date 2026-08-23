@@ -84,6 +84,19 @@ const CELL: Partial<Record<ProductImportField, (item: StarterCatalogItem) => str
   // a shop sells is a per-shop fact — guessing that every kirana also stocks the 5 kg
   // bag would put a price on the shelf that nobody chose.
   sellingUnits: () => "",
+  // Deliberately blank, and this one was measured rather than assumed. Matching
+  // these 560 rows to Open Food Facts by brand and name was tried and rejected:
+  // it landed 1 of 18 on staples and 4 of 18 on the best-covered brands, and the
+  // near misses were confidently wrong — Fortune Atta matched "Fortune Besan",
+  // Rajdhani Maida matched "Rajdhani suji", Amul Ghee matched "Amul Butter". A
+  // wrong packet on the billing tile is worse than no packet at all, so the
+  // column stays empty until the rows carry barcodes.
+  //
+  // Barcode is the real unlock: none of these 560 rows has one, and with one the
+  // lookup is exact — Open Food Facts holds 22,628 Indian products and 99% of a
+  // sampled hundred had a front image. Fill `skuBarcode` and the product form
+  // fetches the picture itself; nothing more is needed here.
+  imageUrl: () => "",
 };
 
 /**
