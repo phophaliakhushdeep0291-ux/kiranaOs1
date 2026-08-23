@@ -107,6 +107,24 @@ remote support read.
   at 30s for bills, and retires at 12 attempts. Reconnecting clears the backoff
   but **not** the count, so a genuinely refused operation still retires.
 
+**The invariant that keeps a till's queue alive:** a failure that is not the
+operation's fault must never be able to retire it. `retry_count` rises only on
+`FAILED`, and twelve of those remove a row from automatic sync for good — so
+before this was separated, a shop on patchy wifi could strand a morning of sales
+in about a dozen blips, recoverable only from the Sync Status screen. Push
+failures are therefore classified (`sync-failure-classification.ts`):
+
+| | Meaning | Outbox result |
+|---|---|---|
+| **Transient** — no status, 5xx, 408, 429, 401 | never got a verdict | back to `PENDING`, deferred, **no attempt spent**, reported as `skipped` |
+| **Permanent** — a 4xx verdict | the server read it and refused | `FAILED`, parked for a human immediately |
+
+Two consequences worth holding on to: a wifi blip no longer lights the "needs
+review" banner, and a rejected operation stops wasting twelve attempts against an
+endpoint that will keep saying no. Setting a row back to `PENDING` also sets
+`sync_status: "pending_sync"` — it used to keep its old value, leaving a requeued
+row reading `syncing` forever and eventually swept up as abandoned.
+
 ### 2. Money is paise, and storage is not yet exact
 
 Arithmetic routes through paise helpers. **Storage does not**: most money columns

@@ -484,7 +484,16 @@ function isOutboxPendingNow(
     event.status === "PENDING" || event.sync_status === "pending_sync";
   const isRetryableFailed =
     event.status === "FAILED" || event.sync_status === "failed";
-  if (isPending) return true;
+  if (isPending) {
+    // A PENDING row normally has no next_retry_at and is due immediately. One is
+    // set only when a transient failure (network down, 5xx) deferred the row
+    // WITHOUT spending its retry budget — honour that, or a 500-ing server gets
+    // hammered every cycle. An explicit Retry clears the field, so a human still
+    // outranks the wait.
+    if (!event.next_retry_at) return true;
+    const pendingRetryAt = new Date(event.next_retry_at).getTime();
+    return !Number.isFinite(pendingRetryAt) || pendingRetryAt <= now;
+  }
   if (!isRetryableFailed) return false;
   if ((event.retry_count ?? event.attempts ?? 0) >= MAX_AUTOMATIC_RETRY_ATTEMPTS) return false;
   if (!event.next_retry_at) return true;
@@ -871,6 +880,10 @@ class OfflineDBFacade {
     clientEventIds: string[],
     status: SyncOutboxStatus,
     errorMessage?: string,
+    // `deferMs` lets a caller hold a row back without marking it FAILED, which is
+    // what a transient network/5xx failure needs: retry later, but do not spend
+    // an attempt from the twelve that retire an operation for good.
+    options?: { deferMs?: number },
   ): Promise<void> {
     await this.init();
     if (clientEventIds.length === 0) return;
@@ -885,7 +898,7 @@ class OfflineDBFacade {
         const retryDelayMs =
           status === "FAILED"
             ? retryDelayForFailedEvent(row, retryCount)
-            : 0;
+            : (options?.deferMs ?? 0);
         // Only on SYNCED. A FAILED op is retried from this very payload, so the PIN has
         // to survive until the push actually lands; a CONFLICT may still be re-pushed by
         // resolution. Once it is synced the authorisation is spent.
@@ -903,14 +916,20 @@ class OfflineDBFacade {
                   ? "failed"
                   : status === "CONFLICT"
                     ? "conflict"
-                    : row.sync_status,
+                    // PENDING used to fall through to the previous value, which
+                    // left a row re-queued after a transient failure reading
+                    // `syncing` forever — the stale-SYNCING sweep would then pick
+                    // it up as abandoned. An explicit PENDING means pending.
+                    : status === "PENDING"
+                      ? "pending_sync"
+                      : row.sync_status,
           retry_count: retryCount,
           attempts: retryCount,
           error_message: status === "SYNCED" ? null : (errorMessage ?? null),
           last_error: status === "SYNCED" ? null : (errorMessage ?? null),
           last_attempt_at: now,
           next_retry_at:
-            status === "FAILED"
+            status === "FAILED" || retryDelayMs > 0
               ? new Date(Date.now() + retryDelayMs).toISOString()
               : null,
         });

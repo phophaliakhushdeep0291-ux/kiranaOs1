@@ -11,6 +11,10 @@ import { syncPush } from "@/features/core/sync/api";
 import { reconcileSyncedBillFromPush } from "@/features/core/sync/bill-reconciliation";
 import { storeConflict } from "@/features/core/sync/sync-conflicts";
 import {
+  isTransientSyncFailure,
+  transientRetryDelayMs,
+} from "@/features/core/sync/sync-failure-classification";
+import {
   applyIdMappingsFromResponse,
   collectUnmappedLocalIds,
   deepReplaceMappedIds,
@@ -72,11 +76,13 @@ async function updateOutboxStatus(
   events: PendingSyncEvent[],
   status: SyncOutboxStatus,
   message?: string,
+  options?: { deferMs?: number },
 ): Promise<void> {
   await offlineDB.updatePendingEventStatus(
     events.map((event) => event.clientEventId),
     status,
     message,
+    options,
   );
   if (status !== "SYNCED") await updateBusinessRowsForOutboxStatus(events, status).catch(() => undefined);
 }
@@ -501,11 +507,25 @@ export async function pushPendingOutboxOperations(): Promise<{
       error instanceof Error
         ? error.message
         : "Network/server error during push sync";
-    await updateOutboxStatus(
-      prepared.map((item) => item.event),
-      "FAILED",
-      message,
-    );
+    const events = prepared.map((item) => item.event);
+
+    // The whole batch failed, so nothing here was individually judged. If the
+    // cause is transient — the request never got a verdict, or the server did
+    // not answer properly — these operations are not suspect and must not spend
+    // an attempt from the twelve that retire one for good. A shop on patchy wifi
+    // was otherwise able to strand a morning of sales in about a dozen blips,
+    // recoverable only from a screen nobody opens until something is wrong.
+    if (isTransientSyncFailure(error)) {
+      const attempt = Math.max(0, ...events.map((event) => event.retry_count ?? event.attempts ?? 0));
+      await updateOutboxStatus(events, "PENDING", message, {
+        deferMs: transientRetryDelayMs(attempt),
+      });
+      // Reported as skipped, not failed: nothing was rejected, and counting it as
+      // a failure is what lights the "needs review" banner for a wifi blip.
+      return { pushed: 0, failed: 0, conflicts: 0, skipped: skipped + events.length };
+    }
+
+    await updateOutboxStatus(events, "FAILED", message);
     return { pushed: 0, failed: prepared.length, conflicts: 0, skipped };
   }
 }
