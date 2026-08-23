@@ -15,7 +15,7 @@
 import type { TranslationKey } from "@/features/core/settings/i18n";
 import type { ProductFormData } from "./pages/product-form-state";
 import { mergeDraftIntoProductForm } from "./pages/product-form-state";
-import { normalizeProductVoiceText, type ProductVoiceField, type ProductVoiceFields } from "./product-voice-parser";
+import type { ProductVoiceField, ProductVoiceFields } from "./product-voice-parser";
 
 /**
  * What gets asked, in order.
@@ -57,43 +57,6 @@ export const PRODUCT_VOICE_PROMPT_KEYS: Record<ProductVoiceField, TranslationKey
   wholesalePrice: "products.voice.ask.wholesalePrice",
   lowStockAlert: "products.voice.ask.lowStockAlert",
 };
-
-export type ProductVoiceControl = "skip" | "stop" | "save" | "none";
-
-const SKIP_WORDS = new Set([
-  "skip",
-  "next",
-  "pass",
-  "chhodo",
-  "chodo",
-  "aage",
-  "छोड़ो",
-  "छोड़",
-  "आगे",
-  "अगला",
-]);
-
-const STOP_WORDS = new Set(["stop", "cancel", "quit", "band", "bas", "बस", "रुको", "बंद", "रोको"]);
-
-const SAVE_WORDS = new Set(["save", "done", "finish", "ok", "theek", "sahi", "सेव", "बचाओ", "हो गया", "ठीक"]);
-
-/**
- * Whether a reply is a command about the conversation rather than an answer to it.
- *
- * Checked on the WHOLE utterance, not on any word inside it: "save" appearing in
- * "sarson ka tel save" is part of a sentence, while "save" alone is an
- * instruction. Anything longer than the command itself is treated as an answer,
- * which is the safe direction to be wrong in — a misread answer is visible and
- * editable, a misread "stop" ends the session and loses the thread.
- */
-export function readVoiceControlWord(spoken: string): ProductVoiceControl {
-  const text = normalizeProductVoiceText(spoken);
-  if (!text) return "none";
-  if (SKIP_WORDS.has(text)) return "skip";
-  if (STOP_WORDS.has(text)) return "stop";
-  if (SAVE_WORDS.has(text)) return "save";
-  return "none";
-}
 
 function hasName(values: Pick<ProductFormData, "name">) {
   return String(values.name ?? "").trim().length > 0;

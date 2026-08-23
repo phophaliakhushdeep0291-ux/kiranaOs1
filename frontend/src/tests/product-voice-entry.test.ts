@@ -7,8 +7,8 @@ import {
   applyProductVoiceFields,
   isProductReadyToSave,
   nextProductVoiceField,
-  readVoiceControlWord,
 } from "@/features/core/products/product-voice-session";
+import { readVoiceControlWord } from "@/features/core/voice/use-voice-dictation";
 import { productFormSchema, type ProductFormData } from "@/features/core/products/pages/product-form-state";
 import { parseLocalVoiceIntent, parseProductDraft } from "@/features/core/voice/voice-command-parser";
 
