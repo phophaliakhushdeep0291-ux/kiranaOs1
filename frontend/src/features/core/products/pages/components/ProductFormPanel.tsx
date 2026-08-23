@@ -19,6 +19,7 @@ import { roundMoney } from "@/lib/money";
 import { useShopCapability } from "@/features/core/settings/capabilities";
 import { PRODUCT_ATTRIBUTE_SECTION_TITLE } from "@/features/core/products/product-attributes";
 import { ProductAttributesSection } from "./ProductAttributesSection";
+import { ProductVoiceDictation } from "./ProductVoiceDictation";
 import { VariantGridEditor } from "./VariantGridEditor";
 import { VariantLocationSplit } from "./VariantLocationSplit";
 import { convertPackagingMode, type ProductFormData } from "../product-form-state";
@@ -812,6 +813,11 @@ export function ProductFormPanel({
           <X size={18} />
         </button>
       </div>
+
+      {/* Sits outside the scroll area on purpose: while a dictation session is
+          running this is the only thing on screen saying what was just asked, and
+          scrolling down to a field must not take the question away with it. */}
+      <ProductVoiceDictation form={form} open={open} onRequestSave={() => void form.handleSubmit(onSubmit)()} />
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
         <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">

@@ -1,3 +1,4 @@
+import { parseSpokenProductFields } from "@/features/core/products/product-voice-parser";
 import type {
   CustomerDraft,
   InventoryDraft,
@@ -373,6 +374,32 @@ function quantityAfterPriceFrom(text: string, label: "retail" | "wholesale") {
   return match ? Number(match[1]) : undefined;
 }
 
+/**
+ * Hindi product vocabulary.
+ *
+ * Written with explicit space anchors instead of `\b`, because `\b` is defined
+ * against [A-Za-z0-9_]: every Devanagari character counts as a non-word
+ * character, so a `\b`-delimited Hindi word never matches at all. That is why a
+ * Hindi shop dictating a product got `noop` back while the mic was already
+ * listening in hi-IN for them.
+ */
+const HINDI_PRODUCT_TRIGGER =
+  /(?:^|\s)(?:(?:नया|नई|नयी|नए)\s+(?:प्रोडक्ट|आइटम|सामान|माल)|(?:प्रोडक्ट|आइटम|सामान|माल)\s+(?:जोड़ो|जोड़ें|डालो|बनाओ))(?=\s|$)/;
+
+const HINDI_PRODUCT_FIELD =
+  /(?:^|\s)(?:दाम|भाव|कीमत|रेट|स्टॉक|खरीद|लागत|बिक्री|एमआरपी|जीएसटी|कैटेगरी|श्रेणी|यूनिट|इकाई|बारकोड|एचएसएन|उपनाम|थोक|खुदरा|न्यूनतम|ब्रांड|कंपनी)(?=\s|$)/;
+
+/**
+ * Only an explicit Hindi product trigger routes here from elsewhere in the app.
+ * A bare field word like खरीद or स्टॉक belongs just as plausibly to an inventory
+ * purchase, so it counts only once the shop is already on the products screen
+ * with the form in front of it.
+ */
+export function looksLikeHindiProductCommand(text: string, currentRoute = "") {
+  if (HINDI_PRODUCT_TRIGGER.test(text)) return true;
+  return currentRoute.startsWith("/products") && HINDI_PRODUCT_FIELD.test(text);
+}
+
 export function looksLikeProductFieldCommand(text: string) {
   return /\b(name|naam|product name|cost|avg cost|average cost|selling|sell|minimum|min price|min|stock|quantity|unit|category|barcode|alias|aliases|retail|wholesale|low stock|alert)\b/.test(
     text,
@@ -546,59 +573,21 @@ export function parseProductName(text: string) {
   return filtered.slice(0, 3).join(" ").trim() || undefined;
 }
 
+/**
+ * A spoken product, read by the shared token parser.
+ *
+ * Delegated rather than duplicated so the floating assistant and the form's own
+ * dictation understand exactly the same sentences: this used to have its own
+ * regex-per-field reader that dropped MRP, GST, brand, HSN and pack size, and
+ * left every word it failed to recognise inside the product NAME.
+ */
 export function parseProductDraft(command: string): ProductDraft {
   const text = normalizeVoiceText(command);
-  const mode = /\b(edit|update|change|customise|customize)\b/.test(text)
-    ? "edit"
-    : "create";
-  const quantityUnit = parseQuantityUnit(text);
-  const name = parseProductName(command);
-  const stockQuantity = numberAfter(command, [
-    "stock",
-    "opening stock",
-    "quantity",
-  ]);
-  return {
-    mode,
-    name,
-    productName: name,
-    category: extractNameAfter(command, ["category", "cat"]),
-    unit: unitAfter(command) ?? quantityUnit.unit,
-    aliases: extractAliases(command),
-    costPrice: numberAfter(command, [
-      "cost",
-      "cost price",
-      "average cost",
-      "avg cost",
-    ]),
-    sellingPrice: numberAfter(command, [
-      "selling",
-      "sell",
-      "selling price",
-      "rate",
-    ]),
-    minimumSellingPrice: numberAfter(command, [
-      "minimum",
-      "min",
-      "minimum selling",
-      "min price",
-    ]),
-    retailPrice: numberAfter(command, ["retail", "retail price"]),
-    wholesalePrice: numberAfter(command, ["wholesale", "wholesale price"]),
-    retailFromQuantity:
-      quantityAfterPriceFrom(command, "retail") ??
-      numberAfter(command, ["retail from", "retail quantity"]),
-    wholesaleFromQuantity:
-      quantityAfterPriceFrom(command, "wholesale") ??
-      numberAfter(command, ["wholesale from", "wholesale quantity"]),
-    stockQuantity:
-      stockQuantity ??
-      (/\b(stock|opening stock|quantity)\b/.test(text)
-        ? quantityUnit.quantity
-        : undefined),
-    lowStockAlert: numberAfter(command, ["low stock", "alert"]),
-  };
+  const mode = /\b(edit|update|change|customise|customize)\b/.test(text) ? "edit" : "create";
+  const fields = parseSpokenProductFields(command);
+  return { mode, productName: fields.name, ...fields };
 }
+
 export function parseCustomerDraft(command: string): CustomerDraft {
   const text = normalizeVoiceText(command);
   const mode = /\b(edit|update|change)\b/.test(text) ? "edit" : "create";
@@ -830,7 +819,8 @@ export function parseLocalVoiceIntent(
   if (
     (currentRoute.startsWith("/products") &&
       looksLikeProductFieldCommand(text)) ||
-    looksLikeProductVoiceFillCommand(text)
+    looksLikeProductVoiceFillCommand(text) ||
+    looksLikeHindiProductCommand(text, currentRoute)
   ) {
     const isOpenFormFill = currentRoute.startsWith("/products");
     return {
