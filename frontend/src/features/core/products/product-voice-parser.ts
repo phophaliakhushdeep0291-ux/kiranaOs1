@@ -17,6 +17,20 @@
  * works in Hindi (see voice-recognition.ts) — a Hindi shop that dictates a
  * product gets Devanagari back, so Devanagari is what has to be parsed.
  */
+import {
+  CONNECTOR_WORDS,
+  MONEY_WORDS,
+  PERCENT_WORDS,
+  labelMatchesAt,
+  normalizeSpokenText,
+  sortedSpokenLabels,
+  readSpokenAmount,
+  spokenNumber,
+  startsAnyLabel,
+  uniqueWords,
+  valueIndexAfter,
+  type SpokenLabel,
+} from "@/features/core/voice/voice-text";
 
 /** A field this parser can fill from speech. */
 export type ProductVoiceField =
@@ -219,44 +233,6 @@ const UNIT_WORDS: Record<string, string> = {
   दर्जन: "dozen",
 };
 
-/** Words that carry a price but are not part of it. */
-const MONEY_WORDS = new Set([
-  "rs",
-  "rupee",
-  "rupees",
-  "rupaye",
-  "rupaya",
-  "rupay",
-  "रुपये",
-  "रुपया",
-  "रुपए",
-  "र",
-]);
-
-const PERCENT_WORDS = new Set(["percent", "percentage", "pct", "प्रतिशत", "फीसदी"]);
-
-/** Said between a label and its value — "cost is 40", "daam hai 45". */
-const CONNECTOR_WORDS = new Set([
-  "is",
-  "of",
-  "at",
-  "for",
-  "the",
-  "a",
-  "an",
-  "hai",
-  "he",
-  "ka",
-  "ke",
-  "ki",
-  "को",
-  "है",
-  "का",
-  "के",
-  "की",
-  "में",
-]);
-
 /** Opens a command without describing the product — dropped from the name. */
 const TRIGGER_WORDS = new Set([
   "add",
@@ -302,76 +278,6 @@ const TRIGGER_WORDS = new Set([
 /** Introduces the quantity a slab price starts at — "retail 45 from 1 kg". */
 const FROM_WORDS = new Set(["from", "se", "से", "upar", "ऊपर"]);
 
-const HINDI_DIGITS = "०१२३४५६७८९";
-
-/** Spoken numerals, for a recogniser that transcribes the word instead of the digit. */
-const NUMBER_WORDS: Record<string, number> = {
-  ek: 1,
-  one: 1,
-  do: 2,
-  two: 2,
-  teen: 3,
-  three: 3,
-  char: 4,
-  chaar: 4,
-  four: 4,
-  panch: 5,
-  paanch: 5,
-  five: 5,
-  che: 6,
-  chhe: 6,
-  six: 6,
-  saat: 7,
-  seven: 7,
-  aath: 8,
-  eight: 8,
-  nau: 9,
-  nine: 9,
-  das: 10,
-  dus: 10,
-  ten: 10,
-  bees: 20,
-  bis: 20,
-  twenty: 20,
-  tees: 30,
-  thirty: 30,
-  chalis: 40,
-  chaalis: 40,
-  forty: 40,
-  pachas: 50,
-  pachaas: 50,
-  fifty: 50,
-  sau: 100,
-  hundred: 100,
-  aadha: 0.5,
-  half: 0.5,
-  // Fractions a counter says constantly for weight. These already existed in
-  // billing-voice-parser and were missing here, so the same shopkeeper saying
-  // "डेढ़ किलो चीनी" was understood at the till but not when adding the product —
-  // the word fell through to the name, which became "डेढ़ किलो चीनी".
-  sava: 1.25, सवा: 1.25,
-  dedh: 1.5, "डेढ़": 1.5, डेढ: 1.5,
-  dhai: 2.5, ढाई: 2.5,
-  paun: 0.75, पौन: 0.75,
-  एक: 1,
-  दो: 2,
-  तीन: 3,
-  चार: 4,
-  पांच: 5,
-  पाँच: 5,
-  छह: 6,
-  सात: 7,
-  आठ: 8,
-  नौ: 9,
-  दस: 10,
-  बीस: 20,
-  तीस: 30,
-  चालीस: 40,
-  पचास: 50,
-  सौ: 100,
-  आधा: 0.5,
-};
-
 /**
  * Lowercase, fold Devanagari digits to ASCII, drop punctuation.
  *
@@ -381,22 +287,7 @@ const NUMBER_WORDS: Record<string, number> = {
  * between digits and is stripped everywhere else.
  */
 export function normalizeProductVoiceText(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[०-९]/g, (digit) => String(HINDI_DIGITS.indexOf(digit)))
-    .replace(/(\d)[.,](\d)/g, "$1․$2")
-    .replace(/[^\p{L}\p{N}\p{M}․]+/gu, " ")
-    .replace(/․/g, ".")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function toNumber(token: string | undefined): number | undefined {
-  if (!token) return undefined;
-  if (/^\d+(?:\.\d+)?$/.test(token)) return Number(token);
-  return NUMBER_WORDS[token];
+  return normalizeSpokenText(text);
 }
 
 function unitOf(token: string | undefined): string | undefined {
@@ -405,37 +296,7 @@ function unitOf(token: string | undefined): string | undefined {
 }
 
 /** Every label, longest first, so "cost price" is claimed before "price". */
-type LabelEntry = { field: ProductVoiceField; tokens: string[] };
-
-const SORTED_LABELS: LabelEntry[] = Object.entries(FIELD_LABELS)
-  .flatMap(([field, labels]) =>
-    labels.map((label) => ({ field: field as ProductVoiceField, tokens: label.split(" ") })),
-  )
-  .sort((a, b) => b.tokens.length - a.tokens.length || b.tokens[0].length - a.tokens[0].length);
-
-function matchesAt(tokens: string[], index: number, label: string[], consumed: Set<number>) {
-  if (index + label.length > tokens.length) return false;
-  for (let offset = 0; offset < label.length; offset += 1) {
-    if (consumed.has(index + offset)) return false;
-    if (tokens[index + offset] !== label[offset]) return false;
-  }
-  return true;
-}
-
-/**
- * Where a label's value starts: the first token after it that is not filler.
- *
- * Only a couple of connector words are skipped, and never a number, so "cost is
- * 40" reaches the 40 while "cost 40 selling 45" cannot run past its own value
- * into the next field's.
- */
-function valueIndexAfter(tokens: string[], start: number, consumed: Set<number>) {
-  let index = start;
-  while (index < tokens.length && !consumed.has(index) && CONNECTOR_WORDS.has(tokens[index])) {
-    index += 1;
-  }
-  return index;
-}
+const SORTED_LABELS: SpokenLabel<ProductVoiceField>[] = sortedSpokenLabels(FIELD_LABELS);
 
 /**
  * Read every field a sentence states, and take the name from what is left over.
@@ -468,7 +329,7 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
 
   for (const { field, tokens: label } of SORTED_LABELS) {
     for (let index = 0; index < tokens.length; index += 1) {
-      if (!matchesAt(tokens, index, label, consumed)) continue;
+      if (!labelMatchesAt(tokens, index, label, consumed)) continue;
       const alreadyStated = field === "aliases" ? aliasWords.length > 0 : explicit.has(field);
       const labelEnd = index + label.length - 1;
       const valueAt = valueIndexAfter(tokens, labelEnd + 1, consumed);
@@ -487,26 +348,29 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
       }
 
       if (NUMERIC_FIELDS.has(field)) {
-        const value = toNumber(tokens[valueAt]);
-        if (value === undefined) continue;
-        claim(index, valueAt);
+        // "mrp paanch sau" is 500. Read one token at a time it came back as 5,
+        // which put a hundredth of the real price on the shelf label.
+        const amount = readSpokenAmount(tokens, valueAt);
+        if (amount === undefined) continue;
+        const { value, end: valueEnd } = amount;
+        claim(index, valueEnd);
 
         // A unit riding on the value belongs to this field: "stock 25 kg" says
         // the stock is in kilos, "pack of 500 gram" sizes the pack.
-        const trailingUnit = unitOf(tokens[valueAt + 1]);
-        if (trailingUnit) claim(valueAt + 1, valueAt + 1);
+        const trailingUnit = unitOf(tokens[valueEnd + 1]);
+        if (trailingUnit) claim(valueEnd + 1, valueEnd + 1);
 
         if (!alreadyStated) {
           applyNumeric(fields, field, value, trailingUnit);
           explicit.add(field);
         }
-        consumeMoneyAndPercentAround(tokens, valueAt, consumed, claim);
+        consumeMoneyAndPercentAround(tokens, valueAt, valueEnd, consumed, claim);
 
         // "retail 45 from 1 kg" — the quantity the slab starts at.
         if (field === "retailPrice" || field === "wholesalePrice") {
-          const fromAt = trailingUnit ? valueAt + 2 : valueAt + 1;
+          const fromAt = trailingUnit ? valueEnd + 2 : valueEnd + 1;
           if (FROM_WORDS.has(tokens[fromAt] ?? "")) {
-            const slabValue = toNumber(tokens[fromAt + 1]);
+            const slabValue = spokenNumber(tokens[fromAt + 1]);
             if (slabValue !== undefined) {
               if (field === "retailPrice") fields.retailFromQuantity = slabValue;
               else fields.wholesaleFromQuantity = slabValue;
@@ -539,7 +403,7 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
     }
   }
 
-  if (aliasWords.length) fields.aliases = unique(aliasWords);
+  if (aliasWords.length) fields.aliases = uniqueWords(aliasWords);
 
   // Pass 2 — a bare "<number> <unit>" with no label of its own. On a packet this
   // is its size ("Tata Salt 1 kg", "amul butter 500 g"), which is also the read
@@ -547,7 +411,7 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
   if (fields.packSizeValue === undefined) {
     for (let index = 0; index < tokens.length - 1; index += 1) {
       if (consumed.has(index) || consumed.has(index + 1)) continue;
-      const value = toNumber(tokens[index]);
+      const value = spokenNumber(tokens[index]);
       const unit = unitOf(tokens[index + 1]);
       if (value === undefined || !unit || value <= 0) continue;
       fields.packSizeValue = value;
@@ -566,10 +430,10 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
   for (const { field, tokens: label } of SORTED_LABELS) {
     if (!NUMERIC_FIELDS.has(field) || explicit.has(field)) continue;
     for (let index = 1; index < tokens.length; index += 1) {
-      if (!matchesAt(tokens, index, label, consumed)) continue;
+      if (!labelMatchesAt(tokens, index, label, consumed)) continue;
       const valueAt = index - 1;
       if (consumed.has(valueAt)) continue;
-      const value = toNumber(tokens[valueAt]);
+      const value = spokenNumber(tokens[valueAt]);
       if (value === undefined) continue;
       applyNumeric(fields, field, value, undefined);
       explicit.add(field);
@@ -586,7 +450,7 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
   if (fields.sellingPrice === undefined && !explicit.has("sellingPrice")) {
     for (let index = 0; index < tokens.length; index += 1) {
       if (consumed.has(index)) continue;
-      const value = toNumber(tokens[index]);
+      const value = spokenNumber(tokens[index]);
       if (value === undefined || value <= 0) continue;
       // The currency word can lead or follow: "45 rupaye" and "rs 45" both occur.
       const after = tokens[index + 1];
@@ -621,7 +485,7 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
           !MONEY_WORDS.has(token) &&
           !PERCENT_WORDS.has(token) &&
           !FROM_WORDS.has(token) &&
-          toNumber(token) === undefined,
+          spokenNumber(token) === undefined,
       );
     const name = leftover.join(" ").trim();
     // One stray syllable is a mishearing, not something worth naming a product.
@@ -631,57 +495,45 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
   return fields;
 }
 
-function unique(words: string[]) {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const word of words) {
-    if (seen.has(word)) continue;
-    seen.add(word);
-    out.push(word);
-  }
-  return out;
-}
-
 /** Words up to the next label, number or unit — the value of a word-valued field. */
 function takeWords(tokens: string[], start: number, consumed: Set<number>, limit: number) {
   const words: string[] = [];
   for (let index = start; index < tokens.length && words.length < limit; index += 1) {
     if (consumed.has(index)) break;
     const token = tokens[index];
-    if (toNumber(token) !== undefined) break;
+    if (spokenNumber(token) !== undefined) break;
     if (MONEY_WORDS.has(token) || PERCENT_WORDS.has(token)) break;
     if (TRIGGER_WORDS.has(token) || CONNECTOR_WORDS.has(token)) break;
-    if (startsALabel(tokens, index, consumed)) break;
+    if (startsAnyLabel(SORTED_LABELS, tokens, index, consumed)) break;
     words.push(token);
   }
   return words;
-}
-
-function startsALabel(tokens: string[], index: number, consumed: Set<number>) {
-  return SORTED_LABELS.some((entry) => matchesAt(tokens, index, entry.tokens, consumed));
 }
 
 /** Whether the sentence names a field out loud, rather than just holding values. */
 export function statesAFieldLabel(spoken: string): boolean {
   const tokens = normalizeProductVoiceText(spoken).split(" ").filter(Boolean);
   const none = new Set<number>();
-  return tokens.some((_token, index) => startsALabel(tokens, index, none));
+  return tokens.some((_token, index) => startsAnyLabel(SORTED_LABELS, tokens, index, none));
 }
 
 /** "40 rupees" and "5 percent" — the carrier word is not part of the name. */
 function consumeMoneyAndPercentAround(
   tokens: string[],
   valueAt: number,
+  valueEnd: number,
   consumed: Set<number>,
   claim: (from: number, to: number) => void,
 ) {
   const before = tokens[valueAt - 1];
-  const after = tokens[valueAt + 1];
+  // A multi-token amount ("paanch sau") pushes the trailing rupees/percent past
+  // where the value started, so the two ends are tracked separately.
+  const after = tokens[valueEnd + 1];
   if (before && (MONEY_WORDS.has(before) || PERCENT_WORDS.has(before)) && !consumed.has(valueAt - 1)) {
     claim(valueAt - 1, valueAt - 1);
   }
-  if (after && (MONEY_WORDS.has(after) || PERCENT_WORDS.has(after)) && !consumed.has(valueAt + 1)) {
-    claim(valueAt + 1, valueAt + 1);
+  if (after && (MONEY_WORDS.has(after) || PERCENT_WORDS.has(after)) && !consumed.has(valueEnd + 1)) {
+    claim(valueEnd + 1, valueEnd + 1);
   }
 }
 
@@ -741,9 +593,9 @@ export function parseProductVoiceAnswer(field: ProductVoiceField, spoken: string
   }
 
   if (NUMERIC_FIELDS.has(field)) {
-    const at = tokens.findIndex((token) => toNumber(token) !== undefined);
+    const at = tokens.findIndex((token) => spokenNumber(token) !== undefined);
     if (at === -1) return {};
-    const value = toNumber(tokens[at]);
+    const value = spokenNumber(tokens[at]);
     if (value === undefined) return {};
     const numeric: ProductVoiceFields = {};
     applyNumeric(numeric, field, value, unitOf(tokens[at + 1]));
@@ -758,7 +610,7 @@ export function parseProductVoiceAnswer(field: ProductVoiceField, spoken: string
   // Whatever was said, minus the words that only ever open a command.
   const words = tokens.filter((token) => !TRIGGER_WORDS.has(token) && !CONNECTOR_WORDS.has(token));
   if (!words.length) return {};
-  if (field === "aliases") return { aliases: unique(words) };
+  if (field === "aliases") return { aliases: uniqueWords(words) };
   if (field === "brand") return { brand: words.join(" ") };
   if (field === "category") return { category: words.join(" ") };
   return { name: words.join(" ") };
