@@ -127,6 +127,10 @@ export const NUMBER_WORDS: Record<string, number> = {
   सौ: 100,
   हजार: 1000,
   हज़ार: 1000,
+  lakh: 100000,
+  lakhs: 100000,
+  lac: 100000,
+  लाख: 100000,
   आधा: 0.5,
 };
 
@@ -134,6 +138,62 @@ export function spokenNumber(token: string | undefined): number | undefined {
   if (!token) return undefined;
   if (/^\d+(?:\.\d+)?$/.test(token)) return Number(token);
   return NUMBER_WORDS[token];
+}
+
+/**
+ * Words that MULTIPLY the number in front of them rather than standing alone.
+ *
+ * "paanch sau" is five hundreds, not a five followed by a hundred. Read one
+ * token at a time it comes back as 5, which is how a ₹500 MRP and a ₹5,000
+ * credit limit were both being filed off by a factor of a hundred or a thousand.
+ */
+const AMOUNT_MULTIPLIERS: Record<string, number> = {
+  sau: 100,
+  hundred: 100,
+  सौ: 100,
+  hazaar: 1000,
+  hazar: 1000,
+  hajar: 1000,
+  thousand: 1000,
+  हजार: 1000,
+  हज़ार: 1000,
+  lakh: 100000,
+  lakhs: 100000,
+  lac: 100000,
+  लाख: 100000,
+};
+
+export type SpokenAmount = { value: number; end: number };
+
+/**
+ * Read one amount, however many tokens a person spent saying it.
+ *
+ * Handles the two shapes Indian speech actually uses — "paanch sau" (500) and
+ * "do sau pachas" (250) — and deliberately nothing looser than that. A trailing
+ * part is only taken when it is SMALLER than the multiplier it follows, so
+ * "udhar limit paanch hazaar" cannot reach past its own value and swallow the
+ * next field's bare number.
+ */
+export function readSpokenAmount(tokens: string[], start: number): SpokenAmount | undefined {
+  const base = spokenNumber(tokens[start]);
+  if (base === undefined) return undefined;
+
+  const multiplier = AMOUNT_MULTIPLIERS[tokens[start + 1] ?? ""];
+  // A multiplier standing where the number should be is already its own value:
+  // "sau" on its own is a hundred, and must not be multiplied by what follows.
+  if (multiplier === undefined || AMOUNT_MULTIPLIERS[tokens[start] ?? ""] !== undefined) {
+    return { value: base, end: start };
+  }
+
+  let value = base * multiplier;
+  let end = start + 1;
+
+  const tail = spokenNumber(tokens[end + 1]);
+  if (tail !== undefined && tail < multiplier && AMOUNT_MULTIPLIERS[tokens[end + 1] ?? ""] === undefined) {
+    value += tail;
+    end += 1;
+  }
+  return { value, end };
 }
 
 /** Words that carry a price but are not part of it. */

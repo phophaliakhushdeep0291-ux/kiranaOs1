@@ -24,6 +24,7 @@ import {
   labelMatchesAt,
   normalizeSpokenText,
   sortedSpokenLabels,
+  readSpokenAmount,
   spokenNumber,
   startsAnyLabel,
   uniqueWords,
@@ -347,24 +348,27 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
       }
 
       if (NUMERIC_FIELDS.has(field)) {
-        const value = spokenNumber(tokens[valueAt]);
-        if (value === undefined) continue;
-        claim(index, valueAt);
+        // "mrp paanch sau" is 500. Read one token at a time it came back as 5,
+        // which put a hundredth of the real price on the shelf label.
+        const amount = readSpokenAmount(tokens, valueAt);
+        if (amount === undefined) continue;
+        const { value, end: valueEnd } = amount;
+        claim(index, valueEnd);
 
         // A unit riding on the value belongs to this field: "stock 25 kg" says
         // the stock is in kilos, "pack of 500 gram" sizes the pack.
-        const trailingUnit = unitOf(tokens[valueAt + 1]);
-        if (trailingUnit) claim(valueAt + 1, valueAt + 1);
+        const trailingUnit = unitOf(tokens[valueEnd + 1]);
+        if (trailingUnit) claim(valueEnd + 1, valueEnd + 1);
 
         if (!alreadyStated) {
           applyNumeric(fields, field, value, trailingUnit);
           explicit.add(field);
         }
-        consumeMoneyAndPercentAround(tokens, valueAt, consumed, claim);
+        consumeMoneyAndPercentAround(tokens, valueAt, valueEnd, consumed, claim);
 
         // "retail 45 from 1 kg" — the quantity the slab starts at.
         if (field === "retailPrice" || field === "wholesalePrice") {
-          const fromAt = trailingUnit ? valueAt + 2 : valueAt + 1;
+          const fromAt = trailingUnit ? valueEnd + 2 : valueEnd + 1;
           if (FROM_WORDS.has(tokens[fromAt] ?? "")) {
             const slabValue = spokenNumber(tokens[fromAt + 1]);
             if (slabValue !== undefined) {
@@ -469,16 +473,19 @@ export function statesAFieldLabel(spoken: string): boolean {
 function consumeMoneyAndPercentAround(
   tokens: string[],
   valueAt: number,
+  valueEnd: number,
   consumed: Set<number>,
   claim: (from: number, to: number) => void,
 ) {
   const before = tokens[valueAt - 1];
-  const after = tokens[valueAt + 1];
+  // A multi-token amount ("paanch sau") pushes the trailing rupees/percent past
+  // where the value started, so the two ends are tracked separately.
+  const after = tokens[valueEnd + 1];
   if (before && (MONEY_WORDS.has(before) || PERCENT_WORDS.has(before)) && !consumed.has(valueAt - 1)) {
     claim(valueAt - 1, valueAt - 1);
   }
-  if (after && (MONEY_WORDS.has(after) || PERCENT_WORDS.has(after)) && !consumed.has(valueAt + 1)) {
-    claim(valueAt + 1, valueAt + 1);
+  if (after && (MONEY_WORDS.has(after) || PERCENT_WORDS.has(after)) && !consumed.has(valueEnd + 1)) {
+    claim(valueEnd + 1, valueEnd + 1);
   }
 }
 

@@ -20,6 +20,7 @@ import {
   labelMatchesAt,
   normalizeSpokenText,
   sortedSpokenLabels,
+  readSpokenAmount,
   spokenNumber,
   startsAnyLabel,
   tokenizeSpoken,
@@ -198,7 +199,17 @@ export function parseSpokenCustomerFields(spoken: string): CustomerVoiceFields {
       if (!labelMatchesAt(norm, index, label, consumed)) continue;
       const labelEnd = index + label.length - 1;
       const valueAt = valueIndexAfter(norm, labelEnd + 1, consumed);
-      if (valueAt >= norm.length || consumed.has(valueAt)) continue;
+      // A label with nothing usable behind it — the sentence ended on it, or the
+      // next word opens another field — was said and then abandoned. Claiming it
+      // here is what stops "add customer Ramesh mobile 98765 43210 address" from
+      // filing a customer named "Ramesh address". A label followed by an
+      // ordinary word is left alone, because that word may simply be part of a
+      // name: "Sunil Number Wala" is somebody, not a malformed phone field.
+      if (valueAt >= norm.length || startsAnyLabel(SORTED_LABELS, norm, valueAt, consumed)) {
+        claim(index, labelEnd);
+        continue;
+      }
+      if (consumed.has(valueAt)) continue;
       const alreadyStated = explicit.has(field);
 
       if (field === "mobile") {
@@ -223,14 +234,16 @@ export function parseSpokenCustomerFields(spoken: string): CustomerVoiceFields {
       }
 
       if (field === "udharLimit") {
-        const value = spokenNumber(norm[valueAt]);
-        if (value === undefined) continue;
+        // A limit is nearly always said in round numbers a person speaks rather
+        // than spells out — "paanch hazaar", not "five zero zero zero".
+        const amount = readSpokenAmount(norm, valueAt);
+        if (amount === undefined) continue;
         if (!alreadyStated) {
-          fields.udharLimit = value;
+          fields.udharLimit = amount.value;
           explicit.add(field);
         }
-        claim(index, valueAt);
-        if (MONEY_WORDS.has(norm[valueAt + 1] ?? "")) claim(valueAt + 1, valueAt + 1);
+        claim(index, amount.end);
+        if (MONEY_WORDS.has(norm[amount.end + 1] ?? "")) claim(amount.end + 1, amount.end + 1);
         if (MONEY_WORDS.has(norm[valueAt - 1] ?? "") && !consumed.has(valueAt - 1)) claim(valueAt - 1, valueAt - 1);
         continue;
       }
@@ -388,7 +401,9 @@ export function parseCustomerVoiceAnswer(field: CustomerVoiceField, spoken: stri
   if (field === "udharLimit") {
     const at = norm.findIndex((token) => spokenNumber(token) !== undefined);
     if (at === -1) return {};
-    return { udharLimit: spokenNumber(norm[at]), type: "udhar" };
+    const amount = readSpokenAmount(norm, at);
+    if (amount === undefined) return {};
+    return { udharLimit: amount.value, type: "udhar" };
   }
   if (field === "gstNumber") {
     const at = norm.findIndex((token) => GSTIN_SHAPE.test(token));

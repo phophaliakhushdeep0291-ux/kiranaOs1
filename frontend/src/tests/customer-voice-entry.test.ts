@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   parseCustomerVoiceAnswer,
   parseSpokenCustomerFields,
@@ -87,13 +87,37 @@ describe("customer voice parser — one natural sentence", () => {
     expect(fields.type).toBe("udhar");
   });
 
-  it("reads a spoken date into the field that was named", () => {
-    expect(
-      parseSpokenCustomerFields(
-        "new customer Suresh Sharma phone 9812345678 khata udhar limit 10000 due date 15 September",
-      ),
-    ).toMatchObject({ dueDate: "2026-09-15", udharLimit: 10000, type: "udhar" });
+  // A limit is spoken the way money is spoken. Read one token at a time,
+  // "paanch hazaar" came back as 5, so a ₹5,000 limit was filed as ₹5.
+  it.each([
+    ["add customer Ramesh mobile 9876543210 udhar limit paanch hazaar", 5000],
+    ["add customer Ramesh mobile 9876543210 udhar limit ek lakh", 100000],
+    ["add customer Ramesh mobile 9876543210 udhar limit do sau pachas", 250],
+    ["add customer Ramesh mobile 9876543210 udhar limit 5000", 5000],
+  ])("reads a credit limit said as words: %s", (spoken, limit) => {
+    expect(parseSpokenCustomerFields(spoken).udharLimit).toBe(limit);
   });
+
+  it("reads a credit limit said as Hindi words", () => {
+    expect(parseSpokenCustomerFields("नया ग्राहक रमेश मोबाइल 9876543210 उधार सीमा पांच हज़ार").udharLimit).toBe(5000);
+  });
+
+  // A label the speaker abandoned is not part of anybody's name.
+  it.each([
+    "add customer Ramesh mobile 9876543210 address",
+    "add customer Ramesh address mobile 9876543210",
+    "add customer Ramesh Kumar mobile 9876543210 note",
+  ])("drops a label that was said with no value after it: %s", (spoken) => {
+    expect(parseSpokenCustomerFields(spoken).name).toMatch(/^Ramesh( Kumar)?$/);
+  });
+
+  // ...but an ordinary word that happens to be a label elsewhere is still a name.
+  it("keeps a label word that is part of a name", () => {
+    expect(parseSpokenCustomerFields("add customer Sunil Number Wala mobile 9876543210").name).toBe(
+      "Sunil Number Wala",
+    );
+  });
+
 });
 
 describe("customer voice parser — Hindi", () => {
@@ -211,5 +235,56 @@ describe("folding voice into the customer form", () => {
 
   it("is not saveable on a name alone", () => {
     expect(isCustomerReadyToSave(emptyForm({ name: "Ramesh" }))).toBe(false);
+  });
+});
+
+// Every spoken date is relative to today — "next Friday", and a bare month that
+// rolls into next year once it has passed. Read against the real clock these
+// assertions pass until the date they name and then fail for ever, so the clock
+// is pinned to a known Sunday instead.
+describe("spoken dates, against a fixed clock", () => {
+  beforeAll(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 23, 12));
+  });
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  it("reads a spoken date into the field that was named", () => {
+    expect(
+      parseSpokenCustomerFields(
+        "new customer Suresh Sharma phone 9812345678 khata udhar limit 10000 due date 15 September",
+      ),
+    ).toMatchObject({ dueDate: "2026-09-15", udharLimit: 10000, type: "udhar" });
+  });
+
+  // The mic listens in hi-IN when the shop works in Hindi, so a Hindi month is
+  // what comes back. Before the month table knew them the date was dropped AND
+  // the label fell through into the name: "रमेश देय तारीख सितंबर".
+  it("reads a Hindi month in a due date", () => {
+    expect(parseSpokenCustomerFields("ग्राहक रमेश देय तारीख 15 सितंबर मोबाइल 9812345678")).toMatchObject({
+      dueDate: "2026-09-15",
+      name: "रमेश",
+      mobile: "9812345678",
+    });
+  });
+
+  // A month already past this year means next year — a promise to pay is always
+  // ahead, and filing it behind would make the customer instantly overdue.
+  it("rolls a month that has already gone by into next year", () => {
+    expect(parseSpokenCustomerFields("customer Ramesh due date 15 January").dueDate).toBe("2027-01-15");
+  });
+
+  // ...but a year that was actually said is not guesswork, and used to be thrown
+  // away, filing the date twelve months early.
+  it("keeps a year that was spoken", () => {
+    expect(parseSpokenCustomerFields("customer Ramesh due date 15 September 2027").dueDate).toBe("2027-09-15");
+  });
+
+  it("reads a relative promise date", () => {
+    expect(parseCustomerVoiceAnswer("promiseToPayDate", "next Friday")).toEqual({
+      promiseToPayDate: "2026-08-28",
+    });
   });
 });
