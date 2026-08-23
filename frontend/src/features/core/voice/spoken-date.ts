@@ -54,6 +54,25 @@ const MONTH_INDEX: Record<string, number> = {
   nov: 11,
   december: 12,
   dec: 12,
+  // The mic listens in hi-IN when the shop works in Hindi, so a Hindi month is
+  // what actually comes back. Without these, "देय तारीख 15 सितंबर" read as no
+  // date at all and the month name fell through into the customer's name.
+  जनवरी: 1,
+  फरवरी: 2,
+  मार्च: 3,
+  अप्रैल: 4,
+  मई: 5,
+  जून: 6,
+  जुलाई: 7,
+  अगस्त: 8,
+  सितंबर: 9,
+  सितम्बर: 9,
+  अक्टूबर: 10,
+  अक्तूबर: 10,
+  नवंबर: 11,
+  नवम्बर: 11,
+  दिसंबर: 12,
+  दिसम्बर: 12,
 };
 
 export function nextWeekday(targetDay: number, now = new Date()) {
@@ -95,18 +114,27 @@ export function readSpokenDate(raw: string, now = new Date()): string | undefine
   }
 
   // "15 September" and "September 15".
+  // \b is a boundary between ASCII word characters, which a Devanagari month
+  // name has on neither side, so the edges are asserted explicitly instead.
   const monthNames = Object.keys(MONTH_INDEX).join("|");
-  const dayFirst = text.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})\\b`, "i"));
-  const monthFirst = text.match(new RegExp(`\\b(${monthNames})\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, "i"));
+  const edge = "(?:^|[^\\p{L}\\p{N}])";
+  const dayFirst = text.match(
+    new RegExp(`${edge}(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})(?:\\s+(\\d{4}))?`, "iu"),
+  );
+  const monthFirst = text.match(
+    new RegExp(`${edge}(${monthNames})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+(\\d{4}))?`, "iu"),
+  );
   const named = dayFirst
-    ? { day: Number(dayFirst[1]), month: MONTH_INDEX[dayFirst[2].toLowerCase()] }
+    ? { day: Number(dayFirst[1]), month: MONTH_INDEX[dayFirst[2].toLowerCase()], year: dayFirst[3] }
     : monthFirst
-      ? { day: Number(monthFirst[2]), month: MONTH_INDEX[monthFirst[1].toLowerCase()] }
+      ? { day: Number(monthFirst[2]), month: MONTH_INDEX[monthFirst[1].toLowerCase()], year: monthFirst[3] }
       : null;
   if (named && named.day >= 1 && named.day <= 31) {
     const thisYear = now.getFullYear();
     const candidate = new Date(thisYear, named.month - 1, named.day, 12);
-    const year = candidate < now ? thisYear + 1 : thisYear;
+    // A year that was actually said wins. Only an unstated one is rolled
+    // forward, so "15 September 2027" stops being filed twelve months early.
+    const year = named.year ? Number(named.year) : candidate < now ? thisYear + 1 : thisYear;
     return `${year}-${String(named.month).padStart(2, "0")}-${String(named.day).padStart(2, "0")}`;
   }
 
