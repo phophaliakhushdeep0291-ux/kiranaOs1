@@ -25,6 +25,14 @@ import { convertPackagingMode, type ProductFormData } from "../product-form-stat
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { generateInternalEan13 } from "@/lib/barcode/ean13";
 import { lookupKnownProduct } from "@/features/core/products/product-knowledge";
+import {
+  IMAGE_BUDGET_BYTES,
+  IMAGE_CANVAS_UNSUPPORTED,
+  encodingLadder,
+  preferredImageMimeType,
+  scaledSize,
+  withinBudget,
+} from "@/features/core/products/pages/product-image-encoding";
 
 const GST_RATES = [0, 5, 12, 18, 28];
 const PACK_MEASURE_UNITS = ["piece", "tablet", "gram", "kg", "ml", "litre"];
@@ -169,29 +177,50 @@ interface ProductFormPanelProps {
   saveError?: string | null;
 }
 
-async function fileToResizedDataUrl(file: File, max = 512): Promise<string> {
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const img = new window.Image();
-      img.onload = () => {
-        const scale = Math.min(1, max / Math.max(img.width, img.height));
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return reject(new Error("Canvas unsupported"));
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.72));
-      };
+      img.onload = () => resolve(img);
       img.onerror = () => reject(new Error("Invalid image"));
       img.src = reader.result as string;
     };
     reader.onerror = () => reject(new Error("Read failed"));
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * Encodes to a size budget rather than to fixed settings — see
+ * `product-image-encoding.ts` for why the budget is on the output.
+ */
+async function fileToResizedDataUrl(file: File, budgetBytes = IMAGE_BUDGET_BYTES): Promise<string> {
+  const img = await loadImageFromFile(file);
+  const mimeType = preferredImageMimeType();
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error(IMAGE_CANVAS_UNSUPPORTED);
+
+  let lastEncoded = "";
+  let lastDimension = -1;
+  for (const { maxDimension, quality } of encodingLadder()) {
+    // Redraw only when the size actually changes; the quality steps reuse the canvas.
+    if (maxDimension !== lastDimension) {
+      const { width, height } = scaledSize(img.width, img.height, maxDimension);
+      canvas.width = width;
+      canvas.height = height;
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+      lastDimension = maxDimension;
+    }
+    lastEncoded = canvas.toDataURL(mimeType, quality);
+    if (withinBudget(lastEncoded, budgetBytes)) return lastEncoded;
+  }
+  // Nothing fit, which takes a genuinely pathological picture. Hand back the
+  // smallest encoding produced rather than refusing the upload outright — the
+  // last rung is the smallest, and a large image beats no image.
+  return lastEncoded;
 }
 
 /**
@@ -560,6 +589,16 @@ export function ProductFormPanel({
       fillBlank("name", known.name);
       fillBlank("brand", known.brand);
       fillBlank("description", known.description);
+      // The lookup already carries a picture, and nobody was using it — which is
+      // why stocking a shop meant photographing every packet by hand. This is a
+      // hosted https URL rather than an inlined data URL, so it costs a link in
+      // the row instead of ~24 kB of base64, and the shop gets the image for free.
+      // Only ever fills a blank slot: a photo the shopkeeper took of their own
+      // shelf outranks a stock packshot.
+      if (known.imageUrl && !String(form.getValues("imageUrl") ?? "").trim()) {
+        form.setValue("imageUrl", known.imageUrl, { shouldDirty: true });
+        filled += 1;
+      }
       // Only a category this shop actually files things under: a lookup's own
       // wording would otherwise invent one nobody browses by.
       const match = categories.find((row) => row.toLowerCase() === String(known.category ?? "").trim().toLowerCase());
