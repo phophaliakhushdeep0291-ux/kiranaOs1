@@ -629,12 +629,6 @@ function consumeMoneyAndPercentAround(
   }
 }
 
-function readField(fields: ProductVoiceFields, field: ProductVoiceField): unknown {
-  if (field === "packSize") return fields.packSizeValue;
-  if (field === "name") return fields.name;
-  return (fields as Record<string, unknown>)[field];
-}
-
 function assignCode(fields: ProductVoiceFields, field: ProductVoiceField, value: string) {
   if (field === "barcode") fields.barcode = value;
   else fields.hsn = value;
