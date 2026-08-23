@@ -17,13 +17,29 @@ describe("phone-first customer form", () => {
   it("uses a mobile task surface with phone-native input and reachable actions", () => {
     expect(source).toContain('data-customer-form-dialog="true"');
     expect(source).toContain("max-h-[92vh]");
-    expect(source).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
+    // The header and footer stay put and only the body scrolls. Pinned rows get
+    // added above the body over time (the voice bar is one), so this checks the
+    // shape rather than one literal: every row fixed except the body, which is
+    // the only flexible one and the last before the footer.
+    expect(source).toMatch(/grid-rows-\[(?:auto_)+minmax\(0,1fr\)_auto\]/);
     expect(source).toContain('inputMode="numeric"');
     expect(source).toContain('autoComplete="tel"');
     expect(source).toContain('data-customer-save="true"');
     expect(source).toContain("h-12 rounded-[12px]");
     expect(source).toContain('window.matchMedia("(min-width: 1024px)")');
     expect(source).toContain("{showChart ? (");
+  });
+
+  // The parser and the prompts can all be right and the feature still be
+  // invisible, which is the bug this whole thing exists to fix: nothing on the
+  // form said dictation was possible. So the mount is worth pinning.
+  it("offers dictation on the customer form, above the scroll area", () => {
+    expect(source).toContain("<CustomerVoiceDictation");
+    expect(source).toContain("values={customerForm}");
+    expect(source).toContain("onChange={setCustomerForm}");
+    expect(source).toContain("onRequestSave={() => void saveCustomer()}");
+    // Above the body, or the question scrolls away with the fields.
+    expect(source.indexOf("<CustomerVoiceDictation")).toBeLessThan(source.indexOf("app-scrollbar min-h-0 overflow-y-auto"));
   });
 
   it("keeps the primary customer search at the minimum touch-target height", () => {

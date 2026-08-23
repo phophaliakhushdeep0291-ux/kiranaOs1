@@ -90,6 +90,7 @@ import {
   normaliseCustomerMobile,
 } from "@/features/core/customers/customer-reliability";
 import { useFeature } from "@/features/core/subscription/access";
+import { CustomerVoiceDictation } from "./components/CustomerVoiceDictation";
 
 interface CustomerFormState {
   name: string;
@@ -1426,7 +1427,7 @@ export default function CustomersPage() {
       <Dialog open={customerOpen} onOpenChange={setCustomerOpen}>
         <DialogContent
           data-customer-form-dialog="true"
-          className="grid max-h-[92vh] max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-[#dbe5f2] bg-[#f6f9fd] p-0 shadow-[0_30px_90px_rgba(14,35,71,0.28)]"
+          className="grid max-h-[92vh] max-w-2xl grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-[#dbe5f2] bg-[#f6f9fd] p-0 shadow-[0_30px_90px_rgba(14,35,71,0.28)]"
         >
           <DialogHeader className="border-b border-[#dfe8f3] bg-[linear-gradient(135deg,#ffffff_0%,#f2f7ff_58%,#eaf2ff_100%)] px-5 py-5 pr-16 text-left sm:px-6">
             <div className="flex items-center gap-3">
@@ -1441,6 +1442,17 @@ export default function CustomersPage() {
               </div>
             </div>
           </DialogHeader>
+
+          {/* Sits outside the scroll area on purpose: while a dictation session
+              is running this is the only thing on screen saying what was just
+              asked, and scrolling down to a field must not take the question
+              away with it. */}
+          <CustomerVoiceDictation
+            values={customerForm}
+            onChange={setCustomerForm}
+            open={customerOpen}
+            onRequestSave={() => void saveCustomer()}
+          />
 
           <div className="app-scrollbar min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
             <div className="space-y-4">
