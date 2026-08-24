@@ -3189,6 +3189,17 @@ async function applyRecordSupplierPayment(shopId, event, user, context) {
         paymentMode: mode,
         businessDate,
         idempotencyKey,
+        evidenceJson: JSON.stringify({
+          version: 1,
+          capturedAt: new Date().toISOString(),
+          sourceType: "supplier_payment",
+          sourceId: payload.paymentId,
+          purchaseBillId: purchase.id,
+          supplierId: purchase.supplierId,
+          entryType: "supplier_payment",
+          amountPaise: String(toPaiseBigInt(amount)),
+          paymentMode: mode,
+        }),
       },
     });
     const paid = round2(Number(purchase.purchasePaidAmount ?? 0) + amount);
@@ -3258,6 +3269,17 @@ async function applyReverseSupplierPayment(shopId, event, user) {
         paymentMode: original.paymentMode,
         businessDate: new Date(),
         idempotencyKey,
+        evidenceJson: JSON.stringify({
+          version: 1,
+          capturedAt: new Date().toISOString(),
+          sourceType: "supplier_payment_reversal",
+          sourceId: original.id,
+          purchaseBillId: purchase.id,
+          supplierId: original.supplierId,
+          entryType: "supplier_payment",
+          amountPaise: String(-original.amountPaise),
+          paymentMode: original.paymentMode,
+        }),
       },
     });
     const paid = round2(Math.max(0, Number(purchase.purchasePaidAmount ?? 0) - amount));

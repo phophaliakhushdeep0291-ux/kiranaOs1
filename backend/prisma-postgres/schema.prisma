@@ -2331,6 +2331,7 @@ model FinancialLedger {
   businessDate   DateTime
   serverSeq      BigInt?
   idempotencyKey String
+  evidenceJson   String   @default("{}")
   reversedById   String?
   createdAt      DateTime @default(now())
 

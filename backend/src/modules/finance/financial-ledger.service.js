@@ -48,6 +48,7 @@ function ledgerRow({
   businessDate,
   idempotencyKey,
 }) {
+  const amountPaise = toPaiseBigInt(amount);
   return {
     shopId,
     customerId,
@@ -59,10 +60,23 @@ function ledgerRow({
     sourceId,
     entryType,
     direction,
-    amountPaise: toPaiseBigInt(amount),
+    amountPaise,
     paymentMode,
     businessDate: businessDate ?? new Date(),
     idempotencyKey,
+    evidenceJson: JSON.stringify({
+      version: 1,
+      capturedAt: new Date().toISOString(),
+      sourceType,
+      sourceId,
+      billId,
+      paymentId,
+      purchaseBillId,
+      entryType,
+      direction,
+      amountPaise: String(amountPaise),
+      paymentMode,
+    }),
   };
 }
 

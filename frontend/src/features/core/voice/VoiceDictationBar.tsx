@@ -61,7 +61,7 @@ export function VoiceDictationBar({
           type="button"
           onClick={onStart}
           data-testid={`${testId}-start`}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand-softer)] px-3 text-[12px] font-black text-[var(--brand)] transition-colors hover:bg-[var(--brand-soft)] disabled:opacity-50"
+          className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-[var(--brand-softer)] px-3 text-[12px] font-black text-[var(--brand)] transition-colors hover:bg-[var(--brand-soft)] disabled:opacity-50"
           disabled={!supported}
         >
           <Mic size={14} />
@@ -90,7 +90,7 @@ export function VoiceDictationBar({
           onClick={onToggleSpeak}
           aria-label={labels.speakToggle}
           aria-pressed={speakPrompts}
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-white/70"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-white/70"
         >
           {speakPrompts ? <Volume2 size={15} /> : <VolumeX size={15} />}
         </button>
@@ -98,7 +98,7 @@ export function VoiceDictationBar({
           type="button"
           onClick={onStop}
           data-testid={`${testId}-stop`}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-white px-2.5 text-[12px] font-black text-[#536383] transition-colors hover:bg-[#f1f4f8]"
+          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-white px-2.5 text-[12px] font-black text-[#536383] transition-colors hover:bg-[#f1f4f8]"
         >
           <Square size={12} />
           {labels.stop}

@@ -1031,16 +1031,19 @@ async function assertProductCodeNamespaceAvailable(shopId, product, sellingUnits
   }
   if (requestedByCode.size === 0) return;
 
-  const [products, units] = await Promise.all([
-    client.product.findMany({
-      where: { shopId, ...(excludeProductId ? { NOT: { id: excludeProductId } } : {}) },
-      select: { id: true, name: true, barcode: true, sku: true, deletedAt: true },
-    }),
-    client.productSellingUnit.findMany({
-      where: { shopId, ...(excludeProductId ? { NOT: { productId: excludeProductId } } : {}) },
-      select: { productId: true, unitCode: true, barcode: true, sku: true, product: { select: { name: true } } },
-    }),
-  ]);
+  // Keep operations on an interactive transaction strictly sequential. Prisma's
+  // SQLite library engine can batch a Promise.all against the transaction's one
+  // connection, panic internally and close the transaction. PostgreSQL gains
+  // nothing from parallel reads here either: the shop row is deliberately held
+  // until the namespace decision and write finish.
+  const products = await client.product.findMany({
+    where: { shopId, ...(excludeProductId ? { NOT: { id: excludeProductId } } : {}) },
+    select: { id: true, name: true, barcode: true, sku: true, deletedAt: true },
+  });
+  const units = await client.productSellingUnit.findMany({
+    where: { shopId, ...(excludeProductId ? { NOT: { productId: excludeProductId } } : {}) },
+    select: { productId: true, unitCode: true, barcode: true, sku: true, product: { select: { name: true } } },
+  });
 
   for (const owner of products) {
     const matched = [owner.barcode, owner.sku]
