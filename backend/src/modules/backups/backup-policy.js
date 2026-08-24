@@ -33,7 +33,7 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // The double-entry books are portable business history. ChartOfAccount must
   // restore before journal entries, and entries before their lines; the backup
   // service derives that order from the Prisma relations.
-  "FinancialLedger", "ChartOfAccount", "JournalEntry", "JournalLine",
+  "FinancialLedger", "ChartOfAccount", "JournalEntry", "JournalLine", "AccountingPeriod",
   "BankStatementImport", "BankStatementTransaction",
   "BankReconciliationAllocation", "BankReconciliationEvent", "AuditRule", "AuditRun",
   "AuditEvaluation", "AuditFinding", "AuditFindingRule", "AuditEvidenceRequirement",

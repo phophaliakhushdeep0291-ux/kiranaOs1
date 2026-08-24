@@ -65,7 +65,7 @@ model Shop {
   chartOfAccounts               ChartOfAccount[]
   journalEntries                JournalEntry[]
   journalLines                  JournalLine[]
-  accountingPeriods            AccountingPeriod[]
+  accountingPeriods             AccountingPeriod[]
   billCounter                   BillCounter?
   subscriptions                 Subscription[]
   onboardingPurchases           OnboardingPurchase[]

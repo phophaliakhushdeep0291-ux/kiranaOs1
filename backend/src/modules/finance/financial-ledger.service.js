@@ -205,6 +205,12 @@ async function postBillEffectLedger(tx, {
     }));
   }
 
+  const costAmount = postsReporting ? (bill.items ?? []).reduce((sum, item) => round2(sum + Number(item.lineCost ?? 0)), 0) : 0;
+  if (costAmount !== 0) {
+    rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType, sourceId: bill.id, entryType: "cost_of_goods_sold", direction: "debit", amount: sign * costAmount, businessDate: date, idempotencyKey: `${keyBase}:cost_of_goods_sold` }));
+    rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType, sourceId: bill.id, entryType: "inventory_sale", direction: "credit", amount: sign * costAmount, businessDate: date, idempotencyKey: `${keyBase}:inventory_sale` }));
+  }
+
   const gstAmount = postsReporting ? Number(bill.gst ?? 0) : 0;
   if (gstAmount !== 0) {
     rows.push(ledgerRow({
@@ -353,6 +359,7 @@ export async function postSaleReturnLedger(tx, {
     error.code = "SALE_RETURN_ACCOUNTING_EVIDENCE_MISMATCH";
     throw error;
   }
+
   const rows = [ledgerRow({
     shopId,
     billId: bill.id,
@@ -365,6 +372,12 @@ export async function postSaleReturnLedger(tx, {
     businessDate: date,
     idempotencyKey: `${keyBase}:sale`,
   })];
+
+  const returnCost = (bill.items ?? []).reduce((sum, item) => round2(sum + Number(item.lineCost ?? 0)), 0);
+  if (returnCost !== 0) {
+    rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType: "sale_return", sourceId: bill.id, entryType: "cost_of_goods_sold", direction: "debit", amount: returnCost, businessDate: date, idempotencyKey: `${keyBase}:cost_of_goods_sold` }));
+    rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType: "sale_return", sourceId: bill.id, entryType: "inventory_sale", direction: "credit", amount: returnCost, businessDate: date, idempotencyKey: `${keyBase}:inventory_sale` }));
+  }
 
   const gstAmount = Number(bill.gst ?? 0);
   if (gstAmount !== 0) {

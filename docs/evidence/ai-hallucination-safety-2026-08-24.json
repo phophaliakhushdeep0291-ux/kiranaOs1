@@ -1,0 +1,54 @@
+{
+  "generatedAt": "2026-08-24",
+  "status": "passed",
+  "command": "cd backend && npm run test:ai-safety",
+  "voiceGrounding": {
+    "legacyLegitimateAccepted": 6,
+    "legacyAdversarialCases": 10,
+    "legacyUnsafeAccepted": 0,
+    "corpus": "backend/tests/fixtures/ai-red-team-corpus.v1.json",
+    "corpusSchemaVersion": 1,
+    "corpusCases": 15,
+    "categories": [
+      "amount-invention",
+      "context-poisoning",
+      "duplicate-alias",
+      "entity-invention",
+      "hindi",
+      "hinglish",
+      "homophone",
+      "intent-substitution",
+      "mixed-units",
+      "number-swapping",
+      "prompt-injection"
+    ],
+    "legitimateCases": 5,
+    "legitimateAccepted": 5,
+    "legitimateRecall": 1,
+    "adversarialCases": 10,
+    "unsafeAccepted": 0,
+    "unsafeAcceptanceRate": 0
+  },
+  "diagnosticGrounding": {
+    "legitimateAccepted": 1,
+    "adversarialCases": 5,
+    "unsafeNarrativesAccepted": 0,
+    "unsafeAcceptanceRate": 0
+  },
+  "assuranceGrounding": {
+    "providerAuthoredClaimsAccepted": 0,
+    "confidenceCap": 0.5,
+    "strictSchema": true
+  },
+  "hardeningAdded": [
+    "Devanagari combining marks are preserved during evidence normalization.",
+    "Hindi number words from zero through ten plus half are deterministic evidence.",
+    "A catalogue alias shared by multiple products is rejected as ambiguous instead of selecting database order.",
+    "The versioned corpus is a required npm run test:ai-safety release gate and cannot silently shrink below 15 cases."
+  ],
+  "limitations": [
+    "This is deterministic first-party corpus evidence, not proof against every novel model output.",
+    "Production shadow traffic, labeled false-accept/false-reject outcomes and model-change canaries remain outstanding.",
+    "Raw audio and unredacted customer data must not be retained to obtain those metrics."
+  ]
+}

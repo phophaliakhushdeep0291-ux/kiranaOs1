@@ -19,6 +19,7 @@ const ACCOUNTS = {
   // sit against something. Clears when the bill is cancelled (debt reversed) or restored.
   recycleBinSuspense: { code: "2900", name: "Recycle-bin suspense", category: "liability" },
   sales: { code: "4000", name: "Net sales", category: "income" },
+  costOfGoodsSold: { code: "5000", name: "Cost of goods sold", category: "expense" },
   operatingExpenses: { code: "6000", name: "Operating expenses", category: "expense" },
   waivers: { code: "6100", name: "Waivers and rounding", category: "expense" },
 };
@@ -37,6 +38,8 @@ const ENTRY_MAPPING = {
   recycle_bin_offset: { account: ACCOUNTS.recycleBinSuspense, side: "credit" },
   gst_output: { account: ACCOUNTS.gstOutput, side: "credit" },
   gst_sales_reclassification: { account: ACCOUNTS.sales, side: "debit" },
+  cost_of_goods_sold: { account: ACCOUNTS.costOfGoodsSold, side: "debit" },
+  inventory_sale: { account: ACCOUNTS.inventory, side: "credit" },
   inventory_purchase: { account: ACCOUNTS.inventory, side: "debit" },
   inventory_purchase_return: { account: ACCOUNTS.inventory, side: "credit" },
   supplier_payable: { account: ACCOUNTS.payables, side: "credit" },

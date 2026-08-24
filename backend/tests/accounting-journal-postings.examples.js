@@ -13,7 +13,10 @@ function capture() {
   const rows = [];
   return {
     rows,
-    tx: { financialLedger: { create: async ({ data }) => { rows.push({ id: `row-${rows.length + 1}`, ...data }); return data; } } },
+    tx: {
+      accountingPeriod: { findFirst: async () => null },
+      financialLedger: { create: async ({ data }) => { rows.push({ id: `row-${rows.length + 1}`, ...data }); return data; } },
+    },
   };
 }
 

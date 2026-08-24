@@ -154,7 +154,7 @@ export async function emailBillReceipt(shopId, billId, email) {
 
 export async function softDeleteBill(shopId, billId, { reason } = {}, actor = {}) {
   return db.$transaction(async (tx) => {
-    const bill = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { payments: true } });
+    const bill = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });
     if (!bill) throw new AppError("Bill not found", 404);
     // Idempotent under offline replay: a re-delivered DELETE_BILL event stops here, so the
     // ledger below is posted exactly once per actual trip to the recycle bin. The unique
@@ -207,7 +207,7 @@ export async function softDeleteBill(shopId, billId, { reason } = {}, actor = {}
 
 export async function restoreDeletedBill(shopId, billId, actor = {}) {
   return db.$transaction(async (tx) => {
-    const bill = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { payments: true } });
+    const bill = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });
     if (!bill) throw new AppError("Bill not found", 404);
     // Same replay guard as softDeleteBill, from the other side.
     if (!bill.deletedAt) return bill;

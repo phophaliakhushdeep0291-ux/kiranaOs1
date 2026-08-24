@@ -18,6 +18,7 @@ export const SYSTEM_ACCOUNTS = [
   ["3000", "Owner capital", "equity", "credit", "owner_capital"],
   ["3100", "Owner drawings", "equity", "debit", "owner_drawings"],
   ["4000", "Net sales", "income", "credit", "sales"],
+  ["5000", "Cost of goods sold", "expense", "debit", "cost_of_goods_sold"],
   ["6000", "Operating expenses", "expense", "debit", "operating_expenses"],
   ["6100", "Waivers and rounding", "expense", "debit", "waivers"],
 ].map(([code, name, category, normalSide, systemKey]) => ({ code, name, category, normalSide, systemKey }));
@@ -27,6 +28,7 @@ const ENTRY_MAPPING = {
   udhar_debit: ["1100", "debit"], udhar_credit: ["1100", "credit"], udhar_return_credit: ["1100", "credit"],
   gift_card_issued: ["2100", "credit"], gift_card_redeemed: ["2100", "debit"], waiver_expense: ["6100", "debit"],
   recycle_bin_offset: ["2900", "credit"], gst_output: ["2200", "credit"], gst_sales_reclassification: ["4000", "debit"],
+  cost_of_goods_sold: ["5000", "debit"], inventory_sale: ["1200", "credit"],
   inventory_purchase: ["1200", "debit"], inventory_purchase_return: ["1200", "credit"], supplier_payable: ["2000", "credit"],
   supplier_payable_reduction: ["2000", "debit"], supplier_credit_receivable: ["1300", "debit"], cash_out: ["1000", "credit"],
   upi_out: ["1010", "credit"], bank_out: ["1020", "credit"], other_out: ["1030", "credit"], cash_refund_in: ["1000", "debit"],
@@ -35,6 +37,23 @@ const ENTRY_MAPPING = {
 
 const opposite = (side) => side === "debit" ? "credit" : "debit";
 const tenderCode = (mode) => String(mode).toLowerCase() === "upi" ? "1010" : ["bank", "card"].includes(String(mode).toLowerCase()) ? "1020" : "1000";
+
+function accountingError(message, code, status = 409) {
+  return Object.assign(new Error(message), { code, status });
+}
+
+async function assertPeriodOpen(shopId, businessDate, client) {
+  if (!client.accountingPeriod) return;
+  const locked = await client.accountingPeriod.findFirst({ where: { shopId, status: "closed", startsAt: { lte: businessDate }, endsAt: { gte: businessDate } } });
+  if (locked) throw accountingError(`Accounting period ${locked.name} is closed`, "ACCOUNTING_PERIOD_CLOSED");
+}
+
+function validateBalancedLines(lines) {
+  const debitPaise = lines.reduce((sum, line) => sum + BigInt(line.debitPaise ?? 0), 0n);
+  const creditPaise = lines.reduce((sum, line) => sum + BigInt(line.creditPaise ?? 0), 0n);
+  if (debitPaise <= 0n || debitPaise !== creditPaise) throw accountingError("Journal debits and credits must be equal and non-zero", "GENERAL_LEDGER_UNBALANCED_JOURNAL", 400);
+  return { debitPaise, creditPaise };
+}
 
 export function projectLedgerRow(row) {
   const signed = BigInt(row.amountPaise ?? 0);
@@ -73,6 +92,7 @@ export async function postFinancialLedgerRows(client, rows) {
   if (!rows.length) return [];
   const shopId = rows[0].shopId;
   if (rows.some((row) => row.shopId !== shopId)) throw new Error("A journal batch cannot span shops");
+  for (const row of rows) await assertPeriodOpen(shopId, new Date(row.businessDate), client);
   const createdRows = [];
   for (const row of rows) createdRows.push(await client.financialLedger.create({ data: row }));
   // Lightweight unit-test transaction doubles intentionally expose only the
@@ -100,6 +120,67 @@ export async function postFinancialLedgerRows(client, rows) {
   return createdRows;
 }
 
+export async function createAccount(shopId, input, client = db) {
+  const systemKey = null;
+  return client.chartOfAccount.create({ data: { shopId, ...input, systemKey } });
+}
+
+export async function updateAccount(shopId, accountId, input, client = db) {
+  const account = await client.chartOfAccount.findFirst({ where: { id: accountId, shopId }, include: { _count: { select: { lines: true } } } });
+  if (!account) throw accountingError("Account not found", "ACCOUNT_NOT_FOUND", 404);
+  if (account.systemKey && input.active === false) throw accountingError("System accounts cannot be deactivated", "SYSTEM_ACCOUNT_IMMUTABLE");
+  if (input.active === false && account._count.lines > 0) throw accountingError("An account with journal history cannot be deactivated", "ACCOUNT_HAS_JOURNAL_HISTORY");
+  return client.chartOfAccount.update({ where: { id: account.id }, data: input });
+}
+
+export async function createManualJournal(shopId, input, { sourceType = "manual_journal", actorUserId = null, client = db } = {}) {
+  validateBalancedLines(input.lines);
+  const businessDate = new Date(input.businessDate);
+  await assertPeriodOpen(shopId, businessDate, client);
+  const codes = [...new Set(input.lines.map((line) => line.accountCode))];
+  const accounts = await client.chartOfAccount.findMany({ where: { shopId, active: true, code: { in: codes } } });
+  if (accounts.length !== codes.length) throw accountingError("Every journal line must reference an active account in this shop", "JOURNAL_ACCOUNT_INVALID", 400);
+  const accountByCode = new Map(accounts.map((account) => [account.code, account]));
+  return client.journalEntry.create({ data: {
+    shopId, sourceType, sourceId: input.reference, businessDate, description: input.description,
+    evidenceJson: JSON.stringify({ version: 1, actorUserId, manuallyApproved: true }),
+    lines: { create: input.lines.map((line, index) => ({ shopId, accountId: accountByCode.get(line.accountCode).id, lineNumber: index + 1, debitPaise: BigInt(line.debitPaise), creditPaise: BigInt(line.creditPaise), memo: line.memo ?? null, evidenceJson: JSON.stringify({ version: 1, actorUserId, accountCode: line.accountCode }) })) },
+  }, include: { lines: { include: { account: true } } } });
+}
+
+export async function reverseJournal(shopId, journalId, input, actorUserId = null, client = db) {
+  const original = await client.journalEntry.findFirst({ where: { id: journalId, shopId, status: "posted" }, include: { lines: { include: { account: true } }, reversals: true } });
+  if (!original) throw accountingError("Posted journal not found", "JOURNAL_NOT_FOUND", 404);
+  if (original.reversals.length) throw accountingError("Journal is already reversed", "JOURNAL_ALREADY_REVERSED");
+  const businessDate = input.businessDate ? new Date(input.businessDate) : new Date();
+  await assertPeriodOpen(shopId, businessDate, client);
+  return client.journalEntry.create({ data: {
+    shopId, sourceType: "journal_reversal", sourceId: original.id, businessDate, reversalOfId: original.id,
+    description: `Reversal: ${input.reason}`, evidenceJson: JSON.stringify({ version: 1, actorUserId, reason: input.reason, originalJournalId: original.id }),
+    lines: { create: original.lines.map((line, index) => ({ shopId, accountId: line.accountId, lineNumber: index + 1, debitPaise: line.creditPaise, creditPaise: line.debitPaise, memo: input.reason, evidenceJson: JSON.stringify({ version: 1, actorUserId, reversedLineId: line.id, accountCode: line.account.code }) })) },
+  }, include: { lines: true } });
+}
+
+export async function createAccountingPeriod(shopId, input, client = db) {
+  const startsAt = new Date(input.startsAt); const endsAt = new Date(input.endsAt);
+  const overlap = await client.accountingPeriod.findFirst({ where: { shopId, startsAt: { lte: endsAt }, endsAt: { gte: startsAt } } });
+  if (overlap) throw accountingError(`Period overlaps ${overlap.name}`, "ACCOUNTING_PERIOD_OVERLAP");
+  return client.accountingPeriod.create({ data: { shopId, name: input.name, startsAt, endsAt } });
+}
+
+export async function listAccountingPeriods(shopId, client = db) {
+  return client.accountingPeriod.findMany({ where: { shopId }, orderBy: { startsAt: "desc" } });
+}
+
+export async function closeAccountingPeriod(shopId, periodId, input, actorUserId, client = db) {
+  const period = await client.accountingPeriod.findFirst({ where: { id: periodId, shopId } });
+  if (!period) throw accountingError("Accounting period not found", "ACCOUNTING_PERIOD_NOT_FOUND", 404);
+  if (period.status === "closed") return period;
+  const trial = await getTrialBalance(shopId, { from: period.startsAt.toISOString(), to: period.endsAt.toISOString() }, client);
+  if (trial.status !== "balanced") throw accountingError("The period cannot close until its trial balance is balanced", "ACCOUNTING_PERIOD_UNBALANCED");
+  return client.accountingPeriod.update({ where: { id: period.id }, data: { status: "closed", closedAt: new Date(), closedByUserId: actorUserId, closeReason: input.reason } });
+}
+
 export async function projectShopGeneralLedger(shopId, client = db) {
   const accounts = await ensureSystemAccounts(shopId, client);
   const accountByCode = new Map(accounts.map((account) => [account.code, account]));
@@ -110,12 +191,21 @@ export async function projectShopGeneralLedger(shopId, client = db) {
   for (const sourceRows of groups.values()) {
     const source = sourceRows[0];
     const found = await client.journalEntry.findUnique({ where: { shopId_sourceType_sourceId: { shopId, sourceType: source.sourceType, sourceId: source.sourceId } } });
-    if (found) { existing += 1; continue; }
-    const projection = buildJournalProjection(sourceRows);
+    let rowsToProject = sourceRows;
+    let journalSourceType = source.sourceType;
+    if (found) {
+      existing += 1;
+      let projectedIds = [];
+      try { projectedIds = JSON.parse(found.evidenceJson).ledgerRowIds ?? []; } catch { /* verification below catches malformed legacy evidence */ }
+      rowsToProject = sourceRows.filter((row) => !projectedIds.includes(row.id));
+      if (!rowsToProject.length) continue;
+      journalSourceType = `${source.sourceType}_projection_supplement`;
+    }
+    const projection = buildJournalProjection(rowsToProject);
     await client.journalEntry.create({ data: {
-      shopId, sourceType: source.sourceType, sourceId: source.sourceId, businessDate: source.businessDate,
-      description: `${source.sourceType}:${source.sourceId}`,
-      evidenceJson: JSON.stringify({ version: 1, projectionVersion: GENERAL_LEDGER_VERSION, ledgerRowIds: sourceRows.map((row) => row.id) }),
+      shopId, sourceType: journalSourceType, sourceId: source.sourceId, businessDate: source.businessDate,
+      description: `${journalSourceType}:${source.sourceId}`,
+      evidenceJson: JSON.stringify({ version: 1, projectionVersion: GENERAL_LEDGER_VERSION, supplemental: Boolean(found), ledgerRowIds: rowsToProject.map((row) => row.id) }),
       lines: { create: projection.lines.map((line, index) => ({
         shopId, accountId: accountByCode.get(line.accountCode).id, financialLedgerId: line.financialLedgerId,
         lineNumber: index + 1, debitPaise: line.side === "debit" ? line.amountPaise : 0n,
@@ -145,4 +235,32 @@ export async function getTrialBalance(shopId, { from, to } = {}, client = db) {
   const totalCreditPaise = rows.reduce((sum, row) => sum + row.creditPaise, 0n);
   const publicRows = rows.map((row) => ({ ...row, debitPaise: Number(row.debitPaise), creditPaise: Number(row.creditPaise), balancePaise: Number(row.balancePaise) }));
   return { version: GENERAL_LEDGER_VERSION, status: totalDebitPaise === totalCreditPaise ? "balanced" : "attention_required", totalDebitPaise: Number(totalDebitPaise), totalCreditPaise: Number(totalCreditPaise), differencePaise: Number(totalDebitPaise - totalCreditPaise), accounts: publicRows };
+}
+
+export async function getProfitAndLoss(shopId, query = {}, client = db) {
+  const trial = await getTrialBalance(shopId, query, client);
+  const income = trial.accounts.filter((row) => row.category === "income").map((row) => ({ ...row, amountPaise: row.creditPaise - row.debitPaise }));
+  const expenses = trial.accounts.filter((row) => row.category === "expense").map((row) => ({ ...row, amountPaise: row.debitPaise - row.creditPaise }));
+  const totalIncomePaise = income.reduce((sum, row) => sum + row.amountPaise, 0);
+  const totalExpensePaise = expenses.reduce((sum, row) => sum + row.amountPaise, 0);
+  return { version: GENERAL_LEDGER_VERSION, from: query.from ?? null, to: query.to ?? null, totalIncomePaise, totalExpensePaise, netProfitPaise: totalIncomePaise - totalExpensePaise, income, expenses, basis: "posted_general_ledger" };
+}
+
+export async function getBalanceSheet(shopId, { asOf } = {}, client = db) {
+  const trial = await getTrialBalance(shopId, { ...(asOf ? { to: asOf } : {}) }, client);
+  const assets = trial.accounts.filter((row) => row.category === "asset").map((row) => ({ ...row, amountPaise: row.debitPaise - row.creditPaise }));
+  const liabilities = trial.accounts.filter((row) => row.category === "liability").map((row) => ({ ...row, amountPaise: row.creditPaise - row.debitPaise }));
+  const equityAccounts = trial.accounts.filter((row) => row.category === "equity").map((row) => ({ ...row, amountPaise: row.creditPaise - row.debitPaise }));
+  const currentEarningsPaise = trial.accounts.filter((row) => row.category === "income").reduce((sum, row) => sum + row.creditPaise - row.debitPaise, 0)
+    - trial.accounts.filter((row) => row.category === "expense").reduce((sum, row) => sum + row.debitPaise - row.creditPaise, 0);
+  const totalAssetsPaise = assets.reduce((sum, row) => sum + row.amountPaise, 0);
+  const totalLiabilitiesPaise = liabilities.reduce((sum, row) => sum + row.amountPaise, 0);
+  const totalEquityPaise = equityAccounts.reduce((sum, row) => sum + row.amountPaise, 0) + currentEarningsPaise;
+  return { version: GENERAL_LEDGER_VERSION, asOf: asOf ?? null, status: totalAssetsPaise === totalLiabilitiesPaise + totalEquityPaise ? "balanced" : "attention_required", totalAssetsPaise, totalLiabilitiesPaise, totalEquityPaise, differencePaise: totalAssetsPaise - totalLiabilitiesPaise - totalEquityPaise, assets, liabilities, equity: [...equityAccounts, { code: "CURRENT_EARNINGS", name: "Current earnings", category: "equity", normalSide: "credit", debitPaise: 0, creditPaise: 0, balancePaise: -currentEarningsPaise, amountPaise: currentEarningsPaise }] };
+}
+
+export async function getJournal(shopId, journalId, client = db) {
+  const journal = await client.journalEntry.findFirst({ where: { id: journalId, shopId }, include: { lines: { orderBy: { lineNumber: "asc" }, include: { account: true } }, reversalOf: true, reversals: true } });
+  if (!journal) throw accountingError("Journal not found", "JOURNAL_NOT_FOUND", 404);
+  return journal;
 }

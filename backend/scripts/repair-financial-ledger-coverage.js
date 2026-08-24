@@ -41,7 +41,7 @@ async function expectedRowsForBill(bill) {
   return capture.rows;
 }
 
-const bills = await db.bill.findMany({ include: { payments: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+const bills = await db.bill.findMany({ include: { items: true, payments: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
 const existing = await db.financialLedger.findMany({ select: { shopId: true, idempotencyKey: true } });
 const existingKeys = new Set(existing.map((row) => `${row.shopId}:${row.idempotencyKey}`));
 const repairs = [];
