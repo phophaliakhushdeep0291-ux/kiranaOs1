@@ -1,7 +1,7 @@
 import * as service from "./purchaseReturns.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 
-const actor = (req) => ({ userId: req.user?.userId ?? null, deviceId: req.user?.deviceId ?? undefined, req });
+const actor = (req) => ({ userId: req.user?.userId ?? null, userName: req.user?.userName ?? req.user?.userEmail ?? null, deviceId: req.user?.deviceId ?? undefined, req });
 
 export async function list(req, res, next) { try { res.json({ success: true, data: await service.listPurchaseReturns(req.shopId, { ...req.query, locationId: requestLocationId(req) }) }); } catch (error) { next(error); } }
 export async function create(req, res, next) { try { const data = await service.createPurchaseReturn(req.shopId, req.body, actor(req), requestLocationId(req)); res.status(data.idempotentReplay ? 200 : 201).json({ success: true, data }); } catch (error) { next(error); } }

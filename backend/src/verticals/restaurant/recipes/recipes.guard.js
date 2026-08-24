@@ -2,6 +2,7 @@ import { registerSaleGuard } from "../../../shared/sale-guards.js";
 import { decrementLocationInventory } from "../../../modules/stores/location-context.service.js";
 import { round2 } from "../../../utils/money.js";
 import { effectiveQtyPerPortion } from "./recipes.service.js";
+import { stockLedgerProvenance } from "../../../modules/inventory/stock-ledger-provenance.js";
 
 /**
  * The restaurant's condition on a sale: selling a dish consumes its ingredients.
@@ -92,7 +93,7 @@ export function registerRecipeConsumptionGuard() {
     if (consumption.length === 0) return null;
 
     return {
-      onConfirmed: async ({ tx: confirmTx, bill, location: confirmedLocation }) => {
+      onConfirmed: async ({ tx: confirmTx, bill, location: confirmedLocation, actor }) => {
         for (const row of consumption) {
           const ingredient = await confirmTx.product.findFirst({
             where: { id: row.ingredientProductId, shopId, deletedAt: null },
@@ -115,6 +116,7 @@ export function registerRecipeConsumptionGuard() {
               locationId: (confirmedLocation ?? location).id,
               productId: row.ingredientProductId,
               productName: ingredient.name ?? row.ingredientName,
+              ...stockLedgerProvenance(actor),
               // Its own action, not "sale": what left the fridge is an
               // ingredient, and a report that called it a sale would double-count
               // against the dish that was actually sold.

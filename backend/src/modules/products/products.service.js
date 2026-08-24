@@ -19,6 +19,7 @@ import {
   setLocationInventory,
   writeLocationStockRow,
 } from "../stores/location-context.service.js";
+import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
 
 async function writeRequiredProductAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -379,6 +380,7 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
           sourceDeviceId: actor.deviceId ?? productIdentity.sourceDeviceId ?? null,
           sourceType: "product_create",
           sourceId: created.id,
+          ...stockLedgerProvenance(actor),
         };
         if (resolvedPackagingMode === "per_pack") {
           let runningTotal = 0;
@@ -511,7 +513,7 @@ async function findExistingProductByIdentity(client, shopId, identity) {
  * StockLedger row, so "current stock == sum of recorded movements" continues to
  * hold. A no-op change writes nothing rather than logging a zero-quantity row.
  */
-async function applyStockCorrectionInTransaction(tx, shopId, productId, newStockBaseQty, locationId) {
+async function applyStockCorrectionInTransaction(tx, shopId, productId, newStockBaseQty, locationId, actor = {}) {
   const requested = Number(newStockBaseQty);
   if (!Number.isFinite(requested)) return;
 
@@ -530,10 +532,13 @@ async function applyStockCorrectionInTransaction(tx, shopId, productId, newStock
       locationId: location.id,
       productId,
       productName: product.name,
+      ...stockLedgerProvenance(actor),
       action: "correction",
       changeBaseQty: stockResult.difference,
       oldStockBaseQty: stockResult.oldStock,
       newStockBaseQty: stockResult.newStock,
+      sourceType: "product_edit",
+      sourceId: productId,
       note: "Stock set from product edit",
     },
   });
@@ -639,13 +644,14 @@ export async function updateProduct(shopId, id, data, { actor = {}, locationId =
           normalizedUnits,
           requestedStockBaseQty,
           locationId,
+          actor,
         });
       } else if (requestedStockBaseQty !== undefined) {
-        await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, locationId);
+        await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, locationId, actor);
       }
     } else {
       if (requestedStockBaseQty !== undefined) {
-        await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, locationId);
+        await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, locationId, actor);
       }
       await syncDefaultSellingUnitPricing(tx, shopId, id, { ...existing, ...rest });
     }
@@ -715,6 +721,7 @@ async function applyPerPackStockEditInTransaction(tx, {
   normalizedUnits,
   requestedStockBaseQty,
   locationId,
+  actor = {},
 }) {
   const desiredTotal = perPackStockTotal(normalizedUnits);
   if (requestedStockBaseQty !== undefined && round2(Number(requestedStockBaseQty)) !== desiredTotal) {
@@ -799,6 +806,7 @@ async function applyPerPackStockEditInTransaction(tx, {
         locationId: location.id,
         productId: product.id,
         productName: product.name,
+        ...stockLedgerProvenance(actor),
         sellingUnitId: stored?.id ?? null,
         sellingUnitQty: change.deltaQty,
         action: "correction",

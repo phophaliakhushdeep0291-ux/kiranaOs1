@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { getLocationQuantity, resolveOperationalLocation, setLocationInventory } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { stockLedgerProvenance } from "./stock-ledger-provenance.js";
 
 const includeDetail = { location: true, lines: { orderBy: { productName: "asc" } } };
 
@@ -232,6 +233,7 @@ export async function applyStockCount(shopId, locationId, sessionId, actor = {})
           locationId: location.id,
           productId: product.id,
           productName: product.name,
+          ...stockLedgerProvenance(actor),
           action: "stock_count",
           changeBaseQty: result.difference,
           oldStockBaseQty: result.oldStock,

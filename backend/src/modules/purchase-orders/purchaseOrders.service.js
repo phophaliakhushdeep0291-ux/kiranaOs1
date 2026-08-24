@@ -8,6 +8,7 @@ import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
 import { postPurchaseReceiptLedger } from "../finance/financial-ledger.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
+import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
 import {
   calculateReorderRecommendation,
   REORDER_SALES_WINDOW_DAYS,
@@ -35,8 +36,8 @@ async function writeRequiredPurchaseOrderAudit(entry, client) {
 }
 
 function normalizeActor(actor) {
-  if (typeof actor === "string") return { userId: actor, deviceId: undefined, req: null };
-  return { userId: actor?.userId ?? null, deviceId: actor?.deviceId ?? undefined, req: actor?.req ?? null };
+  if (typeof actor === "string") return { userId: actor, userName: null, deviceId: undefined, req: null };
+  return { userId: actor?.userId ?? null, userName: actor?.userName ?? null, deviceId: actor?.deviceId ?? undefined, req: actor?.req ?? null };
 }
 
 function parseDate(value) {
@@ -463,6 +464,7 @@ export async function receivePurchaseOrder(shopId, id, data, actor = {}) {
             locationId: order.locationId,
             productId: product.id,
             productName: product.name,
+            ...stockLedgerProvenance(auditActor),
             action: "purchase",
             changeBaseQty: input.quantityBaseQty,
             oldStockBaseQty: stockResult.oldStock,

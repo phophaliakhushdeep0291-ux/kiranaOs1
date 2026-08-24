@@ -3,6 +3,7 @@ import { decrementLocationInventory } from "../../../modules/stores/location-con
 import { round2 } from "../../../utils/money.js";
 import { aggregateRecipeConsumption } from "../recipes/recipes.guard.js";
 import { comboComponentsFor, expandComboPortions } from "./combos.service.js";
+import { stockLedgerProvenance } from "../../../modules/inventory/stock-ledger-provenance.js";
 
 /**
  * What selling a combo actually takes out of the kitchen.
@@ -91,7 +92,7 @@ export function registerComboConsumptionGuard() {
     if (ingredientConsumption.length === 0 && directStock.length === 0) return null;
 
     return {
-      onConfirmed: async ({ tx: confirmTx, bill, location: confirmedLocation }) => {
+      onConfirmed: async ({ tx: confirmTx, bill, location: confirmedLocation, actor }) => {
         const target = confirmedLocation ?? location;
         const moves = [
           ...ingredientConsumption.map((row) => ({
@@ -131,6 +132,7 @@ export function registerComboConsumptionGuard() {
               locationId: target.id,
               productId: move.productId,
               productName: product.name ?? move.name,
+              ...stockLedgerProvenance(actor),
               /*
                * "recipe_use", not "sale" and not a new action of our own.
                *

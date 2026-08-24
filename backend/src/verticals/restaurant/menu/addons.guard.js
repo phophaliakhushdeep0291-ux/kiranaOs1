@@ -2,6 +2,7 @@ import { registerSaleGuard } from "../../../shared/sale-guards.js";
 import { decrementLocationInventory } from "../../../modules/stores/location-context.service.js";
 import { moneyShadows, round2 } from "../../../utils/money.js";
 import { validateSelection } from "./addons.service.js";
+import { stockLedgerProvenance } from "../../../modules/inventory/stock-ledger-provenance.js";
 
 function refusal(message, code = "MENU_ADDON_SELECTION_INVALID", status = 409) {
   return { code, message, status };
@@ -110,7 +111,7 @@ export function registerAddonSelectionGuard() {
         const snapshots = snapshotsByIndex.get(itemIndex) ?? [];
         return snapshots.length > 0 ? { addons: { create: snapshots } } : null;
       },
-      onConfirmed: consumption.size === 0 ? undefined : async ({ tx: confirmTx, bill, location: confirmedLocation }) => {
+      onConfirmed: consumption.size === 0 ? undefined : async ({ tx: confirmTx, bill, location: confirmedLocation, actor }) => {
         for (const [productId, qtyBase] of consumption) {
           const product = await confirmTx.product.findFirst({
             where: { id: productId, shopId, deletedAt: null },
@@ -129,6 +130,7 @@ export function registerAddonSelectionGuard() {
               locationId: (confirmedLocation ?? location).id,
               productId,
               productName: product.name,
+              ...stockLedgerProvenance(actor),
               action: "addon_use",
               changeBaseQty: -qtyBase,
               oldStockBaseQty: stockResult.oldStock,

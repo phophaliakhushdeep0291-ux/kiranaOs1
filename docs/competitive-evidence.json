@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "KiranaOS competitive capability evidence",
-  "generatedAt": "2026-08-22",
+  "generatedAt": "2026-08-24",
   "scoreScale": 10,
   "statusFactors": {
     "verified": 1,
@@ -450,17 +450,17 @@
       "weight": 30,
       "status": "verified",
       "proofKind": "runtime_required",
-      "summary": "A current authenticated matrix passed 36/36 responsive captures and sequential keyboard traversal on 9/9 core routes, with zero undersized targets, horizontal overflow, route failures, loading stalls, runtime errors, missed controls, unnamed focus stops, invisible focus indicators or hidden/inert focus leaks.",
+      "summary": "A current authenticated matrix passed 36/36 responsive captures and sequential keyboard traversal on 9/9 core routes, with zero undersized targets, horizontal overflow, route failures, loading stalls, runtime errors, definite axe WCAG violations, missed controls, unnamed focus stops, invisible focus indicators or hidden/inert focus leaks. The axe run covered WCAG 2 A/AA, 2.1 A/AA and 2.2 AA tags and records its indeterminate gradient/overlap contrast nodes separately for manual review.",
       "competitorEvidence": [
         { "product": "Lightspeed Retail", "url": "https://www.lightspeedhq.com/pos/retail/features/", "claim": "Polished cross-device workflows are part of the leading retail UX benchmark." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["frontend/scripts/capture-mobile-core-matrix-v1.mjs", "frontend/src/tests/mobile-core-matrix-harness.test.ts", "docs/evidence/mobile-core-accessibility-2026-08-22.json", "docs/evidence/core-route-keyboard-2026-08-22.json"],
+        "sourcePaths": ["frontend/scripts/capture-mobile-core-matrix-v1.mjs", "frontend/src/tests/mobile-core-matrix-harness.test.ts", "docs/evidence/core-route-wcag-axe-2026-08-24.json"],
         "testCommands": ["cd frontend && npm run qa:mobile-core-matrix"],
         "externalProofRequirements": [],
-        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/core-route-keyboard-2026-08-22.json" }
+        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/core-route-wcag-axe-2026-08-24.json" }
       },
-      "lastVerifiedAt": "2026-08-22"
+      "lastVerifiedAt": "2026-08-24"
     },
     {
       "id": "formal_accessibility_audit",
@@ -468,17 +468,17 @@
       "weight": 20,
       "status": "partial",
       "proofKind": "runtime_required",
-      "summary": "The live matrix fails on missing titles, language, landmarks, heading order, duplicate IDs, broken ARIA references, unnamed controls, unlabeled forms, missing image alternatives or hidden focus traps. The current run passed 36/36 captures and 9/9 settled-route keyboard traversals. Manual screen-reader, measured contrast and keyboard-only end-to-end mutation-task certification remain outstanding.",
+      "summary": "The live matrix combines custom semantic checks with pinned axe-core WCAG 2 A/AA, 2.1 A/AA and 2.2 AA rules. The current run passed 36/36 captures and 9/9 settled-route keyboard traversals with zero definite axe violations and 7,306 passed nodes. It explicitly retains 177 indeterminate contrast nodes on gradient, translucent or overlapped backgrounds instead of counting them as passes. Manual screen-reader, measured review of those contrast nodes and keyboard-only end-to-end mutation-task certification remain outstanding.",
       "competitorEvidence": [
         { "product": "Lightspeed Retail", "url": "https://www.lightspeedhq.com/pos/retail/features/", "claim": "Usable employee and customer workflows form the comparison baseline." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["frontend/scripts/capture-mobile-core-matrix-v1.mjs", "frontend/src/tests/mobile-core-matrix-harness.test.ts", "docs/evidence/mobile-core-accessibility-2026-08-22.json", "docs/evidence/core-route-keyboard-2026-08-22.json"],
+        "sourcePaths": ["frontend/scripts/capture-mobile-core-matrix-v1.mjs", "frontend/src/tests/mobile-core-matrix-harness.test.ts", "docs/evidence/core-route-wcag-axe-2026-08-24.json"],
         "testCommands": ["cd frontend && npm run qa:mobile-core-matrix"],
-        "externalProofRequirements": ["Manual NVDA/TalkBack/VoiceOver task walkthrough", "Keyboard-only end-to-end mutation-task audit", "Measured WCAG color-contrast audit"],
-        "runtimeProof": { "status": "passed-automated-only", "artifact": "docs/evidence/core-route-keyboard-2026-08-22.json" }
+        "externalProofRequirements": ["Manual NVDA/TalkBack/VoiceOver task walkthrough", "Keyboard-only end-to-end mutation-task audit", "Measured/manual review of the 177 axe-indeterminate contrast nodes"],
+        "runtimeProof": { "status": "passed-automated-only", "artifact": "docs/evidence/core-route-wcag-axe-2026-08-24.json" }
       },
-      "lastVerifiedAt": "2026-08-22"
+      "lastVerifiedAt": "2026-08-24"
     }
   ],
   "caps": [

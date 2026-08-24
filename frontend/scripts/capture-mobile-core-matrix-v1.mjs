@@ -150,7 +150,7 @@ async function auditPage(client, qaId, route, width, height, expectedPath = rout
     passRuleCount:result.passes.length,
     passNodeCount:result.passes.reduce((total,rule)=>total+rule.nodes.length,0),
     incompleteCount:result.incomplete.length,
-    incomplete:result.incomplete.map(rule=>({id:rule.id,impact:rule.impact,help:rule.help,nodeCount:rule.nodes.length}))
+    incomplete:result.incomplete.map(rule=>({id:rule.id,impact:rule.impact,help:rule.help,nodeCount:rule.nodes.length,nodes:rule.nodes.slice(0,24).map(node=>({target:node.target,html:node.html.slice(0,240),failureSummary:node.failureSummary}))}))
   }))`);
   metrics.axe = axe;
   const image = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });

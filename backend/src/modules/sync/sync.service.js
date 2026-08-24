@@ -10,6 +10,7 @@ import { createCustomerSchema, updateCustomerSchema, udharPaymentSchema } from "
 import { createCustomer, getCustomer, recordUdharPayment, restoreCustomer, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
 import { damageSchema, correctionSchema, purchaseSchema } from "../inventory/inventory.schema.js";
 import { correctStock, recordDamage, recordPurchase } from "../inventory/inventory.service.js";
+import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
 import { createProductSchema, updateProductSchema } from "../products/products.schema.js";
 import { bindProductBarcode, createProduct, getProduct, restoreDeletedProduct, softDeleteProduct, updateProduct } from "../products/products.service.js";
 import { createSupplierSchema, updateSupplierSchema } from "../suppliers/suppliers.schema.js";
@@ -36,6 +37,7 @@ import { moneyAmount, quantityAmount } from "../../utils/validationSchemas.js";
 import { addMoney, moneyShadows, round2, toPaise, toPaiseBigInt } from "../../utils/money.js";
 import { toBaseQty } from "../../utils/units.js";
 import { calculateCustomerUdharBalance, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
+import { postFinancialLedgerRows } from "../finance/general-ledger.service.js";
 import {
   decrementLocationInventory,
   getLocationQuantity,
@@ -1655,6 +1657,7 @@ async function applyCreateBill(shopId, event, user, context) {
   // Cashier attribution is server-authoritative. Ignore any frontend-created createdByUserId.
   const bill = await confirmBill(shopId, parsed, {
     userId: user?.userId ?? null,
+    userName: user?.userName ?? user?.userEmail ?? null,
     deviceId: billIdentity.sourceDeviceId ?? user?.deviceId ?? null,
     isOfflineReplay: true,
     businessDate: event.client_created_at ?? event.clientCreatedAt ?? event.createdAt ?? new Date().toISOString(),
@@ -1973,6 +1976,7 @@ async function applyRestoreBill(shopId, event, user, context) {
 
   const bill = await restoreCancelledBill(shopId, billId, { reason: payload.reason }, {
     userId: user?.userId ?? user?.id ?? null,
+    userName: user?.userName ?? user?.userEmail ?? null,
     deviceId: user?.deviceId ?? null,
     syncEventId: getClientEventId(event),
   });
@@ -2288,6 +2292,7 @@ async function applyAdjustStock(shopId, event, user, context) {
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   const identity = getAdjustStockIdentity(event, payload);
   identity.userId = user?.userId ?? user?.id ?? null;
+  identity.userName = user?.userName ?? user?.userEmail ?? null;
   identity.sourceDeviceId = identity.sourceDeviceId ?? user?.deviceId ?? null;
   identity.syncEventId = getClientEventId(event);
 
@@ -2677,6 +2682,7 @@ async function applyStockPurchase(shopId, event, user, context) {
   // server never moved, and the supplier's due went unrecorded.
   const identity = getPurchaseIdentity(event, rawPayload);
   identity.userId = user?.userId ?? user?.id ?? null;
+  identity.userName = user?.userName ?? user?.userEmail ?? null;
   identity.sourceDeviceId = identity.sourceDeviceId ?? user?.deviceId ?? null;
   identity.syncEventId = getClientEventId(event);
   const payload = stockPurchasePayloadSchema.parse({ ...rawPayload, idempotencyKey: identity.idempotencyKey ?? rawPayload.idempotencyKey });
@@ -2706,6 +2712,7 @@ async function applyStockPurchaseBatch(shopId, event, user, context) {
     const rawPayload = normalizeStockPurchaseSyncPayload(line);
     const identity = getPurchaseIdentity(event, rawPayload);
     identity.userId = user?.userId ?? user?.id ?? null;
+    identity.userName = user?.userName ?? user?.userEmail ?? null;
     identity.sourceDeviceId = identity.sourceDeviceId ?? user?.deviceId ?? null;
     identity.syncEventId = getClientEventId(event);
     const parsed = stockPurchasePayloadSchema.parse({
@@ -3176,8 +3183,7 @@ async function applyRecordSupplierPayment(shopId, event, user, context) {
     if (existing) {
       return { type: event.type, paymentId: existing.sourceId, ledgerEntryId: existing.id, purchaseHistoryId: existing.purchaseBillId, idempotentReplay: true };
     }
-    const ledger = await tx.financialLedger.create({
-      data: {
+    const [ledger] = await postFinancialLedgerRows(tx, [{
         shopId,
         supplierId: purchase.supplierId,
         purchaseBillId: purchase.id,
@@ -3200,8 +3206,7 @@ async function applyRecordSupplierPayment(shopId, event, user, context) {
           amountPaise: String(toPaiseBigInt(amount)),
           paymentMode: mode,
         }),
-      },
-    });
+    }]);
     const paid = round2(Number(purchase.purchasePaidAmount ?? 0) + amount);
     const due = round2(Math.max(0, Number(purchase.billAmount ?? 0) - paid));
     const updated = await tx.purchaseHistory.update({
@@ -3256,8 +3261,7 @@ async function applyReverseSupplierPayment(shopId, event, user) {
     const purchase = await tx.purchaseHistory.findFirst({ where: { id: original.purchaseBillId, shopId } });
     if (!purchase) throw new AppError("Purchase bill not found for supplier payment", 404);
     const amount = Number(original.amountPaise) / 100;
-    const reversal = await tx.financialLedger.create({
-      data: {
+    const [reversal] = await postFinancialLedgerRows(tx, [{
         shopId,
         supplierId: original.supplierId,
         purchaseBillId: purchase.id,
@@ -3280,8 +3284,7 @@ async function applyReverseSupplierPayment(shopId, event, user) {
           amountPaise: String(-original.amountPaise),
           paymentMode: original.paymentMode,
         }),
-      },
-    });
+    }]);
     const paid = round2(Math.max(0, Number(purchase.purchasePaidAmount ?? 0) - amount));
     const due = round2(Math.max(0, Number(purchase.billAmount ?? 0) - paid));
     const updated = await tx.purchaseHistory.update({
@@ -3402,6 +3405,7 @@ async function applyStockSale(shopId, event, user, context) {
           locationId: location.id,
           productId: product.id,
           productName: product.name,
+          ...stockLedgerProvenance(user),
           action: "sale",
           changeBaseQty: -qtyInBase,
           oldStockBaseQty: stock.oldStock,
@@ -3411,8 +3415,8 @@ async function applyStockSale(shopId, event, user, context) {
           idempotencyKey,
           clientMovementId,
           sourceDeviceId,
-          sourceType: idempotencyKey ? "sale" : null,
-          sourceId: idempotencyKey ? product.id : null,
+          sourceType: "manual_sale",
+          sourceId: product.id,
           note: stock.shortfallBaseQty > 0
             ? `${payload.note ?? "Offline manual stock sale"} | ${location.name} stock negative by ${stock.shortfallBaseQty} ${product.baseUnit}; reconcile inventory`
             : payload.note ?? "Offline manual stock sale",

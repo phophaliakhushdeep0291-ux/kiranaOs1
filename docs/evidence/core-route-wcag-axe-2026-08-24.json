@@ -1,0 +1,68 @@
+{
+  "generatedAt": "2026-08-24T11:14:45.904Z",
+  "status": "passed-with-manual-review-items",
+  "scope": "Authenticated core-route responsive, semantic, axe WCAG and sequential-keyboard matrix",
+  "sourceArtifact": "frontend/qa-artifacts/mobile-core-matrix-axe-20260824-final/report.json",
+  "sourceArtifactSha256": "279CBF14FB960FBA5EA822714ED2285FDB1E7CCA5B32A0E77535C2859C39EB99",
+  "engine": {
+    "name": "axe-core",
+    "version": "4.10.3",
+    "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]
+  },
+  "responsiveCaptures": {
+    "passed": 36,
+    "total": 36,
+    "routes": 9,
+    "viewports": ["375x667", "390x844", "430x932", "768x1024"],
+    "definiteAxeViolations": 0,
+    "axePassedRuleOccurrences": 900,
+    "axePassedNodes": 7306,
+    "horizontalOverflowFindings": 0,
+    "undersizedTargetFindings": 0,
+    "customSemanticFindings": 0,
+    "runtimeErrors": 0
+  },
+  "keyboardTraversal": {
+    "passedRoutes": 9,
+    "totalRoutes": 9,
+    "precomputedSequentialControls": 420,
+    "observedFocusStops": 421,
+    "unnamedFocusStops": 0,
+    "invisibleFocusIndicators": 0,
+    "hiddenOrInertFocusLeaks": 0,
+    "missedSequentialControls": 0,
+    "semanticallyMatchedDomReplacements": 0,
+    "routes": [
+      { "qaId": "MQA-BILL-01", "route": "/billing", "expected": 39, "visited": 39 },
+      { "qaId": "MQA-PROD-01", "route": "/products", "expected": 45, "visited": 45 },
+      { "qaId": "MQA-CUST-01", "route": "/customers", "expected": 39, "visited": 39 },
+      { "qaId": "MQA-INV-01", "route": "/inventory", "expected": 52, "visited": 52 },
+      { "qaId": "MQA-PUR-01", "route": "/purchase-bills", "expected": 45, "visited": 45 },
+      { "qaId": "MQA-RPT-01", "route": "/reports", "expected": 52, "visited": 53 },
+      { "qaId": "MQA-SET-01", "route": "/settings", "expected": 72, "visited": 72 },
+      { "qaId": "MQA-SYNC-01", "route": "/sync-status", "expected": 37, "visited": 37 },
+      { "qaId": "MQA-UDHAR-01", "route": "/udhar", "expected": 39, "visited": 39 }
+    ]
+  },
+  "manualReviewBoundary": {
+    "axeIncompleteRuleOccurrences": 32,
+    "axeIncompleteNodes": 177,
+    "rules": ["color-contrast"],
+    "reasonSummary": "axe could not determine the effective background for gradient, translucent, overlapped or partially obscured content; four non-text glyph nodes also require manual judgment",
+    "unaffectedRoute": "MQA-SYNC-01",
+    "claimPolicy": "Incomplete nodes are not counted as passes and this artifact is not represented as a complete accessibility certification."
+  },
+  "statefulChecks": {
+    "udharSpaTransition": {
+      "path": "/customers",
+      "search": "?filter=udhar",
+      "activeFilter": "udhar"
+    }
+  },
+  "limitations": [
+    "Manual NVDA, TalkBack and VoiceOver task walkthroughs remain required.",
+    "Keyboard-only end-to-end mutation tasks remain required; this proves the settled route traversal.",
+    "Gradient, translucent and overlapped text reported as axe incomplete requires measured/manual contrast review.",
+    "This is first-party automated browser evidence, not a third-party accessibility certification."
+  ]
+}

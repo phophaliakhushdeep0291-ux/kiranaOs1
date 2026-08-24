@@ -17,7 +17,13 @@ export interface InventoryLedgerDisplayEntry extends Record<string, unknown> {
   productName?: string;
   action?: string;
   quantityDelta?: number;
+  stockBefore?: number;
+  stockAfter?: number;
   unit?: string;
+  actorUserId?: string | null;
+  actorName?: string | null;
+  sourceType?: string | null;
+  sourceId?: string | null;
   note?: string;
   createdAt: string;
 }
@@ -32,6 +38,28 @@ export const getGetStockLedgerQueryKey = (params?: QueryParams) => ["inventory",
 type InventoryQueryKey = ReturnType<typeof getGetInventoryQueryKey>;
 type LowStockQueryKey = ReturnType<typeof getGetLowStockQueryKey>;
 type StockLedgerQueryKey = ReturnType<typeof getGetStockLedgerQueryKey>;
+
+export function normalizeInventoryLedgerEntry(raw: Record<string, unknown>): InventoryLedgerDisplayEntry {
+  const product = raw.product && typeof raw.product === "object"
+    ? raw.product as Record<string, unknown>
+    : null;
+  return {
+    ...raw,
+    id: String(raw.id ?? raw.clientMovementId ?? raw.client_movement_id ?? ""),
+    productName: String(raw.productName ?? raw.product_name ?? ""),
+    action: String(raw.action ?? raw.type ?? "movement"),
+    quantityDelta: Number(raw.quantityDelta ?? raw.quantity_delta ?? raw.changeBaseQty ?? 0),
+    stockBefore: Number(raw.stockBefore ?? raw.stock_before ?? raw.oldStockBaseQty ?? 0),
+    stockAfter: Number(raw.stockAfter ?? raw.stock_after ?? raw.newStockBaseQty ?? 0),
+    unit: String(raw.unit ?? raw.baseUnit ?? product?.baseUnit ?? ""),
+    actorUserId: raw.actorUserId as string | null | undefined ?? raw.actor_user_id as string | null | undefined ?? null,
+    actorName: raw.actorName as string | null | undefined ?? raw.actor_name as string | null | undefined ?? null,
+    sourceType: raw.sourceType as string | null | undefined ?? raw.source_type as string | null | undefined ?? null,
+    sourceId: raw.sourceId as string | null | undefined ?? raw.source_id as string | null | undefined ?? null,
+    createdAt: String(raw.createdAt ?? raw.created_at ?? new Date(0).toISOString()),
+    sync_status: raw.sync_status ?? "synced",
+  };
+}
 
 function readCachedInventory(): InventoryItem[] {
   return readInstantCache<InventoryItem[]>(INVENTORY_CACHE_KEY, readInstantCache<Product[]>(PRODUCTS_CACHE_KEY, []) as InventoryItem[])
@@ -147,7 +175,8 @@ export function useGetStockLedger(
   const extra = getQueryOptions<InventoryLedgerResponse, StockLedgerQueryKey>(options);
   const limit = Number(params?.limit ?? 50);
   const readCachedLedger = () => {
-    const cachedEntries = readInstantCache<InventoryLedgerDisplayEntry[]>(INVENTORY_MOVEMENTS_CACHE_KEY, []);
+    const cachedEntries = readInstantCache<Record<string, unknown>[]>(INVENTORY_MOVEMENTS_CACHE_KEY, [])
+      .map(normalizeInventoryLedgerEntry);
     return { entries: cachedEntries.slice(0, Number.isFinite(limit) ? limit : 50), total: cachedEntries.length };
   };
   const cached = readCachedLedger();
@@ -163,7 +192,19 @@ export function useGetStockLedger(
       const liveCached = readCachedLedger();
       if (!isBrowserOnline()) return liveCached;
       try {
-        return await inventoryApi.getStockLedger(params) as InventoryLedgerResponse;
+        const response = await inventoryApi.getStockLedger(params) as LedgerResult<Record<string, unknown>>;
+        const merged = new Map(liveCached.entries.map((entry) => [entry.id, entry]));
+        for (const raw of response.entries ?? []) {
+          const entry = normalizeInventoryLedgerEntry(raw);
+          const clientMovementId = String(raw.clientMovementId ?? raw.client_movement_id ?? "");
+          if (clientMovementId) merged.delete(clientMovementId);
+          merged.set(entry.id, entry);
+        }
+        const entries = [...merged.values()]
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .slice(0, Number.isFinite(limit) ? limit : 50);
+        writeInstantCache(INVENTORY_MOVEMENTS_CACHE_KEY, entries);
+        return { ...response, entries, total: Math.max(response.total ?? 0, entries.length) };
       } catch (error) {
         if (liveCached.entries.length > 0 || isRecoverableNetworkError(error)) return liveCached;
         throw error;

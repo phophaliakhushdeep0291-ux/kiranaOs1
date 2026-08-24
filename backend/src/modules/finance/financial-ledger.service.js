@@ -16,6 +16,7 @@
 // restore/delete/undelete keys include the operation timestamp so a legitimate
 // cancel→restore→cancel cycle posts distinct rows instead of colliding.
 import { round2, toPaiseBigInt } from "../../utils/money.js";
+import { postFinancialLedgerRows } from "./general-ledger.service.js";
 
 const TENDER_ENTRY = {
   cash: { entryType: "cash_in", direction: "debit" },
@@ -262,9 +263,7 @@ async function postBillEffectLedger(tx, {
     }
   }
 
-  for (const row of rows) {
-    await tx.financialLedger.create({ data: row });
-  }
+  await postFinancialLedgerRows(tx, rows);
 }
 
 export async function postBillCreatedLedger(tx, args) {
@@ -447,7 +446,7 @@ export async function postSaleReturnLedger(tx, {
     }));
   }
 
-  for (const row of rows) await tx.financialLedger.create({ data: row });
+  await postFinancialLedgerRows(tx, rows);
 }
 
 // Udhar khata payment: money in (cash_in/upi_in/bank_in) + outstanding down (udhar_credit).
@@ -493,9 +492,7 @@ export async function postUdharPaymentLedger(tx, {
       idempotencyKey: `${base}:udhar_credit`,
     }),
   ];
-  for (const row of rows) {
-    await tx.financialLedger.create({ data: row });
-  }
+  await postFinancialLedgerRows(tx, rows);
 }
 
 function purchaseRefundEntry(mode) {
@@ -548,7 +545,7 @@ export async function postPurchaseReceiptLedger(tx, { shopId, receipt, supplierI
       idempotencyKey: `${keyBase}:supplier_payable`,
     }));
   }
-  for (const row of rows) await tx.financialLedger.create({ data: row });
+  await postFinancialLedgerRows(tx, rows);
 }
 
 async function postPurchaseReturnEffectLedger(tx, {
@@ -598,7 +595,7 @@ async function postPurchaseReturnEffectLedger(tx, {
       idempotencyKey: `${keyBase}:${refundEntry.entryType}`,
     }));
   }
-  for (const row of rows) await tx.financialLedger.create({ data: row });
+  await postFinancialLedgerRows(tx, rows);
 }
 
 export async function postPurchaseReturnCreatedLedger(tx, { shopId, purchaseReturn, businessDate }) {
@@ -667,7 +664,7 @@ export async function postExpenseEffectLedger(tx, {
       idempotencyKey: `${keyBase}:${outflow.entryType}`,
     }));
   }
-  for (const row of rows) await tx.financialLedger.create({ data: row });
+  await postFinancialLedgerRows(tx, rows);
 }
 const PAISE_PER_RUPEE = 100;
 const SUMMARY_ENTRY_TYPES = ["sale", "cash_in", "upi_in", "bank_in", "udhar_debit", "udhar_credit", "udhar_return_credit", "gift_card_issued", "gift_card_redeemed", "waiver_expense"];

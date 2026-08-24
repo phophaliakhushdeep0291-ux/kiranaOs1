@@ -2,6 +2,7 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { decrementLocationInventory, incrementLocationInventory, resolveOperationalLocation } from "../../modules/stores/location-context.service.js";
+import { stockLedgerProvenance } from "../../modules/inventory/stock-ledger-provenance.js";
 
 function cleanDate(value) { return new Date(`${value}T00:00:00.000Z`); }
 function effectiveBomQty(row, scale) { return round2(Number(row.quantityBaseQty) * scale * (1 + Number(row.wastagePercent || 0) / 100)); }
@@ -45,7 +46,7 @@ export async function createRun(shopId, input) {
   return db.productionRun.create({ data: { shopId, locationId: location.id, bomId: bom.id, runNumber: input.runNumber, plannedOutputBaseQty: input.plannedOutputBaseQty, notes: input.notes ?? null } });
 }
 
-export async function completeRun(shopId, runId, input) {
+export async function completeRun(shopId, runId, input, actor = {}) {
   if (input.qcStatus === "failed") throw new AppError("A failed QC batch cannot be released into finished stock", 422, "PRODUCTION_QC_FAILED");
   return db.$transaction(async (tx) => {
     const run = await tx.productionRun.findFirst({ where: { id: runId, shopId }, include: { bom: { include: { items: true } } } });
@@ -72,7 +73,7 @@ export async function completeRun(shopId, runId, input) {
       }
       const packs = row.sellingUnitId && row.packageCount ? new Map([[row.sellingUnitId, { sellingUnit: product.sellingUnits.find((unit) => unit.id === row.sellingUnitId), qty: row.packageCount }]]) : null;
       const moved = await decrementLocationInventory(tx, { shopId, location, product, quantityBase: row.actualBaseQty, packs });
-      await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: product.id, productName: product.name, sellingUnitId: row.sellingUnitId ?? null, sellingUnitQty: row.packageCount ?? null, action: "production_use", changeBaseQty: -row.actualBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "production_run", sourceId: run.id, note: `Consumed by ${run.runNumber}` } });
+      await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: product.id, productName: product.name, ...stockLedgerProvenance(actor), sellingUnitId: row.sellingUnitId ?? null, sellingUnitQty: row.packageCount ?? null, action: "production_use", changeBaseQty: -row.actualBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "production_run", sourceId: run.id, note: `Consumed by ${run.runNumber}` } });
       await tx.productionConsumption.create({ data: { shopId, runId: run.id, productId: product.id, inventoryLotId: row.inventoryLotId ?? null, plannedBaseQty: effectiveBomQty(bomItem, scale), actualBaseQty: row.actualBaseQty, sourceBatchNumber } });
     }
 
@@ -87,7 +88,7 @@ export async function completeRun(shopId, runId, input) {
       await tx.productionOutput.create({ data: { shopId, runId: run.id, productId: finished.id, sellingUnitId: unit?.id ?? null, inventoryLotId: lot.id, packagingSku: unit?.sku ?? unit?.unitCode ?? null, quantityBaseQty: row.quantityBaseQty, packageCount: row.packageCount ?? null, batchNumber: input.finishedBatchNumber } });
     }
     const moved = await incrementLocationInventory(tx, { shopId, location, product: finished, quantityBase: input.actualOutputBaseQty, packs: packMap.size ? packMap : null });
-    await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: finished.id, productName: finished.name, action: "production_output", changeBaseQty: input.actualOutputBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "production_run", sourceId: run.id, note: `Finished batch ${input.finishedBatchNumber}` } });
+    await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: finished.id, productName: finished.name, ...stockLedgerProvenance(actor), action: "production_output", changeBaseQty: input.actualOutputBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "production_run", sourceId: run.id, note: `Finished batch ${input.finishedBatchNumber}` } });
     return tx.productionRun.update({ where: { id: run.id }, data: { status: input.qcStatus === "conditional" ? "quarantined" : "completed", actualOutputBaseQty: input.actualOutputBaseQty, finishedBatchNumber: input.finishedBatchNumber, manufacturedOn: cleanDate(input.manufacturedOn), expiresOn: cleanDate(input.expiresOn), qcStatus: input.qcStatus, notes: input.notes ?? run.notes, startedAt: run.startedAt ?? new Date(), completedAt: new Date() }, include: { bom: true, consumptions: true, outputs: true } });
   });
 }

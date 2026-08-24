@@ -4,7 +4,7 @@ import { assertLocationCapability } from "../stores/location-access.service.js";
 import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
 import { ENTITY_TYPES } from "../assurance/assurance.constants.js";
 
-const actor = (req) => ({ userId: req.user?.userId ?? null, deviceId: req.user?.deviceId ?? undefined, req });
+const actor = (req) => ({ userId: req.user?.userId ?? null, userName: req.user?.userName ?? req.user?.userEmail ?? null, deviceId: req.user?.deviceId ?? undefined, req });
 
 async function assertOrderAccess(req, capability) {
   const order = await service.getPurchaseOrder(req.shopId, req.params.id);

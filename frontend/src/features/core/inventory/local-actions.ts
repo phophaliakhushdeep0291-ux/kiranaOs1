@@ -7,6 +7,7 @@ import type { InventoryItem, Product, StockMovementInput } from "@/types/api";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
 import { buildUnitMismatchWarning, fromInventoryBaseQty } from "@/features/core/inventory/calculations";
+import { loadAuthSession } from "@/lib/storage/auth-storage";
 import {
   findInventorySellingUnit,
   inventoryDisplayQuantity,
@@ -242,6 +243,9 @@ async function stockMovementLocalFirst(
 
   const movementId = createLocalId(`stock_${movementType}`);
   const now = new Date().toISOString();
+  const currentUser = loadAuthSession().user;
+  const actorUserId = currentUser?.id ?? null;
+  const actorName = currentUser?.name ?? currentUser?.email ?? "Offline operator";
   const selectedSellingUnit = findInventorySellingUnit(product, enteredUnit);
   const displayUnit = inventoryUnitLabel(product, enteredUnit);
   const syncEnteredUnit = product.baseUnit ?? productUnit ?? enteredUnit;
@@ -264,6 +268,14 @@ async function stockMovementLocalFirst(
     productName: product.name,
     type: movementType,
     action: movementType,
+    actorUserId,
+    actor_user_id: actorUserId,
+    actorName,
+    actor_name: actorName,
+    sourceType: `manual_${movementType}`,
+    source_type: `manual_${movementType}`,
+    sourceId: movementId,
+    source_id: movementId,
     quantityDelta: validated.quantityDelta,
     quantity_delta: validated.quantityDelta,
     stockBefore: previousStock,
@@ -324,6 +336,8 @@ async function stockMovementLocalFirst(
     entityType: "inventory_movement",
     entityId: movementId,
     entityLabel: product.name ?? productId,
+    userId: actorUserId,
+    userName: actorName,
     oldValue: product ?? null,
     newValue: { movement, product: updatedProduct },
     reason: data.reason ?? data.note ?? movementType,

@@ -12,6 +12,7 @@ function movementIdentity(req) {
     sourceDeviceId: Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader ?? null,
     locationId: requestLocationId(req),
     userId: req.user?.userId ?? null,
+    userName: req.user?.userName ?? req.user?.userEmail ?? null,
     req,
   };
 }

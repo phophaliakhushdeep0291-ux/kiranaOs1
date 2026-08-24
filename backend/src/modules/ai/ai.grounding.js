@@ -2,17 +2,29 @@ import { AI_INTENTS } from "./ai.command-schema.js";
 
 const NUMBER_WORDS = new Map(Object.entries({
   zero: 0, shunya: 0,
+  "शून्य": 0,
   one: 1, ek: 1,
+  "एक": 1,
   two: 2, do: 2,
+  "दो": 2,
   three: 3, teen: 3,
+  "तीन": 3,
   four: 4, char: 4, chaar: 4,
+  "चार": 4,
   five: 5, paanch: 5, panch: 5,
+  "पांच": 5, "पाँच": 5,
   six: 6, chhe: 6, cheh: 6,
+  "छह": 6,
   seven: 7, saat: 7,
+  "सात": 7,
   eight: 8, aath: 8,
+  "आठ": 8,
   nine: 9, nau: 9,
+  "नौ": 9,
   ten: 10, das: 10,
+  "दस": 10,
   half: 0.5, aadha: 0.5, adha: 0.5,
+  "आधा": 0.5,
 }));
 
 const INTENT_EVIDENCE = Object.freeze({
@@ -109,7 +121,10 @@ export function normalizeEvidenceText(value) {
   return String(value ?? "")
     .normalize("NFKC")
     .toLocaleLowerCase("en-IN")
-    .replace(/[^\p{L}\p{N}.]+/gu, " ")
+    // Devanagari vowel signs are Unicode marks, not letters. Dropping them
+    // changes दो into द and चीनी into च न, destroying the exact evidence we
+    // need to distinguish Hindi quantities and catalogue aliases.
+    .replace(/[^\p{L}\p{M}\p{N}.]+/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -167,14 +182,18 @@ function phraseIsSupported(phrase, transcript) {
 
 function matchCatalogProduct(query, transcript, catalog) {
   const normalizedQuery = normalizeEvidenceText(query);
+  const matches = [];
   for (const product of catalog) {
     const terms = [product.name, ...product.aliases].map(normalizeEvidenceText).filter(Boolean);
     const queryMatches = terms.some((term) => term === normalizedQuery || (term.length >= 3 && normalizedQuery.includes(term)) || (normalizedQuery.length >= 3 && term.includes(normalizedQuery)));
     if (!queryMatches) continue;
     const spokenMatch = terms.some((term) => phraseIsSupported(term, transcript));
-    if (spokenMatch) return product;
+    if (spokenMatch) matches.push(product);
   }
-  return null;
+  // A shared alias such as "oil" is evidence that the user named a family, not
+  // evidence for whichever SKU happens to be first in the database. Only an
+  // unambiguous tenant-catalogue match may ground a product mutation.
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function minimumConfidence(intent) {

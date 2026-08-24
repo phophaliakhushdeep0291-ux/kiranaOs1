@@ -15,6 +15,7 @@ import {
   bankStatementListQuerySchema,
 } from "./bank-reconciliation.schema.js";
 import * as controller from "./accounting-control.controller.js";
+import * as generalLedgerController from "./general-ledger.controller.js";
 import * as bankController from "./bank-reconciliation.controller.js";
 import {
   channelSettlementImportQuerySchema,
@@ -27,6 +28,9 @@ import * as channelController from "./channel-settlement.controller.js";
 const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated(), requireRole("owner"));
 router.get("/control", validateQuery(accountingControlQuerySchema), controller.control);
+router.get("/chart-of-accounts", generalLedgerController.accounts);
+router.post("/general-ledger/project", requireOwnerPin, generalLedgerController.project);
+router.get("/trial-balance", validateQuery(accountingControlQuerySchema), generalLedgerController.trialBalance);
 router.get("/bank-statements", requireFeature("csv_import_export"), validateQuery(bankStatementListQuerySchema), bankController.imports);
 router.post("/bank-statements/import", requireFeature("csv_import_export"), requireOwnerPin, validate(bankStatementImportSchema), bankController.importStatement);
 router.get("/bank-reconciliation", requireFeature("csv_import_export"), validateQuery(bankReconciliationQuerySchema), bankController.reconciliation);

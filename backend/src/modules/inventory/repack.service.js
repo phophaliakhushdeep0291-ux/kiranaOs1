@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { decrementLocationInventory, incrementLocationInventory, resolveOperationalLocation } from "../stores/location-context.service.js";
+import { stockLedgerProvenance } from "./stock-ledger-provenance.js";
 
 async function writeRequiredRepackAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -111,6 +112,7 @@ export async function recordRepack(shopId, data, identity = {}) {
     await tx.stockLedger.create({
       data: {
         shopId, locationId: location.id, productId, productName: product.name,
+        ...stockLedgerProvenance(identity),
         action: "repack_out",
         changeBaseQty: -plan.consumedBaseQty,
         oldStockBaseQty: consumed.oldStock,
@@ -118,12 +120,15 @@ export async function recordRepack(shopId, data, identity = {}) {
         sellingUnitId: fromUnit.id,
         sellingUnitQty: plan.fromQuantity,
         note: data.note || `Repacked ${plan.fromQuantity} × ${fromUnit.name} into ${toUnit.name}`,
-        ...(idempotencyKey && { idempotencyKey: `${idempotencyKey}:out`, sourceType: "repack", sourceId: productId }),
+        ...(idempotencyKey && { idempotencyKey: `${idempotencyKey}:out` }),
+        sourceType: "repack",
+        sourceId: productId,
       },
     });
     await tx.stockLedger.create({
       data: {
         shopId, locationId: location.id, productId, productName: product.name,
+        ...stockLedgerProvenance(identity),
         action: "repack_in",
         changeBaseQty: plan.producedBaseQty,
         oldStockBaseQty: produced.oldStock,
@@ -131,7 +136,9 @@ export async function recordRepack(shopId, data, identity = {}) {
         sellingUnitId: toUnit.id,
         sellingUnitQty: plan.producedUnits,
         note: data.note || `Repacked from ${fromUnit.name}`,
-        ...(idempotencyKey && { idempotencyKey: `${idempotencyKey}:in`, sourceType: "repack", sourceId: productId }),
+        ...(idempotencyKey && { idempotencyKey: `${idempotencyKey}:in` }),
+        sourceType: "repack",
+        sourceId: productId,
       },
     });
 

@@ -12,6 +12,7 @@ import {
 } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
+import { stockLedgerProvenance } from "./stock-ledger-provenance.js";
 
 async function writeRequiredInventoryAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -352,6 +353,7 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
       data: {
         shopId, locationId: location.id, productId,
         productName: product.name,
+        ...stockLedgerProvenance(identity),
         action: "purchase",
         changeBaseQty: qtyInBase,
         oldStockBaseQty: stockResult.oldStock,
@@ -371,8 +373,8 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
         idempotencyKey,
         clientMovementId,
         sourceDeviceId,
-        sourceType: idempotencyKey ? "purchase" : null,
-        sourceId: idempotencyKey ? purchaseHistory.id : null,
+        sourceType: "purchase",
+        sourceId: purchaseHistory.id,
       },
     });
 
@@ -546,6 +548,7 @@ export async function recordDamage(shopId, data, identity = {}) {
         data: {
           shopId, locationId: location.id, productId,
           productName: product.name,
+          ...stockLedgerProvenance(identity),
           action: "damage",
           changeBaseQty: -qtyInBase,
           oldStockBaseQty: stockResult.oldStock,
@@ -558,8 +561,8 @@ export async function recordDamage(shopId, data, identity = {}) {
           idempotencyKey,
           clientMovementId,
           sourceDeviceId,
-          sourceType: idempotencyKey ? "adjustment" : null,
-          sourceId: idempotencyKey ? productId : null,
+          sourceType: "damage_adjustment",
+          sourceId: productId,
         },
       });
 
@@ -651,6 +654,7 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
         data: {
           shopId, locationId: location.id, productId,
           productName: product.name,
+          ...stockLedgerProvenance(identity),
           action: "correction",
           changeBaseQty: diff,
           oldStockBaseQty: stockResult.oldStock,
@@ -659,8 +663,8 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
           idempotencyKey,
           clientMovementId,
           sourceDeviceId,
-          sourceType: idempotencyKey ? "adjustment" : null,
-          sourceId: idempotencyKey ? productId : null,
+          sourceType: "stock_adjustment",
+          sourceId: productId,
         },
       });
 
@@ -731,9 +735,18 @@ export async function getLedger(shopId, { productId, action, locationId, from, t
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
+      include: { product: { select: { baseUnit: true } } },
     }),
     db.stockLedger.count({ where }),
   ]);
 
-  return { entries, total, page, limit };
+  return {
+    entries: entries.map(({ product, ...entry }) => ({
+      ...entry,
+      unit: product?.baseUnit ?? null,
+    })),
+    total,
+    page,
+    limit,
+  };
 }

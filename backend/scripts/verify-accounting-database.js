@@ -1,7 +1,7 @@
 import db from "../src/db.js";
 import { ACCOUNTING_CONTROL_VERSION, buildAccountingControl } from "../src/modules/finance/accounting-control.service.js";
 
-const [shops, ledger, bills, payments, purchaseHistory, purchaseReceipts, assuranceFindings] = await Promise.all([
+const [shops, ledger, bills, payments, purchaseHistory, purchaseReceipts, assuranceFindings, journalEntries] = await Promise.all([
   db.shop.findMany({ select: { id: true, name: true } }),
   db.financialLedger.findMany({ orderBy: [{ shopId: "asc" }, { createdAt: "asc" }, { id: "asc" }] }),
   db.bill.findMany(),
@@ -12,6 +12,7 @@ const [shops, ledger, bills, payments, purchaseHistory, purchaseReceipts, assura
     where: { rules: { some: { ruleCode: "CLOSING_SPLIT_PAYMENT_MISMATCH", active: true } } },
     include: { rules: true },
   }),
+  db.journalEntry.findMany({ include: { lines: true } }),
 ]);
 
 const byId = (items) => new Map(items.map((item) => [item.id, item]));
@@ -71,8 +72,16 @@ const accountingFailures = controls.filter(({ result }) => result.status === "at
 const coveredBills = new Set(ledger.filter((row) => row.billId).map((row) => row.billId));
 const uncoveredBills = bills.filter((bill) => String(bill.billType).toLowerCase() !== "estimate" && !coveredBills.has(bill.id));
 const unrecognizedMismatches = sourceAmountMismatches.filter((item) => !recognizedMismatchShops.has(item.shopId));
+const ledgerSourceKeys = new Set(ledger.map((row) => `${row.shopId}\u0000${row.sourceType}\u0000${row.sourceId}`));
+const journalSourceKeys = new Set(journalEntries.map((entry) => `${entry.shopId}\u0000${entry.sourceType}\u0000${entry.sourceId}`));
+const missingJournalProjections = [...ledgerSourceKeys].filter((key) => !journalSourceKeys.has(key));
+const journalBalanceFailures = journalEntries.flatMap((entry) => {
+  const debitPaise = entry.lines.reduce((sum, line) => sum + BigInt(line.debitPaise), 0n);
+  const creditPaise = entry.lines.reduce((sum, line) => sum + BigInt(line.creditPaise), 0n);
+  return debitPaise === creditPaise && entry.lines.length >= 2 ? [] : [{ journalEntryId: entry.id, shopId: entry.shopId, sourceType: entry.sourceType, sourceId: entry.sourceId, debitPaise: String(debitPaise), creditPaise: String(creditPaise), lines: entry.lines.length }];
+});
 
-const failures = accountingFailures.length + uncoveredBills.length + structuralFailures.length + evidenceFailures.length + unrecognizedMismatches.length;
+const failures = accountingFailures.length + uncoveredBills.length + structuralFailures.length + evidenceFailures.length + unrecognizedMismatches.length + missingJournalProjections.length + journalBalanceFailures.length;
 const report = {
   ok: failures === 0,
   engineVersion: ACCOUNTING_CONTROL_VERSION,
@@ -87,8 +96,11 @@ const report = {
     archivedSourceReferences: archivedSourceReferences.length,
     recognizedSourceAmountMismatches: sourceAmountMismatches.length - unrecognizedMismatches.length,
     unrecognizedSourceAmountMismatches: unrecognizedMismatches.length,
+    journalEntries: journalEntries.length,
+    missingJournalProjections: missingJournalProjections.length,
+    journalBalanceFailures: journalBalanceFailures.length,
   },
-  failures: { accountingFailures, uncoveredBills, evidenceFailures, structuralFailures, unrecognizedMismatches },
+  failures: { accountingFailures, uncoveredBills, evidenceFailures, structuralFailures, unrecognizedMismatches, missingJournalProjections, journalBalanceFailures },
 };
 
 console.log(JSON.stringify(report, (_key, value) => typeof value === "bigint" ? value.toString() : value, 2));
