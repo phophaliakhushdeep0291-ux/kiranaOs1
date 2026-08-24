@@ -27,4 +27,9 @@ const routes = fs.readFileSync(new URL("../src/modules/finance/accounting.routes
 assert.match(routes, /\/chart-of-accounts/);
 assert.match(routes, /\/general-ledger\/project/);
 assert.match(routes, /\/trial-balance/);
+assert.match(routes, /\/profit-and-loss/);
+assert.match(routes, /\/balance-sheet/);
+assert.match(routes, /\/opening-balances/);
+assert.match(routes, /\/journals\/:id\/reverse/);
+assert.match(routes, /\/periods\/:id\/close/);
 console.log("general-ledger.examples.js OK");

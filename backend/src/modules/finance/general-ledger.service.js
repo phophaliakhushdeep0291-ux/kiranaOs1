@@ -140,13 +140,15 @@ export async function postFinancialLedgerRows(client, rows) {
 
 export async function createAccount(shopId, input, client = db) {
   const systemKey = null;
+  const existing = await client.chartOfAccount.findFirst({ where: { shopId, code: input.code } });
+  if (existing) throw accountingError("An account with this code already exists", "ACCOUNT_CODE_EXISTS");
   return client.chartOfAccount.create({ data: { shopId, ...input, systemKey } });
 }
 
 export async function updateAccount(shopId, accountId, input, client = db) {
   const account = await client.chartOfAccount.findFirst({ where: { id: accountId, shopId }, include: { _count: { select: { lines: true } } } });
   if (!account) throw accountingError("Account not found", "ACCOUNT_NOT_FOUND", 404);
-  if (account.systemKey && input.active === false) throw accountingError("System accounts cannot be deactivated", "SYSTEM_ACCOUNT_IMMUTABLE");
+  if (account.systemKey) throw accountingError("System accounts are controlled by the posting engine", "SYSTEM_ACCOUNT_IMMUTABLE");
   if (input.active === false && account._count.lines > 0) throw accountingError("An account with journal history cannot be deactivated", "ACCOUNT_HAS_JOURNAL_HISTORY");
   return client.chartOfAccount.update({ where: { id: account.id }, data: input });
 }
@@ -155,6 +157,8 @@ export async function createManualJournal(shopId, input, { sourceType = "manual_
   validateBalancedLines(input.lines);
   const businessDate = new Date(input.businessDate);
   await assertPeriodOpen(shopId, businessDate, client);
+  const existing = await client.journalEntry.findUnique({ where: { shopId_sourceType_sourceId: { shopId, sourceType, sourceId: input.reference } } });
+  if (existing) throw accountingError("This journal reference already exists", "JOURNAL_REFERENCE_EXISTS");
   const codes = [...new Set(input.lines.map((line) => line.accountCode))];
   const accounts = await client.chartOfAccount.findMany({ where: { shopId, active: true, code: { in: codes } } });
   if (accounts.length !== codes.length) throw accountingError("Every journal line must reference an active account in this shop", "JOURNAL_ACCOUNT_INVALID", 400);
@@ -169,6 +173,7 @@ export async function createManualJournal(shopId, input, { sourceType = "manual_
 export async function reverseJournal(shopId, journalId, input, actorUserId = null, client = db) {
   const original = await client.journalEntry.findFirst({ where: { id: journalId, shopId, status: "posted" }, include: { lines: { include: { account: true } }, reversals: true } });
   if (!original) throw accountingError("Posted journal not found", "JOURNAL_NOT_FOUND", 404);
+  if (!["manual_journal", "opening_balance"].includes(original.sourceType)) throw accountingError("System-generated journals must be corrected through their originating business transaction", "SYSTEM_JOURNAL_REVERSAL_FORBIDDEN", 400);
   if (original.reversals.length) throw accountingError("Journal is already reversed", "JOURNAL_ALREADY_REVERSED");
   const businessDate = input.businessDate ? new Date(input.businessDate) : new Date();
   await assertPeriodOpen(shopId, businessDate, client);

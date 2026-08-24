@@ -16,7 +16,7 @@ import {
 } from "./bank-reconciliation.schema.js";
 import * as controller from "./accounting-control.controller.js";
 import * as generalLedgerController from "./general-ledger.controller.js";
-import { accountCreateSchema, accountUpdateSchema, journalCreateSchema, openingBalanceSchema, periodCloseSchema, periodCreateSchema, reversalSchema } from "./general-ledger.schema.js";
+import { accountCreateSchema, accountUpdateSchema, balanceSheetQuerySchema, journalCreateSchema, openingBalanceSchema, periodCloseSchema, periodCreateSchema, reversalSchema } from "./general-ledger.schema.js";
 import * as bankController from "./bank-reconciliation.controller.js";
 import {
   channelSettlementImportQuerySchema,
@@ -35,7 +35,7 @@ router.patch("/chart-of-accounts/:id", requireOwnerPin, validate(accountUpdateSc
 router.post("/general-ledger/project", requireOwnerPin, generalLedgerController.project);
 router.get("/trial-balance", validateQuery(accountingControlQuerySchema), generalLedgerController.trialBalance);
 router.get("/profit-and-loss", validateQuery(accountingControlQuerySchema), generalLedgerController.profitAndLoss);
-router.get("/balance-sheet", generalLedgerController.balanceSheet);
+router.get("/balance-sheet", validateQuery(balanceSheetQuerySchema), generalLedgerController.balanceSheet);
 router.post("/opening-balances", requireOwnerPin, validate(openingBalanceSchema), generalLedgerController.openingBalances);
 router.post("/journals", requireOwnerPin, validate(journalCreateSchema), generalLedgerController.manualJournal);
 router.get("/journals/:id", generalLedgerController.journal);

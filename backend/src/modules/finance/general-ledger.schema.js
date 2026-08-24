@@ -11,3 +11,4 @@ export const openingBalanceSchema = journalCreateSchema.extend({ reference: z.st
 export const reversalSchema = z.object({ reason: z.string().trim().min(3).max(500), businessDate: date.optional() });
 export const periodCreateSchema = z.object({ name: z.string().trim().min(2).max(100), startsAt: date, endsAt: date }).refine((value) => new Date(value.startsAt) <= new Date(value.endsAt), { path: ["endsAt"], message: "endsAt must be on or after startsAt" });
 export const periodCloseSchema = z.object({ reason: z.string().trim().min(3).max(500) });
+export const balanceSheetQuerySchema = z.object({ asOf: date.optional() });
