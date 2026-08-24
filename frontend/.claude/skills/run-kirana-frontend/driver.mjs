@@ -295,9 +295,14 @@ async function audit(c) {
     // The app shell sets overflow-x:clip, so a too-wide child is SLICED OFF
     // rather than making the document scroll — documentWidth stays honest-looking
     // while content is genuinely unreachable. Find the actual culprits instead.
-    const vw=innerWidth,bleeders=[];
+    // An element that overflows INSIDE a horizontally scrollable ancestor is
+    // reachable — a wide ledger table in an overflow-x:auto wrapper is meant to
+    // scroll and is not a defect. Only content the shell silently CLIPS counts.
+    const scrollableX=(n)=>{for(let p=n.parentElement;p;p=p.parentElement){const s=getComputedStyle(p);if(/auto|scroll/.test(s.overflowX)&&p.scrollWidth>p.clientWidth+1)return true}return false};
+    const vw=innerWidth,bleeders=[];let reachableByScroll=0;
     for(const n of document.querySelectorAll("body *")){
       if(!vis(n))continue;
+      if(scrollableX(n)){if(n.getBoundingClientRect().right>vw+1)reachableByScroll++;continue}
       const r=n.getBoundingClientRect();
       if(r.right>vw+1||r.left<-1){
         const s=getComputedStyle(n),p=n.parentElement;
@@ -339,10 +344,40 @@ async function audit(c) {
 
     // Does anything actually receive the click at a control's centre? An overlay
     // sitting on top is invisible in a screenshot and steals every tap.
-    const stolen=[];
-    for(const n of [...document.querySelectorAll("button,[role=button],a[href]")].filter(vis).slice(0,60)){
+    // A control scrolled out of its own scroll container is not having its
+    // click stolen — it is simply scrolled away, and elementFromPoint at its
+    // centre reports whatever is painted there instead. That made every
+    // desktop route claim 3 stolen clicks from the sidebar, whose nav is
+    // overflow-y:auto with 832px of items in 612px of space. Only test a
+    // control whose centre is actually on screen inside every clipping
+    // ancestor.
+    // Two very different reasons a centre point is not where you can click it,
+    // and collapsing them hides real bugs:
+    //   scrollable ancestor (auto/scroll) -> the control is merely scrolled
+    //     away and a user can reach it. Not a defect.
+    //   clipping ancestor (hidden/clip)   -> the control is painted nowhere and
+    //     is genuinely unreachable. That IS the defect, reported as clipped.
+    const outsideOf=(p,cx,cy)=>{const b=p.getBoundingClientRect();return cx<b.left-1||cx>b.right+1||cy<b.top-1||cy>b.bottom+1};
+    const reach=(n,cx,cy)=>{
+      if(cx<0||cy<0||cx>innerWidth||cy>innerHeight)return "offscreen";
+      for(let p=n.parentElement;p;p=p.parentElement){
+        const s=getComputedStyle(p);
+        const sx=/auto|scroll/.test(s.overflowY+" "+s.overflowX);
+        const cl=/hidden|clip/.test(s.overflowY+" "+s.overflowX);
+        if(!sx&&!cl)continue;
+        if(!outsideOf(p,cx,cy))continue;
+        return sx?"scrolled":"clipped";
+      }
+      return "visible";
+    };
+    const stolen=[],clipped=[];
+    for(const n of [...document.querySelectorAll("button,[role=button],a[href]")].filter(vis).slice(0,80)){
       const r=n.getBoundingClientRect();
-      const hit=document.elementFromPoint(Math.round(r.left+r.width/2),Math.round(r.top+r.height/2));
+      const cx=Math.round(r.left+r.width/2),cy=Math.round(r.top+r.height/2);
+      const where=reach(n,cx,cy);
+      if(where==="clipped"){clipped.push({el:sel(n),text:label(n),centre:[cx,cy]});continue}
+      if(where!=="visible")continue;
+      const hit=document.elementFromPoint(cx,cy);
       if(hit&&hit!==n&&!n.contains(hit)&&!hit.contains(n))stolen.push({el:sel(n),text:label(n),blockedBy:sel(hit)});
     }
 
@@ -357,8 +392,10 @@ async function audit(c) {
       documentWidth:document.documentElement.scrollWidth,
       shellOverflowX:getComputedStyle(shell).overflowX,
       bleeding:trimmed,
+      reachableByScroll,
       touchTargets:{total:controls.length,undersized:small.length,worst:small.sort((a,b)=>a.w*a.h-b.w*b.h).slice(0,10)},
       clicksStolen:stolen.slice(0,10),
+      clippedControls:clipped.slice(0,10),
       errorBoundary:/something went wrong|unexpected error|page failed to load/i.test(t),
       stuckLoading:/loading(?:\\.{3}|…)?$/im.test(t.trim()),
       runtimeErrors:(window.__uiuxErrors||[]).slice(0,5),

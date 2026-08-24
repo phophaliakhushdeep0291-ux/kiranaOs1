@@ -160,6 +160,11 @@
   --app-desktop-topbar-height: 76px;
   --app-mobile-topbar-height: 88px;
   --app-mobile-nav-height: 84px;
+  /* Height of the trial / offline banner strip, republished by Layout whenever
+     it resizes. These banners sit BELOW the header, so the two topbar heights
+     above do not include them. Stays 0px when no banner is showing, which is
+     why subtracting it is always safe. */
+  --app-banner-height: 0px;
   --app-mobile-bottom-nav-clearance: calc(var(--app-mobile-nav-height) + 1.5rem + env(safe-area-inset-bottom));
   --app-mobile-fixed-action-height: 76px;
   --app-mobile-content-bottom-clearance: calc(var(--app-mobile-fixed-action-height) + 1.25rem + env(safe-area-inset-bottom));
@@ -2366,6 +2371,21 @@ html[data-density="compact"] {
      that genuinely needs to hold its width — a horizontal rail's chips, a
      table that is meant to scroll — is opted back out below. */
   :where(.app-page-shell, .kirana-mobile-page) :where([class*="grid-cols"], .grid) > * {
+    min-width: 0;
+  }
+
+  /* A dialog renders through a portal on <body>, so it is inside neither shell
+     above and the floor was never dropped for it. `DialogContent` is itself a
+     `grid`, which made its own header the over-wide track: the "Add customer"
+     dialog laid out at 611px inside a 390px box and sliced the description, the
+     field labels and the primary button off both edges — while
+     `documentWidth` still read exactly 390, because the shell clips. Both
+     selectors are needed: the first for the dialog's own children, the second
+     for any grid nested deeper inside it. */
+  :where([role="dialog"], [role="alertdialog"]) > *,
+  :where([role="dialog"], [role="alertdialog"])
+    :where([class*="grid-cols"], .grid)
+    > * {
     min-width: 0;
   }
 

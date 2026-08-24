@@ -402,6 +402,31 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   const { snapshot } = useSubscriptionSnapshot();
   const { def: btDef } = useBusinessType();
   useBusinessTypeServerSync();
+
+  // Publish the height of the banner strip so full-height pages can subtract it.
+  // `--app-desktop-topbar-height` is a static 76px that matches the header
+  // exactly, but the trial/offline banners sit BELOW the header and were in
+  // nobody's arithmetic. At 1280x800 that pushed Billing's workspace 45px past
+  // the fold and a sibling block covered the cash / UPI / udhar tender buttons,
+  // so a counter operator could not tender a sale by clicking at all. The
+  // variable defaults to 0px, so anything that does not subtract it is
+  // unaffected.
+  const bannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = bannerRef.current;
+    if (!node) return;
+    const publish = () => document.documentElement.style.setProperty(
+      "--app-banner-height",
+      `${Math.round(node.getBoundingClientRect().height)}px`,
+    );
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.setProperty("--app-banner-height", "0px");
+    };
+  }, []);
   const businessProfile = useShopBusinessProfile();
   const { isEnabled: isModuleOn, isHrefEnabled } = useModuleVisibility();
   const verticalPack = useActiveVerticalPack();
@@ -863,10 +888,12 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
           showLocation={locations.length > 1}
         />
 
-        <SubscriptionStatusBanner />
-        {backendStatus.browserOnline && !backendStatus.backendReachable && backendStatus.checkedAt && (
-          <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
-        )}
+        <div ref={bannerRef}>
+          <SubscriptionStatusBanner />
+          {backendStatus.browserOnline && !backendStatus.backendReachable && backendStatus.checkedAt && (
+            <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
+          )}
+        </div>
 
         <main
           id="main-content"
@@ -922,8 +949,14 @@ function SidebarLink({ item, loc, collapsed, labelOverride }: {
       onFocus={() => void preloadCoreRoute(item.href)?.catch(() => undefined)}
       onTouchStart={() => void preloadCoreRoute(item.href)?.catch(() => undefined)}
     >
+      {/* No `role="menuitem"` here. It requires a menu/menubar/group parent and
+          there is none, so it failed axe's aria-required-parent at critical on
+          every sidebar entry. It was also wrong on its own terms: this is a
+          navigation link, not an application menu — there is no arrow-key
+          roving focus — and the role sat on a div INSIDE the anchor, which
+          masked the link semantics the <a> already provides. `aria-current`
+          carries the active state. */}
       <div
-        role="menuitem"
         aria-current={active ? "page" : undefined}
         title={collapsed ? label : undefined}
         className={cn(
