@@ -144,9 +144,13 @@ async function auditPage(client, qaId, route, width, height, expectedPath = rout
     return{issueCount:issues.length,issues:issues.slice(0,40),h1Count:h1s.length,headingCount:headings.length};
   })()`);
   metrics.accessibility = accessibility;
-  const axe = await client.evaluate(`axe.run(document,{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21a","wcag21aa","wcag22aa"]},resultTypes:["violations"]}).then(result=>({
+  const axe = await client.evaluate(`axe.run(document,{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21a","wcag21aa","wcag22aa"]},resultTypes:["violations","incomplete","passes"]}).then(result=>({
     violationCount:result.violations.length,
-    violations:result.violations.map(rule=>({id:rule.id,impact:rule.impact,help:rule.help,nodes:rule.nodes.slice(0,12).map(node=>({target:node.target,html:node.html.slice(0,240),failureSummary:node.failureSummary}))}))
+    violations:result.violations.map(rule=>({id:rule.id,impact:rule.impact,help:rule.help,nodes:rule.nodes.slice(0,12).map(node=>({target:node.target,html:node.html.slice(0,240),failureSummary:node.failureSummary}))})),
+    passRuleCount:result.passes.length,
+    passNodeCount:result.passes.reduce((total,rule)=>total+rule.nodes.length,0),
+    incompleteCount:result.incomplete.length,
+    incomplete:result.incomplete.map(rule=>({id:rule.id,impact:rule.impact,help:rule.help,nodeCount:rule.nodes.length}))
   }))`);
   metrics.axe = axe;
   const image = await client.send("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });

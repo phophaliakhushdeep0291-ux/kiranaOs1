@@ -53,6 +53,7 @@
     "prisma:migrate:postgres": "node node_modules/prisma/build/index.js migrate dev --schema prisma-postgres/schema.prisma",
     "prisma:deploy:postgres": "node scripts/deploy-postgres-migrations.js",
     "verify:product-schema": "node scripts/verify-product-schema.js",
+    "verify:accounting-db": "node scripts/verify-accounting-database.js",
     "deploy:migrate": "npm run deploy:migrate:postgres",
     "deploy:migrate:postgres": "npm run prisma:deploy:postgres && npm run prisma:generate:postgres && npm run verify:product-schema",
     "prisma:push:postgres": "node node_modules/prisma/build/index.js db push --schema prisma-postgres/schema.prisma",

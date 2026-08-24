@@ -73,18 +73,19 @@ before(async () => {
 });
 
 after(async () => {
-  try {
-    await db.auditLog.deleteMany({ where: { shopId: shop.id } });
-    await db.stockCountSession.deleteMany({ where: { shopId: shop.id } });
-    await db.stockLedger.deleteMany({ where: { shopId: shop.id } });
-    await db.productSellingUnit.deleteMany({ where: { shopId: shop.id } });
-    await db.product.deleteMany({ where: { shopId: shop.id } });
-    await db.storeLocation.deleteMany({ where: { shopId: shop.id } });
-    await db.user.deleteMany({ where: { shopId: shop.id } });
-    await db.shop.delete({ where: { id: shop.id } });
-  } catch (cleanupError) {
-    console.error("cleanup failed", cleanupError);
-  }
+  await db.auditLog.deleteMany({ where: { shopId: shop.id } });
+  await db.stockCountSession.deleteMany({ where: { shopId: shop.id } });
+  await db.stockLedger.deleteMany({ where: { shopId: shop.id } });
+  // The ordinary-product control creates a draft PO whose item restricts
+  // product deletion. Delete the parent first (items cascade) so teardown
+  // proves it left the isolated database clean instead of logging and hiding a
+  // foreign-key failure after all assertions passed.
+  await db.purchaseOrder.deleteMany({ where: { shopId: shop.id } });
+  await db.productSellingUnit.deleteMany({ where: { shopId: shop.id } });
+  await db.product.deleteMany({ where: { shopId: shop.id } });
+  await db.storeLocation.deleteMany({ where: { shopId: shop.id } });
+  await db.user.deleteMany({ where: { shopId: shop.id } });
+  await db.shop.delete({ where: { id: shop.id } });
   await db.$disconnect();
 });
 
