@@ -91,6 +91,16 @@ export function ReportIssueButton() {
   const apiCount = open ? getRecentApiRequests().length : 0;
   const errorCount = open ? getRecentErrors().length : 0;
 
+  // Billing is a fixed-height POS workspace whose tender row and confirm button
+  // are pinned to the bottom-right — exactly where this button floats on a wide
+  // screen. Measured at 1280x800: the button covered "UPI" by 3,454px², "उधार"
+  // by 2,538px² and "कैश लें" by 6,376px², and `elementFromPoint` at the centre
+  // of all three returned this button, so a counter operator could not tender a
+  // sale by clicking at all. There is no scroll room to push the collision
+  // away, so the button stands down here; support stays reachable from /help
+  // and from every other screen.
+  if (loc.startsWith("/billing")) return null;
+
   return (
     <>
       <button
