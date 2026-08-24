@@ -19,7 +19,7 @@ import { resolveBillPaymentMode } from "@/features/core/bills/payment-mode";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useListBills } from "@/features/core/bills/queries";
-import type { Bill, Product } from "@/lib/api/client";
+import type { Bill, Product, ProductSellingUnit } from "@/lib/api/client";
 import { applyBindSheetPick, normalizeSearchText, productSearchText, productSellingPrice, resolveScanOutcome } from "../billing-calculations";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { ACTIVITY_EVENTS, trackEvent, useSearchTracking } from "@/lib/activity";
@@ -106,7 +106,7 @@ interface BillingSearchProps {
   filteredProducts: Product[];
   /** Whole catalogue — the bind sheet searches this, not the category-filtered grid. */
   allProducts: Product[];
-  onAddProduct: (product: Product) => void;
+  onAddProduct: (product: Product, sellingUnit?: ProductSellingUnit) => void;
   /**
    * Capture-on-first-scan: bind the scanned code to this product, then add it to the cart.
    * Rejects when the code is already owned; the sheet shows the reason and stays open.
@@ -230,9 +230,9 @@ export function BillingSearch({
   // §13. One search event per settled query, attributed to whatever the user
   // picked — that pairing is what the search auto-complete learns from.
   const { notifySelection } = useSearchTracking(search, filteredProducts.length, { screen: "/billing" });
-  const addProduct = (product: Product) => {
+  const addProduct = (product: Product, sellingUnit?: ProductSellingUnit) => {
     notifySelection(product.id, product.name);
-    onAddProduct(product);
+    onAddProduct(product, sellingUnit);
   };
   const visibleCategories = showAllCategories ? categories : categories.slice(0, CATEGORY_LIMIT);
   const hasMoreCategories = categories.length > CATEGORY_LIMIT;
@@ -353,8 +353,13 @@ export function BillingSearch({
     const { filteredProducts: onScreen, allProducts: catalogue } = scanPoolRef.current;
     const outcome = resolveScanOutcome(term, onScreen, catalogue);
     if (outcome.kind === "match") {
-      trackEvent(ACTIVITY_EVENTS.BARCODE_SCANNED, { source, matched: true, productId: outcome.product.id });
-      addProduct(outcome.product);
+      trackEvent(ACTIVITY_EVENTS.BARCODE_SCANNED, {
+        source,
+        matched: true,
+        productId: outcome.product.id,
+        sellingUnitId: outcome.sellingUnit?.id,
+      });
+      addProduct(outcome.product, outcome.sellingUnit);
       onSearchChange("");
       return true;
     }

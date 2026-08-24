@@ -86,7 +86,8 @@ if (ctx.skip) {
 
     test("create and edit enforce one case-insensitive code namespace across products and packs", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
-      const owner = await createProduct(ctx.db, tenant.shop.id, { name: "SKU Owner", sku: "case-128-abc" });
+      const owner = await createProduct(ctx.db, tenant.shop.id, { name: "SKU Owner" });
+      await ctx.db.product.update({ where: { id: owner.id }, data: { sku: "case-128-abc" } });
       const rejectedCreate = assertFailure(await ctx.post("/api/products", {
         ...productPayload({ name: "Duplicate Product Code" }),
         barcode: "CASE-128-ABC",

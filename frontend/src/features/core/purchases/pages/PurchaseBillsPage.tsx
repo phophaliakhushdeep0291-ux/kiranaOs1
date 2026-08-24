@@ -821,9 +821,9 @@ export default function PurchaseBillsPage() {
           {/* Top suppliers */}
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3">
-              <h3 className="font-display text-[13.5px] font-black tracking-tight text-[var(--brand-ink)]">Top Suppliers</h3>
-              <Select value={topRange} onValueChange={(value) => setTopRange(value as "month" | "all")}>
-                <SelectTrigger className="h-7 w-[110px] text-[11px]"><SelectValue /></SelectTrigger>
+              <h3 id="purchase-top-suppliers-title" className="font-display text-[13.5px] font-black tracking-tight text-[var(--brand-ink)]">Top Suppliers</h3>
+              <Select value={topRange} onValueChange={(value) => setTopRange(value as "month" | "all")}> 
+                <SelectTrigger aria-labelledby="purchase-top-suppliers-title" className="h-7 w-[110px] text-[11px]"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="month">This Month</SelectItem><SelectItem value="all">All Time</SelectItem></SelectContent>
               </Select>
             </div>
@@ -1486,12 +1486,12 @@ function Kpi({ label, value, icon, iconBg, sub, subTone = "muted", delta, deltaS
 }) {
   let line: React.ReactNode;
   if (delta != null) {
-    line = <p className={cn("mt-1.5 text-[11px] font-bold", delta >= 0 ? "text-[#16a34a]" : "text-[#ef4444]")}>{delta >= 0 ? "↗" : "↓"} {Math.abs(delta)}% {deltaSuffix}</p>;
+    line = <p className={cn("mt-1.5 text-[11px] font-bold", delta >= 0 ? "text-[#15803d]" : "text-[#b91c1c]")}>{delta >= 0 ? "↗" : "↓"} {Math.abs(delta)}% {deltaSuffix}</p>;
   } else if (sub) {
-    const cls = subTone === "good" ? "text-[#16a34a]" : subTone === "bad" ? "text-[#ef4444]" : "text-[#94a3b8]";
+    const cls = subTone === "good" ? "text-[#15803d]" : subTone === "bad" ? "text-[#b91c1c]" : "text-[#52617c]";
     line = <p className={cn("mt-1.5 text-[11px] font-bold", cls)}>{sub}</p>;
   } else {
-    line = <p className="mt-1.5 text-[11px] font-semibold text-[#94a3b8]">{fallbackSub ?? ""}</p>;
+    line = <p className="mt-1.5 text-[11px] font-semibold text-[#52617c]">{fallbackSub ?? ""}</p>;
   }
   return (
     <div className="rounded-[14px] border border-[#e6ecf4] bg-white px-5 py-4 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
@@ -1506,7 +1506,7 @@ function Kpi({ label, value, icon, iconBg, sub, subTone = "muted", delta, deltaS
 }
 
 function Insight({ icon, iconBg, label, value, sub, subTone = "muted" }: { icon: React.ReactNode; iconBg: string; label: string; value: string; sub: string; subTone?: "good" | "bad" | "muted" }) {
-  const cls = subTone === "good" ? "text-[#16a34a]" : subTone === "bad" ? "text-[#ef4444]" : "text-[#94a3b8]";
+  const cls = subTone === "good" ? "text-[#15803d]" : subTone === "bad" ? "text-[#b91c1c]" : "text-[#52617c]";
   return (
     <div className="flex items-center gap-3 px-4 py-3.5">
       <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full", iconBg)}>{icon}</span>

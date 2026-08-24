@@ -358,9 +358,57 @@ export function findLocalBarcodeOwner(
     const isSameEntity = [record.id, record.local_id, record.server_id]
       .some((candidate) => typeof candidate === "string" && candidate === excludeProductId);
     if (isSameEntity) return false;
-    return [row.barcode, row.sku]
+    const unitCodes = (row.sellingUnits ?? []).flatMap((unit) => [unit.barcode, unit.sku]);
+    return [row.barcode, row.sku, ...unitCodes]
       .some((value) => value != null && normalizeBarcodeValue(String(value)).toLowerCase() === needle);
   });
+}
+
+type ProductCodeCandidate = Pick<ProductInput, "barcode" | "sku" | "sellingUnits">;
+
+function productCodeAssignments(candidate: ProductCodeCandidate) {
+  const assignments: Array<{ code: string; normalized: string; ownerKey: string; label: string }> = [];
+  const add = (value: unknown, ownerKey: string, label: string) => {
+    const code = normalizeBarcodeValue(typeof value === "string" ? value : null);
+    if (code) assignments.push({ code, normalized: code.toLowerCase(), ownerKey, label });
+  };
+  add(candidate.barcode, "default", "product barcode");
+  add(candidate.sku, "default", "product SKU");
+  (candidate.sellingUnits ?? []).forEach((unit, index) => {
+    const ownerKey = unit.isDefault ? "default" : `unit:${unit.unitCode || index}`;
+    const label = unit.isDefault ? "default selling unit" : `${unit.unitCode || unit.name || `pack ${index + 1}`} pack`;
+    add(unit.barcode, ownerKey, `${label} barcode`);
+    add(unit.sku, ownerKey, `${label} SKU`);
+  });
+  return assignments;
+}
+
+/** Fail before IndexedDB/audit/outbox writes if the next scan would be ambiguous. */
+async function assertNoLocalProductCodeConflict(candidate: ProductCodeCandidate, excludeProductId?: string): Promise<void> {
+  const assignments = productCodeAssignments(candidate);
+  const requested = new Map<string, (typeof assignments)[number]>();
+  for (const assignment of assignments) {
+    const previous = requested.get(assignment.normalized);
+    if (previous && previous.ownerKey !== assignment.ownerKey) {
+      throw new ProductBarcodeBindError(
+        "PRODUCT_BARCODE_DUPLICATE",
+        `Code ${assignment.code} is assigned to both ${previous.label} and ${assignment.label}`,
+      );
+    }
+    if (!previous) requested.set(assignment.normalized, assignment);
+  }
+  if (requested.size === 0) return;
+
+  const products = await offlineDB.getAll<Product>("products").catch(() => [] as Product[]);
+  for (const assignment of requested.values()) {
+    const owner = findLocalBarcodeOwner(assignment.code, products, excludeProductId);
+    if (!owner) continue;
+    throw new ProductBarcodeBindError(
+      "PRODUCT_BARCODE_DUPLICATE",
+      `Code ${assignment.code} already belongs to "${owner.name}"${owner.deletedAt || (owner as unknown as Record<string, unknown>).deleted_at ? " in the recycle bin" : ""}`,
+      { id: owner.id, name: owner.name },
+    );
+  }
 }
 
 /**
@@ -448,6 +496,7 @@ export async function bindProductBarcodeLocalFirst(productId: string, barcode: s
 export async function createProductLocalFirst(data: ProductInput): Promise<Product> {
   const validated = parseOrThrow(productCreationSchema, data) as unknown as ProductInput;
   await assertNoLocalProductNameConflict(validated.name);
+  await assertNoLocalProductCodeConflict(validated);
   const product = makeLocalEntity(toProduct(validated), "product", "pending_sync");
   const auditLogs = [
     buildAuditLogRow({
@@ -483,6 +532,7 @@ export async function createProductLocalFirst(data: ProductInput): Promise<Produ
 export async function updateProductLocalFirst(id: string, data: ProductInput): Promise<Product> {
   const validated = parseOrThrow(productCreationSchema, data) as unknown as ProductInput;
   await assertNoLocalProductNameConflict(validated.name, id);
+  await assertNoLocalProductCodeConflict(validated, id);
   const existing = await offlineDB.getAll<Product>("products").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
   assertPackagingModeChangeIsSafe(existing, validated);
   const product = touchLocalEntity(toProduct(validated, id, existing), "pending_sync");

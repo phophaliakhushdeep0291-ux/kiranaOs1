@@ -8,7 +8,7 @@
  */
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Product } from "@/types/api";
+import type { Product, ProductInput } from "@/types/api";
 
 const mockState = vi.hoisted(() => ({
   idCounter: 0,
@@ -63,7 +63,9 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 import {
   ProductBarcodeBindError,
   bindProductBarcodeLocalFirst,
+  createProductLocalFirst,
   findLocalBarcodeOwner,
+  updateProductLocalFirst,
 } from "@/features/core/products/local-actions";
 import {
   applyBindSheetPick,
@@ -89,6 +91,20 @@ function product(overrides: Partial<Product> & { id: string; name: string }): Pr
 
 const parleG = product({ id: "p_parle", name: "Parle-G" });
 const goodDay = product({ id: "p_goodday", name: "Good Day", barcode: "8901234567890" });
+
+function productInput(overrides: Partial<ProductInput> = {}): ProductInput {
+  return {
+    name: "New Product",
+    aliases: [],
+    displayUnit: "piece",
+    baseUnit: "piece",
+    rateUnit: "piece",
+    stockBaseQty: 0,
+    defaultPricePerRateUnit: 20,
+    gstRate: 0,
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   mockState.idCounter = 0;
@@ -135,6 +151,56 @@ describe("recognising a scan", () => {
     const skuOnly = product({ id: "p_sku", name: "Atta", sku: "8901111111111" });
     expect(resolveScanOutcome("8901111111111", [], [parleG, skuOnly])).toEqual({ kind: "match", product: skuOnly });
   });
+
+  it("resolves an alternate pack code to that exact selling unit", () => {
+    const caseUnit = {
+      id: "u_case_12",
+      name: "Case of 12",
+      unitType: "case",
+      unitCode: "case-12",
+      conversionToBase: 12,
+      barcode: "CASE-PARLE-0012",
+      sku: "PG-CASE-12",
+      defaultPrice: 220,
+      isDefault: false,
+      isActive: true,
+    };
+    const packed = product({ id: "p_packed", name: "Parle-G case", sellingUnits: [caseUnit] });
+
+    expect(resolveScanOutcome("case-parle-0012", [], [parleG, packed])).toEqual({
+      kind: "match",
+      product: packed,
+      sellingUnit: caseUnit,
+    });
+    expect(resolveScanOutcome("pg-case-12", [], [parleG, packed])).toEqual({
+      kind: "match",
+      product: packed,
+      sellingUnit: caseUnit,
+    });
+  });
+
+  it("does not sell an inactive pack when its old label is scanned", () => {
+    const packed = product({
+      id: "p_inactive_pack",
+      name: "Retired pack",
+      sellingUnits: [{
+        id: "u_retired",
+        name: "Retired case",
+        unitType: "case",
+        unitCode: "retired-case",
+        conversionToBase: 12,
+        barcode: "RETIRED-CASE-12",
+        defaultPrice: 200,
+        isDefault: false,
+        isActive: false,
+      }],
+    });
+
+    expect(resolveScanOutcome("RETIRED-CASE-12", [], [packed])).toEqual({
+      kind: "unknown-code",
+      code: "RETIRED-CASE-12",
+    });
+  });
 });
 
 describe("the sheet is wired to the scan path", () => {
@@ -142,6 +208,7 @@ describe("the sheet is wired to the scan path", () => {
   // by source: the behaviour it guards (an unknown code opening the sheet rather than
   // dead-ending on "no results") is the whole point of the feature.
   const source = readFileSync("src/features/core/billing/pages/components/BillingSearch.tsx", "utf8");
+  const billingPageSource = readFileSync("src/features/core/billing/pages/BillingPage.tsx", "utf8");
 
   it("opens the sheet on an unknown code from both the keyboard and the camera", () => {
     expect(source).toContain('if (outcome.kind === "unknown-code")');
@@ -152,6 +219,12 @@ describe("the sheet is wired to the scan path", () => {
   it("routes the pick through the shared bind/skip decision", () => {
     expect(source).toContain("applyBindSheetPick({");
     expect(source).toContain("skip: skipBinding");
+  });
+
+  it("carries an exact pack scan all the way into the cart", () => {
+    expect(source).toContain("addProduct(outcome.product, outcome.sellingUnit)");
+    expect(billingPageSource).toContain("const sellingUnit = options?.sellingUnit ?? defaultSellingUnit(product)");
+    expect(billingPageSource).toContain("sellingUnit: pendingProductConfiguration.sellingUnit");
   });
 
   it("offers create-new and skip without leaving the sheet blocking", () => {
@@ -273,5 +346,46 @@ describe("binding offline", () => {
     expect(findLocalBarcodeOwner("8901234567890", [parleG, goodDay])?.id).toBe("p_goodday");
     expect(findLocalBarcodeOwner("PG-100", [product({ id: "p_x", name: "X", sku: "PG-100" })])?.id).toBe("p_x");
     expect(findLocalBarcodeOwner("8901234567890", [parleG, goodDay], "p_goodday")).toBeUndefined();
+  });
+
+  it("finds a code owned by an alternate selling unit", () => {
+    const packed = product({
+      id: "p_pack",
+      name: "Atta",
+      sellingUnits: [{ id: "u_box", name: "Box", unitType: "box", unitCode: "box-12", conversionToBase: 12, barcode: "PACK-CASE-12", defaultPrice: 220, isDefault: false, isActive: true }],
+    });
+    expect(findLocalBarcodeOwner("pack-case-12", [packed])?.id).toBe("p_pack");
+  });
+
+  it("refuses create when a code already belongs to a product pack", async () => {
+    mockState.products = [product({
+      id: "p_pack",
+      name: "Atta",
+      sellingUnits: [{ id: "u_box", name: "Box", unitType: "box", unitCode: "box-12", conversionToBase: 12, barcode: "PACK-CASE-12", defaultPrice: 220, isDefault: false, isActive: true }],
+    })];
+
+    await expect(createProductLocalFirst(productInput({ name: "Duplicate Code", barcode: "pack-case-12" }))).rejects.toMatchObject({
+      code: "PRODUCT_BARCODE_DUPLICATE",
+    });
+    expect(mockState.committed.products).toHaveLength(0);
+    expect(mockState.committed.local_audit_logs).toHaveLength(0);
+    expect(mockState.committed.sync_outbox).toHaveLength(0);
+  });
+
+  it("refuses one code assigned to two physical packs on edit", async () => {
+    mockState.products = [{ ...parleG }];
+    const code = "8901234567890";
+    const input = productInput({
+      name: "Parle-G",
+      barcode: code,
+      sellingUnits: [
+        { name: "Piece", unitType: "piece", unitCode: "piece", conversionToBase: 1, barcode: code, defaultPrice: 20, isDefault: true, isActive: true },
+        { name: "Box", unitType: "box", unitCode: "box-12", conversionToBase: 12, barcode: code, defaultPrice: 220, isDefault: false, isActive: true },
+      ],
+    });
+
+    await expect(updateProductLocalFirst("p_parle", input)).rejects.toMatchObject({ code: "PRODUCT_BARCODE_DUPLICATE" });
+    expect(mockState.committed.products).toHaveLength(0);
+    expect(mockState.committed.sync_outbox).toHaveLength(0);
   });
 });
