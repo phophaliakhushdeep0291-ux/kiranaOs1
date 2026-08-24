@@ -701,14 +701,14 @@ if (ctx.skip) {
       );
 
       const financialRows = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: bill.id } });
-      for (const entryType of ["sale", "cash_in", "upi_in", "udhar_debit"]) {
+      for (const entryType of ["sale", "cash_in", "upi_in", "udhar_debit", "cost_of_goods_sold", "inventory_sale"]) {
         assert.equal(
           financialRows.filter((row) => row.entryType === entryType).reduce((sum, row) => sum + Number(row.amountPaise), 0),
           0,
           `${entryType} nets to zero paise`,
         );
       }
-      assert.equal(financialRows.filter((row) => row.sourceType === "bill_cancel").length, 4, "one reversal row exists for every economic leg");
+      assert.equal(financialRows.filter((row) => row.sourceType === "bill_cancel").length, 6, "one reversal row exists for every revenue, tender, receivable, COGS, and inventory leg");
 
       const audit = await ctx.db.auditLog.findFirst({
         where: { shopId: tenant.shop.id, entityId: bill.id, action: "BILL_CANCELLED" },
@@ -725,7 +725,7 @@ if (ctx.skip) {
       ));
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 10, "retry cannot restore stock twice");
       assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, action: "cancel_reversal" } }), 1);
-      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, sourceType: "bill_cancel" } }), 4);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, sourceType: "bill_cancel" } }), 6);
       assert.equal(await ctx.db.udharLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, type: "payment" } }), 1);
       assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, entityId: bill.id, action: "BILL_CANCELLED" } }), 1, "a lost-response retry cannot duplicate the trusted audit");
     });

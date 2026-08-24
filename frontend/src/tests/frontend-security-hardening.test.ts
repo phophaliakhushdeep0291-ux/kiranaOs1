@@ -134,6 +134,8 @@ describe("frontend security hardening", () => {
     expect(source).toContain("async function cacheFirstStatic");
     expect(source).toContain("async function cacheFirstNavigation");
     expect(source).toContain("const cached = await cache.match(request)");
+    expect(source).toContain("if (cached) return cached");
+    expect(source).not.toContain("fetchAndStore");
     expect(source).toContain("event.respondWith(cacheFirstStatic(request))");
     expect(source).toContain("event.respondWith(cacheFirstNavigation(request))");
     expect(source).not.toContain("async function networkFirstStatic");

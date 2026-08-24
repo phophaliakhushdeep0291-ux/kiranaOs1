@@ -135,7 +135,21 @@ type MovementEntry = {
   type?: string;
   quantityDelta?: number;
   quantity_delta?: number;
+  stockBefore?: number;
+  stock_before?: number;
+  stockAfter?: number;
+  stock_after?: number;
+  oldStockBaseQty?: number;
+  newStockBaseQty?: number;
   unit?: string;
+  actorUserId?: string | null;
+  actor_user_id?: string | null;
+  actorName?: string | null;
+  actor_name?: string | null;
+  sourceType?: string | null;
+  source_type?: string | null;
+  sourceId?: string | null;
+  source_id?: string | null;
   supplierName?: string;
   supplier_name?: string;
   billAmount?: number;
@@ -210,6 +224,28 @@ function movementClass(type: string) {
   if (type === "sale") return "outline" as const;
   if (type === "damage") return "destructive" as const;
   return "default" as const;
+}
+
+function movementQuantity(row: MovementEntry) {
+  return Number(row.quantityDelta ?? row.quantity_delta ?? 0);
+}
+
+function movementBalance(row: MovementEntry) {
+  return {
+    before: Number(row.stockBefore ?? row.stock_before ?? row.oldStockBaseQty ?? 0),
+    after: Number(row.stockAfter ?? row.stock_after ?? row.newStockBaseQty ?? 0),
+  };
+}
+
+function movementActor(row: MovementEntry, t: Translate) {
+  const name = row.actorName ?? row.actor_name;
+  if (name?.trim()) return name;
+  return (row.actorUserId ?? row.actor_user_id) ? t("inventory.page.actor") : t("inventory.page.legacyActor");
+}
+
+function movementSource(row: MovementEntry) {
+  const value = String(row.sourceType ?? row.source_type ?? row.action ?? row.type ?? "movement");
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function safeDate(value: string | undefined) {
@@ -753,13 +789,13 @@ export default function InventoryPage() {
         <InventoryActionCard label={t("inventory.page.supplierPurchase")} detail={t("inventory.page.supplierPurchaseHelp")} tone="violet" icon={<CircleDollarSign size={20} />} onClick={() => openMovement("purchase")} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="group col-span-2 flex min-h-[82px] w-full items-center gap-3 rounded-[16px] border border-[#e2e8f1] bg-white px-3.5 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)] lg:col-span-1">
+            <button type="button" data-inventory-history-menu className="group col-span-2 flex min-h-[82px] w-full items-center gap-3 rounded-[16px] border border-[#e2e8f1] bg-white px-3.5 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)] lg:col-span-1">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#eef4ff] text-[var(--brand)]"><Ellipsis size={20} /></span>
               <span className="min-w-0"><span className="block text-[13px] font-bold text-[#13223f]">{t("inventory.page.moreActions")}</span><span className="mt-1 block text-[11px] leading-4 text-[#6d7c98]">{t("inventory.page.moreActionsHelp")}</span></span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem onClick={() => setActiveTab("movements")}><History size={15} className="mr-2" />{t("inventory.page.movementHistory")}</DropdownMenuItem>
+            <DropdownMenuItem data-inventory-movement-history onClick={() => setActiveTab("movements")}><History size={15} className="mr-2" />{t("inventory.page.movementHistory")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setActiveTab("purchase-bills")}><ClipboardList size={15} className="mr-2" />{t("inventory.page.purchaseBills")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setActiveTab("reports")}><BarChart3 size={15} className="mr-2" />{t("inventory.page.insights")}</DropdownMenuItem>
             {/* Batch & Expiry used to sit here as a "higher plan" teaser shown to
@@ -775,7 +811,7 @@ export default function InventoryPage() {
         {activeTab !== "dashboard" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 py-3">
             <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? t("inventory.page.movementHistory") : activeTab === "purchase-bills" ? t("inventory.page.purchaseBills") : t("inventory.page.insights")}</p><p className="text-[11px] text-[#718096]">{t("inventory.page.detailRecords")}</p></div>
-            <Button variant="outline" className="h-9 rounded-[8px] text-[11px]" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />{t("inventory.page.backToStock")}</Button>
+            <Button variant="outline" className="h-11 rounded-[8px] text-[11px] lg:mouse:h-9" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />{t("inventory.page.backToStock")}</Button>
           </div>
         ) : null}
         {activeTab === "dashboard" ? <div className="mt-0 space-y-4">
@@ -967,27 +1003,45 @@ export default function InventoryPage() {
             <StatCard label={t("inventory.page.sales")} value={movementSummary.sales} tone="blue" />
             <StatCard label={t("inventory.page.damageShort")} value={movementSummary.damage} tone="amber" />
           </StatsGrid>
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/60 border-b"><tr><th className="px-4 py-3 text-left">{t("inventory.col.product")}</th><th className="px-4 py-3 text-left">{t("inventory.page.type")}</th><th className="px-4 py-3 text-right">{t("inventory.page.qtyDelta")}</th><th className="px-4 py-3 text-left">{t("inventory.page.supplierNote")}</th><th className="px-4 py-3 text-center">{t("inventory.page.sync")}</th><th className="px-4 py-3 text-right">{t("inventory.page.time")}</th></tr></thead>
+          <section data-inventory-trace className="overflow-hidden rounded-[18px] border border-[#dfe7f2] bg-white shadow-[0_14px_40px_rgba(23,43,77,0.07)]">
+            <div className="border-b border-[#e8edf5] bg-[linear-gradient(135deg,#f8fbff_0%,#f7f4ff_100%)] px-4 py-4 sm:px-5">
+              <p className="text-[13px] font-black text-[#152542]">{t("inventory.page.movementTrace")}</p>
+              <p className="mt-1 text-[11px] leading-4 text-[#687995]">{t("inventory.page.movementTraceHelp")}</p>
+            </div>
+            {movementRows.length === 0 ? <p className="px-4 py-12 text-center text-sm text-muted-foreground">{t("inventory.page.noMovements")}</p> : (
+              <div className="divide-y divide-[#e9eef5] md:hidden">
+                {movementRows.map((entry) => <MovementTraceCard key={entry.id} entry={entry} />)}
+              </div>
+            )}
+            <div
+              className="hidden overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-inset md:block"
+              role="region"
+              aria-label={t("inventory.page.movementHistory")}
+              tabIndex={0}
+            >
+            <table className="w-full min-w-[1060px] text-sm">
+              <thead className="border-b bg-[#f7f9fd]"><tr><th className="px-4 py-3 text-left">{t("inventory.col.product")}</th><th className="px-4 py-3 text-left">{t("inventory.page.type")}</th><th className="px-4 py-3 text-right">{t("inventory.page.qtyDelta")}</th><th className="px-4 py-3 text-left">{t("inventory.page.balance")}</th><th className="px-4 py-3 text-left">{t("inventory.page.source")}</th><th className="px-4 py-3 text-left">{t("inventory.page.actor")}</th><th className="px-4 py-3 text-right">{t("inventory.page.time")}</th></tr></thead>
               <tbody>
-                {movementRows.length === 0 ? <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">{t("inventory.page.noMovements")}</td></tr> : movementRows.map((entry) => {
+                {movementRows.map((entry) => {
                   const type = entry.action ?? entry.type ?? "movement";
-                  const qty = Number(entry.quantityDelta ?? entry.quantity_delta ?? 0);
+                  const qty = movementQuantity(entry);
+                  const balance = movementBalance(entry);
                   return (
                     <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium">{entry.productName ?? "-"}</td>
-                      <td className="px-4 py-3"><Badge variant={movementClass(type)}>{movementLabel(type, t)}</Badge></td>
+                      <td className="px-4 py-3"><Badge variant={movementClass(type)} className={type === "damage" ? "bg-[#b42318]" : undefined}>{movementLabel(type, t)}</Badge></td>
                       <td className="px-4 py-3 text-right">{qty > 0 ? "+" : ""}{qty} {entry.unit ?? ""}</td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs max-w-[260px] truncate">{entry.supplierName ?? entry.supplier_name ?? entry.note ?? entry.reason ?? "-"}</td>
-                      <td className="px-4 py-3 text-center"><Badge variant="outline">{entry.sync_status ?? "local"}</Badge></td>
+                      <td className="px-4 py-3 text-xs font-semibold text-[#344668]">{balance.before.toLocaleString("en-IN")} → {balance.after.toLocaleString("en-IN")}</td>
+                      <td className="px-4 py-3"><p className="text-xs font-semibold text-[#344668]">{movementSource(entry)}</p><p className="max-w-[220px] truncate text-[10px] text-[#52637d]">{entry.note ?? entry.reason ?? entry.sourceId ?? entry.source_id ?? "-"}</p></td>
+                      <td className="px-4 py-3"><p className="text-xs font-semibold text-[#344668]">{movementActor(entry, t)}</p><p className="text-[10px] text-[#52637d]">{String(entry.sync_status ?? "synced").replaceAll("_", " ")}</p></td>
                       <td className="px-4 py-3 text-right text-muted-foreground text-xs">{format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </section>
         </div> : null}
 
 
@@ -1210,17 +1264,61 @@ function InventoryPagination({ page, pages, total, onChange }: { page: number; p
   );
 }
 
+function MovementTraceCard({ entry }: { entry: MovementEntry }) {
+  const { t } = useAppLanguage();
+  const type = entry.action ?? entry.type ?? "movement";
+  const quantity = movementQuantity(entry);
+  const balance = movementBalance(entry);
+  const positive = quantity > 0;
+  const tone = type === "damage" || type === "sale" ? "rose" : type === "correction" ? "orange" : "green";
+  const icon = type === "damage" ? <ShieldAlert size={16} /> : type === "sale" ? <PackageX size={16} /> : type === "correction" ? <Wrench size={16} /> : <PackagePlus size={16} />;
+  const sync = String(entry.sync_status ?? "synced").replaceAll("_", " ");
+  return (
+    <article className="px-4 py-4">
+      <div className="flex items-start gap-3">
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border ${INVENTORY_TONES[tone]}`}>{icon}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-black text-[#182945]">{entry.productName ?? t("inventory.page.inventoryItem")}</p>
+              <p className="mt-0.5 text-[11px] font-semibold text-[#52637d]">{movementLabel(type, t)} · {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p>
+            </div>
+            <p className={`whitespace-nowrap text-[15px] font-black ${positive ? "text-[#047857]" : "text-rose-700"}`}>{positive ? "+" : ""}{quantity.toLocaleString("en-IN")} <span className="text-[10px] font-bold">{entry.unit ?? ""}</span></p>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 rounded-[12px] border border-[#e6ecf4] bg-[#f8fafd] p-3">
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#52637d]">{t("inventory.page.balance")}</p>
+              <p className="mt-1 text-[12px] font-black text-[#273a5c]">{balance.before.toLocaleString("en-IN")} → {balance.after.toLocaleString("en-IN")}</p>
+            </div>
+            <div className="border-l border-[#dfe6ef] pl-3">
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#52637d]">{t("inventory.page.actor")}</p>
+              <p className="mt-1 truncate text-[12px] font-black text-[#273a5c]">{movementActor(entry, t)}</p>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-[11px] font-bold text-[#415372]">{movementSource(entry)}</p>
+              {(entry.note ?? entry.reason) ? <p className="mt-0.5 truncate text-[10px] text-[#52637d]">{entry.note ?? entry.reason}</p> : null}
+            </div>
+            <span className="shrink-0 rounded-full bg-[#eef3fb] px-2.5 py-1 text-[9px] font-black capitalize text-[#4f607b]">{sync}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function RecentMovementRow({ entry }: { entry: MovementEntry }) {
   const { t } = useAppLanguage();
   const type = entry.action ?? entry.type ?? "correction";
-  const quantity = Number(entry.quantityDelta ?? entry.quantity_delta ?? 0);
+  const quantity = movementQuantity(entry);
   const positive = quantity > 0;
   const tone = type === "damage" || type === "sale" ? "rose" : type === "correction" ? "orange" : "green";
   const icon = type === "damage" ? <ShieldAlert size={13} /> : type === "sale" ? <PackageX size={13} /> : type === "correction" ? <Wrench size={13} /> : <PackagePlus size={13} />;
   return (
     <div className="flex items-center gap-2.5 py-2.5">
       <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border ${INVENTORY_TONES[tone]}`}>{icon}</span>
-      <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{movementLabel(type, t)}</p><p className="truncate text-[10px] text-[#718096]">{entry.productName ?? t("inventory.page.inventoryItem")} - {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p></div>
+      <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{movementLabel(type, t)}</p><p className="truncate text-[10px] text-[#718096]">{entry.productName ?? t("inventory.page.inventoryItem")} · {movementActor(entry, t)} · {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p></div>
       <span className={`text-[11px] font-semibold ${positive ? "text-[#15803d]" : "text-[#be123c]"}`}>{positive ? "+" : ""}{quantity} {entry.unit ?? ""}</span>
     </div>
   );

@@ -131,6 +131,27 @@ if (ctx.skip) {
       assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, entityType: "Product" } }), 0);
     });
 
+    test("a code-free product can be created immediately after a packed-code product", async () => {
+      const { ownerAuth, tenant, deviceHeaders } = await ownerCtx();
+      const packed = assertSuccess(await ctx.post("/api/products", {
+        ...productPayload({ name: "First Packed Product", stockBaseQty: 0 }),
+        barcode: "SEQUENTIAL-MAIN-01",
+        sellingUnits: [
+          { name: "piece", unitType: "piece", unitCode: "piece", conversionToBase: 1, barcode: "SEQUENTIAL-MAIN-01", defaultPrice: 20, isDefault: true, isActive: true },
+          { name: "case", unitType: "case", unitCode: "case-12", conversionToBase: 12, barcode: "SEQUENTIAL-CASE-12", defaultPrice: 220, isDefault: false, isActive: true },
+        ],
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin, headers: deviceHeaders }), 201);
+      assert.equal(packed.sellingUnits.length, 2);
+
+      const blank = assertSuccess(await ctx.post(
+        "/api/products",
+        productPayload({ name: "Immediate Blank Product", stockBaseQty: 0 }),
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin, headers: deviceHeaders },
+      ), 201);
+      assert.equal(blank.barcode, null);
+      assert.equal(blank.sellingUnits.length, 1);
+    });
+
     test("concurrent case variants produce one owner and one explicit conflict", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const attempts = await Promise.all([

@@ -57,6 +57,12 @@ model Shop {
   syncCommands                  SyncCommand[]
   changeLogs                    ChangeLog[]
   financialLedger               FinancialLedger[]
+  chartOfAccounts               ChartOfAccount[]
+  journalEntries                JournalEntry[]
+  journalLines                  JournalLine[]
+  accountingPeriods             AccountingPeriod[]
+  accountingDocuments           AccountingDocument[]
+  accountingDocumentEvents      AccountingDocumentEvent[]
   billCounter                   BillCounter?
   subscriptions                 Subscription[]
   onboardingPurchases           OnboardingPurchase[]
@@ -1288,6 +1294,10 @@ model StockLedger {
   sourceDeviceId          String?
   sourceType              String?
   sourceId                String?
+  // Immutable attribution snapshot. actorUserId is null only for system work;
+  // actorName keeps the historical display stable after staff changes.
+  actorUserId             String?
+  actorName               String?
   note                    String?
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
@@ -1302,6 +1312,7 @@ model StockLedger {
   @@index([shopId, sellingUnitId])
   @@index([shopId, locationId, createdAt])
   @@index([shopId, sourceType, sourceId])
+  @@index([shopId, actorUserId, createdAt])
   @@index([productId])
   @@index([shopId, updatedAt, id])
 }
@@ -2331,6 +2342,7 @@ model FinancialLedger {
   businessDate   DateTime
   serverSeq      BigInt?
   idempotencyKey String
+  evidenceJson   String   @default("{}")
   reversedById   String?
   createdAt      DateTime @default(now())
 
@@ -2342,6 +2354,134 @@ model FinancialLedger {
   @@index([shopId, customerId])
   @@index([shopId, billId])
   @@index([shopId, sourceType, sourceId])
+}
+
+model ChartOfAccount {
+  id         String   @id @default(cuid())
+  shopId     String
+  code       String
+  name       String
+  category   String
+  normalSide String
+  systemKey  String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  shop  Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  lines JournalLine[]
+
+  @@unique([shopId, code])
+  @@unique([shopId, systemKey])
+  @@index([shopId, category, active])
+}
+
+model JournalEntry {
+  id           String   @id @default(cuid())
+  shopId       String
+  sourceType   String
+  sourceId     String
+  businessDate DateTime
+  status       String   @default("posted")
+  description  String?
+  evidenceJson String   @default("{}")
+  reversalOfId String?
+  postedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  shop       Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  lines      JournalLine[]
+  reversalOf JournalEntry?  @relation("JournalReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals  JournalEntry[] @relation("JournalReversal")
+
+  @@unique([shopId, sourceType, sourceId])
+  @@index([shopId, businessDate, status])
+}
+
+model JournalLine {
+  id                String   @id @default(cuid())
+  shopId            String
+  journalEntryId    String
+  accountId         String
+  financialLedgerId String?
+  lineNumber        Int
+  debitPaise        BigInt   @default(0)
+  creditPaise       BigInt   @default(0)
+  memo              String?
+  evidenceJson      String   @default("{}")
+  createdAt         DateTime @default(now())
+
+  shop         Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  journalEntry JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      ChartOfAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([journalEntryId, lineNumber])
+  @@index([shopId, accountId, createdAt])
+  @@index([financialLedgerId])
+}
+
+model AccountingPeriod {
+  id             String    @id @default(cuid())
+  shopId         String
+  name           String
+  startsAt       DateTime
+  endsAt         DateTime
+  status         String    @default("open")
+  closedAt       DateTime?
+  closedByUserId String?
+  closeReason    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, startsAt, endsAt])
+  @@index([shopId, status, startsAt, endsAt])
+}
+
+model AccountingDocument {
+  id                   String    @id @default(cuid())
+  shopId               String
+  documentType         String
+  status               String    @default("review_required")
+  sourceHash           String
+  sourceMimeType       String
+  sourceBytes          Int
+  supplierId           String?
+  supplierMatch        String
+  extractedJson        String
+  validationJson       String
+  suggestedJournalJson String
+  evidenceJson         String
+  createdByUserId      String?
+  reviewedByUserId     String?
+  reviewedAt           DateTime?
+  reviewReason         String?
+  journalEntryId       String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  shop   Shop                      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  events AccountingDocumentEvent[]
+
+  @@unique([shopId, sourceHash])
+  @@index([shopId, status, createdAt])
+  @@index([shopId, supplierId, createdAt])
+}
+
+model AccountingDocumentEvent {
+  id          String   @id @default(cuid())
+  shopId      String
+  documentId  String
+  action      String
+  actorUserId String?
+  payloadJson String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  shop     Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  document AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, documentId, createdAt])
 }
 
 model BankStatementImport {

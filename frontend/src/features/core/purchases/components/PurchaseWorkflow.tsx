@@ -20,6 +20,7 @@ export function PurchaseWorkflow({ children }: { children: ReactNode }) {
             ))}
           </div>
           <Button
+            data-purchase-planning-toggle
             variant="outline"
             className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold"
             onClick={() => setShowPlanning((open) => !open)}

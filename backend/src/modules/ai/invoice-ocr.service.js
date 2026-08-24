@@ -89,10 +89,10 @@ export async function extractPurchaseInvoice(shopId, image, { providerOverride, 
 
   const products = await database.product.findMany({
     where: { shopId, deletedAt: null },
-    select: { id: true, name: true, barcode: true, costPrice: true, costPerRateUnit: true, rateUnit: true },
+    select: { id: true, name: true, barcode: true, costPerRateUnit: true, rateUnit: true },
     take: 5_000,
   });
-  const suppliers = await database.supplier.findMany({ where: { shopId, deletedAt: null }, select: { id: true, name: true }, take: 1_000 });
+  const suppliers = await database.supplier.findMany({ where: { shopId, deletedAt: null }, select: { id: true, name: true, gstin: true }, take: 1_000 });
   const matchedLines = parsed.lines.map((line) => {
     const barcode = normalize(line.barcode);
     const name = normalize(line.description);
@@ -120,7 +120,10 @@ export async function extractPurchaseInvoice(shopId, image, { providerOverride, 
     };
   });
   const supplierKey = normalize(parsed.supplierName);
-  const supplierMatches = suppliers.filter((item) => supplierKey && normalize(item.name) === supplierKey);
+  const gstinKey = normalize(parsed.supplierGstin);
+  const gstinMatches = suppliers.filter((item) => gstinKey && normalize(item.gstin) === gstinKey);
+  const nameMatches = suppliers.filter((item) => supplierKey && normalize(item.name) === supplierKey);
+  const supplierMatches = gstinMatches.length ? gstinMatches : nameMatches;
   const supplier = supplierMatches.length === 1 ? supplierMatches[0] : null;
   const extractedLinesTotal = parsed.lines.length && parsed.lines.every((line) => line.lineTotal != null)
     ? parsed.lines.reduce((sum, line) => sum + line.lineTotal, 0)
@@ -141,6 +144,7 @@ export async function extractPurchaseInvoice(shopId, image, { providerOverride, 
     ...parsed,
     supplierId: supplier?.id ?? null,
     supplierMatch: supplier ? "exact" : supplierMatches.length > 1 ? "ambiguous" : "unmatched",
+    supplierMatchMethod: supplier ? (gstinMatches.length ? "gstin" : "name") : null,
     lines: matchedLines,
     headerChecks: { invoiceDateValid, supplierExact: Boolean(supplier) },
     mathChecks: { linesToSubtotal, subtotalTaxToGrandTotal },

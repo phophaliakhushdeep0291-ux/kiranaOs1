@@ -266,9 +266,13 @@ export const inventoryRules = [
         correctionsLast30Days: corrections.length,
         alertThreshold: ALERT_COUNT,
         movementIds: corrections.slice(0, 20).map((row) => row.id),
-        // StockLedger carries no actor column, so per-staff attribution is not
-        // available yet (see docs/AUDIT_LIMITATIONS.md).
-        staffAttributionAvailable: false,
+        staffAttributionAvailable: corrections.every((row) => Boolean(row.actorName)),
+        actors: [...new Map(corrections
+          .filter((row) => row.actorName)
+          .map((row) => [row.actorUserId ?? `system:${row.actorName}`, {
+            actorUserId: row.actorUserId ?? null,
+            actorName: row.actorName,
+          }])).values()].slice(0, 20),
       });
     },
   }),

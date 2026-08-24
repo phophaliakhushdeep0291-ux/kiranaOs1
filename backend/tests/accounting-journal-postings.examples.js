@@ -13,7 +13,10 @@ function capture() {
   const rows = [];
   return {
     rows,
-    tx: { financialLedger: { create: async ({ data }) => { rows.push({ id: `row-${rows.length + 1}`, ...data }); return data; } } },
+    tx: {
+      accountingPeriod: { findFirst: async () => null },
+      financialLedger: { create: async ({ data }) => { rows.push({ id: `row-${rows.length + 1}`, ...data }); return data; } },
+    },
   };
 }
 
@@ -26,19 +29,22 @@ const date = new Date("2026-07-22T10:00:00.000Z");
 let proof = capture();
 await postBillCreatedLedger(proof.tx, {
   shopId: "shop-1",
-  bill: { id: "gst-sale-1", grandTotal: 118, gst: 18, createdAt: date },
+  bill: { id: "gst-sale-1", grandTotal: 118, gst: 18, createdAt: date, items: [{ lineCost: 60 }] },
   tenderPayments: [{ id: "cash-payment-1", mode: "cash", amount: 118 }],
 });
 assert.deepEqual(byType(proof.rows).map((row) => [row.entryType, row.amountPaise]), [
   ["cash_in", 11800n],
+  ["cost_of_goods_sold", 6000n],
   ["gst_output", 1800n],
   ["gst_sales_reclassification", 1800n],
+  ["inventory_sale", 6000n],
   ["sale", 11800n],
 ]);
 let control = buildAccountingControl(proof.rows);
 assert.equal(control.status, "balanced", "GST sale must stay balanced after output-tax reclassification");
 assert.equal(control.trialBalance.accounts.find((account) => account.code === "4000")?.creditBalance.amount, 100, "net sales exclude output GST");
 assert.equal(control.trialBalance.accounts.find((account) => account.code === "2200")?.creditBalance.amount, 18, "output GST remains an explicit liability");
+assert.equal(control.trialBalance.accounts.find((account) => account.code === "5000")?.debitBalance.amount, 60, "sale cost moves from inventory to COGS");
 
 await assert.rejects(
   () => postBillCreatedLedger(capture().tx, {
@@ -61,13 +67,13 @@ assert.equal(proof.rows.length, 0, "an estimate is a quotation and must never en
 proof = capture();
 await postBillCreatedLedger(proof.tx, {
   shopId: "shop-1",
-  bill: { id: "gst-sale-2", billType: "gst_invoice", grandTotal: 118, gst: 18, createdAt: date },
+  bill: { id: "gst-sale-2", billType: "gst_invoice", grandTotal: 118, gst: 18, createdAt: date, items: [{ lineCost: 60 }] },
   tenderPayments: [{ id: "cash-payment-2", mode: "cash", amount: 118 }],
 });
 
 await postSaleReturnLedger(proof.tx, {
   shopId: "shop-1",
-  bill: { id: "gst-return-1", grandTotal: -118, gst: -18, createdAt: date, payments: [{ id: "refund-1", mode: "cash", amount: -118 }] },
+  bill: { id: "gst-return-1", grandTotal: -118, gst: -18, createdAt: date, items: [{ lineCost: -60 }], payments: [{ id: "refund-1", mode: "cash", amount: -118 }] },
   refundMode: "cash",
   refundAmount: 118,
 });

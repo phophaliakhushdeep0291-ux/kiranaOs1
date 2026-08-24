@@ -23,6 +23,12 @@ server-controlled evidence.
    capped until a reviewer verifies the document.
 6. Invoice OCR is review-only, never posts, only prefills exact catalogue matches
    with high confidence and consistent arithmetic, and reports every mismatch.
+7. Evidence normalization preserves Devanagari combining marks and recognizes a
+   bounded Hindi number-word set. A catalogue alias shared by more than one SKU
+   is ambiguous and fails closed instead of selecting database order.
+8. A pinned version-1 red-team corpus covers Hindi, Hinglish, homophones, prompt
+   injection, number swapping, mixed units, duplicate aliases, entity invention,
+   intent substitution and context poisoning. It is part of `test:ai-safety`.
 
 ## Required release gates
 
@@ -33,13 +39,24 @@ server-controlled evidence.
   in an explanation, case summary, or classification reason.
 - Unknown schema fields, malformed JSON, unavailable catalogues, unsupported
   evidence IDs, and provider failures must all fail closed.
+- The pinned red-team corpus cannot silently shrink below 15 cases, legitimate
+  recall must remain 100%, and unsafe acceptance must remain 0%.
 - AI safety tests remain a required step in release certification.
+
+## Current measured evidence
+
+The 2026-08-24 gate passes the original voice set (6 legitimate, 10 adversarial,
+0 unsafe accepted), the versioned corpus (5 legitimate accepted out of 5 and 0
+unsafe accepted out of 10), diagnostic grounding (0 unsafe narratives out of 5)
+and assurance grounding (no provider-authored claim accepted; confidence capped
+at 0.5). The retained summary is
+`docs/evidence/ai-hallucination-safety-2026-08-24.json`.
 
 ## Next maturity stages
 
-1. Add a versioned red-team corpus covering Hindi, Hinglish, homophones,
-   prompt injection, number swapping, mixed units, duplicate product aliases,
-   and multi-turn context poisoning.
+1. Expand the pinned corpus with labeled real-shop utterances after redaction;
+   add compound Hindi numbers, code-switching around decimals, noisy ASR tokens,
+   and multi-turn replay without weakening the zero-unsafe-acceptance threshold.
 2. Track per-intent false-accept, false-reject, clarification, and manual-fallback
    rates without storing raw audio or unredacted customer data.
 3. Add field-level provenance to OCR results: page region, extracted token,

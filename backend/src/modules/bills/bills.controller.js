@@ -44,6 +44,7 @@ export async function confirm(req, res, next) {
   try {
     const data = await svc.confirmBill(req.shopId, req.body, {
       userId: req.user?.userId ?? null,
+      userName: req.user?.userName ?? req.user?.userEmail ?? null,
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       locationId: requestLocationId(req),
       allowStockShortfall: true,
@@ -63,6 +64,7 @@ export async function saleReturn(req, res, next) {
   try {
     const data = await svc.createSaleReturn(req.shopId, { ...req.body, locationId: requestLocationId(req) }, {
       userId: req.user?.userId ?? null,
+      userName: req.user?.userName ?? req.user?.userEmail ?? null,
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       locationId: requestLocationId(req),
       req,
@@ -79,6 +81,7 @@ export async function cancel(req, res, next) {
     await assertLocationCapability({ shopId: req.shopId, userId: req.user?.userId, role: req.user?.role, locationId: existing.locationId, capability: "sell" });
     const data = await svc.cancelBill(req.shopId, req.params.id, req.body, {
       userId: req.user?.userId ?? null,
+      userName: req.user?.userName ?? req.user?.userEmail ?? null,
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       req,
     });

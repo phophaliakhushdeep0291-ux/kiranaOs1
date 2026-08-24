@@ -3,6 +3,7 @@ import { requestLocationId } from "../stores/location-context.service.js";
 
 const actor = (req) => ({
   userId: req.user?.userId ?? null,
+  userName: req.user?.userName ?? req.user?.userEmail ?? null,
   deviceId: req.user?.deviceId ?? null,
   note: req.body?.note ?? null,
   req,

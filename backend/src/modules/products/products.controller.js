@@ -5,6 +5,7 @@ import { lookupProductKnowledge } from "./product-knowledge.service.js";
 function actor(req) {
   return {
     userId: req.user?.userId ?? null,
+    userName: req.user?.userName ?? req.user?.userEmail ?? null,
     deviceId: req.user?.deviceId ?? undefined,
     reason: req.body?.ownerPinReason ?? req.body?.auditReason ?? null,
     req,

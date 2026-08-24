@@ -110,15 +110,17 @@ async function main() {
     })()`);
 
     await navigate(client, `${FRONTEND_URL}/purchase-bills`);
+    await waitForPage(client, "document.querySelector('[data-purchase-planning-toggle]')");
+    await client.evaluate("document.querySelector('[data-purchase-planning-toggle]').click()");
     await waitForPage(client, "document.body.innerText.includes('QA Reliable Wholesale')");
-    await client.evaluate(`(()=>{const button=[...document.querySelectorAll('button')].find(node=>node.textContent?.trim()==='Receive');if(!button)throw new Error('Receive action missing');button.click();return true})()`);
+    await client.evaluate(`(()=>{const button=document.querySelector('[data-purchase-order-receive]');if(!button)throw new Error('Receive action missing');button.click();return true})()`);
     await waitForPage(client, "document.querySelector('[data-mobile-task-dialog=\"true\"]')");
     await sleep(350);
     const formAudit = await client.evaluate(`(()=>{
       const dialog=document.querySelector('[data-mobile-task-dialog="true"]');
       const set=(node,value)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}))};
-      const inputs=[...dialog.querySelectorAll('input')],numbers=inputs.filter(node=>node.type==='number'),invoice=inputs.find(node=>node.type==='text');
-      if(!invoice||numbers.length<3)throw new Error('Receive fields missing');set(invoice,'QA-SUP-1001');set(numbers[1],'100');
+      const invoice=dialog.querySelector('[data-purchase-receive-invoice]'),paid=dialog.querySelector('[data-purchase-receive-paid]');
+      if(!invoice||!paid)throw new Error('Receive fields missing');set(invoice,'QA-SUP-1001');set(paid,'100');
       const rect=dialog.getBoundingClientRect(),controls=[...dialog.querySelectorAll('input,textarea,button,[role="combobox"]')].filter(node=>getComputedStyle(node).display!=='none');
       return {rect:[Math.round(rect.left),Math.round(rect.top),Math.round(rect.width),Math.round(rect.height)],minControlHeight:Math.min(...controls.map(node=>node.getBoundingClientRect().height)),overflowX:dialog.scrollWidth-dialog.clientWidth,totalVisible:dialog.textContent.includes('₹920')};
     })()`);
@@ -126,7 +128,7 @@ async function main() {
     assert(formAudit.minControlHeight >= 43 && formAudit.overflowX <= 2 && formAudit.totalVisible, `Receive task mobile contract failed: ${JSON.stringify(formAudit)}`);
     const artifact = await screenshot(client, "purchase-receive-task-390.png");
 
-    await client.evaluate(`(()=>{const button=[...document.querySelectorAll('[data-mobile-task-dialog="true"] button')].find(node=>node.textContent?.includes('Review receipt'));if(!button)throw new Error('Review receipt missing');button.click();return true})()`);
+    await client.evaluate(`(()=>{const button=document.querySelector('[data-purchase-receive-review]');if(!button)throw new Error('Review receipt missing');button.click();return true})()`);
     await waitForPage(client, "[...document.querySelectorAll('form')].some(form=>form.textContent?.includes('Owner PIN'))");
     await client.evaluate(`(()=>{const form=[...document.querySelectorAll('form')].find(node=>node.textContent?.includes('Owner PIN')),pin=form?.querySelector('input[type="password"]');if(!pin)throw new Error('Owner PIN field missing');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(pin,'2468');pin.dispatchEvent(new Event('input',{bubbles:true}));pin.dispatchEvent(new Event('change',{bubbles:true}));form.requestSubmit();return true})()`);
     await waitForPage(client, "![...document.querySelectorAll('form')].some(form=>form.textContent?.includes('Owner PIN'))", 30_000);

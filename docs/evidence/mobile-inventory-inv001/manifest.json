@@ -1,0 +1,105 @@
+{
+  "requirement": "INV-001",
+  "qaId": "MQA-INV-01 / product add-edit-scan",
+  "testedAt": "2026-08-24T11:11:00.000Z",
+  "sourceRevisionBeforeCheckpoint": "8612982f",
+  "implementationRevisions": [
+    "00187a42",
+    "f99c7a33"
+  ],
+  "environment": {
+    "frontend": "Vite local application; automated source and behavior contracts",
+    "backend": "Local KiranaOS API on 127.0.0.1:3000",
+    "database": "Local SQLite development database plus isolated SQLite integration databases",
+    "shop": "BILL-004 Mobile QA",
+    "actor": "Synthetic owner QA account",
+    "device": "codex-inv001-qa-20260824"
+  },
+  "productIdentity": {
+    "namespace": [
+      "Product.barcode",
+      "Product.sku",
+      "ProductSellingUnit.barcode",
+      "ProductSellingUnit.sku"
+    ],
+    "comparison": "trimmed and case-insensitive",
+    "reservation": "soft-deleted products and inactive selling units retain their codes",
+    "internalDefaultRule": "product and default-selling-unit barcode/SKU may mirror one logical default owner; alternate physical packs may not reuse it",
+    "concurrency": "per-shop in-process decision serialization plus PostgreSQL Shop row FOR UPDATE across instances",
+    "offline": "create and edit reject a conflicting product or pack code before IndexedDB product, local audit or sync-outbox writes"
+  },
+  "billingScan": {
+    "catalogueScope": "exact code lookup spans the complete catalogue, independent of category/filter limits",
+    "packResolution": "an active alternate selling-unit barcode or SKU returns both the product and exact selling unit",
+    "cart": "the exact selling unit survives search selection, optional configurator work and cart key/pricing resolution",
+    "inactivePack": "not sellable when its retired code is scanned",
+    "unknownCode": "continues into capture-on-first-scan instead of adding an arbitrary sole row"
+  },
+  "mobileUx": {
+    "surface": "full-width 100dvh product task panel on phones",
+    "keyboard": "visual-keyboard inset path plus interactive-widget resizes-content support",
+    "safeArea": "sticky footer includes env(safe-area-inset-bottom)",
+    "touchTargets": "compact inputs, selects and buttons use h-11; small text actions use the shared 44px tap-target overlay; keep-open label is min-h-11",
+    "freshAuthenticatedScreenCapture": "not claimed; browser credential/PIN entry was avoided"
+  },
+  "liveApi": {
+    "healthStatus": 200,
+    "create": {
+      "status": 201,
+      "mainCode": "INV001-R2-MAIN-20260824",
+      "alternatePackCode": "INV001-R2-CASE-20260824"
+    },
+    "duplicate": {
+      "status": 409,
+      "code": "PRODUCT_BARCODE_DUPLICATE",
+      "caseVariant": "inv001-r2-case-20260824",
+      "ownerNamed": true
+    },
+    "edit": {
+      "status": 200,
+      "sellingPrice": 22,
+      "gstRate": 12,
+      "lowStockThreshold": 9,
+      "reorderLevel": 15
+    },
+    "bindReplay": {
+      "firstStatus": 200,
+      "replayStatus": 200,
+      "code": "INV001-R2-BIND-20260824",
+      "bindAuditCount": 1
+    },
+    "audit": {
+      "actions": [
+        "PRODUCT_CREATED_WITH_SENSITIVE_FIELDS",
+        "PRODUCT_UPDATED",
+        "PRODUCT_CREATED_WITH_SENSITIVE_FIELDS",
+        "product_barcode_bound"
+      ],
+      "allAttributedToQaDevice": true
+    }
+  },
+  "liveDiscoveredRegression": {
+    "symptom": "the first proof's immediate code-free create returned 500 after Prisma's SQLite library engine panicked and closed the interactive transaction",
+    "cause": "product and selling-unit namespace reads were launched with Promise.all inside one interactive transaction connection",
+    "fix": "namespace reads are sequential inside the transaction; PostgreSQL's shop-row lock remains held across both reads and the write",
+    "regression": "a packed-code product followed immediately by a code-free product now succeeds in the isolated integration suite",
+    "runtimeRecovery": "main and integration Prisma clients were regenerated before the successful live rerun"
+  },
+  "automatedEvidence": {
+    "focusedFrontendFiles": 4,
+    "focusedFrontendTests": 38,
+    "barcodeIntegrationTests": 14,
+    "productInventoryIntegrationTests": 14,
+    "combinedAffectedIntegrationTests": 28,
+    "frontendFiles": 288,
+    "frontendPassedFiles": 287,
+    "frontendTests": 1957,
+    "frontendIntentionalSkips": 1,
+    "translationKeys": 5027,
+    "typecheck": "passed",
+    "productionBuild": "passed",
+    "bundleAndProductionAppChecks": "passed",
+    "backendProductionCheck": "passed"
+  },
+  "scope": "Local correctness and production-readiness evidence. It does not claim fresh authenticated screenshots, exact-candidate CI, external deployment or human release approval. Synthetic records were confined to the local QA database; a concurrently running local QA reset invalidated the cleanup session after proof."
+}

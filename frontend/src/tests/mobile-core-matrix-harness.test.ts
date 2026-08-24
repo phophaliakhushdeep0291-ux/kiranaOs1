@@ -55,6 +55,8 @@ describe("mobile core QA matrix harness", () => {
     expect(source).toContain('"wcag22aa"');
     expect(source).toContain("axe WCAG violations");
     expect(source).toContain("metrics.axe.violationCount === 0");
+    expect(source).toContain("passRuleCount");
+    expect(source).toContain("incompleteCount");
   });
 
   it("proves every core route is operable with visible, named keyboard focus", () => {

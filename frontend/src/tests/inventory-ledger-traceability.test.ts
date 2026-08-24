@@ -1,0 +1,73 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { normalizeInventoryLedgerEntry } from "@/features/core/inventory/queries";
+
+describe("inventory ledger traceability", () => {
+  it("normalizes the server ledger contract without losing quantity or balances", () => {
+    const entry = normalizeInventoryLedgerEntry({
+      id: "ledger_1",
+      productName: "Rice",
+      action: "purchase",
+      changeBaseQty: 12,
+      oldStockBaseQty: 8,
+      newStockBaseQty: 20,
+      actorUserId: "owner_1",
+      actorName: "Asha Owner",
+      sourceType: "purchase_order_receipt",
+      sourceId: "receipt_1",
+      unit: "kg",
+      createdAt: "2026-08-24T10:00:00.000Z",
+    });
+
+    expect(entry).toEqual(expect.objectContaining({
+      quantityDelta: 12,
+      stockBefore: 8,
+      stockAfter: 20,
+      actorUserId: "owner_1",
+      actorName: "Asha Owner",
+      sourceType: "purchase_order_receipt",
+      sourceId: "receipt_1",
+      unit: "kg",
+    }));
+  });
+
+  it("keeps local snake-case movements traceable while pending sync", () => {
+    const entry = normalizeInventoryLedgerEntry({
+      id: "local_1",
+      product_name: "Sugar",
+      quantity_delta: -2,
+      stock_before: 10,
+      stock_after: 8,
+      actor_user_id: "staff_1",
+      actor_name: "Ravi Cashier",
+      source_type: "manual_damage",
+      source_id: "local_1",
+      sync_status: "pending_sync",
+      created_at: "2026-08-24T11:00:00.000Z",
+    });
+
+    expect(entry).toEqual(expect.objectContaining({
+      productName: "Sugar",
+      quantityDelta: -2,
+      stockBefore: 10,
+      stockAfter: 8,
+      actorName: "Ravi Cashier",
+      sourceType: "manual_damage",
+      sync_status: "pending_sync",
+    }));
+  });
+
+  it("renders phone-native trace cards in both stock-history surfaces", () => {
+    const page = readFileSync("src/features/core/inventory/pages/InventoryPage.tsx", "utf8");
+    const register = readFileSync("src/features/core/inventory/pages/components/InventoryRegisterView.tsx", "utf8");
+
+    expect(page).toContain("MovementTraceCard");
+    expect(page).toContain('md:hidden');
+    expect(page).toContain('inventory.page.balance');
+    expect(page).toContain('inventory.page.actor');
+    expect(register).toContain('md:hidden');
+    expect(register).toContain('sourceName(row)');
+    expect(register).toContain('actorName(row)');
+    expect(register).toContain('h-11 gap-2');
+  });
+});

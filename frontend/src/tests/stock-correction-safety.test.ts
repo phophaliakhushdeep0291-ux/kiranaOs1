@@ -6,6 +6,15 @@ const dbState = vi.hoisted(() => ({
   idCounter: 0,
 }));
 
+vi.mock("@/lib/storage/auth-storage", () => ({
+  loadAuthSession: vi.fn(() => ({
+    accessToken: "test-token",
+    refreshToken: "test-refresh",
+    user: { id: "owner_1", name: "Asha Owner", email: "asha@example.test" },
+    shop: { id: "shop_1" },
+  })),
+}));
+
 function cloneRows(rows: unknown[]) {
   return rows.map((row) => ({ ...(row as Record<string, unknown>) }));
 }
@@ -127,6 +136,10 @@ describe("stock adjustment transaction safety", () => {
         purchase_bill_no: "PUR-100",
         supplierBillNo: "PUR-100",
         supplier_bill_no: "PUR-100",
+        actorUserId: "owner_1",
+        actorName: "Asha Owner",
+        sourceType: "manual_purchase",
+        sourceId: "stock_purchase_1",
       }),
     ]));
     expect(tableRows("sync_outbox")).toEqual(expect.arrayContaining([
@@ -217,7 +230,7 @@ describe("stock adjustment transaction safety", () => {
       expect.objectContaining({ type: "correction", ownerPinVerified: true, owner_pin_verified: true }),
     ]));
     expect(tableRows("local_audit_logs")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ action: "stock_correction", entity_type: "inventory_movement", entity_id: "stock_correction_1", reason: "Physical count", owner_pin_provided: true }),
+      expect.objectContaining({ action: "stock_correction", entity_type: "inventory_movement", entity_id: "stock_correction_1", actor_id: "owner_1", actor_name: "Asha Owner", reason: "Physical count", owner_pin_provided: true }),
     ]));
     expect(tableRows("sync_outbox")).toEqual(expect.arrayContaining([
       expect.objectContaining({ operation_type: "STOCK_CORRECTION", entity_type: "inventory_movement", entity_id: "stock_correction_1" }),

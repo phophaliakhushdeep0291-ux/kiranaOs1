@@ -1,0 +1,1140 @@
+{
+  "generatedAt": "2026-08-24T11:40:15.214Z",
+  "frontendUrl": "http://127.0.0.1:5180",
+  "apiUrl": "http://127.0.0.1:3020/api",
+  "results": [
+    {
+      "qaId": "MQA-INV-01",
+      "route": "/inventory",
+      "width": 375,
+      "height": 667,
+      "path": "/inventory",
+      "viewport": [
+        375,
+        667
+      ],
+      "documentWidth": 375,
+      "bodyWidth": 375,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 12,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 26,
+        "passNodeCount": 259,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 4,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand)]\">आपकी दुकान के हिसाब से स्टॉक टूल्स</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".mt-1.font-bold.text-\\[14px\\]"
+                ],
+                "html": "<p class=\"mt-1 truncate text-[14px] font-bold text-[#13223f]\">🛒 Kirana / General Store</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".mt-0\\.5.leading-4.text-\\[\\#6d7c98\\]"
+                ],
+                "html": "<p class=\"mt-0.5 text-[11px] leading-4 text-[#6d7c98]\">खुला और पैक दोनों स्टॉक उसी यूनिट में रखें जिसमें बेचते हैं, और शेल्फ खाली होने से पहले भर लें।</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".px-1"
+                ],
+                "html": "<a href=\"/settings/store-profile\" class=\"inline-flex min-h-11 items-center px-1 text-[11px] font-semibold text-[var(--brand)] hover:underline\">दुकान का प्रकार बदलें</a>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "mqa-inv-01-375x667.png"
+    },
+    {
+      "qaId": "MQA-INV-01",
+      "route": "/inventory",
+      "width": 390,
+      "height": 844,
+      "path": "/inventory",
+      "viewport": [
+        390,
+        844
+      ],
+      "documentWidth": 390,
+      "bodyWidth": 390,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 16,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 26,
+        "passNodeCount": 277,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 4,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand)]\">आपकी दुकान के हिसाब से स्टॉक टूल्स</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".mt-1.font-bold.text-\\[14px\\]"
+                ],
+                "html": "<p class=\"mt-1 truncate text-[14px] font-bold text-[#13223f]\">🛒 Kirana / General Store</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".mt-0\\.5.leading-4.text-\\[\\#6d7c98\\]"
+                ],
+                "html": "<p class=\"mt-0.5 text-[11px] leading-4 text-[#6d7c98]\">खुला और पैक दोनों स्टॉक उसी यूनिट में रखें जिसमें बेचते हैं, और शेल्फ खाली होने से पहले भर लें।</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".px-1"
+                ],
+                "html": "<a href=\"/settings/store-profile\" class=\"inline-flex min-h-11 items-center px-1 text-[11px] font-semibold text-[var(--brand)] hover:underline\">दुकान का प्रकार बदलें</a>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "mqa-inv-01-390x844.png"
+    },
+    {
+      "qaId": "MQA-INV-01",
+      "route": "/inventory",
+      "width": 430,
+      "height": 932,
+      "path": "/inventory",
+      "viewport": [
+        430,
+        932
+      ],
+      "documentWidth": 430,
+      "bodyWidth": 430,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 17,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 26,
+        "passNodeCount": 283,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 4,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand)]\">आपकी दुकान के हिसाब से स्टॉक टूल्स</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".mt-1.font-bold.text-\\[14px\\]"
+                ],
+                "html": "<p class=\"mt-1 truncate text-[14px] font-bold text-[#13223f]\">🛒 Kirana / General Store</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".mt-0\\.5.leading-4.text-\\[\\#6d7c98\\]"
+                ],
+                "html": "<p class=\"mt-0.5 text-[11px] leading-4 text-[#6d7c98]\">खुला और पैक दोनों स्टॉक उसी यूनिट में रखें जिसमें बेचते हैं, और शेल्फ खाली होने से पहले भर लें।</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".px-1"
+                ],
+                "html": "<a href=\"/settings/store-profile\" class=\"inline-flex min-h-11 items-center px-1 text-[11px] font-semibold text-[var(--brand)] hover:underline\">दुकान का प्रकार बदलें</a>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "mqa-inv-01-430x932.png"
+    },
+    {
+      "qaId": "MQA-INV-01",
+      "route": "/inventory",
+      "width": 768,
+      "height": 1024,
+      "path": "/inventory",
+      "viewport": [
+        768,
+        1024
+      ],
+      "documentWidth": 768,
+      "bodyWidth": 768,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 20,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 2
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 28,
+        "passNodeCount": 288,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 4,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand)]\">आपकी दुकान के हिसाब से स्टॉक टूल्स</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".mt-1.font-bold.text-\\[14px\\]"
+                ],
+                "html": "<p class=\"mt-1 truncate text-[14px] font-bold text-[#13223f]\">🛒 Kirana / General Store</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".mt-0\\.5.leading-4.text-\\[\\#6d7c98\\]"
+                ],
+                "html": "<p class=\"mt-0.5 text-[11px] leading-4 text-[#6d7c98]\">खुला और पैक दोनों स्टॉक उसी यूनिट में रखें जिसमें बेचते हैं, और शेल्फ खाली होने से पहले भर लें।</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".px-1"
+                ],
+                "html": "<a href=\"/settings/store-profile\" class=\"inline-flex min-h-11 items-center px-1 text-[11px] font-semibold text-[var(--brand)] hover:underline\">दुकान का प्रकार बदलें</a>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "mqa-inv-01-768x1024.png"
+    }
+  ],
+  "statefulChecks": {},
+  "keyboardResults": [
+    {
+      "qaId": "MQA-INV-01",
+      "route": "/inventory",
+      "expectedControlCount": 52,
+      "visitedControlCount": 52,
+      "replacedControlCount": 0,
+      "browserBoundaryCount": 1,
+      "focusStates": [
+        {
+          "id": "MQA-INV-01-0",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "#main-content",
+          "rawName": "मुख्य सामग्री पर जाएँ",
+          "name": "मुख्य सामग्री पर जाएँ",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 150,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-1",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "Resize sidebar, 260 pixels. Use left and right arrow keys.",
+          "name": "Resize sidebar, 260 pixels. Use left and right arrow keys.",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 12,
+            "height": 800
+          }
+        },
+        {
+          "id": "MQA-INV-01-2",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/dashboard",
+          "rawName": "Arthaभारतीय दुकानों के लिए बना",
+          "name": "Arthaभारतीय दुकानों के लिए बना",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 176,
+            "height": 48
+          }
+        },
+        {
+          "id": "MQA-INV-01-3",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "Collapse sidebar",
+          "name": "Collapse sidebar",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 28,
+            "height": 28
+          }
+        },
+        {
+          "id": "MQA-INV-01-4",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/dashboard",
+          "rawName": "होम",
+          "name": "होम",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-5",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/billing",
+          "rawName": "बिलिंगF2",
+          "name": "बिलिंगF2",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-6",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/inventory",
+          "rawName": "स्टॉकCurrent page",
+          "name": "स्टॉकCurrent page",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 195,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-7",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "Collapse स्टॉक menu",
+          "name": "Collapse स्टॉक menu",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 40,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-8",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/products",
+          "rawName": "सामान",
+          "name": "सामान",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 193,
+            "height": 32
+          }
+        },
+        {
+          "id": "MQA-INV-01-9",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/categories",
+          "rawName": "श्रेणियाँ",
+          "name": "श्रेणियाँ",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 193,
+            "height": 32
+          }
+        },
+        {
+          "id": "MQA-INV-01-10",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/inventory/stock-in",
+          "rawName": "स्टॉक आया",
+          "name": "स्टॉक आया",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 193,
+            "height": 32
+          }
+        },
+        {
+          "id": "MQA-INV-01-11",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/inventory/stock-out",
+          "rawName": "स्टॉक गया",
+          "name": "स्टॉक गया",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 193,
+            "height": 32
+          }
+        },
+        {
+          "id": "MQA-INV-01-12",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/inventory/adjustments",
+          "rawName": "सुधार",
+          "name": "सुधार",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 193,
+            "height": 32
+          }
+        },
+        {
+          "id": "MQA-INV-01-13",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/inventory/stock-transfers",
+          "rawName": "स्टॉक ट्रांसफर",
+          "name": "स्टॉक ट्रांसफर",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 193,
+            "height": 32
+          }
+        },
+        {
+          "id": "MQA-INV-01-14",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/inventory/stock-counts",
+          "rawName": "स्टॉक गिनती",
+          "name": "स्टॉक गिनती",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 193,
+            "height": 32
+          }
+        },
+        {
+          "id": "MQA-INV-01-15",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/inventory/batches",
+          "rawName": "बैच और एक्सपायरी",
+          "name": "बैच और एक्सपायरी",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 193,
+            "height": 32
+          }
+        },
+        {
+          "id": "MQA-INV-01-16",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/customers",
+          "rawName": "ग्राहक / उधार",
+          "name": "ग्राहक / उधार",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-17",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/purchase-bills",
+          "rawName": "खरीद",
+          "name": "खरीद",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-18",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "बिक्री",
+          "name": "बिक्री",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-19",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/returns",
+          "rawName": "वापसी",
+          "name": "वापसी",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-20",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/reports",
+          "rawName": "रिपोर्ट",
+          "name": "रिपोर्ट",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-21",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/money-statement",
+          "rawName": "नकद और भुगतान",
+          "name": "नकद और भुगतान",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-22",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "दुकान के टूल",
+          "name": "दुकान के टूल",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-23",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/expenses",
+          "rawName": "खर्च",
+          "name": "खर्च",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-24",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/settings",
+          "rawName": "सेटिंग",
+          "name": "सेटिंग",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 235,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-25",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "MMMobile Matrix QAMobile Matrix QA - Main · Jaipur",
+          "name": "MMMobile Matrix QAMobile Matrix QA - Main · Jaipur",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 227,
+            "height": 66
+          }
+        },
+        {
+          "id": "MQA-INV-01-26",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "Toggle sidebar",
+          "name": "Toggle sidebar",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-27",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "Mobile Matrix QA - MainMAIN · Primary",
+          "name": "Mobile Matrix QA - MainMAIN · Primary",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 203,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-28",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/sync-status",
+          "rawName": "Open sync alerts",
+          "name": "Open sync alerts",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 44,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-29",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "Mobile Matrix QAMobile Matrix QA - Main · JaipurMM",
+          "name": "Mobile Matrix QAMobile Matrix QA - Main · JaipurMM",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 87,
+            "height": 58
+          }
+        },
+        {
+          "id": "MQA-INV-01-30",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/subscription",
+          "rawName": "मालिक विवरणविवरण",
+          "name": "मालिक विवरणविवरण",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 120,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-31",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/inventory/batches",
+          "rawName": "बैच और एक्सपायरी",
+          "name": "बैच और एक्सपायरी",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 127,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-32",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/inventory/stock-counts",
+          "rawName": "स्टॉक गिनती",
+          "name": "स्टॉक गिनती",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 96,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-33",
+          "tag": "a",
+          "type": "",
+          "role": "",
+          "href": "/settings/store-profile",
+          "rawName": "दुकान का प्रकार बदलें",
+          "name": "दुकान का प्रकार बदलें",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 106,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-34",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "स्टॉक जोड़ेंस्टॉक बढ़ाएं",
+          "name": "स्टॉक जोड़ेंस्टॉक बढ़ाएं",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 185,
+            "height": 82
+          }
+        },
+        {
+          "id": "MQA-INV-01-35",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "स्टॉक सुधारस्टॉक की मात्रा ठीक करें",
+          "name": "स्टॉक सुधारस्टॉक की मात्रा ठीक करें",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 185,
+            "height": 82
+          }
+        },
+        {
+          "id": "MQA-INV-01-36",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "खराब माल की एंट्रीखराब हुआ सामान दर्ज करें",
+          "name": "खराब माल की एंट्रीखराब हुआ सामान दर्ज करें",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 185,
+            "height": 82
+          }
+        },
+        {
+          "id": "MQA-INV-01-37",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "सप्लायर से खरीदखरीद की एंट्री बनाएं",
+          "name": "सप्लायर से खरीदखरीद की एंट्री बनाएं",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 185,
+            "height": 82
+          }
+        },
+        {
+          "id": "MQA-INV-01-38",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "और कामइतिहास, बिल और जानकारी",
+          "name": "और कामइतिहास, बिल और जानकारी",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 185,
+            "height": 82
+          }
+        },
+        {
+          "id": "MQA-INV-01-39",
+          "tag": "input",
+          "type": "",
+          "role": "",
+          "href": "",
+          "rawName": "सामान, SKU या बारकोड से खोजें...",
+          "name": "सामान, SKU या बारकोड से खोजें...",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 241,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-40",
+          "tag": "button",
+          "type": "",
+          "role": "",
+          "href": "",
+          "rawName": "छांटें",
+          "name": "छांटें",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 77,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-41",
+          "tag": "button",
+          "type": "",
+          "role": "",
+          "href": "",
+          "rawName": "एक्सपोर्ट",
+          "name": "एक्सपोर्ट",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 106,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-42",
+          "tag": "button",
+          "type": "button",
+          "role": "combobox",
+          "href": "",
+          "rawName": "सभी कैटेगरी",
+          "name": "सभी कैटेगरी",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 150,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-43",
+          "tag": "button",
+          "type": "button",
+          "role": "combobox",
+          "href": "",
+          "rawName": "सभी ब्रांड",
+          "name": "सभी ब्रांड",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 150,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-44",
+          "tag": "button",
+          "type": "button",
+          "role": "combobox",
+          "href": "",
+          "rawName": "सभी इकाइयां",
+          "name": "सभी इकाइयां",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 150,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-45",
+          "tag": "button",
+          "type": "button",
+          "role": "combobox",
+          "href": "",
+          "rawName": "सभी स्टॉक स्थिति",
+          "name": "सभी स्टॉक स्थिति",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 150,
+            "height": 44
+          }
+        },
+        {
+          "id": "MQA-INV-01-46",
+          "tag": "div",
+          "type": "",
+          "role": "region",
+          "href": "",
+          "rawName": "सामान का स्टॉक",
+          "name": "सामान का स्टॉक",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 654,
+            "height": 244
+          }
+        },
+        {
+          "id": "MQA-INV-01-47",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "पेज 1",
+          "name": "पेज 1",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 32,
+            "height": 32
+          }
+        },
+        {
+          "id": "MQA-INV-01-48",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "सभी देखें",
+          "name": "सभी देखें",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 41,
+            "height": 17
+          }
+        },
+        {
+          "id": "MQA-INV-01-49",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "सभी देखें",
+          "name": "सभी देखें",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 41,
+            "height": 17
+          }
+        },
+        {
+          "id": "MQA-INV-01-50",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "Voice assistant",
+          "name": "Voice assistant",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 42,
+            "height": 42
+          }
+        },
+        {
+          "id": "MQA-INV-01-51",
+          "tag": "button",
+          "type": "button",
+          "role": "",
+          "href": "",
+          "rawName": "Report a problem",
+          "name": "Report a problem",
+          "hidden": false,
+          "focusVisible": true,
+          "indicator": true,
+          "rect": {
+            "width": 168,
+            "height": 44
+          }
+        }
+      ]
+    }
+  ]
+}

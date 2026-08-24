@@ -25,6 +25,7 @@ import { sendTransactionalEmail } from "../../lib/authEmail.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
 import { assertSensitiveBillReason, deriveSensitiveBillActions } from "./bill-sensitive-approval.js";
+import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
 
 const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
@@ -153,7 +154,7 @@ export async function emailBillReceipt(shopId, billId, email) {
 
 export async function softDeleteBill(shopId, billId, { reason } = {}, actor = {}) {
   return db.$transaction(async (tx) => {
-    const bill = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { payments: true } });
+    const bill = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });
     if (!bill) throw new AppError("Bill not found", 404);
     // Idempotent under offline replay: a re-delivered DELETE_BILL event stops here, so the
     // ledger below is posted exactly once per actual trip to the recycle bin. The unique
@@ -206,7 +207,7 @@ export async function softDeleteBill(shopId, billId, { reason } = {}, actor = {}
 
 export async function restoreDeletedBill(shopId, billId, actor = {}) {
   return db.$transaction(async (tx) => {
-    const bill = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { payments: true } });
+    const bill = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });
     if (!bill) throw new AppError("Bill not found", 404);
     // Same replay guard as softDeleteBill, from the other side.
     if (!bill.deletedAt) return bill;
@@ -765,7 +766,7 @@ export async function confirmBill(shopId, body, actor = {}) {
 
     // Whatever a guard needs to record about the sale it permitted — the pharmacy
     // closes its register entry against this bill here.
-    for (const hook of saleGuardHooks) await hook({ tx, bill, billNo, location });
+    for (const hook of saleGuardHooks) await hook({ tx, bill, billNo, location, actor });
 
     await recordBillLoyaltyRedemption(tx, {
       shopId,
@@ -798,6 +799,7 @@ export async function confirmBill(shopId, body, actor = {}) {
           locationId: location.id,
           productId: product.id,
           productName: product.name,
+          ...stockLedgerProvenance(actor),
           action: "sale",
           changeBaseQty: -removedBaseQty,
           oldStockBaseQty: stockResult.oldStock,
@@ -1048,11 +1050,15 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
           locationId: location.id,
           productId: item.productId,
           productName: item.name,
+          ...stockLedgerProvenance(actor),
           action: "cancel_reversal",
           changeBaseQty: item.quantityInBaseUnit,
           oldStockBaseQty: stockResult.oldStock,
           newStockBaseQty: stockResult.newStock,
           billId: bill.id,
+          sourceDeviceId: actor.deviceId ?? null,
+          sourceType: "bill_cancel",
+          sourceId: bill.id,
           note: `Reversal: ${reason}`,
         },
       });
@@ -1526,6 +1532,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
               locationId: location.id,
               productId: product.id,
               productName: product.name,
+              ...stockLedgerProvenance(actor),
               action: "damage",
               changeBaseQty: 0,
               oldStockBaseQty: await getLocationQuantity(tx, shopId, location, product),
@@ -1564,6 +1571,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
             locationId: location.id,
             productId: product.id,
             productName: product.name,
+            ...stockLedgerProvenance(actor),
             action: "return",
             changeBaseQty: qtyInBase,
             oldStockBaseQty: stockResult.oldStock,
@@ -1742,11 +1750,15 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
           locationId: location.id,
           productId: product.id,
           productName: item.name,
+          ...stockLedgerProvenance(actor),
           action: "restore_reversal",
           changeBaseQty: -item.quantityInBaseUnit,
           oldStockBaseQty: stockResult.oldStock,
           newStockBaseQty: stockResult.newStock,
           billId: bill.id,
+          sourceDeviceId: actor.deviceId ?? null,
+          sourceType: "bill_restore",
+          sourceId: bill.id,
           note: `Restore cancelled bill: ${reason}`,
         },
       });

@@ -16,6 +16,7 @@
 // restore/delete/undelete keys include the operation timestamp so a legitimate
 // cancel→restore→cancel cycle posts distinct rows instead of colliding.
 import { round2, toPaiseBigInt } from "../../utils/money.js";
+import { postFinancialLedgerRows } from "./general-ledger.service.js";
 
 const TENDER_ENTRY = {
   cash: { entryType: "cash_in", direction: "debit" },
@@ -48,6 +49,7 @@ function ledgerRow({
   businessDate,
   idempotencyKey,
 }) {
+  const amountPaise = toPaiseBigInt(amount);
   return {
     shopId,
     customerId,
@@ -59,10 +61,23 @@ function ledgerRow({
     sourceId,
     entryType,
     direction,
-    amountPaise: toPaiseBigInt(amount),
+    amountPaise,
     paymentMode,
     businessDate: businessDate ?? new Date(),
     idempotencyKey,
+    evidenceJson: JSON.stringify({
+      version: 1,
+      capturedAt: new Date().toISOString(),
+      sourceType,
+      sourceId,
+      billId,
+      paymentId,
+      purchaseBillId,
+      entryType,
+      direction,
+      amountPaise: String(amountPaise),
+      paymentMode,
+    }),
   };
 }
 
@@ -190,6 +205,12 @@ async function postBillEffectLedger(tx, {
     }));
   }
 
+  const costAmount = postsReporting ? (bill.items ?? []).reduce((sum, item) => round2(sum + Number(item.lineCost ?? 0)), 0) : 0;
+  if (costAmount !== 0) {
+    rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType, sourceId: bill.id, entryType: "cost_of_goods_sold", direction: "debit", amount: sign * costAmount, businessDate: date, idempotencyKey: `${keyBase}:cost_of_goods_sold` }));
+    rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType, sourceId: bill.id, entryType: "inventory_sale", direction: "credit", amount: sign * costAmount, businessDate: date, idempotencyKey: `${keyBase}:inventory_sale` }));
+  }
+
   const gstAmount = postsReporting ? Number(bill.gst ?? 0) : 0;
   if (gstAmount !== 0) {
     rows.push(ledgerRow({
@@ -248,9 +269,7 @@ async function postBillEffectLedger(tx, {
     }
   }
 
-  for (const row of rows) {
-    await tx.financialLedger.create({ data: row });
-  }
+  await postFinancialLedgerRows(tx, rows);
 }
 
 export async function postBillCreatedLedger(tx, args) {
@@ -340,6 +359,7 @@ export async function postSaleReturnLedger(tx, {
     error.code = "SALE_RETURN_ACCOUNTING_EVIDENCE_MISMATCH";
     throw error;
   }
+
   const rows = [ledgerRow({
     shopId,
     billId: bill.id,
@@ -352,6 +372,12 @@ export async function postSaleReturnLedger(tx, {
     businessDate: date,
     idempotencyKey: `${keyBase}:sale`,
   })];
+
+  const returnCost = (bill.items ?? []).reduce((sum, item) => round2(sum + Number(item.lineCost ?? 0)), 0);
+  if (returnCost !== 0) {
+    rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType: "sale_return", sourceId: bill.id, entryType: "cost_of_goods_sold", direction: "debit", amount: returnCost, businessDate: date, idempotencyKey: `${keyBase}:cost_of_goods_sold` }));
+    rows.push(ledgerRow({ shopId, billId: bill.id, customerId, sourceType: "sale_return", sourceId: bill.id, entryType: "inventory_sale", direction: "credit", amount: returnCost, businessDate: date, idempotencyKey: `${keyBase}:inventory_sale` }));
+  }
 
   const gstAmount = Number(bill.gst ?? 0);
   if (gstAmount !== 0) {
@@ -433,7 +459,7 @@ export async function postSaleReturnLedger(tx, {
     }));
   }
 
-  for (const row of rows) await tx.financialLedger.create({ data: row });
+  await postFinancialLedgerRows(tx, rows);
 }
 
 // Udhar khata payment: money in (cash_in/upi_in/bank_in) + outstanding down (udhar_credit).
@@ -479,9 +505,7 @@ export async function postUdharPaymentLedger(tx, {
       idempotencyKey: `${base}:udhar_credit`,
     }),
   ];
-  for (const row of rows) {
-    await tx.financialLedger.create({ data: row });
-  }
+  await postFinancialLedgerRows(tx, rows);
 }
 
 function purchaseRefundEntry(mode) {
@@ -534,7 +558,7 @@ export async function postPurchaseReceiptLedger(tx, { shopId, receipt, supplierI
       idempotencyKey: `${keyBase}:supplier_payable`,
     }));
   }
-  for (const row of rows) await tx.financialLedger.create({ data: row });
+  await postFinancialLedgerRows(tx, rows);
 }
 
 async function postPurchaseReturnEffectLedger(tx, {
@@ -584,7 +608,7 @@ async function postPurchaseReturnEffectLedger(tx, {
       idempotencyKey: `${keyBase}:${refundEntry.entryType}`,
     }));
   }
-  for (const row of rows) await tx.financialLedger.create({ data: row });
+  await postFinancialLedgerRows(tx, rows);
 }
 
 export async function postPurchaseReturnCreatedLedger(tx, { shopId, purchaseReturn, businessDate }) {
@@ -653,7 +677,7 @@ export async function postExpenseEffectLedger(tx, {
       idempotencyKey: `${keyBase}:${outflow.entryType}`,
     }));
   }
-  for (const row of rows) await tx.financialLedger.create({ data: row });
+  await postFinancialLedgerRows(tx, rows);
 }
 const PAISE_PER_RUPEE = 100;
 const SUMMARY_ENTRY_TYPES = ["sale", "cash_in", "upi_in", "bank_in", "udhar_debit", "udhar_credit", "udhar_return_credit", "gift_card_issued", "gift_card_redeemed", "waiver_expense"];

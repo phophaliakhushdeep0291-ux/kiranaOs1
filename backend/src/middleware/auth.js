@@ -11,7 +11,7 @@ import db from "../db.js";
  * role downgrades, and disabled accounts take effect immediately instead of
  * waiting for the access token to expire.
  *
- * req.user = { userId, shopId, role }
+ * req.user = { userId, shopId, role, userName, userEmail }
  */
 export async function requireAuth(req, _res, next) {
   const header = req.headers.authorization;
@@ -43,7 +43,7 @@ export async function requireAuth(req, _res, next) {
 
     const user = await db.user.findFirst({
       where: { id: payload.userId, shopId: payload.shopId, disabledAt: null },
-      select: { id: true, shopId: true, role: true },
+      select: { id: true, shopId: true, role: true, name: true, email: true },
     });
 
     if (!user) {
@@ -117,6 +117,8 @@ export async function requireAuth(req, _res, next) {
       userId: user.id,
       shopId: user.shopId,
       role: user.role,
+      userName: user.name,
+      userEmail: user.email,
       sessionId: session?.id ?? payload.sessionId ?? payload.sid ?? null,
       deviceId: session?.deviceId ?? null,
       deviceRecordId: session?.deviceRecordId ?? payload.deviceRecordId ?? null,

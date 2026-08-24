@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { decrementLocationInventory, resolveOperationalLocation } from "../../modules/stores/location-context.service.js";
 import { createSaleReturn, getBill } from "../../modules/bills/bills.service.js";
+import { stockLedgerProvenance } from "../../modules/inventory/stock-ledger-provenance.js";
 
 const detailInclude = { items: { include: { allocations: true } }, dispatch: true };
 const date = (value) => value ? new Date(`${value}T00:00:00.000Z`) : null;
@@ -105,7 +106,7 @@ export async function packTradeOrder(shopId, id, input) {
   });
 }
 
-export async function dispatchTradeOrder(shopId, id, input) {
+export async function dispatchTradeOrder(shopId, id, input, actor = {}) {
   return db.$transaction(async (tx) => {
     const order = await tx.tradeOrder.findFirst({ where: { id, shopId, status: "packed" }, include: detailInclude });
     if (!order) throw new AppError("Pack the order before dispatch", 409, "TRADE_ORDER_NOT_PACKED");
@@ -121,7 +122,7 @@ export async function dispatchTradeOrder(shopId, id, input) {
       const unit = item.sellingUnitId ? product.sellingUnits.find((row) => row.id === item.sellingUnitId) : null;
       const packs = unit ? new Map([[unit.id, { sellingUnit: unit, qty: item.quantity }]]) : null;
       const moved = await decrementLocationInventory(tx, { shopId, location, product, quantityBase: item.quantityBaseQty, packs });
-      await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: product.id, productName: product.name, sellingUnitId: unit?.id ?? null, sellingUnitQty: unit ? item.quantity : null, action: "trade_dispatch", changeBaseQty: -item.quantityBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "trade_order", sourceId: order.id, note: `Dispatch ${input.dispatchNumber} for ${order.orderNumber}` } });
+      await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: product.id, productName: product.name, ...stockLedgerProvenance(actor), sellingUnitId: unit?.id ?? null, sellingUnitQty: unit ? item.quantity : null, action: "trade_dispatch", changeBaseQty: -item.quantityBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "trade_order", sourceId: order.id, note: `Dispatch ${input.dispatchNumber} for ${order.orderNumber}` } });
     }
     await tx.tradeDispatch.create({ data: { shopId, orderId: order.id, dispatchNumber: input.dispatchNumber, dispatchDate: date(input.dispatchDate), transporterName: input.transporterName ?? null, transporterGstin: input.transporterGstin ?? null, vehicleNumber: input.vehicleNumber ?? null, lrAwbNumber: input.lrAwbNumber ?? null, ewayBillNumber: input.ewayBillNumber ?? null, shippingBillNumber: input.shippingBillNumber ?? null, shippingBillDate: date(input.shippingBillDate), containerNumber: input.containerNumber ?? null, packageCount: input.packageCount ?? null, netWeight: input.netWeight ?? null, grossWeight: input.grossWeight ?? null, sealNumber: input.sealNumber ?? null, notes: input.notes ?? null } });
     return tx.tradeOrder.update({ where: { id: order.id }, data: { status: "dispatched", dispatchedAt: new Date() }, include: detailInclude });

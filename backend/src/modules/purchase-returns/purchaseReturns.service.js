@@ -7,6 +7,7 @@ import { decrementLocationInventory, incrementLocationInventory } from "../store
 import { postPurchaseReturnCancelledLedger, postPurchaseReturnCreatedLedger } from "../finance/financial-ledger.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
+import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
 
 const include = { location: true, supplier: true, purchaseReceipt: true, items: { include: { product: true, purchaseReceiptItem: true } } };
 const ref = () => `PR-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
@@ -54,8 +55,8 @@ function reversedInputTax(receipt, returnedGoodsValue) {
 }
 
 function normalizeActor(actor) {
-  if (typeof actor === "string") return { userId: actor, deviceId: undefined, req: null };
-  return { userId: actor?.userId ?? null, deviceId: actor?.deviceId ?? undefined, req: actor?.req ?? null };
+  if (typeof actor === "string") return { userId: actor, userName: null, deviceId: undefined, req: null };
+  return { userId: actor?.userId ?? null, userName: actor?.userName ?? null, deviceId: actor?.deviceId ?? undefined, req: actor?.req ?? null };
 }
 
 export async function listPurchaseReturns(shopId, { locationId, limit = 100 } = {}) {
@@ -115,7 +116,7 @@ export async function createPurchaseReturn(shopId, data, actor = {}, requestedLo
       const quantity = round2(line.input.quantityBaseQty);
       const stock = await decrementLocationInventory(tx, { shopId, location: receipt.location, product: line.item.product, quantityBase: quantity, allowShortfall: false });
       const lotAllocations = await removeReturnedLots(tx, { shopId, locationId: receipt.locationId, product: line.item.product, receiptItemId: line.item.id, quantity });
-      await tx.stockLedger.create({ data: { shopId, locationId: receipt.locationId, productId: line.item.productId, productName: line.item.product.name, action: "purchase_return", changeBaseQty: -quantity, oldStockBaseQty: stock.oldStock, newStockBaseQty: stock.newStock, purchaseBillAmount: -line.lineAmount, ...moneyShadows({ purchaseBillAmount: -line.lineAmount }), invoiceNumber: receipt.supplierInvoiceNumber || receipt.receiptNumber, supplierName: receipt.supplier?.name || null, sourceType: "purchase_return", sourceId: purchaseReturn.id, note: `Purchase return ${purchaseReturn.returnNumber}: ${data.reason}` } });
+      await tx.stockLedger.create({ data: { shopId, locationId: receipt.locationId, productId: line.item.productId, productName: line.item.product.name, ...stockLedgerProvenance(auditActor), action: "purchase_return", changeBaseQty: -quantity, oldStockBaseQty: stock.oldStock, newStockBaseQty: stock.newStock, purchaseBillAmount: -line.lineAmount, ...moneyShadows({ purchaseBillAmount: -line.lineAmount }), invoiceNumber: receipt.supplierInvoiceNumber || receipt.receiptNumber, supplierName: receipt.supplier?.name || null, sourceType: "purchase_return", sourceId: purchaseReturn.id, note: `Purchase return ${purchaseReturn.returnNumber}: ${data.reason}` } });
       await tx.purchaseReturnItem.create({ data: { purchaseReturnId: purchaseReturn.id, purchaseReceiptItemId: line.item.id, productId: line.item.productId, quantityBaseQty: quantity, actualRate: line.item.actualRate, lineAmount: line.lineAmount, ...moneyShadows({ actualRate: line.item.actualRate, lineAmount: line.lineAmount }), lotAllocationsJson: JSON.stringify(lotAllocations) } });
     }
     const dueAmount = round2(Math.max(0, Number(receipt.dueAmount || 0) - supplierCreditAmount));
@@ -196,6 +197,7 @@ export async function cancelPurchaseReturn(shopId, id, reason, actor = {}, reque
           locationId: purchaseReturn.locationId,
           productId: item.productId,
           productName: item.product.name,
+          ...stockLedgerProvenance(auditActor),
           action: "purchase_return_cancel",
           changeBaseQty: item.quantityBaseQty,
           oldStockBaseQty: stock.oldStock,
