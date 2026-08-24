@@ -1,6 +1,6 @@
 /* Artha service worker: app-shell only. Business data stays in IndexedDB, not Cache Storage. */
 const BUILD_ID = "__KIRANA_BUILD_ID__";
-const CACHE_VERSION = `kiranaos-shell-v9-${BUILD_ID}`;
+const CACHE_VERSION = `kiranaos-shell-v10-${BUILD_ID}`;
 const CORE_ASSETS = __KIRANA_CORE_ASSETS__;
 const VERTICAL_ASSETS = __KIRANA_VERTICAL_ASSETS__;
 const APP_SHELL = [
@@ -116,15 +116,17 @@ async function cacheFirstStatic(request) {
   // older cache can briefly coexist, and a global caches.match() could otherwise
   // mix files from two releases.
   const cached = await cache.match(request);
-  const fetchAndStore = fetch(request).then((response) => {
+  // Content-hashed assets inside a build-scoped, atomically installed cache are
+  // immutable. Do not start a background network request for a cache hit: during
+  // a hard disconnect those requests can remain pending and eventually starve a
+  // later lazy import, even though that route chunk is already cached. This was
+  // visible after a long offline route sequence as an endless "Opening…" screen.
+  if (cached) return cached;
+
+  return fetch(request).then((response) => {
     if (response && response.ok && response.type === "basic") cache.put(request, response.clone()).catch(() => undefined);
     return response;
   });
-  if (cached) {
-    fetchAndStore.catch(() => undefined);
-    return cached;
-  }
-  return fetchAndStore;
 }
 
 self.addEventListener("fetch", (event) => {
@@ -141,7 +143,7 @@ self.addEventListener("fetch", (event) => {
   // can hang indefinitely during a hard disconnect, leaving React lazy routes on
   // their loading screen even though the exact chunk is already cached. Filenames
   // are content-hashed and CACHE_VERSION is build-scoped, so serving the installed
-  // copy first cannot mix releases; the background request still refreshes it.
+  // copy cannot mix releases and needs no background revalidation.
   if (["style", "script", "worker"].includes(request.destination)) {
     event.respondWith(cacheFirstStatic(request));
     return;

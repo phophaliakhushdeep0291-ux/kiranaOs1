@@ -73,8 +73,6 @@ const coveredBills = new Set(ledger.filter((row) => row.billId).map((row) => row
 const uncoveredBills = bills.filter((bill) => String(bill.billType).toLowerCase() !== "estimate" && !coveredBills.has(bill.id));
 const unrecognizedMismatches = sourceAmountMismatches.filter((item) => !recognizedMismatchShops.has(item.shopId));
 const ledgerSourceKeys = new Set(ledger.map((row) => `${row.shopId}\u0000${row.sourceType}\u0000${row.sourceId}`));
-const journalSourceKeys = new Set(journalEntries.map((entry) => `${entry.shopId}\u0000${entry.sourceType}\u0000${entry.sourceId}`));
-const missingJournalProjections = [...ledgerSourceKeys].filter((key) => !journalSourceKeys.has(key));
 const journalBalanceFailures = journalEntries.flatMap((entry) => {
   const debitPaise = entry.lines.reduce((sum, line) => sum + BigInt(line.debitPaise), 0n);
   const creditPaise = entry.lines.reduce((sum, line) => sum + BigInt(line.creditPaise), 0n);
@@ -85,12 +83,14 @@ const journalEvidenceFailures = [];
 for (const entry of journalEntries) {
   try {
     const evidence = JSON.parse(entry.evidenceJson);
-    if (evidence.version !== 1) journalEvidenceFailures.push({ journalEntryId: entry.id, reason: "unsupported_version" });
+    if (![1, 2].includes(evidence.version)) journalEvidenceFailures.push({ journalEntryId: entry.id, reason: "unsupported_version" });
     projectedLedgerIds.push(...(evidence.ledgerRowIds ?? []));
   } catch { journalEvidenceFailures.push({ journalEntryId: entry.id, reason: "invalid_json" }); }
 }
 const projectedCounts = Map.groupBy(projectedLedgerIds, (id) => id);
 const missingLedgerRowProjections = ledger.filter((row) => !projectedCounts.has(row.id)).map((row) => row.id);
+const missingLedgerIds = new Set(missingLedgerRowProjections);
+const missingJournalProjections = [...ledgerSourceKeys].filter((key) => ledger.some((row) => `${row.shopId}\u0000${row.sourceType}\u0000${row.sourceId}` === key && missingLedgerIds.has(row.id)));
 const duplicateLedgerRowProjections = [...projectedCounts].filter(([, ids]) => ids.length !== 1).map(([id, ids]) => ({ id, count: ids.length }));
 const statementBalanceFailures = [];
 for (const [shopId, entries] of Map.groupBy(journalEntries, (entry) => entry.shopId)) {

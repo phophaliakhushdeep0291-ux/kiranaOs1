@@ -208,27 +208,26 @@ export async function projectShopGeneralLedger(shopId, client = db) {
   const accounts = await ensureSystemAccounts(shopId, client);
   const accountByCode = new Map(accounts.map((account) => [account.code, account]));
   const rows = await client.financialLedger.findMany({ where: { shopId }, orderBy: [{ businessDate: "asc" }, { createdAt: "asc" }, { id: "asc" }] });
+  const existingJournals = await client.journalEntry.findMany({ where: { shopId }, select: { evidenceJson: true } });
+  const projectedLedgerIds = new Set();
+  for (const journal of existingJournals) {
+    try { for (const id of JSON.parse(journal.evidenceJson).ledgerRowIds ?? []) projectedLedgerIds.add(id); } catch { /* permanent verification reports malformed evidence */ }
+  }
   const groups = Map.groupBy(rows, (row) => `${row.sourceType}\u0000${row.sourceId}`);
   let created = 0;
   let existing = 0;
   for (const sourceRows of groups.values()) {
     const source = sourceRows[0];
-    const found = await client.journalEntry.findUnique({ where: { shopId_sourceType_sourceId: { shopId, sourceType: source.sourceType, sourceId: source.sourceId } } });
-    let rowsToProject = sourceRows;
-    let journalSourceType = source.sourceType;
-    if (found) {
-      existing += 1;
-      let projectedIds = [];
-      try { projectedIds = JSON.parse(found.evidenceJson).ledgerRowIds ?? []; } catch { /* verification below catches malformed legacy evidence */ }
-      rowsToProject = sourceRows.filter((row) => !projectedIds.includes(row.id));
-      if (!rowsToProject.length) continue;
-      journalSourceType = `${source.sourceType}_projection_supplement`;
-    }
+    const rowsToProject = sourceRows.filter((row) => !projectedLedgerIds.has(row.id));
+    if (!rowsToProject.length) { existing += 1; continue; }
+    const supplemental = rowsToProject.length !== sourceRows.length;
+    const journalSourceType = supplemental ? `${source.sourceType}_projection_supplement` : source.sourceType;
+    const batchSourceId = journalBatchSourceId(rowsToProject);
     const projection = buildJournalProjection(rowsToProject);
     await client.journalEntry.create({ data: {
-      shopId, sourceType: journalSourceType, sourceId: source.sourceId, businessDate: source.businessDate,
+      shopId, sourceType: journalSourceType, sourceId: batchSourceId, businessDate: source.businessDate,
       description: `${journalSourceType}:${source.sourceId}`,
-      evidenceJson: JSON.stringify({ version: 1, projectionVersion: GENERAL_LEDGER_VERSION, supplemental: Boolean(found), ledgerRowIds: rowsToProject.map((row) => row.id) }),
+      evidenceJson: JSON.stringify({ version: 2, projectionVersion: GENERAL_LEDGER_VERSION, originalSourceId: source.sourceId, batchSourceId, supplemental, ledgerRowIds: rowsToProject.map((row) => row.id), ledgerIdempotencyKeys: rowsToProject.map((row) => row.idempotencyKey).sort() }),
       lines: { create: projection.lines.map((line, index) => ({
         shopId, accountId: accountByCode.get(line.accountCode).id, financialLedgerId: line.financialLedgerId,
         lineNumber: index + 1, debitPaise: line.side === "debit" ? line.amountPaise : 0n,

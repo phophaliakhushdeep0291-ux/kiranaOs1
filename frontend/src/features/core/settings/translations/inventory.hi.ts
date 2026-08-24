@@ -264,7 +264,7 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.page.actor": "दर्ज करने वाला",
   "inventory.page.legacyActor": "पुरानी एंट्री",
   "inventory.page.systemActor": "KiranaOS सिस्टम",
-  "inventory.page.stockFlow": "{before} → {after}",
+  "inventory.page.stockFlow": "पहले {before} → बाद में {after}",
   "inventory.page.purchaseBills": "खरीद बिल",
   "inventory.page.insights": "स्टॉक की जानकारी",
   "inventory.page.batchExpiry": "बैच और एक्सपायरी",

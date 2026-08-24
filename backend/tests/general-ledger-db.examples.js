@@ -33,6 +33,12 @@ try {
   assert.equal(await db.financialLedger.count({ where: { shopId: shop.id } }), ledgerCount, "closed-period rejection writes nothing");
   await expectCode(createAccountingPeriod(shop.id, { name: "Overlap", startsAt: "2026-04-15T00:00:00.000Z", endsAt: "2026-05-15T23:59:59.999Z" }), "ACCOUNTING_PERIOD_OVERLAP");
   await expectCode(updateAccount(shop.id, accounts.find((row) => row.code === "1000").id, { active: false }), "SYSTEM_ACCOUNT_IMMUTABLE");
+  const batch = (suffix, amount) => [{ shopId: shop.id, sourceType: "bill_cancel", sourceId: "REPEAT-BILL", entryType: "sale", direction: "credit", amountPaise: BigInt(amount), businessDate: new Date("2026-06-01T00:00:00.000Z"), idempotencyKey: `repeat:${suffix}:sale` }, { shopId: shop.id, sourceType: "bill_cancel", sourceId: "REPEAT-BILL", entryType: "cash_in", direction: "debit", amountPaise: BigInt(amount), businessDate: new Date("2026-06-01T00:00:00.000Z"), idempotencyKey: `repeat:${suffix}:cash` }];
+  await postFinancialLedgerRows(db, batch("one", -100));
+  await postFinancialLedgerRows(db, batch("two", 100));
+  const repeatedJournals = await db.journalEntry.findMany({ where: { shopId: shop.id, sourceType: "bill_cancel" } });
+  assert.equal(repeatedJournals.length, 2, "repeat lifecycle events receive distinct immutable journal identities");
+  await expectCode(reverseJournal(shop.id, repeatedJournals[0].id, { reason: "Wrong correction path" }), "SYSTEM_JOURNAL_REVERSAL_FORBIDDEN");
   console.log("general-ledger-db.examples.js OK");
 } finally {
   await db.journalLine.deleteMany({ where: { shopId: shop.id } });

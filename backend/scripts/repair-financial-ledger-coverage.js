@@ -42,7 +42,7 @@ async function expectedRowsForBill(bill) {
 }
 
 const bills = await db.bill.findMany({ include: { items: true, payments: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
-const existing = await db.financialLedger.findMany({ select: { shopId: true, idempotencyKey: true } });
+const existing = await db.financialLedger.findMany();
 const existingKeys = new Set(existing.map((row) => `${row.shopId}:${row.idempotencyKey}`));
 const repairs = [];
 const quarantined = [];
@@ -65,6 +65,48 @@ for (const bill of bills) {
       if (missingCostRows.length) repairs.push({ billId: bill.id, billNo: bill.billNo, shopId: bill.shopId, billType: bill.billType, rows: missingCostRows });
     }
   }
+}
+
+// Every sale-bearing lifecycle event (create, cancel, restore, delete,
+// undelete, return) must move inventory cost with revenue. This catches
+// historical reversals independently from tender evidence.
+const billById = new Map(bills.map((bill) => [bill.id, bill]));
+const plannedKeys = new Set(repairs.flatMap((repair) => repair.rows.map((row) => `${row.shopId}:${row.idempotencyKey}`)));
+for (const sale of existing.filter((row) => row.entryType === "sale" && row.billId && /:sale$/.test(row.idempotencyKey))) {
+  const bill = billById.get(sale.billId);
+  if (String(bill?.billType).toLowerCase() === "estimate") continue;
+  const costPaise = BigInt(Math.round(Math.abs((bill?.items ?? []).reduce((sum, item) => sum + Number(item.lineCost ?? 0), 0)) * 100));
+  if (costPaise === 0n) continue;
+  const signedCost = BigInt(sale.amountPaise) < 0n ? -costPaise : costPaise;
+  const base = sale.idempotencyKey.slice(0, -":sale".length);
+  const candidates = [
+    { entryType: "cost_of_goods_sold", direction: "debit", idempotencyKey: `${base}:cost_of_goods_sold` },
+    { entryType: "inventory_sale", direction: "credit", idempotencyKey: `${base}:inventory_sale` },
+  ].filter((row) => !existingKeys.has(`${sale.shopId}:${row.idempotencyKey}`) && !plannedKeys.has(`${sale.shopId}:${row.idempotencyKey}`))
+    .map((row) => ({ shopId: sale.shopId, customerId: sale.customerId, supplierId: null, billId: sale.billId, paymentId: null, purchaseBillId: null, sourceType: sale.sourceType, sourceId: sale.sourceId, ...row, amountPaise: signedCost, paymentMode: null, businessDate: sale.businessDate, evidenceJson: JSON.stringify({ version: 1, capturedAt: new Date().toISOString(), historicalBackfill: true, sourceType: sale.sourceType, sourceId: sale.sourceId, billId: sale.billId, entryType: row.entryType, direction: row.direction, amountPaise: String(signedCost), paymentMode: null }) }));
+  if (candidates.length) {
+    repairs.push({ billId: bill.id, billNo: bill.billNo, shopId: bill.shopId, billType: `${bill.billType}:${sale.sourceType}`, rows: candidates });
+    for (const row of candidates) plannedKeys.add(`${row.shopId}:${row.idempotencyKey}`);
+  }
+}
+
+// Estimates are quotations. Older builds posted some as sales; remove their
+// net accounting effect with an append-only correction instead of deleting
+// history. Cancelled estimates that already net to zero need no correction.
+for (const bill of bills.filter((row) => String(row.billType).toLowerCase() === "estimate")) {
+  const rows = existing.filter((row) => row.billId === bill.id && row.sourceType !== "legacy_estimate_reversal");
+  const grouped = Map.groupBy(rows, (row) => `${row.entryType}\u0000${row.paymentMode ?? ""}`);
+  const correctionRows = [];
+  for (const group of grouped.values()) {
+    const template = group[0];
+    const netPaise = group.reduce((sum, row) => sum + BigInt(row.amountPaise), 0n);
+    if (netPaise === 0n) continue;
+    const idempotencyKey = `legacy-estimate-reversal:${bill.id}:${template.entryType}:${template.paymentMode ?? "none"}`;
+    if (existingKeys.has(`${bill.shopId}:${idempotencyKey}`) || plannedKeys.has(`${bill.shopId}:${idempotencyKey}`)) continue;
+    const amountPaise = -netPaise;
+    correctionRows.push({ shopId: bill.shopId, customerId: bill.customerId, supplierId: null, billId: bill.id, paymentId: null, purchaseBillId: null, sourceType: "legacy_estimate_reversal", sourceId: bill.id, entryType: template.entryType, direction: template.direction, amountPaise, paymentMode: template.paymentMode, businessDate: new Date(), idempotencyKey, evidenceJson: JSON.stringify({ version: 1, capturedAt: new Date().toISOString(), historicalCorrection: true, reason: "Estimate is a quotation, not an accounting event", sourceType: "legacy_estimate_reversal", sourceId: bill.id, billId: bill.id, entryType: template.entryType, direction: template.direction, amountPaise: String(amountPaise), paymentMode: template.paymentMode }) });
+  }
+  if (correctionRows.length) repairs.push({ billId: bill.id, billNo: bill.billNo, shopId: bill.shopId, billType: "estimate:legacy_reversal", rows: correctionRows });
 }
 
 if (apply) {
