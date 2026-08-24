@@ -1,5 +1,5 @@
 import { applyRoundOff, roundMoney, roundToRupee } from "@/lib/money";
-import type { Product } from "@/lib/api/client";
+import type { Product, ProductSellingUnit } from "@/lib/api/client";
 import { addonUnitPrice, type CartItem } from "./billing-types";
 
 export function clampAmount(value: number, min: number, max: number): number {
@@ -89,6 +89,40 @@ export function resolveScanMatch(rawSearch: string, filtered: Product[]): Produc
   return filtered.length === 1 ? filtered[0] : null;
 }
 
+interface ExactCatalogueScanMatch {
+  product: Product;
+  sellingUnit?: ProductSellingUnit;
+}
+
+function normalizedScanCode(value: unknown): string {
+  return String(value ?? "").trim().toLocaleLowerCase("en-US");
+}
+
+/**
+ * Resolve a physical label to the exact thing that label identifies.
+ *
+ * Product-level codes mean the default selling unit. A code printed on an active
+ * alternate pack means that pack — scanning a carton must never silently add one
+ * loose piece. Inactive packs keep their namespace reservation on the server, but
+ * are intentionally not sellable at the till.
+ */
+function exactCatalogueScanMatch(rawSearch: string, all: Product[]): ExactCatalogueScanMatch | null {
+  const code = normalizedScanCode(rawSearch);
+  if (!code) return null;
+
+  for (const product of all) {
+    if (normalizedScanCode(product.barcode) === code || normalizedScanCode(product.sku) === code) {
+      return { product };
+    }
+    const sellingUnit = (product.sellingUnits ?? []).find((unit) =>
+      unit.isActive !== false
+      && (normalizedScanCode(unit.barcode) === code || normalizedScanCode(unit.sku) === code),
+    );
+    if (sellingUnit) return { product, sellingUnit };
+  }
+  return null;
+}
+
 /**
  * Does this look like a scanned code rather than someone typing a product name?
  *
@@ -106,7 +140,7 @@ export function looksLikeScannedBarcode(rawSearch: string): boolean {
 }
 
 export type ScanOutcome =
-  | { kind: "match"; product: Product }
+  | { kind: "match"; product: Product; sellingUnit?: ProductSellingUnit }
   | { kind: "unknown-code"; code: string }
   | { kind: "none" };
 
@@ -128,13 +162,8 @@ export function resolveScanOutcome(
 
   // Only an exact code match counts at catalogue scope. resolveScanMatch's other rule —
   // "the sole row on screen" — is about a narrowed grid and would be nonsense here.
-  const lower = term.toLowerCase();
-  const exact = all.find(
-    (product) =>
-      (product.barcode && String(product.barcode).trim().toLowerCase() === lower) ||
-      (product.sku && String(product.sku).trim().toLowerCase() === lower),
-  );
-  if (exact) return { kind: "match", product: exact };
+  const exact = exactCatalogueScanMatch(term, all);
+  if (exact) return { kind: "match", ...exact };
 
   const onScreen = resolveScanMatch(term, filtered);
   if (onScreen) return { kind: "match", product: onScreen };

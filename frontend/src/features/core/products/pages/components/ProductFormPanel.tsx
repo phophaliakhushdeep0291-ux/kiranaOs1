@@ -763,7 +763,7 @@ export function ProductFormPanel({
   const CategoryField = (
     <Field label={t("products.col.category")} required>
       <Select value={currentCategory} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
-        <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
+        <SelectTrigger className="h-11"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
           {categoryOptions.map((c) => <SelectItem key={c} value={c} className="capitalize">{translateCategory(c, t)}</SelectItem>)}
         </SelectContent>
@@ -773,7 +773,7 @@ export function ProductFormPanel({
   const UnitField = (
     <Field label={isLoose ? t("products.form.rateStockUnit") : t("products.form.soldAsTitle")} required>
       <Select value={form.watch("unit")} onValueChange={(v) => form.setValue("unit", v, { shouldDirty: true })}>
-        <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
+        <SelectTrigger className="h-11"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
           {Array.from(new Set(def.primaryUnits)).map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
           <div className="my-1 h-px bg-border" />
@@ -841,7 +841,7 @@ export function ProductFormPanel({
           {/* Basic Information */}
           <Section title={t("products.form.basicInfo")}>
             <Field label={t(productEntry.nameLabel)} required error={err.name?.message}>
-              <Input className="h-10" placeholder={isLoose ? t(productEntry.looseNamePlaceholder) : t(productEntry.namePlaceholder)} {...form.register("name")} />
+              <Input className="h-11" placeholder={isLoose ? t(productEntry.looseNamePlaceholder) : t(productEntry.namePlaceholder)} {...form.register("name")} />
             </Field>
 
             {/* Category + Brand (brand hidden for loose) */}
@@ -851,7 +851,7 @@ export function ProductFormPanel({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {CategoryField}
                 <Field label={t(productEntry.brandLabel)}>
-                  <Input className="h-10" placeholder={t(productEntry.brandPlaceholder)} {...form.register("brand")} />
+                  <Input className="h-11" placeholder={t(productEntry.brandPlaceholder)} {...form.register("brand")} />
                 </Field>
               </div>
             )}
@@ -865,7 +865,7 @@ export function ProductFormPanel({
                   <div className="flex gap-2">
                     <div className="relative min-w-0 flex-1">
                       <Input
-                        className="h-10 pr-9"
+                        className="h-11 pr-9"
                         placeholder={t(productEntry.identifierPlaceholder)}
                         {...barcodeField}
                         onBlur={(event) => { void barcodeField.onBlur(event); void fillFromBarcode(); }}
@@ -876,7 +876,7 @@ export function ProductFormPanel({
                         <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
                       )}
                     </div>
-                    <Button type="button" variant="outline" className="h-10 shrink-0 px-3" onClick={() => form.setValue("barcode", generateInternalEan13(), { shouldDirty: true, shouldValidate: true })}>
+                    <Button type="button" variant="outline" className="h-11 shrink-0 px-3" onClick={() => form.setValue("barcode", generateInternalEan13(), { shouldDirty: true, shouldValidate: true })}>
                       Generate
                     </Button>
                   </div>
@@ -913,7 +913,7 @@ export function ProductFormPanel({
                   <div className="grid grid-cols-[minmax(0,1fr)_minmax(120px,0.9fr)] gap-2">
                     <Input
                       data-testid="input-pack-size"
-                      className="h-10 bg-white"
+                      className="h-11 bg-white"
                       type="number"
                       inputMode="decimal"
                       min="0.001"
@@ -922,7 +922,7 @@ export function ProductFormPanel({
                       {...form.register("packSizeValue")}
                     />
                     <Select value={packSizeUnit} onValueChange={(v) => form.setValue("packSizeUnit", v, { shouldDirty: true, shouldValidate: true })}>
-                      <SelectTrigger data-testid="select-pack-measure" className="h-10 bg-white"><SelectValue /></SelectTrigger>
+                      <SelectTrigger data-testid="select-pack-measure" className="h-11 bg-white"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {packMeasureUnits.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
                       </SelectContent>
@@ -940,21 +940,21 @@ export function ProductFormPanel({
             ) : null}
 
             <Field label={t("products.form.hsn")}>
-              <Input className="h-10" placeholder={t("products.form.hsnPlaceholder")} {...form.register("hsn")} />
+              <Input className="h-11" placeholder={t("products.form.hsnPlaceholder")} {...form.register("hsn")} />
             </Field>
           </Section>
 
           {/* Aliases */}
           <Section title={t("products.form.aliasesTitle")}>
             <Field label={t("products.form.aliasesLabel")}>
-              <Input className="h-10" placeholder={t("products.form.aliasesPlaceholder")} {...form.register("aliasesText")} />
+              <Input className="h-11" placeholder={t("products.form.aliasesPlaceholder")} {...form.register("aliasesText")} />
             </Field>
             {currentAliases.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {currentAliases.map((a) => (
                   <span key={a} className="inline-flex items-center gap-1 rounded-full bg-[#eef4ff] px-2.5 py-1 text-[11px] font-bold text-[var(--brand)]">
                     {a}
-                    <button type="button" onClick={() => removeAlias(a)} aria-label={`Remove ${a}`} className="text-[var(--brand)]/60 hover:text-[var(--brand)]"><X size={11} /></button>
+                    <button type="button" onClick={() => removeAlias(a)} aria-label={`Remove ${a}`} className="tap-target text-[var(--brand)]/60 hover:text-[var(--brand)]"><X size={11} /></button>
                   </span>
                 ))}
               </div>
@@ -974,7 +974,7 @@ export function ProductFormPanel({
             {suggestions.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {suggestions.map((a) => (
-                  <button key={a} type="button" onClick={() => appendAlias(a)} className="inline-flex items-center gap-1 rounded-full border border-[#e3eaf3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#45577a] transition-colors hover:border-[var(--brand)]/40 hover:text-[var(--brand)]">
+                  <button key={a} type="button" onClick={() => appendAlias(a)} className="tap-target inline-flex items-center gap-1 rounded-full border border-[#e3eaf3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#45577a] transition-colors hover:border-[var(--brand)]/40 hover:text-[var(--brand)]">
                     <Plus size={11} /> {a}
                   </button>
                 ))}
@@ -991,22 +991,22 @@ export function ProductFormPanel({
                   is not "no MRP", it is "no ceiling", and the counter will then
                   take any price at all. */}
               <Field label={t("products.form.mrp")}>
-                <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("mrp")} />
+                <Input className="h-11" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("mrp")} />
                 {!(productMrp > 0) ? (
                   <p className="mt-1 text-[10px] font-semibold leading-4 text-amber-700">{t("products.form.mrpZeroHint")}</p>
                 ) : null}
               </Field>
               <Field label={t("products.form.costPrice")}>
-                <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("costPrice")} />
+                <Input className="h-11" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("costPrice")} />
               </Field>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label={t("products.form.sellingPrice")} required error={err.sellingPrice?.message}>
-                <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("sellingPrice")} />
+                <Input className="h-11" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("sellingPrice")} />
               </Field>
               <Field label={t("products.form.gstRate")}>
                 <Select value={String(form.watch("gstRate") ?? 0)} onValueChange={(v) => form.setValue("gstRate", Number(v), { shouldDirty: true })}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {GST_RATES.map((r) => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
                   </SelectContent>
@@ -1066,7 +1066,7 @@ export function ProductFormPanel({
                   <button
                     type="button"
                     onClick={toggleExtraPack}
-                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--brand-border)] bg-white px-2.5 text-[10.5px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]"
+                    className="inline-flex h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--brand-border)] bg-white px-3 text-[10.5px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]"
                   >
                     {extraPackOpen ? <X size={12} /> : <Plus size={12} />}
                     {extraPackOpen ? "Close" : t("products.form.addSize")}
@@ -1089,7 +1089,7 @@ export function ProductFormPanel({
                         type="button"
                         onClick={() => switchPackagingMode(mode)}
                         aria-pressed={packagingMode === mode}
-                        className={`rounded-lg border p-2 text-left transition ${
+                        className={`min-h-11 rounded-lg border p-2 text-left transition ${
                           packagingMode === mode
                             ? "border-[var(--brand)] bg-[#f2f7ff]"
                             : "border-[#e3eaf3] bg-white hover:bg-[#f7f9fc]"
@@ -1122,7 +1122,7 @@ export function ProductFormPanel({
                         <div className="mt-2 grid grid-cols-3 items-end gap-2 border-t border-[#eef2f7] pt-2">
                           <Field label={t("products.form.sellingPriceRs")}>
                             <Input
-                              className="h-8"
+                              className="h-11"
                               type="number"
                               min="0"
                               step="0.01"
@@ -1140,7 +1140,7 @@ export function ProductFormPanel({
                               where the pack being described is not yet on screen. */}
                           <Field label={t("products.form.costPrice")}>
                             <Input
-                              className="h-8"
+                              className="h-11"
                               type="number"
                               min="0"
                               step="0.01"
@@ -1152,7 +1152,7 @@ export function ProductFormPanel({
                           </Field>
                           <Field label={t("products.form.mrp")}>
                             <Input
-                              className="h-8"
+                              className="h-11"
                               type="number"
                               min="0"
                               step="0.01"
@@ -1173,7 +1173,7 @@ export function ProductFormPanel({
                         <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#eef2f7] pt-2">
                           <Field label={t("products.form.minPrice")}>
                             <Input
-                              className="h-8"
+                              className="h-11"
                               type="number"
                               min="0"
                               step="0.01"
@@ -1188,7 +1188,7 @@ export function ProductFormPanel({
                           <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#eef2f7] pt-2">
                             <Field label={t("products.form.inStock")}>
                               <Input
-                                className="h-8"
+                                className="h-11"
                                 type="number"
                                 min="0"
                                 step="1"
@@ -1200,7 +1200,7 @@ export function ProductFormPanel({
                             </Field>
                             <Field label={t("products.form.alertBelow")}>
                               <Input
-                                className="h-8"
+                                className="h-11"
                                 type="number"
                                 min="0"
                                 step="1"
@@ -1215,7 +1215,7 @@ export function ProductFormPanel({
                                 reorder against. The dashboard already reads it. */}
                             <Field label={t("products.form.reorderLevel")}>
                               <Input
-                                className="h-8"
+                                className="h-11"
                                 type="number"
                                 min="0"
                                 step="1"
@@ -1238,21 +1238,21 @@ export function ProductFormPanel({
                     <div className="grid grid-cols-2 gap-2">
                       <Field label={t("products.form.soldAs")} required>
                         <Select value={extraPackDraft.unitType} onValueChange={(value) => setExtraPack((current) => ({ ...current, unitType: value }))}>
-                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                           <SelectContent>{packSellingUnits.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
                         </Select>
                       </Field>
                       <Field label={t("products.form.sellingPriceRs")} required>
-                        <Input className="h-9" type="number" min="0.01" step="0.01" value={extraPackDraft.price} onChange={(event) => setExtraPack((current) => ({ ...current, price: event.target.value }))} placeholder="0.00" />
+                        <Input className="h-11" type="number" min="0.01" step="0.01" value={extraPackDraft.price} onChange={(event) => setExtraPack((current) => ({ ...current, price: event.target.value }))} placeholder="0.00" />
                       </Field>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <Field label={`One ${extraPackDraft.unitType} contains`} required>
-                        <Input className="h-9" type="number" min="0.001" step="0.001" value={extraPackDraft.packSizeValue} onChange={(event) => setExtraPack((current) => ({ ...current, packSizeValue: event.target.value }))} placeholder="500" />
+                        <Input className="h-11" type="number" min="0.001" step="0.001" value={extraPackDraft.packSizeValue} onChange={(event) => setExtraPack((current) => ({ ...current, packSizeValue: event.target.value }))} placeholder="500" />
                       </Field>
                       <Field label={t("products.form.measure")} required>
                         <Select value={extraPackDraft.packSizeUnit} onValueChange={(value) => setExtraPack((current) => ({ ...current, packSizeUnit: value }))}>
-                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                           <SelectContent>{packMeasureUnits.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
                         </Select>
                       </Field>
@@ -1260,7 +1260,7 @@ export function ProductFormPanel({
                     <div className="grid grid-cols-2 gap-2">
                       <Field label={t("products.form.packCost")}>
                         <Input
-                          className="h-9"
+                          className="h-11"
                           type="number"
                           min="0"
                           step="0.01"
@@ -1272,7 +1272,7 @@ export function ProductFormPanel({
                       </Field>
                       <Field label={t("products.form.packMrp")}>
                         <Input
-                          className="h-9"
+                          className="h-11"
                           type="number"
                           min="0"
                           step="0.01"
@@ -1287,11 +1287,11 @@ export function ProductFormPanel({
                     <p className="text-[10px] font-semibold leading-4 text-[#6d7c98]">{t("products.form.packCostHint")}</p>
                     <div className="grid grid-cols-2 gap-2">
                       <Field label={t("products.form.packBarcode")}>
-                        <Input className="h-9" value={extraPackDraft.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder={t("products.form.packBarcodePlaceholder")} />
+                        <Input className="h-11" value={extraPackDraft.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder={t("products.form.packBarcodePlaceholder")} />
                       </Field>
                       <Field label={t("products.form.openingQuantity")}>
                         <Input
-                          className="h-9"
+                          className="h-11"
                           type="number"
                           min="0"
                           step="1"
@@ -1306,7 +1306,7 @@ export function ProductFormPanel({
                       How many of this pack you have now. It is added to the product's opening
                       stock — every pack size sells from that one stock.
                     </p>
-                    <button type="button" onClick={addAlternatePack} className="h-9 w-full rounded-lg bg-[var(--brand)] text-[11.5px] font-black text-white hover:bg-[var(--brand-strong)]">{t("products.form.addPack")}</button>
+                    <button type="button" onClick={addAlternatePack} className="h-11 w-full rounded-lg bg-[var(--brand)] text-[11.5px] font-black text-white hover:bg-[var(--brand-strong)]">{t("products.form.addPack")}</button>
                   </div>
                 ) : null}
               </div>
@@ -1333,14 +1333,14 @@ export function ProductFormPanel({
                 </Field>
               ) : (
                 <Field label={`Opening Stock (${currentSellingUnitName || selectedUnit})`}>
-                  <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("stockQuantity")} />
+                  <Input className="h-11" type="number" inputMode="decimal" placeholder="0" {...form.register("stockQuantity")} />
                 </Field>
               )}
               <Field label={`Low Stock Alert (${selectedUnit})`}>
-                <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("lowStockAlert")} />
+                <Input className="h-11" type="number" inputMode="decimal" placeholder="0" {...form.register("lowStockAlert")} />
               </Field>
               <Field label={t("products.form.reorderLevel")}>
-                <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("reorderLevel")} />
+                <Input className="h-11" type="number" inputMode="decimal" placeholder="0" {...form.register("reorderLevel")} />
               </Field>
             </div>
             {/* Dated stock is a real concern for a chemist, a grocer and a
@@ -1381,7 +1381,7 @@ export function ProductFormPanel({
                 value={drugSchedule ?? ""}
                 onChange={(event) => form.setValue("drugSchedule", (event.target.value || null) as ProductFormData["drugSchedule"], { shouldDirty: true })}
                 aria-label="Drug schedule"
-                className="mt-2 h-9 w-full rounded-md border border-[#e6ecf4] bg-white px-2 text-[12px] font-semibold text-[#13274d]"
+                className="mt-2 h-11 w-full rounded-md border border-[#e6ecf4] bg-white px-2 text-[12px] font-semibold text-[#13274d]"
               >
                 <option value="">Not scheduled — sell freely</option>
                 <option value="otc">Over the counter (OTC)</option>
@@ -1418,7 +1418,7 @@ export function ProductFormPanel({
             </div>
             <p className="mt-1.5 text-[10px] text-[#9aa6bb]">Recommended size: 512x512px{imageUrl ? " · stored on this device and synced." : ""}</p>
             {imageUrl && (
-              <button type="button" onClick={() => form.setValue("imageUrl", "", { shouldDirty: true })} className="mt-1 text-[11px] font-semibold text-rose-600 hover:underline">Remove image</button>
+              <button type="button" onClick={() => form.setValue("imageUrl", "", { shouldDirty: true })} className="tap-target mt-1 text-[11px] font-semibold text-rose-600 hover:underline">Remove image</button>
             )}
             {imgError && <p className="mt-1 text-[11px] text-rose-600">{imgError}</p>}
           </Section>
@@ -1455,7 +1455,7 @@ export function ProductFormPanel({
             </p>
           )}
           {!editing && (
-            <label className="mb-3 flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-[#45577a]">
+            <label className="mb-3 flex min-h-11 cursor-pointer items-center gap-2 text-[12px] font-semibold text-[#45577a]">
               <input type="checkbox" aria-label={t("products.form.keepOpen")} checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[var(--brand)]" />
               {t("products.form.keepOpen")}
             </label>

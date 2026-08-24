@@ -82,6 +82,22 @@ function ledgerRow({
 // account and the later cancel/restore clears it. Every source group therefore still balances.
 const RETAINED_TENDER_MODES = new Set(["gift_card"]);
 
+function absolutePaise(value) {
+  const paise = toPaiseBigInt(Number(value ?? 0));
+  return paise < 0n ? -paise : paise;
+}
+
+function assertBillAccountingEvidence({ bill, tenderPayments, creditAmount, waivedAmount }) {
+  const billPaise = absolutePaise(bill?.grandTotal);
+  const tenderPaise = tenderPayments.reduce((sum, payment) => sum + absolutePaise(payment?.amount), 0n);
+  const accountedPaise = tenderPaise + absolutePaise(creditAmount) + absolutePaise(waivedAmount);
+  if (billPaise !== accountedPaise) {
+    const error = new Error(`Bill accounting evidence does not reconcile: total ${billPaise} paise, tenders/credit/waiver ${accountedPaise} paise`);
+    error.code = "BILL_ACCOUNTING_EVIDENCE_MISMATCH";
+    throw error;
+  }
+}
+
 async function postBillEffectLedger(tx, {
   shopId,
   bill,
@@ -100,6 +116,10 @@ async function postBillEffectLedger(tx, {
   const postsReporting = scope === "full" || scope === "reporting";
   const postsRetained = scope === "full" || scope === "retained";
   const rows = [];
+
+  if (scope === "full") {
+    assertBillAccountingEvidence({ bill, tenderPayments, creditAmount, waivedAmount });
+  }
 
   if (postsReporting) {
     rows.push(ledgerRow({
@@ -234,6 +254,7 @@ async function postBillEffectLedger(tx, {
 }
 
 export async function postBillCreatedLedger(tx, args) {
+  if (String(args?.bill?.billType ?? "").toLowerCase() === "estimate") return;
   return postBillEffectLedger(tx, { ...args, keyBase: `bill:${args.bill.id}`, sourceType: "bill", sign: 1 });
 }
 
@@ -312,6 +333,13 @@ export async function postSaleReturnLedger(tx, {
   const date = businessDate ?? bill.businessDate ?? bill.createdAt ?? new Date();
   const keyBase = `return:${bill.id}`;
   const mode = String(refundMode ?? "").toLowerCase();
+  const returnTotalPaise = absolutePaise(bill.grandTotal);
+  const refundPaise = absolutePaise(refundAmount);
+  if (returnTotalPaise !== refundPaise) {
+    const error = new Error(`Sale-return accounting evidence does not reconcile: total ${returnTotalPaise} paise, refund ${refundPaise} paise`);
+    error.code = "SALE_RETURN_ACCOUNTING_EVIDENCE_MISMATCH";
+    throw error;
+  }
   const rows = [ledgerRow({
     shopId,
     billId: bill.id,
@@ -356,6 +384,11 @@ export async function postSaleReturnLedger(tx, {
   const tender = TENDER_ENTRY[mode];
   if (tender && mode !== "gift_card") {
     const payment = (bill.payments ?? []).find((row) => String(row.mode).toLowerCase() === mode);
+    if (payment && absolutePaise(payment.amount) !== refundPaise) {
+      const error = new Error(`Sale-return payment evidence does not reconcile: refund ${refundPaise} paise, payment ${absolutePaise(payment.amount)} paise`);
+      error.code = "SALE_RETURN_PAYMENT_EVIDENCE_MISMATCH";
+      throw error;
+    }
     rows.push(ledgerRow({
       shopId,
       billId: bill.id,

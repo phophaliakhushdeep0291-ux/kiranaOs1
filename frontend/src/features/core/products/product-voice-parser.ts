@@ -85,7 +85,9 @@ export type ProductVoiceFields = {
  */
 const FIELD_LABELS: Record<ProductVoiceField, string[]> = {
   name: ["product name", "item name", "name", "naam", "नाम", "प्रोडक्ट का नाम"],
-  category: ["category", "categorie", "cat", "shreni", "श्रेणी", "कैटेगरी", "केटेगरी"],
+  // No "cat" abbreviation. A kirana stocks cat food and cat litter, and nobody
+  // shortens "category" out loud anyway, so the alias only ever cost names.
+  category: ["category", "categorie", "shreni", "श्रेणी", "कैटेगरी", "केटेगरी"],
   brand: ["brand", "company", "kampani", "ब्रांड", "ब्रँड", "कंपनी", "कम्पनी"],
   unit: ["unit", "sold as", "इकाई", "यूनिट"],
   packSize: ["pack size", "pack of", "packet of", "pack", "पैक साइज", "पैक", "पैकेट"],
@@ -312,6 +314,7 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
   const consumed = new Set<number>();
   const fields: ProductVoiceFields = {};
   const aliasWords: string[] = [];
+  const wordCaptures: Array<{ field: ProductVoiceField; labelAt: number; from: number; to: number }> = [];
 
   const claim = (from: number, to: number) => {
     for (let index = from; index <= to; index += 1) consumed.add(index);
@@ -333,7 +336,36 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
       const alreadyStated = field === "aliases" ? aliasWords.length > 0 : explicit.has(field);
       const labelEnd = index + label.length - 1;
       const valueAt = valueIndexAfter(tokens, labelEnd + 1, consumed);
-      if (valueAt >= tokens.length || consumed.has(valueAt)) continue;
+      // A label with nothing usable behind it — the sentence ran out, the next
+      // word opens another field, or another field already took it. It was said
+      // and then abandoned, and claiming it here is what stops "amul butter
+      // stock" from filing a product called "amul butter stock".
+      //
+      // Placed BEFORE the shape checks on purpose. A label whose shape check
+      // merely fails must fall through unclaimed, because it is probably not a
+      // label at all: "cost guard biscuit rate 20" is a biscuit, and claiming
+      // "cost" there would cut the product's own name in half.
+      if (
+        valueAt >= tokens.length ||
+        consumed.has(valueAt) ||
+        startsAnyLabel(SORTED_LABELS, tokens, valueAt, consumed)
+      ) {
+        // Before writing the label off, check whether its figure was spoken
+        // BEFORE it — "tata salt 50 stock". This has to happen HERE rather than
+        // in a later pass: the claim below consumes the label, and once it is
+        // consumed nothing downstream can pair it with anything.
+        if (NUMERIC_FIELDS.has(field) && !explicit.has(field) && index > 0 && !consumed.has(index - 1)) {
+          const spokenBefore = spokenNumber(tokens[index - 1]);
+          if (spokenBefore !== undefined) {
+            applyNumeric(fields, field, spokenBefore, undefined);
+            explicit.add(field);
+            claim(index - 1, labelEnd);
+            continue;
+          }
+        }
+        claim(index, labelEnd);
+        continue;
+      }
 
       if (CODE_FIELDS.has(field)) {
         // Kept as text: a barcode is 13 digits and an HSN can lead with a zero,
@@ -396,6 +428,15 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
       if (alreadyStated) continue;
       explicit.add(field);
 
+      // Remember what this label swallowed. A word-valued label fires on ANY
+      // word that follows it — unlike a price label, which is protected by
+      // having to find a number — so it is the one kind that can eat the words
+      // that were going to be the name. If nothing else turns out to be the
+      // name, the leftmost of these gives its value back.
+      if (field !== "name") {
+        wordCaptures.push({ field, labelAt: index, from: valueAt, to: valueAt + words.length - 1 });
+      }
+
       if (field === "unit") fields.unit = unitOf(words[0]) ?? words[0];
       else if (field === "name") fields.name = words.join(" ");
       else if (field === "brand") fields.brand = words.join(" ");
@@ -421,28 +462,7 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
     }
   }
 
-  // Pass 2a — "tata salt 50 stock". Pass 1 only ever looks for a value AFTER its
-  // label, so a figure spoken BEFORE one was lost twice over: the number went
-  // nowhere and the stranded label word fell through into the name, which came
-  // out as "tata salt stock". Deliberately requires an actual number in front:
-  // claiming a bare label with no value would let this swallow a word that is
-  // genuinely part of what the thing is called.
-  for (const { field, tokens: label } of SORTED_LABELS) {
-    if (!NUMERIC_FIELDS.has(field) || explicit.has(field)) continue;
-    for (let index = 1; index < tokens.length; index += 1) {
-      if (!labelMatchesAt(tokens, index, label, consumed)) continue;
-      const valueAt = index - 1;
-      if (consumed.has(valueAt)) continue;
-      const value = spokenNumber(tokens[valueAt]);
-      if (value === undefined) continue;
-      applyNumeric(fields, field, value, undefined);
-      explicit.add(field);
-      claim(valueAt, index + label.length - 1);
-      break;
-    }
-  }
-
-  // Pass 2b — "chini 45 rupaye". A currency word IS the label; a shopkeeper
+  // Pass 2a — "chini 45 rupaye". A currency word IS the label; a shopkeeper
   // saying a price out loud rarely also says "selling price". Both tokens were
   // already being filtered out of the name, so the number simply vanished and the
   // product saved with no price at all — silently, which is the worst way for a
@@ -492,7 +512,58 @@ export function parseSpokenProductFields(spoken: string): ProductVoiceFields {
     if (name.length >= 2) fields.name = name;
   }
 
+  // Pass 4 — a product with no name at all is never the right reading.
+  //
+  // "cat food rate 200" priced something and named nothing: "cat" matched a
+  // category label, "food" satisfied it, and the product's actual name was gone.
+  // A word-valued label fires on any word that follows it, so it is the only
+  // kind that can do this — a price label has to find a number first.
+  //
+  // The capture gives its VALUE back to be the name; the label word itself stays
+  // consumed, because "brand factory shirt" is a shirt, not a brand-factory-shirt.
+  //
+  // Two conditions keep this from firing on ordinary field-at-a-time dictation.
+  // The sentence must state something else as well, so "category grocery" on its
+  // own is still just a category. And the label must be the FIRST thing said,
+  // which is what separates "unit soap rate 30" (a soap) from "stock 25 kg unit
+  // litre" (a stock figure and its unit, with no name in it at all).
+  if (fields.name === undefined && wordCaptures.length > 0 && statedAnyValue(fields)) {
+    const opensSentence = tokens.findIndex(
+      (token) => !TRIGGER_WORDS.has(token) && !CONNECTOR_WORDS.has(token),
+    );
+    const released = wordCaptures.find((capture) => capture.labelAt === opensSentence);
+    const name = released ? tokens.slice(released.from, released.to + 1).join(" ").trim() : "";
+    if (released && name.length >= 2) {
+      fields.name = name;
+      clearField(fields, released.field);
+    }
+  }
+
   return fields;
+}
+
+/** Whether the sentence carried a real value, as opposed to one stray label. */
+function statedAnyValue(fields: ProductVoiceFields) {
+  return (
+    fields.mrp !== undefined ||
+    fields.costPrice !== undefined ||
+    fields.sellingPrice !== undefined ||
+    fields.minimumSellingPrice !== undefined ||
+    fields.retailPrice !== undefined ||
+    fields.wholesalePrice !== undefined ||
+    fields.stockQuantity !== undefined ||
+    fields.lowStockAlert !== undefined ||
+    fields.gstRate !== undefined ||
+    fields.barcode !== undefined ||
+    fields.hsn !== undefined ||
+    fields.packSizeValue !== undefined
+  );
+}
+
+function clearField(fields: ProductVoiceFields, field: ProductVoiceField) {
+  if (field === "category") fields.category = undefined;
+  else if (field === "brand") fields.brand = undefined;
+  else if (field === "unit") fields.unit = undefined;
 }
 
 /** Words up to the next label, number or unit — the value of a word-valued field. */

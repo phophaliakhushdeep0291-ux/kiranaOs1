@@ -861,7 +861,12 @@ export default function InventoryPage() {
                 })}
               </div>
 
-              <div className="hidden overflow-x-auto md:block">
+              <div
+                className="hidden overflow-x-auto rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2 md:block"
+                role="region"
+                aria-label={t("inventory.page.productStock")}
+                tabIndex={0}
+              >
                 <table className="w-full min-w-[860px] text-left text-[12px]">
                   <thead><tr className="border-b border-[#e4eaf2] bg-[#f8fafc] text-[10px] font-semibold uppercase tracking-[0.02em] text-[#718096]">
                     <th className="px-4 py-3">{t("inventory.col.product")}</th><th className="px-3 py-3">{t("inventory.col.skuBarcode")}</th><th className="px-3 py-3">{t("inventory.col.category")}</th><th className="px-3 py-3">{t("inventory.col.unit")}</th><th className="px-3 py-3 text-right">{t("inventory.col.stock")}</th><th className="px-3 py-3 text-right">{t("inventory.page.cost")}</th><th className="px-3 py-3 text-right">{t("inventory.page.totalValue")}</th><th className="px-4 py-3 text-center">{t("inventory.col.status")}</th>
@@ -994,7 +999,12 @@ export default function InventoryPage() {
             <StatCard label={t("inventory.page.supplierDue")} value={fmtMoney(movementSummary.purchaseDueTotal)} tone="amber" />
           </StatsGrid>
           <div className="rounded-lg border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
+            <div
+              className="overflow-x-auto rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2"
+              role="region"
+              aria-label={t("inventory.page.movementHistory")}
+              tabIndex={0}
+            >
               <table className="w-full text-sm">
                 <thead className="bg-muted/60 border-b">
                   <tr>

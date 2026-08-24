@@ -40,12 +40,47 @@ assert.equal(control.status, "balanced", "GST sale must stay balanced after outp
 assert.equal(control.trialBalance.accounts.find((account) => account.code === "4000")?.creditBalance.amount, 100, "net sales exclude output GST");
 assert.equal(control.trialBalance.accounts.find((account) => account.code === "2200")?.creditBalance.amount, 18, "output GST remains an explicit liability");
 
+await assert.rejects(
+  () => postBillCreatedLedger(capture().tx, {
+    shopId: "shop-1",
+    bill: { id: "bad-sale", grandTotal: 300, gst: 0, createdAt: date },
+    tenderPayments: [{ id: "bad-payment", mode: "cash", amount: 120 }],
+  }),
+  (error) => error?.code === "BILL_ACCOUNTING_EVIDENCE_MISMATCH",
+  "a bill must never post when its tender evidence disagrees with its total",
+);
+
+proof = capture();
+await postBillCreatedLedger(proof.tx, {
+  shopId: "shop-1",
+  bill: { id: "estimate-1", billType: "estimate", grandTotal: 300, createdAt: date },
+  tenderPayments: [],
+});
+assert.equal(proof.rows.length, 0, "an estimate is a quotation and must never enter FinancialLedger");
+
+proof = capture();
+await postBillCreatedLedger(proof.tx, {
+  shopId: "shop-1",
+  bill: { id: "gst-sale-2", billType: "gst_invoice", grandTotal: 118, gst: 18, createdAt: date },
+  tenderPayments: [{ id: "cash-payment-2", mode: "cash", amount: 118 }],
+});
+
 await postSaleReturnLedger(proof.tx, {
   shopId: "shop-1",
   bill: { id: "gst-return-1", grandTotal: -118, gst: -18, createdAt: date, payments: [{ id: "refund-1", mode: "cash", amount: -118 }] },
   refundMode: "cash",
   refundAmount: 118,
 });
+await assert.rejects(
+  () => postSaleReturnLedger(capture().tx, {
+    shopId: "shop-1",
+    bill: { id: "bad-return", grandTotal: -118, gst: -18, createdAt: date, payments: [{ id: "bad-refund", mode: "cash", amount: -100 }] },
+    refundMode: "cash",
+    refundAmount: 118,
+  }),
+  (error) => error?.code === "SALE_RETURN_PAYMENT_EVIDENCE_MISMATCH",
+  "a return must never post when its linked refund payment disagrees with the return total",
+);
 control = buildAccountingControl(proof.rows);
 assert.equal(control.status, "balanced");
 assert.equal(control.trialBalance.debit.paise, 0, "full GST return must reverse every account balance");

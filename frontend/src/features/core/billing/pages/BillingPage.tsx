@@ -175,6 +175,7 @@ export default function Billing() {
   const [cart, setCart] = useState<CartItem[]>(() => readBillingDraft().cart ?? []);
   const [pendingProductConfiguration, setPendingProductConfiguration] = useState<{
     product: Product;
+    sellingUnit?: ProductSellingUnit;
     configurator: ProductConfigurator;
     data: unknown;
   } | null>(null);
@@ -923,9 +924,9 @@ export default function Billing() {
     };
   }
 
-  function commitAddToCart(product: Product, options?: { custom?: boolean; addons?: CartItem["addons"] }) {
+  function commitAddToCart(product: Product, options?: { custom?: boolean; addons?: CartItem["addons"]; sellingUnit?: ProductSellingUnit }) {
     setCart((previous) => {
-      const sellingUnit = defaultSellingUnit(product);
+      const sellingUnit = options?.sellingUnit ?? defaultSellingUnit(product);
       const candidate: CartItem = {
         product,
         quantity: 1,
@@ -954,22 +955,22 @@ export default function Billing() {
     setSearch("");
   }
 
-  function addToCart(product: Product, options?: { custom?: boolean }) {
+  function addToCart(product: Product, sellingUnit?: ProductSellingUnit, options?: { custom?: boolean }) {
     if (options?.custom) {
-      commitAddToCart(product, options);
+      commitAddToCart(product, { ...options, sellingUnit });
       return;
     }
     const configurator = productConfiguratorFor(product);
     if (!configurator) {
-      commitAddToCart(product);
+      commitAddToCart(product, { sellingUnit });
       return;
     }
     if (configuringProductId) return;
     setConfiguringProductId(product.id);
     void configurator.load(product)
       .then((data) => {
-        if (data) setPendingProductConfiguration({ product, configurator, data });
-        else commitAddToCart(product);
+        if (data) setPendingProductConfiguration({ product, sellingUnit, configurator, data });
+        else commitAddToCart(product, { sellingUnit });
       })
       .catch((error: unknown) => {
         toast({
@@ -2265,7 +2266,10 @@ export default function Billing() {
             data={pendingProductConfiguration.data}
             onCancel={() => setPendingProductConfiguration(null)}
             onConfirm={(result) => {
-              commitAddToCart(pendingProductConfiguration.product, { addons: result.addons });
+              commitAddToCart(pendingProductConfiguration.product, {
+                addons: result.addons,
+                sellingUnit: pendingProductConfiguration.sellingUnit,
+              });
               setPendingProductConfiguration(null);
             }}
           />

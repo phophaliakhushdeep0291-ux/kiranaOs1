@@ -912,7 +912,7 @@ function KpiCard({ id, label, value, previous, icon, iconClass, color, spark, po
     {loading ? <Skeleton className="h-full min-h-[98px]" /> : <>
       <div className="flex min-w-0 items-center gap-2.5"><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[10px]", iconClass)}>{icon}</span><p className="min-w-0 truncate text-[11px] font-bold leading-tight text-[#52617c]">{label}</p></div>
       <p className="mt-3 whitespace-nowrap text-[22px] font-black leading-none tracking-[-0.025em] text-[var(--brand-ink)]">{fmt(value)}</p>
-      <div className="mt-2 flex min-w-0 items-center gap-1 text-[9.5px]"><span className={cn("inline-flex shrink-0 items-center gap-0.5 font-bold", favorable ? "text-[#0d873a]" : "text-[#ff334d]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}%</span><span className="truncate text-[#6a758a]">vs last period</span></div>
+      <div className="mt-2 flex min-w-0 items-center gap-1 text-[9.5px]"><span className={cn("inline-flex shrink-0 items-center gap-0.5 font-bold", favorable ? "text-[#15803d]" : "text-[#be123c]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}%</span><span className="truncate text-[#52617c]">vs last period</span></div>
       <div className="mt-1 h-[24px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={points} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}><defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.28} /><stop offset="70%" stopColor={color} stopOpacity={0.08} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs><Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.7} fill={`url(#${gradientId})`} dot={{ r: 1.5, fill: "white", stroke: color, strokeWidth: 1.2 }} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div>
     </>}
   </article>;
@@ -973,7 +973,7 @@ function MoneyTooltip({ active, payload, label }: { active?: boolean; payload?: 
 
 function TrendLabel({ current, previous }: { current: number; previous: number }) {
   const change = delta(current, previous);
-  return <span className={cn("inline-flex items-center gap-0.5 text-[10px] font-bold", change >= 0 ? "text-[#0d873a]" : "text-[#ff334d]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}% <em className="font-normal not-italic text-[#75839d]">vs last period</em></span>;
+  return <span className={cn("inline-flex items-center gap-0.5 text-[10px] font-bold", change >= 0 ? "text-[#15803d]" : "text-[#be123c]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}% <em className="font-normal not-italic text-[#52617c]">vs last period</em></span>;
 }
 
 function DenseTable({ title, action, actionHref, headers, loading, empty, children }: { title: string; action: string; actionHref: string; headers: string[]; loading: boolean; empty: boolean; children: ReactNode }) {
