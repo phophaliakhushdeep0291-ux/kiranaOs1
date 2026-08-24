@@ -79,6 +79,66 @@ describe("product voice: how people actually speak", () => {
     expect(noNumber.stockQuantity).toBeUndefined();
   });
 
+  it("never lets a label a speaker abandoned become part of the name", () => {
+    // A label said and then left with nothing behind it — the sentence ran out,
+    // or another field already took its value. It used to fall through into the
+    // residue and get filed as part of the product's name.
+    expect(parseSpokenProductFields("amul butter stock").name).toBe("amul butter");
+    expect(parseSpokenProductFields("tata salt cost").name).toBe("tata salt");
+    expect(parseSpokenProductFields("chini category grocery brand")).toMatchObject({
+      name: "chini",
+      category: "grocery",
+    });
+    expect(parseSpokenProductFields("amul butter mrp 62 stock 12 unit").name).toBe("amul butter");
+  });
+
+  it("never files a product with no name at all", () => {
+    // A word-valued label fires on ANY word after it, so it can eat the words
+    // that were going to be the name. "cat food rate 200" priced something and
+    // named nothing. The capture gives its VALUE back; the label word stays
+    // consumed, so this is a shirt rather than a brand-factory-shirt.
+    expect(parseSpokenProductFields("cat food rate 200")).toMatchObject({
+      name: "cat food",
+      sellingPrice: 200,
+    });
+    expect(parseSpokenProductFields("unit soap rate 30").name).toBe("soap");
+    expect(parseSpokenProductFields("brand factory shirt rate 500").name).toBe("factory shirt");
+    expect(parseSpokenProductFields("company seal rate 15").name).toBe("seal");
+  });
+
+  it("still reads a mid-sentence label as a real value, not a rescued name", () => {
+    // The gate on the rescue is positional. A label that OPENS the sentence was
+    // probably the product's name; one said mid-sentence is a genuine field, and
+    // rescuing it filed a product named "litre" with its unit cleared. This is
+    // also what protects field-at-a-time dictation.
+    expect(parseSpokenProductFields("stock 25 kg unit litre")).toMatchObject({
+      stockQuantity: 25,
+      unit: "litre",
+    });
+    expect(parseSpokenProductFields("stock 25 kg unit litre").name).toBeUndefined();
+    expect(parseSpokenProductFields("category grocery")).toMatchObject({ category: "grocery" });
+    expect(parseSpokenProductFields("category grocery").name).toBeUndefined();
+  });
+
+  it("reads a figure before its label even though the label gets claimed", () => {
+    // The interaction that broke when these fixes were first combined: claiming a
+    // stranded label consumes it, so pairing it with a preceding number has to
+    // happen in the SAME place, not in a later pass. Once claimed, nothing
+    // downstream can see it.
+    expect(parseSpokenProductFields("tata salt 50 stock")).toMatchObject({
+      name: "tata salt",
+      stockQuantity: 50,
+    });
+  });
+
+  it("keeps a name that merely looks like a label", () => {
+    // The other half of the stranded-label rule: a label whose SHAPE check fails
+    // is probably not a label at all, and must fall through unclaimed.
+    expect(parseSpokenProductFields("cost guard biscuit rate 20").name).toBe("cost guard biscuit");
+    expect(parseSpokenProductFields("sendha salt rate 20").name).toBe("sendha salt");
+    expect(parseSpokenProductFields("stock pot rate 400").name).toBe("stock pot");
+  });
+
   it("keeps reading the keyword-disciplined sentences it always could", () => {
     expect(parseSpokenProductFields("add product Tata Salt cost 24 selling 26 stock 50")).toMatchObject({
       name: "tata salt",
