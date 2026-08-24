@@ -852,7 +852,8 @@ export async function confirmBill(shopId, body, actor = {}) {
 
     // ── 7. FinancialLedger: append-only accounting source of truth ─
     // Posted inside the same transaction so the ledger can never disagree with the bill.
-    // Estimates post too — they are full sales, just under their own number series.
+    // Estimates/rough bills are quotations, not economic events; the ledger service
+    // deliberately ignores them. Final sales post atomically with the bill.
     await postBillCreatedLedger(tx, {
       shopId,
       bill,

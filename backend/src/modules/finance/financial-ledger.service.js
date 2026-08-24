@@ -254,6 +254,7 @@ async function postBillEffectLedger(tx, {
 }
 
 export async function postBillCreatedLedger(tx, args) {
+  if (String(args?.bill?.billType ?? "").toLowerCase() === "estimate") return;
   return postBillEffectLedger(tx, { ...args, keyBase: `bill:${args.bill.id}`, sourceType: "bill", sign: 1 });
 }
 

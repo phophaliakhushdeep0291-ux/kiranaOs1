@@ -50,6 +50,21 @@ await assert.rejects(
   "a bill must never post when its tender evidence disagrees with its total",
 );
 
+proof = capture();
+await postBillCreatedLedger(proof.tx, {
+  shopId: "shop-1",
+  bill: { id: "estimate-1", billType: "estimate", grandTotal: 300, createdAt: date },
+  tenderPayments: [],
+});
+assert.equal(proof.rows.length, 0, "an estimate is a quotation and must never enter FinancialLedger");
+
+proof = capture();
+await postBillCreatedLedger(proof.tx, {
+  shopId: "shop-1",
+  bill: { id: "gst-sale-2", billType: "gst_invoice", grandTotal: 118, gst: 18, createdAt: date },
+  tenderPayments: [{ id: "cash-payment-2", mode: "cash", amount: 118 }],
+});
+
 await postSaleReturnLedger(proof.tx, {
   shopId: "shop-1",
   bill: { id: "gst-return-1", grandTotal: -118, gst: -18, createdAt: date, payments: [{ id: "refund-1", mode: "cash", amount: -118 }] },
