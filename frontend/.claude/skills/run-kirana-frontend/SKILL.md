@@ -96,14 +96,20 @@ on a screen at once.
 - **`appReady`** — read this first. `false` means the page had not finished
   rendering and every other number is meaningless (an unready page reports
   zero controls and zero problems, which looks exactly like a clean page).
-- **`bleeding`** — elements crossing the viewport edge, outermost first, with
-  `suspectMinWidthAuto` when the cause is the usual one. **Trust this, not
-  `documentWidth`** (see gotcha).
+- **`bleeding`** — elements crossing the viewport edge that are genuinely
+  **clipped**, outermost first, with `suspectMinWidthAuto` when the cause is
+  the usual one. **Trust this, not `documentWidth`** (see gotcha).
+- **`reachableByScroll`** — a count, not a defect. Overflow inside an
+  `overflow-x:auto` ancestor is meant to scroll (a 1020px ledger table in a
+  960px wrapper), so it is kept out of `bleeding` and counted here instead.
 - **`touchTargets`** — hit areas under 44px, overlay-aware. `rawBox` appears
   when the measured box differs from the visual one.
 - **`clicksStolen`** — a control whose centre point belongs to some other
   element. Invisible in a screenshot; this is how a floating button eats a
-  dropdown.
+  dropdown. Controls scrolled out of their own container are excluded — they
+  are reachable, and counting them made every desktop route cry wolf.
+- **`clippedControls`** — a control lying outside an `overflow:hidden`/`clip`
+  ancestor. Unlike the above it cannot be scrolled to; it is painted nowhere.
 - **`axe`** — WCAG 2.0/2.1/2.2 A + AA violations from axe-core.
 
 ## Run (human path)
