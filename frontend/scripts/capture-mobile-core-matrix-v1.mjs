@@ -104,7 +104,7 @@ async function showPopulatedInventoryHistory(client) {
   await client.evaluate(`document.querySelector('[data-inventory-movement-history]')?.click()`);
   await waitForPage(client, `Boolean(document.querySelector('[data-inventory-trace]')) && document.body.innerText.includes("QA Owner") && document.body.innerText.includes("Supplier receipt verified") && document.body.innerText.includes("Damaged bag isolated")`);
   await sleep(250);
-  await client.evaluate(`(()=>{const node=document.querySelector('[data-inventory-trace]');if(!node)return;const target=innerWidth<768?node.querySelector('article')??node:node;target.style.scrollMarginTop='132px';target.scrollIntoView({block:innerWidth<768?'center':'start',inline:'nearest',behavior:'instant'})})()`);
+  await client.evaluate(`(()=>{const node=document.querySelector('[data-inventory-trace]'),scroller=document.querySelector('.app-main-scroll');if(!node||!scroller)return;scroller.scrollTop+=node.getBoundingClientRect().top-scroller.getBoundingClientRect().top-16})()`);
   await sleep(250);
 }
 

@@ -47,7 +47,7 @@ assert.match(testDbUtils, /production/, "test DB helper must reject production-l
 
 const dbRuntime = read("src/db.js");
 assert.match(dbRuntime, /databaseUrl\.startsWith\("file:"\)/, "isolated Prisma client must only be selected for SQLite file datasources");
-assert.match(dbRuntime, /useIsolatedIntegrationClient/, "database runtime must keep PostgreSQL proof on the generated PostgreSQL client");
+assert.match(dbRuntime, /isolatedClientPackage[\s\S]*require\("@prisma\/client"\)/, "database runtime must keep PostgreSQL proof on the generated PostgreSQL client fallback");
 
 const setup = read("tests/integration/setup.js");
 const runner = read("scripts/run-integration-tests.js");

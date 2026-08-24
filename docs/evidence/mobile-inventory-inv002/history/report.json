@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-24T11:51:38.725Z",
+  "generatedAt": "2026-08-24T11:52:43.303Z",
   "frontendUrl": "http://127.0.0.1:5180",
   "apiUrl": "http://127.0.0.1:3020/api",
   "results": [
@@ -32,7 +32,7 @@
         "violationCount": 0,
         "violations": [],
         "passRuleCount": 23,
-        "passNodeCount": 175,
+        "passNodeCount": 178,
         "incompleteCount": 1,
         "incomplete": [
           {
@@ -75,7 +75,7 @@
       "bodyWidth": 390,
       "undersized": [],
       "undersizedCount": 0,
-      "visibleControlCount": 10,
+      "visibleControlCount": 9,
       "desktopSidebarVisible": false,
       "genericFailure": false,
       "stuckLoading": false,
@@ -90,7 +90,7 @@
         "violationCount": 0,
         "violations": [],
         "passRuleCount": 23,
-        "passNodeCount": 183,
+        "passNodeCount": 185,
         "incompleteCount": 1,
         "incomplete": [
           {
@@ -133,7 +133,7 @@
       "bodyWidth": 430,
       "undersized": [],
       "undersizedCount": 0,
-      "visibleControlCount": 11,
+      "visibleControlCount": 9,
       "desktopSidebarVisible": false,
       "genericFailure": false,
       "stuckLoading": false,
@@ -206,7 +206,7 @@
         "violationCount": 0,
         "violations": [],
         "passRuleCount": 25,
-        "passNodeCount": 204,
+        "passNodeCount": 203,
         "incompleteCount": 1,
         "incomplete": [
           {

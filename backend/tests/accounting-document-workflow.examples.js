@@ -24,7 +24,8 @@ const created = await createPurchaseInvoiceDraft(shop.id, image, { id: null }, {
 assert.equal(created.duplicate, false);
 assert.equal(created.document.status, "review_required");
 assert.equal(created.document.supplierId, supplier.id, "GSTIN must win even when the supplier name differs");
-assert.equal(created.document.supplierMatch, "gstin_exact");
+assert.equal(created.document.supplierMatch, "exact");
+assert.equal(created.document.extracted.supplierMatchMethod, "gstin");
 assert.equal(created.document.suggestedJournal.readyForApproval, true);
 assert.deepEqual(created.document.suggestedJournal.lines.map((line) => [line.accountCode, line.debitPaise, line.creditPaise]), [
   ["1200", 10_000, 0], ["2210", 1_800, 0], ["2000", 0, 11_800],
@@ -59,6 +60,5 @@ const unsafe = buildPurchaseJournalSuggestion({ supplierId: null, invoiceDate: "
 assert.equal(unsafe.readyForApproval, false);
 assert.equal(unsafe.lines.length, 0);
 
-await db.shop.delete({ where: { id: shop.id } });
 await db.$disconnect();
 console.log("accounting-document-workflow.examples.js OK");

@@ -1,4 +1,5 @@
-CREATE TABLE "AccountingDocument" (
+-- @replay-safe: table and index creation are guarded for interrupted local deploys.
+CREATE TABLE IF NOT EXISTS "AccountingDocument" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shopId" TEXT NOT NULL,
     "documentType" TEXT NOT NULL,
@@ -22,7 +23,7 @@ CREATE TABLE "AccountingDocument" (
     CONSTRAINT "AccountingDocument_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE TABLE "AccountingDocumentEvent" (
+CREATE TABLE IF NOT EXISTS "AccountingDocumentEvent" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "shopId" TEXT NOT NULL,
     "documentId" TEXT NOT NULL,
@@ -34,7 +35,7 @@ CREATE TABLE "AccountingDocumentEvent" (
     CONSTRAINT "AccountingDocumentEvent_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "AccountingDocument" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE UNIQUE INDEX "AccountingDocument_shopId_sourceHash_key" ON "AccountingDocument"("shopId", "sourceHash");
-CREATE INDEX "AccountingDocument_shopId_status_createdAt_idx" ON "AccountingDocument"("shopId", "status", "createdAt");
-CREATE INDEX "AccountingDocument_shopId_supplierId_createdAt_idx" ON "AccountingDocument"("shopId", "supplierId", "createdAt");
-CREATE INDEX "AccountingDocumentEvent_shopId_documentId_createdAt_idx" ON "AccountingDocumentEvent"("shopId", "documentId", "createdAt");
+CREATE UNIQUE INDEX IF NOT EXISTS "AccountingDocument_shopId_sourceHash_key" ON "AccountingDocument"("shopId", "sourceHash");
+CREATE INDEX IF NOT EXISTS "AccountingDocument_shopId_status_createdAt_idx" ON "AccountingDocument"("shopId", "status", "createdAt");
+CREATE INDEX IF NOT EXISTS "AccountingDocument_shopId_supplierId_createdAt_idx" ON "AccountingDocument"("shopId", "supplierId", "createdAt");
+CREATE INDEX IF NOT EXISTS "AccountingDocumentEvent_shopId_documentId_createdAt_idx" ON "AccountingDocumentEvent"("shopId", "documentId", "createdAt");

@@ -14,6 +14,7 @@ export interface PurchaseInvoiceDraft {
   reviewOnly: true; requiresReview: true; posted: false; sourceBytes: number;
   supplierName: string | null; supplierGstin: string | null; supplierId: string | null;
   supplierMatch: "exact" | "ambiguous" | "unmatched"; invoiceNumber: string | null; invoiceDate: string | null;
+  supplierMatchMethod?: "gstin" | "name" | null;
   subtotal: number | null; taxTotal: number | null; grandTotal: number | null;
   lines: PurchaseInvoiceDraftLine[]; warnings: string[];
   headerChecks: { invoiceDateValid: boolean; supplierExact: boolean };

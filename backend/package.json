@@ -56,6 +56,7 @@
     "verify:accounting-db": "node scripts/verify-accounting-database.js",
     "accounting:project-general-ledger": "node scripts/project-general-ledger.js",
     "test:general-ledger-db": "node scripts/run-db-example-tests.js tests/general-ledger-db.examples.js",
+    "test:accounting-documents": "node scripts/run-db-example-tests.js tests/accounting-document-workflow.examples.js",
     "deploy:migrate": "npm run deploy:migrate:postgres",
     "deploy:migrate:postgres": "npm run prisma:deploy:postgres && npm run prisma:generate:postgres && npm run verify:product-schema",
     "prisma:push:postgres": "node node_modules/prisma/build/index.js db push --schema prisma-postgres/schema.prisma",
