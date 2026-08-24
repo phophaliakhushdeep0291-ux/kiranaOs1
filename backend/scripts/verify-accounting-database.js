@@ -12,7 +12,7 @@ const [shops, ledger, bills, payments, purchaseHistory, purchaseReceipts, assura
     where: { rules: { some: { ruleCode: "CLOSING_SPLIT_PAYMENT_MISMATCH", active: true } } },
     include: { rules: true },
   }),
-  db.journalEntry.findMany({ include: { lines: true } }),
+  db.journalEntry.findMany({ include: { lines: { include: { account: true } } } }),
 ]);
 
 const byId = (items) => new Map(items.map((item) => [item.id, item]));
@@ -80,8 +80,31 @@ const journalBalanceFailures = journalEntries.flatMap((entry) => {
   const creditPaise = entry.lines.reduce((sum, line) => sum + BigInt(line.creditPaise), 0n);
   return debitPaise === creditPaise && entry.lines.length >= 2 ? [] : [{ journalEntryId: entry.id, shopId: entry.shopId, sourceType: entry.sourceType, sourceId: entry.sourceId, debitPaise: String(debitPaise), creditPaise: String(creditPaise), lines: entry.lines.length }];
 });
+const projectedLedgerIds = [];
+const journalEvidenceFailures = [];
+for (const entry of journalEntries) {
+  try {
+    const evidence = JSON.parse(entry.evidenceJson);
+    if (evidence.version !== 1) journalEvidenceFailures.push({ journalEntryId: entry.id, reason: "unsupported_version" });
+    projectedLedgerIds.push(...(evidence.ledgerRowIds ?? []));
+  } catch { journalEvidenceFailures.push({ journalEntryId: entry.id, reason: "invalid_json" }); }
+}
+const projectedCounts = Map.groupBy(projectedLedgerIds, (id) => id);
+const missingLedgerRowProjections = ledger.filter((row) => !projectedCounts.has(row.id)).map((row) => row.id);
+const duplicateLedgerRowProjections = [...projectedCounts].filter(([, ids]) => ids.length !== 1).map(([id, ids]) => ({ id, count: ids.length }));
+const statementBalanceFailures = [];
+for (const [shopId, entries] of Map.groupBy(journalEntries, (entry) => entry.shopId)) {
+  const totals = { asset: 0n, liability: 0n, equity: 0n, income: 0n, expense: 0n };
+  for (const line of entries.filter((entry) => entry.status === "posted").flatMap((entry) => entry.lines)) {
+    if (!(line.account.category in totals)) { statementBalanceFailures.push({ shopId, reason: `unknown_account_category:${line.account.category}` }); continue; }
+    const signedDebit = BigInt(line.debitPaise) - BigInt(line.creditPaise);
+    totals[line.account.category] += signedDebit;
+  }
+  const equationDifference = totals.asset + totals.expense + totals.equity + totals.income + totals.liability;
+  if (equationDifference !== 0n) statementBalanceFailures.push({ shopId, reason: "balance_sheet_equation", differencePaise: String(equationDifference) });
+}
 
-const failures = accountingFailures.length + uncoveredBills.length + structuralFailures.length + evidenceFailures.length + unrecognizedMismatches.length + missingJournalProjections.length + journalBalanceFailures.length;
+const failures = accountingFailures.length + uncoveredBills.length + structuralFailures.length + evidenceFailures.length + unrecognizedMismatches.length + missingJournalProjections.length + journalBalanceFailures.length + journalEvidenceFailures.length + missingLedgerRowProjections.length + duplicateLedgerRowProjections.length + statementBalanceFailures.length;
 const report = {
   ok: failures === 0,
   engineVersion: ACCOUNTING_CONTROL_VERSION,
@@ -99,8 +122,12 @@ const report = {
     journalEntries: journalEntries.length,
     missingJournalProjections: missingJournalProjections.length,
     journalBalanceFailures: journalBalanceFailures.length,
+    journalEvidenceFailures: journalEvidenceFailures.length,
+    missingLedgerRowProjections: missingLedgerRowProjections.length,
+    duplicateLedgerRowProjections: duplicateLedgerRowProjections.length,
+    statementBalanceFailures: statementBalanceFailures.length,
   },
-  failures: { accountingFailures, uncoveredBills, evidenceFailures, structuralFailures, unrecognizedMismatches, missingJournalProjections, journalBalanceFailures },
+  failures: { accountingFailures, uncoveredBills, evidenceFailures, structuralFailures, unrecognizedMismatches, missingJournalProjections, journalBalanceFailures, journalEvidenceFailures, missingLedgerRowProjections, duplicateLedgerRowProjections, statementBalanceFailures },
 };
 
 console.log(JSON.stringify(report, (_key, value) => typeof value === "bigint" ? value.toString() : value, 2));

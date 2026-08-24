@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { createHash } from "node:crypto";
 
 export const GENERAL_LEDGER_VERSION = "general-ledger-v1";
 
@@ -77,6 +78,15 @@ export function buildJournalProjection(rows) {
   return { lines: projected, debitPaise, creditPaise };
 }
 
+export function journalBatchSourceId(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) throw new Error("A journal batch needs at least one financial-ledger row");
+  const sourceId = String(rows[0].sourceId ?? "");
+  const keys = rows.map((row) => String(row.idempotencyKey ?? "")).sort();
+  if (!sourceId || keys.some((key) => !key)) throw new Error("A journal batch needs a source and idempotency key on every row");
+  const digest = createHash("sha256").update(JSON.stringify(keys)).digest("hex").slice(0, 24);
+  return `${sourceId}:${digest}`;
+}
+
 export async function ensureSystemAccounts(shopId, client = db) {
   for (const account of SYSTEM_ACCOUNTS) {
     await client.chartOfAccount.upsert({
@@ -105,10 +115,18 @@ export async function postFinancialLedgerRows(client, rows) {
   for (const sourceRows of groups.values()) {
     const source = sourceRows[0];
     const projection = buildJournalProjection(sourceRows);
+    const batchSourceId = journalBatchSourceId(sourceRows);
     await client.journalEntry.create({ data: {
-      shopId, sourceType: source.sourceType, sourceId: source.sourceId, businessDate: source.businessDate,
+      shopId, sourceType: source.sourceType, sourceId: batchSourceId, businessDate: source.businessDate,
       description: `${source.sourceType}:${source.sourceId}`,
-      evidenceJson: JSON.stringify({ version: 1, projectionVersion: GENERAL_LEDGER_VERSION, ledgerRowIds: sourceRows.map((row) => row.id) }),
+      evidenceJson: JSON.stringify({
+        version: 2,
+        projectionVersion: GENERAL_LEDGER_VERSION,
+        originalSourceId: source.sourceId,
+        batchSourceId,
+        ledgerRowIds: sourceRows.map((row) => row.id),
+        ledgerIdempotencyKeys: sourceRows.map((row) => row.idempotencyKey).sort(),
+      }),
       lines: { create: projection.lines.map((line, index) => ({
         shopId, accountId: accountByCode.get(line.accountCode).id, financialLedgerId: line.financialLedgerId,
         lineNumber: index + 1, debitPaise: line.side === "debit" ? line.amountPaise : 0n,

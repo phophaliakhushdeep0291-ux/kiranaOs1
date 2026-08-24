@@ -72,6 +72,39 @@ if (ctx.skip) {
       assert.equal(product.name, "Rice");
     });
 
+    test("stock history exposes immutable actor, source, quantity, time and resulting balance", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = assertSuccess(await ctx.post("/api/products", productPayload({
+        name: "Traceable Rice",
+        stockBaseQty: 12,
+        baseUnit: "kg",
+        displayUnit: "kg",
+        rateUnit: "kg",
+      }), { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+
+      const stored = await ctx.db.stockLedger.findFirstOrThrow({
+        where: { shopId: tenant.shop.id, productId: product.id, action: "opening_stock" },
+      });
+      assert.equal(stored.actorUserId, tenant.owner.id);
+      assert.equal(stored.actorName, tenant.owner.name);
+      assert.equal(stored.sourceType, "product_create");
+      assert.equal(stored.sourceId, product.id);
+      assert.equal(stored.changeBaseQty, 12);
+      assert.equal(stored.oldStockBaseQty, 0);
+      assert.equal(stored.newStockBaseQty, 12);
+      assert.ok(stored.createdAt instanceof Date);
+
+      const history = assertSuccess(await ctx.get(`/api/inventory/ledger?productId=${product.id}&page=1&limit=20`, {
+        token: ownerAuth.accessToken,
+      }));
+      assert.equal(history.total, 1);
+      assert.equal(history.entries[0].actorUserId, tenant.owner.id);
+      assert.equal(history.entries[0].actorName, tenant.owner.name);
+      assert.equal(history.entries[0].sourceType, "product_create");
+      assert.equal(history.entries[0].unit, "kg");
+      assert.equal(history.entries[0].newStockBaseQty, 12);
+    });
+
     test("product update works", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Old Name" });

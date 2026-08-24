@@ -55,6 +55,15 @@ for (const bill of bills) {
     repairs.push({ billId: bill.id, billNo: bill.billNo, shopId: bill.shopId, billType: bill.billType, rows: missing });
   } catch (error) {
     quarantined.push({ billId: bill.id, billNo: bill.billNo, shopId: bill.shopId, billType: bill.billType, code: error?.code ?? "UNSAFE_BACKFILL", reason: error?.message ?? String(error) });
+    // A known tender mismatch must stay quarantined, but it must not prevent the
+    // independent, self-balancing COGS/inventory evidence from being restored.
+    if (error?.code === "BILL_ACCOUNTING_EVIDENCE_MISMATCH") {
+      const capture = captureClient();
+      const accountedTotal = bill.payments.reduce((sum, row) => sum + abs(row.amount), 0) + abs(bill.creditAmount) + abs(bill.waivedAmount);
+      await postBillCreatedLedger(capture, { shopId: bill.shopId, bill: { ...bill, grandTotal: accountedTotal }, tenderPayments: bill.payments, creditAmount: Number(bill.creditAmount ?? 0), waivedAmount: Number(bill.waivedAmount ?? 0), customerId: bill.customerId, businessDate: bill.businessDate ?? bill.createdAt });
+      const missingCostRows = capture.rows.filter((row) => ["cost_of_goods_sold", "inventory_sale"].includes(row.entryType) && !existingKeys.has(`${row.shopId}:${row.idempotencyKey}`));
+      if (missingCostRows.length) repairs.push({ billId: bill.id, billNo: bill.billNo, shopId: bill.shopId, billType: bill.billType, rows: missingCostRows });
+    }
   }
 }
 
