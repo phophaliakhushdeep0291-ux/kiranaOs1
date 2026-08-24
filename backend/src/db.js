@@ -6,11 +6,16 @@ const databaseUrl = String(process.env.DATABASE_URL || "");
 // PostgreSQL proof intentionally reuses the integration runner, so select that
 // client only for a file: datasource; otherwise use the PostgreSQL client that
 // prisma:generate:postgres generated in @prisma/client.
-const useIsolatedIntegrationClient =
-  process.env.PRISMA_CLIENT_VARIANT === "integration" &&
-  databaseUrl.startsWith("file:");
-const prismaPackage = useIsolatedIntegrationClient
-  ? require("../generated/integration-prisma-client")
+const sqliteClientVariant = databaseUrl.startsWith("file:")
+  ? String(process.env.PRISMA_CLIENT_VARIANT || "")
+  : "";
+const isolatedClientPackages = {
+  integration: "../generated/integration-prisma-client",
+  certification: "../generated/certification-prisma-client",
+};
+const isolatedClientPackage = isolatedClientPackages[sqliteClientVariant];
+const prismaPackage = isolatedClientPackage
+  ? require(isolatedClientPackage)
   : require("@prisma/client");
 const { PrismaClient } = prismaPackage;
 

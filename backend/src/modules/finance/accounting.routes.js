@@ -18,6 +18,8 @@ import * as controller from "./accounting-control.controller.js";
 import * as generalLedgerController from "./general-ledger.controller.js";
 import { accountCreateSchema, accountUpdateSchema, balanceSheetQuerySchema, journalCreateSchema, openingBalanceSchema, periodCloseSchema, periodCreateSchema, reversalSchema } from "./general-ledger.schema.js";
 import * as bankController from "./bank-reconciliation.controller.js";
+import * as documentController from "./accounting-document.controller.js";
+import { accountingDocumentApproveSchema, accountingDocumentListSchema, accountingDocumentRejectSchema } from "./accounting-document.schema.js";
 import {
   channelSettlementImportQuerySchema,
   channelSettlementImportSchema,
@@ -43,6 +45,10 @@ router.post("/journals/:id/reverse", requireOwnerPin, validate(reversalSchema), 
 router.get("/periods", generalLedgerController.periods);
 router.post("/periods", requireOwnerPin, validate(periodCreateSchema), generalLedgerController.addPeriod);
 router.post("/periods/:id/close", requireOwnerPin, validate(periodCloseSchema), generalLedgerController.closePeriod);
+router.get("/documents", validateQuery(accountingDocumentListSchema), documentController.documents);
+router.get("/documents/:id", documentController.document);
+router.post("/documents/:id/approve", requireOwnerPin, validate(accountingDocumentApproveSchema), documentController.approve);
+router.post("/documents/:id/reject", requireOwnerPin, validate(accountingDocumentRejectSchema), documentController.reject);
 router.get("/bank-statements", requireFeature("csv_import_export"), validateQuery(bankStatementListQuerySchema), bankController.imports);
 router.post("/bank-statements/import", requireFeature("csv_import_export"), requireOwnerPin, validate(bankStatementImportSchema), bankController.importStatement);
 router.get("/bank-reconciliation", requireFeature("csv_import_export"), validateQuery(bankReconciliationQuerySchema), bankController.reconciliation);

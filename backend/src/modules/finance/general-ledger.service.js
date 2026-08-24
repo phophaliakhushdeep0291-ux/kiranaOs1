@@ -14,6 +14,7 @@ export const SYSTEM_ACCOUNTS = [
   ["2000", "Supplier payables", "liability", "credit", "payables"],
   ["2100", "Gift card liability", "liability", "credit", "gift_cards"],
   ["2200", "GST output payable", "liability", "credit", "gst_output"],
+  ["2210", "Input GST recoverable", "asset", "debit", "gst_input"],
   ["2300", "Accrued expense payables", "liability", "credit", "expense_payables"],
   ["2900", "Recycle-bin suspense", "liability", "credit", "recycle_bin_suspense"],
   ["3000", "Owner capital", "equity", "credit", "owner_capital"],
@@ -173,7 +174,7 @@ export async function createManualJournal(shopId, input, { sourceType = "manual_
 export async function reverseJournal(shopId, journalId, input, actorUserId = null, client = db) {
   const original = await client.journalEntry.findFirst({ where: { id: journalId, shopId, status: "posted" }, include: { lines: { include: { account: true } }, reversals: true } });
   if (!original) throw accountingError("Posted journal not found", "JOURNAL_NOT_FOUND", 404);
-  if (!["manual_journal", "opening_balance"].includes(original.sourceType)) throw accountingError("System-generated journals must be corrected through their originating business transaction", "SYSTEM_JOURNAL_REVERSAL_FORBIDDEN", 400);
+  if (!["manual_journal", "opening_balance", "document_approval"].includes(original.sourceType)) throw accountingError("System-generated journals must be corrected through their originating business transaction", "SYSTEM_JOURNAL_REVERSAL_FORBIDDEN", 400);
   if (original.reversals.length) throw accountingError("Journal is already reversed", "JOURNAL_ALREADY_REVERSED");
   const businessDate = input.businessDate ? new Date(input.businessDate) : new Date();
   await assertPeriodOpen(shopId, businessDate, client);

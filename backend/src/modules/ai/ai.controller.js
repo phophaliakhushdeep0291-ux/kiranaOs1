@@ -1,7 +1,7 @@
 import * as svc from "./ai.service.js";
 import { AppError } from "../../middleware/error.js";
 import { getUploadedAudioFile, removeUploadedAudioFile } from "./ai.upload.js";
-import { extractPurchaseInvoice as extractInvoice } from "./invoice-ocr.service.js";
+import { createPurchaseInvoiceDraft } from "../finance/accounting-document.service.js";
 
 function sendAiProviderError(err, res) {
   const msg = (err.message ?? "").toLowerCase();
@@ -82,8 +82,8 @@ export async function transcribe(req, res, next) {
 
 export async function extractPurchaseInvoice(req, res, next) {
   try {
-    const draft = await extractInvoice(req.shopId, req.invoiceImage);
-    res.json({ success: true, data: { draft } });
+    const result = await createPurchaseInvoiceDraft(req.shopId, req.invoiceImage, req.user);
+    res.json({ success: true, data: { draft: result.document.extracted, document: result.document, duplicate: result.duplicate } });
   } catch (err) {
     if (sendAiProviderError(err, res)) return;
     next(err);

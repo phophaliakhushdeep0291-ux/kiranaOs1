@@ -47,9 +47,11 @@ for (const file of [
   assert.ok(pkg.scripts["test:packaging-db"].includes(file), `test:packaging-db must cover ${file}`);
 }
 assert.ok(pkg.scripts.posttest.includes("test:packaging-db"), "the default backend suite must run DB packaging safety examples");
-assert.match(setup, /generated["'], ["']integration-prisma-client/, "skip-generation checks must validate the isolated client, not the default client");
-assert.match(setup, /generatedSchema !== sourceSchema/, "skip-generation checks must reject a stale integration client");
-assert.match(certification, /id: "backend-tests"[\s\S]*?SKIP_PRISMA_GENERATE: "true"/, "certification must reuse the integration client prepared by backend-source-db");
+assert.match(setup, /certification-prisma-client/, "setup must support a release-only client that cannot contend with live QA");
+assert.match(setup, /generatedSchema !== sourceSchema/, "skip-generation checks must reject a stale isolated client");
+const certificationSourceDbStep = certification.match(/id: "backend-source-db"[\s\S]*?\n\}\);/)?.[0] ?? "";
+assert.match(certificationSourceDbStep, /PRISMA_CLIENT_VARIANT: "certification"/, "certification must prepare its dedicated Prisma client");
+assert.match(certification, /id: "backend-tests"[\s\S]*?PRISMA_CLIENT_VARIANT: "certification"[\s\S]*?SKIP_PRISMA_GENERATE: "true"/, "certification must reuse the dedicated client prepared by backend-source-db");
 
 for (const [name, command] of Object.entries(pkg.scripts)) {
   if (/node tests\/(activity-personalization|audit-timeline|device-health|diagnostics-error-store|incident-report|packaging-mode-guard|per-pack-(?:low-stock|return|stock-in|stock-out|sync-stock)|remote-support(?:-http|-playbooks|-settings)?|sync-diagnostics)\.examples\.js/.test(command)) {

@@ -1707,7 +1707,7 @@ if (ctx.skip) {
       assert.equal(creditNote.items[0].hsn, "1905", "later product edits must not rewrite a credit note's HSN");
 
       const returnLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: creditNote.id }, orderBy: { entryType: "asc" } });
-      assert.deepEqual(returnLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", -10000n], ["gst_output", -1525n], ["gst_sales_reclassification", -1525n], ["sale", -10000n]], "the append-only financial ledger must reverse tender, net revenue and aggregate output GST without rewriting the original sale");
+      assert.deepEqual(returnLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", -10000n], ["cost_of_goods_sold", -6000n], ["gst_output", -1525n], ["gst_sales_reclassification", -1525n], ["inventory_sale", -6000n], ["sale", -10000n]], "the append-only financial ledger must reverse tender, revenue, COGS, inventory, and aggregate output GST without rewriting the original sale");
 
       const working = assertSuccess(await ctx.get("/api/compliance/gstr1-working?range=monthly", { token: auth.accessToken }));
       assert.equal(working.cdnr.length, 1);
@@ -1773,7 +1773,7 @@ if (ctx.skip) {
       assert.equal(bill.payments.some((payment) => payment.mode === "gift_card" && payment.provider === "gift_card_ledger"), true);
       assert.equal((await ctx.db.giftCard.findUnique({ where: { id: issued.id } })).balancePaise, 17500n);
       const giftSaleLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: bill.id }, orderBy: { entryType: "asc" } });
-      assert.deepEqual(giftSaleLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", 2500n], ["gift_card_redeemed", 7500n], ["sale", 10000n]], "gift redemption must debit stored-value liability instead of disappearing from accounting");
+      assert.deepEqual(giftSaleLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", 2500n], ["cost_of_goods_sold", 1000n], ["gift_card_redeemed", 7500n], ["inventory_sale", 1000n], ["sale", 10000n]], "gift redemption must debit stored-value liability while preserving COGS and inventory accounting");
       const firstControl = assertSuccess(await ctx.get("/api/accounting/control?from=2020-01-01T00%3A00%3A00.000Z&to=2030-01-01T00%3A00%3A00.000Z", { token: auth.accessToken }));
       assert.equal(firstControl.status, "balanced");
       assert.equal(firstControl.scope, "shop");
@@ -1790,7 +1790,7 @@ if (ctx.skip) {
         waivedAmount: 5,
       }), { token: auth.accessToken }), 201);
       const waivedLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: waivedSale.id }, orderBy: { entryType: "asc" } });
-      assert.deepEqual(waivedLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", 9500n], ["sale", 10000n], ["waiver_expense", 500n]], "waived money must be an explicit debit leg");
+      assert.deepEqual(waivedLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", 9500n], ["cost_of_goods_sold", 1000n], ["inventory_sale", 1000n], ["sale", 10000n], ["waiver_expense", 500n]], "waived money must be an explicit debit leg alongside COGS and inventory accounting");
       const controlWithWaiver = assertSuccess(await ctx.get("/api/accounting/control?from=2020-01-01T00%3A00%3A00.000Z&to=2030-01-01T00%3A00%3A00.000Z", { token: auth.accessToken }));
       assert.equal(controlWithWaiver.status, "balanced");
       assert.equal(controlWithWaiver.coverage.balancedGroups, 2);
@@ -1830,7 +1830,7 @@ if (ctx.skip) {
       assert.equal(returnCredit.issuedGiftCard.balance, 100);
       assert.equal(returnCredit.locationId, branch.id, "a cross-channel return must restock the accepting branch");
       const giftReturnLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: returnCredit.id }, orderBy: { entryType: "asc" } });
-      assert.deepEqual(giftReturnLedger.map((row) => [row.entryType, row.amountPaise]), [["gift_card_issued", 10000n], ["sale", -10000n]], "store-credit returns must expose the new gift-value liability without fake cash movement");
+      assert.deepEqual(giftReturnLedger.map((row) => [row.entryType, row.amountPaise]), [["cost_of_goods_sold", -1000n], ["gift_card_issued", 10000n], ["inventory_sale", -1000n], ["sale", -10000n]], "store-credit returns must expose the new gift-value liability and reverse COGS/inventory without fake cash movement");
 
       const repeatReturn = assertFailure(await ctx.post("/api/bills/returns", {
         refundMode: "cash",

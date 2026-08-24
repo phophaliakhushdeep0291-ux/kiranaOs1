@@ -512,7 +512,8 @@ if (ctx.skip) {
     });
 
     test("bill creation posts append-only FinancialLedger entries exactly once across retries", async () => {
-      // Part 4 consistency: a partial cash + udhar bill must post sale + cash_in + udhar_debit.
+      // Part 4 consistency: a partial cash + udhar bill must post the commercial
+      // legs plus COGS and inventory reduction.
       // Re-pushing the same bill under a new event id (retry after lost ack) must NOT double-post:
       // the ledger is the dashboard's source of truth, so a retry that double-counted would
       // corrupt every money KPI. The unique idempotency key guarantees exactly-once.
@@ -545,7 +546,7 @@ if (ctx.skip) {
 
       const ledger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id } });
       const ofType = (entryType) => ledger.filter((row) => row.entryType === entryType);
-      assert.equal(ledger.length, 3, "sale + cash_in + udhar_debit, posted once despite the retry");
+      assert.equal(ledger.length, 5, "sale + cash_in + udhar_debit + COGS + inventory, posted once despite the retry");
       assert.equal(ofType("sale").length, 1);
       assert.equal(Number(ofType("sale")[0].amountPaise), 10000, "sale = ₹100");
       assert.equal(ofType("cash_in").length, 1);
@@ -553,6 +554,10 @@ if (ctx.skip) {
       assert.equal(ofType("upi_in").length, 0, "no UPI tender on this bill");
       assert.equal(ofType("udhar_debit").length, 1);
       assert.equal(Number(ofType("udhar_debit")[0].amountPaise), 6000, "udhar_debit = ₹60");
+      assert.equal(ofType("cost_of_goods_sold").length, 1);
+      assert.equal(Number(ofType("cost_of_goods_sold")[0].amountPaise), 1000, "COGS = ₹10");
+      assert.equal(ofType("inventory_sale").length, 1);
+      assert.equal(Number(ofType("inventory_sale")[0].amountPaise), 1000, "inventory reduction = ₹10");
     });
 
     test("ADJUST_STOCK (damage) replayed under a new event id applies stock only once", async () => {

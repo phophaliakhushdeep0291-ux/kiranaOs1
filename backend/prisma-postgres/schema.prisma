@@ -60,7 +60,9 @@ model Shop {
   chartOfAccounts               ChartOfAccount[]
   journalEntries                JournalEntry[]
   journalLines                  JournalLine[]
-  accountingPeriods            AccountingPeriod[]
+  accountingPeriods             AccountingPeriod[]
+  accountingDocuments           AccountingDocument[]
+  accountingDocumentEvents      AccountingDocumentEvent[]
   billCounter                   BillCounter?
   subscriptions                 Subscription[]
   onboardingPurchases           OnboardingPurchase[]
@@ -2355,16 +2357,16 @@ model FinancialLedger {
 }
 
 model ChartOfAccount {
-  id          String   @id @default(cuid())
-  shopId      String
-  code        String
-  name        String
-  category    String
-  normalSide  String
-  systemKey   String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  shopId     String
+  code       String
+  name       String
+  category   String
+  normalSide String
+  systemKey  String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   shop  Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
   lines JournalLine[]
@@ -2375,17 +2377,17 @@ model ChartOfAccount {
 }
 
 model JournalEntry {
-  id             String   @id @default(cuid())
-  shopId         String
-  sourceType     String
-  sourceId       String
-  businessDate   DateTime
-  status         String   @default("posted")
-  description    String?
-  evidenceJson   String   @default("{}")
-  reversalOfId   String?
-  postedAt       DateTime @default(now())
-  createdAt      DateTime @default(now())
+  id           String   @id @default(cuid())
+  shopId       String
+  sourceType   String
+  sourceId     String
+  businessDate DateTime
+  status       String   @default("posted")
+  description  String?
+  evidenceJson String   @default("{}")
+  reversalOfId String?
+  postedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   shop       Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
   lines      JournalLine[]
@@ -2435,6 +2437,51 @@ model AccountingPeriod {
 
   @@unique([shopId, startsAt, endsAt])
   @@index([shopId, status, startsAt, endsAt])
+}
+
+model AccountingDocument {
+  id                   String    @id @default(cuid())
+  shopId               String
+  documentType         String
+  status               String    @default("review_required")
+  sourceHash           String
+  sourceMimeType       String
+  sourceBytes          Int
+  supplierId           String?
+  supplierMatch        String
+  extractedJson        String
+  validationJson       String
+  suggestedJournalJson String
+  evidenceJson         String
+  createdByUserId      String?
+  reviewedByUserId     String?
+  reviewedAt           DateTime?
+  reviewReason         String?
+  journalEntryId       String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  shop   Shop                      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  events AccountingDocumentEvent[]
+
+  @@unique([shopId, sourceHash])
+  @@index([shopId, status, createdAt])
+  @@index([shopId, supplierId, createdAt])
+}
+
+model AccountingDocumentEvent {
+  id          String   @id @default(cuid())
+  shopId      String
+  documentId  String
+  action      String
+  actorUserId String?
+  payloadJson String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  shop     Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  document AccountingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, documentId, createdAt])
 }
 
 model BankStatementImport {

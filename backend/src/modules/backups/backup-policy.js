@@ -34,6 +34,7 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // restore before journal entries, and entries before their lines; the backup
   // service derives that order from the Prisma relations.
   "FinancialLedger", "ChartOfAccount", "JournalEntry", "JournalLine", "AccountingPeriod",
+  "AccountingDocument", "AccountingDocumentEvent",
   "BankStatementImport", "BankStatementTransaction",
   "BankReconciliationAllocation", "BankReconciliationEvent", "AuditRule", "AuditRun",
   "AuditEvaluation", "AuditFinding", "AuditFindingRule", "AuditEvidenceRequirement",

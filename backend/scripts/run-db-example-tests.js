@@ -13,7 +13,10 @@ if (files.length === 0) {
 const backendRoot = path.resolve(process.cwd());
 const testsRoot = path.resolve(backendRoot, "tests");
 const sourceSchemaPath = path.join(backendRoot, "prisma", "schema.prisma");
-const generatedSchemaPath = path.join(backendRoot, "generated", "integration-prisma-client", "schema.prisma");
+const prismaClientVariant = process.env.PRISMA_CLIENT_VARIANT === "certification"
+  ? "certification"
+  : "integration";
+const generatedSchemaPath = path.join(backendRoot, "generated", `${prismaClientVariant}-prisma-client`, "schema.prisma");
 const resolvedFiles = files.map((file) => {
   const absolute = path.resolve(backendRoot, file);
   const relative = path.relative(testsRoot, absolute);
@@ -34,7 +37,7 @@ const generatedClientMatchesSource = fs.existsSync(sourceSchemaPath)
 
 const env = buildTestEnv({
   NODE_ENV: "test",
-  PRISMA_CLIENT_VARIANT: "integration",
+  PRISMA_CLIENT_VARIANT: prismaClientVariant,
   FORCE_DB_TESTS: "true",
   ...(isolatedDatabasePath ? {
     TEST_DATABASE_URL: `file:${isolatedDatabasePath}`,

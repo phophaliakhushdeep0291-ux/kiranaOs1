@@ -25,6 +25,8 @@ const ROUTE_FILTER = String(process.env.QA_ROUTE_FILTER || "").split(",").map((v
 const ROUTES = ROUTE_FILTER.length
   ? ALL_ROUTES.filter(([qaId, route]) => ROUTE_FILTER.includes(qaId) || ROUTE_FILTER.includes(route))
   : ALL_ROUTES;
+const INVENTORY_HISTORY_STATE = String(process.env.QA_INVENTORY_HISTORY || "").toLowerCase() === "true";
+let inventoryHistorySeeded = false;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const assert = (value, message) => { if (!value) throw new Error(message); };
 
@@ -77,6 +79,35 @@ async function navigate(client, route, expectedPath = route, expectedSearch = ""
   await sleep(900);
 }
 
+async function showPopulatedInventoryHistory(client) {
+  if (!inventoryHistorySeeded) {
+    const result = await client.evaluate(`(async()=>{
+      const apiUrl=${JSON.stringify(API_URL)},session=JSON.parse(localStorage.getItem("kiranaos.auth.session.v1")||"{}"),deviceId=localStorage.getItem("kiranaos_device_id")||localStorage.getItem("kirana-os:device-id:v1"),suffix=Date.now();
+      const headers={"content-type":"application/json",authorization:"Bearer "+session.accessToken,"x-device-id":deviceId,"x-owner-pin":"2468"};
+      const request=async(path,body)=>{const response=await fetch(apiUrl+path,{method:"POST",headers,body:JSON.stringify(body)}),json=await response.json();if(!response.ok)throw new Error(path+" failed: "+JSON.stringify(json));return json.data??json};
+      const product=await request("/products",{name:"Traceable Rice "+suffix,category:"grocery",displayUnit:"kg",baseUnit:"kg",rateUnit:"kg",stockBaseQty:5,costPerRateUnit:40,minPricePerRateUnit:45,defaultPricePerRateUnit:50,gstRate:5,lowStockThreshold:2});
+      await request("/inventory/purchase",{idempotencyKey:"inv002-visual-purchase-"+suffix,productId:product.id,quantity:3,enteredUnit:"kg",billAmount:150,supplierName:"Premium Foods",note:"Supplier receipt verified"});
+      await request("/inventory/damage",{idempotencyKey:"inv002-visual-damage-"+suffix,productId:product.id,quantity:1,enteredUnit:"kg",note:"Damaged bag isolated"});
+      return {productId:product.id};
+    })()`);
+    assert(result?.productId, "Inventory history fixture did not create a product");
+    inventoryHistorySeeded = true;
+    await navigate(client, "/inventory");
+  }
+  const trigger = await client.evaluate(`(()=>{const node=document.querySelector("[data-inventory-history-menu]");if(!node)return null;node.scrollIntoView({block:"center",inline:"nearest"});const rect=node.getBoundingClientRect();return{x:rect.left+rect.width/2,y:rect.top+rect.height/2,visible:rect.top>=0&&rect.bottom<=innerHeight}})()`);
+  assert(trigger, "Inventory More actions trigger was not available");
+  assert(trigger.visible, "Inventory More actions trigger could not be scrolled into view");
+  await client.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: trigger.x, y: trigger.y });
+  await client.send("Input.dispatchMouseEvent", { type: "mousePressed", x: trigger.x, y: trigger.y, button: "left", clickCount: 1 });
+  await client.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: trigger.x, y: trigger.y, button: "left", clickCount: 1 });
+  await waitForPage(client, `Boolean(document.querySelector('[data-inventory-movement-history]'))`);
+  await client.evaluate(`document.querySelector('[data-inventory-movement-history]')?.click()`);
+  await waitForPage(client, `Boolean(document.querySelector('[data-inventory-trace]')) && document.body.innerText.includes("QA Owner") && document.body.innerText.includes("Supplier receipt verified") && document.body.innerText.includes("Damaged bag isolated")`);
+  await sleep(250);
+  await client.evaluate(`(()=>{const node=document.querySelector('[data-inventory-trace]');if(!node)return;const target=innerWidth<768?node.querySelector('article')??node:node;target.style.scrollMarginTop='132px';target.scrollIntoView({block:innerWidth<768?'center':'start',inline:'nearest',behavior:'instant'})})()`);
+  await sleep(250);
+}
+
 async function prepareAppOrigin(client) {
   // Use a same-origin static document so the application cannot clear an old
   // session while the harness is still deciding whether to verify or refresh it.
@@ -125,6 +156,7 @@ async function closeChrome(client, chrome) {
 async function auditPage(client, qaId, route, width, height, expectedPath = route, expectedSearch = "") {
   await client.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: true });
   await navigate(client, route, expectedPath, expectedSearch);
+  if (INVENTORY_HISTORY_STATE && qaId === "MQA-INV-01") await showPopulatedInventoryHistory(client);
   const metrics = await client.evaluate(`(()=>{const visible=node=>{const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&rect.width>0&&rect.height>0&&rect.bottom>0&&rect.top<innerHeight};const controls=[...document.querySelectorAll("button,input,select,textarea,[role=button],[role=combobox],a[href]")].filter(visible).map(node=>{const rect=node.getBoundingClientRect();return{tag:node.tagName,type:node.getAttribute("type")||"",label:(node.getAttribute("aria-label")||node.textContent||node.getAttribute("placeholder")||"").trim().replace(/\\s+/g," ").slice(0,70),width:Math.round(rect.width),height:Math.round(rect.height)}}).filter(control=>!(["checkbox","radio","hidden"].includes(control.type))&&!(control.width<=2&&control.height<=2));const undersized=controls.filter(control=>control.width<44||control.height<44),text=document.body.innerText;return{path:location.pathname,viewport:[innerWidth,innerHeight],documentWidth:document.documentElement.scrollWidth,bodyWidth:document.body.scrollWidth,undersized:undersized.slice(0,30),undersizedCount:undersized.length,visibleControlCount:controls.length,desktopSidebarVisible:[...document.querySelectorAll(".app-desktop-sidebar")].some(visible),genericFailure:/something went wrong|unexpected error|page failed to load/i.test(text),stuckLoading:/loading(?:\\.{3}|…)?$/im.test(text.trim()),runtimeErrors:window.__arthaQaErrors||[]}})()`);
   const accessibility = await client.evaluate(`(()=>{
     const visible=(node)=>{if(node.closest('[hidden],[inert],[aria-hidden="true"]'))return false;const style=getComputedStyle(node),rect=node.getBoundingClientRect();return style.display!=="none"&&style.visibility!=="hidden"&&Number(style.opacity||1)>0&&(rect.width>0||rect.height>0)&&rect.bottom>0&&rect.top<innerHeight&&rect.right>0&&rect.left<innerWidth};

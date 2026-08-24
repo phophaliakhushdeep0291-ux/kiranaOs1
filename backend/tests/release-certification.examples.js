@@ -15,7 +15,11 @@ for (const status of ["passed", "failed", "blocked", "skipped"]) {
 }
 assert.ok(
   runner.includes('SKIP_PRISMA_GENERATE: "true"'),
-  "local certification must reuse its prepared integration client between DB-backed suites"
+  "local certification must reuse its prepared isolated client between DB-backed suites"
+);
+assert.ok(
+  runner.includes('PRISMA_CLIENT_VARIANT: "certification"'),
+  "release certification must not contend with a live integration client's Windows query-engine DLL"
 );
 for (const evidence of [
   "frontend-production-check",

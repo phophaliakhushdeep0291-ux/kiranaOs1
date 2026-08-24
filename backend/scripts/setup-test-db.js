@@ -16,15 +16,22 @@ const prismaCli = path.join(process.cwd(), "node_modules", "prisma", "build", "i
 const isPostgres = isPostgresTestDatabaseUrl(getTestDatabaseUrl());
 const schemaArgs = isPostgres ? ["--schema", "prisma-postgres/schema.prisma"] : [];
 const skipGenerate = process.env.SKIP_PRISMA_GENERATE === "true";
-const useIsolatedClient = !isPostgres && process.env.PRISMA_CLIENT_VARIANT === "integration";
+const sqliteClientVariants = {
+  integration: { directory: "integration-prisma-client", generator: "integrationClient" },
+  certification: { directory: "certification-prisma-client", generator: "certificationClient" },
+};
+const isolatedClient = !isPostgres
+  ? sqliteClientVariants[process.env.PRISMA_CLIENT_VARIANT]
+  : null;
+const useIsolatedClient = Boolean(isolatedClient);
 
 function assertCompatibleGeneratedClient() {
   const generatedSchemaPath = useIsolatedClient
-    ? path.join(process.cwd(), "generated", "integration-prisma-client", "schema.prisma")
+    ? path.join(process.cwd(), "generated", isolatedClient.directory, "schema.prisma")
     : path.join(process.cwd(), "node_modules", ".prisma", "client", "schema.prisma");
   if (!fs.existsSync(generatedSchemaPath)) {
     throw new Error(
-      `SKIP_PRISMA_GENERATE=true requires an existing ${useIsolatedClient ? "integration" : "default"} Prisma client. Generate that client first.`
+      `SKIP_PRISMA_GENERATE=true requires an existing ${useIsolatedClient ? process.env.PRISMA_CLIENT_VARIANT : "default"} Prisma client. Generate that client first.`
     );
   }
 
@@ -42,7 +49,7 @@ function assertCompatibleGeneratedClient() {
     const sourceSchema = fs.readFileSync(sourceSchemaPath, "utf8");
     if (generatedSchema !== sourceSchema) {
       throw new Error(
-        "SKIP_PRISMA_GENERATE=true found a stale integration Prisma client. Regenerate it from prisma/schema.prisma first."
+        `SKIP_PRISMA_GENERATE=true found a stale ${process.env.PRISMA_CLIENT_VARIANT} Prisma client. Regenerate it from prisma/schema.prisma first.`
       );
     }
   }
@@ -101,7 +108,7 @@ if (isPostgres) {
   if (!skipGenerate) runPrisma(["generate", ...schemaArgs]);
 } else {
   ensureSqliteDatabaseFile();
-  if (!skipGenerate) runPrisma(["generate", ...(useIsolatedClient ? ["--generator", "integrationClient"] : [])]);
+  if (!skipGenerate) runPrisma(["generate", ...(useIsolatedClient ? ["--generator", isolatedClient.generator] : [])]);
   // Generation is handled explicitly above. Never let db push regenerate every
   // declared client, because a live Windows dev server can hold the canonical
   // engine DLL open while the isolated integration client remains available.

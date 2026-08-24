@@ -789,13 +789,13 @@ export default function InventoryPage() {
         <InventoryActionCard label={t("inventory.page.supplierPurchase")} detail={t("inventory.page.supplierPurchaseHelp")} tone="violet" icon={<CircleDollarSign size={20} />} onClick={() => openMovement("purchase")} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="group col-span-2 flex min-h-[82px] w-full items-center gap-3 rounded-[16px] border border-[#e2e8f1] bg-white px-3.5 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)] lg:col-span-1">
+            <button type="button" data-inventory-history-menu className="group col-span-2 flex min-h-[82px] w-full items-center gap-3 rounded-[16px] border border-[#e2e8f1] bg-white px-3.5 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)] lg:col-span-1">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#eef4ff] text-[var(--brand)]"><Ellipsis size={20} /></span>
               <span className="min-w-0"><span className="block text-[13px] font-bold text-[#13223f]">{t("inventory.page.moreActions")}</span><span className="mt-1 block text-[11px] leading-4 text-[#6d7c98]">{t("inventory.page.moreActionsHelp")}</span></span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem onClick={() => setActiveTab("movements")}><History size={15} className="mr-2" />{t("inventory.page.movementHistory")}</DropdownMenuItem>
+            <DropdownMenuItem data-inventory-movement-history onClick={() => setActiveTab("movements")}><History size={15} className="mr-2" />{t("inventory.page.movementHistory")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setActiveTab("purchase-bills")}><ClipboardList size={15} className="mr-2" />{t("inventory.page.purchaseBills")}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setActiveTab("reports")}><BarChart3 size={15} className="mr-2" />{t("inventory.page.insights")}</DropdownMenuItem>
             {/* Batch & Expiry used to sit here as a "higher plan" teaser shown to
@@ -811,7 +811,7 @@ export default function InventoryPage() {
         {activeTab !== "dashboard" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 py-3">
             <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? t("inventory.page.movementHistory") : activeTab === "purchase-bills" ? t("inventory.page.purchaseBills") : t("inventory.page.insights")}</p><p className="text-[11px] text-[#718096]">{t("inventory.page.detailRecords")}</p></div>
-            <Button variant="outline" className="h-9 rounded-[8px] text-[11px]" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />{t("inventory.page.backToStock")}</Button>
+            <Button variant="outline" className="h-11 rounded-[8px] text-[11px] lg:mouse:h-9" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />{t("inventory.page.backToStock")}</Button>
           </div>
         ) : null}
         {activeTab === "dashboard" ? <div className="mt-0 space-y-4">
@@ -1003,7 +1003,7 @@ export default function InventoryPage() {
             <StatCard label={t("inventory.page.sales")} value={movementSummary.sales} tone="blue" />
             <StatCard label={t("inventory.page.damageShort")} value={movementSummary.damage} tone="amber" />
           </StatsGrid>
-          <section className="overflow-hidden rounded-[18px] border border-[#dfe7f2] bg-white shadow-[0_14px_40px_rgba(23,43,77,0.07)]">
+          <section data-inventory-trace className="overflow-hidden rounded-[18px] border border-[#dfe7f2] bg-white shadow-[0_14px_40px_rgba(23,43,77,0.07)]">
             <div className="border-b border-[#e8edf5] bg-[linear-gradient(135deg,#f8fbff_0%,#f7f4ff_100%)] px-4 py-4 sm:px-5">
               <p className="text-[13px] font-black text-[#152542]">{t("inventory.page.movementTrace")}</p>
               <p className="mt-1 text-[11px] leading-4 text-[#687995]">{t("inventory.page.movementTraceHelp")}</p>
@@ -1013,7 +1013,12 @@ export default function InventoryPage() {
                 {movementRows.map((entry) => <MovementTraceCard key={entry.id} entry={entry} />)}
               </div>
             )}
-            <div className="hidden overflow-x-auto md:block">
+            <div
+              className="hidden overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-inset md:block"
+              role="region"
+              aria-label={t("inventory.page.movementHistory")}
+              tabIndex={0}
+            >
             <table className="w-full min-w-[1060px] text-sm">
               <thead className="border-b bg-[#f7f9fd]"><tr><th className="px-4 py-3 text-left">{t("inventory.col.product")}</th><th className="px-4 py-3 text-left">{t("inventory.page.type")}</th><th className="px-4 py-3 text-right">{t("inventory.page.qtyDelta")}</th><th className="px-4 py-3 text-left">{t("inventory.page.balance")}</th><th className="px-4 py-3 text-left">{t("inventory.page.source")}</th><th className="px-4 py-3 text-left">{t("inventory.page.actor")}</th><th className="px-4 py-3 text-right">{t("inventory.page.time")}</th></tr></thead>
               <tbody>
@@ -1024,11 +1029,11 @@ export default function InventoryPage() {
                   return (
                     <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium">{entry.productName ?? "-"}</td>
-                      <td className="px-4 py-3"><Badge variant={movementClass(type)}>{movementLabel(type, t)}</Badge></td>
+                      <td className="px-4 py-3"><Badge variant={movementClass(type)} className={type === "damage" ? "bg-[#b42318]" : undefined}>{movementLabel(type, t)}</Badge></td>
                       <td className="px-4 py-3 text-right">{qty > 0 ? "+" : ""}{qty} {entry.unit ?? ""}</td>
                       <td className="px-4 py-3 text-xs font-semibold text-[#344668]">{balance.before.toLocaleString("en-IN")} → {balance.after.toLocaleString("en-IN")}</td>
-                      <td className="px-4 py-3"><p className="text-xs font-semibold text-[#344668]">{movementSource(entry)}</p><p className="max-w-[220px] truncate text-[10px] text-[#7b8aa4]">{entry.note ?? entry.reason ?? entry.sourceId ?? entry.source_id ?? "-"}</p></td>
-                      <td className="px-4 py-3"><p className="text-xs font-semibold text-[#344668]">{movementActor(entry, t)}</p><p className="text-[10px] text-[#7b8aa4]">{String(entry.sync_status ?? "synced").replaceAll("_", " ")}</p></td>
+                      <td className="px-4 py-3"><p className="text-xs font-semibold text-[#344668]">{movementSource(entry)}</p><p className="max-w-[220px] truncate text-[10px] text-[#52637d]">{entry.note ?? entry.reason ?? entry.sourceId ?? entry.source_id ?? "-"}</p></td>
+                      <td className="px-4 py-3"><p className="text-xs font-semibold text-[#344668]">{movementActor(entry, t)}</p><p className="text-[10px] text-[#52637d]">{String(entry.sync_status ?? "synced").replaceAll("_", " ")}</p></td>
                       <td className="px-4 py-3 text-right text-muted-foreground text-xs">{format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</td>
                     </tr>
                   );
@@ -1276,26 +1281,26 @@ function MovementTraceCard({ entry }: { entry: MovementEntry }) {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-[13px] font-black text-[#182945]">{entry.productName ?? t("inventory.page.inventoryItem")}</p>
-              <p className="mt-0.5 text-[11px] font-semibold text-[#6b7b96]">{movementLabel(type, t)} · {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p>
+              <p className="mt-0.5 text-[11px] font-semibold text-[#52637d]">{movementLabel(type, t)} · {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p>
             </div>
-            <p className={`whitespace-nowrap text-[15px] font-black ${positive ? "text-emerald-600" : "text-rose-600"}`}>{positive ? "+" : ""}{quantity.toLocaleString("en-IN")} <span className="text-[10px] font-bold">{entry.unit ?? ""}</span></p>
+            <p className={`whitespace-nowrap text-[15px] font-black ${positive ? "text-[#047857]" : "text-rose-700"}`}>{positive ? "+" : ""}{quantity.toLocaleString("en-IN")} <span className="text-[10px] font-bold">{entry.unit ?? ""}</span></p>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 rounded-[12px] border border-[#e6ecf4] bg-[#f8fafd] p-3">
             <div>
-              <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#8795ac]">{t("inventory.page.balance")}</p>
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#52637d]">{t("inventory.page.balance")}</p>
               <p className="mt-1 text-[12px] font-black text-[#273a5c]">{balance.before.toLocaleString("en-IN")} → {balance.after.toLocaleString("en-IN")}</p>
             </div>
             <div className="border-l border-[#dfe6ef] pl-3">
-              <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#8795ac]">{t("inventory.page.actor")}</p>
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#52637d]">{t("inventory.page.actor")}</p>
               <p className="mt-1 truncate text-[12px] font-black text-[#273a5c]">{movementActor(entry, t)}</p>
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-[11px] font-bold text-[#415372]">{movementSource(entry)}</p>
-              {(entry.note ?? entry.reason) ? <p className="mt-0.5 truncate text-[10px] text-[#7b8aa4]">{entry.note ?? entry.reason}</p> : null}
+              {(entry.note ?? entry.reason) ? <p className="mt-0.5 truncate text-[10px] text-[#52637d]">{entry.note ?? entry.reason}</p> : null}
             </div>
-            <span className="shrink-0 rounded-full bg-[#eef3fb] px-2.5 py-1 text-[9px] font-black capitalize text-[#5f708d]">{sync}</span>
+            <span className="shrink-0 rounded-full bg-[#eef3fb] px-2.5 py-1 text-[9px] font-black capitalize text-[#4f607b]">{sync}</span>
           </div>
         </div>
       </div>

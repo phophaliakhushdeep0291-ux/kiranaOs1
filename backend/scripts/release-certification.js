@@ -264,7 +264,7 @@ runStep({
     NODE_ENV: "test",
     DATABASE_URL: sqliteTestUrl,
     TEST_DATABASE_URL: sqliteTestUrl,
-    PRISMA_CLIENT_VARIANT: "integration",
+    PRISMA_CLIENT_VARIANT: "certification",
     FORCE_DB_TESTS: "true",
   },
 });
@@ -276,7 +276,7 @@ runStep({
     NODE_ENV: "test",
     DATABASE_URL: sqliteTestUrl,
     TEST_DATABASE_URL: sqliteTestUrl,
-    PRISMA_CLIENT_VARIANT: "integration",
+    PRISMA_CLIENT_VARIANT: "certification",
     FORCE_DB_TESTS: "true",
     // backend-source-db generated the isolated client immediately above. The
     // DB-example runner resets data repeatedly, but regenerating the same
@@ -295,7 +295,7 @@ runStep({
     DATABASE_URL: sqliteTestUrl,
     TEST_DATABASE_URL: sqliteTestUrl,
     POSTGRES_TEST_DATABASE_URL: "",
-    PRISMA_CLIENT_VARIANT: "integration",
+    PRISMA_CLIENT_VARIANT: "certification",
     FORCE_DB_TESTS: "true",
     SKIP_PRISMA_GENERATE: "true",
     LOG_LEVEL: "silent",
@@ -304,12 +304,14 @@ runStep({
 runStep({
   id: "backend-integration-sqlite",
   label: "Backend regression and integration tests (isolated SQLite)",
-  args: ["run", "test:integration"],
+  command: process.execPath,
+  args: ["scripts/run-integration-tests.js"],
   env: {
     NODE_ENV: "test",
     DATABASE_URL: sqliteTestUrl,
     TEST_DATABASE_URL: sqliteTestUrl,
     POSTGRES_TEST_DATABASE_URL: "",
+    PRISMA_CLIENT_VARIANT: "certification",
     FORCE_DB_TESTS: "true",
     SKIP_PRISMA_GENERATE: mode === "local" ? "true" : "false",
     LOG_LEVEL: "silent",
