@@ -205,7 +205,7 @@ async function auditKeyboardRoute(client, qaId, route, expectedPath = route, exp
     const candidates=[...document.querySelectorAll('a[href],button,input,select,textarea,summary,[contenteditable]:not([contenteditable="false"]),[tabindex]')].filter(node=>visible(node)&&!node.disabled&&node.getAttribute('aria-disabled')!=="true"&&node.tabIndex>=0);
     const radios=new Map();for(const node of candidates){if(node instanceof HTMLInputElement&&node.type==="radio"&&node.name){const key=(node.form?.id||"")+"::"+node.name;if(!radios.has(key))radios.set(key,[]);radios.get(key).push(node)}}
     const sequential=candidates.filter(node=>{if(!(node instanceof HTMLInputElement)||node.type!=="radio"||!node.name)return true;const key=(node.form?.id||"")+"::"+node.name,group=radios.get(key)||[];return group.find(item=>item.checked)===node||(!group.some(item=>item.checked)&&group[0]===node)});
-    return sequential.map((node,index)=>{node.dataset.qaKeyboardId=${JSON.stringify(qaId)}+"-"+index;return{id:node.dataset.qaKeyboardId,tag:node.tagName.toLowerCase(),type:node.getAttribute("type")||"",role:node.getAttribute("role")||"",name:(node.getAttribute("aria-label")||node.getAttribute("title")||node.textContent||node.getAttribute("placeholder")||"").replace(/\\s+/g," ").trim().slice(0,100),html:node.outerHTML.slice(0,240)}});
+    return sequential.map((node,index)=>{node.dataset.qaKeyboardId=${JSON.stringify(qaId)}+"-"+index;const rawName=(node.getAttribute("aria-label")||node.getAttribute("title")||node.textContent||node.getAttribute("placeholder")||"").replace(/\\s+/g," ").trim().slice(0,100);return{id:node.dataset.qaKeyboardId,tag:node.tagName.toLowerCase(),type:node.getAttribute("type")||"",role:node.getAttribute("role")||"",href:node.getAttribute("href")||"",rawName,name:rawName,html:node.outerHTML.slice(0,240)}});
   })()`);
   assert(expected.length > 0, `${qaId} exposes no keyboard-reachable controls`);
   const expectedIds = expected.map((control) => control.id);
@@ -214,7 +214,7 @@ async function auditKeyboardRoute(client, qaId, route, expectedPath = route, exp
   let browserBoundaryCount = 0;
   for (let index = 0; index < Math.min(expected.length + 30, 280); index += 1) {
     await pressTab(client);
-    const state = await client.evaluate(`(()=>{const node=document.activeElement;if(!(node instanceof HTMLElement))return null;const text=(value)=>(value||"").replace(/\\s+/g," ").trim();const ids=text(node.getAttribute("aria-labelledby")).split(/\\s+/).filter(Boolean),labelled=ids.map(id=>text(document.getElementById(id)?.textContent)).join(" ").trim(),labels="labels" in node&&node.labels?[...node.labels].map(label=>text(label.textContent)).join(" ").trim():"",name=text(node.getAttribute("aria-label"))||labelled||labels||text(node.getAttribute("alt"))||text(node.getAttribute("title"))||text(node.textContent)||text(node.getAttribute("placeholder"));const style=getComputedStyle(node),rect=node.getBoundingClientRect(),hidden=Boolean(node.closest('[hidden],[inert],[aria-hidden="true"]'))||style.display==="none"||style.visibility==="hidden"||Number(style.opacity||1)===0;const indicator=(style.outlineStyle!=="none"&&parseFloat(style.outlineWidth)>0)||style.boxShadow!=="none";if(!node.dataset.qaKeyboardId)node.dataset.qaKeyboardId=${JSON.stringify(qaId)}+"-runtime-"+Math.random().toString(36).slice(2);return{id:node.dataset.qaKeyboardId,tag:node.tagName.toLowerCase(),role:node.getAttribute("role")||"",name:name.slice(0,100),hidden,focusVisible:node.matches(":focus-visible"),indicator,rect:{width:Math.round(rect.width),height:Math.round(rect.height)}}})()`);
+    const state = await client.evaluate(`(()=>{const node=document.activeElement;if(!(node instanceof HTMLElement))return null;const text=(value)=>(value||"").replace(/\\s+/g," ").trim();const ids=text(node.getAttribute("aria-labelledby")).split(/\\s+/).filter(Boolean),labelled=ids.map(id=>text(document.getElementById(id)?.textContent)).join(" ").trim(),labels="labels" in node&&node.labels?[...node.labels].map(label=>text(label.textContent)).join(" ").trim():"",rawName=(text(node.getAttribute("aria-label"))||text(node.getAttribute("title"))||text(node.textContent)||text(node.getAttribute("placeholder"))).slice(0,100),name=text(node.getAttribute("aria-label"))||labelled||labels||text(node.getAttribute("alt"))||text(node.getAttribute("title"))||text(node.textContent)||text(node.getAttribute("placeholder"));const style=getComputedStyle(node),rect=node.getBoundingClientRect(),hidden=Boolean(node.closest('[hidden],[inert],[aria-hidden="true"]'))||style.display==="none"||style.visibility==="hidden"||Number(style.opacity||1)===0;const indicator=(style.outlineStyle!=="none"&&parseFloat(style.outlineWidth)>0)||style.boxShadow!=="none";if(!node.dataset.qaKeyboardId)node.dataset.qaKeyboardId=${JSON.stringify(qaId)}+"-runtime-"+Math.random().toString(36).slice(2);return{id:node.dataset.qaKeyboardId,tag:node.tagName.toLowerCase(),type:node.getAttribute("type")||"",role:node.getAttribute("role")||"",href:node.getAttribute("href")||"",rawName,name:name.slice(0,100),hidden,focusVisible:node.matches(":focus-visible"),indicator,rect:{width:Math.round(rect.width),height:Math.round(rect.height)}}})()`);
     // Headless Chromium exposes BODY while Tab moves through browser chrome.
     // Keep traversing until focus returns to the page, then use a repeat of the
     // first control as the real cycle boundary.
@@ -226,11 +226,29 @@ async function auditKeyboardRoute(client, qaId, route, expectedPath = route, exp
     if (!visited.includes(state.id)) visited.push(state.id);
     focusStates.push(state);
   }
-  const missing = expected.filter((control) => !visited.includes(control.id));
+  // A background status update may replace a React control during traversal.
+  // The replacement receives focus but no longer carries the temporary ID.
+  // Match only such runtime nodes, one-for-one, by full semantic signature.
+  const signature = (control) => JSON.stringify([control.tag, control.type, control.role, control.href, control.rawName]);
+  const runtimeBySignature = new Map();
+  for (const state of focusStates) {
+    if (!state.id.includes("-runtime-")) continue;
+    const key = signature(state), ids = runtimeBySignature.get(key) ?? new Set();
+    ids.add(state.id); runtimeBySignature.set(key, ids);
+  }
+  const replacementBudget = new Map([...runtimeBySignature].map(([key, ids]) => [key, ids.size]));
+  const directlyVisitedCount = expected.filter((control) => visited.includes(control.id)).length;
+  const missing = expected.filter((control) => {
+    if (visited.includes(control.id)) return false;
+    const key = signature(control), remaining = replacementBudget.get(key) ?? 0;
+    if (remaining > 0) { replacementBudget.set(key, remaining - 1); return false; }
+    return true;
+  });
+  const replacedControlCount = expected.length - missing.length - directlyVisitedCount;
   assert(missing.length === 0, `${qaId} keyboard traversal missed ${missing.length}/${expected.length} controls: ${JSON.stringify(missing.slice(0,20))}`);
   assert(await client.evaluate(`location.pathname`) === expectedPath, `${qaId} keyboard traversal changed route unexpectedly`);
   assert(await client.evaluate(`location.search`) === expectedSearch, `${qaId} keyboard traversal changed query unexpectedly`);
-  return { qaId, route, expectedControlCount: expectedIds.length, visitedControlCount: visited.length, browserBoundaryCount, focusStates };
+  return { qaId, route, expectedControlCount: expectedIds.length, visitedControlCount: visited.length, replacedControlCount, browserBoundaryCount, focusStates };
 }
 
 async function main() {
