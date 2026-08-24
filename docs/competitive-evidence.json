@@ -363,7 +363,7 @@
       "weight": 35,
       "status": "verified",
       "proofKind": "runtime_required",
-      "summary": "A durable 2026-08-22 local attestation records 15 required stages passed and zero failed: SQLite and PostgreSQL schema validation, migration safety, source tests, warehouse bins/repack/replenishment, the isolated SQLite integration suite, frontend production checks, AI hallucination safety, API and hardware contracts, Razorpay fixtures and local object storage. It deliberately skips and does not claim PostgreSQL runtime, Redis, live API, cloud storage, restore or Docker proof.",
+      "summary": "A durable 2026-08-24 local attestation records 15 required stages passed and zero failed: SQLite and PostgreSQL schema validation, replay-safe migration checks, source tests, warehouse bins/repack/replenishment, the full isolated SQLite integration suite, frontend production checks, AI hallucination safety, API and hardware contracts, Razorpay fixtures and local object storage. Certification now uses a dedicated generated Prisma client so it can run beside live local QA without Windows query-engine DLL contention. It deliberately skips and does not claim PostgreSQL runtime, Redis, live API, cloud storage, restore or Docker proof.",
       "competitorEvidence": [
         { "product": "Zoho POS", "url": "https://www.zoho.com/en-us/pos/features/", "claim": "Reliable cloud and offline operation establish the production benchmark." }
       ],
@@ -372,7 +372,7 @@
         "testCommands": ["cd backend && npm run release:certify:local"],
         "runtimeProof": { "status": "verified", "artifact": "docs/evidence/local-release-certification-latest.json" }
       },
-      "lastVerifiedAt": "2026-08-22"
+      "lastVerifiedAt": "2026-08-24"
     },
     {
       "id": "postgres_redis_proof",
