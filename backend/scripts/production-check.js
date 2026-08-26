@@ -2222,7 +2222,9 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   if (!packageJson.scripts?.["test:ai-safety"]?.includes("diagnostic-ai-grounding.examples.js")) {
     errors.push("package.json must expose the diagnostic AI grounding suite");
   }
-  if (!packageJson.scripts?.test?.includes("test:ai-safety")) {
+  const rootTest = packageJson.scripts?.test ?? "";
+  const isolatedSuite = packageJson.scripts?.["test:isolated-suite"] ?? "";
+  if (!rootTest.includes("test:ai-safety") && !(rootTest.includes("run-isolated-full-suite") && isolatedSuite.includes("test:ai-safety"))) {
     errors.push("npm test must run the AI hallucination safety suite");
   }
   for (const snippet of ["AI_COMMAND_OUTPUT_SCHEMA", ".strict()", "safeUnknownAiCommand"]) {

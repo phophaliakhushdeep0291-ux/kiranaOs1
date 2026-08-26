@@ -144,6 +144,21 @@ export const apiLimiter = rateLimit({
   handler: rateLimitHandler,
 });
 
+/** Guest QR writes need a tighter anonymous-IP bucket than authenticated POS traffic. */
+export const storefrontWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: env.NODE_ENV === "production" ? 60 : 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `${req.ip}:${String(req.params?.shopId ?? "unknown")}`,
+  handler: (req, res) => res.status(429).json({
+    success: false,
+    error: "Too many guest requests. Please wait and try again.",
+    code: "STOREFRONT_RATE_LIMITED",
+    requestId: req.requestId,
+  }),
+});
+
 const RATE_LIMITED_AUTH_PATHS = new Set([
   "/register",
   "/login",
