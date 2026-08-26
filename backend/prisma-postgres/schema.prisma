@@ -118,6 +118,7 @@ model Shop {
   testerUnits                   TesterUnit[]
   restaurantTables              RestaurantTable[]
   tableReservations             TableReservation[]
+  restaurantGuestRequests       RestaurantGuestRequest[]
   staffShifts                   StaffShift[]
   kioskTerminals                KioskTerminal[]
   kitchenTickets                KitchenTicket[]
@@ -343,6 +344,9 @@ model CustomerOrder {
   fulfilledAt       DateTime?
   rejectedAt        DateTime?
   cancelledAt       DateTime?
+  feedbackRating    Int?
+  feedbackComment   String?
+  feedbackAt        DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -357,6 +361,28 @@ model CustomerOrder {
   @@index([shopId, paymentStatus, createdAt])
   // "What has this table ordered tonight?" — the floor screen's only question.
   @@index([shopId, tableId, status, createdAt])
+}
+
+model RestaurantGuestRequest {
+  id          String   @id @default(cuid())
+  shopId      String
+  tableId     String
+  tableCode   String
+  tableName   String
+  orderId     String?
+  type        String
+  reason      String?
+  splitMode   String?
+  status      String   @default("pending")
+  requestedAt DateTime @default(now())
+  acknowledgedAt DateTime?
+  completedAt DateTime?
+  updatedAt   DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, status, requestedAt])
+  @@index([shopId, tableId, status])
 }
 
 // ─────────────────────────────────────────────

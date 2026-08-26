@@ -21,6 +21,19 @@ import type {
 // here would give the two halves of one feature two types to drift apart.
 import type { KotLine, KotStatus, KotTicket } from "./table-store";
 
+export interface RestaurantGuestRequest {
+  id: string;
+  tableId: string;
+  tableCode: string;
+  tableName: string;
+  orderId: string | null;
+  type: "waiter" | "bill";
+  reason: string | null;
+  splitMode: string | null;
+  status: "pending" | "acknowledged" | "completed" | "cancelled";
+  requestedAt: string;
+}
+
 /**
  * The restaurant's server-side records: the floor, the menu card, the recipes.
  *
@@ -289,4 +302,16 @@ export function setKitchenTicketStatus(id: string, status: KotStatus) {
 
 export function voidKitchenTicket(id: string) {
   return apiRequest<{ id: string; deleted: boolean }>(`/restaurant/kot/${id}`, { method: "DELETE" });
+}
+
+export function listGuestRequests(status?: RestaurantGuestRequest["status"]) {
+  const query = status ? `?status=${status}` : "";
+  return apiRequest<RestaurantGuestRequest[]>(`/restaurant/service-ops/guest-requests${query}`, { background: true });
+}
+
+export function setGuestRequestStatus(id: string, status: "acknowledged" | "completed" | "cancelled") {
+  return apiRequest<RestaurantGuestRequest>(`/restaurant/service-ops/guest-requests/${id}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
+  });
 }

@@ -11,6 +11,7 @@ import {
 } from "../service/table-store";
 import { listKitchenTickets, setKitchenTicketStatus } from "../service/restaurant-api";
 import { GuestOrdersStrip } from "./components/GuestOrdersStrip";
+import { GuestRequestsStrip } from "./components/GuestRequestsStrip";
 
 /** How long a ticket may sit before the board calls it out. */
 const LATE_MINUTES = 12;
@@ -121,6 +122,7 @@ export default function KitchenPage() {
       {/* Sits above the pass because it is not on the pass yet: a guest's order
           is a request until somebody takes it onto a table's bill. */}
       <GuestOrdersStrip onAccepted={() => void refresh()} />
+      <GuestRequestsStrip />
 
       {open.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-12 text-center">

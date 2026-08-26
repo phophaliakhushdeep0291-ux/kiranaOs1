@@ -72,3 +72,17 @@ export async function cancelOrder(req, res, next) {
     next(err);
   }
 }
+
+export async function submitFeedback(req, res, next) {
+  try {
+    const data = await svc.submitPublicOrderFeedback(req.params.shopId, req.params.orderId, req.body, { actor: { req } });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function createGuestRequest(req, res, next) {
+  try {
+    const data = await svc.createPublicGuestRequest(req.params.shopId, req.params.tableId, req.body, { actor: { req } });
+    res.status(data.duplicate ? 200 : 201).json({ success: true, data });
+  } catch (err) { next(err); }
+}

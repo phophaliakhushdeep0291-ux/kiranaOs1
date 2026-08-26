@@ -1,6 +1,7 @@
 import * as reservations from "./reservations.service.js";
 import * as shifts from "./shifts.service.js";
 import * as kiosk from "./kiosk.service.js";
+import * as guestRequests from "./guest-requests.service.js";
 
 export async function listReservations(req, res, next) {
   try { res.json({ success: true, data: await reservations.listReservations(req.shopId, req.query) }); } catch (error) { next(error); }
@@ -53,6 +54,14 @@ export async function createTerminal(req, res, next) {
 
 export async function updateTerminal(req, res, next) {
   try { res.json({ success: true, data: await kiosk.updateTerminal(req.shopId, req.params.id, req.body, req.user, req) }); } catch (error) { next(error); }
+}
+
+export async function listGuestRequests(req, res, next) {
+  try { res.json({ success: true, data: await guestRequests.listGuestRequests(req.shopId, req.query) }); } catch (error) { next(error); }
+}
+
+export async function setGuestRequestStatus(req, res, next) {
+  try { res.json({ success: true, data: await guestRequests.setGuestRequestStatus(req.shopId, req.params.id, req.body.status, req.user, req) }); } catch (error) { next(error); }
 }
 
 // Public: called by the unattended screen itself, which has no session.

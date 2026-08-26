@@ -15,6 +15,8 @@ import {
   updateKioskSchema,
   updateReservationSchema,
   updateShiftSchema,
+  guestRequestListQuery,
+  guestRequestStatusSchema,
 } from "./service-ops.schema.js";
 import * as ctrl from "./service-ops.controller.js";
 
@@ -44,5 +46,8 @@ router.patch("/shifts/:id", requireRole("owner", "admin"), validate(updateShiftS
 router.get("/kiosks", ctrl.listTerminals);
 router.post("/kiosks", requireRole("owner", "admin"), validate(createKioskSchema), ctrl.createTerminal);
 router.patch("/kiosks/:id", requireRole("owner", "admin"), validate(updateKioskSchema), ctrl.updateTerminal);
+
+router.get("/guest-requests", validateQuery(guestRequestListQuery), ctrl.listGuestRequests);
+router.post("/guest-requests/:id/status", validate(guestRequestStatusSchema), ctrl.setGuestRequestStatus);
 
 export default router;

@@ -78,3 +78,12 @@ export const updateKioskSchema = z.object({
   requirePrepay: z.boolean().optional(),
   active: z.boolean().optional(),
 }).strict();
+
+export const guestRequestListQuery = z.object({
+  status: z.enum(["pending", "acknowledged", "completed", "cancelled"]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+export const guestRequestStatusSchema = z.object({
+  status: z.enum(["acknowledged", "completed", "cancelled"]),
+}).strict();

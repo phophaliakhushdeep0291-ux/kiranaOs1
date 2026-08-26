@@ -183,7 +183,7 @@ export async function getPublicOrderStatus(shopId, orderId) {
   }
   const order = await db.customerOrder.findFirst({
     where: { id: String(orderId ?? ""), shopId },
-    select: { id: true, status: true, paymentStatus: true, fulfillmentStatus: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, tableName: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
+    select: { id: true, status: true, paymentStatus: true, fulfillmentStatus: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, tableId: true, tableName: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
   });
   if (!order) throw new AppError("We couldn't find that order.", 404);
   const settings = parseShopSettings(shop.settingsJson);
@@ -200,6 +200,7 @@ export async function getPublicOrderStatus(shopId, orderId) {
     stage: ORDER_STAGE[order.status] ?? order.status,
     fulfillmentType: order.fulfillmentType,
     promisedSlot: order.promisedSlot,
+    tableId: order.tableId ?? null,
     tableName: order.tableName ?? null,
     location: order.location,
     itemCount: order.itemCount,
@@ -268,6 +269,80 @@ export async function cancelPublicOrder(shopId, orderId, options = {}) {
   }, { isolationLevel: "Serializable" });
   await dispatchIntegrationDeliveries(result.deliveries);
   return getPublicOrderStatus(shopId, existing.id);
+}
+
+export async function submitPublicOrderFeedback(shopId, orderId, body = {}, options = {}) {
+  const shop = await db.shop.findUnique({ where: { id: shopId } });
+  if (!shop || !isCustomerOrderingEnabled(shop.settingsJson)) throw new AppError("We couldn't find that order.", 404);
+  const rating = Number(body.rating);
+  const comment = String(body.comment ?? "").trim();
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new AppError("Choose a rating from 1 to 5.", 400);
+  if (comment.length > 500) throw new AppError("Feedback must be 500 characters or fewer.", 400);
+
+  const existing = await db.customerOrder.findFirst({ where: { id: String(orderId ?? ""), shopId } });
+  if (!existing) throw new AppError("We couldn't find that order.", 404);
+  if (existing.status !== "fulfilled") throw new AppError("Feedback opens after the order is served.", 409, "ORDER_NOT_FULFILLED");
+  if (existing.feedbackAt) {
+    return { rating: existing.feedbackRating, comment: existing.feedbackComment, submittedAt: existing.feedbackAt, duplicate: true };
+  }
+
+  const now = new Date();
+  const result = await db.$transaction(async (tx) => {
+    const claimed = await tx.customerOrder.updateMany({
+      where: { id: existing.id, shopId, status: "fulfilled", feedbackAt: null },
+      data: { feedbackRating: rating, feedbackComment: comment || null, feedbackAt: now },
+    });
+    if (claimed.count !== 1) {
+      const current = await tx.customerOrder.findUniqueOrThrow({ where: { id: existing.id } });
+      return { current, deliveries: [] };
+    }
+    const current = await tx.customerOrder.findUniqueOrThrow({ where: { id: existing.id } });
+    await writeRequiredPublicOrderAudit({
+      shopId, userId: null, deviceId: null, action: "CUSTOMER_ORDER_FEEDBACK_SUBMITTED",
+      entityType: "CustomerOrder", entityId: existing.id, before: null,
+      after: { rating, hasComment: Boolean(comment) }, metadata: null, req: options.actor?.req ?? null,
+    }, tx);
+    const deliveries = await stageIntegrationEvent(shopId, "customer_order.feedback", {
+      id: existing.id, rating, hasComment: Boolean(comment), submittedAt: now,
+    }, { client: tx });
+    return { current, deliveries };
+  }, { isolationLevel: "Serializable" });
+  await dispatchIntegrationDeliveries(result.deliveries);
+  return { rating: result.current.feedbackRating, comment: result.current.feedbackComment, submittedAt: result.current.feedbackAt, duplicate: result.deliveries.length === 0 };
+}
+
+export async function createPublicGuestRequest(shopId, tableId, body = {}, options = {}) {
+  const shop = await db.shop.findUnique({ where: { id: shopId } });
+  if (!shop || !isCustomerOrderingEnabled(shop.settingsJson)) throw new AppError("This restaurant is not available.", 404);
+  const settings = parseShopSettings(shop.settingsJson);
+  const policy = await resolveStorefrontCancellationPolicy({ shopId, shop, settings });
+  if (!policy) throw new AppError("This restaurant is not available.", 404);
+  const type = body.type === "bill" ? "bill" : body.type === "waiter" ? "waiter" : null;
+  if (!type) throw new AppError("Choose waiter or bill.", 400);
+  const reason = String(body.reason ?? "").trim().slice(0, 200) || null;
+  const splitMode = type === "bill" && ["none", "evenly", "by-item"].includes(body.splitMode) ? body.splitMode : null;
+  const table = await db.restaurantTable.findFirst({ where: { id: String(tableId ?? ""), shopId, active: true, deletedAt: null, selfOrderEnabled: true } });
+  if (!table) throw new AppError("We couldn't find that table.", 404);
+  const orderId = String(body.orderId ?? "").trim() || null;
+  if (orderId) {
+    const order = await db.customerOrder.findFirst({ where: { id: orderId, shopId, tableId: table.id } });
+    if (!order) throw new AppError("We couldn't match that order to this table.", 404);
+  }
+  const recent = await db.restaurantGuestRequest.findFirst({
+    where: { shopId, tableId: table.id, type, status: { in: ["pending", "acknowledged"] }, requestedAt: { gte: new Date(Date.now() - 45_000) } },
+    orderBy: { requestedAt: "desc" },
+  });
+  if (recent) return { ...recent, duplicate: true };
+  const created = await db.restaurantGuestRequest.create({ data: {
+    shopId, tableId: table.id, tableCode: table.code, tableName: table.name,
+    orderId, type, reason, splitMode,
+  } });
+  await createAuditLog({
+    shopId, userId: null, action: type === "bill" ? "GUEST_BILL_REQUESTED" : "GUEST_WAITER_REQUESTED",
+    entityType: "RestaurantGuestRequest", entityId: created.id, after: { tableId: table.id, tableName: table.name, type },
+    req: options.actor?.req ?? null,
+  });
+  return { ...created, duplicate: false };
 }
 
 function cleanOrderIdempotencyKey(value) {
