@@ -63,3 +63,12 @@ export async function orderStatus(req, res, next) {
     next(err);
   }
 }
+
+export async function cancelOrder(req, res, next) {
+  try {
+    const data = await svc.cancelPublicOrder(req.params.shopId, req.params.orderId, { actor: { req } });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}

@@ -44,7 +44,7 @@ export interface MenuBrand {
 
 export interface RestaurantSettings {
   brand?: Partial<MenuBrand>;
-  dineIn?: { guestOrders?: boolean };
+  dineIn?: { guestOrders?: boolean; cancellationWindowMinutes?: number };
 }
 
 export const BLANK_BRAND: MenuBrand = {
@@ -73,6 +73,11 @@ export function readMenuBrand(prefs: Record<string, unknown> | undefined): MenuB
 
 export function guestOrdersEnabled(prefs: Record<string, unknown> | undefined): boolean {
   return readRestaurantSettings(prefs).dineIn?.guestOrders !== false;
+}
+
+export function guestCancellationWindow(prefs: Record<string, unknown> | undefined): number {
+  const raw = Number(readRestaurantSettings(prefs).dineIn?.cancellationWindowMinutes ?? 5);
+  return Number.isFinite(raw) ? Math.max(0, Math.min(60, Math.trunc(raw))) : 5;
 }
 
 /**

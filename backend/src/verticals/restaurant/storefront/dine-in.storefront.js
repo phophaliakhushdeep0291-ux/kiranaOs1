@@ -82,6 +82,13 @@ export function guestOrderingAllowed(settings) {
   return settings?.restaurant?.dineIn?.guestOrders !== false;
 }
 
+/** Minutes after placement in which an untouched guest order may be cancelled. */
+export function cancellationWindowMinutes(settings) {
+  const raw = Number(settings?.restaurant?.dineIn?.cancellationWindowMinutes ?? 5);
+  if (!Number.isFinite(raw)) return 5;
+  return Math.max(0, Math.min(60, Math.trunc(raw)));
+}
+
 function toMenuItem(product, { portionsLeft, hasRecipe, addonGroups = [] }) {
   return {
     id: product.id,
@@ -179,6 +186,7 @@ async function shapeCatalog({ shopId, shop, settings, products, request }) {
     // scanning anything" are different situations and read differently.
     tableRequested: Boolean(request?.tableCode),
     guestOrdersEnabled: guestOrderingAllowed(settings),
+    cancellationWindowMinutes: cancellationWindowMinutes(settings),
     branding: resolveMenuBranding(settings, shop),
     menu: grouped.map((section) => ({
       course: section.course,

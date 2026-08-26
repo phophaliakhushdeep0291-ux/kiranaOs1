@@ -4,6 +4,7 @@ import { listProducts } from "../products/products.service.js";
 import { priceCatalogProducts } from "../pricing/pricing.service.js";
 import { unavailableProductIds } from "../../shared/catalog-availability.js";
 import { prepareStorefrontOrderLines, resolveStorefrontOrderContext, resolveStorefrontTerminal, shapeStorefrontCatalog } from "../../shared/storefront-modes.js";
+import { cancellationWindowMinutes, isRestaurantShop } from "../../verticals/restaurant/storefront/dine-in.storefront.js";
 import { parseShopSettings } from "../shops/businessProfiles.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -138,6 +139,7 @@ export async function getPublicCatalog(shopId, requestedLocationId = null, { tab
           table: storefront.table ?? null,
           tableRequested: storefront.tableRequested === true,
           guestOrdersEnabled: storefront.guestOrdersEnabled !== false,
+          cancellationWindowMinutes: storefront.cancellationWindowMinutes ?? 0,
           branding: storefront.branding ?? null,
           menu: storefront.menu ?? null,
         },
@@ -185,6 +187,11 @@ export async function getPublicOrderStatus(shopId, orderId) {
     select: { id: true, status: true, paymentStatus: true, fulfillmentStatus: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, tableName: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
   });
   if (!order) throw new AppError("We couldn't find that order.", 404);
+  const settings = parseShopSettings(shop.settingsJson);
+  const cancelMinutes = isRestaurantShop(settings) ? cancellationWindowMinutes(settings) : 0;
+  const cancelAllowedUntil = cancelMinutes > 0
+    ? new Date(order.createdAt.getTime() + cancelMinutes * 60_000)
+    : null;
   return {
     orderId: order.id,
     status: order.status,
@@ -201,7 +208,65 @@ export async function getPublicOrderStatus(shopId, orderId) {
     shopName: shop.name,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
+    cancellation: {
+      windowMinutes: cancelMinutes,
+      allowedUntil: cancelAllowedUntil,
+      allowed: order.status === "new" && cancelAllowedUntil !== null && Date.now() < cancelAllowedUntil.getTime(),
+    },
   };
+}
+
+/**
+ * Cancel an untouched guest order inside the restaurant's configured window.
+ * The deadline and current status are checked again in the atomic update so a
+ * waiter accepting the ticket at the same moment always wins deterministically.
+ */
+export async function cancelPublicOrder(shopId, orderId, options = {}) {
+  const shop = await db.shop.findUnique({ where: { id: shopId } });
+  if (!shop || !isCustomerOrderingEnabled(shop.settingsJson)) {
+    throw new AppError("This shop is not accepting online orders.", 404);
+  }
+  const settings = parseShopSettings(shop.settingsJson);
+  const minutes = isRestaurantShop(settings) ? cancellationWindowMinutes(settings) : 0;
+  if (minutes <= 0) throw new AppError("This restaurant does not allow online cancellation.", 409, "ORDER_CANCELLATION_DISABLED");
+
+  const existing = await db.customerOrder.findFirst({ where: { id: String(orderId ?? ""), shopId } });
+  if (!existing) throw new AppError("We couldn't find that order.", 404);
+  if (existing.status === "cancelled") return getPublicOrderStatus(shopId, existing.id);
+  if (existing.status !== "new") {
+    throw new AppError("The kitchen has already started this order. Please speak to the restaurant.", 409, "ORDER_ALREADY_ACCEPTED");
+  }
+  const allowedUntil = new Date(existing.createdAt.getTime() + minutes * 60_000);
+  if (Date.now() >= allowedUntil.getTime()) {
+    throw new AppError(`The ${minutes}-minute cancellation window has ended. Please speak to the restaurant.`, 409, "ORDER_CANCELLATION_WINDOW_ENDED");
+  }
+
+  const now = new Date();
+  const result = await db.$transaction(async (tx) => {
+    const claimed = await tx.customerOrder.updateMany({
+      where: { id: existing.id, shopId, status: "new", updatedAt: existing.updatedAt },
+      data: { status: "cancelled", fulfillmentStatus: "cancelled", cancelledAt: now },
+    });
+    if (claimed.count !== 1) throw new AppError("The order changed before it could be cancelled. Refresh and check its status.", 409, "CONCURRENT_ORDER_UPDATE");
+    const updated = await tx.customerOrder.findUniqueOrThrow({ where: { id: existing.id } });
+    await writeRequiredPublicOrderAudit({
+      shopId, userId: null, deviceId: null,
+      action: "CUSTOMER_ORDER_CANCELLED_BY_GUEST",
+      entityType: "CustomerOrder", entityId: updated.id,
+      before: { status: existing.status, fulfillmentStatus: existing.fulfillmentStatus, cancelledAt: existing.cancelledAt },
+      after: { status: updated.status, fulfillmentStatus: updated.fulfillmentStatus, cancelledAt: updated.cancelledAt },
+      metadata: { cancellationWindowMinutes: minutes }, req: options.actor?.req ?? null,
+    }, tx);
+    const deliveries = await stageIntegrationEvent(shopId, "customer_order.updated", {
+      id: updated.id, locationId: updated.locationId, fulfillmentType: updated.fulfillmentType,
+      status: updated.status, sourceChannel: updated.sourceChannel,
+      paymentStatus: updated.paymentStatus, fulfillmentStatus: updated.fulfillmentStatus,
+      billId: updated.billId, updatedAt: updated.updatedAt,
+    }, { client: tx });
+    return { deliveries };
+  }, { isolationLevel: "Serializable" });
+  await dispatchIntegrationDeliveries(result.deliveries);
+  return getPublicOrderStatus(shopId, existing.id);
 }
 
 function cleanOrderIdempotencyKey(value) {

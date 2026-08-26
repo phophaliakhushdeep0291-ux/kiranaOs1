@@ -18,7 +18,7 @@ import type { FoodType, MenuAddonGroup, MenuBoard, MenuDish } from "@/types/api"
 import { getMenuBoard, listAddonGroups, saveComboComponents, saveDishAddonGroups, saveDishVariations, updateDishMenu, type ComboComponentInput, type DishVariationInput } from "../service/restaurant-api";
 import { AddonManagerDialog } from "./components/AddonManagerDialog";
 import {
-  BLANK_BRAND, guestOrdersEnabled, MENU_THEME_OPTIONS, readMenuBrand, readRestaurantSettings,
+  BLANK_BRAND, guestCancellationWindow, guestOrdersEnabled, MENU_THEME_OPTIONS, readMenuBrand, readRestaurantSettings,
   themeOption, toStoredBrand, type MenuBrand,
 } from "../service/menu-branding";
 
@@ -192,6 +192,7 @@ export default function MenuPage() {
 
   const brand = readMenuBrand(prefs);
   const guestOrders = guestOrdersEnabled(prefs);
+  const cancellationMinutes = guestCancellationWindow(prefs);
   const menuUrl = shop?.id ? `/t/${shop.id}` : "";
 
   if (loading) {
@@ -304,16 +305,17 @@ export default function MenuPage() {
         open={brandOpen}
         brand={brand}
         guestOrders={guestOrders}
+        cancellationMinutes={cancellationMinutes}
         disabled={!hydrated}
         shopName={shop?.name ?? ""}
         onClose={() => setBrandOpen(false)}
-        onSave={async (next, nextGuestOrders) => {
+        onSave={async (next, nextGuestOrders, nextCancellationMinutes) => {
           const existing = readRestaurantSettings(prefs);
           await patch({
             restaurant: {
               ...existing,
               brand: toStoredBrand(next),
-              dineIn: { ...(existing.dineIn ?? {}), guestOrders: nextGuestOrders },
+              dineIn: { ...(existing.dineIn ?? {}), guestOrders: nextGuestOrders, cancellationWindowMinutes: nextCancellationMinutes },
             },
           }, { immediate: true });
           setBrandOpen(false);
@@ -894,23 +896,25 @@ function PortionRow({
  * of coloured circles cannot answer it.
  */
 function BrandEditor({
-  open, brand, guestOrders, disabled, shopName, onClose, onSave,
+  open, brand, guestOrders, cancellationMinutes, disabled, shopName, onClose, onSave,
 }: {
   open: boolean;
   brand: MenuBrand;
   guestOrders: boolean;
+  cancellationMinutes: number;
   disabled: boolean;
   shopName: string;
   onClose: () => void;
-  onSave: (brand: MenuBrand, guestOrders: boolean) => Promise<void>;
+  onSave: (brand: MenuBrand, guestOrders: boolean, cancellationMinutes: number) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<MenuBrand>(brand);
   const [orders, setOrders] = useState(guestOrders);
+  const [cancelMinutes, setCancelMinutes] = useState(cancellationMinutes);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) { setDraft(brand ?? BLANK_BRAND); setOrders(guestOrders); }
-  }, [open, brand, guestOrders]);
+    if (open) { setDraft(brand ?? BLANK_BRAND); setOrders(guestOrders); setCancelMinutes(cancellationMinutes); }
+  }, [open, brand, guestOrders, cancellationMinutes]);
 
   const preview = themeOption(draft.theme);
 
@@ -988,13 +992,32 @@ function BrandEditor({
               Turn this off to show the menu only — guests still scan and read it, but order through your staff.
             </span>
           </label>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="guest-cancel-window">Guest cancellation window</Label>
+            <select
+              id="guest-cancel-window"
+              value={cancelMinutes}
+              onChange={(event) => setCancelMinutes(Number(event.target.value))}
+              disabled={!orders}
+              className="h-11 w-full rounded-[8px] border bg-white px-3 text-[13px]"
+            >
+              <option value={0}>Cancellation disabled</option>
+              <option value={2}>2 minutes</option>
+              <option value={5}>5 minutes</option>
+              <option value={10}>10 minutes</option>
+              <option value={15}>15 minutes</option>
+              <option value={30}>30 minutes</option>
+            </select>
+            <p className="text-[11px] text-[#64748b]">Only untouched orders can be cancelled. Once staff accepts an order, guests must speak to the restaurant.</p>
+          </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
             disabled={disabled || saving}
-            onClick={async () => { setSaving(true); await onSave(draft, orders); setSaving(false); }}
+            onClick={async () => { setSaving(true); await onSave(draft, orders, cancelMinutes); setSaving(false); }}
           >
             {saving ? "Saving…" : "Save"}
           </Button>
