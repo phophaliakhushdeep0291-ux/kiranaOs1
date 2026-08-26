@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { extractPurchaseInvoice } from "../ai/invoice-ocr.service.js";
+import { AUDIT_MODULES, AUDIT_RESULTS, createAuditLog } from "../audit/audit.service.js";
 import { createManualJournal, ensureSystemAccounts } from "./general-ledger.service.js";
 
 const json = (value) => JSON.stringify(value);
@@ -10,6 +11,41 @@ const actorId = (actor) => actor?.userId ?? actor?.id ?? null;
 const toPaise = (amount) => Number.isFinite(amount) ? Math.round(amount * 100) : null;
 
 function fail(message, status, code) { throw new AppError(message, status, code); }
+
+async function writeRequiredDocumentAudit(client, actor, entry) {
+  const audit = await createAuditLog({
+    ...entry,
+    userId: actorId(actor),
+    module: AUDIT_MODULES.FINANCE,
+    result: AUDIT_RESULTS.SUCCESS,
+    req: actor?.req ?? null,
+    client,
+  });
+  if (!audit) {
+    fail(
+      "Accounting document action was not saved because its audit record could not be stored",
+      503,
+      "ACCOUNTING_DOCUMENT_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
+async function claimDocumentReview(tx, shopId, id, claimedStatus) {
+  const row = await tx.accountingDocument.findFirst({ where: { id, shopId } });
+  if (!row) fail("Accounting document not found", 404, "ACCOUNTING_DOCUMENT_NOT_FOUND");
+  if (row.status !== "review_required") {
+    fail("Only a review-required document can be reviewed", 409, "ACCOUNTING_DOCUMENT_ALREADY_REVIEWED");
+  }
+  const claimed = await tx.accountingDocument.updateMany({
+    where: { id, shopId, status: "review_required" },
+    data: { status: claimedStatus },
+  });
+  if (claimed.count !== 1) {
+    fail("This document was reviewed by another request", 409, "ACCOUNTING_DOCUMENT_REVIEW_CONFLICT");
+  }
+  return row;
+}
 
 export function buildPurchaseJournalSuggestion(draft) {
   const subtotalPaise = toPaise(draft.subtotal);
@@ -86,22 +122,43 @@ export async function createPurchaseInvoiceDraft(shopId, image, actor, { databas
     sourceBytes: image.size,
     reviewOnly: true,
   };
-  const created = await database.accountingDocument.create({ data: {
-    shopId,
-    documentType: "purchase_invoice",
-    sourceHash,
-    sourceMimeType: image.mimeType,
-    sourceBytes: image.size,
-    supplierId: draft.supplierId,
-    supplierMatch: draft.supplierMatch,
-    extractedJson: json(draft),
-    validationJson: json(validation),
-    suggestedJournalJson: json(suggestion),
-    evidenceJson: json(evidence),
-    createdByUserId: actorId(actor),
-    events: { create: { shopId, action: "extracted", actorUserId: actorId(actor), payloadJson: json({ suggestionReady: suggestion.readyForApproval, blockers: suggestion.blockers }) } },
-  }, include: { events: { orderBy: { createdAt: "asc" } } } });
-  return { document: publicDocument(created), duplicate: false };
+  try {
+    return await database.$transaction(async (tx) => {
+      const created = await tx.accountingDocument.create({ data: {
+        shopId,
+        documentType: "purchase_invoice",
+        sourceHash,
+        sourceMimeType: image.mimeType,
+        sourceBytes: image.size,
+        supplierId: draft.supplierId,
+        supplierMatch: draft.supplierMatch,
+        extractedJson: json(draft),
+        validationJson: json(validation),
+        suggestedJournalJson: json(suggestion),
+        evidenceJson: json(evidence),
+        createdByUserId: actorId(actor),
+        events: { create: { shopId, action: "extracted", actorUserId: actorId(actor), payloadJson: json({ suggestionReady: suggestion.readyForApproval, blockers: suggestion.blockers }) } },
+      }, include: { events: { orderBy: { createdAt: "asc" } } } });
+      const document = publicDocument(created);
+      await writeRequiredDocumentAudit(tx, actor, {
+        shopId,
+        action: "LEDGER_DOCUMENT_EXTRACTED",
+        entityType: "AccountingDocument",
+        entityId: created.id,
+        after: document,
+        metadata: { sourceHash, suggestionReady: suggestion.readyForApproval, blockerCount: suggestion.blockers.length },
+      });
+      return { document, duplicate: false };
+    });
+  } catch (error) {
+    if (error?.code !== "P2002") throw error;
+    const concurrentDuplicate = await database.accountingDocument.findUnique({
+      where: { shopId_sourceHash: { shopId, sourceHash } },
+      include: { events: { orderBy: { createdAt: "asc" } } },
+    });
+    if (!concurrentDuplicate) throw error;
+    return { document: publicDocument(concurrentDuplicate), duplicate: true };
+  }
 }
 
 export async function listAccountingDocuments(shopId, { status, limit = 50 } = {}, database = db) {
@@ -121,9 +178,7 @@ export async function getAccountingDocument(shopId, id, database = db) {
 
 export async function approveAccountingDocument(shopId, id, input, actor, database = db) {
   return database.$transaction(async (tx) => {
-    const row = await tx.accountingDocument.findFirst({ where: { id, shopId } });
-    if (!row) fail("Accounting document not found", 404, "ACCOUNTING_DOCUMENT_NOT_FOUND");
-    if (row.status !== "review_required") fail("Only a review-required document can be approved", 409, "ACCOUNTING_DOCUMENT_ALREADY_REVIEWED");
+    const row = await claimDocumentReview(tx, shopId, id, "approving");
     const suggestion = parse(row.suggestedJournalJson, {});
     const supplierId = input.supplierId ?? row.supplierId;
     if (!supplierId) fail("Select a supplier before approval", 400, "ACCOUNTING_DOCUMENT_SUPPLIER_REQUIRED");
@@ -164,18 +219,34 @@ export async function approveAccountingDocument(shopId, id, input, actor, databa
       journalEntryId: journal.id,
     } });
     await tx.accountingDocumentEvent.create({ data: { shopId, documentId: row.id, action: "approved_and_posted", actorUserId: actorId(actor), payloadJson: json({ journalEntryId: journal.id, supplierId, reason: input.reason }) } });
-    return { document: publicDocument(updated), journal };
+    const document = publicDocument(updated);
+    await writeRequiredDocumentAudit(tx, actor, {
+      shopId,
+      action: "LEDGER_DOCUMENT_APPROVED",
+      entityType: "AccountingDocument",
+      entityId: row.id,
+      after: document,
+      metadata: { journalEntryId: journal.id, supplierId, reason: input.reason },
+    });
+    return { document, journal };
   });
 }
 
 export async function rejectAccountingDocument(shopId, id, input, actor, database = db) {
   return database.$transaction(async (tx) => {
-    const row = await tx.accountingDocument.findFirst({ where: { id, shopId } });
-    if (!row) fail("Accounting document not found", 404, "ACCOUNTING_DOCUMENT_NOT_FOUND");
-    if (row.status !== "review_required") fail("Only a review-required document can be rejected", 409, "ACCOUNTING_DOCUMENT_ALREADY_REVIEWED");
+    const row = await claimDocumentReview(tx, shopId, id, "rejecting");
     const updated = await tx.accountingDocument.update({ where: { id: row.id }, data: { status: "rejected", reviewedByUserId: actorId(actor), reviewedAt: new Date(), reviewReason: input.reason } });
     await tx.accountingDocumentEvent.create({ data: { shopId, documentId: row.id, action: "rejected", actorUserId: actorId(actor), payloadJson: json({ reason: input.reason }) } });
-    return publicDocument(updated);
+    const document = publicDocument(updated);
+    await writeRequiredDocumentAudit(tx, actor, {
+      shopId,
+      action: "LEDGER_DOCUMENT_REJECTED",
+      entityType: "AccountingDocument",
+      entityId: row.id,
+      after: document,
+      metadata: { reason: input.reason },
+    });
+    return document;
   });
 }
 

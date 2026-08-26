@@ -82,7 +82,7 @@ export async function transcribe(req, res, next) {
 
 export async function extractPurchaseInvoice(req, res, next) {
   try {
-    const result = await createPurchaseInvoiceDraft(req.shopId, req.invoiceImage, req.user);
+    const result = await createPurchaseInvoiceDraft(req.shopId, req.invoiceImage, { ...req.user, req });
     res.json({ success: true, data: { draft: result.document.extracted, document: result.document, duplicate: result.duplicate } });
   } catch (err) {
     if (sendAiProviderError(err, res)) return;

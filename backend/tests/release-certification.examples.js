@@ -10,6 +10,7 @@ assert.ok(fs.existsSync(workflowPath), "release CI must live at repository-root 
 for (const script of ["release:certify", "release:certify:ci", "release:certify:local"]) {
   assert.ok(pkg.scripts[script], `package.json must expose ${script}`);
 }
+assert.ok(pkg.scripts.posttest.includes("test:accounting-documents"), "the required backend gate must cover OCR-to-journal audit atomicity");
 for (const status of ["passed", "failed", "blocked", "skipped"]) {
   assert.ok(runner.includes(`\"${status}\"`), `certification report must represent ${status} checks`);
 }

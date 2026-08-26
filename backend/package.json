@@ -22,7 +22,7 @@
     "db:generate": "node node_modules/prisma/build/index.js generate --generator client",
     "pretest": "node tests/db-example-isolation.examples.js && node tests/local-sqlite-schema-workflow.examples.js",
     "test": "npm run test:billing && node tests/procurement-reconciliation.examples.js && npm run test:compliance && npm run test:tally && npm run test:loyalty && npm run test:atomic-offers && npm run test:ai-safety && npm run test:retail-payment && npm run test:card-terminal && npm run test:channel-settlement && npm run test:flipkart && npm run test:report-documents && npm run test:event-bus && npm run test:event-bus-redis && npm run test:activity && npm run test:rentals && npm run test:prescriptions && npm run test:serial-units && npm run test:fitment && npm run test:size-runs && npm run test:book-lists && npm run test:furniture-orders && npm run test:testers && npm run test:restaurant && npm run test:verticals && npm run test:barcode && npm run test:trade-attributes && npm run test:batch-mrp && npm run test:pack-pricing && npm run test:purchase-lot && npm run test:near-expiry && npm run test:schedule-h",
-    "posttest": "npm run test:packaging-db && npm run test:reports-db",
+    "posttest": "npm run test:packaging-db && npm run test:reports-db && npm run test:accounting-documents",
     "test:barcode": "node tests/barcode-binding.examples.js && node tests/product-knowledge.examples.js",
     "test:trade-attributes": "node --test tests/product-trade-attributes.examples.js",
     "test:sync-conflicts": "node tests/sync-conflict-entity-matrix.examples.js && node tests/sync-id-format.examples.js",

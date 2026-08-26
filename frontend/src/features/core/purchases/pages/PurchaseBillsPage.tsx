@@ -624,8 +624,9 @@ export default function PurchaseBillsPage() {
             value={fmt(0)} sub="No returns recorded" />
         </div>
 
-        <PurchaseOrdersPanel />
         </PurchaseWorkflow>
+
+        <PurchaseOrdersPanel />
 
         {/* Purchase Bills table */}
         <div id="purchase-table" className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">

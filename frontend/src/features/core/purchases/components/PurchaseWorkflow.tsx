@@ -22,12 +22,12 @@ export function PurchaseWorkflow({ children }: { children: ReactNode }) {
           <Button
             data-purchase-planning-toggle
             variant="outline"
-            className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold"
+            className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold lg:mouse:h-9"
             onClick={() => setShowPlanning((open) => !open)}
             aria-expanded={showPlanning}
             aria-controls={showPlanning ? "purchase-planning-panel" : undefined}
           >
-            Planning & insights
+            Planning insights
             <ChevronDown size={14} className={cn("transition-transform", showPlanning && "rotate-180")} />
           </Button>
         </div>

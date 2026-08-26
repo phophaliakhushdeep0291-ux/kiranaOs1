@@ -1348,6 +1348,21 @@
   }
 }
 
+/* Tablets are touch devices too. Keep purchase-order actions and the long
+   operational dialogs at the same target size through the 768px QA contract;
+   pointer-dense desktop layouts may stay compact above this breakpoint. */
+@media (max-width: 1023px) {
+  [data-purchase-orders-panel] button,
+  [data-mobile-task-dialog="true"] input,
+  [data-mobile-task-dialog="true"] textarea,
+  [data-mobile-task-dialog="true"] select,
+  [data-mobile-task-dialog="true"] button,
+  [data-mobile-task-dialog="true"] [role="combobox"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 /* Respect operating-system motion preferences without removing useful state changes. */
 @media (prefers-reduced-motion: reduce) {
   html {
