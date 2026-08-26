@@ -303,7 +303,12 @@ async function resolveTerminal({ shopId, terminalCode }) {
 }
 
 export function registerDineInStorefront() {
-  registerStorefrontMode({ id: "dine_in", shapeCatalog, resolveOrderContext, prepareOrderLines, resolveTerminal });
+  registerStorefrontMode({
+    id: "dine_in", shapeCatalog, resolveOrderContext, prepareOrderLines, resolveTerminal,
+    resolveCancellationPolicy: ({ settings }) => isRestaurantShop(settings)
+      ? { windowMinutes: cancellationWindowMinutes(settings) }
+      : null,
+  });
 }
 
 // Loading this module registers the storefront. It is reached through the

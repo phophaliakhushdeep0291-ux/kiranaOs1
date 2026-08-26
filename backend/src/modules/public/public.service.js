@@ -3,8 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { listProducts } from "../products/products.service.js";
 import { priceCatalogProducts } from "../pricing/pricing.service.js";
 import { unavailableProductIds } from "../../shared/catalog-availability.js";
-import { prepareStorefrontOrderLines, resolveStorefrontOrderContext, resolveStorefrontTerminal, shapeStorefrontCatalog } from "../../shared/storefront-modes.js";
-import { cancellationWindowMinutes, isRestaurantShop } from "../../verticals/restaurant/storefront/dine-in.storefront.js";
+import { prepareStorefrontOrderLines, resolveStorefrontCancellationPolicy, resolveStorefrontOrderContext, resolveStorefrontTerminal, shapeStorefrontCatalog } from "../../shared/storefront-modes.js";
 import { parseShopSettings } from "../shops/businessProfiles.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -188,7 +187,8 @@ export async function getPublicOrderStatus(shopId, orderId) {
   });
   if (!order) throw new AppError("We couldn't find that order.", 404);
   const settings = parseShopSettings(shop.settingsJson);
-  const cancelMinutes = isRestaurantShop(settings) ? cancellationWindowMinutes(settings) : 0;
+  const cancelPolicy = await resolveStorefrontCancellationPolicy({ shopId, shop, settings });
+  const cancelMinutes = Number(cancelPolicy?.windowMinutes ?? 0);
   const cancelAllowedUntil = cancelMinutes > 0
     ? new Date(order.createdAt.getTime() + cancelMinutes * 60_000)
     : null;
@@ -227,7 +227,8 @@ export async function cancelPublicOrder(shopId, orderId, options = {}) {
     throw new AppError("This shop is not accepting online orders.", 404);
   }
   const settings = parseShopSettings(shop.settingsJson);
-  const minutes = isRestaurantShop(settings) ? cancellationWindowMinutes(settings) : 0;
+  const cancelPolicy = await resolveStorefrontCancellationPolicy({ shopId, shop, settings });
+  const minutes = Number(cancelPolicy?.windowMinutes ?? 0);
   if (minutes <= 0) throw new AppError("This restaurant does not allow online cancellation.", 409, "ORDER_CANCELLATION_DISABLED");
 
   const existing = await db.customerOrder.findFirst({ where: { id: String(orderId ?? ""), shopId } });

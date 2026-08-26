@@ -132,6 +132,24 @@ assert.ok(
   read("../src/modules/public/public.controller.js").includes("orderStatus"),
   "public controller must expose an orderStatus handler",
 );
+assert.ok(
+  publicRoutes.includes('router.post("/shops/:shopId/orders/:orderId/cancel"'),
+  "public QR page must expose an order cancellation endpoint",
+);
+assert.ok(
+  publicService.includes("cancelPublicOrder")
+    && publicService.includes('status: "new"')
+    && publicService.includes("ORDER_CANCELLATION_WINDOW_ENDED")
+    && publicService.includes("CUSTOMER_ORDER_CANCELLED_BY_GUEST"),
+  "guest cancellation must be deadline-limited, atomically limited to untouched orders, and audited",
+);
+const dineInStorefront = read("../src/verticals/restaurant/storefront/dine-in.storefront.js");
+assert.ok(
+  dineInStorefront.includes("cancellationWindowMinutes")
+    && dineInStorefront.includes("Math.min(60")
+    && dineInStorefront.includes("Math.max(0"),
+  "restaurant cancellation windows must be configurable and bounded",
+);
 
 const app = read("../src/app.js");
 assert.ok(app.includes('app.use("/api/orders", orderRoutes)'), "owner orders API must be mounted");

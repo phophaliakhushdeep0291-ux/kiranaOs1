@@ -126,6 +126,17 @@ export async function resolveStorefrontTerminal(context) {
   return null;
 }
 
+/** Optional guest-order policy owned by the trade that claims this shop. */
+export async function resolveStorefrontCancellationPolicy(context) {
+  if (modes.length === 0) return null;
+  for (const mode of modes) {
+    if (typeof mode.resolveCancellationPolicy !== "function") continue;
+    const resolved = await mode.resolveCancellationPolicy(context);
+    if (resolved) return resolved;
+  }
+  return null;
+}
+
 /** Test seam: drop every registration so one suite cannot leak into the next. */
 export function resetStorefrontModes() {
   modes.length = 0;
