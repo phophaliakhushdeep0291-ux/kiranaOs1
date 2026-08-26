@@ -1,4 +1,4 @@
-import { db } from "../../../db.js";
+import db from "../../../db.js";
 import { AppError } from "../../../middleware/error.js";
 import { createAuditLog } from "../../../modules/audit/audit.service.js";
 

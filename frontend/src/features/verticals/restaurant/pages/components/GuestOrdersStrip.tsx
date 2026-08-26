@@ -62,11 +62,10 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
   }, [refresh]);
 
   async function accept(order: CustomerOrder) {
-    // The table is matched by NAME rather than by id: the floor on this till is
-    // its own, and the server's table row is a different record. The name is the
-    // thing both sides agree on and the thing printed on the sticker.
-    const table = tables.find((row) => row.name === order.tableName)
-      ?? tables.find((row) => row.code && row.code === order.tableId);
+    // QR orders now carry the server table id. Name remains a compatibility
+    // fallback for orders created before that field was introduced.
+    const table = tables.find((row) => row.id === order.tableId)
+      ?? tables.find((row) => row.name === order.tableName);
     if (!table) {
       toast({
         title: `No table called ${order.tableName ?? "that"} on this floor`,
@@ -129,6 +128,9 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
             </ul>
             {order.note ? (
               <p className="mt-1.5 rounded-lg bg-[#fff7ed] px-2 py-1 text-[11px] font-semibold text-[#9a3412]">{order.note}</p>
+            ) : null}
+            {order.promisedSlot ? (
+              <p className="mt-1.5 rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-800">Scheduled: {order.promisedSlot}</p>
             ) : null}
             <Button
               size="sm"

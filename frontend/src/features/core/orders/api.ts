@@ -24,6 +24,9 @@ export interface CustomerOrder {
   estimatedTotal: number;
   fulfillmentType: "delivery" | "pickup" | "dine_in";
   promisedSlot: string | null;
+  feedbackRating?: number | null;
+  feedbackComment?: string | null;
+  feedbackAt?: string | null;
   /**
    * Where the guest is sitting, when the order came off a table's QR code.
    * The name is carried alongside the id because it is what a kitchen ticket
