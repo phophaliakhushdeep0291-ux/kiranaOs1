@@ -1459,7 +1459,7 @@ export default function CustomersPage() {
               <section className="rounded-[18px] border border-[#e0e8f3] bg-white p-4 shadow-[0_10px_28px_rgba(26,53,96,0.055)] sm:p-5">
                 <div className="mb-4 flex items-start gap-3">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[var(--brand-soft)] text-[var(--brand)]"><UserCheck size={17} /></span>
-                  <div><h3 className="text-[13px] font-black text-[var(--brand-ink)]">{t("customers.form.contactSection")}</h3><p className="mt-0.5 text-[11px] leading-4 text-[#6a7892]">{t("customers.form.contactHelp")}</p></div>
+                  <div><h3 className="text-[13px] font-black text-[var(--brand-ink)]">{t("customers.form.contactSection")}</h3><p className="mt-0.5 text-[11px] leading-4 text-[#64718c]">{t("customers.form.contactHelp")}</p></div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
@@ -1509,10 +1509,10 @@ export default function CustomersPage() {
               <section className="rounded-[18px] border border-[#e0e8f3] bg-white p-4 shadow-[0_10px_28px_rgba(26,53,96,0.055)] sm:p-5">
                 <div className="mb-4 flex items-start gap-3">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[#ecfdf5] text-emerald-700"><Wallet size={17} /></span>
-                  <div><h3 className="text-[13px] font-black text-[var(--brand-ink)]">{t("customers.form.creditSection")}</h3><p className="mt-0.5 text-[11px] leading-4 text-[#6a7892]">{t("customers.form.creditHelp")}</p></div>
+                  <div><h3 className="text-[13px] font-black text-[var(--brand-ink)]">{t("customers.form.creditSection")}</h3><p className="mt-0.5 text-[11px] leading-4 text-[#64718c]">{t("customers.form.creditHelp")}</p></div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div><Label className="text-[11px] font-bold text-[#435474]">{t("customers.form.customerType")}</Label><Select value={customerForm.type} onValueChange={(value) => setCustomerForm((form) => ({ ...form, type: value as "regular" | "udhar" }))}><SelectTrigger className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">{t("customers.form.regular")}</SelectItem><SelectItem value="udhar">{t("customers.form.udharAllowed")}</SelectItem></SelectContent></Select></div>
+                  <div><Label htmlFor="customer-form-type" className="text-[11px] font-bold text-[#435474]">{t("customers.form.customerType")}</Label><Select value={customerForm.type} onValueChange={(value) => setCustomerForm((form) => ({ ...form, type: value as "regular" | "udhar" }))}><SelectTrigger id="customer-form-type" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">{t("customers.form.regular")}</SelectItem><SelectItem value="udhar">{t("customers.form.udharAllowed")}</SelectItem></SelectContent></Select></div>
                   <div><Label htmlFor="customer-udhar-limit" className="text-[11px] font-bold text-[#435474]">{t("customers.form.udharLimit")}</Label><Input id="customer-udhar-limit" type="number" inputMode="decimal" min="0" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.udharLimit} onChange={(event) => setCustomerForm((form) => ({ ...form, udharLimit: event.target.value }))} /></div>
                   <div><Label htmlFor="customer-due-date" className="text-[11px] font-bold text-[#435474]">{t("customers.form.dueDate")}</Label><Input id="customer-due-date" type="date" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.dueDate} onChange={(event) => setCustomerForm((form) => ({ ...form, dueDate: event.target.value }))} /></div>
                   <div><Label htmlFor="customer-promise-date" className="text-[11px] font-bold text-[#435474]">{t("customers.form.promiseDate")}</Label><Input id="customer-promise-date" type="date" className="mt-1.5 h-12 rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.promiseToPayDate} onChange={(event) => setCustomerForm((form) => ({ ...form, promiseToPayDate: event.target.value }))} /></div>
@@ -1522,7 +1522,7 @@ export default function CustomersPage() {
               <section className="rounded-[18px] border border-[#e0e8f3] bg-white p-4 shadow-[0_10px_28px_rgba(26,53,96,0.055)] sm:p-5">
                 <div className="mb-4 flex items-start gap-3">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-[#f5f3ff] text-violet-700"><FileText size={17} /></span>
-                  <div><h3 className="text-[13px] font-black text-[var(--brand-ink)]">{t("customers.form.billingSection")}</h3><p className="mt-0.5 text-[11px] leading-4 text-[#6a7892]">{t("customers.form.billingHelp")}</p></div>
+                  <div><h3 className="text-[13px] font-black text-[var(--brand-ink)]">{t("customers.form.billingSection")}</h3><p className="mt-0.5 text-[11px] leading-4 text-[#64718c]">{t("customers.form.billingHelp")}</p></div>
                 </div>
                 <div className="space-y-4">
                   <div><Label htmlFor="customer-address" className="text-[11px] font-bold text-[#435474]">{t("customers.form.billingAddress")}</Label><Textarea id="customer-address" className="mt-1.5 min-h-[78px] resize-y rounded-[12px] border-[#dce5f0] bg-[#fbfcfe]" value={customerForm.address} onChange={(event) => setCustomerForm((form) => ({ ...form, address: event.target.value }))} /></div>

@@ -2014,7 +2014,7 @@ export default function Billing() {
   });
 
   return (
-    <div className="min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))] bg-white lg:h-[calc(100dvh-var(--app-desktop-topbar-height))] lg:min-h-0 lg:overflow-hidden">
+    <div className="min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))] bg-white lg:h-[calc(100dvh-var(--app-desktop-topbar-height)-var(--app-banner-height))] lg:min-h-0 lg:overflow-hidden">
       <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 pb-[calc(var(--app-mobile-fixed-action-height)+2rem)] sm:px-3 sm:py-3 sm:pb-[calc(var(--app-mobile-fixed-action-height)+2rem)] lg:h-full lg:flex-row lg:gap-4 lg:px-4 lg:pb-3">
       {/* ── LEFT PANEL: product search + grid ── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-visible lg:min-h-0 lg:overflow-hidden">
