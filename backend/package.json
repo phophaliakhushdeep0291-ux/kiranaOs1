@@ -21,8 +21,8 @@
     "prisma:deploy": "npm run prisma:deploy:postgres",
     "db:generate": "node node_modules/prisma/build/index.js generate --generator client",
     "pretest": "node tests/db-example-isolation.examples.js && node tests/local-sqlite-schema-workflow.examples.js",
-    "test": "npm run test:billing && node tests/procurement-reconciliation.examples.js && npm run test:compliance && npm run test:tally && npm run test:loyalty && npm run test:atomic-offers && npm run test:ai-safety && npm run test:retail-payment && npm run test:card-terminal && npm run test:channel-settlement && npm run test:flipkart && npm run test:report-documents && npm run test:event-bus && npm run test:event-bus-redis && npm run test:activity && npm run test:rentals && npm run test:prescriptions && npm run test:serial-units && npm run test:fitment && npm run test:size-runs && npm run test:book-lists && npm run test:furniture-orders && npm run test:testers && npm run test:restaurant && npm run test:verticals && npm run test:barcode && npm run test:trade-attributes && npm run test:batch-mrp && npm run test:pack-pricing && npm run test:purchase-lot && npm run test:near-expiry && npm run test:schedule-h",
-    "posttest": "npm run test:packaging-db && npm run test:reports-db && npm run test:accounting-documents",
+    "test": "node scripts/run-isolated-full-suite.js",
+    "posttest": "npm run test:packaging-db && npm run test:reports-db && npm run test:accounting-documents && node tests/shared-test-database-guard.examples.js",
     "test:barcode": "node tests/barcode-binding.examples.js && node tests/product-knowledge.examples.js",
     "test:trade-attributes": "node --test tests/product-trade-attributes.examples.js",
     "test:sync-conflicts": "node tests/sync-conflict-entity-matrix.examples.js && node tests/sync-id-format.examples.js",
@@ -123,7 +123,8 @@
     "test:book-lists": "node tests/book-lists.examples.js",
     "test:furniture-orders": "node tests/furniture-orders.examples.js",
     "test:testers": "node tests/cosmetics-testers.examples.js",
-    "test:restaurant": "node tests/restaurant-tables-menu.examples.js && node tests/kitchen-tickets.examples.js && node scripts/run-db-example-tests.js tests/restaurant-service-ops.examples.js"
+    "test:restaurant": "node tests/restaurant-tables-menu.examples.js && node tests/kitchen-tickets.examples.js && node scripts/run-db-example-tests.js tests/restaurant-service-ops.examples.js",
+    "test:isolated-suite": "npm run test:billing && node tests/procurement-reconciliation.examples.js && npm run test:compliance && npm run test:tally && npm run test:loyalty && npm run test:atomic-offers && npm run test:ai-safety && npm run test:retail-payment && npm run test:card-terminal && npm run test:channel-settlement && npm run test:flipkart && npm run test:report-documents && npm run test:event-bus && npm run test:event-bus-redis && npm run test:activity && npm run test:rentals && npm run test:prescriptions && npm run test:serial-units && npm run test:fitment && npm run test:size-runs && npm run test:book-lists && npm run test:furniture-orders && npm run test:testers && npm run test:restaurant && npm run test:verticals && npm run test:barcode && npm run test:trade-attributes && npm run test:batch-mrp && npm run test:pack-pricing && npm run test:purchase-lot && npm run test:near-expiry && npm run test:schedule-h"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",

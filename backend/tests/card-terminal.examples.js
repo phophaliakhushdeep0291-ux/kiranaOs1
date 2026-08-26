@@ -18,6 +18,10 @@ import { assertCardTerminalLocation, isAmbiguousTerminalStartError } from "../sr
 // payments no bank ever saw. This is a startup failure, not a runtime warning.
 const PRODUCTION_ENV = {
   NODE_ENV: "production",
+  // The parent integration runner enables this test-only switch. Production
+  // boot scenarios must explicitly reset it so the terminal guard is the
+  // safety invariant being exercised here.
+  ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION: "false",
   JWT_SECRET: "test-jwt-secret-that-is-long-enough-1234567890",
   DATABASE_URL: "postgresql://u:p@localhost:5432/db",
   OWNER_PIN_REQUIRED: "true",

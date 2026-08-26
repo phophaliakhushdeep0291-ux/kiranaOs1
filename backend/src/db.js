@@ -2,6 +2,21 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const databaseUrl = String(process.env.DATABASE_URL || "");
+const normalizedDatabaseUrl = databaseUrl.replaceAll("\\", "/").toLowerCase();
+const launchedTestFile = String(process.argv[1] || "").replaceAll("\\", "/").includes("/tests/");
+const testProcess = process.env.NODE_ENV === "test"
+  || String(process.env.npm_lifecycle_event || "").startsWith("test")
+  || launchedTestFile;
+const sharedDevelopmentDatabase = !databaseUrl
+  || /(?:^|\/)dev\.db(?:[?&]|$)/.test(normalizedDatabaseUrl)
+  || normalizedDatabaseUrl.includes("production");
+
+if (testProcess && sharedDevelopmentDatabase && process.env.ALLOW_SHARED_TEST_DATABASE !== "true") {
+  throw new Error(
+    "Refusing to run tests against the shared development database. " +
+    "Use scripts/run-db-example-tests.js or npm test so KiranaOS QA data stays isolated."
+  );
+}
 // The isolated integration client is generated from the SQLite schema. CI's
 // PostgreSQL proof intentionally reuses the integration runner, so select that
 // client only for a file: datasource; otherwise use the PostgreSQL client that
