@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import db from "../src/db.js";
 import "../src/verticals/restaurant/storefront/dine-in.storefront.js";
-import { createPublicGuestRequest, submitPublicOrderFeedback, getPublicOrderStatus } from "../src/modules/public/public.service.js";
+import { createPublicGuestRequest, createPublicOrder, submitPublicOrderFeedback, getPublicOrderStatus } from "../src/modules/public/public.service.js";
 import { listGuestRequests, setGuestRequestStatus } from "../src/verticals/restaurant/service-ops/guest-requests.service.js";
 
 async function withFailedAudit(action, operation) {
@@ -35,6 +35,12 @@ const order = await db.customerOrder.create({ data: {
   shopId: shop.id, customerName: "T5", customerMobile: "", fulfillmentType: "dine_in",
   tableId: table.id, tableName: table.name, itemsJson: JSON.stringify([{ productId: "dish-test", name: "Dish", qty: 1, price: 100, variation: { unitCode: "large", name: "Large" } }]), status: "fulfilled", fulfillmentStatus: "fulfilled",
 } });
+
+await assert.rejects(
+  createPublicOrder(shop.id, { tableCode: table.code, items: [{ productId: "dish-test", qty: 100 }] }),
+  (error) => error?.code === "ORDER_QUANTITY_LIMIT",
+  "a table QR must not create an unbounded kitchen quantity",
+);
 
 const tracked = await getPublicOrderStatus(shop.id, order.id);
 assert.equal(tracked.tableCode, "t5", "tracker returns the QR code, not the display name");

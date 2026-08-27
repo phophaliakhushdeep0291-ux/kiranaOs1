@@ -431,6 +431,18 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   const fulfillmentType = storefrontOrder?.fulfillmentType
     ?? (body.fulfillmentType === "pickup" ? "pickup" : "delivery");
   const promisedSlot = String(body.promisedSlot ?? "").trim().slice(0, 120) || null;
+
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+  if (rawItems.length === 0) throw new AppError("Add at least one item to your order.", 400);
+  if (rawItems.length > MAX_ORDER_LINES) throw new AppError("Too many items in one order.", 400);
+  const maxItemQuantity = Number(storefrontOrder?.maxItemQuantity ?? 0);
+  if (Number.isFinite(maxItemQuantity) && maxItemQuantity > 0 && rawItems.some((item) => {
+    const quantity = Number(item?.qty ?? item?.quantity ?? 0);
+    return !Number.isFinite(quantity) || quantity > maxItemQuantity;
+  })) {
+    throw new AppError(`Choose no more than ${maxItemQuantity} of one item per order.`, 400, "ORDER_QUANTITY_LIMIT");
+  }
+
   const location = await resolveOperationalLocation(shopId, body.locationId || null);
 
   // A guest sitting at a table has already identified themselves by being in the
@@ -450,10 +462,6 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   if (addressRequired && customerAddress.length < 5) {
     throw new AppError("Please enter a delivery address.", 400);
   }
-
-  const rawItems = Array.isArray(body.items) ? body.items : [];
-  if (rawItems.length === 0) throw new AppError("Add at least one item to your order.", 400);
-  if (rawItems.length > MAX_ORDER_LINES) throw new AppError("Too many items in one order.", 400);
 
   // Authoritative catalog re-price: the customer only sends productId + qty.
   const normalizedItems = new Map();

@@ -40,23 +40,29 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [response, accepted, plan, pending] = await Promise.all([
-      listCustomerOrders("new").catch(() => null),
-      loadAcceptedOrderIds(),
-      loadFloorPlan(),
-      loadPendingGuestOrders(),
-    ]);
-    setTables(plan);
-    const unique = new Map([...pendingGuestOrders(response?.orders ?? [], accepted), ...pending].map((order) => [order.id, order]));
-    setOrders([...unique.values()]);
+    try {
+      const [response, accepted, plan, pending] = await Promise.all([
+        listCustomerOrders("new"),
+        loadAcceptedOrderIds(),
+        loadFloorPlan(),
+        loadPendingGuestOrders(),
+      ]);
+      setTables(plan);
+      const unique = new Map([...pendingGuestOrders(response.orders ?? [], accepted), ...pending].map((order) => [order.id, order]));
+      setOrders([...unique.values()]);
+      setLoadFailed(false);
+    } catch {
+      // Retain the last cards; clearing them would make a network outage look
+      // exactly like the counter accepted every waiting order.
+      setLoadFailed(true);
+    }
   }, []);
 
   useEffect(() => {
-    const safeRefresh = () => { void refresh().catch(() => {
-      toast({ title: t("restaurant.guest.loadFailed"), description: t("restaurant.guest.checkStorage"), variant: "destructive" });
-    }); };
+    const safeRefresh = () => { void refresh(); };
     safeRefresh();
     const timer = window.setInterval(safeRefresh, POLL_MS);
     const onFocus = safeRefresh;
@@ -103,10 +109,12 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
     }
   }
 
-  if (orders.length === 0) return null;
+  if (orders.length === 0 && !loadFailed) return null;
 
   return (
     <section className="space-y-2" data-testid="guest-orders-strip">
+      {loadFailed ? <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{t("restaurant.guest.ordersStale")} <button type="button" className="ml-2 min-h-11 underline" onClick={() => void refresh()}>{t("restaurant.guest.retryNow")}</button></div> : null}
+      {orders.length > 0 ? <>
       <h2 className="flex items-center gap-2 text-[12px] font-black uppercase tracking-wider text-[#64748b]">
         <QrCode size={13} /> Guests have ordered
         <span className={cn("rounded-full px-2 py-0.5 text-[10px]", CHIP_TONES.violet)}>{orders.length}</span>
@@ -148,6 +156,7 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
           </article>
         ))}
       </div>
+      </> : null}
     </section>
   );
 }

@@ -24,6 +24,7 @@ import { openTableInBilling, releaseTable } from "../service/open-table";
 import { fireKitchenTicket, listKitchenTickets, listTables, publishFloorPlan } from "../service/restaurant-api";
 import { mergeServerCodes, unpublishedTables } from "../service/table-qr";
 import { TableQrDialog } from "./components/TableQrDialog";
+import { GuestRequestsStrip } from "./components/GuestRequestsStrip";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { websiteFromPrefs } from "@/features/core/customer-order/restaurant-website";
@@ -280,6 +281,8 @@ export default function TablesPage() {
           </Button>
         </div>
       </header>
+
+      <GuestRequestsStrip />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat icon={<Utensils size={15} />} label="Occupied" value={String(totals.open)} />

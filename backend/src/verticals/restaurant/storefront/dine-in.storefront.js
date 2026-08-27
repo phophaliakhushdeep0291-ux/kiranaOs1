@@ -35,6 +35,7 @@ import { AppError } from "../../../middleware/error.js";
  */
 
 const DEFAULT_THEME = "classic";
+export const MAX_DINE_IN_ITEM_QUANTITY = 99;
 
 /**
  * The looks a restaurant can pick between.
@@ -216,6 +217,7 @@ async function resolveOrderContext({ shopId, settings, body }) {
     fulfillmentType: "dine_in",
     tableId: table.id,
     tableName: table.name,
+    maxItemQuantity: MAX_DINE_IN_ITEM_QUANTITY,
     guestCount: Number.isFinite(Number(body?.guestCount)) ? Math.max(0, Math.min(60, Number(body.guestCount))) : null,
     // A guest at a table has no delivery address, and asking for one is how a
     // dine-in order gets abandoned halfway through.

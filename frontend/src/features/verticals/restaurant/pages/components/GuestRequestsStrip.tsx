@@ -10,18 +10,30 @@ export function GuestRequestsStrip() {
   const { toast } = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const [requests, setRequests] = useState<RestaurantGuestRequest[]>([]);
+  const [loadFailed, setLoadFailed] = useState(false);
   const refresh = useCallback(async () => {
-    const rows = await listGuestRequests().catch(() => [] as RestaurantGuestRequest[]);
-    setRequests(rows.filter((row) => row.status === "pending" || row.status === "acknowledged"));
+    try {
+      const rows = await listGuestRequests();
+      setRequests(rows.filter((row) => row.status === "pending" || row.status === "acknowledged"));
+      setLoadFailed(false);
+    } catch {
+      // Keep the last visible requests. An outage must not look like every
+      // waiter/bill request was completed while nobody was watching.
+      setLoadFailed(true);
+    }
   }, []);
   useEffect(() => {
     void refresh();
     const timer = window.setInterval(() => void refresh(), 5_000);
-    return () => window.clearInterval(timer);
+    const onFocus = () => void refresh();
+    window.addEventListener("focus", onFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
   }, [refresh]);
-  if (requests.length === 0) return null;
+  if (requests.length === 0 && !loadFailed) return null;
   return (
-    <section className="rounded-2xl border border-amber-300 bg-amber-50 p-3">
+    <section className="rounded-2xl border border-amber-300 bg-amber-50 p-3" data-testid="guest-requests-strip">
+      {loadFailed ? <div role="alert" className="mb-2 rounded-lg border border-amber-400 bg-white px-3 py-2 text-xs font-semibold text-amber-900">{t("restaurant.guest.requestsStale")} <button type="button" className="ml-1 min-h-11 underline" onClick={() => void refresh()}>{t("restaurant.guest.retryNow")}</button></div> : null}
+      {requests.length > 0 ? <>
       <h2 className="mb-2 text-xs font-black uppercase tracking-wider text-amber-900">{t("restaurant.guest.requests")}</h2>
       <div className="flex flex-wrap gap-2">
         {requests.map((request) => (
@@ -42,6 +54,7 @@ export function GuestRequestsStrip() {
           </div>
         ))}
       </div>
+      </> : null}
     </section>
   );
 }

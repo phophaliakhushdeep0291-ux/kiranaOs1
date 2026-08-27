@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { CheckCheck, ChefHat, Clock, Flame, LayoutGrid, Loader2, Utensils } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
 import { listKitchenTickets, setKitchenTicketStatus } from "../service/restaurant-api";
 import { GuestOrdersStrip } from "./components/GuestOrdersStrip";
 import { GuestRequestsStrip } from "./components/GuestRequestsStrip";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 /** How long a ticket may sit before the board calls it out. */
 const LATE_MINUTES = 12;
@@ -24,10 +25,14 @@ const COLUMNS: Array<{ status: KotStatus; label: string; tone: ChipTone; action:
 
 export default function KitchenPage() {
   const [, navigate] = useLocation();
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const [tickets, setTickets] = useState<KotTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshFailed, setRefreshFailed] = useState(false);
+  const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
+  const updatingIdsRef = useRef<Set<string>>(new Set());
+  const [confirmBatch, setConfirmBatch] = useState<KotStatus | null>(null);
   const [, setTick] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -58,6 +63,12 @@ export default function KitchenPage() {
     };
   }, [refresh]);
 
+  useEffect(() => {
+    if (!confirmBatch) return;
+    const timer = window.setTimeout(() => setConfirmBatch(null), 5_000);
+    return () => window.clearTimeout(timer);
+  }, [confirmBatch]);
+
   const open = useMemo(
     () => tickets.filter((ticket) => ticket.status !== "served"),
     [tickets],
@@ -76,19 +87,39 @@ export default function KitchenPage() {
    * rather than leaving the screen quietly lying about the pass.
    */
   async function applyStatus(ids: string[], next: KotStatus) {
-    if (ids.length === 0) return;
-    const before = tickets;
-    setTickets(tickets.map((row) => (ids.includes(row.id) ? { ...row, status: next } : row)));
+    const claimedIds = [...new Set(ids)].filter((id) => !updatingIdsRef.current.has(id));
+    if (claimedIds.length === 0) return;
+    const claimed = new Set(claimedIds);
+    const before = new Map(tickets.filter((row) => claimed.has(row.id)).map((row) => [row.id, row]));
+    claimedIds.forEach((id) => updatingIdsRef.current.add(id));
+    setUpdatingIds(new Set(updatingIdsRef.current));
+    setTickets((current) => current.map((row) => (claimed.has(row.id) ? { ...row, status: next } : row)));
     try {
-      await Promise.all(ids.map((id) => setKitchenTicketStatus(id, next)));
+      const outcomes = await Promise.allSettled(claimedIds.map((id) => setKitchenTicketStatus(id, next)));
+      const failed = new Set(claimedIds.filter((_, index) => outcomes[index].status === "rejected"));
+      if (failed.size > 0) {
+        // A batch may partially succeed. Restore only the ticket writes the
+        // server rejected; successful tickets must stay advanced.
+        setTickets((current) => current.map((row) => failed.has(row.id) ? before.get(row.id) ?? row : row));
+        toast({
+          title: "Could not update the pass",
+          description: "The kitchen board is shared with the counter, so it needs a connection. Check the network and try again.",
+          variant: "destructive",
+        });
+      }
       await refresh();
     } catch {
-      setTickets(before);
+      // Roll back only this write. Restoring the whole board here used to undo
+      // a different cook's successful update when two tickets moved together.
+      setTickets((current) => current.map((row) => before.get(row.id) ?? row));
       toast({
         title: "Could not update the pass",
         description: "The kitchen board is shared with the counter, so it needs a connection. Check the network and try again.",
         variant: "destructive",
       });
+    } finally {
+      claimedIds.forEach((id) => updatingIdsRef.current.delete(id));
+      setUpdatingIds(new Set(updatingIdsRef.current));
     }
   }
 
@@ -99,7 +130,13 @@ export default function KitchenPage() {
 
   function bumpAll(status: KotStatus) {
     const next = nextKotStatus(status);
-    if (next) void applyStatus(tickets.filter((row) => row.status === status).map((row) => row.id), next);
+    if (!next) return;
+    if (confirmBatch !== status) {
+      setConfirmBatch(status);
+      return;
+    }
+    setConfirmBatch(null);
+    void applyStatus(tickets.filter((row) => row.status === status).map((row) => row.id), next);
   }
 
   if (loading) {
@@ -150,16 +187,17 @@ export default function KitchenPage() {
                   </h2>
                   {rows.length > 1 ? (
                     <button
-                      className="text-[11px] font-black text-[var(--brand)] hover:underline"
+                      className="min-h-11 text-[11px] font-black text-[var(--brand)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => void bumpAll(column.status)}
+                      disabled={rows.some((row) => updatingIds.has(row.id))}
                     >
-                      Bump all
+                      {confirmBatch === column.status ? t("restaurant.kitchen.confirmTickets", { count: rows.length }) : "Bump all"}
                     </button>
                   ) : null}
                 </div>
                 <div className="space-y-3">
                   {rows.map((ticket) => (
-                    <TicketCard key={ticket.id} ticket={ticket} actionLabel={column.action} onAdvance={() => void advance(ticket)} />
+                    <TicketCard key={ticket.id} ticket={ticket} actionLabel={column.action} busy={updatingIds.has(ticket.id)} updatingLabel={t("restaurant.kitchen.updating")} onAdvance={() => void advance(ticket)} />
                   ))}
                   {rows.length === 0 ? (
                     <div className="rounded-xl border border-dashed p-5 text-center text-[12px] text-[#94a3b8]">Empty</div>
@@ -189,7 +227,7 @@ export default function KitchenPage() {
   );
 }
 
-function TicketCard({ ticket, actionLabel, onAdvance }: { ticket: KotTicket; actionLabel: string; onAdvance: () => void }) {
+function TicketCard({ ticket, actionLabel, busy, updatingLabel, onAdvance }: { ticket: KotTicket; actionLabel: string; busy: boolean; updatingLabel: string; onAdvance: () => void }) {
   const minutes = ticketAgeMinutes(ticket);
   const late = minutes >= LATE_MINUTES && ticket.status !== "ready";
   const step = KOT_STATUS_FLOW.indexOf(ticket.status);
@@ -228,8 +266,8 @@ function TicketCard({ ticket, actionLabel, onAdvance }: { ticket: KotTicket; act
         ))}
       </ul>
 
-      <Button size="sm" className="mt-3 h-9 w-full gap-1.5 rounded-[8px] text-[12px] font-black" onClick={onAdvance}>
-        <Utensils size={13} /> {actionLabel}
+      <Button size="sm" className="mt-3 h-9 w-full gap-1.5 rounded-[8px] text-[12px] font-black" disabled={busy} onClick={onAdvance}>
+        {busy ? <Loader2 className="animate-spin" size={13} /> : <Utensils size={13} />} {busy ? updatingLabel : actionLabel}
       </Button>
     </article>
   );

@@ -21,6 +21,7 @@ import { TABLE_BILLS_KEY, type RestaurantTable } from "./table-store";
 
 /** Which guest orders have already been added, so accepting twice cannot double a table's food. */
 export const ACCEPTED_GUEST_ORDERS_KEY = "kirana-os:restaurant:accepted-guest-orders:v1";
+const MAX_ACCEPTED_GUEST_ORDER_IDS = 500;
 
 export const PENDING_GUEST_ORDERS_KEY = "kirana-os:restaurant:pending-guest-orders:v1";
 interface PendingAcceptance {
@@ -44,7 +45,7 @@ export async function rememberAcceptedOrder(orderId: string): Promise<void> {
   const current = await loadAcceptedOrderIds();
   if (current.includes(orderId)) return;
   await offlineDB
-    .setSetting(ACCEPTED_GUEST_ORDERS_KEY, [orderId, ...current]);
+    .setSetting(ACCEPTED_GUEST_ORDERS_KEY, [orderId, ...current].slice(0, MAX_ACCEPTED_GUEST_ORDER_IDS));
 }
 
 /** Dine-in orders a guest has sent and the floor has not yet taken. */
@@ -224,7 +225,7 @@ export async function acceptGuestOrderToTable(
     delete pending[order.id];
     await tx.setSetting(HELD_BILLS_KEY, upsertOpenBill(held, bill));
     await tx.setSetting(TABLE_BILLS_KEY, { ...map, [target.id]: bill.id });
-    await tx.setSetting(ACCEPTED_GUEST_ORDERS_KEY, [...accepted, order.id]);
+    await tx.setSetting(ACCEPTED_GUEST_ORDERS_KEY, [order.id, ...accepted].slice(0, MAX_ACCEPTED_GUEST_ORDER_IDS));
     await tx.setSetting(PENDING_GUEST_ORDERS_KEY, pending);
     return { billId: bill.id, added: operation.lines.length, skipped: [] };
   });
