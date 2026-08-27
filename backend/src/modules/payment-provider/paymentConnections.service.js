@@ -28,6 +28,18 @@ function assertProvider(provider) {
 
 function credentialsContext(shopId, provider) { return `payment-provider:${shopId}:${provider}`; }
 
+async function writeRequiredConnectionAudit(client, entry) {
+  const audit = await createAuditLog({ ...entry, client });
+  if (!audit) {
+    throw new AppError(
+      "Payment provider change was not saved because its audit record could not be stored",
+      503,
+      "PAYMENT_PROVIDER_AUDIT_WRITE_FAILED",
+    );
+  }
+  return audit;
+}
+
 export async function listPaymentConnections(shopId) {
   const rows = await db.paymentProviderConnection.findMany({ where: { shopId }, orderBy: [{ selected: "desc" }, { provider: "asc" }] });
   return rows.map(publicConnection);
@@ -56,44 +68,90 @@ export async function savePaymentConnection({ shopId, userId, provider, input, r
   }
   const encryptedCredentials = encryptPaymentCredentials({ keyId: input.keyId, keySecret: input.keySecret, webhookSecret: input.webhookSecret }, credentialsContext(shopId, provider));
   const keyIdHint = `${input.keyId.slice(0, Math.min(12, input.keyId.length))}…${input.keyId.slice(-4)}`;
-  const row = await db.paymentProviderConnection.upsert({
-    where: { shopId_provider: { shopId, provider } },
-    create: { shopId, provider, environment: input.environment, encryptedCredentials, keyIdHint, webhookSecretConfigured: Boolean(input.webhookSecret), status: "configured", selected: false, createdByUserId: userId || null, updatedByUserId: userId || null },
-    update: { environment: input.environment, encryptedCredentials, keyIdHint, webhookSecretConfigured: Boolean(input.webhookSecret), status: "configured", selected: false, verifiedAt: null, lastVerifiedAt: null, updatedByUserId: userId || null },
+  const row = await db.$transaction(async (tx) => {
+    const previous = await tx.paymentProviderConnection.findUnique({ where: { shopId_provider: { shopId, provider } } });
+    const saved = await tx.paymentProviderConnection.upsert({
+      where: { shopId_provider: { shopId, provider } },
+      create: { shopId, provider, environment: input.environment, encryptedCredentials, keyIdHint, webhookSecretConfigured: Boolean(input.webhookSecret), status: "configured", selected: false, createdByUserId: userId || null, updatedByUserId: userId || null },
+      update: { environment: input.environment, encryptedCredentials, keyIdHint, webhookSecretConfigured: Boolean(input.webhookSecret), status: "configured", selected: false, verifiedAt: null, lastVerifiedAt: null, updatedByUserId: userId || null },
+    });
+    await writeRequiredConnectionAudit(tx, {
+      shopId, userId, action: "PAYMENT_PROVIDER_CREDENTIALS_UPDATED",
+      entityType: "PaymentProviderConnection", entityId: saved.id,
+      before: previous ? { provider, environment: previous.environment, keyIdHint: previous.keyIdHint, webhookSecretConfigured: previous.webhookSecretConfigured, status: previous.status, selected: previous.selected } : undefined,
+      after: { provider, environment: input.environment, keyIdHint, webhookSecretConfigured: Boolean(input.webhookSecret), status: "configured", selected: false },
+      req,
+    });
+    return saved;
   });
-  await createAuditLog({ shopId, userId, action: "PAYMENT_PROVIDER_CREDENTIALS_UPDATED", entityType: "PaymentProviderConnection", entityId: row.id, after: { provider, environment: input.environment, keyIdHint, webhookSecretConfigured: Boolean(input.webhookSecret) }, req });
   return publicConnection(row);
 }
 
-export async function verifyPaymentConnection({ shopId, userId, provider, req }) {
+export async function verifyPaymentConnection({ shopId, userId, provider, req, verifyOverride = null }) {
   const adapter = assertProvider(provider);
   const row = await db.paymentProviderConnection.findUnique({ where: { shopId_provider: { shopId, provider } } });
   if (!row) throw new AppError("Payment provider connection was not found", 404, "PAYMENT_PROVIDER_CONNECTION_NOT_FOUND");
   const credentials = decryptPaymentCredentials(row.encryptedCredentials, credentialsContext(shopId, provider));
-  await adapter.verify(credentials);
+  await (verifyOverride || adapter.verify)(credentials);
   const now = new Date();
-  const updated = await db.paymentProviderConnection.update({ where: { id: row.id }, data: { status: "verified", verifiedAt: row.verifiedAt || now, lastVerifiedAt: now, updatedByUserId: userId || null } });
-  await createAuditLog({ shopId, userId, action: "PAYMENT_PROVIDER_CREDENTIALS_VERIFIED", entityType: "PaymentProviderConnection", entityId: row.id, after: { provider, environment: row.environment }, req });
+  const updated = await db.$transaction(async (tx) => {
+    const claimed = await tx.paymentProviderConnection.updateMany({
+      where: { id: row.id, shopId, provider, updatedAt: row.updatedAt, encryptedCredentials: row.encryptedCredentials },
+      data: { status: "verified", verifiedAt: row.verifiedAt || now, lastVerifiedAt: now, updatedByUserId: userId || null },
+    });
+    if (claimed.count !== 1) {
+      throw new AppError(
+        "Payment provider credentials changed while they were being verified; verify the current credentials again",
+        409,
+        "PAYMENT_PROVIDER_VERIFICATION_CONFLICT",
+      );
+    }
+    const verified = await tx.paymentProviderConnection.findUnique({ where: { id: row.id } });
+    await writeRequiredConnectionAudit(tx, {
+      shopId, userId, action: "PAYMENT_PROVIDER_CREDENTIALS_VERIFIED",
+      entityType: "PaymentProviderConnection", entityId: row.id,
+      before: { provider, environment: row.environment, status: row.status, selected: row.selected },
+      after: { provider, environment: row.environment, status: "verified", selected: row.selected },
+      req,
+    });
+    return verified;
+  });
   return publicConnection(updated);
 }
 
 export async function selectPaymentConnection({ shopId, userId, provider, req }) {
   assertProvider(provider);
-  const row = await db.paymentProviderConnection.findUnique({ where: { shopId_provider: { shopId, provider } } });
-  if (!row) throw new AppError("Payment provider connection was not found", 404, "PAYMENT_PROVIDER_CONNECTION_NOT_FOUND");
-  if (row.status !== "verified") throw new AppError("Verify the provider credentials before selecting them", 409, "PAYMENT_PROVIDER_NOT_VERIFIED");
   const updated = await db.$transaction(async (tx) => {
+    const row = await tx.paymentProviderConnection.findUnique({ where: { shopId_provider: { shopId, provider } } });
+    if (!row) throw new AppError("Payment provider connection was not found", 404, "PAYMENT_PROVIDER_CONNECTION_NOT_FOUND");
+    if (row.status !== "verified") throw new AppError("Verify the provider credentials before selecting them", 409, "PAYMENT_PROVIDER_NOT_VERIFIED");
     await tx.paymentProviderConnection.updateMany({ where: { shopId, selected: true }, data: { selected: false } });
-    return tx.paymentProviderConnection.update({ where: { id: row.id }, data: { selected: true, updatedByUserId: userId || null } });
+    const selected = await tx.paymentProviderConnection.update({ where: { id: row.id }, data: { selected: true, updatedByUserId: userId || null } });
+    await writeRequiredConnectionAudit(tx, {
+      shopId, userId, action: "PAYMENT_PROVIDER_SELECTED",
+      entityType: "PaymentProviderConnection", entityId: row.id,
+      before: { provider, environment: row.environment, status: row.status, selected: row.selected },
+      after: { provider, environment: row.environment, status: row.status, selected: true },
+      req,
+    });
+    return selected;
   });
-  await createAuditLog({ shopId, userId, action: "PAYMENT_PROVIDER_SELECTED", entityType: "PaymentProviderConnection", entityId: row.id, after: { provider, environment: row.environment }, req });
   return publicConnection(updated);
 }
 
 export async function disablePaymentConnection({ shopId, userId, provider, req }) {
   assertProvider(provider);
-  const result = await db.paymentProviderConnection.updateMany({ where: { shopId, provider }, data: { selected: false, status: "disabled", updatedByUserId: userId || null } });
-  if (!result.count) throw new AppError("Payment provider connection was not found", 404, "PAYMENT_PROVIDER_CONNECTION_NOT_FOUND");
-  await createAuditLog({ shopId, userId, action: "PAYMENT_PROVIDER_DISABLED", entityType: "PaymentProviderConnection", after: { provider }, req });
+  await db.$transaction(async (tx) => {
+    const row = await tx.paymentProviderConnection.findUnique({ where: { shopId_provider: { shopId, provider } } });
+    if (!row) throw new AppError("Payment provider connection was not found", 404, "PAYMENT_PROVIDER_CONNECTION_NOT_FOUND");
+    await tx.paymentProviderConnection.update({ where: { id: row.id }, data: { selected: false, status: "disabled", updatedByUserId: userId || null } });
+    await writeRequiredConnectionAudit(tx, {
+      shopId, userId, action: "PAYMENT_PROVIDER_DISABLED",
+      entityType: "PaymentProviderConnection", entityId: row.id,
+      before: { provider, environment: row.environment, status: row.status, selected: row.selected },
+      after: { provider, environment: row.environment, status: "disabled", selected: false },
+      req,
+    });
+  });
   return { disabled: true, provider };
 }

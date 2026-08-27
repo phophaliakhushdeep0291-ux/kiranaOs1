@@ -1,4 +1,5 @@
 import { registerStorefrontMode } from "../../../shared/storefront-modes.js";
+import { restaurantWebsiteUrl } from "./restaurant-website.js";
 import { businessTypeFromSettings } from "../../registry.js";
 import { groupMenuByCourse, parseTags, PORTION_UNIT_TYPE, UNCATEGORISED_COURSE } from "../menu/menu.service.js";
 import { addonGroupsByProduct, validateSelection } from "../menu/addons.service.js";
@@ -74,6 +75,7 @@ export function resolveMenuBranding(settings, shop) {
     ink: theme.ink,
     logoUrl: typeof configured.logoUrl === "string" && configured.logoUrl.startsWith("http") ? configured.logoUrl : null,
     footerNote: String(configured.footerNote ?? "").trim() || null,
+    websiteUrl: restaurantWebsiteUrl(configured.websiteUrl),
   };
 }
 

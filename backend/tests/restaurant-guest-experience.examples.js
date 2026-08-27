@@ -4,6 +4,26 @@ import "../src/verticals/restaurant/storefront/dine-in.storefront.js";
 import { createPublicGuestRequest, submitPublicOrderFeedback, getPublicOrderStatus } from "../src/modules/public/public.service.js";
 import { listGuestRequests, setGuestRequestStatus } from "../src/verticals/restaurant/service-ops/guest-requests.service.js";
 
+async function withFailedAudit(action, operation) {
+  const trigger = `force_guest_request_audit_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  await db.$executeRawUnsafe(`
+    CREATE TRIGGER ${trigger}
+    BEFORE INSERT ON AuditLog
+    WHEN NEW.action = '${action}'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced guest request audit failure');
+    END
+  `);
+  try {
+    await operation();
+    assert.fail("guest request operation should fail closed when its audit write fails");
+  } catch (error) {
+    assert.ok(["ORDER_AUDIT_UNAVAILABLE", "GUEST_REQUEST_AUDIT_WRITE_FAILED"].includes(error?.code), error?.message);
+  } finally {
+    await db.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ${trigger}`);
+  }
+}
+
 const settingsJson = JSON.stringify({
   customerOrdering: { enabled: true },
   businessProfile: { businessType: "restaurant" },
@@ -29,7 +49,18 @@ const request = await createPublicGuestRequest(shop.id, table.id, { type: "waite
 assert.equal(request.type, "waiter");
 assert.equal((await createPublicGuestRequest(shop.id, table.id, { type: "waiter", orderId: order.id })).duplicate, true, "rapid duplicate requests are collapsed");
 assert.equal((await listGuestRequests(shop.id, { status: "pending" })).length, 1);
+
+await withFailedAudit("GUEST_BILL_REQUESTED", () => createPublicGuestRequest(shop.id, table.id, { type: "bill", orderId: order.id }));
+assert.equal(await db.restaurantGuestRequest.count({ where: { shopId: shop.id, type: "bill" } }), 0, "public request creation and audit must commit together");
+
+await withFailedAudit("RESTAURANT_GUEST_REQUEST_UPDATED", () => setGuestRequestStatus(shop.id, request.id, "acknowledged", null));
+assert.equal((await db.restaurantGuestRequest.findUnique({ where: { id: request.id } })).status, "pending", "status change must roll back with its audit");
 assert.equal((await setGuestRequestStatus(shop.id, request.id, "acknowledged", null)).status, "acknowledged");
 assert.equal((await setGuestRequestStatus(shop.id, request.id, "completed", null)).status, "completed");
+assert.equal((await setGuestRequestStatus(shop.id, request.id, "completed", null)).status, "completed", "same-status retry is idempotent");
+await assert.rejects(
+  setGuestRequestStatus(shop.id, request.id, "cancelled", null),
+  (error) => error?.code === "GUEST_REQUEST_INVALID_TRANSITION",
+);
 
 console.log("restaurant-guest-experience.examples.js OK");

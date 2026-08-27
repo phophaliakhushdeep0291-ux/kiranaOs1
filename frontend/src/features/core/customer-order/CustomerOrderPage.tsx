@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams } from "wouter";
+import { guestWebsiteRedirect } from "./restaurant-website";
 import {
   ArrowLeft,
   Bell,
@@ -125,6 +126,9 @@ export default function CustomerOrderPage() {
     setState(cached ? { kind: "ready", catalog: cached, source: "cache" } : { kind: "loading" });
     loadCustomerCatalog(shopCode)
       .then((res) => {
+        if (!active) return;
+        const destination = res.source === "network" ? guestWebsiteRedirect(res.catalog, window.location.href, new URLSearchParams(window.location.search).get("table")) : null;
+        if (destination) { window.location.replace(destination); return; }
         if (active) setState({ kind: "ready", catalog: res.catalog, source: res.source });
       })
       .catch((err: unknown) => {

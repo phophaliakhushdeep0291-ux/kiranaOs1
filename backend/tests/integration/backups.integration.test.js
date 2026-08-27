@@ -263,6 +263,64 @@ if (ctx.skip) {
       assert.equal(await ctx.db.shopMaintenanceLock.count({ where: { shopId: tenant.shop.id } }), 0, "lock releases after success");
     });
 
+    test("restores restaurant guest requests while preserving live payment-provider credentials", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      const table = await ctx.db.restaurantTable.create({ data: {
+        shopId: tenant.shop.id,
+        code: "backup-table-1",
+        name: "Backup Table 1",
+      } });
+      const guestRequest = await ctx.db.restaurantGuestRequest.create({ data: {
+        shopId: tenant.shop.id,
+        tableId: table.id,
+        tableCode: table.code,
+        tableName: table.name,
+        type: "bill",
+        status: "pending",
+      } });
+      const connection = await ctx.db.paymentProviderConnection.create({ data: {
+        shopId: tenant.shop.id,
+        provider: "razorpay",
+        environment: "test",
+        encryptedCredentials: "installation-secret-before-backup",
+        keyIdHint: "1234",
+        webhookSecretConfigured: true,
+        selected: true,
+        status: "verified",
+        createdByUserId: tenant.owner.id,
+        updatedByUserId: tenant.owner.id,
+      } });
+      const artifact = await ctx.db.backupArtifact.create({ data: {
+        shopId: tenant.shop.id,
+        requestedByUserId: tenant.owner.id,
+        type: "shop_logical",
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      } });
+
+      await processShopBackupArtifact(artifact.id, tenant.shop.id);
+      const snapshot = await verifyBackupArtifactForTest(tenant.shop.id, artifact.id);
+      assert.equal(snapshot.manifest.schemaVersion, "2026-08-27-complete-v6");
+      assert.equal(snapshot.data.tables.RestaurantGuestRequest.some((row) => row.id === guestRequest.id), true);
+      assert.equal(snapshot.data.tables.PaymentProviderConnection, undefined, "credential-bearing provider connections are not portable");
+      assert.equal(JSON.stringify(snapshot).includes("installation-secret-before-backup"), false, "provider credentials never enter the portable artifact");
+
+      await ctx.db.restaurantGuestRequest.update({ where: { id: guestRequest.id }, data: { status: "completed", completedAt: new Date() } });
+      await ctx.db.paymentProviderConnection.update({ where: { id: connection.id }, data: {
+        environment: "live",
+        encryptedCredentials: "installation-secret-after-backup",
+        keyIdHint: "9876",
+      } });
+
+      await restoreShopBackup(tenant.shop.id, artifact.id, tenant.owner.id, `RESTORE ${artifact.id.slice(-6)}`);
+      const restoredRequest = await ctx.db.restaurantGuestRequest.findUniqueOrThrow({ where: { id: guestRequest.id } });
+      assert.equal(restoredRequest.status, "pending", "guest-service history returns to the snapshot state");
+      assert.equal(restoredRequest.completedAt, null);
+      const preservedConnection = await ctx.db.paymentProviderConnection.findUniqueOrThrow({ where: { id: connection.id } });
+      assert.equal(preservedConnection.environment, "live");
+      assert.equal(preservedConnection.encryptedCredentials, "installation-secret-after-backup");
+      assert.equal(preservedConnection.keyIdHint, "9876", "restore leaves the live installation's credentials untouched");
+    });
+
     test("restores the complete manufacturing genealogy without losing recall evidence", async () => {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       const finished = await createProduct(ctx.db, tenant.shop.id, { name: "Finished Spice" });

@@ -17,7 +17,10 @@ export const PRESERVED_SHOP_MODELS = Object.freeze([
   // re-queue repair commands a device has already run or refused.
   "SupportSession", "DeviceCommand",
   "DeviceHealthSnapshot", "Subscription", "OnboardingPurchase", "PaymentTransaction",
-  "PaymentProviderEvent", "IntegrationApiKey", "WebhookEndpoint", "WebhookDelivery",
+  // Provider connections contain encrypted credentials and describe the live
+  // installation's selected payment account. A portable restore must not
+  // overwrite them with credentials from another device or an older snapshot.
+  "PaymentProviderEvent", "PaymentProviderConnection", "IntegrationApiKey", "WebhookEndpoint", "WebhookDelivery",
   "Device", "DeviceReplacementChallenge", "DeviceLicense",
 ]);
 
@@ -88,7 +91,10 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   // record of what was actually cooked, which is the answer when a guest
   // disputes a line on the bill. It is short-lived on the rail, but a restore
   // that dropped it would leave the sale with nothing behind it.
-  "RestaurantTable", "DishRecipeComponent", "KitchenTicket",
+  // Guest requests (water, bill, assistance) are operational restaurant
+  // history. Keeping them with the floor and kitchen records prevents a
+  // restore from silently dropping unresolved requests or their resolution.
+  "RestaurantTable", "RestaurantGuestRequest", "DishRecipeComponent", "KitchenTicket",
   // Menu add-ons are durable shop configuration. Groups define the selection
   // rule, options carry prices/ingredient links, and the join decides which
   // dishes offer them; losing any one of the three changes the live menu.

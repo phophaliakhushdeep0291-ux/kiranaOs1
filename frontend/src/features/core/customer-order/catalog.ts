@@ -58,6 +58,7 @@ export interface CustomerMenuSection {
 
 /** How one restaurant's page is told apart from the next one's. */
 export interface StorefrontBranding {
+  websiteUrl?: string | null;
   displayName: string;
   tagline: string | null;
   themeKey: string;

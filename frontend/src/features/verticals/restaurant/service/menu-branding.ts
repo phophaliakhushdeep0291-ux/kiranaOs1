@@ -9,6 +9,8 @@
  * configuration.
  */
 
+import { restaurantWebsiteUrl } from "@/features/core/customer-order/restaurant-website";
+
 export interface MenuThemeOption {
   key: string;
   label: string;
@@ -35,6 +37,7 @@ export const MENU_THEME_OPTIONS: MenuThemeOption[] = [
 ];
 
 export interface MenuBrand {
+  websiteUrl?: string;
   displayName: string;
   tagline: string;
   theme: string;
@@ -53,6 +56,7 @@ export const BLANK_BRAND: MenuBrand = {
   theme: "classic",
   logoUrl: "",
   footerNote: "",
+  websiteUrl: "",
 };
 
 export function readRestaurantSettings(prefs: Record<string, unknown> | undefined): RestaurantSettings {
@@ -68,6 +72,7 @@ export function readMenuBrand(prefs: Record<string, unknown> | undefined): MenuB
     theme: MENU_THEME_OPTIONS.some((option) => option.key === brand.theme) ? String(brand.theme) : "classic",
     logoUrl: String(brand.logoUrl ?? ""),
     footerNote: String(brand.footerNote ?? ""),
+    websiteUrl: restaurantWebsiteUrl(brand.websiteUrl) ?? "",
   };
 }
 
@@ -92,6 +97,10 @@ export function guestCancellationWindow(prefs: Record<string, unknown> | undefin
  */
 export function toStoredBrand(brand: MenuBrand): Partial<MenuBrand> {
   const stored: Partial<MenuBrand> = {};
+  const websiteUrl = restaurantWebsiteUrl(brand.websiteUrl);
+  if (brand.websiteUrl?.trim() && !websiteUrl) throw new Error("Use a public HTTPS DineIn menu URL ending in /r/your-restaurant.");
+  // Persist an explicit empty value so a merge-based settings save can disable redirects.
+  stored.websiteUrl = websiteUrl ?? "";
   const displayName = brand.displayName.trim();
   const tagline = brand.tagline.trim();
   const footerNote = brand.footerNote.trim();

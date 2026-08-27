@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { restaurantWebsiteUrl } from "@/features/core/customer-order/restaurant-website";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import {
   ChefHat, Clock, ExternalLink, Flame, Loader2, Palette, Search, Settings2, Sparkles, Trash2, Utensils,
@@ -919,6 +920,7 @@ function BrandEditor({
   }, [open, brand, guestOrders, cancellationMinutes]);
 
   const preview = themeOption(draft.theme);
+  const invalidWebsite = Boolean(draft.websiteUrl?.trim() && !restaurantWebsiteUrl(draft.websiteUrl));
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
@@ -954,6 +956,13 @@ function BrandEditor({
             ))}
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="restaurant-website">Restaurant website URL</Label>
+            <Input id="restaurant-website" value={draft.websiteUrl ?? ""} placeholder="https://dinein-production.up.railway.app/r/my-restaurant" onChange={event => setDraft({ ...draft, websiteUrl: event.target.value })} aria-invalid={invalidWebsite} />
+            <p className="text-xs text-[#64748b]">Your own DineIn menu address. New QR codes and old printed links will open this website. Leave empty to use KiranaOS. Deploy and verify the destination first.</p>
+            {invalidWebsite && <p role="alert" className="text-xs text-red-700">Enter a public HTTPS URL ending in /r/your-restaurant, without query parameters.</p>}
+            {restaurantWebsiteUrl(draft.websiteUrl) && <a className="text-sm underline" href={restaurantWebsiteUrl(draft.websiteUrl)!} target="_blank" rel="noreferrer">Preview restaurant website</a>}
+          </div>
           <div className="space-y-1.5">
             <Label>Name on the menu</Label>
             <Input
@@ -1014,8 +1023,8 @@ function BrandEditor({
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button
-            disabled={disabled || saving}
-            onClick={async () => { setSaving(true); await onSave(draft, orders, cancelMinutes); setSaving(false); }}
+            disabled={disabled || saving || invalidWebsite}
+            onClick={async () => { setSaving(true); try { await onSave(draft, orders, cancelMinutes); } finally { setSaving(false); } }}
           >
             {saving ? "Saving…" : "Save"}
           </Button>

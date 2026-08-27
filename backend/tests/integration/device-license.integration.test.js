@@ -23,7 +23,10 @@ if (ctx.skip) {
       const device = assertSuccess(await ctx.post("/api/devices/activate", { deviceId: "license-device-1", deviceName: "Counter" }, { token: ownerAuth.accessToken }), 201);
       assert.equal(device.deviceId, "license-device-1");
       assert.equal(device.license.payload.deviceId, "license-device-1");
-      assert.equal(device.license.payload.planCode, "starter");
+      assert.equal(device.license.payload.planCode, "pro");
+      assert.equal(device.license.payload.subscriptionStatus, "trial");
+      assert.equal(device.license.payload.maxDevices, 10);
+      assert.ok(device.license.payload.features.includes("premium_support"));
       assert.equal(device.license.algorithm, "HMAC-SHA256");
     });
 

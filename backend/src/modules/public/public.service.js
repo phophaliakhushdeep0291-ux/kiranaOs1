@@ -344,14 +344,19 @@ export async function createPublicGuestRequest(shopId, tableId, body = {}, optio
     orderBy: { requestedAt: "desc" },
   });
   if (recent) return { ...recent, duplicate: true };
-  const created = await db.restaurantGuestRequest.create({ data: {
-    shopId, tableId: table.id, tableCode: table.code, tableName: table.name,
-    orderId, type, reason, splitMode,
-  } });
-  await createAuditLog({
-    shopId, userId: null, action: type === "bill" ? "GUEST_BILL_REQUESTED" : "GUEST_WAITER_REQUESTED",
-    entityType: "RestaurantGuestRequest", entityId: created.id, after: { tableId: table.id, tableName: table.name, type },
-    req: options.actor?.req ?? null,
+  const created = await db.$transaction(async (tx) => {
+    const request = await tx.restaurantGuestRequest.create({ data: {
+      shopId, tableId: table.id, tableCode: table.code, tableName: table.name,
+      orderId, type, reason, splitMode,
+    } });
+    await writeRequiredPublicOrderAudit({
+      shopId, userId: null, deviceId: null,
+      action: type === "bill" ? "GUEST_BILL_REQUESTED" : "GUEST_WAITER_REQUESTED",
+      entityType: "RestaurantGuestRequest", entityId: request.id,
+      after: { tableId: table.id, tableName: table.name, type },
+      req: options.actor?.req ?? null,
+    }, tx);
+    return request;
   });
   return { ...created, duplicate: false };
 }

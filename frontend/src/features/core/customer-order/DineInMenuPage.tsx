@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
+import { guestWebsiteRedirect } from "./restaurant-website";
 import {
   AlertTriangle, ChefHat, CheckCircle2, Clock, Flame, Leaf, Loader2, Minus, Plus,
   RefreshCw, Search, ShoppingBag, Utensils, WifiOff, X,
@@ -98,7 +99,12 @@ export default function DineInMenuPage() {
     const cached = readCachedCatalog(shopCode);
     if (cached) setState({ kind: "ready", catalog: cached });
     loadCustomerCatalog(shopCode, {}, undefined, tableCode)
-      .then((res) => { if (active) setState({ kind: "ready", catalog: res.catalog }); })
+      .then((res) => {
+        if (!active) return;
+        const destination = res.source === "network" ? guestWebsiteRedirect(res.catalog, window.location.href, tableCode) : null;
+        if (destination) { window.location.replace(destination); return; }
+        setState({ kind: "ready", catalog: res.catalog });
+      })
       .catch((err: unknown) => {
         if (!active) return;
         if (err instanceof CatalogUnavailableError) {

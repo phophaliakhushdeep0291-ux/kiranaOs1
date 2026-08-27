@@ -1,4 +1,6 @@
-CREATE TABLE "PaymentProviderConnection" (
+-- @replay-safe: the table and indexes are guarded, while the foreign key uses
+-- a duplicate-object handler because PostgreSQL has no ADD CONSTRAINT IF NOT EXISTS.
+CREATE TABLE IF NOT EXISTS "PaymentProviderConnection" (
   "id" TEXT NOT NULL,
   "shopId" TEXT NOT NULL,
   "provider" TEXT NOT NULL,
@@ -16,7 +18,15 @@ CREATE TABLE "PaymentProviderConnection" (
   "updatedAt" TIMESTAMP(3) NOT NULL,
   CONSTRAINT "PaymentProviderConnection_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX "PaymentProviderConnection_shopId_provider_key" ON "PaymentProviderConnection"("shopId", "provider");
-CREATE INDEX "PaymentProviderConnection_shopId_selected_status_idx" ON "PaymentProviderConnection"("shopId", "selected", "status");
-CREATE UNIQUE INDEX "PaymentProviderConnection_one_selected_per_shop" ON "PaymentProviderConnection"("shopId") WHERE "selected" = true;
-ALTER TABLE "PaymentProviderConnection" ADD CONSTRAINT "PaymentProviderConnection_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE UNIQUE INDEX IF NOT EXISTS "PaymentProviderConnection_shopId_provider_key" ON "PaymentProviderConnection"("shopId", "provider");
+CREATE INDEX IF NOT EXISTS "PaymentProviderConnection_shopId_selected_status_idx" ON "PaymentProviderConnection"("shopId", "selected", "status");
+CREATE UNIQUE INDEX IF NOT EXISTS "PaymentProviderConnection_one_selected_per_shop" ON "PaymentProviderConnection"("shopId") WHERE "selected" = true;
+
+DO $$
+BEGIN
+  ALTER TABLE "PaymentProviderConnection"
+    ADD CONSTRAINT "PaymentProviderConnection_shopId_fkey"
+    FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
