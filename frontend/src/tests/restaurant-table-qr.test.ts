@@ -254,10 +254,10 @@ describe("what a guest sends", () => {
 describe("one restaurant must not look like the next", () => {
   it("stores only what is worth storing", () => {
     // The settings blob has a hard 20 KB ceiling shared with the printer config
-    // and everything else, so an empty string is not worth a key.
-    expect(toStoredBrand(BLANK_BRAND)).toEqual({});
+    // and everything else. Website URL is explicit so clearing it revokes redirects.
+    expect(toStoredBrand(BLANK_BRAND)).toEqual({ websiteUrl: "" });
     expect(toStoredBrand({ ...BLANK_BRAND, displayName: "  Kaapi & Co  ", theme: "emerald" }))
-      .toEqual({ displayName: "Kaapi & Co", theme: "emerald" });
+      .toEqual({ displayName: "Kaapi & Co", theme: "emerald", websiteUrl: "" });
   });
 
   it("refuses a logo the guest's browser should not be asked to fetch", () => {

@@ -195,7 +195,7 @@ export default function MenuPage() {
   const brand = readMenuBrand(prefs);
   const guestOrders = guestOrdersEnabled(prefs);
   const cancellationMinutes = guestCancellationWindow(prefs);
-  const menuUrl = shop?.id ? `/t/${shop.id}` : "";
+  const menuUrl = restaurantWebsiteUrl(brand.websiteUrl) ?? (shop?.id ? `/t/${shop.id}` : "");
 
   if (loading) {
     return (
@@ -313,13 +313,17 @@ export default function MenuPage() {
         onClose={() => setBrandOpen(false)}
         onSave={async (next, nextGuestOrders, nextCancellationMinutes) => {
           const existing = readRestaurantSettings(prefs);
-          await patch({
+          const saved = await patch({
             restaurant: {
               ...existing,
               brand: toStoredBrand(next),
               dineIn: { ...(existing.dineIn ?? {}), guestOrders: nextGuestOrders, cancellationWindowMinutes: nextCancellationMinutes },
             },
           }, { immediate: true });
+          if (!saved) {
+            toast({ title: "Website setting was not saved online", description: "Reconnect and save again before printing QR codes.", variant: "destructive" });
+            return;
+          }
           setBrandOpen(false);
           toast({ title: "Menu look saved", description: "Guests scanning a table QR will see it on their next open." });
         }}

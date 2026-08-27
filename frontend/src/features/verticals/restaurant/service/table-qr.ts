@@ -1,4 +1,5 @@
 import { describeOrderUrlReach, resolveCustomerOrderBase, type OrderUrlReach } from "@/features/core/customer-order/order-url";
+import { restaurantGuestUrl } from "@/features/core/customer-order/restaurant-website";
 
 /**
  * Where the QR sticker on a table points.
@@ -33,12 +34,14 @@ export function tableOrderPath(shopId: string, tableCode: string): string {
 }
 
 export function buildTableOrderUrl({
+  websiteUrl,
   shopId,
   tableCode,
   configuredBaseUrl,
   currentOrigin,
   basePath = "",
 }: {
+  websiteUrl?: string | null;
   shopId: string;
   tableCode: string;
   configuredBaseUrl?: string | null;
@@ -46,6 +49,8 @@ export function buildTableOrderUrl({
   basePath?: string;
 }): string {
   if (!shopId || !tableCode) return "";
+  const dedicated = restaurantGuestUrl(websiteUrl, tableCode);
+  if (dedicated) return dedicated;
   // Built from the same resolver as the shop-wide order link, so a shop that has
   // configured a public address gets it here too rather than only on the
   // counter's QR — and so there is one answer to "where do we publish from?".
@@ -55,6 +60,7 @@ export function buildTableOrderUrl({
 }
 
 export function describeTableQr(args: {
+  websiteUrl?: string | null;
   shopId: string;
   tableCode: string;
   configuredBaseUrl?: string | null;

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { restaurantGuestUrl } from "./restaurant-website";
 import { Check, Copy, ExternalLink, Printer, QrCode } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -15,16 +16,18 @@ export function OwnerOrderingCard({
   enabled,
   onToggle,
   shopId,
+  websiteUrl,
 }: {
   enabled: boolean;
   onToggle: (next: boolean) => void | Promise<unknown>;
   shopId: string | null;
+  websiteUrl?: string | null;
 }) {
   const orderUrl = useMemo(() => {
     if (!shopId) return "";
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-    return `${window.location.origin}${base}/order/${shopId}`;
-  }, [shopId]);
+    return restaurantGuestUrl(websiteUrl) ?? `${window.location.origin}${base}/order/${shopId}`;
+  }, [shopId, websiteUrl]);
 
   const [copied, setCopied] = useState(false);
 

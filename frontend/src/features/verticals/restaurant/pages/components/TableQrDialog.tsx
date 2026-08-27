@@ -27,14 +27,15 @@ export interface TableQrDialogProps {
   table: PrintableTable | null;
   tables: PrintableTable[];
   configuredBaseUrl?: string | null;
+  websiteUrl?: string | null;
 }
 
-function qrTargets(tables: PrintableTable[], shopId: string, configuredBaseUrl?: string | null) {
+function qrTargets(tables: PrintableTable[], shopId: string, configuredBaseUrl?: string | null, websiteUrl?: string | null) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   return tables.map((table) => ({
     table,
-    ...describeTableQr({ shopId, tableCode: table.code ?? "", configuredBaseUrl, currentOrigin: origin, basePath }),
+    ...describeTableQr({ shopId, tableCode: table.code ?? "", configuredBaseUrl, websiteUrl, currentOrigin: origin, basePath }),
   }));
 }
 
@@ -78,11 +79,11 @@ function escapeHtml(value: string) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char] as string));
 }
 
-export function TableQrDialog({ open, onClose, shopId, shopName, table, tables, configuredBaseUrl }: TableQrDialogProps) {
+export function TableQrDialog({ open, onClose, shopId, shopName, table, tables, configuredBaseUrl, websiteUrl }: TableQrDialogProps) {
   const printable = useMemo(() => tablesForPrinting(tables), [tables]);
   const targets = useMemo(
-    () => qrTargets(table ? [table] : printable, shopId, configuredBaseUrl),
-    [table, printable, shopId, configuredBaseUrl],
+    () => qrTargets(table ? [table] : printable, shopId, configuredBaseUrl, websiteUrl),
+    [table, printable, shopId, configuredBaseUrl, websiteUrl],
   );
   const single = table ? targets[0] : null;
   // One warning for the whole sheet: every table shares an address, so repeating

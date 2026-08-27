@@ -18,6 +18,7 @@ import { SettingsShell } from "@/features/core/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge } from "@/features/core/settings/ui";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { OwnerOrderingCard } from "@/features/core/customer-order/OwnerOrderingCard";
+import { websiteFromPrefs } from "@/features/core/customer-order/restaurant-website";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { getBusinessTypeCompatibility, getShopBootstrap, type BusinessTypeCompatibility } from "@/features/core/settings/api";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -475,6 +476,7 @@ export default function StoreProfilePage() {
 
       {/* Customer QR self-order (owner opt-in) */}
       <OwnerOrderingCard
+        websiteUrl={websiteFromPrefs(prefs)}
         enabled={Boolean((prefs.customerOrdering as { enabled?: boolean } | undefined)?.enabled)}
         onToggle={async (v) => {
           const updated = await patch({ customerOrdering: { enabled: v } }, { immediate: true });

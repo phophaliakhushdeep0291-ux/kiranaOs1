@@ -79,7 +79,7 @@ function newIdempotencyKey(shopCode: string, tableCode: string): string {
 export default function DineInMenuPage() {
   const params = useParams<{ shopCode: string; tableCode?: string }>();
   const shopCode = params.shopCode ?? "";
-  const tableCode = params.tableCode ?? "";
+  const tableCode = params.tableCode ?? new URLSearchParams(window.location.search).get("table") ?? "";
 
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [cartLines, setCartLines] = useState<GuestCartLine[]>([]);

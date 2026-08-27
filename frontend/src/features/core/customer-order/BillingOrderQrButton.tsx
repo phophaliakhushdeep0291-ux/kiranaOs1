@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { restaurantGuestUrl, websiteFromPrefs } from "./restaurant-website";
 import { Printer, QrCode, X } from "lucide-react";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
@@ -33,8 +34,8 @@ export function BillingOrderQrButton() {
   const orderUrl = useMemo(() => {
     if (!shopId) return "";
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-    return `${window.location.origin}${base}/order/${shopId}`;
-  }, [shopId]);
+    return restaurantGuestUrl(websiteFromPrefs(prefs)) ?? `${window.location.origin}${base}/order/${shopId}`;
+  }, [shopId, prefs]);
 
   function printQr() {
     if (!orderUrl) return;

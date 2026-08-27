@@ -25,6 +25,8 @@ import { fireKitchenTicket, listKitchenTickets, listTables, publishFloorPlan } f
 import { mergeServerCodes, unpublishedTables } from "../service/table-qr";
 import { TableQrDialog } from "./components/TableQrDialog";
 import { useAuth } from "@/features/core/auth/useAuth";
+import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
+import { websiteFromPrefs } from "@/features/core/customer-order/restaurant-website";
 
 function inr(n: number) {
   return `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -75,6 +77,7 @@ async function syncFloorCodes(plan: RestaurantTable[]): Promise<RestaurantTable[
 }
 
 export default function TablesPage() {
+  const { prefs } = useSettingsPrefs();
   const { toast } = useToast();
   const { shop } = useAuth();
   const [, navigate] = useLocation();
@@ -361,6 +364,7 @@ export default function TablesPage() {
       />
 
       <TableQrDialog
+        websiteUrl={websiteFromPrefs(prefs)}
         open={Boolean(qrFor) || qrSheetOpen}
         table={qrFor}
         tables={tables}
