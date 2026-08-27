@@ -32,7 +32,7 @@ function parseItems(json) {
 }
 
 function shapeOrder(order) {
-  const { itemsJson, ...rest } = order;
+  const { itemsJson, acceptanceKey, ...rest } = order;
   return { ...rest, items: parseItems(itemsJson) };
 }
 
@@ -96,12 +96,22 @@ export async function listCustomerOrders(shopId, { status, sourceChannel, paymen
   };
 }
 
-export async function updateCustomerOrderStatus(shopId, orderId, { status, paymentStatus, billId, locationId, actor = {} } = {}) {
+export async function updateCustomerOrderStatus(shopId, orderId, { status, paymentStatus, billId, acceptanceKey, locationId, actor = {} } = {}) {
   if (status && !ORDER_STATUSES.includes(status)) throw new AppError("Invalid order status", 400);
   if (paymentStatus && !PAYMENT_STATUSES.includes(paymentStatus)) throw new AppError("Invalid payment status", 400);
   const result = await db.$transaction(async (tx) => {
     const existing = await tx.customerOrder.findFirst({ where: { id: orderId, shopId, ...(locationId ? { locationId } : {}) } });
     if (!existing) throw new AppError("Order not found", 404);
+    // A persisted client operation key owns the local bill import. Do not expose
+    // it in order listings: another till must not borrow a claim on retry.
+    if (acceptanceKey) {
+      if (status !== "accepted" || existing.fulfillmentType !== "dine_in") {
+        throw new AppError("Table acceptance requires a dine-in order", 400);
+      }
+      if (existing.status !== "new" && !(existing.status === "accepted" && existing.acceptanceKey === acceptanceKey)) {
+        throw new AppError("This order was already handled. Check the accepting till before adding food.", 409, "ORDER_ALREADY_CLAIMED");
+      }
+    }
     if (status && status !== existing.status && !ALLOWED_TRANSITIONS[existing.status]?.has(status)) {
       const error = new AppError(`Order cannot move from ${existing.status} to ${status}`, 409, "INVALID_ORDER_TRANSITION");
       error.publicData = { currentStatus: existing.status, requestedStatus: status };
@@ -137,6 +147,7 @@ export async function updateCustomerOrderStatus(shopId, orderId, { status, payme
 
     const now = new Date();
     const updateData = {
+      ...(acceptanceKey ? { acceptanceKey } : {}),
       ...(status ? { status, fulfillmentStatus: FULFILLMENT_STATUS_BY_ORDER_STATUS[status] } : {}),
       ...(paymentStatus ? { paymentStatus } : {}),
       ...(billId !== undefined ? { billId: billId || null } : {}),

@@ -339,6 +339,7 @@ model CustomerOrder {
   status            String    @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
   billId            String?
   idempotencyKey    String?
+  acceptanceKey    String?
   acceptedAt        DateTime?
   readyAt           DateTime?
   fulfilledAt       DateTime?

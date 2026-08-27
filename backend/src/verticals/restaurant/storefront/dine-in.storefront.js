@@ -228,7 +228,9 @@ async function prepareOrderLines({ shopId, settings, rawItems, products, orderab
     const productId = String(raw?.productId ?? "");
     const product = byId.get(productId);
     const qty = Math.round(Math.max(0, Number(raw?.qty ?? raw?.quantity ?? 0)) * 100) / 100;
-    if (!product || qty <= 0 || (orderableIds && !orderableIds.has(productId))) continue;
+    if (!product || !Number.isFinite(qty) || qty <= 0 || (orderableIds && !orderableIds.has(productId))) {
+      throw new AppError("An item is no longer available. Refresh the menu before ordering.", 409, "MENU_ITEM_UNAVAILABLE");
+    }
 
     const variations = (product.sellingUnits ?? []).filter(
       (unit) => unit.unitType === PORTION_UNIT_TYPE && unit.isActive !== false,
@@ -283,6 +285,7 @@ async function prepareOrderLines({ shopId, settings, rawItems, products, orderab
       unit: variation?.name ?? product.rateUnit ?? product.displayUnit ?? "plate",
       price,
       basePrice,
+      note: typeof raw.note === "string" ? raw.note.trim().slice(0, 280) : null,
       qty,
       variation: variation ? { unitCode: variation.unitCode, name: variation.name, price: basePrice } : null,
       addons,

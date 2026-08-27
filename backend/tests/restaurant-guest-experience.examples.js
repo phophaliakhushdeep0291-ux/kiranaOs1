@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import db from "../src/db.js";
 import "../src/verticals/restaurant/storefront/dine-in.storefront.js";
-import { createPublicGuestRequest, submitPublicOrderFeedback } from "../src/modules/public/public.service.js";
+import { createPublicGuestRequest, submitPublicOrderFeedback, getPublicOrderStatus } from "../src/modules/public/public.service.js";
 import { listGuestRequests, setGuestRequestStatus } from "../src/verticals/restaurant/service-ops/guest-requests.service.js";
 
 const settingsJson = JSON.stringify({
@@ -13,8 +13,13 @@ const shop = await db.shop.create({ data: { name: `Guest experience ${Date.now()
 const table = await db.restaurantTable.create({ data: { shopId: shop.id, code: "t5", name: "T5" } });
 const order = await db.customerOrder.create({ data: {
   shopId: shop.id, customerName: "T5", customerMobile: "", fulfillmentType: "dine_in",
-  tableId: table.id, tableName: table.name, itemsJson: "[]", status: "fulfilled", fulfillmentStatus: "fulfilled",
+  tableId: table.id, tableName: table.name, itemsJson: JSON.stringify([{ productId: "dish-test", name: "Dish", qty: 1, price: 100, variation: { unitCode: "large", name: "Large" } }]), status: "fulfilled", fulfillmentStatus: "fulfilled",
 } });
+
+const tracked = await getPublicOrderStatus(shop.id, order.id);
+assert.equal(tracked.tableCode, "t5", "tracker returns the QR code, not the display name");
+assert.equal(tracked.items[0].productId, "dish-test", "reorder needs the original product id");
+assert.equal(tracked.items[0].variation.unitCode, "large");
 
 const feedback = await submitPublicOrderFeedback(shop.id, order.id, { rating: 5, comment: "Excellent" });
 assert.equal(feedback.rating, 5);

@@ -22,6 +22,7 @@ export async function updateStatus(req, res, next) {
       status: req.body?.status,
       paymentStatus: req.body?.paymentStatus,
       billId: req.body?.billId,
+      acceptanceKey: req.body?.acceptanceKey,
       locationId: req.operationalLocation?.id,
       actor: {
         userId: req.user?.userId ?? null,

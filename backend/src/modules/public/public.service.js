@@ -158,10 +158,12 @@ function parseOrderLines(json) {
     const parsed = JSON.parse(json || "[]");
     if (!Array.isArray(parsed)) return [];
     return parsed.map((l) => ({
+      productId: l.productId,
       name: l.name,
       qty: l.qty,
       price: l.price,
       unit: l.unit,
+      note: l.note ?? null,
       variation: l.variation ?? null,
       addons: Array.isArray(l.addons) ? l.addons : [],
     }));
@@ -186,6 +188,10 @@ export async function getPublicOrderStatus(shopId, orderId) {
     select: { id: true, status: true, paymentStatus: true, fulfillmentStatus: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, tableId: true, tableName: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
   });
   if (!order) throw new AppError("We couldn't find that order.", 404);
+  const table = order.tableId ? await db.restaurantTable.findFirst({
+    where: { id: order.tableId, shopId, active: true, deletedAt: null },
+    select: { code: true },
+  }) : null;
   const settings = parseShopSettings(shop.settingsJson);
   const cancelPolicy = await resolveStorefrontCancellationPolicy({ shopId, shop, settings });
   const cancelMinutes = Number(cancelPolicy?.windowMinutes ?? 0);
@@ -201,6 +207,7 @@ export async function getPublicOrderStatus(shopId, orderId) {
     fulfillmentType: order.fulfillmentType,
     promisedSlot: order.promisedSlot,
     tableId: order.tableId ?? null,
+    tableCode: table?.code ?? null,
     tableName: order.tableName ?? null,
     location: order.location,
     itemCount: order.itemCount,

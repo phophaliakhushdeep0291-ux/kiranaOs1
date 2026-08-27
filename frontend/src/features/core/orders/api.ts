@@ -7,6 +7,7 @@ export interface CustomerOrderItem {
   price: number;
   qty: number;
   basePrice?: number;
+  note?: string | null;
   variation?: { unitCode: string; name: string; price: number } | null;
   addons?: Array<{ optionId: string; groupName: string; name: string; price: number; quantity: number }>;
 }
@@ -65,7 +66,7 @@ export function listCustomerOrders(status?: string, cursor?: string | null) {
   return apiRequest<CustomerOrdersResponse>(`/orders${query ? `?${query}` : ""}`);
 }
 
-export function updateCustomerOrder(id: string, data: { status?: CustomerOrder["status"]; paymentStatus?: CustomerOrder["paymentStatus"]; billId?: string | null }) {
+export function updateCustomerOrder(id: string, data: { status?: CustomerOrder["status"]; paymentStatus?: CustomerOrder["paymentStatus"]; billId?: string | null; acceptanceKey?: string }) {
   return apiRequest<CustomerOrder>(`/orders/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),

@@ -176,7 +176,7 @@ describe("what a guest sends", () => {
     expect(pendingGuestOrders(orders, ["b"]).map((row) => row.id)).toEqual(["a"]);
   });
 
-  it("re-prices from the shop's own catalogue, not from the phone", () => {
+  it("preserves the server-priced order when the catalogue changes", () => {
     const products = [
       { id: "p1", name: "Masala Dosa", rateUnit: "plate", defaultPricePerRateUnit: 140 } as unknown as Product,
     ];
@@ -184,8 +184,8 @@ describe("what a guest sends", () => {
     expect(skipped).toEqual([]);
     expect(lines).toHaveLength(1);
     expect(lines[0].quantity).toBe(2);
-    // 140, not the 120 that travelled through the guest's phone.
-    expect(lines[0].rate).toBe(140);
+    // The server priced this order at 120 before the catalogue changed to 140.
+    expect(lines[0].rate).toBe(120);
   });
 
   it("says which items it could not match rather than dropping them silently", () => {
@@ -215,7 +215,7 @@ describe("what a guest sends", () => {
     expect(merged).toHaveLength(2);
   });
 
-  it("keeps a guest's portion and options, but refreshes their current prices", () => {
+  it("keeps the server snapshot of a guest's portion and options", () => {
     const product = {
       id: "p1",
       name: "Masala Dosa",
@@ -236,8 +236,8 @@ describe("what a guest sends", () => {
     }] as unknown as MenuDish[];
     const { lines } = guestOrderCartLines(configuredOrder, [product], menu);
     expect(lines[0].sellingUnit?.unitCode).toBe("portion-half");
-    expect(lines[0].rate).toBe(90);
-    expect(lines[0].addons).toEqual([{ optionId: "cheese", groupName: "Extras", name: "Cheese", price: 30, quantity: 1 }]);
+    expect(lines[0].rate).toBe(80);
+    expect(lines[0].addons).toEqual([{ optionId: "cheese", groupName: "Extras", name: "Old cheese", price: 25, quantity: 1 }]);
   });
 
   it("never merges two differently configured dishes", () => {

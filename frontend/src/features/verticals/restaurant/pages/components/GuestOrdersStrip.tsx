@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
-import { listCustomerOrders, updateCustomerOrder, type CustomerOrder } from "@/features/core/orders/api";
+import { listCustomerOrders, type CustomerOrder } from "@/features/core/orders/api";
 import { useListProducts } from "@/features/core/products/queries";
 import { loadFloorPlan, type RestaurantTable } from "../../service/table-store";
-import { acceptGuestOrderToTable, loadAcceptedOrderIds, pendingGuestOrders } from "../../service/guest-orders";
+import { acceptGuestOrderToTable, loadAcceptedOrderIds, loadPendingGuestOrders, pendingGuestOrders } from "../../service/guest-orders";
 
 /**
  * Orders guests sent from the QR on their own table.
@@ -40,26 +40,30 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [response, accepted, plan] = await Promise.all([
+    const [response, accepted, plan, pending] = await Promise.all([
       listCustomerOrders("new").catch(() => null),
       loadAcceptedOrderIds(),
       loadFloorPlan(),
+      loadPendingGuestOrders(),
     ]);
     setTables(plan);
-    if (!response) return;
-    setOrders(pendingGuestOrders(response.orders, accepted));
+    const unique = new Map([...pendingGuestOrders(response?.orders ?? [], accepted), ...pending].map((order) => [order.id, order]));
+    setOrders([...unique.values()]);
   }, []);
 
   useEffect(() => {
-    void refresh();
-    const timer = window.setInterval(() => { void refresh(); }, POLL_MS);
-    const onFocus = () => void refresh();
+    const safeRefresh = () => { void refresh().catch(() => {
+      toast({ title: "Could not load guest orders", description: "Check this device's storage and connection.", variant: "destructive" });
+    }); };
+    safeRefresh();
+    const timer = window.setInterval(safeRefresh, POLL_MS);
+    const onFocus = safeRefresh;
     window.addEventListener("focus", onFocus);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [refresh]);
+  }, [refresh, toast]);
 
   async function accept(order: CustomerOrder) {
     // QR orders now carry the server table id. Name remains a compatibility
@@ -77,9 +81,6 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
     setBusyId(order.id);
     try {
       const result = await acceptGuestOrderToTable(order, table, products.data ?? []);
-      // Told to the server too, so a second till does not offer the same order
-      // again and the guest's tracker stops saying "sent".
-      await updateCustomerOrder(order.id, { status: "accepted" }).catch(() => undefined);
       await refresh();
       onAccepted?.();
       toast({
@@ -91,7 +92,7 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
     } catch (err) {
       toast({
         title: "Could not add that order",
-        description: err instanceof Error ? err.message : "Try again.",
+        description: `${err instanceof Error ? err.message : "Try again."} Retry on this till; do not manually add the same food.`,
         variant: "destructive",
       });
     } finally {
@@ -135,7 +136,7 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
             <Button
               size="sm"
               className="mt-3 h-9 w-full gap-1.5 rounded-[8px] text-[12px] font-black"
-              disabled={busyId === order.id}
+              disabled={busyId !== null}
               data-testid={`accept-guest-order-${order.id}`}
               onClick={() => void accept(order)}
             >

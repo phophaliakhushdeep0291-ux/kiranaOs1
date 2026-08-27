@@ -16,6 +16,7 @@ export const updateCustomerOrderSchema = z.object({
   status: z.enum(customerOrderStatuses).optional(),
   paymentStatus: z.enum(customerOrderPaymentStatuses).optional(),
   billId: z.string().trim().min(1).max(120).nullable().optional(),
+  acceptanceKey: z.string().uuid().optional(),
 }).refine(
   (value) => value.status !== undefined || value.paymentStatus !== undefined || value.billId !== undefined,
   "A status, payment status, or bill must be supplied",

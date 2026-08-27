@@ -1,11 +1,9 @@
 import { offlineDB } from "@/lib/offline/db";
 import { HELD_BILLS_KEY, newBillId, upsertOpenBill } from "@/features/core/billing/pages/open-bills";
-import { productSellingPrice } from "@/features/core/billing/pages/billing-calculations";
 import { cartItemKey, type CartItem, type HeldBill } from "@/features/core/billing/pages/billing-types";
-import type { CustomerOrder } from "@/features/core/orders/api";
+import { updateCustomerOrder, type CustomerOrder } from "@/features/core/orders/api";
 import type { MenuDish, Product } from "@/types/api";
-import { loadTableBills, saveTableBills, type RestaurantTable } from "./table-store";
-import { getMenuBoard } from "./restaurant-api";
+import { TABLE_BILLS_KEY, type RestaurantTable } from "./table-store";
 
 /**
  * A guest's own order, joined to the table they are sitting at.
@@ -24,11 +22,21 @@ import { getMenuBoard } from "./restaurant-api";
 /** Which guest orders have already been added, so accepting twice cannot double a table's food. */
 export const ACCEPTED_GUEST_ORDERS_KEY = "kirana-os:restaurant:accepted-guest-orders:v1";
 
-/** Kept short: this only has to outlive one service, not one shop. */
-const MAX_REMEMBERED = 300;
+export const PENDING_GUEST_ORDERS_KEY = "kirana-os:restaurant:pending-guest-orders:v1";
+interface PendingAcceptance {
+  key: string;
+  order: CustomerOrder;
+  table: RestaurantTable;
+  lines: CartItem[];
+}
+
+export async function loadPendingGuestOrders(): Promise<CustomerOrder[]> {
+  const pending = await offlineDB.getSetting<Record<string, PendingAcceptance>>(PENDING_GUEST_ORDERS_KEY);
+  return Object.values(pending ?? {}).map((entry) => entry.order);
+}
 
 export async function loadAcceptedOrderIds(): Promise<string[]> {
-  const rows = await offlineDB.getSetting<string[]>(ACCEPTED_GUEST_ORDERS_KEY).catch(() => null);
+  const rows = await offlineDB.getSetting<string[]>(ACCEPTED_GUEST_ORDERS_KEY);
   return Array.isArray(rows) ? rows : [];
 }
 
@@ -36,8 +44,7 @@ export async function rememberAcceptedOrder(orderId: string): Promise<void> {
   const current = await loadAcceptedOrderIds();
   if (current.includes(orderId)) return;
   await offlineDB
-    .setSetting(ACCEPTED_GUEST_ORDERS_KEY, [orderId, ...current].slice(0, MAX_REMEMBERED))
-    .catch(() => undefined);
+    .setSetting(ACCEPTED_GUEST_ORDERS_KEY, [orderId, ...current]);
 }
 
 /** Dine-in orders a guest has sent and the floor has not yet taken. */
@@ -53,13 +60,10 @@ export function pendingGuestOrders(orders: CustomerOrder[], acceptedIds: string[
 /**
  * Turn a guest's order lines into cart lines.
  *
- * The price is re-read from this shop's own catalogue rather than taken from the
- * order. The server already re-priced it once when the guest sent it, and this
- * re-prices it again at the till — because between the two a rate may have moved,
- * and the number the customer pays must be the shop's current one, not a figure
- * that travelled through a phone.
+ * Prices come from the server's validated order snapshot, never the guest's
+ * submitted amount. A catalogue change after placement must not change the quote.
  */
-export function guestOrderCartLines(order: CustomerOrder, products: Product[], menuDishes: MenuDish[] = []): {
+export function guestOrderCartLines(order: CustomerOrder, products: Product[], _menuDishes: MenuDish[] = []): {
   lines: CartItem[];
   skipped: string[];
 } {
@@ -74,7 +78,6 @@ export function guestOrderCartLines(order: CustomerOrder, products: Product[], m
 
   const lines: CartItem[] = [];
   const skipped: string[] = [];
-  const menuById = new Map(menuDishes.map((dish) => [dish.id, dish]));
   for (const item of order.items ?? []) {
     const product = byId.get(item.productId);
     if (!product) {
@@ -85,28 +88,29 @@ export function guestOrderCartLines(order: CustomerOrder, products: Product[], m
     const sellingUnit = item.variation?.unitCode
       ? (product.sellingUnits ?? []).find((unit) => unit.unitCode === item.variation?.unitCode && unit.isActive !== false)
       : undefined;
-    const dish = menuById.get(product.id);
-    const currentOptions = new Map((dish?.addonGroups ?? []).flatMap((group) => group.options.map((option) => [option.id, { ...option, groupName: group.name }] as const)));
-    const addons = (item.addons ?? []).map((addon) => {
-      const current = currentOptions.get(addon.optionId);
-      return {
-        optionId: addon.optionId,
-        groupName: current?.groupName ?? addon.groupName,
-        name: current?.name ?? addon.name,
-        price: current?.price ?? addon.price,
-        quantity: addon.quantity,
-      };
-    });
+    if (item.variation && !sellingUnit) {
+      skipped.push(`${item.name}: portion unavailable`);
+      continue;
+    }
+    const addons = (item.addons ?? []).map((addon) => ({ ...addon }));
+    const addonTotal = addons.reduce((sum, addon) => sum + addon.price * (addon.quantity ?? 1), 0);
+    const rate = Number(item.basePrice ?? item.variation?.price ?? (item.price - addonTotal));
+    if (!Number.isFinite(rate) || rate < 0 || !Number.isFinite(Number(item.qty)) || Number(item.qty) <= 0) {
+      skipped.push(`${item.name}: invalid price or quantity`);
+      continue;
+    }
     lines.push({
       product,
       quantity,
-      rate: sellingUnit ? Number(sellingUnit.defaultPrice ?? 0) : productSellingPrice(product, quantity),
-      unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece",
+      rate,
+      manualRate: true,
+      guestSnapshot: true,
+      unit: item.unit || sellingUnit?.name || product.rateUnit || product.displayUnit || "piece",
       sellingUnit,
       addons,
       // Carried onto the line so the kitchen ticket shows what the guest asked
       // for. A note typed on a phone is the only thing they could not say aloud.
-      note: order.note ? order.note.slice(0, 120) : undefined,
+      note: [item.note, order.note].filter(Boolean).join(" — ") || undefined,
     });
   }
   return { lines, skipped };
@@ -153,37 +157,43 @@ export async function acceptGuestOrderToTable(
   table: RestaurantTable,
   products: Product[],
 ): Promise<AcceptGuestOrderResult> {
-  const board = await getMenuBoard().catch(() => null);
-  const menuDishes = board?.courses.flatMap((section) => section.dishes) ?? [];
-  const { lines, skipped } = guestOrderCartLines(order, products, menuDishes);
+  // Journal BEFORE the network call. A timeout or restart retains the same key
+  // and snapshot. Concurrent tabs share the IndexedDB transaction, not a mutex
+  // in one React component. Never keep a DB transaction open across the network.
+  const operation = await offlineDB.transaction(["settings"], async (tx) => {
+    const accepted = await loadAcceptedOrderIds();
+    if (accepted.includes(order.id)) return null;
+    const pending = await offlineDB.getSetting<Record<string, PendingAcceptance>>(PENDING_GUEST_ORDERS_KEY) ?? {};
+    if (pending[order.id]) return pending[order.id];
+    const { lines, skipped } = guestOrderCartLines(order, products);
+    if (!lines.length || skipped.length) {
+      throw new Error(`Order not accepted. Refresh the catalogue: ${skipped.join(", ") || "no items available"}.`);
+    }
+    const entry = { key: crypto.randomUUID(), order, table, lines };
+    await tx.setSetting(PENDING_GUEST_ORDERS_KEY, { ...pending, [order.id]: entry });
+    return entry;
+  });
+  if (!operation) return { billId: "", added: 0, skipped: [] };
 
-  const [heldRaw, map] = await Promise.all([
-    offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null),
-    loadTableBills(),
-  ]);
-  let held = Array.isArray(heldRaw) ? heldRaw : [];
+  await updateCustomerOrder(order.id, { status: "accepted", acceptanceKey: operation.key });
 
-  const existingId = map[table.id];
-  const existing = held.find((entry) => entry.id === existingId) ?? null;
-  const bill: HeldBill = existing
-    ? { ...existing, cart: mergeCartLines(existing.cart ?? [], lines) }
-    : {
-      id: newBillId(),
-      label: `${table.name} • table`,
-      createdAt: new Date().toISOString(),
-      cart: lines,
-      selectedCustomerId: "walk_in",
-      customerName: table.name,
-    };
-
-  held = upsertOpenBill(held, bill);
-  map[table.id] = bill.id;
-
-  await Promise.all([
-    offlineDB.setSetting(HELD_BILLS_KEY, held).catch(() => undefined),
-    saveTableBills(map),
-    rememberAcceptedOrder(order.id),
-  ]);
-
-  return { billId: bill.id, added: lines.length, skipped };
+  return offlineDB.transaction(["settings"], async (tx) => {
+    const accepted = await loadAcceptedOrderIds();
+    if (accepted.includes(order.id)) return { billId: "", added: 0, skipped: [] };
+    const held = await offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY) ?? [];
+    const map = await offlineDB.getSetting<Record<string, string>>(TABLE_BILLS_KEY) ?? {};
+    const pending = await offlineDB.getSetting<Record<string, PendingAcceptance>>(PENDING_GUEST_ORDERS_KEY) ?? {};
+    const target = operation.table;
+    const existing = held.find((entry) => entry.id === map[target.id]);
+    const bill: HeldBill = existing
+      ? { ...existing, cart: mergeCartLines(existing.cart ?? [], operation.lines) }
+      : { id: newBillId(), label: `${target.name} • table`, createdAt: new Date().toISOString(),
+          cart: operation.lines, selectedCustomerId: "walk_in", customerName: target.name };
+    delete pending[order.id];
+    await tx.setSetting(HELD_BILLS_KEY, upsertOpenBill(held, bill));
+    await tx.setSetting(TABLE_BILLS_KEY, { ...map, [target.id]: bill.id });
+    await tx.setSetting(ACCEPTED_GUEST_ORDERS_KEY, [...accepted, order.id]);
+    await tx.setSetting(PENDING_GUEST_ORDERS_KEY, pending);
+    return { billId: bill.id, added: operation.lines.length, skipped: [] };
+  });
 }
