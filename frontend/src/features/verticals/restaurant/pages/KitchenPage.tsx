@@ -128,7 +128,7 @@ export default function KitchenPage() {
 
       {/* Sits above the pass because it is not on the pass yet: a guest's order
           is a request until somebody takes it onto a table's bill. */}
-      <GuestOrdersStrip onAccepted={() => void refresh()} />
+      <GuestOrdersStrip readOnly />
       <GuestRequestsStrip />
 
       {open.length === 0 && !refreshFailed ? (

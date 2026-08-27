@@ -26,7 +26,7 @@ import { acceptGuestOrderToTable, loadAcceptedOrderIds, loadPendingGuestOrders, 
 
 const POLL_MS = 20_000;
 
-export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
+export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?: () => void; readOnly?: boolean }) {
   const { toast } = useToast();
   const { t } = useAppLanguage();
   // The counter's own catalogue hook, deliberately. Swapping it for a lighter
@@ -68,6 +68,7 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
   }, [refresh, toast, t]);
 
   async function accept(order: CustomerOrder) {
+    if (readOnly) return;
     // QR orders now carry the server table id. Name remains a compatibility
     // fallback for orders created before that field was introduced.
     const table = tables.find((row) => row.id === order.tableId)
@@ -135,7 +136,7 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
             {order.promisedSlot ? (
               <p className="mt-1.5 rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-800">Scheduled: {order.promisedSlot}</p>
             ) : null}
-            <Button
+            {readOnly ? <p className="mt-3 text-xs text-[#52627e]">Waiting for the billing counter to accept and send this order to the kitchen.</p> : <Button
               size="sm"
               className="mt-3 h-9 w-full gap-1.5 rounded-[8px] text-[12px] font-black"
               disabled={busyId !== null}
@@ -143,7 +144,7 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
               onClick={() => void accept(order)}
             >
               <Utensils size={13} /> {busyId === order.id ? "Adding…" : `Add to ${order.tableName ?? "table"}`}
-            </Button>
+            </Button>}
           </article>
         ))}
       </div>
