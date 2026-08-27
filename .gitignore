@@ -27,13 +27,6 @@ dev.db
 .vscode/
 .idea/
 .claude/
-
-# ...but the committed run-skill under frontend/.claude/skills/ must survive that
-# rule. Git cannot re-include a file whose parent directory is excluded, so each
-# level is negated in turn — dropping any one line silently un-commits the skill.
-!frontend/.claude/
-!frontend/.claude/skills/
-!frontend/.claude/skills/**
 .DS_Store
 
 # One-off local probes and deployment-trigger marker files are never product
