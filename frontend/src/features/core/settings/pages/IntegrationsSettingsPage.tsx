@@ -15,6 +15,7 @@ import { Badge, Card, CardHead, Fld, Kpi, type Tone } from "@/features/core/sett
 import { loadPrinterConfig } from "@/features/core/settings/printer-config";
 import { postTallyViaHardwareBridge, type TallyPostResult } from "@/features/core/hardware/local-hardware-bridge";
 import type { ReactNode } from "react";
+import { PaymentProviderConnectionsCard } from "@/features/core/settings/PaymentProviderConnectionsCard";
 
 type ProviderStatus = "ready" | "available" | "setup_required" | "sandbox_only" | "adapter_required" | "development_only" | "upgrade_required";
 type Provider = { id: string; name: string; category: string; status: ProviderStatus; detail: string };
@@ -361,6 +362,8 @@ export default function IntegrationsSettingsPage() {
           </div>
         </div>
       </Card>
+
+      <PaymentProviderConnectionsCard />
 
       <Dialog open={keyOpen} onOpenChange={setKeyOpen}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>{t("settings.integrations.createScopedKey")}</DialogTitle><DialogDescription>{t("settings.integrations.createScopedKeyHelp")}</DialogDescription></DialogHeader><div className="space-y-4"><Fld label={t("settings.integrations.credentialName")}><Input value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder={t("settings.integrations.credentialNamePlaceholder")} /></Fld><Fld label={t("settings.integrations.autoExpiry")} hint={t("settings.integrations.autoExpiryHelp")}><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={keyTtlDays} onChange={(event) => setKeyTtlDays(event.target.value)}><option value="30">{t("settings.integrations.days30")}</option><option value="90">{t("settings.integrations.days90")}</option><option value="365">{t("settings.integrations.year1")}</option><option value="0">{t("settings.integrations.neverValue")}</option></select></Fld><div><p className="mb-1.5 text-[12px] font-semibold text-[#45577a]">{t("settings.integrations.permissions")}</p><div className="space-y-2">{apiScopes(t).map((scope) => <label key={scope.id} className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#e4ebf6] p-3"><Checkbox checked={scopes.includes(scope.id)} onCheckedChange={(checked) => setScopes((current) => checked ? [...new Set([...current, scope.id])] : current.filter((item) => item !== scope.id))} /><span><span className="block text-sm font-bold text-[var(--brand-ink)]">{scope.label}</span><span className="block text-xs text-[#64748b]">{scope.detail}</span></span></label>)}</div></div></div><DialogFooter><Button variant="outline" onClick={() => setKeyOpen(false)}>{t("settings.integrations.cancel")}</Button><Button onClick={createKey}>{t("settings.integrations.continueSecurely")}</Button></DialogFooter></DialogContent></Dialog>
 

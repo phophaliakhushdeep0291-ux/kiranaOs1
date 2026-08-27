@@ -39,6 +39,7 @@ model Shop {
   bills                         Bill[]
   payments                      Payment[]
   retailPaymentIntents          RetailPaymentIntent[]
+  paymentProviderConnections    PaymentProviderConnection[]
   stockLedger                   StockLedger[]
   udharLedger                   UdharLedger[]
   suppliers                     Supplier[]
@@ -339,7 +340,7 @@ model CustomerOrder {
   status            String    @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
   billId            String?
   idempotencyKey    String?
-  acceptanceKey    String?
+  acceptanceKey     String?
   acceptedAt        DateTime?
   readyAt           DateTime?
   fulfilledAt       DateTime?
@@ -365,20 +366,20 @@ model CustomerOrder {
 }
 
 model RestaurantGuestRequest {
-  id          String   @id @default(cuid())
-  shopId      String
-  tableId     String
-  tableCode   String
-  tableName   String
-  orderId     String?
-  type        String
-  reason      String?
-  splitMode   String?
-  status      String   @default("pending")
-  requestedAt DateTime @default(now())
+  id             String    @id @default(cuid())
+  shopId         String
+  tableId        String
+  tableCode      String
+  tableName      String
+  orderId        String?
+  type           String
+  reason         String?
+  splitMode      String?
+  status         String    @default("pending")
+  requestedAt    DateTime  @default(now())
   acknowledgedAt DateTime?
-  completedAt DateTime?
-  updatedAt   DateTime @updatedAt
+  completedAt    DateTime?
+  updatedAt      DateTime  @updatedAt
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
@@ -853,6 +854,29 @@ model RetailPaymentIntent {
 
   @@index([shopId, locationId, status, createdAt])
   @@index([status, expiresAt])
+}
+
+model PaymentProviderConnection {
+  id                      String    @id @default(cuid())
+  shopId                  String
+  provider                String
+  environment             String    @default("test")
+  encryptedCredentials    String
+  keyIdHint               String
+  webhookSecretConfigured Boolean   @default(false)
+  selected                Boolean   @default(false)
+  status                  String    @default("configured")
+  verifiedAt              DateTime?
+  lastVerifiedAt          DateTime?
+  createdByUserId         String?
+  updatedByUserId         String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, provider])
+  @@index([shopId, selected, status])
 }
 
 model StoreLocation {

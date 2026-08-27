@@ -5,7 +5,7 @@ import https from "https";
 import net from "net";
 import db from "../../db.js";
 import { env } from "../../config/env.js";
-import { retailPaymentReadiness } from "../payment-provider/retailPayment.service.js";
+import { retailPaymentReadinessForShop } from "../payment-provider/retailPayment.service.js";
 import { gspHttpReadiness } from "../compliance/gsp-http.provider.js";
 import { AppError } from "../../middleware/error.js";
 import { getObjectStorageStatus } from "../../lib/objectStorage.js";
@@ -177,7 +177,7 @@ export async function getOverview(shopId) {
   ]);
   const storage = getObjectStorageStatus();
   const whatsapp = getWhatsAppProviderStatus();
-  const retailPayment = retailPaymentReadiness();
+  const retailPayment = await retailPaymentReadinessForShop(shopId);
   const gstProvider = env.GST_PROVIDER === "gsp_http" ? gspHttpReadiness() : { configured: env.GST_PROVIDER === "sandbox", legalSubmission: false, providerName: env.GST_PROVIDER === "sandbox" ? "Sandbox" : null };
   let flipkartLocationCount = 0;
   try {

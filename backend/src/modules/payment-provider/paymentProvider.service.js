@@ -550,8 +550,8 @@ export async function verifySubscriptionPayment({ shopId, userId, input, req = n
   return { activated: true, ...result };
 }
 
-export async function handleRazorpayWebhook({ rawBody, signature, req = null }) {
-  const verification = verifyWebhookSignature(rawBody, signature);
+export async function handleRazorpayWebhook({ rawBody, signature, req = null, credentials = null, expectedShopId = null }) {
+  const verification = verifyWebhookSignature(rawBody, signature, credentials);
   if (!verification.verified) {
     await auditPaymentAction({
       shopId: null,
@@ -569,6 +569,9 @@ export async function handleRazorpayWebhook({ rawBody, signature, req = null }) 
   const eventId = getWebhookEventId(payload);
   const eventType = payload?.event || "unknown";
   const shopId = extractWebhookShopId(payload);
+  if (expectedShopId && shopId !== expectedShopId) {
+    throw new AppError("Razorpay webhook shop binding is invalid", 400, "PAYMENT_WEBHOOK_SHOP_MISMATCH");
+  }
   const event = await storeProviderEvent({ provider: "razorpay", eventId, eventType, payload, signatureVerified: true, shopId });
   const retryingDuplicate = Boolean(event.duplicate && isRetryableProviderEvent(event));
 

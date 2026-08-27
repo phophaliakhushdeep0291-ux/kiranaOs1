@@ -35,7 +35,7 @@
     "test:atomic-offers": "node tests/offer-bill-atomicity.examples.js",
     "test:ai-safety": "node tests/ai-hallucination-guard.examples.js && node tests/ai-red-team-corpus.examples.js && node tests/diagnostic-ai-grounding.examples.js && node tests/assurance-ai-grounding.examples.js && node tests/competitive-evidence.examples.js && node tests/invoice-ocr.examples.js && node tests/shop-maintenance-lock.examples.js && node tests/backup-model-policy.examples.js && node tests/database-backup-offsite.examples.js",
     "competitive:evidence": "node scripts/check-competitive-evidence.js",
-    "test:retail-payment": "node tests/retail-payment-integrity.examples.js && node tests/dynamic-upi-qr.examples.js && node tests/retail-qr-image.examples.js",
+    "test:retail-payment": "node tests/payment-credentials.examples.js && node tests/retail-payment-integrity.examples.js && node tests/dynamic-upi-qr.examples.js && node scripts/run-db-example-tests.js tests/payment-provider-connections.examples.js tests/retail-qr-image.examples.js",
     "test:card-terminal": "node tests/card-terminal.examples.js",
     "test:channel-settlement": "node tests/channel-settlement.examples.js",
     "test:flipkart": "node tests/flipkart-seller.examples.js",

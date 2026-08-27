@@ -3,12 +3,18 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { validate } from "../../middleware/validate.js";
-import { cardTerminalChargeSchema, manualPaymentSchema, reconcileCardTerminalChargeSchema, retailIntentSchema, verifyRetailIntentSchema } from "./paymentProvider.schemas.js";
+import { cardTerminalChargeSchema, manualPaymentSchema, paymentConnectionSchema, reconcileCardTerminalChargeSchema, retailIntentSchema, verifyRetailIntentSchema } from "./paymentProvider.schemas.js";
 import * as ctrl from "./paymentProvider.controller.js";
 
 const router = Router();
 
 router.post("/razorpay/webhook", ctrl.razorpayWebhook);
+router.post("/webhooks/razorpay/:connectionId", ctrl.restaurantRazorpayWebhook);
+router.get("/connections", requireAuth, requireShop, requireDeviceActivated(), requireRole("owner", "admin"), ctrl.listPaymentConnections);
+router.put("/connections/:provider", requireAuth, requireShop, requireDeviceActivated(), requireRole("owner", "admin"), requireOwnerPin, validate(paymentConnectionSchema), ctrl.savePaymentConnection);
+router.post("/connections/:provider/verify", requireAuth, requireShop, requireDeviceActivated(), requireRole("owner", "admin"), requireOwnerPin, ctrl.verifyPaymentConnection);
+router.post("/connections/:provider/select", requireAuth, requireShop, requireDeviceActivated(), requireRole("owner", "admin"), requireOwnerPin, ctrl.selectPaymentConnection);
+router.post("/connections/:provider/disable", requireAuth, requireShop, requireDeviceActivated(), requireRole("owner", "admin"), requireOwnerPin, ctrl.disablePaymentConnection);
 router.get("/retail/readiness", requireAuth, requireShop, requireDeviceActivated(), ctrl.retailReadiness);
 router.post("/retail/intents", requireAuth, requireShop, requireDeviceActivated(), validate(retailIntentSchema), ctrl.createRetailIntent);
 router.get("/retail/intents/:id/status", requireAuth, requireShop, requireDeviceActivated(), ctrl.retailIntentStatus);

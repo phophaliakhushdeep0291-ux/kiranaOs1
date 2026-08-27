@@ -15,6 +15,7 @@ import {
 } from "./razorpay.provider.js";
 import { validateRetailQrPayment, validateRetailUpiPayment } from "./retailPayment.validation.js";
 import { extractQrModules, packQrModules } from "./qr-image.js";
+import { getSelectedPaymentConnection } from "./paymentConnections.service.js";
 
 const QR_IMAGE_FETCH_TIMEOUT_MS = 6_000;
 const QR_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
@@ -31,9 +32,24 @@ export function retailPaymentReadiness() {
   };
 }
 
+export async function retailPaymentReadinessForShop(shopId) {
+  const selected = await getSelectedPaymentConnection(shopId, "razorpay");
+  if (!selected) return retailPaymentReadiness();
+  return {
+    provider: selected.provider,
+    configured: true,
+    confirmationRequired: true,
+    serverVerified: true,
+    dynamicQrEnabled: false,
+    environment: selected.environment,
+  };
+}
+
 export async function createRetailPaymentIntent({ shopId, requestedLocationId, userId, amountPaise, mode = "checkout" }) {
+  const selectedConnection = await getSelectedPaymentConnection(shopId, "razorpay");
+  const credentials = selectedConnection?.credentials ?? null;
   const readiness = retailPaymentReadiness();
-  if (!readiness.configured) throw new AppError("Verified retail payment checkout is not configured", 503, "RETAIL_PAYMENT_PROVIDER_NOT_CONFIGURED");
+  if (!selectedConnection && !readiness.configured) throw new AppError("Verified retail payment checkout is not configured", 503, "RETAIL_PAYMENT_PROVIDER_NOT_CONFIGURED");
   if (mode === "dynamic_qr" && !readiness.dynamicQrEnabled) {
     throw new AppError("Provider-confirmed dynamic UPI QR is not enabled for this Razorpay account", 503, "RETAIL_DYNAMIC_QR_NOT_ENABLED");
   }
@@ -50,10 +66,10 @@ export async function createRetailPaymentIntent({ shopId, requestedLocationId, u
         description: `Retail payment at ${location.name}`,
         closeBy: Math.floor(expiresAt.getTime() / 1000),
         notes: { product: "kiranaos_retail_qr", intentId: intent.id, shopId, locationId: location.id },
-      });
+      }, credentials);
       const validation = validateCreatedQrCode(intent, qrCode);
       if (!validation.valid) {
-        if (qrCode?.id) await closeRazorpayQrCode(qrCode.id).catch(() => null);
+        if (qrCode?.id) await closeRazorpayQrCode(qrCode.id, credentials).catch(() => null);
         throw new AppError(validation.reason, 502, "RETAIL_QR_PROVIDER_MISMATCH");
       }
       const providerExpiry = Number(qrCode.close_by) > 0 ? new Date(Number(qrCode.close_by) * 1000) : expiresAt;
@@ -68,9 +84,9 @@ export async function createRetailPaymentIntent({ shopId, requestedLocationId, u
       amountPaise,
       receipt: intent.id,
       notes: { product: "kiranaos_retail", intentId: intent.id, shopId, locationId: location.id },
-    });
+    }, credentials);
     await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "pending", providerOrderId: order.id } });
-    return { intentId: intent.id, provider: "razorpay", razorpayKeyId: getRazorpayCheckoutKeyId(), orderId: order.id, amountPaise, currency: "INR", expiresAt: expiresAt.toISOString(), location: { id: location.id, name: location.name } };
+    return { intentId: intent.id, provider: "razorpay", razorpayKeyId: credentials?.keyId || getRazorpayCheckoutKeyId(), orderId: order.id, amountPaise, currency: "INR", expiresAt: expiresAt.toISOString(), location: { id: location.id, name: location.name } };
   } catch (error) {
     await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "failed", failureReason: String(error?.message || "Order creation failed").slice(0, 500) } }).catch(() => {});
     throw error;
@@ -148,9 +164,10 @@ export async function getRetailPaymentIntentStatus({ shopId, intentId }) {
   if (intent.checkoutMode !== "dynamic_qr" || !intent.providerQrCodeId || intent.status === "confirmed") return retailIntentResponse(intent);
   if (!["creating", "pending"].includes(intent.status)) return retailIntentResponse(intent);
 
+  const credentials = (await getSelectedPaymentConnection(shopId, "razorpay"))?.credentials ?? null;
   const [qrCode, payments] = await Promise.all([
-    fetchRazorpayQrCode(intent.providerQrCodeId),
-    fetchRazorpayQrCodePayments(intent.providerQrCodeId),
+    fetchRazorpayQrCode(intent.providerQrCodeId, credentials),
+    fetchRazorpayQrCodePayments(intent.providerQrCodeId, credentials),
   ]);
   const createdValidation = validateCreatedQrCode({ ...intent, amountPaise: intent.amountPaise }, { ...qrCode, status: qrCode.status === "closed" ? "active" : qrCode.status });
   if (!createdValidation.valid) throw new AppError(createdValidation.reason, 409, "RETAIL_QR_PROVIDER_MISMATCH");
@@ -225,7 +242,8 @@ export async function cancelRetailPaymentIntent({ shopId, intentId, userId, user
     throw new AppError("Only the cashier who started this QR can cancel it", 403, "RETAIL_PAYMENT_INTENT_FORBIDDEN");
   }
   if (intent.status === "confirmed") throw new AppError("A confirmed payment cannot be cancelled from checkout", 409, "RETAIL_PAYMENT_ALREADY_CONFIRMED");
-  if (intent.providerQrCodeId && ["creating", "pending"].includes(intent.status)) await closeRazorpayQrCode(intent.providerQrCodeId);
+  const credentials = (await getSelectedPaymentConnection(shopId, "razorpay"))?.credentials ?? null;
+  if (intent.providerQrCodeId && ["creating", "pending"].includes(intent.status)) await closeRazorpayQrCode(intent.providerQrCodeId, credentials);
   const updated = await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "cancelled", failureReason: "Cancelled by cashier before confirmation" } });
   return retailIntentResponse(updated);
 }
@@ -244,8 +262,9 @@ export async function verifyRetailPaymentIntent({ shopId, intentId, input }) {
     throw new AppError("Retail payment intent has expired", 409, "RETAIL_PAYMENT_INTENT_EXPIRED");
   }
   if (intent.providerOrderId !== input.razorpay_order_id) throw new AppError("Payment order does not match this retail intent", 409, "RETAIL_PAYMENT_ORDER_MISMATCH");
-  if (!verifyPaymentSignature(input).verified) throw new AppError("Invalid Razorpay payment signature", 400, "INVALID_PAYMENT_SIGNATURE");
-  const [payment, order] = await Promise.all([fetchRazorpayPayment(input.razorpay_payment_id), fetchRazorpayOrder(input.razorpay_order_id)]);
+  const credentials = (await getSelectedPaymentConnection(shopId, "razorpay"))?.credentials ?? null;
+  if (!verifyPaymentSignature(input, credentials).verified) throw new AppError("Invalid Razorpay payment signature", 400, "INVALID_PAYMENT_SIGNATURE");
+  const [payment, order] = await Promise.all([fetchRazorpayPayment(input.razorpay_payment_id, credentials), fetchRazorpayOrder(input.razorpay_order_id, credentials)]);
   assertRemotePayment(intent, input.razorpay_order_id, input.razorpay_payment_id, payment, order);
   return db.retailPaymentIntent.update({
     where: { id: intent.id },

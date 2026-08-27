@@ -83,6 +83,9 @@ const envSchema = z.object({
   RETAIL_PAYMENT_PROVIDER: z.enum(["manual", "razorpay"]).default("manual"),
   RETAIL_PAYMENT_CONFIRMATION_REQUIRED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   RETAIL_PAYMENT_INTENT_TTL_MINUTES: z.coerce.number().int().min(3).max(60).default(15),
+  // 32-byte base64 or 64-character hex key used only to encrypt restaurant-owned
+  // provider credentials. Rotating it requires a deliberate credential migration.
+  PAYMENT_CREDENTIALS_ENCRYPTION_KEY: z.string().optional(),
   // Card/EDC terminal at the counter. "simulated" confirms charges with no bank
   // behind them and exists only for development and automated tests; the
   // production guard below refuses to boot with it enabled.

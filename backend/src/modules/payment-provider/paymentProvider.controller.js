@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import * as service from "./paymentProvider.service.js";
 import * as retailService from "./retailPayment.service.js";
 import * as terminalService from "./cardTerminal.service.js";
+import * as connectionService from "./paymentConnections.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 
 export async function manualActivate(req, res, next) {
@@ -34,6 +35,16 @@ export async function razorpayWebhook(req, res, next) {
   } catch (err) { next(err); }
 }
 
+export async function restaurantRazorpayWebhook(req, res, next) {
+  try {
+    const connection = await connectionService.getPaymentConnectionForWebhook(req.params.connectionId, "razorpay");
+    if (!connection) throw new AppError("Payment webhook endpoint was not found", 404, "PAYMENT_WEBHOOK_NOT_FOUND");
+    const signature = req.headers["x-razorpay-signature"];
+    const result = await service.handleRazorpayWebhook({ rawBody: req.body, signature, req, credentials: connection.credentials, expectedShopId: connection.shopId });
+    res.status(200).json({ success: true, data: result });
+  } catch (err) { next(err); }
+}
+
 export async function listEvents(req, res, next) {
   try {
     const events = await service.listProviderEvents({
@@ -54,7 +65,7 @@ export async function retryEvent(req, res, next) {
 }
 
 export async function retailReadiness(req, res, next) {
-  try { res.json({ success: true, data: retailService.retailPaymentReadiness() }); } catch (err) { next(err); }
+  try { res.json({ success: true, data: await retailService.retailPaymentReadinessForShop(req.shopId) }); } catch (err) { next(err); }
 }
 
 export async function createRetailIntent(req, res, next) {
@@ -117,4 +128,24 @@ export async function cancelRetailIntent(req, res, next) {
 
 export async function verifyRetailIntent(req, res, next) {
   try { res.json({ success: true, data: await retailService.verifyRetailPaymentIntent({ shopId: req.shopId, intentId: req.params.id, input: req.body }) }); } catch (err) { next(err); }
+}
+
+export async function listPaymentConnections(req, res, next) {
+  try { res.json({ success: true, data: await connectionService.listPaymentConnections(req.shopId) }); } catch (err) { next(err); }
+}
+
+export async function savePaymentConnection(req, res, next) {
+  try { res.json({ success: true, data: await connectionService.savePaymentConnection({ shopId: req.shopId, userId: req.user?.userId, provider: req.params.provider, input: req.body, req }) }); } catch (err) { next(err); }
+}
+
+export async function verifyPaymentConnection(req, res, next) {
+  try { res.json({ success: true, data: await connectionService.verifyPaymentConnection({ shopId: req.shopId, userId: req.user?.userId, provider: req.params.provider, req }) }); } catch (err) { next(err); }
+}
+
+export async function selectPaymentConnection(req, res, next) {
+  try { res.json({ success: true, data: await connectionService.selectPaymentConnection({ shopId: req.shopId, userId: req.user?.userId, provider: req.params.provider, req }) }); } catch (err) { next(err); }
+}
+
+export async function disablePaymentConnection(req, res, next) {
+  try { res.json({ success: true, data: await connectionService.disablePaymentConnection({ shopId: req.shopId, userId: req.user?.userId, provider: req.params.provider, req }) }); } catch (err) { next(err); }
 }

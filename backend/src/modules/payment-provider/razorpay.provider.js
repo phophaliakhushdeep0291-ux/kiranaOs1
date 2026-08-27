@@ -20,8 +20,16 @@ export function getRazorpayCheckoutKeyId() {
   return env.RAZORPAY_KEY_ID || null;
 }
 
-export async function createRazorpayOrder({ amountPaise, currency = "INR", receipt, notes = {} }) {
-  assertRazorpayConfigured();
+export async function verifyRazorpayCredentials(credentials) {
+  const keyId = String(credentials?.keyId || "");
+  const keySecret = String(credentials?.keySecret || "");
+  if (!keyId || !keySecret) throw new AppError("Razorpay credentials are incomplete", 400, "PAYMENT_CREDENTIALS_INCOMPLETE");
+  await razorpayRequest("/orders?count=1", { method: "GET" }, { keyId, keySecret });
+  return { accountReachable: true };
+}
+
+export async function createRazorpayOrder({ amountPaise, currency = "INR", receipt, notes = {} }, credentials = null) {
+  if (!credentials) assertRazorpayConfigured();
   const payload = {
     amount: amountPaise,
     currency,
@@ -31,19 +39,19 @@ export async function createRazorpayOrder({ amountPaise, currency = "INR", recei
   return razorpayRequest("/orders", {
     method: "POST",
     body: JSON.stringify(payload),
-  });
+  }, credentials);
 }
 
-export async function fetchRazorpayPayment(paymentId) {
-  assertRazorpayConfigured();
+export async function fetchRazorpayPayment(paymentId, credentials = null) {
+  if (!credentials) assertRazorpayConfigured();
   if (!paymentId) throw new AppError("Razorpay payment id is required", 400);
-  return razorpayRequest(`/payments/${encodeURIComponent(paymentId)}`, { method: "GET" });
+  return razorpayRequest(`/payments/${encodeURIComponent(paymentId)}`, { method: "GET" }, credentials);
 }
 
-export async function fetchRazorpayOrder(orderId) {
-  assertRazorpayConfigured();
+export async function fetchRazorpayOrder(orderId, credentials = null) {
+  if (!credentials) assertRazorpayConfigured();
   if (!orderId) throw new AppError("Razorpay order id is required", 400);
-  return razorpayRequest(`/orders/${encodeURIComponent(orderId)}`, { method: "GET" });
+  return razorpayRequest(`/orders/${encodeURIComponent(orderId)}`, { method: "GET" }, credentials);
 }
 
 export async function fetchRazorpayOrderByReceipt(receipt) {
@@ -54,8 +62,8 @@ export async function fetchRazorpayOrderByReceipt(receipt) {
   return items.find((order) => order?.receipt === receipt) ?? null;
 }
 
-export async function createRazorpayQrCode({ amountPaise, name, description, closeBy, notes = {} }) {
-  assertRazorpayConfigured();
+export async function createRazorpayQrCode({ amountPaise, name, description, closeBy, notes = {} }, credentials = null) {
+  if (!credentials) assertRazorpayConfigured();
   return razorpayRequest("/payments/qr_codes", {
     method: "POST",
     body: JSON.stringify({
@@ -68,48 +76,50 @@ export async function createRazorpayQrCode({ amountPaise, name, description, clo
       close_by: closeBy,
       notes: sanitizeNotes(notes),
     }),
-  });
+  }, credentials);
 }
 
-export async function fetchRazorpayQrCode(qrCodeId) {
-  assertRazorpayConfigured();
+export async function fetchRazorpayQrCode(qrCodeId, credentials = null) {
+  if (!credentials) assertRazorpayConfigured();
   if (!qrCodeId) throw new AppError("Razorpay QR code id is required", 400);
-  return razorpayRequest(`/payments/qr_codes/${encodeURIComponent(qrCodeId)}`, { method: "GET" });
+  return razorpayRequest(`/payments/qr_codes/${encodeURIComponent(qrCodeId)}`, { method: "GET" }, credentials);
 }
 
-export async function fetchRazorpayQrCodePayments(qrCodeId) {
-  assertRazorpayConfigured();
+export async function fetchRazorpayQrCodePayments(qrCodeId, credentials = null) {
+  if (!credentials) assertRazorpayConfigured();
   if (!qrCodeId) throw new AppError("Razorpay QR code id is required", 400);
-  return razorpayRequest(`/payments/qr_codes/${encodeURIComponent(qrCodeId)}/payments?count=10`, { method: "GET" });
+  return razorpayRequest(`/payments/qr_codes/${encodeURIComponent(qrCodeId)}/payments?count=10`, { method: "GET" }, credentials);
 }
 
-export async function closeRazorpayQrCode(qrCodeId) {
-  assertRazorpayConfigured();
+export async function closeRazorpayQrCode(qrCodeId, credentials = null) {
+  if (!credentials) assertRazorpayConfigured();
   if (!qrCodeId) throw new AppError("Razorpay QR code id is required", 400);
-  return razorpayRequest(`/payments/qr_codes/${encodeURIComponent(qrCodeId)}/close`, { method: "POST", body: "{}" });
+  return razorpayRequest(`/payments/qr_codes/${encodeURIComponent(qrCodeId)}/close`, { method: "POST", body: "{}" }, credentials);
 }
 
-export function verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature }) {
-  if (!env.RAZORPAY_KEY_SECRET) {
+export function verifyPaymentSignature({ razorpay_order_id, razorpay_payment_id, razorpay_signature }, credentials = null) {
+  const keySecret = credentials?.keySecret || env.RAZORPAY_KEY_SECRET;
+  if (!keySecret) {
     return { verified: false, reason: "RAZORPAY_KEY_SECRET not configured" };
   }
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     return { verified: false, reason: "Missing Razorpay payment signature fields" };
   }
   const signedPayload = `${razorpay_order_id}|${razorpay_payment_id}`;
-  const expected = crypto.createHmac("sha256", env.RAZORPAY_KEY_SECRET).update(signedPayload).digest("hex");
+  const expected = crypto.createHmac("sha256", keySecret).update(signedPayload).digest("hex");
   return timingSafeCompareHex(expected, razorpay_signature)
     ? { verified: true, reason: null }
     : { verified: false, reason: "Invalid Razorpay payment signature" };
 }
 
-export function verifyWebhookSignature(rawBody, signature) {
-  if (!env.RAZORPAY_WEBHOOK_SECRET) {
+export function verifyWebhookSignature(rawBody, signature, credentials = null) {
+  const webhookSecret = credentials?.webhookSecret || env.RAZORPAY_WEBHOOK_SECRET;
+  if (!webhookSecret) {
     return { verified: false, reason: "RAZORPAY_WEBHOOK_SECRET not configured" };
   }
   if (!signature) return { verified: false, reason: "Missing Razorpay webhook signature" };
   const bodyBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody ?? ""));
-  const expected = crypto.createHmac("sha256", env.RAZORPAY_WEBHOOK_SECRET).update(bodyBuffer).digest("hex");
+  const expected = crypto.createHmac("sha256", webhookSecret).update(bodyBuffer).digest("hex");
   return timingSafeCompareHex(expected, signature)
     ? { verified: true, reason: null }
     : { verified: false, reason: "Invalid Razorpay webhook signature" };
@@ -140,8 +150,10 @@ function timingSafeCompareHex(expected, actual) {
   return crypto.timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
-async function razorpayRequest(path, options = {}) {
-  const auth = Buffer.from(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`).toString("base64");
+async function razorpayRequest(path, options = {}, credentials = null) {
+  const keyId = credentials?.keyId || env.RAZORPAY_KEY_ID;
+  const keySecret = credentials?.keySecret || env.RAZORPAY_KEY_SECRET;
+  const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
   const response = await fetch(`${RAZORPAY_API_BASE}${path}`, {
     ...options,
     headers: {

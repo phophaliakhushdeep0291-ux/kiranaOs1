@@ -41,3 +41,11 @@ export const verifyRetailIntentSchema = z.object({
   razorpay_payment_id: z.string().min(1),
   razorpay_signature: z.string().min(1),
 });
+
+export const paymentConnectionSchema = z.object({
+  environment: z.enum(["test", "live"]),
+  keyId: z.string().trim().min(8).max(200),
+  keySecret: z.string().trim().min(8).max(500),
+  webhookSecret: z.string().trim().min(8).max(500),
+  ownerPin: z.string().regex(/^\d{4}$/).optional(),
+}).strict();
