@@ -271,5 +271,8 @@ export function planAtLeast(actualPlanCode, minimumPlanCode) {
   return (PLAN_ORDER[actualPlanCode] ?? 0) >= (PLAN_ORDER[minimumPlanCode] ?? 999);
 }
 
-export const DEFAULT_TRIAL_DAYS = 7;
+// New shops receive enough time and access to evaluate the complete product.
+// Keep this authoritative value aligned with the offline frontend fallback.
+export const DEFAULT_TRIAL_DAYS = 30;
+export const DEFAULT_TRIAL_PLAN_CODE = "pro";
 export const DEFAULT_GRACE_DAYS = 3;

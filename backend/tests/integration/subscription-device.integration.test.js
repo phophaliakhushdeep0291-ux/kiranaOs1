@@ -26,18 +26,24 @@ if (ctx.skip) {
 
     test("current subscription returns fallback/trial for shop without subscription", async () => {
       const { tenant, ownerAuth } = await ownerCtx({ planCode: null });
-      const trialStartedAt = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const trialStartedAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
       await ctx.db.shop.update({ where: { id: tenant.shop.id }, data: { createdAt: trialStartedAt } });
 
       const first = assertSuccess(await ctx.get("/api/subscription/current", { token: ownerAuth.accessToken }));
       const second = assertSuccess(await ctx.get("/api/subscription/current", { token: ownerAuth.accessToken }));
 
-      assert.equal(first.planCode, "starter");
+      assert.equal(first.planCode, "pro");
       assert.equal(first.status, "trial");
       assert.equal(first.source, "fallback/trial");
-      assert.equal(first.active, false);
+      assert.equal(first.active, true);
+      assert.equal(first.intendedPaidPlanCode, "starter");
+      assert.equal(first.plan.maxDevices, 10);
+      assert.equal(first.plan.maxStores, 10);
+      assert.equal(first.plan.maxStaff, 20);
+      assert.ok(first.plan.features.includes("premium_support"));
+      assert.ok(first.plan.features.includes("advanced_inventory"));
       assert.equal(new Date(first.currentPeriodStart).getTime(), trialStartedAt.getTime());
-      assert.equal(new Date(first.trialEndsAt).getTime(), trialStartedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      assert.equal(new Date(first.trialEndsAt).getTime(), trialStartedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
       assert.equal(second.trialEndsAt, first.trialEndsAt, "refreshing must never restart the fallback trial clock");
     });
 
@@ -130,11 +136,16 @@ if (ctx.skip) {
       const { tenant, ownerAuth } = await ownerCtx({ planCode: null });
       const d1 = assertSuccess(await ctx.post("/api/devices/activate", { deviceId: "device-1", deviceName: "Counter 1" }, { token: ownerAuth.accessToken }), 201);
       assert.equal(d1.deviceId, "device-1");
-      const secondAuth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
-      const d2 = assertSuccess(await ctx.post("/api/devices/activate", { deviceId: "device-2", deviceName: "Counter 2" }, { token: secondAuth.accessToken }), 201);
-      assert.equal(d2.deviceId, "device-2");
-      const thirdAuth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
-      const over = assertFailure(await ctx.post("/api/devices/activate", { deviceId: "device-3", deviceName: "Counter 3" }, { token: thirdAuth.accessToken }), 403);
+      for (let index = 2; index <= 10; index += 1) {
+        const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+        const device = assertSuccess(await ctx.post("/api/devices/activate", {
+          deviceId: `device-${index}`,
+          deviceName: `Counter ${index}`,
+        }, { token: auth.accessToken }), 201);
+        assert.equal(device.deviceId, `device-${index}`);
+      }
+      const overflowAuth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const over = assertFailure(await ctx.post("/api/devices/activate", { deviceId: "device-11", deviceName: "Counter 11" }, { token: overflowAuth.accessToken }), 403);
       assert.equal(over.code, "DEVICE_LIMIT_EXCEEDED");
       // ownerAuth's session is bound to device-1 (it activated it), so removing that slot is
       // "remove the device you're on" — which now requires the explicit removeCurrentDevice flag.
@@ -144,8 +155,8 @@ if (ctx.skip) {
         headers: { "x-device-id": "device-1" },
         body: { removeCurrentDevice: true },
       }));
-      const d3 = assertSuccess(await ctx.post("/api/devices/activate", { deviceId: "device-3", deviceName: "Counter 3" }, { token: thirdAuth.accessToken }), 201);
-      assert.equal(d3.deviceId, "device-3");
+      const replacement = assertSuccess(await ctx.post("/api/devices/activate", { deviceId: "device-11", deviceName: "Counter 11" }, { token: overflowAuth.accessToken }), 201);
+      assert.equal(replacement.deviceId, "device-11");
     });
 
     test("heartbeat updates lastActiveAt and license returns plan/features", async () => {
@@ -155,9 +166,10 @@ if (ctx.skip) {
       assert.equal(hb.deviceId, "device-1");
       assert.ok(hb.lastActiveAt);
       const license = assertSuccess(await ctx.get("/api/devices/license?deviceId=device-1", { token: ownerAuth.accessToken }));
-      assert.equal(license.planCode, "starter");
+      assert.equal(license.planCode, "pro");
       assert.ok(license.features.includes("basic_billing"));
-      assert.equal(license.maxDevices, 2);
+      assert.ok(license.features.includes("premium_support"));
+      assert.equal(license.maxDevices, 10);
     });
 
     test("razorpay webhook without a valid signature is rejected", async () => {

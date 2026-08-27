@@ -191,7 +191,7 @@ export function evaluateOfflineLicenseToken(
       billingAllowed: true,
       premiumActionsAllowed: false,
       message:
-        "No offline license is cached yet. Old data is viewable; Starter offline billing remains available during trial/grace policy.",
+        "No offline license is cached yet. Old data is viewable; trial access remains available during the trial/grace policy.",
       validUntil: null,
       offlineGraceUntil: null,
     };

@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import {
   DEFAULT_GRACE_DAYS,
   DEFAULT_TRIAL_DAYS,
+  DEFAULT_TRIAL_PLAN_CODE,
   getPlanConfig,
   PLAN_CONFIGS,
   PLAN_CODES,
@@ -89,7 +90,7 @@ export async function getCurrentSubscription(shopId, client = db) {
     const businessType = businessTypeFromSettings(parseShopSettings(shop.settingsJson));
     return fallbackSubscription(
       shopId,
-      getPlanConfigForBusinessType("starter", businessType),
+      getPlanConfigForBusinessType(DEFAULT_TRIAL_PLAN_CODE, businessType),
       shop.createdAt,
     );
   }
@@ -564,7 +565,7 @@ export async function getPlanByCode(planCode, client = db) {
   };
 }
 
-function fallbackSubscription(shopId, starterPlan = getPlanConfig("starter"), trialStartedAt = new Date()) {
+function fallbackSubscription(shopId, trialPlan = getPlanConfig(DEFAULT_TRIAL_PLAN_CODE), trialStartedAt = new Date()) {
   const now = new Date();
   const parsedTrialStart = new Date(trialStartedAt);
   const trialStart = Number.isNaN(parsedTrialStart.getTime()) ? now : parsedTrialStart;
@@ -572,7 +573,7 @@ function fallbackSubscription(shopId, starterPlan = getPlanConfig("starter"), tr
   const fallback = {
     id: null,
     shopId,
-    planCode: "starter",
+    planCode: DEFAULT_TRIAL_PLAN_CODE,
     status: "trial",
     provider: "manual",
     providerSubscriptionId: null,
@@ -584,8 +585,9 @@ function fallbackSubscription(shopId, starterPlan = getPlanConfig("starter"), tr
     createdAt: trialStart,
     updatedAt: trialStart,
     source: "fallback/trial",
-    plan: serializePlan(starterPlan),
-    warning: "No persisted subscription found; Starter trial is anchored to the shop creation date.",
+    plan: serializePlan(trialPlan),
+    intendedPaidPlanCode: "starter",
+    warning: "No persisted subscription found; the 30-day Business trial is anchored to the shop creation date.",
   };
   return { ...fallback, active: isSubscriptionActive(fallback) };
 }

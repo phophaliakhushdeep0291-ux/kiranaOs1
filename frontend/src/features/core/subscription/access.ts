@@ -22,6 +22,8 @@ import { getStoredBusinessType, subscribeToBusinessType } from "@/features/core/
 
 const DEFAULT_TRIAL_KEY = "kirana-os:subscription-default-trial:v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_TRIAL_DAYS = 30;
+const DEFAULT_TRIAL_PLAN: PlanCode = "pro";
 
 export interface SubscriptionSnapshot {
   plan: PlanDefinition;
@@ -126,7 +128,7 @@ async function getOrCreateDefaultTrial(): Promise<{
   ) {
     return {
       trialStartedAt: toIso(existing.value.trialStartedAt) ?? nowIso(),
-      trialEndsAt: toIso(existing.value.trialEndsAt) ?? addDays(new Date(), 7),
+      trialEndsAt: toIso(existing.value.trialEndsAt) ?? addDays(new Date(), DEFAULT_TRIAL_DAYS),
       offlineGraceEndsAt:
         toIso(existing.value.offlineGraceEndsAt) ?? addDays(new Date(), 14),
     };
@@ -134,8 +136,8 @@ async function getOrCreateDefaultTrial(): Promise<{
   const now = new Date();
   const value = {
     trialStartedAt: now.toISOString(),
-    trialEndsAt: addDays(now, 7),
-    offlineGraceEndsAt: addDays(now, 14),
+    trialEndsAt: addDays(now, DEFAULT_TRIAL_DAYS),
+    offlineGraceEndsAt: addDays(now, DEFAULT_TRIAL_DAYS + 7),
   };
   await dexieDB.settings
     .put({
@@ -264,7 +266,7 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
     const graceEnd = new Date(trial.offlineGraceEndsAt).getTime();
     const status: SubscriptionState = now <= trialEnd ? "trial" : "expired";
     const graceActive = now > trialEnd && now <= graceEnd;
-    const plan = getPlanForBusinessType("starter", getStoredBusinessType());
+    const plan = getPlanForBusinessType(DEFAULT_TRIAL_PLAN, getStoredBusinessType());
     return {
       plan,
       planCode: plan.code,
@@ -281,14 +283,14 @@ export async function getCurrentSubscriptionSnapshot(): Promise<SubscriptionSnap
       canCreateNewBills: true,
       message:
         status === "trial"
-          ? "Starter trial active. Your old data will always stay viewable."
+          ? "30-day Business trial active. Every service is available during the trial."
           : graceActive
             ? "Trial ended. Billing is in offline grace, cloud sync may be limited."
             : "Trial grace ended. Sales and data export remain available; other changes and cloud sync wait for renewal.",
       source: "default-trial",
       foundingCustomer: false,
       foundingEndsAt: null,
-      intendedPaidPlanCode: plan.code,
+      intendedPaidPlanCode: "starter",
     };
   }
 
