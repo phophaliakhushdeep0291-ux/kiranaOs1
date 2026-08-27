@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import type { Product } from "@/lib/api/client";
@@ -24,6 +24,8 @@ import { VariantGridEditor } from "./VariantGridEditor";
 import { VariantLocationSplit } from "./VariantLocationSplit";
 import { convertPackagingMode, type ProductFormData } from "../product-form-state";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
+import { activeCategoryNames, loadCategories, mergeCategories, type ShopCategory } from "@/features/core/inventory/category-store";
 import { generateInternalEan13 } from "@/lib/barcode/ean13";
 import { lookupKnownProduct } from "@/features/core/products/product-knowledge";
 import {
@@ -252,6 +254,7 @@ export function ProductFormPanel({
 }: ProductFormPanelProps) {
   const { t } = useAppLanguage();
   const { toast } = useToast();
+  const { prefs } = useSettingsPrefs();
   const keyboardInset = useKeyboardInset();
   const { businessType, def } = useBusinessType();
   const hasCapability = useShopCapability();
@@ -268,7 +271,23 @@ export function ProductFormPanel({
   // The product measure the draft was last seeded from, so a later change to the
   // product's own pack can be inherited without overriding a deliberate choice.
   const seededMeasureRef = useRef<string | null>(null);
-  const categories = def.categories.filter((c) => c !== "all");
+  const [savedCategories, setSavedCategories] = useState<ShopCategory[]>([]);
+  const cloudCategories = Array.isArray(prefs.categories) ? prefs.categories as ShopCategory[] : [];
+  useEffect(() => {
+    let active = true;
+    void loadCategories().then((localCategories) => {
+      if (active) setSavedCategories(mergeCategories(cloudCategories, localCategories));
+    });
+    return () => { active = false; };
+  }, [prefs.categories]);
+  const categories = useMemo(() => {
+    const builtIn = def.categories.filter((category) => category !== "all");
+    const names = new Map(builtIn.map((category) => [category.toLocaleLowerCase(), category]));
+    for (const category of activeCategoryNames(mergeCategories(cloudCategories, savedCategories))) {
+      if (!names.has(category.toLocaleLowerCase())) names.set(category.toLocaleLowerCase(), category);
+    }
+    return [...names.values()];
+  }, [cloudCategories, def.categories, savedCategories]);
   const imageUrl = form.watch("imageUrl");
   const description = form.watch("description") ?? "";
   const batchTracking = form.watch("batchTrackingEnabled");

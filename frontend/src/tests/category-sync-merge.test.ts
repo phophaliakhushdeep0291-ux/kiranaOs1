@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeCategories, type ShopCategory } from "@/features/core/inventory/category-store";
+import { activeCategoryNames, mergeCategories, type ShopCategory } from "@/features/core/inventory/category-store";
 
 function category(overrides: Partial<ShopCategory> = {}): ShopCategory {
   return {
@@ -35,5 +35,14 @@ describe("category cross-device merge", () => {
       [category({ updatedAt: "2026-07-02T00:00:00.000Z" })],
     );
     expect(merged[0].deletedAt).toBe(deletedAt);
+  });
+
+  it("offers only active, non-deleted custom categories to a new product", () => {
+    expect(activeCategoryNames([
+      category({ name: "Cold Drinks" }),
+      category({ id: "cat_2", name: "cold drinks" }),
+      category({ id: "cat_3", name: "Retired", status: "inactive" }),
+      category({ id: "cat_4", name: "Deleted", deletedAt: "2026-07-03T00:00:00.000Z" }),
+    ])).toEqual(["Cold Drinks"]);
   });
 });

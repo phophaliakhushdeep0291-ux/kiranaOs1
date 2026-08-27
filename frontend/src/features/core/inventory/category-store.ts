@@ -42,6 +42,23 @@ export async function saveCategories(list: ShopCategory[]): Promise<void> {
   await offlineDB.setSetting(KEY, list).catch(() => undefined);
 }
 
+/**
+ * Categories are stored as records for sync and hierarchy, while products only
+ * store the chosen category name. Keep the picker list to names that can still
+ * be selected: deleted and inactive categories remain in storage for history
+ * and sync, but must not be offered for a new product.
+ */
+export function activeCategoryNames(categories: ShopCategory[] | null | undefined): string[] {
+  const names = new Map<string, string>();
+  for (const category of categories ?? []) {
+    const name = category?.name?.trim();
+    if (!name || category.deletedAt || category.status !== "active") continue;
+    const key = name.toLocaleLowerCase();
+    if (!names.has(key)) names.set(key, name);
+  }
+  return [...names.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
 /** ids of every descendant of `id` (to prevent cycles when choosing a parent). */
 export function descendantIds(id: string, list: ShopCategory[]): Set<string> {
   const out = new Set<string>();
