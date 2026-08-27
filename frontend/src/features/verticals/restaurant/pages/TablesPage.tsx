@@ -261,7 +261,7 @@ export default function TablesPage() {
           </p>
           {/* Said plainly rather than implied: the floor and its tickets live on
               this device, so a second tablet keeps its own. */}
-          <p className="mt-0.5 text-[12px] text-[#8494ad]">This device's floor — tables and kitchen tickets are not shared with other devices yet.</p>
+          <p className="mt-0.5 text-[12px] text-[#8494ad]">Use one designated billing counter for open table bills and seating. Kitchen tickets are shared online; open bills and occupied seats are not shared between counters.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button

@@ -271,7 +271,7 @@ export async function readCatalogueProducts(): Promise<Product[]> {
 
 const KOT_CACHE_KEY = "restaurant:kot:server-cache:v1";
 
-export function listKitchenTickets(options: { includeServed?: boolean; billId?: string } = {}) {
+export function listKitchenTickets(options: { includeServed?: boolean; billId?: string; fresh?: boolean } = {}) {
   const params = new URLSearchParams();
   if (options.includeServed) params.set("includeServed", "true");
   if (options.billId) params.set("billId", options.billId);
@@ -279,7 +279,7 @@ export function listKitchenTickets(options: { includeServed?: boolean; billId?: 
   // Only the unfiltered rail is cached: a per-bill answer is a question about
   // one sitting, and serving a stale one would let the till re-fire an order.
   const load = () => apiRequest<KotTicket[]>(`/restaurant/kot${qs}`, { background: true });
-  return options.billId ? load() : readThrough(KOT_CACHE_KEY, load);
+  return options.billId || options.fresh ? load() : readThrough(KOT_CACHE_KEY, load);
 }
 
 export function fireKitchenTicket(input: {

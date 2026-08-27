@@ -27,13 +27,19 @@ export default function KitchenPage() {
   const { toast } = useToast();
   const [tickets, setTickets] = useState<KotTicket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [, setTick] = useState(0);
 
   const refresh = useCallback(async () => {
     // Served tickets are asked for because this screen shows a short "done"
     // rail of its own; the filtering below is what splits them.
-    setTickets(await listKitchenTickets({ includeServed: true }).catch(() => [] as KotTicket[]));
-    setLoading(false);
+    try {
+      setTickets(await listKitchenTickets({ includeServed: true, fresh: true }));
+      setRefreshFailed(false);
+    } catch {
+      // Retain the last board, but never make an outage look like an empty pass.
+      setRefreshFailed(true);
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -112,19 +118,20 @@ export default function KitchenPage() {
           <p className="text-[13px] text-[#52627e]">
             Tickets fired from the tables screen. Move each one along as it is cooked and served.
           </p>
-          <p className="mt-0.5 text-[12px] text-[#8494ad]">Showing tickets raised on this device.</p>
+          <p className="mt-0.5 text-[12px] text-[#8494ad]">Kitchen tickets are shared with the counter and refresh every five seconds while connected.</p>
         </div>
         <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/tables")}>
           <LayoutGrid size={15} /> Tables
         </Button>
       </header>
+      {refreshFailed && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Kitchen connection lost. The board may be out of date; confirm new tickets with the counter. <button type="button" className="ml-2 min-h-11 underline" onClick={() => void refresh()}>Retry</button></div>}
 
       {/* Sits above the pass because it is not on the pass yet: a guest's order
           is a request until somebody takes it onto a table's bill. */}
       <GuestOrdersStrip onAccepted={() => void refresh()} />
       <GuestRequestsStrip />
 
-      {open.length === 0 ? (
+      {open.length === 0 && !refreshFailed ? (
         <div className="rounded-2xl border border-dashed p-12 text-center">
           <ChefHat className="mx-auto mb-2 text-[#94a3b8]" size={26} />
           <p className="text-[14px] font-bold text-[var(--brand-ink)]">Nothing on the pass</p>

@@ -839,7 +839,7 @@ export default function Billing() {
         toast({ title: t("billing.page.billSaved", { billNo }), description: isOnline ? t("billing.page.billSavedOnline") : t("billing.page.billSavedOffline") });
       },
       onError: (err: unknown) => {
-        const msg = (err as { data?: { message?: string } })?.data?.message ?? t("billing.page.saveFailedLocally");
+        const msg = (err as { data?: { message?: string } })?.data?.message ?? (err instanceof Error ? err.message : t("billing.page.saveFailedLocally"));
         if (pendingAutoPrintRef.current) {
           try {
             writeBillingReceiptErrorWindow(pendingAutoPrintRef.current.popup, msg);
@@ -1316,7 +1316,15 @@ export default function Billing() {
     return () => window.removeEventListener("kirana:voice-billing-command", handler);
   }, [products.data, productSearchIndex]);
 
+  function protectGuestLine(lineKey?: string) {
+    const protectedLine = cart.find((item) => (!lineKey || cartItemKey(item) === lineKey) && (item.guestSnapshot || item.guestOrderId || item.guestOrderLineId));
+    if (!protectedLine) return false;
+    toast({ title: "Accepted QR order", description: "Keep the original guest items, portions and quantities. Add extras as separate items. For a correction, ask the manager to review the original guest order before settling.", variant: "destructive" });
+    return true;
+  }
+
   function updateQty(lineKey: string, nextQuantity: number) {
+    if (protectGuestLine(lineKey)) return;
     setCart((previous) => previous
       .map((item) => {
         if (cartItemKey(item) !== lineKey) return item;
@@ -1329,6 +1337,7 @@ export default function Billing() {
   }
 
   function updateRate(lineKey: string, nextRate: number) {
+    if (protectGuestLine(lineKey)) return;
     setCart((previous) => previous.map((item) => cartItemKey(item) === lineKey ? { ...item, rate: Math.max(0, roundMoney(nextRate)), manualRate: true } : item));
   }
 
@@ -1378,6 +1387,7 @@ export default function Billing() {
   }
 
   function updateUnit(lineKey: string, unitCode: string) {
+    if (protectGuestLine(lineKey)) return;
     setCart((previous) => {
       const current = previous.find((item) => cartItemKey(item) === lineKey);
       if (!current) return previous;
@@ -1401,6 +1411,7 @@ export default function Billing() {
   }
 
   function removeItem(lineKey: string) {
+    if (protectGuestLine(lineKey)) return;
     // Read the line before the update rather than inside the updater: React
     // re-invokes state updaters under StrictMode, and a side effect in there
     // would count the removal twice.
@@ -1881,11 +1892,13 @@ export default function Billing() {
   }
 
   function clearCartWithConfirmation() {
+    if (protectGuestLine()) return;
     if (cart.length === 0) return;
     setClearConfirmOpen(true);
   }
 
   function executeClearCart() {
+    if (protectGuestLine()) { setClearConfirmOpen(false); return; }
     setClearConfirmOpen(false);
     resetCurrentBill();
     clearBillingDraft();

@@ -178,6 +178,7 @@ function CartRow({
         <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#13274d]">
           {item.product.name}
         </p>
+        {(item.guestSnapshot || item.guestOrderId) && <p className="mt-1 text-[11px] font-medium text-[#52627e]">Accepted QR item · original quantity and portion protected</p>}
         {item.addons?.length ? (
           <div className="mt-1 flex max-w-full flex-wrap gap-1" data-testid={`addons-${item.product.id}`}>
             {item.addons.map((addon) => (

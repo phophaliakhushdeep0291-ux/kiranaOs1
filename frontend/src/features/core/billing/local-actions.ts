@@ -573,6 +573,9 @@ function localBillNoForType(billType: BillInput["billType"], billId: string) {
 }
 
 export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
+  if ((input.items ?? []).some((item) => item.guestOrderId || item.guestOrderLineId)) {
+    throw new Error("QR orders must be validated and settled online before the table is closed.");
+  }
   // Estimates (kacha bills) are full sales in everything but their EST- number series: they
   // move stock, record tender, and can carry udhar exactly like a pakka bill.
   const inputForCreation: BillInput = { ...input, locationId: input.locationId ?? getActiveLocationId() ?? undefined };
