@@ -309,6 +309,23 @@ function retryableBillPaymentValidationConflict(event: PendingSyncEvent): boolea
   );
 }
 
+/**
+ * Builds before the guest-line identity hardening could queue a CREATE_BILL with
+ * one intact QR line and one unlinked sibling. The backend now repairs that
+ * narrow legacy shape from its canonical order snapshot, so the old rejection
+ * can be retried. Keep the match on the exact public refusal: other guest-order
+ * mismatches are genuine owner-review cases and must not loop automatically.
+ */
+export function retryableGuestOrderBillValidationConflict(event: PendingSyncEvent): boolean {
+  const message = eventErrorMessage(event);
+  return (
+    eventTargetsBill(event) &&
+    operationKind(event) === "CREATE_BILL" &&
+    (isConflictOutbox(event) || isFailedOutbox(event)) &&
+    message.includes("include every guest order line before settling the table")
+  );
+}
+
 function retryablePurchaseValidationConflict(event: PendingSyncEvent): boolean {
   const kind = operationKind(event);
   const entityType = String(event.entity_type || "").toLowerCase();
@@ -545,7 +562,7 @@ export async function repairRetryableBillValidationConflicts(): Promise<number> 
   await dexieDB.open();
   const rows = filterRowsForCurrentScope(
     await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
-  ).filter(retryableBillPaymentValidationConflict);
+  ).filter((event) => retryableBillPaymentValidationConflict(event) || retryableGuestOrderBillValidationConflict(event));
 
   if (rows.length === 0) return 0;
   const now = nowIso();

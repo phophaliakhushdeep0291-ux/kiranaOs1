@@ -355,6 +355,8 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.micCouldNotStart": "माइक चालू नहीं हुआ",
   "billing.page.guestOrderProtected": "QR ऑर्डर स्वीकार हो चुका है",
   "billing.page.guestOrderProtectedHelp": "मेहमान के मूल आइटम, हिस्से और मात्रा को न बदलें। अतिरिक्त आइटम अलग से जोड़ें। सुधार के लिए भुगतान पूरा करने से पहले मैनेजर से मूल ऑर्डर की जाँच कराएँ।",
+  "billing.page.guestOrderSyncBlocked": "QR ऑर्डर का लिंक सुधारना है",
+  "billing.page.guestOrderSyncBlockedHelp": "इस स्वीकार किए गए आइटम के ऑर्डर लिंक का एक हिस्सा गायब है, इसलिए बिल सेव नहीं हुआ। भुगतान पूरा करने से पहले Dine-in से टेबल दोबारा खोलें; मूल ऑर्डर सुरक्षित है।",
   "billing.page.micStopped": "रिकॉर्डिंग बंद। बात समझ रहे हैं...",
   "billing.page.micNeedsHttps": "माइक सिर्फ localhost या HTTPS पर चलता है। ऐप को localhost/HTTPS पर खोलकर माइक की इजाज़त दें।",
   "billing.page.micBlockedByBrowser": "ब्राउज़र ने माइक रोका है",

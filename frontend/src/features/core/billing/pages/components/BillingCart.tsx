@@ -282,6 +282,7 @@ function CartRow({
         ) : lineDiscount > 0 ? (
           <button
             data-testid={`line-discount-edit-${item.product.id}`}
+            disabled={guestLocked}
             onClick={startEditDiscount}
             className="mt-1 inline-flex min-h-11 items-center gap-1 rounded-[6px] bg-[#e9f9f0] px-1.5 py-[2px] text-[10px] font-extrabold leading-none text-[#1a8a4e] transition-colors hover:bg-[#d8f3e5]"
             title={t("billing.cart.editLineDiscountHint")}
@@ -292,6 +293,7 @@ function CartRow({
         ) : (
           <button
             data-testid={`line-discount-add-${item.product.id}`}
+            disabled={guestLocked}
             onClick={startEditDiscount}
             className="group mt-1 inline-flex min-h-11 items-center gap-1 rounded-[6px] px-1 py-[1px] text-[10px] font-bold leading-none -ml-1 text-[#9aa7bd] transition-colors hover:bg-[#eef4ff] hover:text-[var(--brand)]"
             title={t("billing.cart.addLineDiscountHint")}
@@ -304,6 +306,7 @@ function CartRow({
           data-testid={`line-note-input-${item.product.id}`}
           maxLength={200}
           value={item.note ?? ""}
+          disabled={guestLocked}
           onChange={(event) => onUpdateLineNote(lineKey, event.target.value)}
           placeholder={t("billing.cart.notePlaceholder")}
           aria-label={t("billing.cart.noteFor", { name: item.product.name })}

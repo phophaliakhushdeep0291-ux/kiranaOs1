@@ -98,7 +98,8 @@ export function cartItemKey(item: CartItem): string {
   // differently, so merging them would bill both at one rate and send the
   // kitchen one ticket that cannot be made.
   const addonKey = addonFingerprint(item.addons);
-  const guestKey = item.guestSnapshot ? `::guest:${JSON.stringify([item.guestOrderLineId, item.rate, addonUnitPrice(item.addons), item.note ?? ""])}` : "";
+  const isGuestLine = Boolean(item.guestSnapshot || item.guestOrderId || item.guestOrderLineId);
+  const guestKey = isGuestLine ? `::guest:${JSON.stringify([item.guestOrderId, item.guestOrderLineId, item.rate, addonUnitPrice(item.addons), item.note ?? ""])}` : "";
   return `${item.product.id}::${unitKey}::${batchKey}::${addonKey}::${item.isCustom ? "custom" : "catalog"}${guestKey}`;
 }
 

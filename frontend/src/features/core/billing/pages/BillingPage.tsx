@@ -1358,6 +1358,7 @@ export default function Billing() {
   }
 
   function updateLineDiscount(lineKey: string, nextDiscount: number) {
+    if (protectGuestLine(lineKey)) return;
     setCart((previous) => previous.map((item) => {
       if (cartItemKey(item) !== lineKey) return item;
       const clamped = Math.min(Math.max(0, roundMoney(nextDiscount)), cartItemGross(item));
@@ -1366,6 +1367,7 @@ export default function Billing() {
   }
 
   function updateLineNote(lineKey: string, nextNote: string) {
+    if (protectGuestLine(lineKey)) return;
     setCart((previous) => previous.map((item) => {
       if (cartItemKey(item) !== lineKey) return item;
       const trimmed = nextNote.trim().slice(0, 200);
@@ -1397,6 +1399,7 @@ export default function Billing() {
   );
 
   function updateLineBatch(lineKey: string, batch?: SellableBatch) {
+    if (protectGuestLine(lineKey)) return;
     setCart((previous) => previous.map((item) => (
       cartItemKey(item) === lineKey ? { ...item, batch } : item
     )));
@@ -1607,6 +1610,18 @@ export default function Billing() {
     const isUdharEntry = nextBillType === BillInputBillType.udhar_entry;
 
     if (!validateBeforeConfirm(nextBillType)) return;
+    const brokenGuestLine = cart.find((item) => {
+      const hasGuestMarker = Boolean(item.guestSnapshot || item.guestOrderId || item.guestOrderLineId);
+      return hasGuestMarker && (!item.guestOrderId || !item.guestOrderLineId);
+    });
+    if (brokenGuestLine) {
+      toast({
+        title: t("billing.page.guestOrderSyncBlocked"),
+        description: t("billing.page.guestOrderSyncBlockedHelp"),
+        variant: "destructive",
+      });
+      return;
+    }
     if (upiTenderPaise > 0 && retailPaymentReadiness.data?.confirmationRequired && !retailPaymentVerified) {
       toast({ title: t("billing.page.verifyUpiPayment"), description: t("billing.page.providerRequired"), variant: "destructive" });
       return;

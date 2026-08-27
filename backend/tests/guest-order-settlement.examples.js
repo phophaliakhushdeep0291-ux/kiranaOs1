@@ -44,6 +44,44 @@ assert.equal((await getPublicOrderStatus(shop.id, first.id)).paymentStatus, "pai
 await settle(billBody); // durable bill retry must not double-charge
 await assert.rejects(settle({ ...billBody, clientBillId: randomUUID() }), { code: "GUEST_ORDER_BILL_MISMATCH" });
 
+// A legacy till could lose both guest identifiers from one sibling line while
+// retaining them on another. The server may recover that line only from an
+// exact, unambiguous match against the accepted server snapshot.
+const legacyOrder = await db.customerOrder.create({ data: { shopId: shop.id, locationId: location.id, customerName: "T1", customerMobile: "", tableId: table.id, tableName: "T1", fulfillmentType: "dine_in", status: "accepted", fulfillmentStatus: "preparing",
+  estimatedTotal: 300, itemsJson: JSON.stringify([
+    { productId: product.id, name: "Dosa", price: 100, qty: 1, unit: "piece" },
+    { productId: product.id, name: "Dosa", price: 100, qty: 2, unit: "piece" },
+  ]),
+} });
+const recoveredBill = await settle({ clientBillId: randomUUID(), billType: "normal_sale", gstMode: "none", customerName: "T1", discount: 0, locationId: location.id,
+  items: [
+    { productId: product.id, guestOrderId: legacyOrder.id, guestOrderLineId: `${legacyOrder.id}-0`, name: "Dosa", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
+    { productId: product.id, name: "Dosa", quantity: 2, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
+  ],
+  payments: [{ mode: "cash", amount: 300 }],
+});
+assert.equal((await db.customerOrder.findUniqueOrThrow({ where: { id: legacyOrder.id } })).billId, recoveredBill.id, "an exact legacy sibling line is repaired and linked");
+
+const ambiguousOrder = await db.customerOrder.create({ data: { shopId: shop.id, locationId: location.id, customerName: "T1", customerMobile: "", tableId: table.id, tableName: "T1", fulfillmentType: "dine_in", status: "accepted", fulfillmentStatus: "preparing",
+  estimatedTotal: 200, itemsJson: JSON.stringify([
+    { productId: product.id, name: "Dosa", price: 100, qty: 1, unit: "piece" },
+    { productId: product.id, name: "Dosa", price: 100, qty: 1, unit: "piece" },
+  ]),
+} });
+await assert.rejects(settle({ clientBillId: randomUUID(), billType: "normal_sale", gstMode: "none", customerName: "T1", discount: 0, locationId: location.id,
+  items: [
+    { productId: product.id, guestOrderId: ambiguousOrder.id, guestOrderLineId: `${ambiguousOrder.id}-0`, name: "Dosa", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
+    { productId: product.id, name: "Dosa", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
+    { productId: product.id, name: "Dosa", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
+  ], payments: [{ mode: "cash", amount: 300 }],
+}), { code: "GUEST_ORDER_BILL_MISMATCH" });
+assert.equal((await db.customerOrder.findUniqueOrThrow({ where: { id: ambiguousOrder.id } })).billId, null, "ambiguous legacy lines remain blocked");
+
+await assert.rejects(settle({ clientBillId: randomUUID(), billType: "normal_sale", gstMode: "none", customerName: "T1", discount: 0, locationId: location.id,
+  items: [{ productId: product.id, guestOrderLineId: "orphan-order-0", name: "Dosa", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 }],
+  payments: [{ mode: "cash", amount: 100 }],
+}), { code: "GUEST_ORDER_BILL_MISMATCH" });
+
 const third = await makeOrder();
 await assert.rejects(settle({ ...billBody, clientBillId: randomUUID(), items: [{ ...billBody.items[0], guestOrderId: third.id, guestOrderLineId: `${third.id}-0`, quantity: 2 }] }), { code: "GUEST_ORDER_BILL_MISMATCH" });
 assert.equal((await db.customerOrder.findUniqueOrThrow({ where: { id: third.id } })).billId, null);

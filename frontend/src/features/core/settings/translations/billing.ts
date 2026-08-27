@@ -368,6 +368,8 @@ export const billingEn = {
   "billing.page.micCouldNotStart": "Mic could not start",
   "billing.page.guestOrderProtected": "Accepted QR order",
   "billing.page.guestOrderProtectedHelp": "Keep the original guest items, portions and quantities. Add extras as separate items. For a correction, ask the manager to review the original guest order before settling.",
+  "billing.page.guestOrderSyncBlocked": "QR order link needs repair",
+  "billing.page.guestOrderSyncBlockedHelp": "This accepted item lost part of its order link, so the bill was not saved. Reopen the table from Dine-in before settling; the original order remains safe.",
   "billing.page.micStopped": "Recording stopped. Transcribing securely...",
   "billing.page.micNeedsHttps": "Mic works only on localhost or HTTPS. Open the app on localhost/HTTPS and allow microphone.",
   "billing.page.micBlockedByBrowser": "Mic blocked by browser",
