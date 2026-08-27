@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { QrCode, Utensils } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { listCustomerOrders, type CustomerOrder } from "@/features/core/orders/api";
@@ -27,6 +28,7 @@ const POLL_MS = 20_000;
 
 export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
   const { toast } = useToast();
+  const { t } = useAppLanguage();
   // The counter's own catalogue hook, deliberately. Swapping it for a lighter
   // read here was measured and made things WORSE: it broke the import edge that
   // keeps the public dine-in menu grouped with this trade's lazy chunks, and
@@ -53,7 +55,7 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
 
   useEffect(() => {
     const safeRefresh = () => { void refresh().catch(() => {
-      toast({ title: "Could not load guest orders", description: "Check this device's storage and connection.", variant: "destructive" });
+      toast({ title: t("restaurant.guest.loadFailed"), description: t("restaurant.guest.checkStorage"), variant: "destructive" });
     }); };
     safeRefresh();
     const timer = window.setInterval(safeRefresh, POLL_MS);
@@ -63,7 +65,7 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [refresh, toast]);
+  }, [refresh, toast, t]);
 
   async function accept(order: CustomerOrder) {
     // QR orders now carry the server table id. Name remains a compatibility
@@ -92,7 +94,7 @@ export function GuestOrdersStrip({ onAccepted }: { onAccepted?: () => void }) {
     } catch (err) {
       toast({
         title: "Could not add that order",
-        description: `${err instanceof Error ? err.message : "Try again."} Retry on this till; do not manually add the same food.`,
+        description: `${err instanceof Error ? err.message : ""} ${t("restaurant.guest.retry")}`,
         variant: "destructive",
       });
     } finally {

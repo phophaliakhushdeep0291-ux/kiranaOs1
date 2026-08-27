@@ -1,6 +1,21 @@
 import type { restaurantEn } from "./restaurant";
 
 export const restaurantHi: { [K in keyof typeof restaurantEn]: string } = {
+  "restaurant.guest.loadFailed": "मेहमानों के ऑर्डर नहीं खुल सके",
+  "restaurant.guest.checkStorage": "इस डिवाइस का स्टोरेज और कनेक्शन जाँचें।",
+  "restaurant.guest.retry": "इसी काउंटर पर दोबारा कोशिश करें; वही खाना हाथ से न जोड़ें।",
+  "restaurant.guest.requests": "मेहमानों के अनुरोध",
+  "restaurant.guest.bill": "बिल माँगा है",
+  "restaurant.guest.waiter": "वेटर बुलाया है",
+  "restaurant.guest.acknowledge": "स्वीकार करें",
+  "restaurant.guest.done": "पूरा हुआ",
+  "restaurant.guest.requestFailed": "मेहमान का अनुरोध अपडेट नहीं हुआ",
+  "restaurant.guest.feedback": "मेहमान की प्रतिक्रिया",
+  "restaurant.guest.received": "मिला {date}",
+  "restaurant.guest.cancelWindow": "ऑर्डर रद्द करने की समय सीमा",
+  "restaurant.guest.cancelDisabled": "रद्द करना बंद है",
+  "restaurant.guest.minutes": "{count} मिनट",
+  "restaurant.guest.cancelHelp": "केवल नए ऑर्डर रद्द हो सकते हैं। स्टाफ के स्वीकार करने के बाद मेहमान को रेस्तरां से बात करनी होगी।",
   "restaurant.reservations.title": "रिज़र्वेशन",
   "restaurant.reservations.subtitle": "कौन बुक है, आने के क्रम में।",
   "restaurant.reservations.refresh": "ताज़ा करें",

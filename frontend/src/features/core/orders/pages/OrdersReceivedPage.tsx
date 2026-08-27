@@ -906,12 +906,12 @@ function OrderDetail({
           </SideCard>
 
           {order.feedbackRating ? (
-            <SideCard title="Guest feedback">
+            <SideCard title={t("restaurant.guest.feedback")}>
               <p className="text-[18px] tracking-wider text-amber-500" aria-label={`${order.feedbackRating} out of 5 stars`}>
                 {"★".repeat(order.feedbackRating)}{"☆".repeat(5 - order.feedbackRating)}
               </p>
               {order.feedbackComment ? <p className="mt-2 text-[12.5px] leading-snug text-[#5b6b85]">“{order.feedbackComment}”</p> : null}
-              {order.feedbackAt ? <p className="mt-1 text-[10.5px] text-[#8290a8]">Received {fullDateTime(order.feedbackAt)}</p> : null}
+              {order.feedbackAt ? <p className="mt-1 text-[10.5px] text-[#8290a8]">{t("restaurant.guest.received", { date: fullDateTime(order.feedbackAt) })}</p> : null}
             </SideCard>
           ) : null}
 

@@ -8,17 +8,19 @@ import { z } from "zod";
 export const KOT_STATUSES = ["new", "preparing", "ready", "served"];
 
 const kotLine = z.object({
+  guestOrderId: z.string().trim().min(1).max(120).optional(),
+  guestOrderLineId: z.string().trim().min(1).max(160).optional(),
   /**
    * `cartItemKey` of the cart line this came from. It is what "already fired"
    * is counted against, so a ticket without it would make the till re-send the
    * whole order every time a waiter added one more dish.
    */
-  key: z.string().trim().min(1).max(200),
+  key: z.string().trim().min(1).max(2000),
   name: z.string().trim().min(1, "A kitchen ticket line needs something to cook").max(200),
   // Millesimal, matching how quantities are stored everywhere else (0.005 kg = 5 g).
   qty: z.coerce.number().positive().max(10_000),
   unit: z.string().trim().min(1).max(24).default("piece"),
-  note: z.string().trim().max(300).nullish(),
+  note: z.string().trim().max(1000).nullish(),
 });
 
 export const fireTicketSchema = z.object({

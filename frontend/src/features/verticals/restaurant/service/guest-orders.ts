@@ -78,7 +78,7 @@ export function guestOrderCartLines(order: CustomerOrder, products: Product[], _
 
   const lines: CartItem[] = [];
   const skipped: string[] = [];
-  for (const item of order.items ?? []) {
+  for (const [itemIndex, item] of (order.items ?? []).entries()) {
     const product = byId.get(item.productId);
     if (!product) {
       skipped.push(item.name || item.productId);
@@ -105,6 +105,8 @@ export function guestOrderCartLines(order: CustomerOrder, products: Product[], _
       rate,
       manualRate: true,
       guestSnapshot: true,
+      guestOrderId: order.id,
+      guestOrderLineId: `${order.id}-${itemIndex}`,
       unit: item.unit || sellingUnit?.name || product.rateUnit || product.displayUnit || "piece",
       sellingUnit,
       addons,

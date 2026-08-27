@@ -44,6 +44,8 @@ export interface RestaurantTable {
 export type KotStatus = "new" | "preparing" | "ready" | "served";
 
 export interface KotLine {
+  guestOrderId?: string;
+  guestOrderLineId?: string;
   /** `cartItemKey` of the cart line this came from — how "already fired" is counted. */
   key: string;
   name: string;
@@ -229,6 +231,8 @@ export function pendingKotLines(cart: CartItem[] | undefined, tickets: KotTicket
     const outstanding = (Number(item.quantity) || 0) - (fired.get(key) ?? 0);
     if (outstanding <= 0.0001) continue;
     pending.push({
+      guestOrderId: item.guestOrderId,
+      guestOrderLineId: item.guestOrderLineId,
       key,
       name: cartLineLabel(item),
       qty: Math.round(outstanding * 1000) / 1000,

@@ -11,6 +11,8 @@ export interface CartItem {
   manualRate?: boolean;
   /** Server-priced QR snapshot: keep different quotes/instructions apart. */
   guestSnapshot?: boolean;
+  guestOrderId?: string;
+  guestOrderLineId?: string;
   /** Flat rupee discount for this whole line (not per unit). */
   lineDiscount?: number;
   /** Free-text callout for this line ("no bag", weight callout) — printed on the receipt. */
@@ -96,7 +98,7 @@ export function cartItemKey(item: CartItem): string {
   // differently, so merging them would bill both at one rate and send the
   // kitchen one ticket that cannot be made.
   const addonKey = addonFingerprint(item.addons);
-  const guestKey = item.guestSnapshot ? `::guest:${JSON.stringify([item.rate, addonUnitPrice(item.addons), item.note ?? ""])}` : "";
+  const guestKey = item.guestSnapshot ? `::guest:${JSON.stringify([item.guestOrderLineId, item.rate, addonUnitPrice(item.addons), item.note ?? ""])}` : "";
   return `${item.product.id}::${unitKey}::${batchKey}::${addonKey}::${item.isCustom ? "custom" : "catalog"}${guestKey}`;
 }
 

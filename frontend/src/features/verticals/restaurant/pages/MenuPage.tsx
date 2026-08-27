@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import {
   ChefHat, Clock, ExternalLink, Flame, Loader2, Palette, Search, Settings2, Sparkles, Trash2, Utensils,
 } from "lucide-react";
@@ -909,6 +910,7 @@ function BrandEditor({
 }) {
   const [draft, setDraft] = useState<MenuBrand>(brand);
   const [orders, setOrders] = useState(guestOrders);
+  const { t } = useAppLanguage();
   const [cancelMinutes, setCancelMinutes] = useState(cancellationMinutes);
   const [saving, setSaving] = useState(false);
 
@@ -994,7 +996,7 @@ function BrandEditor({
           </label>
 
           <div className="space-y-1.5">
-            <Label htmlFor="guest-cancel-window">Guest cancellation window</Label>
+            <Label htmlFor="guest-cancel-window">{t("restaurant.guest.cancelWindow")}</Label>
             <select
               id="guest-cancel-window"
               value={cancelMinutes}
@@ -1002,14 +1004,10 @@ function BrandEditor({
               disabled={!orders}
               className="h-11 w-full rounded-[8px] border bg-white px-3 text-[13px]"
             >
-              <option value={0}>Cancellation disabled</option>
-              <option value={2}>2 minutes</option>
-              <option value={5}>5 minutes</option>
-              <option value={10}>10 minutes</option>
-              <option value={15}>15 minutes</option>
-              <option value={30}>30 minutes</option>
+              <option value={0}>{t("restaurant.guest.cancelDisabled")}</option>
+              {[2, 5, 10, 15, 30].map((count) => <option key={count} value={count}>{t("restaurant.guest.minutes", { count })}</option>)}
             </select>
-            <p className="text-[11px] text-[#64748b]">Only untouched orders can be cancelled. Once staff accepts an order, guests must speak to the restaurant.</p>
+            <p className="text-[11px] text-[#64748b]">{t("restaurant.guest.cancelHelp")}</p>
           </div>
         </div>
 
