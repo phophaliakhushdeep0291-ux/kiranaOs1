@@ -15,6 +15,10 @@ const shop = await db.shop.create({ data: { name: "Settlement test", ownerName: 
 const location = await resolveOperationalLocation(shop.id);
 const table = await db.restaurantTable.create({ data: { shopId: shop.id, code: "t1", name: "T1" } });
 const product = await db.product.create({ data: productData(shop.id, { name: "Dosa", defaultPricePerRateUnit: 100, stockBaseQty: 20 }) });
+await db.productSellingUnit.create({ data: {
+  shopId: shop.id, productId: product.id, name: "piece", unitType: "piece", unitCode: "piece-1-piece",
+  conversionToBase: 1, defaultPrice: 100, isDefault: true,
+} });
 const makeOrder = () => db.customerOrder.create({ data: { shopId: shop.id, locationId: location.id, customerName: "T1", customerMobile: "", tableId: table.id, tableName: "T1", fulfillmentType: "dine_in", status: "accepted", fulfillmentStatus: "preparing",
   estimatedTotal: 100, itemsJson: JSON.stringify([{ productId: product.id, name: "Dosa", price: 100, qty: 1, unit: "piece", note: "No chilli" }]),
 } });
@@ -56,7 +60,10 @@ const legacyOrder = await db.customerOrder.create({ data: { shopId: shop.id, loc
 const recoveredBill = await settle({ clientBillId: randomUUID(), billType: "normal_sale", gstMode: "none", customerName: "T1", discount: 0, locationId: location.id,
   items: [
     { productId: product.id, guestOrderId: legacyOrder.id, guestOrderLineId: `${legacyOrder.id}-0`, name: "Dosa", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
-    { productId: product.id, name: "Dosa", quantity: 2, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
+    // The POS persists its default inventory-unit code even though the public
+    // menu snapshot correctly has no restaurant variation code. That extra
+    // representation must not prevent an otherwise exact legacy recovery.
+    { productId: product.id, sellingUnitCode: "piece-1-piece", sellingUnitLabel: "piece", name: "Dosa", quantity: 2, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
   ],
   payments: [{ mode: "cash", amount: 300 }],
 });

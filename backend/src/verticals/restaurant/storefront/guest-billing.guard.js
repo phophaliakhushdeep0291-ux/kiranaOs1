@@ -7,17 +7,34 @@ export const guestSnapshot = Symbol("validated guest order snapshot");
 const refusal = (message) => ({ code: "GUEST_ORDER_BILL_MISMATCH", message, status: 409 });
 const optionsKey = (rows = []) => rows.map((row) => `${row.optionId}:${row.quantity ?? 1}`).sort().join("|");
 
-function snapshotKey(item) {
+function snapshotIdentityKey(item) {
   return JSON.stringify([
     item.productId,
     Number(item.quantity ?? item.qty),
-    item.sellingUnitCode ?? item.variation?.unitCode ?? "",
     optionsKey(item.addons),
   ]);
 }
 
+const normalizedUnit = (value) => String(value ?? "").trim().toLowerCase();
+
 function lineMatchesSnapshot(item, snapshot) {
-  return snapshotKey(item) === snapshotKey(snapshot);
+  if (snapshotIdentityKey(item) !== snapshotIdentityKey(snapshot)) return false;
+
+  // Public menu portions carry a stable variation code and must match it
+  // exactly. A normal/default menu item deliberately has no variation code;
+  // the POS can still serialize its ordinary inventory selling-unit code (for
+  // example `piece-1-piece`). In that case compare the human unit saved in the
+  // trusted order snapshot with the bill's entered unit. Treating the POS-only
+  // selling-unit code as a menu variation made an otherwise exact legacy Dal
+  // Fry line impossible to recover.
+  const snapshotVariation = normalizedUnit(snapshot.variation?.unitCode);
+  if (snapshotVariation) {
+    return normalizedUnit(item.sellingUnitCode ?? item.variation?.unitCode) === snapshotVariation;
+  }
+
+  const snapshotUnit = normalizedUnit(snapshot.unit);
+  const enteredUnit = normalizedUnit(item.enteredUnit ?? item.sellingUnitLabel ?? item.unit);
+  return Boolean(snapshotUnit && enteredUnit && snapshotUnit === enteredUnit);
 }
 
 registerSaleGuard(async ({ shopId, tx, items, location }) => {
@@ -53,7 +70,7 @@ registerSaleGuard(async ({ shopId, tx, items, location }) => {
         return refusal("The bill does not match the guest's order. Restore the original lines before settling.");
       }
       if (matched.length === 0) {
-        const key = snapshotKey(snapshot);
+        const key = snapshotIdentityKey(snapshot);
         const missing = missingByKey.get(key) ?? [];
         missing.push({ orderId: order.id, lineId: `${order.id}-${index}`, snapshot });
         missingByKey.set(key, missing);
@@ -67,7 +84,9 @@ registerSaleGuard(async ({ shopId, tx, items, location }) => {
   let recoveredLineCount = 0;
   const unlinked = items.filter((item) => !item.guestOrderId && !item.guestOrderLineId);
   for (const [key, missing] of missingByKey) {
-    const candidates = unlinked.filter((item) => snapshotKey(item) === key);
+    const candidates = unlinked.filter((item) =>
+      snapshotIdentityKey(item) === key && missing.some((expected) => lineMatchesSnapshot(item, expected.snapshot)),
+    );
     if (candidates.length !== missing.length) {
       return refusal("Include every guest order line before settling the table.");
     }
