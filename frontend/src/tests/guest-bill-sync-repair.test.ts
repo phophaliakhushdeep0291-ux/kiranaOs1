@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { retryableGuestOrderBillValidationConflict } from "@/features/core/sync/sync-status-repair";
+import { retryableGuestOrderBillValidationConflict, retryableStoredGuestBillConflict } from "@/features/core/sync/sync-status-repair";
 import { cartItemKey, type CartItem } from "@/features/core/billing/pages/billing-types";
 import type { PendingSyncEvent } from "@/types/domain";
 
@@ -47,5 +47,25 @@ describe("guest bill sync recovery", () => {
 
     expect(cartItemKey(legacyGuest)).not.toBe(cartItemKey(ordinary));
     expect(cartItemKey(legacyGuest)).not.toBe(cartItemKey(otherGuest));
+  });
+
+  it("recognizes only the protected server review that can be replayed", () => {
+    const conflict = {
+      id: "conflict-1",
+      entity_type: "bill",
+      entity_id: "bill-t1",
+      source_event_id: "old-create-bill-op",
+      error_message: "Include every guest order line before settling the table.",
+      local_snapshot: {
+        items: [
+          { guestOrderId: "order-1", guestOrderLineId: "order-1-0", productId: "coffee" },
+          { productId: "dal-fry" },
+        ],
+      },
+    };
+    expect(retryableStoredGuestBillConflict(conflict as never)).toBe(true);
+    expect(retryableStoredGuestBillConflict({ ...conflict, source_event_id: undefined } as never)).toBe(false);
+    expect(retryableStoredGuestBillConflict({ ...conflict, error_message: "Guest order already billed" } as never)).toBe(false);
+    expect(retryableStoredGuestBillConflict({ ...conflict, entity_type: "payment" } as never)).toBe(false);
   });
 });

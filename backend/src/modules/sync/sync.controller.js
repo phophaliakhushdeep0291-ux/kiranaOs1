@@ -70,13 +70,22 @@ export async function retry(req, res, next) {
   try {
     const effectivePlan = await getEffectivePlan(req.shopId);
     const payload = buildStatusPayload(req, effectivePlan, await svc.getCurrentServerSeq(req.shopId));
+    const opIds = Array.isArray(req.body?.op_ids) ? req.body.op_ids : [];
+    const recovery = await svc.retryStoredSyncConflicts(
+      req.shopId,
+      opIds,
+      { ...req.user, deviceId: req.device?.deviceId ?? null },
+    );
     res.json({
       success: true,
       data: {
         ...payload,
         retryAccepted: true,
-        opIds: Array.isArray(req.body?.op_ids) ? req.body.op_ids : [],
-        message: "Retry acknowledged. Frontend local outbox remains the source of truth for pending operations.",
+        opIds,
+        recovery,
+        message: recovery.replayed > 0
+          ? "Stored conflict replayed successfully."
+          : "Retry acknowledged. Frontend local outbox remains the source of truth for pending operations.",
       },
     });
   } catch (err) { next(err); }

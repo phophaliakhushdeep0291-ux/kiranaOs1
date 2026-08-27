@@ -166,6 +166,7 @@ function trackSyncEvent(eventType: ActivityEventType, durationMs: number, metada
 
 export async function retryFailedSyncOperations(
   opIds?: string[],
+  storedConflictOpIds: string[] = [],
 ): Promise<SyncRunResult> {
   await dexieDB.open();
   const rows = opIds?.length
@@ -224,7 +225,11 @@ export async function retryFailedSyncOperations(
   }
 
   try {
-    await requestSyncRetry({ op_ids: opIds });
+    const retryIds = [...new Set([
+      ...rows.map((row) => row.op_id || row.clientEventId),
+      ...storedConflictOpIds,
+    ].filter((value): value is string => typeof value === "string" && value.length > 0))];
+    await requestSyncRetry({ op_ids: retryIds.length > 0 ? retryIds : opIds });
   } catch {
     // Backend retry endpoint is advisory. The local outbox retry below remains the source of truth.
   }

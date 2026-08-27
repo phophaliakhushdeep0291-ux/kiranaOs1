@@ -50,7 +50,7 @@ import {
 } from "@/features/core/sync";
 import { getCurrentSubscriptionSnapshot } from "@/features/core/subscription/access";
 import type { SyncConflictRecord, SyncFleetResponse, SyncStatusResponse } from "@/types/api";
-import { repairResolvedSyncStatusNoise } from "@/features/core/sync/sync-status-repair";
+import { repairResolvedSyncStatusNoise, retryableStoredGuestBillConflict } from "@/features/core/sync/sync-status-repair";
 import { tableNameForEntity } from "@/features/core/sync/sync-types";
 import { isSensitiveSyncKey, sanitizeSyncDiagnostic } from "@/features/core/sync/sensitive-data";
 import { PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
@@ -1355,7 +1355,11 @@ export default function SyncStatusPage() {
     }
     setSnapshot((current) => ({ ...current, isSyncing: true }));
     try {
-      const result = await retryFailedSyncOperations();
+      const storedConflictOpIds = snapshot.conflicts
+        .filter((conflict) => retryableStoredGuestBillConflict(conflict))
+        .map((conflict) => readStringFromRecord(conflict, ["source_event_id", "sourceEventId"]))
+        .filter((value): value is string => Boolean(value));
+      const result = await retryFailedSyncOperations(undefined, storedConflictOpIds);
       toast({
         title: t("sync.toast.retryStarted"),
         description: t("sync.toast.syncResult", { pushed: result.pushed, failed: result.failed }),

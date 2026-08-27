@@ -8,6 +8,7 @@ import { resolveOperationalLocation } from "../src/modules/stores/location-conte
 import { fireTicket, setTicketStatus } from "../src/verticals/restaurant/kot/kot.service.js";
 import { confirmBill, cancelBill } from "../src/modules/bills/bills.service.js";
 import { getPublicOrderStatus, submitPublicOrderFeedback } from "../src/modules/public/public.service.js";
+import { retryStoredSyncConflicts } from "../src/modules/sync/sync.service.js";
 
 const shop = await db.shop.create({ data: { name: "Settlement test", ownerName: "Owner", city: "City", address: "Address",
   settingsJson: JSON.stringify({ customerOrdering: { enabled: true }, businessProfile: { businessType: "restaurant" } }),
@@ -68,6 +69,45 @@ const recoveredBill = await settle({ clientBillId: randomUUID(), billType: "norm
   payments: [{ mode: "cash", amount: 300 }],
 });
 assert.equal((await db.customerOrder.findUniqueOrThrow({ where: { id: legacyOrder.id } })).billId, recoveredBill.id, "an exact legacy sibling line is repaired and linked");
+
+// A historical server conflict no longer has a client outbox row to requeue.
+// The explicit retry endpoint must replay that protected snapshot with a fresh
+// event id, retain the financial idempotency key, and close the old review only
+// after the bill actually succeeds.
+const retryOrder = await db.customerOrder.create({ data: { shopId: shop.id, locationId: location.id, customerName: "T1", customerMobile: "", tableId: table.id, tableName: "T1", fulfillmentType: "dine_in", status: "accepted", fulfillmentStatus: "preparing",
+  estimatedTotal: 300, itemsJson: JSON.stringify([
+    { productId: product.id, name: "Dosa", price: 100, qty: 1, unit: "piece" },
+    { productId: product.id, name: "Dosa", price: 100, qty: 2, unit: "piece" },
+  ]),
+} });
+const retryClientBillId = randomUUID();
+const retrySourceEventId = `legacy-guest-bill-${randomUUID()}`;
+const retryEvent = {
+  eventId: retrySourceEventId,
+  clientEventId: retrySourceEventId,
+  type: "CREATE_BILL",
+  payload: {
+    clientBillId: retryClientBillId,
+    idempotencyKey: retryClientBillId,
+    billType: "normal_sale",
+    gstMode: "none",
+    customerName: "T1",
+    discount: 0,
+    locationId: location.id,
+    items: [
+      { productId: product.id, guestOrderId: retryOrder.id, guestOrderLineId: `${retryOrder.id}-0`, name: "Dosa", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
+      { productId: product.id, sellingUnitCode: "piece-1-piece", sellingUnitLabel: "piece", name: "Dosa", quantity: 2, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
+    ],
+    payments: [{ mode: "cash", amount: 300 }],
+  },
+};
+await db.offlineSyncEvent.create({ data: { shopId: shop.id, eventId: retrySourceEventId, type: "CREATE_BILL", status: "conflict", attempts: 1, requestJson: JSON.stringify(retryEvent), error: "Include every guest order line before settling the table." } });
+const storedConflict = await db.syncConflict.create({ data: { shopId: shop.id, sourceEventId: retrySourceEventId, entityType: "bill", entityId: retryClientBillId, reasonCode: "GUEST_ORDER_BILL_MISMATCH", message: "Include every guest order line before settling the table.", localSnapshotJson: JSON.stringify(retryEvent.payload) } });
+const replayed = await retryStoredSyncConflicts(shop.id, [retrySourceEventId], { deviceId: "test-till" });
+assert.equal(replayed.replayed, 1, "the explicit retry replays the stored legacy bill");
+assert.ok((await db.customerOrder.findUniqueOrThrow({ where: { id: retryOrder.id } })).billId, "the replay settles the guest order");
+assert.equal((await db.offlineSyncEvent.findUniqueOrThrow({ where: { shopId_eventId: { shopId: shop.id, eventId: retrySourceEventId } } })).status, "synced", "the old event is closed only after replay success");
+assert.equal((await db.syncConflict.findUniqueOrThrow({ where: { id: storedConflict.id } })).resolution, "replayed_after_validation_fix", "the old review records the successful replay");
 
 const ambiguousOrder = await db.customerOrder.create({ data: { shopId: shop.id, locationId: location.id, customerName: "T1", customerMobile: "", tableId: table.id, tableName: "T1", fulfillmentType: "dine_in", status: "accepted", fulfillmentStatus: "preparing",
   estimatedTotal: 200, itemsJson: JSON.stringify([

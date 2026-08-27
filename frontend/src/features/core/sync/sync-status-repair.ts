@@ -326,6 +326,31 @@ export function retryableGuestOrderBillValidationConflict(event: PendingSyncEven
   );
 }
 
+/**
+ * Server conflict rows can outlive the device outbox event that originally
+ * produced them. Only this exact, now-repaired guest-line rejection may be
+ * replayed from the server's protected event snapshot; all other financial
+ * conflicts remain correction/reversal-only.
+ */
+export function retryableStoredGuestBillConflict(conflict: OfflineRow): boolean {
+  const message = String(conflict.error_message ?? conflict.message ?? "").toLowerCase();
+  const sourceEventId = readStringFrom(conflict, ["source_event_id", "sourceEventId"]);
+  if (
+    String(conflict.entity_type ?? conflict.entityType ?? "").toLowerCase() !== "bill" ||
+    !sourceEventId ||
+    !message.includes("include every guest order line before settling the table")
+  ) return false;
+
+  const local = isRecord(conflict.local_snapshot) ? conflict.local_snapshot : {};
+  const envelopePayload = isRecord(local.payload) ? local.payload : local;
+  const bill = isRecord(envelopePayload.bill) ? envelopePayload.bill : envelopePayload;
+  const items = Array.isArray(bill.items) ? bill.items.filter(isRecord) : [];
+  const hasLinkedLine = items.some((item) => readStringFrom(item, ["guestOrderId"]) && readStringFrom(item, ["guestOrderLineId"]));
+  const hasUnlinkedLine = items.some((item) => !readStringFrom(item, ["guestOrderId"]) && !readStringFrom(item, ["guestOrderLineId"]));
+  const hasHalfLinkedLine = items.some((item) => Boolean(readStringFrom(item, ["guestOrderId"])) !== Boolean(readStringFrom(item, ["guestOrderLineId"])));
+  return hasLinkedLine && hasUnlinkedLine && !hasHalfLinkedLine;
+}
+
 function retryablePurchaseValidationConflict(event: PendingSyncEvent): boolean {
   const kind = operationKind(event);
   const entityType = String(event.entity_type || "").toLowerCase();

@@ -1336,6 +1336,103 @@ export async function pushOfflineActions(shopId, events, user = null) {
   };
 }
 
+const RECOVERABLE_GUEST_BILL_MESSAGE = "include every guest order line before settling the table";
+
+function recoverableGuestBillEvent(conflict, event) {
+  if (!conflict || conflict.status !== "open") return false;
+  if (String(conflict.entityType ?? "").toLowerCase() !== "bill") return false;
+  if (String(conflict.reasonCode ?? "") !== "GUEST_ORDER_BILL_MISMATCH") return false;
+  if (!String(conflict.message ?? "").toLowerCase().includes(RECOVERABLE_GUEST_BILL_MESSAGE)) return false;
+  if (String(event?.type ?? "").toUpperCase() !== SYNC_EVENT_TYPES.CREATE_BILL) return false;
+
+  const payload = getEventPayload(event);
+  const bill = payload?.bill && typeof payload.bill === "object" && !Array.isArray(payload.bill)
+    ? payload.bill
+    : payload;
+  const items = Array.isArray(bill?.items) ? bill.items : [];
+  const hasLinkedLine = items.some((item) => item?.guestOrderId && item?.guestOrderLineId);
+  const hasUnlinkedLine = items.some((item) => !item?.guestOrderId && !item?.guestOrderLineId);
+  const hasHalfLinkedLine = items.some((item) => Boolean(item?.guestOrderId) !== Boolean(item?.guestOrderLineId));
+  return Boolean(hasLinkedLine && hasUnlinkedLine && !hasHalfLinkedLine);
+}
+
+/**
+ * Replays the narrow historical QR-bill conflict whose validation rule has now
+ * been repaired. The original sync event is immutable once it ends in conflict,
+ * so the retry uses a fresh event identity while preserving the bill/payment
+ * idempotency keys inside its payload. A successful replay also closes the old
+ * event and review record; every other financial conflict remains review-only.
+ */
+export async function retryStoredSyncConflicts(shopId, opIds = [], user = null) {
+  const requestedIds = [...new Set(opIds.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim()))].slice(0, 100);
+  const results = [];
+
+  for (const sourceEventId of requestedIds) {
+    const [stored, conflict] = await Promise.all([
+      db.offlineSyncEvent.findUnique({ where: { shopId_eventId: { shopId, eventId: sourceEventId } } }),
+      db.syncConflict.findFirst({ where: { shopId, sourceEventId } }),
+    ]);
+    const event = safeJsonParse(stored?.requestJson);
+    if (!stored || !recoverableGuestBillEvent(conflict, event)) continue;
+
+    const claimed = await db.offlineSyncEvent.update({
+      where: { shopId_eventId: { shopId, eventId: sourceEventId } },
+      data: { attempts: { increment: 1 } },
+    });
+    const recoveryEventId = `${sourceEventId}:recovery:${claimed.attempts}`;
+    const replayEvent = {
+      ...event,
+      eventId: recoveryEventId,
+      clientEventId: recoveryEventId,
+    };
+    const replay = (await pushOfflineActions(shopId, [replayEvent], user)).results[0];
+    results.push({ sourceEventId, recoveryEventId, replay });
+
+    if (!replay?.success) continue;
+    const resolvedAt = new Date();
+    await db.$transaction(async (tx) => {
+      await tx.offlineSyncEvent.update({
+        where: { shopId_eventId: { shopId, eventId: sourceEventId } },
+        data: {
+          status: SYNC_EVENT_STATUSES.SYNCED,
+          resultJson: JSON.stringify(removeSensitiveSyncFields(replay.result ?? replay)),
+          error: null,
+        },
+      });
+      await tx.syncConflict.updateMany({
+        where: { id: conflict.id, shopId, status: "open" },
+        data: {
+          status: "resolved",
+          resolution: "replayed_after_validation_fix",
+          resolutionNote: "Original bill event replayed successfully after the guest-line compatibility repair.",
+          resolvedByUserId: user?.userId ?? user?.id ?? null,
+          resolvedByDeviceId: user?.deviceId ?? null,
+          resolvedAt,
+          expiresAt: syncConflictExpiry(),
+          version: { increment: 1 },
+        },
+      });
+    });
+    await createAuditLog({
+      shopId,
+      userId: user?.userId ?? user?.id ?? null,
+      deviceId: user?.deviceId ?? null,
+      module: AUDIT_MODULES.SYNC,
+      action: "SYNC_CONFLICT_REPLAYED",
+      entityType: "SyncConflict",
+      entityId: conflict.id,
+      metadata: { sourceEventId, recoveryEventId, entityType: conflict.entityType, entityId: conflict.entityId },
+    });
+  }
+
+  return {
+    requested: requestedIds.length,
+    replayed: results.filter((row) => row.replay?.success).length,
+    failed: results.filter((row) => !row.replay?.success).length,
+    results,
+  };
+}
+
 /**
  * The explainer reads the event payload only to name the entity that failed, so
  * strip credentials first — audit metadata is read by support staff.
