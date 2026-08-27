@@ -76,6 +76,10 @@ export function resolveMenuBranding(settings, shop) {
     logoUrl: typeof configured.logoUrl === "string" && configured.logoUrl.startsWith("http") ? configured.logoUrl : null,
     footerNote: String(configured.footerNote ?? "").trim() || null,
     websiteUrl: restaurantWebsiteUrl(configured.websiteUrl),
+    websiteStyle: ["classic", "cafe"].includes(configured.websiteStyle) ? configured.websiteStyle : "managed",
+    heroHeading: String(configured.heroHeading ?? "").trim().slice(0, 100),
+    heroDescription: String(configured.heroDescription ?? "").trim().slice(0, 240),
+    heroImageUrl: typeof configured.heroImageUrl === "string" && /^https:\/\//i.test(configured.heroImageUrl.trim()) ? configured.heroImageUrl.trim().slice(0, 500) : "",
   };
 }
 

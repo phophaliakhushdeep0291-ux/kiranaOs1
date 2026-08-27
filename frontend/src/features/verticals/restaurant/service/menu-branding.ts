@@ -37,6 +37,10 @@ export const MENU_THEME_OPTIONS: MenuThemeOption[] = [
 ];
 
 export interface MenuBrand {
+  websiteStyle?: "managed" | "classic" | "cafe";
+  heroHeading?: string;
+  heroDescription?: string;
+  heroImageUrl?: string;
   websiteUrl?: string;
   displayName: string;
   tagline: string;
@@ -57,6 +61,10 @@ export const BLANK_BRAND: MenuBrand = {
   logoUrl: "",
   footerNote: "",
   websiteUrl: "",
+  websiteStyle: "managed",
+  heroHeading: "",
+  heroDescription: "",
+  heroImageUrl: "",
 };
 
 export function readRestaurantSettings(prefs: Record<string, unknown> | undefined): RestaurantSettings {
@@ -73,6 +81,10 @@ export function readMenuBrand(prefs: Record<string, unknown> | undefined): MenuB
     logoUrl: String(brand.logoUrl ?? ""),
     footerNote: String(brand.footerNote ?? ""),
     websiteUrl: restaurantWebsiteUrl(brand.websiteUrl) ?? "",
+    websiteStyle: brand.websiteStyle === "classic" || brand.websiteStyle === "cafe" ? brand.websiteStyle : "managed",
+    heroHeading: String(brand.heroHeading ?? ""),
+    heroDescription: String(brand.heroDescription ?? ""),
+    heroImageUrl: String(brand.heroImageUrl ?? ""),
   };
 }
 
@@ -105,11 +117,18 @@ export function toStoredBrand(brand: MenuBrand): Partial<MenuBrand> {
   const tagline = brand.tagline.trim();
   const footerNote = brand.footerNote.trim();
   const logoUrl = brand.logoUrl.trim();
-  if (displayName) stored.displayName = displayName.slice(0, 60);
-  if (tagline) stored.tagline = tagline.slice(0, 120);
-  if (footerNote) stored.footerNote = footerNote.slice(0, 160);
-  if (/^https?:\/\//i.test(logoUrl)) stored.logoUrl = logoUrl.slice(0, 300);
-  if (brand.theme && brand.theme !== "classic") stored.theme = brand.theme;
+  // Explicit empty values let an owner clear a previous value in merge-based settings.
+  stored.displayName = displayName.slice(0, 60);
+  stored.tagline = tagline.slice(0, 120);
+  stored.footerNote = footerNote.slice(0, 160);
+  stored.logoUrl = /^https?:\/\//i.test(logoUrl) ? logoUrl.slice(0, 300) : "";
+  stored.theme = MENU_THEME_OPTIONS.some((option) => option.key === brand.theme) ? brand.theme : "classic";
+  stored.websiteStyle = brand.websiteStyle === "classic" || brand.websiteStyle === "cafe" ? brand.websiteStyle : "managed";
+  stored.heroHeading = (brand.heroHeading ?? "").trim().slice(0, 100);
+  stored.heroDescription = (brand.heroDescription ?? "").trim().slice(0, 240);
+  const heroImageUrl = (brand.heroImageUrl ?? "").trim();
+  if (heroImageUrl && !/^https:\/\//i.test(heroImageUrl)) throw new Error("Use an HTTPS image URL for the welcome photo.");
+  stored.heroImageUrl = heroImageUrl.slice(0, 500);
   return stored;
 }
 
