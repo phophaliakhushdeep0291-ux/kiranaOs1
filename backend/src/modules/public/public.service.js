@@ -185,9 +185,13 @@ export async function getPublicOrderStatus(shopId, orderId) {
   }
   const order = await db.customerOrder.findFirst({
     where: { id: String(orderId ?? ""), shopId },
-    select: { id: true, status: true, paymentStatus: true, fulfillmentStatus: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, tableId: true, tableName: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
+    select: { id: true, billId: true, status: true, paymentStatus: true, fulfillmentStatus: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, tableId: true, tableName: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
   });
   if (!order) throw new AppError("We couldn't find that order.", 404);
+  const linkedBill = order.billId ? await db.bill.findFirst({ where: { id: order.billId, shopId }, select: { status: true, deletedAt: true, paidAmount: true, creditAmount: true } }) : null;
+  const paymentStatus = !order.billId ? order.paymentStatus
+    : !linkedBill || linkedBill.deletedAt || linkedBill.status !== "active" ? "unpaid"
+    : Number(linkedBill.creditAmount) > 0 ? (Number(linkedBill.paidAmount) > 0 ? "partially_paid" : "unpaid") : "paid";
   const table = order.tableId ? await db.restaurantTable.findFirst({
     where: { id: order.tableId, shopId, active: true, deletedAt: null },
     select: { code: true },
@@ -201,7 +205,7 @@ export async function getPublicOrderStatus(shopId, orderId) {
   return {
     orderId: order.id,
     status: order.status,
-    paymentStatus: order.paymentStatus,
+    paymentStatus,
     fulfillmentStatus: order.fulfillmentStatus,
     stage: ORDER_STAGE[order.status] ?? order.status,
     fulfillmentType: order.fulfillmentType,

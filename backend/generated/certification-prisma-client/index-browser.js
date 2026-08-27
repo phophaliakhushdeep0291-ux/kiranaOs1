@@ -256,12 +256,33 @@ exports.Prisma.CustomerOrderScalarFieldEnum = {
   status: 'status',
   billId: 'billId',
   idempotencyKey: 'idempotencyKey',
+  acceptanceKey: 'acceptanceKey',
   acceptedAt: 'acceptedAt',
   readyAt: 'readyAt',
   fulfilledAt: 'fulfilledAt',
   rejectedAt: 'rejectedAt',
   cancelledAt: 'cancelledAt',
+  feedbackRating: 'feedbackRating',
+  feedbackComment: 'feedbackComment',
+  feedbackAt: 'feedbackAt',
   createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.RestaurantGuestRequestScalarFieldEnum = {
+  id: 'id',
+  shopId: 'shopId',
+  tableId: 'tableId',
+  tableCode: 'tableCode',
+  tableName: 'tableName',
+  orderId: 'orderId',
+  type: 'type',
+  reason: 'reason',
+  splitMode: 'splitMode',
+  status: 'status',
+  requestedAt: 'requestedAt',
+  acknowledgedAt: 'acknowledgedAt',
+  completedAt: 'completedAt',
   updatedAt: 'updatedAt'
 };
 
@@ -2764,6 +2785,7 @@ exports.Prisma.ModelName = {
   ProductSellingUnit: 'ProductSellingUnit',
   PricingDecisionEvent: 'PricingDecisionEvent',
   CustomerOrder: 'CustomerOrder',
+  RestaurantGuestRequest: 'RestaurantGuestRequest',
   BillCounter: 'BillCounter',
   User: 'User',
   AuthToken: 'AuthToken',

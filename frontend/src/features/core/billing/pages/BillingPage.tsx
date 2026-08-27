@@ -1712,6 +1712,8 @@ export default function Billing() {
         advanceAmount,
         prescriptionId: (billingSlotValues.prescriptionId as { id?: string } | undefined)?.id,
         items: cart.map((item) => ({
+          guestOrderId: item.guestOrderId,
+          guestOrderLineId: item.guestOrderLineId,
           productId: item.isCustom ? undefined : item.product.id,
           inventoryLotId: item.batch?.id,
           sellingUnitId: item.sellingUnit?.id,

@@ -3,6 +3,7 @@ import { decrementLocationInventory } from "../../../modules/stores/location-con
 import { moneyShadows, round2 } from "../../../utils/money.js";
 import { validateSelection } from "./addons.service.js";
 import { stockLedgerProvenance } from "../../../modules/inventory/stock-ledger-provenance.js";
+import { guestSnapshot } from "../storefront/guest-billing.guard.js";
 
 function refusal(message, code = "MENU_ADDON_SELECTION_INVALID", status = 409) {
   return { code, message, status };
@@ -76,9 +77,9 @@ export function registerAddonSelectionGuard() {
             optionId: option.id,
             groupName: group.name,
             name: option.name,
-            price: Number(option.priceDelta ?? 0),
+            price: Number(item[guestSnapshot]?.addons?.find((addon) => addon.optionId === option.id)?.price ?? option.priceDelta ?? 0),
             quantity,
-            ...moneyShadows({ price: Number(option.priceDelta ?? 0) }),
+            ...moneyShadows({ price: Number(item[guestSnapshot]?.addons?.find((addon) => addon.optionId === option.id)?.price ?? option.priceDelta ?? 0) }),
           });
           consumedOptions.push({
             linkedProductId: option.linkedProductId ?? null,

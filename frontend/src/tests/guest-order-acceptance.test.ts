@@ -22,7 +22,7 @@ vi.mock("@/lib/offline/db", () => ({ offlineDB: {
   },
 } }));
 import { acceptGuestOrderToTable, loadPendingGuestOrders, mergeCartLines, guestOrderCartLines, PENDING_GUEST_ORDERS_KEY, ACCEPTED_GUEST_ORDERS_KEY } from "@/features/verticals/restaurant/service/guest-orders";
-import { HELD_BILLS_KEY } from "@/features/core/billing/pages/open-bills";
+import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, MAX_OPEN_BILLS } from "@/features/core/billing/pages/open-bills";
 import { TABLE_BILLS_KEY } from "@/features/verticals/restaurant/service/table-store";
 
 const table = { id: "t1", name: "T1", section: "Main", seats: 4 };
@@ -55,6 +55,12 @@ describe("durable guest acceptance", () => {
     expect(state.update.mock.calls[0][1].acceptanceKey).toBe(state.update.mock.calls[1][1].acceptanceKey);
     expect(bills()[0].cart[0].quantity).toBe(2);
   });
+  it("retires a pending operation only after a definitive claim rejection", async () => {
+    state.update.mockRejectedValue(Object.assign(new Error("Already handled"), { status: 409, data: { code: "ORDER_ALREADY_CLAIMED" } }));
+    await expect(acceptGuestOrderToTable(order, table, products)).rejects.toThrow();
+    expect(await loadPendingGuestOrders()).toEqual([]);
+    expect(bills()).toBeUndefined();
+  });
   it("rolls back all bill writes on storage failure, then recovers once", async () => {
     state.failKey = TABLE_BILLS_KEY;
     await expect(acceptGuestOrderToTable(order, table, products)).rejects.toThrow("Disk full");
@@ -73,6 +79,18 @@ describe("durable guest acceptance", () => {
   });
   it("refuses partial imports", async () => {
     await expect(acceptGuestOrderToTable(order, table, [])).rejects.toThrow("Refresh the catalogue");
+    expect(state.update).not.toHaveBeenCalled();
+  });
+  it("never evicts another table at the open-bill limit", async () => {
+    state.rows.set(HELD_BILLS_KEY, Array.from({ length: MAX_OPEN_BILLS }, (_, i) => ({ id: `held-${i}`, cart: [] })));
+    await expect(acceptGuestOrderToTable(order, table, products)).rejects.toThrow("open-bill limit");
+    expect(bills()).toHaveLength(MAX_OPEN_BILLS);
+    expect(state.update).not.toHaveBeenCalled();
+  });
+  it("requires an active table bill to be parked before importing", async () => {
+    state.rows.set(TABLE_BILLS_KEY, { t1: "active" });
+    state.rows.set(BILLING_DRAFT_KEY, { activeBillId: "active" });
+    await expect(acceptGuestOrderToTable(order, table, products)).rejects.toThrow("Park this table");
     expect(state.update).not.toHaveBeenCalled();
   });
   it("simultaneous retries produce one local import", async () => {

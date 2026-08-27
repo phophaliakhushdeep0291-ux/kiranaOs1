@@ -25,6 +25,10 @@ const envSchema = z.object({
   TEST_DATABASE_URL: z.string().optional(),
   API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(15 * 60 * 1000),
   API_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(1000),
+  // DineIn proxies guests through one address: budget per restaurant, not per
+  // diner. The edge serving DineIn should additionally limit individual clients.
+  STOREFRONT_WRITE_LIMIT_MAX: z.coerce.number().int().min(60).max(100000).default(1000),
+  STOREFRONT_READ_LIMIT_MAX: z.coerce.number().int().min(1800).max(1000000).default(20000),
   AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(15 * 60 * 1000),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
   FRONTEND_APP_URL: z.string().url().optional(),

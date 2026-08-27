@@ -1,6 +1,6 @@
 import { offlineDB } from "@/lib/offline/db";
-import { HELD_BILLS_KEY, newBillId, upsertOpenBill } from "@/features/core/billing/pages/open-bills";
-import { cartItemKey, type CartItem, type HeldBill } from "@/features/core/billing/pages/billing-types";
+import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, newBillId, upsertOpenBill, wouldEvictOpenBill } from "@/features/core/billing/pages/open-bills";
+import { cartItemKey, type BillingDraft, type CartItem, type HeldBill } from "@/features/core/billing/pages/billing-types";
 import { updateCustomerOrder, type CustomerOrder } from "@/features/core/orders/api";
 import type { MenuDish, Product } from "@/types/api";
 import { TABLE_BILLS_KEY, type RestaurantTable } from "./table-store";
@@ -139,6 +139,18 @@ export function mergeCartLines(existing: CartItem[], incoming: CartItem[]): Cart
   return merged;
 }
 
+async function assertTableImportSafe(tableId: string) {
+  const held = await offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY) ?? [];
+  const map = await offlineDB.getSetting<Record<string, string>>(TABLE_BILLS_KEY) ?? {};
+  const draft = await offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY);
+  if (map[tableId] && draft?.activeBillId === map[tableId]) {
+    throw new Error("Park this table's active bill before accepting more food. Keep billing closed in other tabs.");
+  }
+  if (wouldEvictOpenBill(held, { id: map[tableId] ?? "new-guest-bill" })) {
+    throw new Error("The open-bill limit is reached. Settle an existing bill before accepting another table.");
+  }
+}
+
 export interface AcceptGuestOrderResult {
   billId: string;
   added: number;
@@ -166,6 +178,7 @@ export async function acceptGuestOrderToTable(
     const accepted = await loadAcceptedOrderIds();
     if (accepted.includes(order.id)) return null;
     const pending = await offlineDB.getSetting<Record<string, PendingAcceptance>>(PENDING_GUEST_ORDERS_KEY) ?? {};
+    await assertTableImportSafe(table.id);
     if (pending[order.id]) return pending[order.id];
     const { lines, skipped } = guestOrderCartLines(order, products);
     if (!lines.length || skipped.length) {
@@ -177,7 +190,23 @@ export async function acceptGuestOrderToTable(
   });
   if (!operation) return { billId: "", added: 0, skipped: [] };
 
-  await updateCustomerOrder(order.id, { status: "accepted", acceptanceKey: operation.key });
+  try {
+    await updateCustomerOrder(order.id, { status: "accepted", acceptanceKey: operation.key });
+  } catch (error) {
+    const failure = error as { status?: number; data?: { code?: string } };
+    // Only a definitive server rejection can retire the journal. A timeout,
+    // lost reply or storage failure must keep the operation available to retry.
+    if (failure.status === 409 && failure.data?.code === "ORDER_ALREADY_CLAIMED") {
+      await offlineDB.transaction(["settings"], async (tx) => {
+        const pending = await offlineDB.getSetting<Record<string, PendingAcceptance>>(PENDING_GUEST_ORDERS_KEY) ?? {};
+        if (pending[order.id]?.key === operation.key) {
+          delete pending[order.id];
+          await tx.setSetting(PENDING_GUEST_ORDERS_KEY, pending);
+        }
+      });
+    }
+    throw error;
+  }
 
   return offlineDB.transaction(["settings"], async (tx) => {
     const accepted = await loadAcceptedOrderIds();
@@ -186,6 +215,7 @@ export async function acceptGuestOrderToTable(
     const map = await offlineDB.getSetting<Record<string, string>>(TABLE_BILLS_KEY) ?? {};
     const pending = await offlineDB.getSetting<Record<string, PendingAcceptance>>(PENDING_GUEST_ORDERS_KEY) ?? {};
     const target = operation.table;
+    await assertTableImportSafe(target.id);
     const existing = held.find((entry) => entry.id === map[target.id]);
     const bill: HeldBill = existing
       ? { ...existing, cart: mergeCartLines(existing.cart ?? [], operation.lines) }

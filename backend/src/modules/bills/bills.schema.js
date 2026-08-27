@@ -10,6 +10,8 @@ export const whatsappBillSchema = z.object({
 });
 
 const billItemSchema = z.object({
+  guestOrderId: z.string().min(1).max(120).optional(),
+  guestOrderLineId: z.string().min(1).max(160).optional(),
   productId: z.string().optional(),
   // The batch the counter picked for a batch-tracked product. Omitted means FEFO
   // chooses, which is the default and the only behaviour before batch pricing.
@@ -40,7 +42,7 @@ const billItemSchema = z.object({
   // computed on the discounted line total (discount reduces taxable value).
   lineDiscount: moneyAmount().default(0),
   // Free-text callout for this line ("no bag", weight callout) — printed on the receipt.
-  note: z.string().trim().max(200).optional(),
+  note: z.string().trim().max(1000).optional(),
   originalUnitPrice: moneyAmount().optional(),
   appliedPricingRuleId: z.string().optional(),
   appliedPricingRuleType: z.string().optional(),

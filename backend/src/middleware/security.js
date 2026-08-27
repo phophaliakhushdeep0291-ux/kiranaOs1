@@ -82,6 +82,7 @@ function isReadRequest(req) {
 
 function routeBucket(req) {
   const parts = String(req.path || "").split("/").filter(Boolean);
+  if (parts[0] === "public" && parts[1] === "shops" && parts[2]) return `public:${parts[2]}`;
   if (parts[0] === "reports" && parts[1]) return `reports:${parts[1]}`;
   if (parts[0] === "sync" && parts[1]) return `sync:${parts[1]}`;
   return parts[0] || "root";
@@ -109,6 +110,9 @@ function apiRateLimitKey(req) {
 function apiRateLimitMax(req) {
   const base = localDevelopmentLimit(env.API_RATE_LIMIT_MAX);
   if (env.NODE_ENV !== "production") return base;
+  if (routeBucket(req).startsWith("public:")) {
+    return isReadRequest(req) ? env.STOREFRONT_READ_LIMIT_MAX : env.STOREFRONT_WRITE_LIMIT_MAX;
+  }
 
   // Reads are cheap and often happen from multiple counters/devices in the same shop.
   // Keep writes/payment/auth stricter, but make normal POS reads tolerant.
@@ -144,10 +148,10 @@ export const apiLimiter = rateLimit({
   handler: rateLimitHandler,
 });
 
-/** Guest QR writes need a tighter anonymous-IP bucket than authenticated POS traffic. */
+/** Restaurant-wide proxy budget; never trust caller-supplied forwarded IPs here. */
 export const storefrontWriteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: env.NODE_ENV === "production" ? 60 : 600,
+  max: env.STOREFRONT_WRITE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => `${req.ip}:${String(req.params?.shopId ?? "unknown")}`,

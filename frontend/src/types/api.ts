@@ -486,6 +486,8 @@ export interface BillPayment {
 }
 
 export interface BillInputItem {
+  guestOrderId?: string;
+  guestOrderLineId?: string;
   productId?: string;
   /**
    * The batch to dispense from. Omitted means FEFO picks. Set, it fixes both the

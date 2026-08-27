@@ -2,6 +2,8 @@ import db from "../../../db.js";
 import { AppError } from "../../../middleware/error.js";
 import { resolveOperationalLocation } from "../../../modules/stores/location-context.service.js";
 import { KOT_STATUSES } from "./kot.schema.js";
+import { createAuditLog } from "../../../modules/audit/audit.service.js";
+import { stageIntegrationEvent, dispatchIntegrationDeliveries } from "../../../modules/integrations/integrations.service.js";
 
 /**
  * Kitchen tickets.
@@ -80,6 +82,7 @@ export async function nextTicketNumber(client, shopId) {
 
 function normalizeLines(lines) {
   return (lines ?? []).map((line) => ({
+    ...(line.guestOrderId ? { guestOrderId: String(line.guestOrderId), guestOrderLineId: String(line.guestOrderLineId ?? "") } : {}),
     key: String(line.key),
     name: String(line.name).trim(),
     // Millesimal, matching how quantities are stored everywhere else.
@@ -143,6 +146,18 @@ export async function fireTicket(shopId, input, context = {}) {
   const location = await resolveOperationalLocation(shopId, requested).catch(() => null);
   const locationId = location?.id ?? null;
   const lines = normalizeLines(input.lines);
+  for (const orderId of new Set(lines.map((line) => line.guestOrderId).filter(Boolean))) {
+    const order = await db.customerOrder.findFirst({ where: { id: orderId, shopId, fulfillmentType: "dine_in", status: { in: ["accepted", "ready"] } } });
+    if (!order || (order.tableId !== input.tableId && order.tableName !== input.tableName)) {
+      throw new AppError("Guest order is not accepted for this table", 409, "GUEST_KOT_ORDER_MISMATCH");
+    }
+    const items = parseLines(order.itemsJson);
+    for (const line of lines.filter((row) => row.guestOrderId === orderId)) {
+      if (!items.some((_, index) => line.guestOrderLineId === `${orderId}-${index}`)) {
+        throw new AppError("Guest order line is not recognised", 409, "GUEST_KOT_LINE_MISMATCH");
+      }
+    }
+  }
 
   for (let attempt = 0; attempt < NUMBER_RETRIES; attempt += 1) {
     const ticketNo = await nextTicketNumber(db, shopId);
@@ -182,19 +197,47 @@ export async function fireTicket(shopId, input, context = {}) {
 
 export async function setTicketStatus(shopId, id, status) {
   if (!KOT_STATUSES.includes(status)) throw new AppError("Unknown kitchen ticket status", 400);
-  const existing = await db.kitchenTicket.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!existing) throw new AppError("Kitchen ticket not found", 404);
-
-  const ticket = await db.kitchenTicket.update({
-    where: { id: existing.id },
-    data: {
-      status,
-      // Stamped when it reaches the pass and cleared if it is moved back, so the
-      // time is never a claim about a ticket that is cooking again.
-      servedAt: status === "served" ? (existing.servedAt ?? new Date()) : null,
-    },
-  });
-  return serializeTicket(ticket);
+  const result = await db.$transaction(async (tx) => {
+    const existing = await tx.kitchenTicket.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw new AppError("Kitchen ticket not found", 404);
+    const ticket = await tx.kitchenTicket.update({ where: { id }, data: {
+      status, servedAt: status === "served" ? (existing.servedAt ?? new Date()) : null,
+    } });
+    const deliveries = [];
+    const orderIds = [...new Set(parseLines(ticket.linesJson).map((line) => line.guestOrderId).filter(Boolean))];
+    const siblings = orderIds.length ? await tx.kitchenTicket.findMany({ where: { shopId, billId: ticket.billId, deletedAt: null } }) : [];
+    for (const orderId of orderIds) {
+      const order = await tx.customerOrder.findFirst({ where: { id: orderId, shopId, status: { in: ["accepted", "ready"] } } });
+      if (!order) continue; // Never resurrect a cancelled or already settled order.
+      const items = parseLines(order.itemsJson);
+      const covered = (states) => items.length > 0 && items.every((item, index) => {
+        const quantity = siblings.filter((row) => states.includes(row.status))
+          .flatMap((row) => parseLines(row.linesJson))
+          .filter((line) => line.guestOrderId === orderId && line.guestOrderLineId === `${orderId}-${index}`)
+          .reduce((sum, line) => sum + Number(line.qty), 0);
+        return quantity >= Number(item.qty);
+      });
+      const next = covered(["served"]) ? "fulfilled" : covered(["ready", "served"]) ? "ready" : "accepted";
+      if (next === order.status) continue;
+      const now = new Date();
+      const updated = await tx.customerOrder.update({ where: { id: orderId }, data: {
+        status: next, fulfillmentStatus: next === "accepted" ? "preparing" : next,
+        ...(next === "ready" ? { readyAt: now } : {}),
+        ...(next === "fulfilled" ? { fulfilledAt: now } : {}),
+      } });
+      const audit = await createAuditLog({ client: tx, shopId, action: "CUSTOMER_ORDER_KITCHEN_PROGRESS", entityType: "CustomerOrder", entityId: orderId,
+        before: { status: order.status }, after: { status: next }, metadata: { kitchenTicketId: id } });
+      if (!audit) throw new AppError("Kitchen progress could not be audited", 503, "ORDER_AUDIT_UNAVAILABLE");
+      deliveries.push(...await stageIntegrationEvent(shopId, "customer_order.updated", {
+        id: orderId, locationId: order.locationId, fulfillmentType: order.fulfillmentType,
+        status: next, fulfillmentStatus: updated.fulfillmentStatus, paymentStatus: order.paymentStatus,
+        sourceChannel: order.sourceChannel, billId: order.billId, updatedAt: updated.updatedAt,
+      }, { client: tx }));
+    }
+    return { ticket, deliveries };
+  }, { isolationLevel: "Serializable" });
+  await dispatchIntegrationDeliveries(result.deliveries);
+  return serializeTicket(result.ticket);
 }
 
 /**

@@ -159,6 +159,8 @@ export const productCreationSchema = z.object({
 });
 
 export const billItemCreationSchema = z.object({
+  guestOrderId: z.string().min(1).max(120).optional(),
+  guestOrderLineId: z.string().min(1).max(160).optional(),
   productId: optionalText,
   productLocalId: optionalText,
   sellingUnitId: optionalText,
@@ -179,7 +181,7 @@ export const billItemCreationSchema = z.object({
   })).max(80).optional(),
   // Flat rupee discount for the whole line (not per unit).
   lineDiscount: money.default(0),
-  note: z.string().trim().max(200).optional(),
+  note: z.string().trim().max(1000).optional(),
   originalUnitPrice: money.optional(),
   appliedPricingRuleId: optionalText,
   appliedPricingRuleType: optionalText,
