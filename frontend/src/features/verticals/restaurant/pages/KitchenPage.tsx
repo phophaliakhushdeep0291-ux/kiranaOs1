@@ -78,6 +78,12 @@ export default function KitchenPage() {
     [tickets],
   );
 
+  const notifyUpdateFailure = () => toast({
+    title: "Could not update the pass",
+    description: "The kitchen board is shared with the counter, so it needs a connection. Check the network and try again.",
+    variant: "destructive",
+  });
+
   /**
    * Moved optimistically, then confirmed.
    *
@@ -101,22 +107,14 @@ export default function KitchenPage() {
         // A batch may partially succeed. Restore only the ticket writes the
         // server rejected; successful tickets must stay advanced.
         setTickets((current) => current.map((row) => failed.has(row.id) ? before.get(row.id) ?? row : row));
-        toast({
-          title: "Could not update the pass",
-          description: "The kitchen board is shared with the counter, so it needs a connection. Check the network and try again.",
-          variant: "destructive",
-        });
+        notifyUpdateFailure();
       }
       await refresh();
     } catch {
       // Roll back only this write. Restoring the whole board here used to undo
       // a different cook's successful update when two tickets moved together.
       setTickets((current) => current.map((row) => before.get(row.id) ?? row));
-      toast({
-        title: "Could not update the pass",
-        description: "The kitchen board is shared with the counter, so it needs a connection. Check the network and try again.",
-        variant: "destructive",
-      });
+      notifyUpdateFailure();
     } finally {
       claimedIds.forEach((id) => updatingIdsRef.current.delete(id));
       setUpdatingIds(new Set(updatingIdsRef.current));
@@ -161,7 +159,7 @@ export default function KitchenPage() {
           <LayoutGrid size={15} /> Tables
         </Button>
       </header>
-      {refreshFailed && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Kitchen connection lost. The board may be out of date; confirm new tickets with the counter. <button type="button" className="ml-2 min-h-11 underline" onClick={() => void refresh()}>Retry</button></div>}
+      {refreshFailed && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{t("restaurant.kitchen.boardStale")} <button type="button" className="ml-2 min-h-11 underline" onClick={() => void refresh()}>{t("restaurant.guest.retryNow")}</button></div>}
 
       {/* Sits above the pass because it is not on the pass yet: a guest's order
           is a request until somebody takes it onto a table's bill. */}

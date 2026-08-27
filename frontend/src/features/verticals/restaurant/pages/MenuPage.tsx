@@ -54,6 +54,7 @@ const rupees = (n: number) => `₹${Number(n || 0).toLocaleString("en-IN", { max
 
 export default function MenuPage() {
   const { toast } = useToast();
+  const { t } = useAppLanguage();
   const { shop } = useAuth();
   const [, navigate] = useLocation();
   const { prefs, patch, hydrated } = useSettingsPrefs();
@@ -321,11 +322,11 @@ export default function MenuPage() {
             },
           }, { immediate: true });
           if (!saved) {
-            toast({ title: "Website setting was not saved online", description: "Reconnect and save again before printing QR codes.", variant: "destructive" });
+            toast({ title: t("restaurant.website.saveFailedTitle"), description: t("restaurant.website.saveFailedDescription"), variant: "destructive" });
             return;
           }
           setBrandOpen(false);
-          toast({ title: "Menu look saved", description: "Guests scanning a table QR will see it on their next open." });
+          toast({ title: t("restaurant.website.savedTitle"), description: t("restaurant.website.savedDescription") });
         }}
       />
     </div>
@@ -931,7 +932,7 @@ function BrandEditor({
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
-        <DialogHeader><DialogTitle>How your guest menu looks</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t("restaurant.website.editorTitle")}</DialogTitle></DialogHeader>
 
         <div className="space-y-3.5 py-1">
           <div className="rounded-2xl p-4 text-center" style={{ background: preview.surface, color: preview.ink }}>
@@ -939,24 +940,24 @@ function BrandEditor({
               style={{ background: `${preview.accent}1f`, color: preview.accent }}>
               <ChefHat size={20} />
             </div>
-            <div className="font-display text-[17px] font-black">{draft.displayName.trim() || shopName || "Your restaurant"}</div>
+            <div className="font-display text-[17px] font-black">{draft.displayName.trim() || shopName || t("restaurant.website.restaurantFallback")}</div>
             {draft.tagline.trim() ? <div className="mt-0.5 text-[11px] opacity-70">{draft.tagline}</div> : null}
             <div className="mx-auto mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black"
               style={{ background: `${preview.accent}1f`, color: preview.accent }}>
-              <Utensils size={11} /> T5 · Dining
+              <Utensils size={11} /> {t("restaurant.website.previewTable")}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="website-style">DineIn website design</Label>
+            <Label htmlFor="website-style">{t("restaurant.website.designLabel")}</Label>
             <select id="website-style" value={draft.websiteStyle ?? "managed"} onChange={(event) => setDraft({ ...draft, websiteStyle: event.target.value as MenuBrand["websiteStyle"] })} className="min-h-11 w-full rounded-lg border bg-white px-3 text-sm">
-              <option value="managed">Keep my bespoke design</option>
-              <option value="classic">Classic restaurant · elegant menu list</option>
-              <option value="cafe">Café · photo cards</option>
+              <option value="managed">{t("restaurant.website.styleManaged")}</option>
+              <option value="classic">{t("restaurant.website.styleClassic")}</option>
+              <option value="cafe">{t("restaurant.website.styleCafe")}</option>
             </select>
-            <p className="text-xs text-[#64748b]">Choose a layout below to publish these colours and welcome details to DineIn. Keep my bespoke design preserves the developer-managed layout; the colour preview then applies only to the built-in KiranaOS menu.</p>
+            <p className="text-xs text-[#64748b]">{t("restaurant.website.styleHelp")}</p>
           </div>
-          <div className="flex flex-wrap gap-1.5" aria-label="Menu colour palette">
+          <div className="flex flex-wrap gap-1.5" aria-label={t("restaurant.website.paletteLabel")}>
             {MENU_THEME_OPTIONS.map((option) => (
               <button
                 key={option.key}
@@ -972,35 +973,35 @@ function BrandEditor({
           </div>
 
           {draft.websiteStyle !== "managed" && draft.websiteStyle && <div className="space-y-3 rounded-xl border p-3">
-            <div><Label htmlFor="website-heading">Welcome heading</Label><Input id="website-heading" maxLength={100} value={draft.heroHeading ?? ""} placeholder="A place for good food and good company" onChange={(event) => setDraft({ ...draft, heroHeading: event.target.value })} /></div>
-            <div><Label htmlFor="website-description">Welcome description</Label><Input id="website-description" maxLength={240} value={draft.heroDescription ?? ""} onChange={(event) => setDraft({ ...draft, heroDescription: event.target.value })} /></div>
-            <div><Label htmlFor="website-photo">Welcome photo URL</Label><Input id="website-photo" maxLength={500} value={draft.heroImageUrl ?? ""} placeholder="https://your-image-host/restaurant.jpg" aria-invalid={invalidHero} onChange={(event) => setDraft({ ...draft, heroImageUrl: event.target.value })} /><p className="mt-1 text-xs text-[#64748b]">Use a photo you own, hosted at a public HTTPS image address. Leave empty for the decorative placeholder. This field does not upload a file.</p>{invalidHero && <p role="alert" className="text-xs text-red-700">Use an HTTPS image URL.</p>}</div>
+            <div><Label htmlFor="website-heading">{t("restaurant.website.heroHeadingLabel")}</Label><Input id="website-heading" maxLength={100} value={draft.heroHeading ?? ""} placeholder={t("restaurant.website.heroHeadingPlaceholder")} onChange={(event) => setDraft({ ...draft, heroHeading: event.target.value })} /></div>
+            <div><Label htmlFor="website-description">{t("restaurant.website.heroDescriptionLabel")}</Label><Input id="website-description" maxLength={240} value={draft.heroDescription ?? ""} onChange={(event) => setDraft({ ...draft, heroDescription: event.target.value })} /></div>
+            <div><Label htmlFor="website-photo">{t("restaurant.website.heroPhotoLabel")}</Label><Input id="website-photo" maxLength={500} value={draft.heroImageUrl ?? ""} placeholder="https://your-image-host/restaurant.jpg" aria-invalid={invalidHero} onChange={(event) => setDraft({ ...draft, heroImageUrl: event.target.value })} /><p className="mt-1 text-xs text-[#64748b]">{t("restaurant.website.heroPhotoHelp")}</p>{invalidHero && <p role="alert" className="text-xs text-red-700">{t("restaurant.website.heroPhotoInvalid")}</p>}</div>
           </div>}
           <div className="space-y-1.5">
-            <Label htmlFor="restaurant-website">Restaurant website URL</Label>
+            <Label htmlFor="restaurant-website">{t("restaurant.website.urlLabel")}</Label>
             <Input id="restaurant-website" value={draft.websiteUrl ?? ""} placeholder="https://dinein-production.up.railway.app/r/my-restaurant" onChange={event => setDraft({ ...draft, websiteUrl: event.target.value })} aria-invalid={invalidWebsite} />
-            <p className="text-xs text-[#64748b]">Your own DineIn menu address. New QR codes and old printed links will open this website. Leave empty to use KiranaOS. Deploy and verify the destination first.</p>
-            {invalidWebsite && <p role="alert" className="text-xs text-red-700">Enter a public HTTPS URL ending in /r/your-restaurant, without query parameters.</p>}
-            {restaurantWebsiteUrl(draft.websiteUrl) && <a className="text-sm underline" href={restaurantWebsiteUrl(draft.websiteUrl)!} target="_blank" rel="noreferrer">View published website (save first)</a>}
+            <p className="text-xs text-[#64748b]">{t("restaurant.website.urlHelp")}</p>
+            {invalidWebsite && <p role="alert" className="text-xs text-red-700">{t("restaurant.website.urlInvalid")}</p>}
+            {restaurantWebsiteUrl(draft.websiteUrl) && <a className="text-sm underline" href={restaurantWebsiteUrl(draft.websiteUrl)!} target="_blank" rel="noreferrer">{t("restaurant.website.viewPublished")}</a>}
           </div>
           <div className="space-y-1.5">
-            <Label>Name on the menu</Label>
+            <Label>{t("restaurant.website.nameLabel")}</Label>
             <Input
               value={draft.displayName}
-              placeholder={shopName || "Spice Route"}
+              placeholder={shopName || t("restaurant.website.namePlaceholder")}
               onChange={(event) => setDraft({ ...draft, displayName: event.target.value })}
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Tagline</Label>
+            <Label>{t("restaurant.website.taglineLabel")}</Label>
             <Input
               value={draft.tagline}
-              placeholder="South Indian kitchen since 1998"
+              placeholder={t("restaurant.website.taglinePlaceholder")}
               onChange={(event) => setDraft({ ...draft, tagline: event.target.value })}
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Logo URL <span className="font-normal text-[#94a3b8]">(optional)</span></Label>
+            <Label>{t("restaurant.website.logoLabel")} <span className="font-normal text-[#94a3b8]">{t("restaurant.website.optional")}</span></Label>
             <Input
               value={draft.logoUrl}
               placeholder="https://…"
@@ -1008,19 +1009,19 @@ function BrandEditor({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Note at the bottom</Label>
+            <Label>{t("restaurant.website.footerLabel")}</Label>
             <Input
               value={draft.footerNote}
-              placeholder="Prices exclusive of taxes · 5% service charge"
+              placeholder={t("restaurant.website.footerPlaceholder")}
               onChange={(event) => setDraft({ ...draft, footerNote: event.target.value })}
             />
           </div>
 
           <label className="flex items-start gap-3 rounded-xl border p-3">
-            <Switch checked={orders} onCheckedChange={setOrders} aria-label="Let guests order from the QR" />
+            <Switch checked={orders} onCheckedChange={setOrders} aria-label={t("restaurant.website.guestOrdersAria")} />
             <span className="text-[12px] leading-relaxed text-[#52627e]">
-              <span className="block font-black text-[var(--brand-ink)]">Let guests order from the table QR</span>
-              Turn this off to show the menu only — guests still scan and read it, but order through your staff.
+              <span className="block font-black text-[var(--brand-ink)]">{t("restaurant.website.guestOrdersTitle")}</span>
+              {t("restaurant.website.guestOrdersHelp")}
             </span>
           </label>
 
@@ -1041,12 +1042,12 @@ function BrandEditor({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t("restaurant.website.cancel")}</Button>
           <Button
             disabled={disabled || saving || invalidWebsite || invalidHero}
-            onClick={async () => { setSaving(true); setSaveError(""); try { await onSave(draft, orders, cancelMinutes); } catch (error) { setSaveError(error instanceof Error ? error.message : "Could not save. Please try again."); } finally { setSaving(false); } }}
+            onClick={async () => { setSaving(true); setSaveError(""); try { await onSave(draft, orders, cancelMinutes); } catch (error) { setSaveError(error instanceof Error ? error.message : t("restaurant.website.saveError")); } finally { setSaving(false); } }}
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("restaurant.website.saving") : t("restaurant.website.save")}
           </Button>
         </DialogFooter>
         {saveError && <p role="alert" className="text-sm text-red-700">{saveError}</p>}

@@ -1335,7 +1335,7 @@ export default function Billing() {
   function protectGuestLine(lineKey?: string) {
     const protectedLine = cart.find((item) => (!lineKey || cartItemKey(item) === lineKey) && (item.guestSnapshot || item.guestOrderId || item.guestOrderLineId));
     if (!protectedLine) return false;
-    toast({ title: "Accepted QR order", description: "Keep the original guest items, portions and quantities. Add extras as separate items. For a correction, ask the manager to review the original guest order before settling.", variant: "destructive" });
+    toast({ title: t("billing.page.guestOrderProtected"), description: t("billing.page.guestOrderProtectedHelp"), variant: "destructive" });
     return true;
   }
 

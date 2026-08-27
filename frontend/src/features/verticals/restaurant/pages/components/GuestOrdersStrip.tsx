@@ -100,7 +100,7 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
       });
     } catch (err) {
       toast({
-        title: "Could not add that order",
+        title: t("restaurant.guest.acceptFailed"),
         description: `${err instanceof Error ? err.message : ""} ${t("restaurant.guest.retry")}`,
         variant: "destructive",
       });

@@ -120,7 +120,7 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/verticals/pharmacy/prescriptions/pages/PrescriptionsPage.tsx": 29,
   "features/verticals/restaurant/pages/KitchenPage.tsx": 10,
   "features/verticals/restaurant/pages/KitchenStockPage.tsx": 18,
-  "features/verticals/restaurant/pages/MenuPage.tsx": 51,
+  "features/verticals/restaurant/pages/MenuPage.tsx": 36,
   "features/verticals/restaurant/pages/TablesPage.tsx": 27,
   "features/verticals/restaurant/pages/components/GuestOrdersStrip.tsx": 3,
   "features/verticals/restaurant/pages/components/TableQrDialog.tsx": 4,
