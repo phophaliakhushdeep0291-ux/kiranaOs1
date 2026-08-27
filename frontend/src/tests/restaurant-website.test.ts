@@ -3,6 +3,14 @@ import { guestWebsiteRedirect, restaurantGuestUrl, restaurantWebsiteUrl, website
 import { buildTableOrderUrl } from "@/features/verticals/restaurant/service/table-qr";
 import { BLANK_BRAND, readMenuBrand, toStoredBrand } from "@/features/verticals/restaurant/service/menu-branding";
 
+it("persists owner-controlled layout and welcome content, including explicit clearing", () => {
+  const brand = toStoredBrand({ ...BLANK_BRAND, websiteStyle: "cafe", heroHeading: "  Welcome  ", heroDescription: "Our family recipes", heroImageUrl: "https://cdn.example.com/hero.jpg", theme: "emerald" });
+  expect(brand).toMatchObject({ websiteStyle: "cafe", heroHeading: "Welcome", heroImageUrl: "https://cdn.example.com/hero.jpg", theme: "emerald" });
+  expect(readMenuBrand({ restaurant: { brand } })).toMatchObject(brand);
+  expect(toStoredBrand({ ...BLANK_BRAND, theme: "classic" })).toMatchObject({ theme: "classic", heroHeading: "", heroImageUrl: "" });
+  expect(() => toStoredBrand({ ...BLANK_BRAND, heroImageUrl: "javascript:alert(1)" })).toThrow();
+});
+
 const website = "https://dinein-production.up.railway.app/r/my-restaurant";
 const catalog = { storefront: { mode: "dine_in", branding: { websiteUrl: website } } };
 

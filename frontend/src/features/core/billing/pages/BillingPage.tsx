@@ -165,6 +165,7 @@ export default function Billing() {
   const customerNameInputRef = useRef<HTMLInputElement | null>(null);
   const summaryResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const pendingAutoPrintRef = useRef<{ popup: Window; printable: PrintableBill } | null>(null);
+  const pendingReceiptRef = useRef<PrintableBill | null>(null);
   // §13 "average billing time": the clock starts on the first line of a bill,
   // not on page load. A billing screen left open all morning between customers
   // would otherwise report a 3-hour average bill.
@@ -791,15 +792,29 @@ export default function Billing() {
 
   const confirmBill = useConfirmBill({
     mutation: {
-      onSuccess: (data: Bill) => {
+      onSuccess: (data: Bill, { data: submitted }) => {
         const billNo = data.billNumber ?? data.billNo ?? `PENDING-${Date.now()}`;
         setVerifiedRetailPayment(null);
         // Coupon usage and discount impact commit atomically with the bill.
         setAppliedOffer(null);
         const pendingPrint = pendingAutoPrintRef.current;
-        const printableForSavedBill = pendingPrint
-          ? { ...pendingPrint.printable, billId: data.id, billNo, createdAt: data.createdAt ?? pendingPrint.printable.createdAt }
+        const receipt = pendingReceiptRef.current;
+        const printableForSavedBill = receipt
+          ? { ...receipt, billId: data.id, billNo, createdAt: data.createdAt ?? receipt.createdAt }
           : null;
+        pendingReceiptRef.current = null;
+        // Rejected online settlements must not emit a sale/payment success event.
+        trackEvent(ACTIVITY_EVENTS.BILL_CREATED, {
+          billId: data.id, billType: submitted.billType,
+          paymentMethod: paymentMode === SPLIT_PAYMENT ? "split" : String(paymentMode),
+          itemCount: submitted.items?.length ?? 0,
+          productIds: submitted.items?.map((item) => item.productId).filter(Boolean) ?? [],
+          hasCustomer: Boolean(submitted.customerId), hasDiscount: Number(submitted.discount) > 0,
+        }, { durationMs: billingStartedAtRef.current === null ? undefined : Date.now() - billingStartedAtRef.current });
+        if ((submitted.payments ?? []).some((payment) => payment.mode !== BillPaymentMode.credit && payment.amount > 0)) {
+          trackEvent(ACTIVITY_EVENTS.PAYMENT_COMPLETED, { billId: data.id, paymentMethod: paymentMode === SPLIT_PAYMENT ? "split" : String(paymentMode) });
+        }
+        billingStartedAtRef.current = null;
         setLastBillNo(billNo);
         setLastPrintableBill((previous) => printableForSavedBill ?? (previous ? { ...previous, billId: data.id, billNo, createdAt: data.createdAt ?? previous.createdAt } : null));
         if (pendingPrint && printableForSavedBill) {
@@ -839,6 +854,7 @@ export default function Billing() {
         toast({ title: t("billing.page.billSaved", { billNo }), description: isOnline ? t("billing.page.billSavedOnline") : t("billing.page.billSavedOffline") });
       },
       onError: (err: unknown) => {
+        pendingReceiptRef.current = null;
         const msg = (err as { data?: { message?: string } })?.data?.message ?? (err instanceof Error ? err.message : t("billing.page.saveFailedLocally"));
         if (pendingAutoPrintRef.current) {
           try {
@@ -1647,34 +1663,8 @@ export default function Billing() {
           ];
 
     const printable = makePrintableBill(nextBillType, paid, remainingCredit, payments);
-    setLastPrintableBill(printable);
+    pendingReceiptRef.current = printable;
     pendingAutoPrintRef.current = null;
-
-    // §13. Emitted here, at the point of no return, rather than in the mutation's
-    // onSuccess: the local-first path completes the sale on the device and syncs
-    // later, so waiting for a server ack would lose every offline bill from the
-    // activity record — which is exactly the shop that needs suggestions most.
-    // The bill itself remains the authoritative record; this is behaviour only.
-    trackEvent(
-      ACTIVITY_EVENTS.BILL_CREATED,
-      {
-        billId: activeBillId,
-        billType: nextBillType,
-        paymentMethod: paymentMode === SPLIT_PAYMENT ? "split" : String(paymentMode),
-        itemCount: cart.length,
-        productIds: cart.filter((item) => !item.isCustom).map((item) => item.product.id),
-        hasCustomer: Boolean(resolvedCustomerId),
-        hasDiscount: safeDiscount > 0,
-      },
-      { durationMs: billingStartedAtRef.current === null ? undefined : Date.now() - billingStartedAtRef.current },
-    );
-    if (paid > 0) {
-      trackEvent(ACTIVITY_EVENTS.PAYMENT_COMPLETED, {
-        billId: activeBillId,
-        paymentMethod: paymentMode === SPLIT_PAYMENT ? "split" : String(paymentMode),
-      });
-    }
-    billingStartedAtRef.current = null;
 
     if (getPrinterConfigSync().autoPrint) {
       if (printDecision !== false) {

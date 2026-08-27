@@ -255,13 +255,13 @@ describe("one restaurant must not look like the next", () => {
   it("stores only what is worth storing", () => {
     // The settings blob has a hard 20 KB ceiling shared with the printer config
     // and everything else. Website URL is explicit so clearing it revokes redirects.
-    expect(toStoredBrand(BLANK_BRAND)).toEqual({ websiteUrl: "" });
+    expect(toStoredBrand(BLANK_BRAND)).toEqual(BLANK_BRAND);
     expect(toStoredBrand({ ...BLANK_BRAND, displayName: "  Kaapi & Co  ", theme: "emerald" }))
-      .toEqual({ displayName: "Kaapi & Co", theme: "emerald", websiteUrl: "" });
+      .toEqual({ ...BLANK_BRAND, displayName: "Kaapi & Co", theme: "emerald" });
   });
 
   it("refuses a logo the guest's browser should not be asked to fetch", () => {
-    expect(toStoredBrand({ ...BLANK_BRAND, logoUrl: "javascript:alert(1)" }).logoUrl).toBeUndefined();
+    expect(toStoredBrand({ ...BLANK_BRAND, logoUrl: "javascript:alert(1)" }).logoUrl).toBe("");
     expect(toStoredBrand({ ...BLANK_BRAND, logoUrl: "https://cdn.example.com/logo.png" }).logoUrl)
       .toBe("https://cdn.example.com/logo.png");
   });

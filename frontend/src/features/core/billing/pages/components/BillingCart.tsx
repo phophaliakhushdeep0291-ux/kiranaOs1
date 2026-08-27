@@ -104,6 +104,7 @@ function CartRow({
   const emoji = getProductEmoji(item.product.name, item.product.category);
   const sellingUnits = (item.product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
   const lineKey = cartItemKey(item);
+  const guestLocked = Boolean(item.guestSnapshot || item.guestOrderId || item.guestOrderLineId);
   const qtyProps = useQuantityDraft(item.quantity, (next) => onUpdateQty(lineKey, next));
   const scaleUnit = item.sellingUnit?.unitType ?? item.product.rateUnit ?? item.product.unit ?? item.unit;
   const canReadScale = item.product.isLooseItem === true && isScaleBillingUnit(scaleUnit);
@@ -191,6 +192,7 @@ function CartRow({
         {sellingUnits.length > 1 ? (
           <select
             aria-label={t("billing.cart.sellingUnitFor", { name: item.product.name })}
+            disabled={guestLocked}
             value={item.sellingUnit?.unitCode ?? sellingUnits.find((unit) => unit.isDefault)?.unitCode ?? sellingUnits[0]?.unitCode}
             onChange={(event) => onUpdateUnit(lineKey, event.target.value)}
             className="mt-1 h-11 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#31527e] outline-none focus:border-[var(--brand)]"
@@ -241,6 +243,7 @@ function CartRow({
         ) : (
           <button
             data-testid={`rate-edit-${item.product.id}`}
+            disabled={guestLocked}
             onClick={startEditRate}
             className={cn(
               "group mt-[5px] inline-flex min-h-11 items-center gap-1 rounded-[6px] px-1 py-[1px] text-[11px] font-bold leading-none -ml-1 transition-colors hover:bg-[#eef4ff]",
@@ -332,6 +335,7 @@ function CartRow({
       <div className="col-start-2 row-start-2 grid h-[46px] w-[134px] grid-cols-3 justify-self-start overflow-hidden rounded-[8px] border border-[#dfe8f5] sm:col-auto sm:row-auto">
         <button
           data-testid={`button-dec-${item.product.id}`}
+          disabled={guestLocked}
           onClick={() => onUpdateQty(lineKey, item.quantity - 1)}
           className="min-h-11 min-w-11 bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
           aria-label={t("billing.cart.decrease", { name: item.product.name })}
@@ -340,6 +344,7 @@ function CartRow({
         </button>
         <input
           data-testid={`qty-${item.product.id}`}
+          disabled={guestLocked}
           type="number"
           inputMode="decimal"
           aria-label={t("billing.cart.quantityFor", { name: item.product.name })}
@@ -348,6 +353,7 @@ function CartRow({
         />
         <button
           data-testid={`button-inc-${item.product.id}`}
+          disabled={guestLocked}
           onClick={() => onUpdateQty(lineKey, item.quantity + 1)}
           className="min-h-11 min-w-11 bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
           aria-label={t("billing.cart.increase", { name: item.product.name })}
@@ -367,6 +373,7 @@ function CartRow({
       {/* Remove */}
       <button
         data-testid={`button-remove-${item.product.id}`}
+        disabled={guestLocked}
         onClick={() => onRemoveItem(lineKey)}
         className="col-start-3 row-start-1 grid h-11 w-11 place-items-center rounded text-[#536383] transition-colors hover:bg-red-50 hover:text-red-600 sm:col-auto sm:row-auto"
         aria-label={t("billing.cart.remove", { name: item.product.name })}
