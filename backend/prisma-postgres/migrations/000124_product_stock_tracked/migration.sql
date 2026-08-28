@@ -9,10 +9,16 @@
 -- keep counting exactly as they did.
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "stockTrackingEnabled" BOOLEAN NOT NULL DEFAULT true;
 
--- Anything already carrying a recipe is assembled here rather than bought in,
--- which is the same rule the sale guard uses. Backfilled so an existing
--- restaurant does not have to revisit its menu one dish at a time.
+-- Every dish on the menu, not only the ones that happen to carry a recipe.
+--
+-- Keying this on recipes was too narrow: a kitchen puts dishes on the menu long
+-- before anybody writes their recipes down, and Dal Fry is no more a thing you
+-- stock on the day it is added than it is a month later. Being on the menu is
+-- what says "we cook this to order"; a recipe only says how.
+--
+-- A menu item that genuinely IS stock — a bottled drink off the shelf — is the
+-- exception, and the owner turns tracking back on for it.
 UPDATE "Product"
    SET "stockTrackingEnabled" = false
- WHERE "id" IN (SELECT DISTINCT "dishProductId" FROM "DishRecipeComponent")
+ WHERE "menuCourse" IS NOT NULL
    AND "stockTrackingEnabled" IS DISTINCT FROM false;
