@@ -82,7 +82,7 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
     if (!table) {
       toast({
         title: `No table called ${order.tableName ?? "that"} on this floor`,
-        description: "Add it to the floor plan, or take the order at the counter.",
+        description: t("restaurant.guest.noTableHelp"),
         variant: "destructive",
       });
       return;
@@ -142,9 +142,9 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
               <p className="mt-1.5 rounded-lg bg-[#fff7ed] px-2 py-1 text-[11px] font-semibold text-[#9a3412]">{order.note}</p>
             ) : null}
             {order.promisedSlot ? (
-              <p className="mt-1.5 rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-800">Scheduled: {order.promisedSlot}</p>
+              <p className="mt-1.5 rounded-lg bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-800">{t("restaurant.guest.scheduled")} {order.promisedSlot}</p>
             ) : null}
-            {readOnly ? <p className="mt-3 text-xs text-[#52627e]">Waiting for the billing counter to accept and send this order to the kitchen.</p> : <Button
+            {readOnly ? <p className="mt-3 text-xs text-[#52627e]">{t("restaurant.guest.awaitingCounter")}</p> : <Button
               size="sm"
               className="mt-3 h-9 w-full gap-1.5 rounded-[8px] text-[12px] font-black"
               disabled={busyId !== null}

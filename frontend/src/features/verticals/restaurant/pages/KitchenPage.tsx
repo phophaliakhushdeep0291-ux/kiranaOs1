@@ -17,10 +17,15 @@ import { useAppLanguage } from "@/features/core/settings/i18n";
 /** How long a ticket may sit before the board calls it out. */
 const LATE_MINUTES = 12;
 
-const COLUMNS: Array<{ status: KotStatus; label: string; tone: ChipTone; action: string }> = [
-  { status: "new", label: "New", tone: "orange", action: "Start cooking" },
-  { status: "preparing", label: "Cooking", tone: "amber", action: "Mark ready" },
-  { status: "ready", label: "Ready to serve", tone: "green", action: "Mark served" },
+/** The dictionary's key union, so a typo here is a compile error, not a blank chip. */
+type TranslationKey = Parameters<ReturnType<typeof useAppLanguage>["t"]>[0];
+
+// Keys, not text: this array is module-level and cannot call a hook, so the
+// board translates each column where it renders it.
+const COLUMNS: Array<{ status: KotStatus; labelKey: TranslationKey; tone: ChipTone; actionKey: TranslationKey }> = [
+  { status: "new", labelKey: "restaurant.kitchen.statusNew", tone: "orange", actionKey: "restaurant.kitchen.actionStart" },
+  { status: "preparing", labelKey: "restaurant.kitchen.statusPreparing", tone: "amber", actionKey: "restaurant.kitchen.actionReady" },
+  { status: "ready", labelKey: "restaurant.kitchen.statusReady", tone: "green", actionKey: "restaurant.kitchen.actionServed" },
 ];
 
 export default function KitchenPage() {
@@ -79,8 +84,8 @@ export default function KitchenPage() {
   );
 
   const notifyUpdateFailure = () => toast({
-    title: "Could not update the pass",
-    description: "The kitchen board is shared with the counter, so it needs a connection. Check the network and try again.",
+    title: t("restaurant.kitchen.updateFailed"),
+    description: t("restaurant.kitchen.updateFailedHelp"),
     variant: "destructive",
   });
 
@@ -149,11 +154,11 @@ export default function KitchenPage() {
     <div className="space-y-5 p-4 lg:p-6" data-testid="kitchen-page">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-[24px] font-black tracking-tight text-[var(--brand-ink)]">Kitchen</h1>
+          <h1 className="font-display text-[24px] font-black tracking-tight text-[var(--brand-ink)]">{t("restaurant.kitchen.title")}</h1>
           <p className="text-[13px] text-[#52627e]">
             Tickets fired from the tables screen. Move each one along as it is cooked and served.
           </p>
-          <p className="mt-0.5 text-[12px] text-[#8494ad]">Kitchen tickets are shared with the counter and refresh every five seconds while connected.</p>
+          <p className="mt-0.5 text-[12px] text-[#8494ad]">{t("restaurant.kitchen.sharedNote")}</p>
         </div>
         <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/tables")}>
           <LayoutGrid size={15} /> Tables
@@ -169,8 +174,8 @@ export default function KitchenPage() {
       {open.length === 0 && !refreshFailed ? (
         <div className="rounded-2xl border border-dashed p-12 text-center">
           <ChefHat className="mx-auto mb-2 text-[#94a3b8]" size={26} />
-          <p className="text-[14px] font-bold text-[var(--brand-ink)]">Nothing on the pass</p>
-          <p className="text-[13px] text-[#64748b]">Fire an order from a table and it lands here.</p>
+          <p className="text-[14px] font-bold text-[var(--brand-ink)]">{t("restaurant.kitchen.empty")}</p>
+          <p className="text-[13px] text-[#64748b]">{t("restaurant.kitchen.emptyHelp")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -180,7 +185,7 @@ export default function KitchenPage() {
               <section key={column.status} className="space-y-3" data-testid={`kot-column-${column.status}`}>
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="flex items-center gap-2 text-[12px] font-black uppercase tracking-wider text-[#64748b]">
-                    {column.label}
+                    {t(column.labelKey)}
                     <span className={cn("rounded-full px-2 py-0.5 text-[10px]", CHIP_TONES[column.tone])}>{rows.length}</span>
                   </h2>
                   {rows.length > 1 ? (
@@ -195,10 +200,10 @@ export default function KitchenPage() {
                 </div>
                 <div className="space-y-3">
                   {rows.map((ticket) => (
-                    <TicketCard key={ticket.id} ticket={ticket} actionLabel={column.action} busy={updatingIds.has(ticket.id)} updatingLabel={t("restaurant.kitchen.updating")} onAdvance={() => void advance(ticket)} />
+                    <TicketCard key={ticket.id} ticket={ticket} actionLabel={t(column.actionKey)} busy={updatingIds.has(ticket.id)} updatingLabel={t("restaurant.kitchen.updating")} onAdvance={() => void advance(ticket)} />
                   ))}
                   {rows.length === 0 ? (
-                    <div className="rounded-xl border border-dashed p-5 text-center text-[12px] text-[#94a3b8]">Empty</div>
+                    <div className="rounded-xl border border-dashed p-5 text-center text-[12px] text-[#94a3b8]">{t("restaurant.kitchen.emptyShort")}</div>
                   ) : null}
                 </div>
               </section>

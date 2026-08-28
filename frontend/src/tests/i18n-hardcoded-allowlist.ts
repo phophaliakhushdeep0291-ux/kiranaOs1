@@ -118,11 +118,8 @@ export const I18N_HARDCODED_ALLOWLIST: Readonly<Record<string, number>> = {
   "features/verticals/pharmacy/prescriptions/components/PrescriptionAttach.tsx": 4,
   "features/verticals/pharmacy/prescriptions/components/PrescriptionPanel.tsx": 55,
   "features/verticals/pharmacy/prescriptions/pages/PrescriptionsPage.tsx": 29,
-  "features/verticals/restaurant/pages/KitchenPage.tsx": 10,
   "features/verticals/restaurant/pages/KitchenStockPage.tsx": 18,
   "features/verticals/restaurant/pages/MenuPage.tsx": 36,
-  "features/verticals/restaurant/pages/TablesPage.tsx": 28, // +1: full-till seating refusal toast. This whole screen is English-only debt; see the untranslated-staff-screens item.
-  "features/verticals/restaurant/pages/components/GuestOrdersStrip.tsx": 3,
   "features/verticals/restaurant/pages/components/TableQrDialog.tsx": 4,
   "features/verticals/stationery-books/book-lists/components/BookListPanel.tsx": 26,
   "features/verticals/stationery-books/book-lists/pages/BookListsPage.tsx": 32,
