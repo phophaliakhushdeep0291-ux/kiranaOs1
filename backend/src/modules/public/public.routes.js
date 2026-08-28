@@ -19,6 +19,11 @@ router.get("/shops/:shopId/orders/:orderId", ctrl.orderStatus);
 router.post("/shops/:shopId/orders/:orderId/cancel", storefrontWriteLimiter, ctrl.cancelOrder);
 router.post("/shops/:shopId/orders/:orderId/feedback", storefrontWriteLimiter, ctrl.submitFeedback);
 router.post("/shops/:shopId/tables/:tableId/requests", storefrontWriteLimiter, ctrl.createGuestRequest);
+// What a table currently owes, across every round it has ordered. A dine-in
+// table orders more than once and settles once, so a guest asking for the bill
+// must be shown the whole sitting — reading one round back would put a smaller
+// number in front of them than the counter is about to charge.
+router.get("/shops/:shopId/tables/:tableId/bill", ctrl.tableBill);
 // Online-session activity (§13). Only ONLINE_* event types are accepted and no
 // user is ever attributed — see online-activity.service.js for the full box.
 router.post("/shops/:shopId/activity", ctrl.onlineActivity);

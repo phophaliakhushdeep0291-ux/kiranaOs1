@@ -189,9 +189,7 @@ export async function getPublicOrderStatus(shopId, orderId) {
   });
   if (!order) throw new AppError("We couldn't find that order.", 404);
   const linkedBill = order.billId ? await db.bill.findFirst({ where: { id: order.billId, shopId }, select: { status: true, deletedAt: true, paidAmount: true, creditAmount: true } }) : null;
-  const paymentStatus = !order.billId ? order.paymentStatus
-    : !linkedBill || linkedBill.deletedAt || linkedBill.status !== "active" ? "unpaid"
-    : Number(linkedBill.creditAmount) > 0 ? (Number(linkedBill.paidAmount) > 0 ? "partially_paid" : "unpaid") : "paid";
+  const paymentStatus = resolveOrderPaymentStatus(order, linkedBill);
   const table = order.tableId ? await db.restaurantTable.findFirst({
     where: { id: order.tableId, shopId, active: true, deletedAt: null },
     select: { code: true },
@@ -359,6 +357,83 @@ export async function createPublicGuestRequest(shopId, tableId, body = {}, optio
     return request;
   });
   return { ...created, duplicate: false };
+}
+
+/**
+ * Whether a guest order has actually been paid for.
+ *
+ * An order is settled through a Bill, so its own `paymentStatus` column only
+ * speaks for orders that never reached one. Once linked, the bill is the
+ * authority — and a deleted or voided bill means nothing was collected, not
+ * that the meal was free. Shared by the order tracker and the table bill below
+ * because two copies of this rule would eventually disagree about money.
+ */
+function resolveOrderPaymentStatus(order, linkedBill) {
+  if (!order.billId) return order.paymentStatus;
+  if (!linkedBill || linkedBill.deletedAt || linkedBill.status !== "active") return "unpaid";
+  if (Number(linkedBill.creditAmount) > 0) return Number(linkedBill.paidAmount) > 0 ? "partially_paid" : "unpaid";
+  return "paid";
+}
+
+/**
+ * What a table owes right now, across every round it has ordered.
+ *
+ * A dine-in table orders more than once and settles once. Each round is its own
+ * CustomerOrder, so anything reading a single order back — which is all the
+ * public API could do until now — shows the guest one round and lets them
+ * believe that is the bill. They are then handed a larger number at the
+ * counter, which is an argument the restaurant cannot win and did not cause.
+ *
+ * Rounds that were cancelled or rejected are left off: nobody cooked that food.
+ * So are rounds already paid for, because a table turns over several times an
+ * evening and the next party must not inherit the last one's bill.
+ *
+ * Read-only, and keyed on the table id the QR sticker already carries — the
+ * same credential the waiter and bill requests on this router accept.
+ */
+export async function getPublicTableBill(shopId, tableId) {
+  const shop = await db.shop.findUnique({ where: { id: shopId } });
+  if (!shop || !isCustomerOrderingEnabled(shop.settingsJson)) {
+    throw new AppError("This restaurant is not available.", 404);
+  }
+  // Deliberately not filtered on selfOrderEnabled: an owner switching QR
+  // ordering off mid-service must not also hide the bill for food already eaten.
+  const table = await db.restaurantTable.findFirst({
+    where: { id: String(tableId ?? ""), shopId, active: true, deletedAt: null },
+    select: { id: true, code: true, name: true },
+  });
+  if (!table) throw new AppError("We couldn't find that table.", 404);
+
+  const rounds = await db.customerOrder.findMany({
+    where: { shopId, tableId: table.id, status: { notIn: ["cancelled", "rejected"] } },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, billId: true, status: true, paymentStatus: true, itemsJson: true, estimatedTotal: true, createdAt: true, updatedAt: true },
+  });
+
+  // One query for every linked bill rather than one per round: a long table
+  // session is a dozen rounds, and this is read on every bill request.
+  const billIds = [...new Set(rounds.map((round) => round.billId).filter(Boolean))];
+  const linked = billIds.length > 0
+    ? await db.bill.findMany({ where: { shopId, id: { in: billIds } }, select: { id: true, status: true, deletedAt: true, paidAmount: true, creditAmount: true } })
+    : [];
+  const billById = new Map(linked.map((bill) => [bill.id, bill]));
+
+  const open = rounds.filter((round) => resolveOrderPaymentStatus(round, billById.get(round.billId)) !== "paid");
+  const items = open.flatMap((round) => parseOrderLines(round.itemsJson));
+
+  return {
+    tableId: table.id,
+    tableCode: table.code,
+    tableName: table.name,
+    orderIds: open.map((round) => round.id),
+    items,
+    itemCount: items.reduce((sum, line) => sum + (Number(line.qty) || 0), 0),
+    estimatedTotal: open.reduce((sum, round) => sum + Number(round.estimatedTotal ?? 0), 0),
+    // Nothing outstanding is a real answer, not a 404: the table has settled.
+    settled: open.length === 0,
+    openedAt: open[0]?.createdAt ?? null,
+    updatedAt: open.reduce((latest, round) => (latest === null || round.updatedAt > latest ? round.updatedAt : latest), null),
+  };
 }
 
 function cleanOrderIdempotencyKey(value) {

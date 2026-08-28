@@ -86,3 +86,10 @@ export async function createGuestRequest(req, res, next) {
     res.status(data.duplicate ? 200 : 201).json({ success: true, data });
   } catch (err) { next(err); }
 }
+
+export async function tableBill(req, res, next) {
+  try {
+    const data = await svc.getPublicTableBill(req.params.shopId, req.params.tableId);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
