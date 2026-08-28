@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
-  ChefHat, Clock, IndianRupee, LayoutGrid, Loader2, Pencil, Plus, QrCode, Receipt,
+  CalendarClock, ChefHat, Clock, IndianRupee, LayoutGrid, Loader2, Pencil, Plus, QrCode, Receipt,
   Trash2, Users, Utensils, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
 } from "../service/table-store";
 import { openTableInBilling, releaseTable } from "../service/open-table";
 import { fireKitchenTicket, listKitchenTickets, listTables, publishFloorPlan } from "../service/restaurant-api";
+import { listReservations, type Reservation } from "../service/reservations-api";
 import { mergeServerCodes, unpublishedTables } from "../service/table-qr";
 import { TableQrDialog } from "./components/TableQrDialog";
 import { GuestRequestsStrip } from "./components/GuestRequestsStrip";
@@ -92,6 +93,7 @@ export default function TablesPage() {
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [tableBills, setTableBills] = useState<Record<string, string>>({});
   const [tickets, setTickets] = useState<KotTicket[]>([]);
+  const [bookings, setBookings] = useState<Reservation[]>([]);
   const [editing, setEditing] = useState<RestaurantTable | null>(null);
   const [form, setForm] = useState(BLANK_TABLE);
   const [formOpen, setFormOpen] = useState(false);
@@ -101,7 +103,7 @@ export default function TablesPage() {
   const [, setTick] = useState(0);
 
   const refresh = useCallback(async () => {
-    const [plan, heldRaw, draft, mapRaw, kot] = await Promise.all([
+    const [plan, heldRaw, draft, mapRaw, kot, reservations] = await Promise.all([
       loadFloorPlan(),
       offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null),
       offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY).catch(() => null),
@@ -109,6 +111,12 @@ export default function TablesPage() {
       // Every till's tickets, not this one's: the "already fired" tally below
       // is only right if it can see what the other counter has already sent.
       listKitchenTickets({ includeServed: true }).catch(() => [] as KotTicket[]),
+      // The diary, so a table booked for eight does not read Free at five to.
+      // Failure is silent on purpose: the floor works offline, and a missing
+      // booking must never stop a waiter seating someone standing in front
+      // of them.
+      listReservations({ from: new Date().toISOString(), to: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString() })
+        .catch(() => [] as Reservation[]),
     ]);
     // The table open at the till lives in the draft, not the parked set.
     const held = withLiveDraft(Array.isArray(heldRaw) ? heldRaw : [], draft);
@@ -119,6 +127,7 @@ export default function TablesPage() {
     setHeldBills(held);
     setTableBills(map);
     setTickets(kot);
+    setBookings(reservations);
     setLoading(false);
 
     // The floor paints first and the QR codes arrive a moment later. A waiter
@@ -141,6 +150,29 @@ export default function TablesPage() {
       window.clearInterval(timer);
     };
   }, [refresh]);
+
+  /**
+   * The next booking each table is holding, keyed the way the rest of this
+   * screen already joins to the server: by name, falling back to the QR code.
+   * The till owns its floor plan's ids and the server owns the booking, so the
+   * name is the only thing both sides agree on.
+   *
+   * Only bookings still ahead of us count. A party that has already been seated
+   * is on the floor, not in the diary, and showing their slot again would read
+   * as a second sitting.
+   */
+  const bookingByTable = useMemo(() => {
+    const now = Date.now();
+    const byTable = new Map<string, Reservation>();
+    const upcoming = bookings
+      .filter((row) => row.status === "booked" && row.table && Date.parse(row.reservedFor) >= now)
+      .sort((a, b) => a.reservedFor.localeCompare(b.reservedFor));
+    for (const row of upcoming) {
+      const key = row.table!.name || row.table!.code;
+      if (key && !byTable.has(key)) byTable.set(key, row);
+    }
+    return byTable;
+  }, [bookings]);
 
   const occupancy = useMemo(
     () => buildOccupancy(tables, heldBills, tableBills, tickets),
@@ -334,6 +366,7 @@ export default function TablesPage() {
                 onQr={() => setQrFor(row.table)}
                 onRelease={() => setReleasing(row)}
                 onRemove={() => setRemoving(row.table)}
+                booking={bookingByTable.get(row.table.name) ?? bookingByTable.get(row.table.code ?? "") ?? null}
               />
             ))}
           </div>
@@ -414,9 +447,11 @@ function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; va
 }
 
 function TableCard({
-  row, onSeat, onKot, onEdit, onQr, onRelease, onRemove,
+  row, onSeat, onKot, onEdit, onQr, onRelease, onRemove, booking,
 }: {
   row: TableOccupancy;
+  /** The next party booked here, so a walk-in is not seated over them. */
+  booking: Reservation | null;
   onSeat: () => void;
   onKot: () => void;
   onEdit: () => void;
@@ -435,6 +470,16 @@ function TableCard({
         occupied ? "border-[var(--brand)]/40 bg-[#f6f9ff]" : "bg-white",
       )}
     >
+      {booking ? (
+        <div className={cn("flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-bold", CHIP_TONES.violet)}>
+          <CalendarClock size={11} className="shrink-0" />
+          <span className="truncate">
+            {t("restaurant.tables.bookedAt", { time: new Date(booking.reservedFor).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}
+            {" · "}
+            {t("restaurant.tables.bookedFor", { name: booking.guestName, people: booking.partySize })}
+          </span>
+        </div>
+      ) : null}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate font-display text-[17px] font-black text-[var(--brand-ink)]">{row.table.name}</div>

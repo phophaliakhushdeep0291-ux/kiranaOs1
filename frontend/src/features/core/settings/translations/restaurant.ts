@@ -206,4 +206,6 @@ export const restaurantEn = {
   "restaurant.kitchen.served": "Served",
   "restaurant.guest.ordered": "Guests have ordered",
   "restaurant.guest.fromTheQr": "from the QR",
+  "restaurant.tables.bookedAt": "Booked {time}",
+  "restaurant.tables.bookedFor": "{name} · {people}",
 } as const;
