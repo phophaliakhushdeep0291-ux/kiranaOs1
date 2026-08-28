@@ -133,7 +133,7 @@ configured". At café scale that is three extra moving parts — Redis, a bucket
 worker — for one nightly dump.
 
 Use a Railway **scheduled service** instead, matching the convention already in
-[`../SCHEDULING.md`](../SCHEDULING.md):
+[`backend/docs/SCHEDULING.md`](../../backend/docs/SCHEDULING.md):
 
 - Service: `backup`, root directory `backend`, no public domain
 - Command: `npm run backup:postgres`
@@ -187,4 +187,4 @@ Run it before the café goes live, and again after any release that migrates.
 - **No staging by default.** Make a second Railway environment before the first
   migration you are unsure about, not after.
 - **Logs are not alerting.** Point an uptime check at `/health/ready` on both
-  public services; see [`../ALERTING_RUNBOOK.md`](../ALERTING_RUNBOOK.md).
+  public services; see [`backend/docs/ALERTING_RUNBOOK.md`](../../backend/docs/ALERTING_RUNBOOK.md).
