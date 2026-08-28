@@ -6,6 +6,7 @@ import {
   heldBillFromBillingDraft,
   newBillId,
   upsertOpenBill,
+  wouldEvictOpenBill,
 } from "@/features/core/billing/pages/open-bills";
 import type { BillingDraft, HeldBill } from "@/features/core/billing/pages/billing-types";
 import { loadTableBills, reconcileTableBills, saveTableBills, type RestaurantTable } from "./table-store";
@@ -50,6 +51,25 @@ export async function openTableInBilling(table: RestaurantTable): Promise<HeldBi
       selectedCustomerId: "walk_in",
       customerName: table.name,
     };
+    /**
+     * Refuse rather than evict.
+     *
+     * `upsertOpenBill` caps the set at MAX_OPEN_BILLS by dropping the oldest
+     * entry, which for a floor at capacity is another table's running order —
+     * seated, eaten, and now unbillable, while the table -> bill map still
+     * points at a bill that no longer exists. That table then reconciles away
+     * and reads as free.
+     *
+     * Guest-order acceptance already guards this (`assertTableImportSafe`);
+     * seating from the floor screen did not, so a full house lost a table's
+     * food to the eleventh party walking in. Saying no is recoverable; losing
+     * an order silently is not.
+     */
+    if (wouldEvictOpenBill(held, bill)) {
+      throw new Error(
+        `Settle or clear a table before seating ${table.name}. The till is holding ${held.length} open bills, which is the most it can keep at once.`,
+      );
+    }
     held = upsertOpenBill(held, bill);
     map[table.id] = bill.id;
   }
