@@ -14,8 +14,19 @@ async function withFailedAudit(action, operation) {
   const uniqueId = crypto.randomUUID().replaceAll("-", "");
   const trigger = `force_payment_connection_audit_${uniqueId}`;
   const triggerFunction = `${trigger}_fn`;
-  const databaseUrl = process.env.POSTGRES_TEST_DATABASE_URL || process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || "";
-  const isPostgres = /^postgres(?:ql)?:\/\//i.test(databaseUrl);
+  // DATABASE_URL only, because it is the connection Prisma is actually holding.
+  //
+  // The other two describe a database that may not be the one under test.
+  // Importing src/db.js loads dotenv, which puts POSTGRES_TEST_DATABASE_URL back
+  // from .env AFTER the isolated runner has cleared it — dotenv does not
+  // overwrite DATABASE_URL, so the client stays on the SQLite file the runner
+  // made while that variable still names a Postgres server. Reading it first
+  // made this test emit `CREATE FUNCTION … plpgsql` at SQLite, which answered
+  // `near "FUNCTION": syntax error` and took the whole suite red.
+  //
+  // The same one-variable check is what customers, products and reminders use
+  // to decide whether a Postgres-only lock applies.
+  const isPostgres = /^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL || "");
 
   if (isPostgres) {
     await db.$executeRawUnsafe(`
