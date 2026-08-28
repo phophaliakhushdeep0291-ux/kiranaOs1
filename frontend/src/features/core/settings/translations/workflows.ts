@@ -244,7 +244,7 @@ export const workflowsEn = {
 
   // -- restaurant --
   "workflow.restaurant.title": "Restaurant service workflow",
-  "workflow.restaurant.subtitle": "Open orders quickly, keep the menu current, receive online orders, and close the day cleanly.",
+  "workflow.restaurant.subtitle": "Open orders quickly, keep the menu current, manage table service, and close the day cleanly.",
   "workflow.restaurant.action.1": "New order",
   "workflow.restaurant.action.1.detail": "Start counter or table billing",
   "workflow.restaurant.action.2": "Menu setup",

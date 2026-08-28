@@ -75,6 +75,14 @@ export const SHARED_NAVIGATION = [
 /** Unknown/shared-core routes remain visible; only profile-mapped trade routes are filtered. */
 export function isPathInBusinessProfile(path: string, navigation?: string[]) {
   if (!navigation) return true;
+  // Restaurant QR orders live on Tables, not in the generic retail/customer
+  // order inbox. `tables` identifies the restaurant profile; `orders` is the
+  // explicit opt-in a future verified Swiggy/Zomato-style connector can add.
+  // Other shop types keep their existing Orders Received workflow through the
+  // shared `sales` spine.
+  if (/^\/orders-received(?:\/|$)/.test(path)
+    && navigation.includes("tables")
+    && !navigation.includes("orders")) return false;
   const rule = PATH_NAVIGATION_KEYS.find(([pattern]) => pattern.test(path));
   return !rule || rule[1].some((key) => navigation.includes(key));
 }

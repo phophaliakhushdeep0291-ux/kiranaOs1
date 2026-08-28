@@ -6,7 +6,10 @@
 export const navigation = [
   "pos",
   "tables",
-  "orders",
+  // Dine-in QR orders are accepted from Tables. The generic Orders Received
+  // inbox stays out of the restaurant profile until an official marketplace
+  // connector (for example Swiggy or Zomato) can add the `orders` key for the
+  // connected shop. A generic developer API key is not marketplace proof.
   "kitchen-kot",
   "menu",
   "recipes",
