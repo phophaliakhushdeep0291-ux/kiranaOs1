@@ -200,6 +200,7 @@ export default function Billing() {
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [activeBillId, setActiveBillId] = useState<string>(() => readBillingDraft().activeBillId ?? newBillId());
   const openBillTransitionLockRef = useRef(false);
+  const billingCommitLockRef = useRef(false);
   const [openBillTransitionPending, setOpenBillTransitionPending] = useState(false);
   // If the workspace bill came from a customer QR order, its id — so finalizing marks that order
   // fulfilled + links the bill. Mirrored into a ref so the save-success callback reads it live.
@@ -792,6 +793,7 @@ export default function Billing() {
 
   const confirmBill = useConfirmBill({
     mutation: {
+      onSettled: () => { billingCommitLockRef.current = false; },
       onSuccess: (data: Bill, { data: submitted }) => {
         const billNo = data.billNumber ?? data.billNo ?? `PENDING-${Date.now()}`;
         setVerifiedRetailPayment(null);
@@ -1586,6 +1588,8 @@ export default function Billing() {
     printDecision?: boolean,
     approvalOverride?: NonNullable<typeof sensitiveApproval>,
   ) {
+    // Block taps/shortcuts in the same frame, before React renders pending state.
+    if (billingCommitLockRef.current || openBillTransitionLockRef.current) return;
     if (!newBillingFeature.allowed) {
       toast({ title: t("billing.page.billingLocked"), description: newBillingFeature.reason, variant: "destructive" });
       return;
@@ -1693,13 +1697,11 @@ export default function Billing() {
       }
     }
 
+    billingCommitLockRef.current = true;
     confirmBill.mutate({
       data: {
-        // Stable per-open-bill identity. The local-first path already mints its own,
-        // but the ONLINE path (coupons/loyalty/gift cards go straight to the server)
-        // needs this so a retry after a lost response dedupes server-side instead of
-        // creating a second bill and double-redeeming the coupon. A fresh id is set
-        // after every successful save, so distinct sales never collide.
+        // Both local and online saves preserve this identity through retries.
+        // A fresh id is set only after success, so distinct sales never collide.
         clientBillId: activeBillId,
         billType: nextBillType,
         gstMode: getTaxConfigSync().mode,
@@ -1814,7 +1816,7 @@ export default function Billing() {
   // Save the workspace bill back into the open-bills set — but only if it has items, so empty
   // bills aren't littered around.
   async function newBill(): Promise<boolean> {
-    if (openBillTransitionLockRef.current) return false;
+    if (openBillTransitionLockRef.current || billingCommitLockRef.current) return false;
 
     const nextActiveBillId = newBillId();
     const transition = prepareNewBillWorkspace(
@@ -1868,7 +1870,7 @@ export default function Billing() {
   // Switch only after the target draft and remaining parked set are durable.
   // Removing the target before parking the current bill avoids cap eviction.
   async function resumeHeldBill(id: string): Promise<void> {
-    if (openBillTransitionLockRef.current) return;
+    if (openBillTransitionLockRef.current || billingCommitLockRef.current) return;
     const transition = prepareResumeBillWorkspace(
       heldBills,
       cart.length > 0 ? serializeActiveBill() : null,
@@ -1903,6 +1905,7 @@ export default function Billing() {
   }
 
   function executeClearCart() {
+    if (billingCommitLockRef.current) return;
     if (protectGuestLine()) { setClearConfirmOpen(false); return; }
     setClearConfirmOpen(false);
     resetCurrentBill();
@@ -1995,6 +1998,7 @@ export default function Billing() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (billingCommitLockRef.current) return;
       if (event.repeat) return;
       // Settings → Advanced → Keyboard shortcuts. Escape-to-clear stays on
       // because it is a browser convention, not an app hotkey.
@@ -2034,7 +2038,7 @@ export default function Billing() {
   });
 
   return (
-    <div className="min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))] bg-white lg:h-[calc(100dvh-var(--app-desktop-topbar-height)-var(--app-banner-height))] lg:min-h-0 lg:overflow-hidden">
+    <fieldset disabled={confirmBill.isPending} aria-busy={confirmBill.isPending} className="min-w-0 min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))] border-0 bg-white p-0 lg:h-[calc(100dvh-var(--app-desktop-topbar-height)-var(--app-banner-height))] lg:min-h-0 lg:overflow-hidden">
       <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 pb-[calc(var(--app-mobile-fixed-action-height)+2rem)] sm:px-3 sm:py-3 sm:pb-[calc(var(--app-mobile-fixed-action-height)+2rem)] lg:h-full lg:flex-row lg:gap-4 lg:px-4 lg:pb-3">
       {/* ── LEFT PANEL: product search + grid ── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-visible lg:min-h-0 lg:overflow-hidden">
@@ -2046,7 +2050,7 @@ export default function Billing() {
             ]}
             onSwitch={resumeHeldBill}
             onNew={newBill}
-            busy={openBillTransitionPending}
+            busy={openBillTransitionPending || confirmBill.isPending}
           />
         )}
         <BillingSearch
@@ -2398,6 +2402,6 @@ export default function Billing() {
           window.setTimeout(() => handleConfirm(nextType, false), 0);
         }}
       />
-    </div>
+    </fieldset>
   );
 }

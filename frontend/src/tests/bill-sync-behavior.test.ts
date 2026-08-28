@@ -225,7 +225,7 @@ vi.mock("@/lib/offline/db", () => {
         })),
       };
       try {
-        await callback(tx);
+        return await callback(tx);
       } catch (error) {
         dbState.tables = snapshot;
         throw error;
@@ -529,6 +529,17 @@ describe("bill sync behavior", () => {
     })]);
     expect(payload.customerLedgerEntries).toHaveLength(1);
     expect(payload.udharLedgerEntries).toHaveLength(1);
+  });
+
+  it("keeps the open-draft identity through server reconciliation so retry does not create a second sale", async () => {
+    const input = billInput({ clientBillId: "restored-open-draft" });
+    const bill = await createBillLocalFirst(input);
+    const event = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL")!;
+    const result = createServerSuccessResult(event, bill.id);
+    await reconcileSyncedBillFromPush(event as never, result as never);
+    const retried = await createBillLocalFirst(input);
+    expect(retried.id).toBe("server_bill_1");
+    expect(scopedRows("sync_outbox").filter((row) => row.operation_type === "CREATE_BILL")).toHaveLength(1);
   });
 
   it("does not let a bad backend echo auto-pay offline udhar during reconciliation", async () => {

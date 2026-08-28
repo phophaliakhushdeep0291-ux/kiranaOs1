@@ -61,8 +61,9 @@ vi.mock("@/lib/offline/db", () => ({
         }),
       };
 
-      await callback(tx);
+      const result = await callback(tx);
       dbState.committed = staged;
+      return result;
     }),
   },
 }));

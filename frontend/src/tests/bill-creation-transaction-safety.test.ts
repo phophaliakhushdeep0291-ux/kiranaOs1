@@ -5,6 +5,7 @@ const dbState = vi.hoisted(() => ({
   committed: {} as Record<string, unknown[]>,
   failOnTable: null as string | null,
   idCounter: 0,
+  transactions: Promise.resolve() as Promise<unknown>,
 }));
 
 function cloneRows(rows: unknown[]) {
@@ -18,12 +19,13 @@ function tableRows(table: string) {
 vi.mock("@/lib/offline/db", () => ({
   offlineDB: {
     getAll: vi.fn(async (table: string) => cloneRows(dbState.committed[table] ?? [])),
-    transaction: vi.fn(async (_tables: string[], callback: (tx: {
+    transaction: vi.fn((_tables: string[], callback: (tx: {
       put: (table: string, value: unknown) => Promise<void>;
       putMany: (table: string, values: unknown[]) => Promise<void>;
       enqueueOutboxOperation: (event: unknown) => Promise<void>;
       setSetting: (key: string, value: unknown, expiresAt?: number | null) => Promise<void>;
     }) => Promise<unknown>) => {
+      const operation = dbState.transactions.then(async () => {
       const staged = Object.fromEntries(Object.entries(dbState.committed).map(([table, rows]) => [table, cloneRows(rows)])) as Record<string, unknown[]>;
       const ensure = (table: string) => {
         staged[table] ??= [];
@@ -57,8 +59,12 @@ vi.mock("@/lib/offline/db", () => ({
         }),
       };
 
-      await callback(tx);
+      const result = await callback(tx);
       dbState.committed = staged;
+      return result;
+      });
+      dbState.transactions = operation.catch(() => undefined);
+      return operation;
     }),
   },
 }));
@@ -73,7 +79,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
-import { writeInstantMemoryCache } from "@/lib/offline/instant-cache";
+import { readInstantCache, writeInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { createBillLocalFirst } from "@/features/core/billing/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
@@ -100,8 +106,12 @@ describe("bill creation transaction safety", () => {
     vi.clearAllMocks();
     dbState.idCounter = 0;
     dbState.failOnTable = null;
+    dbState.transactions = Promise.resolve();
+    vi.mocked(writeInstantMemoryCache).mockReset();
+    vi.mocked(readInstantCache).mockImplementation((_key, fallback) => fallback);
     dbState.committed = {
       customers: [{ id: "customer_1", name: "Ramesh", type: "regular", udharAmount: 25, totalUdhar: 25 }],
+      products: [{ id: "product_1", name: "Sugar", baseUnit: "kg", stockBaseQty: 20, defaultPricePerRateUnit: 50 }],
     };
   });
 
@@ -194,5 +204,102 @@ describe("bill creation transaction safety", () => {
       ],
     }))).rejects.toThrow(/split cash and upi payments cannot exceed/i);
     expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
+  });
+
+  it("repeated and simultaneous Save attempts create one bill, tender, stock movement and debt", async () => {
+    const input = baseInput({ clientBillId: "open-table-2", buyerPaidAmount: 40,
+      payments: [{ mode: BillPaymentMode.cash, amount: 40 }, { mode: BillPaymentMode.credit, amount: 60 }] });
+    const [first, second] = await Promise.all([createBillLocalFirst(input), createBillLocalFirst(input)]);
+    const third = await createBillLocalFirst(input);
+    expect(second.id).toBe(first.id);
+    expect(third.id).toBe(first.id);
+    expect(tableRows("bills")).toHaveLength(1);
+    expect(tableRows("payments")).toHaveLength(1);
+    expect(tableRows("customer_ledger")).toHaveLength(1);
+    expect(tableRows("inventory_movements")).toHaveLength(1);
+    expect(tableRows("customers")[0].udharAmount).toBe(85);
+    expect(tableRows("products")[0].stockBaseQty).toBe(18);
+    const operations = tableRows("sync_outbox").filter((row) => row.operation_type === "CREATE_BILL");
+    expect(operations).toHaveLength(1);
+    expect(operations[0].payload).toMatchObject({ clientBillId: "open-table-2", localBillId: first.id });
+  });
+
+  it("reads current stock and customer balance inside the transaction, not a stale screen cache", async () => {
+    const staleProducts = structuredClone(tableRows("products"));
+    const staleCustomers = structuredClone(tableRows("customers"));
+    vi.mocked(readInstantCache).mockImplementation((key, fallback) =>
+      (key === "products" ? staleProducts : key === "customers" ? staleCustomers : fallback) as typeof fallback);
+    const credit = baseInput({ buyerPaidAmount: 40,
+      payments: [{ mode: BillPaymentMode.cash, amount: 40 }, { mode: BillPaymentMode.credit, amount: 60 }] });
+    await Promise.all([
+      createBillLocalFirst({ ...credit, clientBillId: "sale-a" }),
+      createBillLocalFirst({ ...credit, clientBillId: "sale-b" }),
+    ]);
+    expect(tableRows("bills")).toHaveLength(2);
+    expect(tableRows("products")[0].stockBaseQty).toBe(16);
+    expect(tableRows("customers")[0].udharAmount).toBe(145);
+    expect(tableRows("customer_ledger").map((row) => row.balance_after)).toEqual([85, 145]);
+  });
+
+  it("retries a failed atomic save with the same open-bill identity without leftover children", async () => {
+    const input = baseInput({ clientBillId: "storage-retry" });
+    dbState.failOnTable = "sync_outbox";
+    await expect(createBillLocalFirst(input)).rejects.toThrow("write failure");
+    expect(tableRows("bills")).toHaveLength(0);
+    expect(tableRows("products")[0].stockBaseQty).toBe(20);
+    dbState.failOnTable = null;
+    await createBillLocalFirst(input);
+    await createBillLocalFirst(input);
+    expect(tableRows("bills")).toHaveLength(1);
+    expect(tableRows("payments")).toHaveLength(1);
+    expect(tableRows("products")[0].stockBaseQty).toBe(18);
+  });
+
+  it("does not report a committed sale as failed when updating the display cache throws", async () => {
+    vi.mocked(writeInstantMemoryCache).mockImplementationOnce(() => { throw new Error("Cache unavailable"); });
+    const input = baseInput({ clientBillId: "cache-retry" });
+    const saved = await createBillLocalFirst(input);
+    expect((await createBillLocalFirst(input)).id).toBe(saved.id);
+    expect(tableRows("bills")).toHaveLength(1);
+  });
+
+  it("does not silently reuse a receipt after the amount or tender was changed", async () => {
+    await createBillLocalFirst(baseInput({ clientBillId: "already-saved" }));
+    await expect(createBillLocalFirst(baseInput({ clientBillId: "already-saved", payments: [{ mode: BillPaymentMode.upi, amount: 100 }] })))
+      .rejects.toThrow("already saved with different details");
+    expect(tableRows("payments")).toHaveLength(1);
+    expect(tableRows("payments")[0].mode).toBe("cash");
+  });
+
+  it("returns the synced receipt if the draft survived a reload after saving", async () => {
+    const input = baseInput({ clientBillId: "restored-draft" });
+    await createBillLocalFirst(input);
+    Object.assign(tableRows("bills")[0], { id: "server-bill", server_id: "server-bill", isSynced: true, sync_status: "synced" });
+    expect((await createBillLocalFirst(input)).id).toBe("server-bill");
+    expect(tableRows("bills")).toHaveLength(1);
+    expect(tableRows("payments")).toHaveLength(1);
+  });
+
+  it("never saves approval credentials in the retry fingerprint", async () => {
+    await createBillLocalFirst(baseInput({ clientBillId: "approval-safe", ownerPin: "9381", reason: "owner-approved" }));
+    const fingerprint = String(tableRows("bills")[0].checkoutFingerprint);
+    expect(fingerprint).not.toContain("ownerPin");
+    expect(fingerprint).not.toContain("9381");
+    expect(fingerprint).not.toContain("owner-approved");
+  });
+
+  it("refuses to announce a cancelled receipt as a newly saved sale", async () => {
+    const input = baseInput({ clientBillId: "cancelled-draft" });
+    await createBillLocalFirst(input);
+    Object.assign(tableRows("bills")[0], { status: "cancelled" });
+    await expect(createBillLocalFirst(input)).rejects.toThrow("cancelled or removed");
+    expect(tableRows("payments")).toHaveLength(1);
+  });
+
+  it("does not hide a failed durable read by taking possibly stale cached stock", async () => {
+    mockedOfflineDB.getAll.mockRejectedValueOnce(new Error("Storage unavailable"));
+    await expect(createBillLocalFirst(baseInput({ clientBillId: "failed-read" }))).rejects.toThrow("Storage unavailable");
+    expect(tableRows("bills")).toHaveLength(0);
+    expect(tableRows("products")[0].stockBaseQty).toBe(20);
   });
 });
