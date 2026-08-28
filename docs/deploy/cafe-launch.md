@@ -15,6 +15,9 @@ They are joined by **one shop id**. DineIn maps its restaurant slug to the
 KiranaOS shop id through `KIRANAOS_SHOP_MAP`; get that wrong and the menu loads
 from nowhere.
 
+> **Hosting.** For Railway specifically — services, variable wiring, volumes and
+> the scheduled backup — read [`railway.md`](./railway.md) alongside this.
+
 > **Scope.** This runbook covers a single-café deployment on counter payments.
 > It does **not** cover connecting a payment provider — those credentials are
 > deployment-wide today, so several cafés behind one merchant account do not
@@ -64,12 +67,23 @@ not a wish list.
 | `STOREFRONT_WRITE_LIMIT_MAX` | `1000` | guest order writes / 15 min |
 | `STOREFRONT_READ_LIMIT_MAX` | `20000` | guest menu reads / 15 min |
 
-Turn on automatic backups — this is what buys the recovery point the drill later
-measures:
+Automatic backups need a decision, not just a flag. `DATABASE_BACKUP_ENABLED`
+schedules a **BullMQ** job: it does nothing without `QUEUES_ENABLED` and Redis,
+and the code notes it is "only meaningful once object storage is configured".
+Turning it on alone leaves you believing you have nightly backups when you have
+none, which is worse than knowing you have none.
+
+Two honest options:
+
+- **Café scale — a scheduled job outside the app.** Run `npm run backup:postgres`
+  on a nightly schedule, writing to storage that survives a redeploy. This is
+  the Railway path; see [`railway.md`](./railway.md).
+- **Full scale — Redis and a bucket.** Set `QUEUES_ENABLED=true`, `REDIS_URL`,
+  `STORAGE_PROVIDER` and its credentials, then `DATABASE_BACKUP_ENABLED=true`.
+
+Either way set the retention and the key:
 
 ```ini
-DATABASE_BACKUP_ENABLED=true
-DATABASE_BACKUP_INTERVAL_HOURS=24
 BACKUP_RETENTION_DAYS=30
 BACKUP_ENCRYPTION_KEY=<the key from step 0>
 ```
@@ -90,6 +104,12 @@ cd backend && npm run prod:preflight
 
 Migrations run **before** the new backend starts, never alongside it.
 
+> **On a Docker host, this is already done for you.** `backend/Dockerfile` runs
+> `prisma:deploy:postgres`, `prisma:generate:postgres` and the schema verifier
+> in its `CMD`, so every deploy migrates before the API accepts traffic and a
+> failed migration fails the deploy. The commands below are for hosts that run
+> the app without that container. Either way, take the backup first.
+
 ```bash
 cd backend
 npm run migration:safety     # refuses a migration that would drop or rewrite data
@@ -107,7 +127,8 @@ npm run backup:postgres
 ## 3. Deploy the backend, then check it
 
 ```bash
-curl -fsS https://<backend>/api/health
+# /health/ready checks the database; /api/health only proves the process is up
+curl -fsS https://<backend>/health/ready
 curl -fsS "https://<backend>/api/public/shops/<shopId>/catalog" | head -c 400
 ```
 

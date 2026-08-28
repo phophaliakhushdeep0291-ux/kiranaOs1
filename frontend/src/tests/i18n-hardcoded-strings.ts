@@ -123,6 +123,21 @@ function stripCommentsAndClasses(source: string): string {
     .replace(/<style[\s\S]*?<\/style>/g, "<style></style>");
 }
 
+/**
+ * Whether a run that spans lines reads as screen text rather than as code.
+ *
+ * Deliberately strict: anything with a bracket, semicolon or assignment is code
+ * caught between two type arguments, not a label. A false negative here costs
+ * one untranslated string; a false positive trains people to widen the
+ * allowlist, which costs the whole check.
+ */
+function isProseAcrossLines(run: string): boolean {
+  const withoutExpressions = run.replace(/\{[^{}]*\}/g, " ");
+  if (/[();=[\]]/.test(withoutExpressions)) return false;
+  // A run of pure punctuation or a lone identifier is not a sentence someone reads.
+  return /[A-Za-z]{2}/.test(withoutExpressions);
+}
+
 export function findHardcodedStrings(source: string): HardcodedString[] {
   const cleaned = stripCommentsAndClasses(source);
   const lineOf = (index: number) => cleaned.slice(0, index).split("\n").length;
@@ -136,7 +151,25 @@ export function findHardcodedStrings(source: string): HardcodedString[] {
   //    The lookbehind keeps `=>`, `<=` and `>=` from opening a match: an arrow
   //    function followed by a comparison or a generic reads as ">text<" otherwise,
   //    and `() => apiRequest<{...}>` was reported as the user-visible word "apiRequest".
-  for (const match of cleaned.matchAll(/(?<![=!<>])>(?!=)((?:[^<>{}\n]|\{[^{}<>\n]*\})+)</g)) {
+  //
+  //    The run may span lines, because that is how JSX is ordinarily written:
+  //
+  //        <Button>
+  //          Add table
+  //        </Button>
+  //
+  //    A single-line-only run made every one of those invisible, which is a large
+  //    hole in the one check that stops the dictionary being bypassed — a screen
+  //    could report zero while most of its labels were still English.
+  //
+  //    Spanning lines costs something, though: with newlines allowed, ordinary
+  //    code between two type arguments reads as prose, and `useState<Foo>([])`
+  //    followed by another `useState<` reports the code between them. So a
+  //    multi-line run must additionally LOOK like prose — no brackets, semicolons
+  //    or assignment — while a single-line run keeps the old, looser rule. Screen
+  //    text does not contain `();=`; code between generics always does.
+  for (const match of cleaned.matchAll(/(?<![=!<>])>(?!=)((?:[^<>{}]|\{[^{}<>\n]*\})+)</g)) {
+    if (match[1].includes("\n") && !isProseAcrossLines(match[1])) continue;
     const line = lineOf(match.index ?? 0);
     // `${…}` loses its dollar too, so a printed-HTML template reports the label
     // rather than the label plus a stray sigil.
