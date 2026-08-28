@@ -31,7 +31,13 @@ export async function openTableInBilling(table: RestaurantTable): Promise<HeldBi
   const parked = heldBillFromBillingDraft(draft);
   if (parked) held = upsertOpenBill(held, parked);
 
-  const map = reconcileTableBills(mapRaw, held);
+  // The active bill has to be named, or reconciling drops it. An empty cart is
+  // normally a finished table freeing itself — except for the one table being
+  // rung up right now, whose waiter has seated a party and not yet keyed a
+  // dish. Without this, opening that table a second time found no bill for it
+  // and started another: two "T1 • table" entries in the switcher, one of them
+  // orphaned with nothing pointing at it. TablesPage already passes this.
+  const map = reconcileTableBills(mapRaw, held, draft?.activeBillId);
   const existingId = map[table.id];
   let bill = held.find((entry) => entry.id === existingId) ?? null;
 
