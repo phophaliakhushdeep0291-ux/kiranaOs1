@@ -65,6 +65,18 @@ test("hooks from allowing guards are collected, and dropped on a refusal", async
   assert.deepEqual(refused.onConfirmed, []);
 });
 
+test("stock handled by multiple vertical guards is merged and dropped on refusal", async () => {
+  resetSaleGuards();
+  registerSaleGuard(async () => ({ handledStockProductIds: ["dish", "combo"] }));
+  registerSaleGuard(async () => ({ handledStockProductIds: new Set(["combo", "meal"]) }));
+  const allowed = await evaluateSaleGuards(context());
+  assert.deepEqual([...allowed.handledStockProductIds].sort(), ["combo", "dish", "meal"]);
+
+  registerSaleGuard(async () => ({ code: "STOP", message: "stop" }));
+  const refused = await evaluateSaleGuards(context());
+  assert.equal(refused.handledStockProductIds.size, 0);
+});
+
 test("a non-function registration is refused at once", () => {
   resetSaleGuards();
   // Failing at registration beats failing on someone's bill.

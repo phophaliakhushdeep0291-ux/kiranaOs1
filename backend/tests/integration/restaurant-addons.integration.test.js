@@ -136,7 +136,7 @@ if (ctx.skip) {
 
       const branchStock = await ctx.db.locationStock.findMany({ where: { locationId: fixture.location.id } });
       const branchQty = new Map(branchStock.map((row) => [row.productId, row.stockBaseQty]));
-      assert.equal(branchQty.get(fixture.dish.id), 3.6, "one Large consumes 1.4 dish units");
+      assert.equal(branchQty.get(fixture.dish.id), 5, "a recipe dish consumes ingredients, not a second finished-dish balance");
       assert.equal(branchQty.get(fixture.recipeIngredient.id), 2.44, "recipe follows the Large portion factor");
       assert.equal(branchQty.get(fixture.addonIngredient.id), 1.9, "one selected add-on consumes stock once");
     });
@@ -186,13 +186,13 @@ if (ctx.skip) {
         where: { locationId: fixture.location.id },
       });
       const branchQty = new Map(branchStock.map((row) => [row.productId, row.stockBaseQty]));
-      assert.equal(branchQty.get(fixture.dish.id), 4, "two half portions consume one dish base unit");
+      assert.equal(branchQty.get(fixture.dish.id), 5, "two half portions do not also consume a finished dish unit");
       assert.equal(branchQty.get(fixture.recipeIngredient.id), 2.6, "recipe consumes 2 x 0.5 x 0.4 kg");
       assert.equal(branchQty.get(fixture.addonIngredient.id), 1.8, "option consumes 2 x 0.1 kg");
 
       const ledgers = await ctx.db.stockLedger.findMany({ where: { billId: bill.id } });
       const byAction = new Map(ledgers.map((row) => [row.action, row]));
-      assert.equal(byAction.get("sale")?.changeBaseQty, -1);
+      assert.equal(byAction.get("sale"), undefined, "recipe dish has no duplicate direct sale movement");
       assert.equal(byAction.get("recipe_use")?.changeBaseQty, -0.4);
       assert.equal(byAction.get("addon_use")?.changeBaseQty, -0.2);
       assert.equal(byAction.get("recipe_use")?.locationId, fixture.location.id);

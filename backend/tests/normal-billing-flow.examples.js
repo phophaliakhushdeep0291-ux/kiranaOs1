@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import db from "../src/db.js";
 import "../src/verticals/restaurant/menu/addons.guard.js";
+import "../src/verticals/restaurant/menu/combos.guard.js";
+import "../src/verticals/restaurant/recipes/recipes.guard.js";
 import "../src/verticals/restaurant/storefront/dine-in.storefront.js";
 import { productData, createCustomer } from "./integration/factories.js";
 import { resolveOperationalLocation } from "../src/modules/stores/location-context.service.js";
-import { confirmBill } from "../src/modules/bills/bills.service.js";
+import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill } from "../src/modules/bills/bills.service.js";
 import { confirmBillSchema } from "../src/modules/bills/bills.schema.js";
 import { pushOfflineActions } from "../src/modules/sync/sync.service.js";
 
@@ -114,5 +116,107 @@ assert.equal(await db.stockLedger.count({ where: { billId: normalBill.id, action
 for (const product of products) {
   assert.equal((await db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 18);
 }
+
+// Recipe dishes own no finished-product stock. A mixed restaurant bill must
+// consume ingredients/options plus ordinary packaged items exactly once, and
+// cancellation/restore must replay those immutable movements rather than every
+// visual bill line.
+const [recipeDish, ingredient, addonIngredient, bottledWater, comboMeal, comboComponent] = await Promise.all([
+  db.product.create({ data: productData(shop.id, { name: "Recipe Dal", defaultPricePerRateUnit: 100, stockBaseQty: 7 }) }),
+  db.product.create({ data: productData(shop.id, { name: "Raw dal", defaultPricePerRateUnit: 10, stockBaseQty: 10 }) }),
+  db.product.create({ data: productData(shop.id, { name: "Butter", defaultPricePerRateUnit: 10, stockBaseQty: 5 }) }),
+  db.product.create({ data: productData(shop.id, { name: "Bottled water", defaultPricePerRateUnit: 20, stockBaseQty: 8 }) }),
+  db.product.create({ data: productData(shop.id, { name: "Snack combo", defaultPricePerRateUnit: 50, stockBaseQty: 4 }) }),
+  db.product.create({ data: productData(shop.id, { name: "Combo snack", defaultPricePerRateUnit: 10, stockBaseQty: 6 }) }),
+]);
+const [dishUnit, waterUnit, comboUnit] = await Promise.all([recipeDish, bottledWater, comboMeal].map((product) => db.productSellingUnit.create({ data: {
+  shopId: shop.id, productId: product.id, name: "piece", unitType: "piece", unitCode: `${product.id}-piece`,
+  conversionToBase: 1, defaultPrice: product.defaultPricePerRateUnit, isDefault: true,
+} })));
+await db.dishRecipeComponent.create({ data: {
+  shopId: shop.id, dishProductId: recipeDish.id, ingredientProductId: ingredient.id,
+  ingredientName: ingredient.name, qtyBase: 2,
+} });
+const addonGroup = await db.menuAddonGroup.create({ data: { shopId: shop.id, name: "Finish", minSelect: 0, maxSelect: 1 } });
+const addonOption = await db.menuAddonOption.create({ data: {
+  shopId: shop.id, groupId: addonGroup.id, name: "Butter finish", priceDelta: 10,
+  linkedProductId: addonIngredient.id, linkedQtyBase: 1,
+} });
+await db.productAddonGroup.create({ data: { shopId: shop.id, productId: recipeDish.id, groupId: addonGroup.id } });
+await db.menuComboComponent.create({ data: {
+  shopId: shop.id, comboProductId: comboMeal.id, componentProductId: comboComponent.id,
+  componentName: comboComponent.name, quantity: 2,
+} });
+const lifecycleBill = await confirmBill(shop.id, confirmBillSchema.parse({
+  clientBillId: randomUUID(), locationId: location.id, billType: "normal_sale", gstMode: "inclusive",
+  customerName: "Inventory lifecycle", discount: 0, actualAmount: 180, buyerPaidAmount: 180,
+  items: [
+    {
+      productId: recipeDish.id, sellingUnitId: dishUnit.id, sellingUnitCode: dishUnit.unitCode,
+      name: recipeDish.name, quantity: 1, enteredUnit: "piece", baseRatePerRateUnit: 100,
+      ratePerRateUnit: 110, gstRate: 0, addons: [{ optionId: addonOption.id, quantity: 1 }],
+    },
+    {
+      productId: bottledWater.id, sellingUnitId: waterUnit.id, sellingUnitCode: waterUnit.unitCode,
+      name: bottledWater.name, quantity: 1, enteredUnit: "piece", ratePerRateUnit: 20, gstRate: 0,
+    },
+    {
+      productId: comboMeal.id, sellingUnitId: comboUnit.id, sellingUnitCode: comboUnit.unitCode,
+      name: comboMeal.name, quantity: 1, enteredUnit: "piece", ratePerRateUnit: 50, gstRate: 0,
+    },
+  ],
+  payments: [{ mode: "cash", amount: 180 }],
+}), actor);
+async function productQty(id) { return (await db.product.findUniqueOrThrow({ where: { id } })).stockBaseQty; }
+assert.equal(await productQty(recipeDish.id), 7, "recipe sale never depletes the finished dish record");
+assert.equal(await productQty(ingredient.id), 8);
+assert.equal(await productQty(addonIngredient.id), 4);
+assert.equal(await productQty(bottledWater.id), 7);
+assert.equal(await productQty(comboMeal.id), 4, "combo sale never depletes the menu identity itself");
+assert.equal(await productQty(comboComponent.id), 4);
+const lifecycleMoves = await db.stockLedger.findMany({ where: { billId: lifecycleBill.id, changeBaseQty: { lt: 0 } } });
+assert.deepEqual(lifecycleMoves.map((row) => `${row.action}:${row.productId}`).sort(), [
+  `addon_use:${addonIngredient.id}`,
+  `recipe_use:${comboComponent.id}`,
+  `recipe_use:${ingredient.id}`,
+  `sale:${bottledWater.id}`,
+].sort());
+
+await cancelBill(shop.id, lifecycleBill.id, { reason: "Lifecycle regression" }, actor);
+assert.equal(await productQty(recipeDish.id), 7);
+assert.equal(await productQty(ingredient.id), 10);
+assert.equal(await productQty(addonIngredient.id), 5);
+assert.equal(await productQty(bottledWater.id), 8);
+assert.equal(await productQty(comboMeal.id), 4);
+assert.equal(await productQty(comboComponent.id), 6);
+const cancelledMoves = await db.stockLedger.findMany({ where: { billId: lifecycleBill.id, action: "cancel_reversal" } });
+assert.deepEqual(cancelledMoves.map((row) => row.sourceType).sort(), ["bill_cancel:addon_use", "bill_cancel:recipe_use", "bill_cancel:recipe_use", "bill_cancel:sale"]);
+
+await restoreCancelledBill(shop.id, lifecycleBill.id, { reason: "Lifecycle regression restore" }, actor);
+assert.equal(await productQty(recipeDish.id), 7);
+assert.equal(await productQty(ingredient.id), 8);
+assert.equal(await productQty(addonIngredient.id), 4);
+assert.equal(await productQty(bottledWater.id), 7);
+assert.equal(await productQty(comboMeal.id), 4);
+assert.equal(await productQty(comboComponent.id), 4);
+const restoredMoves = await db.stockLedger.findMany({ where: { billId: lifecycleBill.id, action: "restore_reversal" } });
+assert.deepEqual(restoredMoves.map((row) => row.sourceType).sort(), ["bill_restore:addon_use", "bill_restore:recipe_use", "bill_restore:recipe_use", "bill_restore:sale"]);
+
+const originalLines = new Map(lifecycleBill.items.map((item) => [item.productId, item]));
+await createSaleReturn(shop.id, {
+  clientBillId: randomUUID(), locationId: location.id, returnOfBillId: lifecycleBill.id,
+  refundMode: "cash", reason: "Restaurant lifecycle refund",
+  items: [recipeDish, comboMeal, bottledWater].map((product) => ({
+    originalBillItemId: originalLines.get(product.id).id, productId: product.id, name: product.name,
+    quantity: 1, enteredUnit: "piece", ratePerRateUnit: originalLines.get(product.id).ratePerRateUnit,
+    gstRate: 0, damaged: false,
+  })),
+}, actor);
+assert.equal(await productQty(recipeDish.id), 7, "a refund does not put a cooked plate into stock");
+assert.equal(await productQty(ingredient.id), 8, "a refund does not uncook consumed ingredients");
+assert.equal(await productQty(addonIngredient.id), 4, "a refund does not restore a consumed option");
+assert.equal(await productQty(bottledWater.id), 8, "an ordinary resellable item is still restocked");
+assert.equal(await productQty(comboMeal.id), 4, "a refund does not restock a served combo identity");
+assert.equal(await productQty(comboComponent.id), 4, "a refund does not rebuild consumed combo components");
 console.log("normal-billing-flow.examples.js OK — guest and counter bills commit once; stock, tender and credit reconcile");
 await db.$disconnect();

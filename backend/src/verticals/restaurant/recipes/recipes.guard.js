@@ -62,6 +62,7 @@ export function registerRecipeConsumptionGuard() {
       where: { shopId, dishProductId: { in: [...new Set(dishIds)] } },
     });
     if (components.length === 0) return null;
+    const recipeDishIds = new Set(components.map((component) => component.dishProductId));
 
     const sellingUnits = await tx.productSellingUnit.findMany({
       where: { shopId, productId: { in: [...new Set(dishIds)] }, isActive: true },
@@ -90,10 +91,12 @@ export function registerRecipeConsumptionGuard() {
     }
 
     const consumption = aggregateRecipeConsumption(dishPortions, components);
-    if (consumption.length === 0) return null;
 
     return {
-      onConfirmed: async ({ tx: confirmTx, bill, location: confirmedLocation, actor }) => {
+      // The ingredients are the stock for a recipe dish. Billing must not also
+      // remove a fictitious finished plate from the ordinary product balance.
+      handledStockProductIds: recipeDishIds,
+      onConfirmed: consumption.length === 0 ? undefined : async ({ tx: confirmTx, bill, location: confirmedLocation, actor }) => {
         for (const row of consumption) {
           const ingredient = await confirmTx.product.findFirst({
             where: { id: row.ingredientProductId, shopId, deletedAt: null },

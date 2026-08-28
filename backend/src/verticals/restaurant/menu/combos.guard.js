@@ -89,10 +89,11 @@ export function registerComboConsumptionGuard() {
     const dishesWithRecipes = new Set(recipeComponents.map((row) => row.dishProductId));
     const directStock = expanded.filter((row) => !dishesWithRecipes.has(row.componentProductId));
 
-    if (ingredientConsumption.length === 0 && directStock.length === 0) return null;
-
     return {
-      onConfirmed: async ({ tx: confirmTx, bill, location: confirmedLocation, actor }) => {
+      // A combo's components are its stock. The combo product itself is only the
+      // price/menu identity and must not be depleted a second time.
+      handledStockProductIds: comboIds,
+      onConfirmed: ingredientConsumption.length === 0 && directStock.length === 0 ? undefined : async ({ tx: confirmTx, bill, location: confirmedLocation, actor }) => {
         const target = confirmedLocation ?? location;
         const moves = [
           ...ingredientConsumption.map((row) => ({

@@ -24,7 +24,7 @@ const guards = [];
  *   items: Array<object>,
  *   productMap: Record<string, object>,
  *   isEstimate: boolean,
- * }) => Promise<null | { code?: string, message?: string, status?: number, publicData?: object, onConfirmed?: Function, decorateBillItem?: Function }>} guard
+ * }) => Promise<null | { code?: string, message?: string, status?: number, publicData?: object, onConfirmed?: Function, decorateBillItem?: Function, handledStockProductIds?: Iterable<string> }>} guard
  *   Returns null to allow the sale, or a refusal describing why. `onConfirmed`,
  *   when present, runs after the bill exists — that is where a guard records
  *   what its own ledger needs to say about the sale it just permitted.
@@ -42,18 +42,22 @@ export function registerSaleGuard(guard) {
  * a counter that works around the feature instead of with it.
  */
 export async function evaluateSaleGuards(context) {
-  if (guards.length === 0) return { refusal: null, onConfirmed: [], decorateBillItem: [] };
+  if (guards.length === 0) return { refusal: null, onConfirmed: [], decorateBillItem: [], handledStockProductIds: new Set() };
 
   const onConfirmed = [];
   const decorateBillItem = [];
+  const handledStockProductIds = new Set();
   for (const guard of guards) {
     const result = await guard(context);
     if (!result) continue;
-    if (result.code) return { refusal: result, onConfirmed: [], decorateBillItem: [] };
+    if (result.code) return { refusal: result, onConfirmed: [], decorateBillItem: [], handledStockProductIds: new Set() };
     if (result.onConfirmed) onConfirmed.push(result.onConfirmed);
     if (result.decorateBillItem) decorateBillItem.push(result.decorateBillItem);
+    if (result.handledStockProductIds) {
+      for (const productId of result.handledStockProductIds) handledStockProductIds.add(productId);
+    }
   }
-  return { refusal: null, onConfirmed, decorateBillItem };
+  return { refusal: null, onConfirmed, decorateBillItem, handledStockProductIds };
 }
 
 /** Test seam: drop every registration so one suite cannot leak into the next. */

@@ -30,6 +30,7 @@ import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
 const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const BILL_ITEMS_WITH_OPTIONS = { include: { addons: true } };
+const BILL_STOCK_CONSUMPTION_ACTIONS = ["sale", "recipe_use", "addon_use"];
 
 async function writeRequiredBillAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -385,7 +386,12 @@ export async function confirmBill(shopId, body, actor = {}) {
     // Schedule H medicine leave without a doctor's slip. Billing never names a
     // trade; verticals register guards and this asks the registry. No guards
     // registered is one array-length check.
-    const { refusal: saleRefusal, onConfirmed: saleGuardHooks, decorateBillItem: saleItemDecorators } = await evaluateSaleGuards({
+    const {
+      refusal: saleRefusal,
+      onConfirmed: saleGuardHooks,
+      decorateBillItem: saleItemDecorators,
+      handledStockProductIds,
+    } = await evaluateSaleGuards({
       shopId, tx, body, items, productMap, isEstimate, location,
     });
     if (saleRefusal) {
@@ -492,7 +498,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       // frontend warns, the sale goes through, and stock is driven negative to show the exact
       // deficit for reconciliation (see decrementProductStockOrThrow). This hard rejection only
       // fires for internal callers that opt out of shortfall (allowStockShortfall === false).
-      if (product && !allowStockShortfall) {
+      if (product && !handledStockProductIds.has(product.id) && !allowStockShortfall) {
         const availableAtLocation = locationStockByProduct.get(product.id) ?? 0;
         if (availableAtLocation < qtyInBase) {
           throw new AppError(
@@ -580,7 +586,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       }
       billItems.push(billItem);
 
-      if (product) {
+      if (product && !handledStockProductIds.has(product.id)) {
         stockUpdates.push({
           product,
           qtyInBase,
@@ -1096,37 +1102,58 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
       throw err;
     }
 
-    // ── 1. Restore stock for every item ───────────────────────
-    // Only bills that actually deducted stock (they have "sale" stock-ledger rows) restore it.
-    // Guards legacy quote-era estimates, which never moved stock at creation.
+    // ── 1. Restore exactly the stock this bill consumed ───────
+    // The immutable ledger is authoritative. A restaurant bill can consume
+    // ingredients and options without consuming the finished dish product.
     const location = await resolveOperationalLocation(shopId, bill.locationId, tx, { allowInactive: true });
-
-    const saleLedgerRows = await tx.stockLedger.count({
-      where: { shopId, billId: bill.id, action: "sale" },
+    const consumedStock = await tx.stockLedger.findMany({
+      where: {
+        shopId,
+        billId: bill.id,
+        action: { in: BILL_STOCK_CONSUMPTION_ACTIONS },
+        changeBaseQty: { lt: 0 },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
-    for (const item of saleLedgerRows > 0 ? bill.items : []) {
-      if (!item.productId) continue;
-
-      const product = await tx.product.findFirst({ where: { id: item.productId, shopId } });
+    for (const movement of consumedStock) {
+      const product = await tx.product.findFirst({ where: { id: movement.productId, shopId } });
       if (!product) continue;
-      const stockResult = await incrementLocationInventory(tx, { shopId, location, product, quantityBase: item.quantityInBaseUnit, packs: packsFromBillItem(item) });
+      // A bill can legitimately go through more than one cancel/restore cycle.
+      // Keep every reversal immutable and give each cycle its own identity.
+      const priorMovementReversals = await tx.stockLedger.count({
+        where: {
+          shopId,
+          billId: bill.id,
+          action: "cancel_reversal",
+          sourceId: movement.id,
+        },
+      });
+      const cancellationCycle = priorMovementReversals + 1;
+      const reversalIdentity = `cancel:${bill.id}:${movement.id}:${cancellationCycle}`;
+      const quantityBase = round2(Math.abs(Number(movement.changeBaseQty)));
+      const packs = movement.action === "sale"
+        ? packsFromBillItems(bill.items.filter((item) => item.productId === movement.productId))
+        : null;
+      const stockResult = await incrementLocationInventory(tx, { shopId, location, product, quantityBase, packs });
 
       await tx.stockLedger.create({
         data: {
           shopId,
           locationId: location.id,
-          productId: item.productId,
-          productName: item.name,
+          productId: movement.productId,
+          productName: movement.productName ?? product.name,
           ...stockLedgerProvenance(actor),
           action: "cancel_reversal",
-          changeBaseQty: item.quantityInBaseUnit,
+          changeBaseQty: quantityBase,
           oldStockBaseQty: stockResult.oldStock,
           newStockBaseQty: stockResult.newStock,
           billId: bill.id,
+          clientMovementId: reversalIdentity,
+          idempotencyKey: reversalIdentity,
           sourceDeviceId: actor.deviceId ?? null,
-          sourceType: "bill_cancel",
-          sourceId: bill.id,
-          note: `Reversal: ${reason}`,
+          sourceType: `bill_cancel:${movement.action}`,
+          sourceId: movement.id,
+          note: `Reversal of ${movement.action}: ${reason}`,
         },
       });
     }
@@ -1282,6 +1309,12 @@ export async function createSaleReturn(shopId, body, actor = {}) {
       ])];
       const dbProducts = await tx.product.findMany({ where: { id: { in: productIds }, shopId } });
       const productMap = Object.fromEntries(dbProducts.map((p) => [p.id, p]));
+      const directlyStockedOriginalProductIds = original
+        ? new Set((await tx.stockLedger.findMany({
+          where: { shopId, billId: original.id, action: "sale", changeBaseQty: { lt: 0 } },
+          select: { productId: true },
+        })).map((row) => row.productId))
+        : null;
 
       let subtotal = 0;
       let totalGst = 0;
@@ -1497,7 +1530,10 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           ...moneyShadows({ ratePerRateUnit: authoritativeRate, costPerRateUnit, lineDiscount: -lineDiscount, lineTotal: -lineTotal, lineCost: -lineCost, lineProfit: -lineProfit }),
         });
 
-        if (product) {
+        // A linked recipe/combo return refunds the dish but does not put a
+        // fictitious finished plate into stock. A damaged return can still
+        // record its loss value without increasing quantity.
+        if (product && (!original || directlyStockedOriginalProductIds.has(product.id) || damaged)) {
           restockPlan.push({
             product,
             qtyInBase: round2(qtyInBase),
@@ -1778,20 +1814,47 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       throw err;
     }
 
-    // Re-deduct only stock the cancellation actually restored ("cancel_reversal" rows exist);
-    // legacy quote-era estimates never moved stock in either direction.
-    const cancelReversalRows = await tx.stockLedger.count({
-      where: { shopId, billId: bill.id, action: "cancel_reversal" },
+    // Re-deduct exactly the movements the cancellation restored. New rows point
+    // at their source movement; the legacy queue preserves older per-line rows.
+    const allCancelReversalRows = await tx.stockLedger.findMany({
+      where: { shopId, billId: bill.id, action: "cancel_reversal", changeBaseQty: { gt: 0 } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
-    for (const item of cancelReversalRows > 0 ? bill.items : []) {
+    const reappliedCancellationRows = allCancelReversalRows.length > 0
+      ? await tx.stockLedger.findMany({
+          where: {
+            shopId,
+            billId: bill.id,
+            action: "restore_reversal",
+            sourceId: { in: allCancelReversalRows.map((row) => row.id) },
+          },
+          select: { sourceId: true },
+        })
+      : [];
+    const reappliedCancellationIds = new Set(reappliedCancellationRows.map((row) => row.sourceId).filter(Boolean));
+    const cancelReversalRows = allCancelReversalRows.filter((row) => !reappliedCancellationIds.has(row.id));
+    const legacyItemsByProduct = new Map();
+    for (const item of bill.items) {
       if (!item.productId) continue;
-
+      if (!legacyItemsByProduct.has(item.productId)) legacyItemsByProduct.set(item.productId, []);
+      legacyItemsByProduct.get(item.productId).push(item);
+    }
+    for (const reversal of cancelReversalRows) {
       const product = await tx.product.findFirst({
-        where: { id: item.productId, shopId, deletedAt: null },
+        where: { id: reversal.productId, shopId, deletedAt: null },
       });
       if (!product) {
-        throw new AppError(`Cannot restore bill because product is deleted or missing: ${item.name}`, 409);
+        throw new AppError(`Cannot restore bill because product is deleted or missing: ${reversal.productName}`, 409);
       }
+      const originalAction = String(reversal.sourceType ?? "").startsWith("bill_cancel:")
+        ? String(reversal.sourceType).slice("bill_cancel:".length)
+        : "sale";
+      const isLegacy = reversal.sourceType === "bill_cancel";
+      const directItems = isLegacy
+        ? [legacyItemsByProduct.get(product.id)?.shift()].filter(Boolean)
+        : bill.items.filter((item) => item.productId === product.id);
+      const packs = originalAction === "sale" ? packsFromBillItems(directItems) : null;
+      const quantityBase = round2(Math.abs(Number(reversal.changeBaseQty)));
 
       let stockResult;
       try {
@@ -1799,10 +1862,10 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
           shopId,
           location,
           product,
-          quantityBase: item.quantityInBaseUnit,
+          quantityBase,
           allowShortfall: false,
           // Exact mirror of the cancellation that put these packs back.
-          packs: packsFromBillItem(item),
+          packs,
         });
       } catch (error) {
         if (["INSUFFICIENT_LOCATION_STOCK", "PRODUCT_NOT_AVAILABLE"].includes(error?.code)) {
@@ -1816,17 +1879,19 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
           shopId,
           locationId: location.id,
           productId: product.id,
-          productName: item.name,
+          productName: reversal.productName ?? product.name,
           ...stockLedgerProvenance(actor),
           action: "restore_reversal",
-          changeBaseQty: -item.quantityInBaseUnit,
+          changeBaseQty: -quantityBase,
           oldStockBaseQty: stockResult.oldStock,
           newStockBaseQty: stockResult.newStock,
           billId: bill.id,
+          clientMovementId: `restore:${bill.id}:${reversal.id}`,
+          idempotencyKey: `restore:${bill.id}:${reversal.id}`,
           sourceDeviceId: actor.deviceId ?? null,
-          sourceType: "bill_restore",
-          sourceId: bill.id,
-          note: `Restore cancelled bill: ${reason}`,
+          sourceType: `bill_restore:${originalAction}`,
+          sourceId: reversal.id,
+          note: `Restore ${originalAction}: ${reason}`,
         },
       });
     }
@@ -1915,6 +1980,19 @@ export function packsFromBillItem(item) {
   const qty = Number(item?.quantity ?? 0);
   if (item?.sellingUnitId && qty > 0) {
     packs.set(item.sellingUnitId, { sellingUnit: { id: item.sellingUnitId }, qty: round2(qty) });
+  }
+  return packs;
+}
+
+/** Aggregate the exact package counts for one product across multiple bill lines. */
+export function packsFromBillItems(items = []) {
+  const packs = new Map();
+  for (const item of items) {
+    for (const [sellingUnitId, row] of packsFromBillItem(item)) {
+      const existing = packs.get(sellingUnitId);
+      if (existing) existing.qty = round2(existing.qty + row.qty);
+      else packs.set(sellingUnitId, row);
+    }
   }
   return packs;
 }
