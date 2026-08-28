@@ -539,6 +539,8 @@ export interface BillInput {
    * create-bill:{shop}:{device}:{clientBillId} as the idempotency key.
    */
   clientBillId?: string;
+  /** Customer order settled atomically with this online bill. */
+  sourceOrderId?: string;
   locationId?: string;
   billType: typeof BillInputBillType[keyof typeof BillInputBillType];
   /** How GST applies: inclusive (MRP prices, default), exclusive (added on top), or none. */

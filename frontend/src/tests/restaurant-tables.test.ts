@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CartItem, HeldBill } from "@/features/core/billing/pages/billing-types";
 import {
-  buildKotTicket, buildOccupancy, cartRunningTotal, nextKotStatus, pendingKotLines,
+  buildKotTicket, buildOccupancy, cartRunningTotal, kitchenFireIdempotencyKey, nextKotStatus, pendingKotLines,
   pruneKotTickets, reconcileTableBills, withLiveDraft,
   type KotTicket, type RestaurantTable,
 } from "@/features/verticals/restaurant/service/table-store";
@@ -100,6 +100,16 @@ describe("restaurant tables", () => {
     expect(nextKotStatus("preparing")).toBe("ready");
     expect(nextKotStatus("ready")).toBe("served");
     expect(nextKotStatus("served")).toBeNull();
+  });
+
+  it("uses one kitchen idempotency key for the same round across taps and tills", () => {
+    const lines = pendingKotLines([line("Paneer", 1, 240), line("Naan", 2, 45)], []);
+    const reordered = [...lines].reverse();
+    expect(kitchenFireIdempotencyKey("bill-1", lines)).toBe(kitchenFireIdempotencyKey("bill-1", reordered));
+    expect(kitchenFireIdempotencyKey("bill-1", lines)).not.toBe(
+      kitchenFireIdempotencyKey("bill-1", [{ ...lines[0], qty: 2 }, lines[1]]),
+    );
+    expect(kitchenFireIdempotencyKey("bill-1", lines).length).toBeLessThanOrEqual(120);
   });
 
   it("drops day-old tickets so the pass shows work, not history", () => {

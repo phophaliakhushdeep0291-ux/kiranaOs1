@@ -23,8 +23,15 @@ describe("online ordering production contract", () => {
   it("does not let a new merchant order jump directly to completed", () => {
     expect(merchantQueue).toContain('t("orders.row.reviewConfirm")');
     expect(englishTranslations["orders.row.reviewConfirm"]).toBe("Review & confirm");
-    expect(merchantQueue).toContain('order.status !== "new" ? (');
+    expect(merchantQueue).toContain('order.status !== "new" && order.fulfillmentType !== "dine_in"');
     expect(merchantQueue).not.toContain('next: order.status === "accepted" ? "ready" : "fulfilled"');
+  });
+
+  it("routes dine-in through Tables instead of the generic retail importer", () => {
+    expect(merchantQueue).toContain('if (order.fulfillmentType === "dine_in")');
+    expect(merchantQueue).toContain('navigate("/tables")');
+    expect(merchantQueue).toContain('t("orders.row.dineInTable"');
+    expect(merchantQueue).toContain('order.fulfillmentType !== "dine_in"');
   });
 
   it("makes destructive rejection explicit", () => {

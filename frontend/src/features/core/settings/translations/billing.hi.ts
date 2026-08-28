@@ -633,6 +633,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.bills.moveToRecycleShort": "रीसायकल बिन में डालें",
   "billing.bills.checkOwnerPin": "कृपया मालिक का PIN जांचें और दोबारा कोशिश करें।",
   "billing.bills.emailFailed": "यह रसीद ईमेल नहीं की जा सकी।",
+  "billing.page.tableCleanupFailed": "बिक्री सुरक्षित है, लेकिन इस डिवाइस पर टेबल खाली नहीं हो सकी। यह स्क्रीन खुली रखें और स्टोरेज उपलब्ध होने पर फिर कोशिश करें।",
 
   // ── दुकान के हिसाब से काउंटर के शब्द ──
   "billing.credit.udhar": "उधार",

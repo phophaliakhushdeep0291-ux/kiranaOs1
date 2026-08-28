@@ -9,7 +9,9 @@ import {
   wouldEvictOpenBill,
 } from "@/features/core/billing/pages/open-bills";
 import type { BillingDraft, HeldBill } from "@/features/core/billing/pages/billing-types";
-import { loadTableBills, reconcileTableBills, saveTableBills, type RestaurantTable } from "./table-store";
+import { updateCustomerOrder } from "@/features/core/orders/api";
+import { loadTableBills, reconcileTableBills, TABLE_BILLS_KEY, type RestaurantTable } from "./table-store";
+import { listKitchenTickets, voidKitchenTicket } from "./restaurant-api";
 
 /**
  * Seat a table in the billing workspace.
@@ -22,8 +24,8 @@ import { loadTableBills, reconcileTableBills, saveTableBills, type RestaurantTab
  */
 export async function openTableInBilling(table: RestaurantTable): Promise<HeldBill> {
   const [heldRaw, draft, mapRaw] = await Promise.all([
-    offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null),
-    offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY).catch(() => null),
+    offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY),
+    offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY),
     loadTableBills(),
   ]);
   let held = Array.isArray(heldRaw) ? heldRaw : [];
@@ -74,11 +76,11 @@ export async function openTableInBilling(table: RestaurantTable): Promise<HeldBi
     map[table.id] = bill.id;
   }
 
-  await Promise.all([
-    offlineDB.setSetting(HELD_BILLS_KEY, held).catch(() => undefined),
-    offlineDB.setSetting(BILLING_DRAFT_KEY, billingDraftFromHeldBill(bill)).catch(() => undefined),
-    saveTableBills(map),
-  ]);
+  await offlineDB.transaction(["settings"], async (tx) => {
+    await tx.setSetting(HELD_BILLS_KEY, held);
+    await tx.setSetting(BILLING_DRAFT_KEY, billingDraftFromHeldBill(bill));
+    await tx.setSetting(TABLE_BILLS_KEY, map);
+  });
   return bill;
 }
 
@@ -89,8 +91,8 @@ export async function openTableInBilling(table: RestaurantTable): Promise<HeldBi
  */
 export async function releaseTable(tableId: string): Promise<void> {
   const [heldRaw, draft, map] = await Promise.all([
-    offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null),
-    offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY).catch(() => null),
+    offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY),
+    offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY),
     loadTableBills(),
   ]);
   const billId = map[tableId];
@@ -99,14 +101,39 @@ export async function releaseTable(tableId: string): Promise<void> {
   const held = (Array.isArray(heldRaw) ? heldRaw : []).filter((entry) => entry.id !== billId);
   delete map[tableId];
 
-  const writes: Array<Promise<unknown>> = [
-    offlineDB.setSetting(HELD_BILLS_KEY, held).catch(() => undefined),
-    saveTableBills(map),
-  ];
-  // If the released table is the cart on screen, empty the workspace too, or the
-  // till would still be holding the order that was just cleared.
-  if (draft?.activeBillId === billId) {
-    writes.push(offlineDB.delete("settings", BILLING_DRAFT_KEY).catch(() => undefined));
+  await offlineDB.transaction(["settings"], async (tx) => {
+    await tx.setSetting(HELD_BILLS_KEY, held);
+    await tx.setSetting(TABLE_BILLS_KEY, map);
+    // The transaction surface deliberately has no delete operation. An empty
+    // draft is equivalent to a missing one and keeps all three writes atomic.
+    if (draft?.activeBillId === billId) await tx.setSetting(BILLING_DRAFT_KEY, {});
+  });
+}
+
+/**
+ * Cancel all server-visible work before discarding the local table bill.
+ *
+ * A successful local clear must never leave a guest tracker saying "preparing"
+ * or a KOT cooking on the pass. Server work is retired first; if any request
+ * fails the local table remains occupied and the staff can safely retry.
+ */
+export async function cancelAndReleaseTable(tableId: string): Promise<{ cancelledOrders: number; voidedTickets: number }> {
+  const [heldRaw, map] = await Promise.all([
+    offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY),
+    loadTableBills(),
+  ]);
+  const billId = map[tableId];
+  if (!billId) return { cancelledOrders: 0, voidedTickets: 0 };
+  const bill = (Array.isArray(heldRaw) ? heldRaw : []).find((entry) => entry.id === billId);
+  const orderIds = [...new Set((bill?.cart ?? []).map((line) => line.guestOrderId).filter((id): id is string => Boolean(id)))];
+  const tickets = await listKitchenTickets({ billId, fresh: true });
+
+  for (const orderId of orderIds) {
+    await updateCustomerOrder(orderId, { status: "cancelled" });
   }
-  await Promise.all(writes);
+  for (const ticket of tickets) {
+    await voidKitchenTicket(ticket.id);
+  }
+  await releaseTable(tableId);
+  return { cancelledOrders: orderIds.length, voidedTickets: tickets.length };
 }

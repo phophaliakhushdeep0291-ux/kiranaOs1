@@ -90,6 +90,15 @@ function fullDateTime(iso: string): string {
   return d.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
 }
 
+function fulfillmentLabel(t: Translate, order: CustomerOrder): string {
+  if (order.fulfillmentType === "dine_in") {
+    return order.tableName
+      ? t("orders.row.dineInTable", { table: order.tableName })
+      : t("orders.row.dineIn");
+  }
+  return order.fulfillmentType === "pickup" ? t("orders.row.pickup") : t("orders.row.delivery");
+}
+
 function isSameLocalDay(iso: string, ref: Date): boolean {
   const d = new Date(iso);
   return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate();
@@ -196,6 +205,14 @@ export default function OrdersReceivedPage() {
   // Primary action: open the order in Billing so the owner can adjust items, rates,
   // discounts, and payment mode before making the final bill. WhatsApp is separate.
   function acceptAndBill(order: CustomerOrder) {
+    if (order.fulfillmentType === "dine_in") {
+      toast({
+        title: t("orders.toast.openingTables"),
+        description: t("orders.toast.openingTablesHint"),
+      });
+      navigate("/tables");
+      return;
+    }
     if (openingOrderId) return;
     setOpeningOrderId(order.id);
     void loadIntoBilling(order)
@@ -218,6 +235,11 @@ export default function OrdersReceivedPage() {
   }
 
   async function loadIntoBilling(order: CustomerOrder) {
+    const acceptBeforeOpening = async () => {
+      if (order.status !== "new") return;
+      await updateCustomerOrder(order.id, { status: "accepted" });
+      await queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+    };
     const requestedItems = order.items.map((item) => ({
       productId: item.productId,
       qty: item.qty,
@@ -245,7 +267,7 @@ export default function OrdersReceivedPage() {
       && (activeDraft.cart?.length ?? 0) > 0;
 
     if (activeOrderAlreadyOpen) {
-      if (order.status === "new") statusMutation.mutate({ id: order.id, next: "accepted" });
+      await acceptBeforeOpening();
       toast({ title: t("orders.toast.alreadyOpen"), description: t("orders.toast.alreadyOpenHint") });
       navigate("/billing");
       return;
@@ -262,7 +284,7 @@ export default function OrdersReceivedPage() {
         offlineDB.setSetting(HELD_BILLS_KEY, nextHeldBills),
         offlineDB.setSetting(BILLING_DRAFT_KEY, billingDraftFromHeldBill(existingHeldOrder)),
       ]);
-      if (order.status === "new") statusMutation.mutate({ id: order.id, next: "accepted" });
+      await acceptBeforeOpening();
       toast({ title: t("orders.toast.alreadyInBilling"), description: t("orders.toast.alreadyInBillingHint") });
       navigate("/billing");
       return;
@@ -292,7 +314,7 @@ export default function OrdersReceivedPage() {
       offlineDB.setSetting(HELD_BILLS_KEY, nextHeldBills),
       offlineDB.setSetting(BILLING_DRAFT_KEY, billingDraftFromHeldBill(withCustomer)),
     ]);
-    statusMutation.mutate({ id: order.id, next: "accepted" });
+    await acceptBeforeOpening();
     toast({
       title: t("orders.toast.sentToBilling"),
       description: (matched === 1
@@ -516,8 +538,8 @@ export default function OrdersReceivedPage() {
                         <Phone size={12} /> {order.customerMobile}
                       </a>
                       <p className="mt-1 flex items-center gap-1 text-[11px] font-bold text-[#6d7c98]">
-                        {order.fulfillmentType === "pickup" ? <ShoppingCart size={12} /> : <MapPin size={12} />}
-                        {order.fulfillmentType === "pickup" ? t("orders.row.pickup") : t("orders.row.delivery")}{order.promisedSlot ? ` · ${order.promisedSlot}` : ""}
+                        {order.fulfillmentType === "dine_in" ? <ChefHat size={12} /> : order.fulfillmentType === "pickup" ? <ShoppingCart size={12} /> : <MapPin size={12} />}
+                        {fulfillmentLabel(t, order)}{order.promisedSlot ? ` · ${order.promisedSlot}` : ""}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-start gap-2 text-right">
@@ -558,7 +580,16 @@ export default function OrdersReceivedPage() {
                           onClick={(e: MouseEvent) => { e.stopPropagation(); acceptAndBill(order); }}
                           className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-3 text-[12px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
                         >
-                          <ShoppingCart size={14} /> {openingOrderId === order.id ? t("orders.row.opening") : t("orders.row.openInBilling")}
+                          {order.fulfillmentType === "dine_in" ? <ChefHat size={14} /> : <ShoppingCart size={14} />}
+                          {openingOrderId === order.id ? t("orders.row.opening") : order.fulfillmentType === "dine_in" ? t("orders.row.openTables") : t("orders.row.openInBilling")}
+                        </button>
+                      ) : order.fulfillmentType === "dine_in" ? (
+                        <button
+                          type="button"
+                          onClick={(e: MouseEvent) => { e.stopPropagation(); acceptAndBill(order); }}
+                          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-3 text-[12px] font-bold text-white shadow-sm"
+                        >
+                          <ChefHat size={14} /> {t("orders.row.openTables")}
                         </button>
                       ) : (
                         <button
@@ -577,7 +608,7 @@ export default function OrdersReceivedPage() {
                       >
                         <MessageCircle size={14} /> {t("orders.row.message")}
                       </button>
-                      {order.status === "accepted" ? (
+                      {order.status === "accepted" && order.fulfillmentType !== "dine_in" ? (
                         <button
                           type="button"
                           disabled={statusMutation.isPending}
@@ -828,7 +859,12 @@ function OrderDetail({
                 onClick={onAcceptBill}
                 className="col-span-2 inline-flex min-h-12 items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-4 text-[12.5px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70 sm:col-span-1"
               >
-                <CheckCircle2 size={15} /> {opening ? t("orders.row.opening") : order.status === "new" ? t("orders.detail.confirmAndBill") : t("orders.row.openInBilling")}
+                {order.fulfillmentType === "dine_in" ? <ChefHat size={15} /> : <CheckCircle2 size={15} />}
+                {opening
+                  ? t("orders.row.opening")
+                  : order.fulfillmentType === "dine_in"
+                    ? t("orders.detail.openTableFlow")
+                    : order.status === "new" ? t("orders.detail.confirmAndBill") : t("orders.row.openInBilling")}
               </button>
               <button type="button" onClick={onPrint} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-3 text-[12.5px] font-bold text-[#405273]">
                 <Printer size={15} /> {t("orders.detail.printSlip")}
@@ -836,7 +872,7 @@ function OrderDetail({
               <button type="button" onClick={onMessage} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-3 text-[12.5px] font-bold text-[#16a34a]">
                 <MessageCircle size={15} /> {t("orders.detail.whatsappCustomer")}
               </button>
-              {order.status !== "new" ? (
+              {order.status !== "new" && order.fulfillmentType !== "dine_in" ? (
                 <button
                   type="button"
                   disabled={mutationPending}
@@ -846,14 +882,14 @@ function OrderDetail({
                   <PackageCheck size={15} /> {order.status === "accepted" ? t("orders.detail.markReady") : t("orders.row.completeHandover")}
                 </button>
               ) : null}
-              <button
-                type="button"
-                disabled={mutationPending}
-                onClick={onReject}
-                className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#f0d5d5] bg-[#fff5f5] px-3 text-[12.5px] font-bold text-[#e11d48] sm:col-span-1"
-              >
-                <XCircle size={15} /> {t("orders.detail.rejectOrder")}
-              </button>
+              {order.fulfillmentType !== "dine_in" || order.status === "new" ? <button
+                  type="button"
+                  disabled={mutationPending}
+                  onClick={onReject}
+                  className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#f0d5d5] bg-[#fff5f5] px-3 text-[12.5px] font-bold text-[#e11d48] sm:col-span-1"
+                >
+                  <XCircle size={15} /> {t("orders.detail.rejectOrder")}
+                </button> : null}
             </div>
           )}
         </div>
@@ -887,7 +923,7 @@ function OrderDetail({
           <SideCard title={t("orders.detail.paymentFulfillment")}>
             <InfoRow label={t("orders.detail.payment")} chip={t("orders.detail.atBilling")} chipClass="bg-[#eaf2ff] text-[var(--brand)]" />
             <InfoRow label={t("orders.detail.orderSource")} chip={t("orders.detail.qrOrder")} chipClass="bg-[#eaf2ff] text-[var(--brand)]" />
-            <InfoRow label={t("orders.detail.fulfillment")} value={order.fulfillmentType === "pickup" ? t("orders.row.pickup") : t("orders.row.delivery")} />
+            <InfoRow label={t("orders.detail.fulfillment")} value={fulfillmentLabel(t, order)} />
             {order.promisedSlot ? <InfoRow label={t("orders.detail.preferredSlot")} value={order.promisedSlot} /> : null}
             <InfoRow label={t("orders.detail.placedOn")} value={fullDateTime(order.createdAt)} />
             <InfoRow label={t("orders.detail.status")} chip={t(STATUS_LABEL[order.status])} chipClass={STATUS_STYLE[order.status]} />
@@ -929,12 +965,12 @@ function OrderDetail({
           {/* Quick actions */}
           <SideCard title={t("orders.detail.quickActions")}>
             <div className="grid grid-cols-3 gap-2">
-              <QuickAction icon={<ShoppingCart size={16} />} label={t("orders.row.openInBilling")} disabled={!active || opening} onClick={onAcceptBill} />
+              <QuickAction icon={order.fulfillmentType === "dine_in" ? <ChefHat size={16} /> : <ShoppingCart size={16} />} label={order.fulfillmentType === "dine_in" ? t("orders.row.openTables") : t("orders.row.openInBilling")} disabled={!active || opening} onClick={onAcceptBill} />
               <QuickAction icon={<MessageCircle size={16} />} label={t("orders.detail.whatsapp")} onClick={onMessage} />
               <QuickAction icon={<Printer size={16} />} label={t("orders.detail.printSlip")} onClick={onPrint} />
               <QuickAction icon={<Copy size={16} />} label={t("orders.detail.copyDetails")} onClick={onCopy} />
-              <QuickAction icon={<PackageCheck size={16} />} label={order.status === "accepted" ? t("orders.detail.markReady") : order.status === "ready" ? t("orders.detail.complete") : t("orders.detail.nextStatus")} disabled={!active || mutationPending || order.status === "new"} onClick={order.status === "accepted" ? onMarkReady : onMarkDone} />
-              <QuickAction icon={<XCircle size={16} />} label={t("orders.detail.reject")} tone="danger" disabled={!active || mutationPending} onClick={onReject} />
+              {order.fulfillmentType !== "dine_in" ? <QuickAction icon={<PackageCheck size={16} />} label={order.status === "accepted" ? t("orders.detail.markReady") : order.status === "ready" ? t("orders.detail.complete") : t("orders.detail.nextStatus")} disabled={!active || mutationPending || order.status === "new"} onClick={order.status === "accepted" ? onMarkReady : onMarkDone} /> : null}
+              {order.fulfillmentType !== "dine_in" || order.status === "new" ? <QuickAction icon={<XCircle size={16} />} label={t("orders.detail.reject")} tone="danger" disabled={!active || mutationPending} onClick={onReject} /> : null}
             </div>
           </SideCard>
         </div>

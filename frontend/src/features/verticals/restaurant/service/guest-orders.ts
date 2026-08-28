@@ -143,10 +143,6 @@ export function mergeCartLines(existing: CartItem[], incoming: CartItem[]): Cart
 async function assertTableImportSafe(tableId: string) {
   const held = await offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY) ?? [];
   const map = await offlineDB.getSetting<Record<string, string>>(TABLE_BILLS_KEY) ?? {};
-  const draft = await offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY);
-  if (map[tableId] && draft?.activeBillId === map[tableId]) {
-    throw new Error("Park this table's active bill before accepting more food. Keep billing closed in other tabs.");
-  }
   if (wouldEvictOpenBill(held, { id: map[tableId] ?? "new-guest-bill" })) {
     throw new Error("The open-bill limit is reached. Settle an existing bill before accepting another table.");
   }
@@ -156,6 +152,8 @@ export interface AcceptGuestOrderResult {
   billId: string;
   added: number;
   skipped: string[];
+  /** Canonical server-confirmed lines, ready to send to the kitchen. */
+  lines: CartItem[];
 }
 
 /**
@@ -189,7 +187,7 @@ export async function acceptGuestOrderToTable(
     await tx.setSetting(PENDING_GUEST_ORDERS_KEY, { ...pending, [order.id]: entry });
     return entry;
   });
-  if (!operation) return { billId: "", added: 0, skipped: [] };
+  if (!operation) return { billId: "", added: 0, skipped: [], lines: [] };
 
   let canonical: CustomerOrder;
   try {
@@ -224,9 +222,10 @@ export async function acceptGuestOrderToTable(
 
   return offlineDB.transaction(["settings"], async (tx) => {
     const accepted = await loadAcceptedOrderIds();
-    if (accepted.includes(order.id)) return { billId: "", added: 0, skipped: [] };
+    if (accepted.includes(order.id)) return { billId: "", added: 0, skipped: [], lines: [] };
     const held = await offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY) ?? [];
     const map = await offlineDB.getSetting<Record<string, string>>(TABLE_BILLS_KEY) ?? {};
+    const draft = await offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY);
     const pending = await offlineDB.getSetting<Record<string, PendingAcceptance>>(PENDING_GUEST_ORDERS_KEY) ?? {};
     const target = operation.table;
     await assertTableImportSafe(target.id);
@@ -238,8 +237,15 @@ export async function acceptGuestOrderToTable(
     delete pending[order.id];
     await tx.setSetting(HELD_BILLS_KEY, upsertOpenBill(held, bill));
     await tx.setSetting(TABLE_BILLS_KEY, { ...map, [target.id]: bill.id });
+    // If this table is the current billing workspace, update its durable draft
+    // in the same transaction. This removes the old "park it, return to Tables,
+    // accept, reopen it" dance for a second QR round while preserving every
+    // discount/customer field already on the bill.
+    if (draft?.activeBillId === bill.id) {
+      await tx.setSetting(BILLING_DRAFT_KEY, { ...draft, cart: bill.cart });
+    }
     await tx.setSetting(ACCEPTED_GUEST_ORDERS_KEY, [order.id, ...accepted].slice(0, MAX_ACCEPTED_GUEST_ORDER_IDS));
     await tx.setSetting(PENDING_GUEST_ORDERS_KEY, pending);
-    return { billId: bill.id, added: confirmed.lines.length, skipped: [] };
+    return { billId: bill.id, added: confirmed.lines.length, skipped: [], lines: confirmed.lines };
   });
 }

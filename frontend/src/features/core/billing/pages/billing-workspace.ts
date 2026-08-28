@@ -32,6 +32,25 @@ export type ResumeBillWorkspaceTransition =
   | { ok: false; reason: "not_found" };
 
 /**
+ * A successful sale retires the cart that owned its client bill id.
+ * Table service keeps the active table in the held set so the floor can see it;
+ * failing to remove it here leaves the table occupied with an already-paid
+ * order. Ordinary counter bills are unaffected because they are not held.
+ */
+export function prepareSettledBillWorkspace(
+  heldBills: HeldBill[],
+  settledBillId: string | undefined,
+  nextActiveBillId: string,
+): BillingWorkspaceSnapshot {
+  return {
+    heldBills: settledBillId
+      ? heldBills.filter((bill) => bill.id !== settledBillId)
+      : heldBills,
+    activeDraft: { activeBillId: nextActiveBillId },
+  };
+}
+
+/**
  * Build the next durable workspace before the UI clears the current bill.
  * Interactive holds refuse to discard an older bill when the parked-bill cap
  * is full; imported-list hygiene can continue to use the capped upsert helper.

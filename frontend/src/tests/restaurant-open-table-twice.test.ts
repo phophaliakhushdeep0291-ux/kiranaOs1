@@ -21,6 +21,16 @@ const settings = new Map<string, unknown>();
 vi.mock("@/lib/offline/db", () => ({
   offlineDB: {
     getSetting: vi.fn(async (key: string) => (settings.has(key) ? settings.get(key) : null)),
+    transaction: vi.fn(async (_stores: string[], work: (tx: { setSetting: (key: string, value: unknown) => Promise<void> }) => Promise<unknown>) => {
+      const before = structuredClone(settings);
+      try {
+        return await work({ setSetting: async (key, value) => { settings.set(key, value); } });
+      } catch (error) {
+        settings.clear();
+        for (const [key, value] of before) settings.set(key, value);
+        throw error;
+      }
+    }),
     setSetting: vi.fn(async (key: string, value: unknown) => {
       settings.set(key, value);
     }),
@@ -76,5 +86,13 @@ describe("seating a table twice", () => {
     expect(parked?.cart).toHaveLength(1);
     // And the workspace has moved to T1.
     expect((settings.get(BILLING_DRAFT_KEY) as BillingDraft).activeBillId).not.toBe(other.id);
+  });
+
+  it("surfaces an atomic storage failure instead of navigating with the wrong table", async () => {
+    const database = (await import("@/lib/offline/db")).offlineDB;
+    vi.mocked(database.transaction).mockRejectedValueOnce(new Error("Disk full"));
+    await expect(openTableInBilling(TABLE)).rejects.toThrow("Disk full");
+    expect(settings.get(HELD_BILLS_KEY)).toBeUndefined();
+    expect(settings.get(TABLE_BILLS_KEY)).toBeUndefined();
   });
 });

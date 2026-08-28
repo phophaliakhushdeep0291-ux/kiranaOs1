@@ -23,6 +23,15 @@ export function useConfirmBill(options?: MutationHookOptions<Bill, ConfirmBillVa
         }
         return createBill(data);
       }
+      // Customer orders must link and change payment/fulfilment state in the
+      // same server transaction as their final bill. A local-first success
+      // would only have a PENDING bill id and could leave the order unpaid.
+      if (data.sourceOrderId) {
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          throw new ApiClientError("Connect to settle this customer order. It remains open and no bill has been saved.", 0, { code: "ORDER_SETTLEMENT_OFFLINE" });
+        }
+        return createBill(data);
+      }
       if (data.offerId || Number(data.loyaltyPointsToRedeem || 0) > 0 || (data.payments ?? []).some((payment) => payment.mode === "gift_card")) {
         if (typeof navigator !== "undefined" && !navigator.onLine) {
           throw new ApiClientError("Coupons, rewards, and gift-card redemption need a connection so value and the bill commit together", 0, { code: "VALUE_REDEMPTION_OFFLINE" });

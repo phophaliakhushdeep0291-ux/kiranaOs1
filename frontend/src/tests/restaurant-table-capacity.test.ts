@@ -18,6 +18,16 @@ const settings = new Map<string, unknown>();
 vi.mock("@/lib/offline/db", () => ({
   offlineDB: {
     getSetting: vi.fn(async (key: string) => (settings.has(key) ? settings.get(key) : null)),
+    transaction: vi.fn(async (_stores: string[], work: (tx: { setSetting: (key: string, value: unknown) => Promise<void> }) => Promise<unknown>) => {
+      const before = structuredClone(settings);
+      try {
+        return await work({ setSetting: async (key, value) => { settings.set(key, value); } });
+      } catch (error) {
+        settings.clear();
+        for (const [key, value] of before) settings.set(key, value);
+        throw error;
+      }
+    }),
     setSetting: vi.fn(async (key: string, value: unknown) => { settings.set(key, value); }),
     delete: vi.fn(async (_s: string, key: string) => { settings.delete(key); }),
   },

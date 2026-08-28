@@ -341,6 +341,24 @@ export async function confirmBill(shopId, body, actor = {}) {
     const shop = await tx.shop.findUnique({ where: { id: shopId } });
     if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
     const sellerIdentity = locationSellerIdentity(location, shop);
+    const sourceOrder = body.sourceOrderId
+      ? await tx.customerOrder.findFirst({ where: { id: body.sourceOrderId, shopId } })
+      : null;
+    if (body.sourceOrderId && !sourceOrder) {
+      throw new AppError("Customer order not found", 404, "SOURCE_ORDER_NOT_FOUND");
+    }
+    if (sourceOrder?.fulfillmentType === "dine_in") {
+      throw new AppError("Dine-in orders must be settled from their protected table bill", 409, "DINE_IN_TABLE_BILL_REQUIRED");
+    }
+    if (sourceOrder && !["accepted", "ready"].includes(sourceOrder.status)) {
+      throw new AppError("Customer order is not ready for billing", 409, "SOURCE_ORDER_NOT_ACCEPTED");
+    }
+    if (sourceOrder?.billId) {
+      throw new AppError("Customer order is already billed", 409, "SOURCE_ORDER_ALREADY_BILLED");
+    }
+    if (sourceOrder?.locationId && sourceOrder.locationId !== location.id) {
+      throw new AppError("Customer order belongs to another store", 409, "SOURCE_ORDER_LOCATION_MISMATCH");
+    }
     if (billType === "gst_invoice" && !sellerIdentity.registrationValid) {
       throw new AppError("This location needs a valid GSTIN before issuing a GST invoice", 422, "SELLER_GSTIN_REQUIRED");
     }
@@ -768,6 +786,55 @@ export async function confirmBill(shopId, body, actor = {}) {
     // closes its register entry against this bill here.
     for (const hook of saleGuardHooks) await hook({ tx, bill, billNo, location, actor });
 
+    let sourceOrderDeliveries = [];
+    if (sourceOrder) {
+      const paymentStatus = Number(bill.creditAmount) > 0
+        ? (Number(bill.paidAmount) > 0 ? "partially_paid" : "unpaid")
+        : "paid";
+      const fulfilledAt = new Date();
+      const linked = await tx.customerOrder.updateMany({
+        where: {
+          id: sourceOrder.id,
+          shopId,
+          billId: null,
+          status: { in: ["accepted", "ready"] },
+        },
+        data: {
+          billId: bill.id,
+          status: "fulfilled",
+          fulfillmentStatus: "fulfilled",
+          paymentStatus,
+          fulfilledAt,
+        },
+      });
+      if (linked.count !== 1) {
+        throw new AppError("Customer order changed before billing. Refresh and retry.", 409, "SOURCE_ORDER_CHANGED");
+      }
+      await writeRequiredBillAudit({
+        shopId,
+        userId: createdByUserId,
+        deviceId: deviceId ?? billIdentity.sourceDeviceId ?? null,
+        action: "CUSTOMER_ORDER_BILLED",
+        entityType: "CustomerOrder",
+        entityId: sourceOrder.id,
+        before: { status: sourceOrder.status, paymentStatus: sourceOrder.paymentStatus, billId: sourceOrder.billId },
+        after: { status: "fulfilled", paymentStatus, billId: bill.id },
+        metadata: { billNo: bill.billNo, locationId: bill.locationId },
+        req: actor.req ?? null,
+      }, tx);
+      sourceOrderDeliveries = await stageIntegrationEvent(shopId, "customer_order.updated", {
+        id: sourceOrder.id,
+        locationId: sourceOrder.locationId,
+        fulfillmentType: sourceOrder.fulfillmentType,
+        status: "fulfilled",
+        fulfillmentStatus: "fulfilled",
+        paymentStatus,
+        sourceChannel: sourceOrder.sourceChannel,
+        billId: bill.id,
+        updatedAt: fulfilledAt,
+      }, { client: tx });
+    }
+
     await recordBillLoyaltyRedemption(tx, {
       shopId,
       billId: bill.id,
@@ -959,7 +1026,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       locationId: bill.locationId,
     }, { client: tx });
 
-    return { bill, deliveries };
+    return { bill, deliveries: [...deliveries, ...sourceOrderDeliveries] };
   });
     bill = transactionResult.bill;
     integrationDeliveries = transactionResult.deliveries;

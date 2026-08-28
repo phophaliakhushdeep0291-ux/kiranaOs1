@@ -100,11 +100,13 @@ describe("durable guest acceptance", () => {
     expect(bills()).toHaveLength(MAX_OPEN_BILLS);
     expect(state.update).not.toHaveBeenCalled();
   });
-  it("requires an active table bill to be parked before importing", async () => {
+  it("merges another QR round into the active table draft without a park/reopen dance", async () => {
     state.rows.set(TABLE_BILLS_KEY, { t1: "active" });
-    state.rows.set(BILLING_DRAFT_KEY, { activeBillId: "active" });
-    await expect(acceptGuestOrderToTable(order, table, products)).rejects.toThrow("Park this table");
-    expect(state.update).not.toHaveBeenCalled();
+    state.rows.set(HELD_BILLS_KEY, [{ id: "active", label: "T1", createdAt: new Date().toISOString(), cart: [] }]);
+    state.rows.set(BILLING_DRAFT_KEY, { activeBillId: "active", cart: [] });
+    await acceptGuestOrderToTable(order, table, products);
+    expect((state.rows.get(BILLING_DRAFT_KEY) as { cart: unknown[] }).cart).toHaveLength(1);
+    expect((state.rows.get(BILLING_DRAFT_KEY) as { activeBillId: string }).activeBillId).toBe("active");
   });
   it("simultaneous retries produce one local import", async () => {
     await Promise.all([acceptGuestOrderToTable(order, table, products), acceptGuestOrderToTable(order, table, products)]);

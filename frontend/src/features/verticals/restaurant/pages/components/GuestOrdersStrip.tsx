@@ -7,8 +7,9 @@ import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { listCustomerOrders, type CustomerOrder } from "@/features/core/orders/api";
 import { useListProducts } from "@/features/core/products/queries";
-import { loadFloorPlan, type RestaurantTable } from "../../service/table-store";
+import { kitchenFireIdempotencyKey, loadFloorPlan, pendingKotLines, type RestaurantTable } from "../../service/table-store";
 import { acceptGuestOrderToTable, loadAcceptedOrderIds, loadPendingGuestOrders, pendingGuestOrders } from "../../service/guest-orders";
+import { fireKitchenTicket, listKitchenTickets } from "../../service/restaurant-api";
 
 /**
  * Orders guests sent from the QR on their own table.
@@ -24,7 +25,7 @@ import { acceptGuestOrderToTable, loadAcceptedOrderIds, loadPendingGuestOrders, 
  * a strip that is always on screen is a strip nobody reads.
  */
 
-const POLL_MS = 20_000;
+const POLL_MS = 5_000;
 
 export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?: () => void; readOnly?: boolean }) {
   const { toast } = useToast();
@@ -90,13 +91,36 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
     setBusyId(order.id);
     try {
       const result = await acceptGuestOrderToTable(order, table, products.data ?? []);
+      let kitchenTicketNo: number | null = null;
+      let kitchenFailed = false;
+      if (result.billId && result.lines.length > 0) {
+        try {
+          const existing = await listKitchenTickets({ billId: result.billId, fresh: true });
+          const lines = pendingKotLines(result.lines, existing);
+          if (lines.length > 0) {
+            const ticket = await fireKitchenTicket({
+              tableId: table.id,
+              tableName: table.name,
+              billId: result.billId,
+              lines,
+              idempotencyKey: kitchenFireIdempotencyKey(result.billId, lines),
+            });
+            kitchenTicketNo = ticket.ticketNo;
+          }
+        } catch {
+          // Acceptance is durable even if the pass is briefly offline. The
+          // table stays visibly "to fire" so the counter can retry safely.
+          kitchenFailed = true;
+        }
+      }
       await refresh();
       onAccepted?.();
       toast({
-        title: `Added to ${table.name}`,
-        description: result.skipped.length > 0
-          ? `${result.added} item${result.added === 1 ? "" : "s"} added. Not in your catalogue: ${result.skipped.join(", ")}.`
-          : `${result.added} item${result.added === 1 ? "" : "s"} are on the table's bill. Fire them from the Tables screen.`,
+        title: kitchenTicketNo ? `Accepted · KOT #${kitchenTicketNo} sent` : `Added to ${table.name}`,
+        description: kitchenFailed
+          ? `The order is safe on ${table.name}, but the kitchen did not receive it. Use “Fire” on this table after checking the connection.`
+          : `${result.added} item${result.added === 1 ? "" : "s"} are on the table bill${kitchenTicketNo ? " and with the kitchen" : ""}.`,
+        variant: kitchenFailed ? "destructive" : undefined,
       });
     } catch (err) {
       toast({
@@ -131,9 +155,12 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
               </span>
             </div>
             <ul className="mt-2 space-y-1">
-              {order.items.map((item) => (
-                <li key={`${order.id}-${item.productId}`} className="flex justify-between gap-2 text-[13px]">
-                  <span className="min-w-0 truncate font-bold text-[var(--brand-ink)]">{item.name}</span>
+              {order.items.map((item, itemIndex) => (
+                <li key={item.lineId ?? `${order.id}-${itemIndex}`} className="flex justify-between gap-2 text-[13px]">
+                  <span className="min-w-0 font-bold text-[var(--brand-ink)]">
+                    <span className="block truncate">{item.name}</span>
+                    {item.note ? <span className="block truncate text-[11px] font-semibold text-[#9a3412]">{item.note}</span> : null}
+                  </span>
                   <span className="shrink-0 font-black tabular-nums">×{item.qty}</span>
                 </li>
               ))}
@@ -151,7 +178,7 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
               data-testid={`accept-guest-order-${order.id}`}
               onClick={() => void accept(order)}
             >
-              <Utensils size={13} /> {busyId === order.id ? "Adding…" : `Add to ${order.tableName ?? "table"}`}
+              <Utensils size={13} /> {busyId === order.id ? "Accepting…" : `Accept & send · ${order.tableName ?? "table"}`}
             </Button>}
           </article>
         ))}

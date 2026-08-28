@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-const read = (file) => fs.readFileSync(file, "utf8");
+// Git checks YAML out with CRLF on Windows. Normalize before applying the
+// structure assertions so the same release certificate runs on developer
+// machines and Linux CI instead of treating line endings as product behavior.
+const read = (file) => fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n");
 const pkg = JSON.parse(read("package.json"));
 const runner = read("scripts/release-certification.js");
 const workflowPath = "../.github/workflows/release-certification.yml";

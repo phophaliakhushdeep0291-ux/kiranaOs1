@@ -660,6 +660,7 @@ export const billingEn = {
   "billing.bills.moveToRecycleShort": "Move to recycle bin",
   "billing.bills.checkOwnerPin": "Please check owner PIN and try again.",
   "billing.bills.emailFailed": "Could not email this receipt.",
+  "billing.page.tableCleanupFailed": "The sale is safe, but this table could not be cleared on this device. Keep this screen open and retry once storage is available.",
 
   // ── The till in each trade's own words (see settings/shop-credit.ts) ──
   // Interpolated into the strings above rather than written out per trade, so

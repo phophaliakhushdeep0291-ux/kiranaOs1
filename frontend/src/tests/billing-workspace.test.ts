@@ -3,6 +3,7 @@ import {
   commitBillingWorkspace,
   prepareNewBillWorkspace,
   prepareResumeBillWorkspace,
+  prepareSettledBillWorkspace,
   type BillingWorkspaceDatabase,
 } from "@/features/core/billing/pages/billing-workspace";
 import {
@@ -94,6 +95,16 @@ describe("billing workspace transitions", () => {
       ok: false,
       reason: "not_found",
     });
+  });
+
+  it("retires the settled table cart and starts a clean bill", () => {
+    const snapshot = prepareSettledBillWorkspace(
+      [bill("table-t1"), bill("table-t2")],
+      "table-t1",
+      "next-active",
+    );
+    expect(snapshot.heldBills.map((entry) => entry.id)).toEqual(["table-t2"]);
+    expect(snapshot.activeDraft).toEqual({ activeBillId: "next-active" });
   });
 });
 

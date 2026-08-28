@@ -63,6 +63,25 @@ assert.equal((await confirmBill(shop.id, confirmBillSchema.parse(guestBody), act
 assert.equal(await db.payment.count({ where: { billId: guestBill.id } }), 1);
 assert.equal(await db.stockLedger.count({ where: { billId: guestBill.id, action: "sale" } }), 2);
 
+// Pickup/delivery orders use a generic editable cart, but their final bill,
+// payment status and fulfilment must still commit together. A PENDING local id
+// followed by a best-effort status request used to leave paid orders as unpaid.
+const pickupOrder = await db.customerOrder.create({ data: {
+  shopId: shop.id, locationId: location.id, customerName: "Pickup guest", customerMobile: "9999999999",
+  fulfillmentType: "pickup", status: "accepted", fulfillmentStatus: "preparing",
+  estimatedTotal: 50, itemsJson: JSON.stringify([{ productId: products[0].id, name: "Coffee", price: 50, qty: 1, unit: "piece" }]),
+} });
+const pickupBill = await confirmBill(shop.id, confirmBillSchema.parse({
+  clientBillId: randomUUID(), sourceOrderId: pickupOrder.id, locationId: location.id,
+  billType: "normal_sale", gstMode: "inclusive", customerName: pickupOrder.customerName,
+  items: [{ name: "Pickup charge", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 50, gstRate: 0 }],
+  discount: 0, actualAmount: 50, buyerPaidAmount: 50, payments: [{ mode: "cash", amount: 50 }],
+}), actor);
+const fulfilledPickup = await db.customerOrder.findUniqueOrThrow({ where: { id: pickupOrder.id } });
+assert.equal(fulfilledPickup.billId, pickupBill.id);
+assert.equal(fulfilledPickup.status, "fulfilled");
+assert.equal(fulfilledPickup.paymentStatus, "paid");
+
 // Ordinary local-first counter sale: the open-draft identity is deliberately
 // different from its local database row id, as it is in the actual frontend.
 const customer = await createCustomer(db, shop.id);

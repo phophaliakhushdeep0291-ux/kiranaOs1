@@ -21,8 +21,7 @@ import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
 import { BillingOrderQrButton } from "@/features/core/customer-order/BillingOrderQrButton";
 import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills } from "./open-bills";
-import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace } from "./billing-workspace";
-import { updateCustomerOrder } from "@/features/core/orders/api";
+import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace, prepareSettledBillWorkspace } from "./billing-workspace";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { applyRoundOff, billNeedsCustomer, billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, cartItemUnitRate, clampAmount, LARGE_DISCOUNT_MIN_AMOUNT, LARGE_DISCOUNT_MIN_PERCENT, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
 import { resolveLinePrice } from "@/features/core/pricing/resolve-line-price";
@@ -794,7 +793,7 @@ export default function Billing() {
   const confirmBill = useConfirmBill({
     mutation: {
       onSettled: () => { billingCommitLockRef.current = false; },
-      onSuccess: (data: Bill, { data: submitted }) => {
+      onSuccess: async (data: Bill, { data: submitted }) => {
         const billNo = data.billNumber ?? data.billNo ?? `PENDING-${Date.now()}`;
         setVerifiedRetailPayment(null);
         // Coupon usage and discount impact commit atomically with the bill.
@@ -828,23 +827,36 @@ export default function Billing() {
             pendingAutoPrintRef.current = null;
           }
         }
-        // If this bill was made from a customer QR order, close that order out and link the bill.
-        // Best-effort + online-only (the inbox needs the network anyway); on failure the owner can
-        // still "Mark done" by hand, so a caught error must not disturb the save.
+        // Generic customer orders are linked atomically by the server because
+        // sourceOrderId rides with the bill. Guest table orders are linked by
+        // their protected line references in the restaurant sale guard.
         const fulfilledOrderId = sourceOrderIdRef.current;
         if (fulfilledOrderId) {
           sourceOrderIdRef.current = undefined;
-          // Link the stable bill id (a local-first "PENDING-…" number would be a throwaway).
-          const linkedBillId = data.id ?? data.billNumber ?? data.billNo ?? billNo;
-          void updateCustomerOrder(fulfilledOrderId, { status: "fulfilled", billId: linkedBillId })
-            .then(() => queryClient.invalidateQueries({ queryKey: ["customer-orders"] }))
-            .catch(() => undefined);
+          void queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
         }
         setSensitiveApproval(null);
-        setMobileCheckoutOpen(false);
-        resetCurrentBill();
-        setActiveBillId(newBillId());
-        clearBillingDraft();
+        const nextActiveBillId = newBillId();
+        const settledWorkspace = prepareSettledBillWorkspace(heldBills, submitted.clientBillId, nextActiveBillId);
+        try {
+          await commitBillingWorkspace(offlineDB, settledWorkspace, (snapshot) => {
+            billingDraftCache = snapshot.activeDraft;
+            setHeldBills(snapshot.heldBills);
+            setMobileCheckoutOpen(false);
+            resetCurrentBill();
+            setActiveBillId(nextActiveBillId);
+          });
+        } catch {
+          // The sale itself is already committed. Keep its cart visible and its
+          // stable clientBillId intact so retrying cleanup cannot create a
+          // second bill or silently lose the table order.
+          toast({
+            title: t("billing.page.billSaved", { billNo }),
+            description: t("billing.page.tableCleanupFailed"),
+            variant: "destructive",
+          });
+          return;
+        }
         queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
         queryClient.invalidateQueries({ queryKey: ["customers"] });
         queryClient.invalidateQueries({ queryKey: ["customers-ledger-list"] });
@@ -1703,6 +1715,7 @@ export default function Billing() {
         // Both local and online saves preserve this identity through retries.
         // A fresh id is set only after success, so distinct sales never collide.
         clientBillId: activeBillId,
+        sourceOrderId,
         billType: nextBillType,
         gstMode: getTaxConfigSync().mode,
         // Ride the round-off setting with the bill so the offline validator and the

@@ -117,12 +117,12 @@ export function saveFloorPlan(tables: RestaurantTable[]) {
 }
 
 export async function loadTableBills(): Promise<Record<string, string>> {
-  const map = await offlineDB.getSetting<Record<string, string>>(TABLE_BILLS_KEY).catch(() => null);
+  const map = await offlineDB.getSetting<Record<string, string>>(TABLE_BILLS_KEY);
   return map && typeof map === "object" && !Array.isArray(map) ? map : {};
 }
 
 export function saveTableBills(map: Record<string, string>) {
-  return offlineDB.setSetting(TABLE_BILLS_KEY, map).catch(() => undefined);
+  return offlineDB.setSetting(TABLE_BILLS_KEY, map);
 }
 
 export async function loadKotTickets(now = Date.now()): Promise<KotTicket[]> {
@@ -290,6 +290,40 @@ export function buildKotTicket(
     status: "new",
     lines,
   };
+}
+
+/**
+ * Stable identity for one exact kitchen send.
+ *
+ * A random id only deduplicates a retry when the caller happens to retain it.
+ * The Tables button is rendered again after every refresh, and two tills may
+ * fire the same sitting at the same moment, so the key has to come from the
+ * bill and the outstanding lines themselves. Sorting makes device/render order
+ * irrelevant; changing a quantity creates a new key for the next round.
+ */
+export function kitchenFireIdempotencyKey(billId: string, lines: KotLine[]): string {
+  const payload = JSON.stringify([
+    billId,
+    [...lines]
+      .map((line) => [
+        line.key,
+        Math.round((Number(line.qty) || 0) * 1000) / 1000,
+        line.guestOrderId ?? "",
+        line.guestOrderLineId ?? "",
+      ])
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+  ]);
+  // Two independent 32-bit accumulators keep the key compact enough for the
+  // API's 120-character cap while making accidental collisions vanishingly
+  // unlikely for a restaurant shift.
+  let left = 0x811c9dc5;
+  let right = 0x9e3779b9;
+  for (let index = 0; index < payload.length; index += 1) {
+    const code = payload.charCodeAt(index);
+    left = Math.imul(left ^ code, 0x01000193) >>> 0;
+    right = Math.imul(right ^ (code + index), 0x85ebca6b) >>> 0;
+  }
+  return `kot-${left.toString(16).padStart(8, "0")}${right.toString(16).padStart(8, "0")}`;
 }
 
 /** Minutes a ticket has been waiting — what a kitchen screen is actually read for. */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
   ChefHat, Clock, IndianRupee, LayoutGrid, Loader2, Pencil, Plus, QrCode, Receipt,
@@ -16,15 +16,16 @@ import { offlineDB } from "@/lib/offline/db";
 import { BILLING_DRAFT_KEY, HELD_BILLS_KEY } from "@/features/core/billing/pages/open-bills";
 import type { BillingDraft, HeldBill } from "@/features/core/billing/pages/billing-types";
 import {
-  buildKotTicket, buildOccupancy, loadFloorPlan, loadTableBills,
-  newTableId, reconcileTableBills, saveFloorPlan, saveTableBills,
+  buildOccupancy, kitchenFireIdempotencyKey, loadFloorPlan, loadTableBills,
+  newTableId, pendingKotLines, reconcileTableBills, saveFloorPlan, saveTableBills,
   withLiveDraft, type KotTicket, type RestaurantTable, type TableOccupancy,
 } from "../service/table-store";
-import { openTableInBilling, releaseTable } from "../service/open-table";
+import { cancelAndReleaseTable, openTableInBilling } from "../service/open-table";
 import { fireKitchenTicket, listKitchenTickets, listTables, publishFloorPlan } from "../service/restaurant-api";
 import { mergeServerCodes, unpublishedTables } from "../service/table-qr";
 import { TableQrDialog } from "./components/TableQrDialog";
 import { GuestRequestsStrip } from "./components/GuestRequestsStrip";
+import { GuestOrdersStrip } from "./components/GuestOrdersStrip";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
@@ -96,6 +97,8 @@ export default function TablesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [releasing, setReleasing] = useState<TableOccupancy | null>(null);
   const [removing, setRemoving] = useState<RestaurantTable | null>(null);
+  const [sendingBillIds, setSendingBillIds] = useState<Set<string>>(() => new Set());
+  const sendingBillIdsRef = useRef(new Set<string>());
   // Re-render on a timer so "seated 12m" ages without the waiter touching it.
   const [, setTick] = useState(0);
 
@@ -113,7 +116,7 @@ export default function TablesPage() {
     const held = withLiveDraft(Array.isArray(heldRaw) ? heldRaw : [], draft);
     const map = reconcileTableBills(mapRaw, held, draft?.activeBillId);
     // A settled table drops out of the map here; persist so it stays freed.
-    if (Object.keys(map).length !== Object.keys(mapRaw).length) void saveTableBills(map);
+    if (Object.keys(map).length !== Object.keys(mapRaw).length) void saveTableBills(map).catch(() => undefined);
     setTables(plan);
     setHeldBills(held);
     setTableBills(map);
@@ -134,7 +137,10 @@ export default function TablesPage() {
     void refresh();
     const onFocus = () => void refresh();
     window.addEventListener("focus", onFocus);
-    const timer = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    const timer = window.setInterval(() => {
+      setTick((n) => n + 1);
+      void refresh();
+    }, 15_000);
     return () => {
       window.removeEventListener("focus", onFocus);
       window.clearInterval(timer);
@@ -183,8 +189,25 @@ export default function TablesPage() {
 
   async function sendToKitchen(row: TableOccupancy) {
     if (row.pendingKotLines.length === 0 || !row.bill) return;
-    const lines = row.pendingKotLines;
+    const billId = row.bill.id;
+    // A ref closes the same-frame double-tap window before React has time to
+    // render the disabled button.
+    if (sendingBillIdsRef.current.has(billId)) return;
+    sendingBillIdsRef.current.add(billId);
+    setSendingBillIds((current) => new Set(current).add(billId));
     try {
+      // Ask the server about this sitting immediately before firing. The floor's
+      // cached rail can be stale when another till has just sent the same round.
+      const latest = await listKitchenTickets({ billId, fresh: true });
+      const lines = pendingKotLines(row.bill.cart, latest);
+      if (lines.length === 0) {
+        setTickets((current) => [...latest, ...current.filter((ticket) => ticket.billId !== billId)]);
+        toast({
+          title: t("restaurant.tables.alreadySent"),
+          description: t("restaurant.tables.noUnsentItems", { table: row.table.name }),
+        });
+        return;
+      }
       // The ticket number comes back from the server: two tills firing at the
       // same moment would otherwise both pick the same one, and the kitchen
       // would get two different tickets called #14.
@@ -194,11 +217,11 @@ export default function TablesPage() {
       const ticket = await fireKitchenTicket({
         tableId: row.table.id,
         tableName: row.table.name,
-        billId: row.bill.id,
+        billId,
         lines,
-        idempotencyKey: buildKotTicket(row.table, row.bill.id, lines, tickets).id,
+        idempotencyKey: kitchenFireIdempotencyKey(billId, lines),
       });
-      setTickets([ticket, ...tickets]);
+      setTickets((current) => [ticket, ...current.filter((row) => row.id !== ticket.id)]);
       toast({
         title: t("restaurant.tables.kotSent", { number: ticket.ticketNo }),
         description: ticket.lines.length === 1
@@ -213,6 +236,13 @@ export default function TablesPage() {
         title: t("restaurant.tables.kitchenFailed"),
         description: t("restaurant.tables.kitchenFailedHelp"),
         variant: "destructive",
+      });
+    } finally {
+      sendingBillIdsRef.current.delete(billId);
+      setSendingBillIds((current) => {
+        const next = new Set(current);
+        next.delete(billId);
+        return next;
       });
     }
   }
@@ -248,10 +278,29 @@ export default function TablesPage() {
 
   async function confirmRelease() {
     if (!releasing) return;
-    await releaseTable(releasing.table.id);
-    setReleasing(null);
-    await refresh();
-    toast({ title: `${releasing.table.name} cleared`, description: t("restaurant.tables.clearedHelp") });
+    try {
+      const result = await cancelAndReleaseTable(releasing.table.id);
+      const tableName = releasing.table.name;
+      setReleasing(null);
+      await refresh();
+      toast({
+        title: t("restaurant.tables.cleared", { table: tableName }),
+        description: result.cancelledOrders || result.voidedTickets
+          ? t("restaurant.tables.clearSummary", {
+            orders: result.cancelledOrders,
+            tickets: result.voidedTickets,
+          })
+          : t("restaurant.tables.clearedHelp"),
+      });
+    } catch (error) {
+      toast({
+        title: t("restaurant.tables.clearFailed"),
+        description: t("restaurant.tables.clearFailedHelp", {
+          reason: error instanceof Error ? error.message : t("restaurant.tables.clearFailedFallback"),
+        }),
+        variant: "destructive",
+      });
+    }
   }
 
   async function confirmRemove() {
@@ -298,6 +347,7 @@ export default function TablesPage() {
         </div>
       </header>
 
+      <GuestOrdersStrip onAccepted={() => void refresh()} />
       <GuestRequestsStrip />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -323,6 +373,7 @@ export default function TablesPage() {
                 row={row}
                 onSeat={() => void seat(row)}
                 onKot={() => void sendToKitchen(row)}
+                sending={Boolean(row.bill && sendingBillIds.has(row.bill.id))}
                 onEdit={() => openForm(row.table)}
                 onQr={() => setQrFor(row.table)}
                 onRelease={() => setReleasing(row)}
@@ -364,8 +415,12 @@ export default function TablesPage() {
 
       <ConfirmDialog
         open={Boolean(releasing)}
-        title={`Clear ${releasing?.table.name ?? "table"}?`}
-        description={`The parked order (${inr(releasing?.runningTotal ?? 0)}) is discarded without billing. Kitchen tickets already sent are not recalled.`}
+        title={t("restaurant.tables.clearConfirmTitle", {
+          table: releasing?.table.name ?? t("restaurant.tables.tableFallback"),
+        })}
+        description={releasing?.tickets.length || releasing?.bill?.cart?.some((line) => line.guestOrderId)
+          ? t("restaurant.tables.clearConfirmService", { amount: inr(releasing?.runningTotal ?? 0) })
+          : t("restaurant.tables.clearConfirmParked", { amount: inr(releasing?.runningTotal ?? 0) })}
         confirmLabel={t("restaurant.tables.clearTable")}
         destructive
         onConfirm={() => void confirmRelease()}
@@ -374,7 +429,9 @@ export default function TablesPage() {
 
       <ConfirmDialog
         open={Boolean(removing)}
-        title={`Remove ${removing?.name ?? "table"}?`}
+        title={t("restaurant.tables.removeConfirmTitle", {
+          table: removing?.name ?? t("restaurant.tables.tableFallback"),
+        })}
         description={t("restaurant.tables.removeHelp")}
         confirmLabel={t("restaurant.tables.remove")}
         destructive
@@ -407,9 +464,10 @@ function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; va
 }
 
 function TableCard({
-  row, onSeat, onKot, onEdit, onQr, onRelease, onRemove,
+  row, sending, onSeat, onKot, onEdit, onQr, onRelease, onRemove,
 }: {
   row: TableOccupancy;
+  sending: boolean;
   onSeat: () => void;
   onKot: () => void;
   onEdit: () => void;
@@ -468,8 +526,8 @@ function TableCard({
           {occupied ? "Open order" : "Seat"}
         </Button>
         {occupied && pending > 0 ? (
-          <Button size="sm" variant="outline" className="h-11 lg:mouse:h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={onKot}>
-            <ChefHat size={13} /> Fire {pending}
+          <Button size="sm" variant="outline" className="h-11 lg:mouse:h-8 gap-1 rounded-[8px] text-[12px] font-bold" disabled={sending} onClick={onKot}>
+            {sending ? <Loader2 size={13} className="animate-spin" /> : <ChefHat size={13} />} {sending ? "Sending…" : `Fire ${pending}`}
           </Button>
         ) : null}
         {/* Shown whether or not the table is seated: a curling sticker gets

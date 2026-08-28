@@ -40,6 +40,19 @@ describe("offline billing mutation", () => {
     expect(createBill).not.toHaveBeenCalled();
   });
 
+  it("settles a linked customer order online and never announces a local-only success", async () => {
+    const data = { sourceOrderId: "order-1", items: [{ productId: "p1" }] };
+    vi.stubGlobal("navigator", { onLine: true });
+    const online = useConfirmBill() as unknown as { mutationFn: (v: { data: Record<string, unknown> }) => Promise<unknown> };
+    createBill.mockResolvedValueOnce({ id: "server-bill" });
+    await expect(online.mutationFn({ data })).resolves.toEqual({ id: "server-bill" });
+    expect(createBillLocalFirst).not.toHaveBeenCalled();
+
+    vi.stubGlobal("navigator", { onLine: false });
+    const offline = useConfirmBill() as unknown as { mutationFn: (v: { data: Record<string, unknown> }) => Promise<unknown> };
+    expect(() => offline.mutationFn({ data })).toThrow("Connect to settle this customer order");
+  });
+
   it("runs while the browser is offline so IndexedDB receives the bill", async () => {
     const options = useConfirmBill() as unknown as {
       networkMode: string;

@@ -247,8 +247,21 @@ export async function setTicketStatus(shopId, id, status) {
  * answers when a guest disputes the bill.
  */
 export async function removeTicket(shopId, id) {
-  const existing = await db.kitchenTicket.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!existing) throw new AppError("Kitchen ticket not found", 404);
-  await db.kitchenTicket.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
-  return { id: existing.id, deleted: true };
+  return db.$transaction(async (tx) => {
+    const existing = await tx.kitchenTicket.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw new AppError("Kitchen ticket not found", 404);
+    await tx.kitchenTicket.update({ where: { id: existing.id }, data: { deletedAt: new Date() } });
+    const audit = await createAuditLog({
+      client: tx,
+      shopId,
+      action: "KITCHEN_TICKET_VOIDED",
+      entityType: "KitchenTicket",
+      entityId: existing.id,
+      before: { deletedAt: null, status: existing.status },
+      after: { deletedAt: "set", status: existing.status },
+      metadata: { billId: existing.billId, tableId: existing.tableId, ticketNo: existing.ticketNo },
+    });
+    if (!audit) throw new AppError("Kitchen ticket could not be recalled because its audit record was not saved", 503, "KOT_AUDIT_UNAVAILABLE");
+    return { id: existing.id, deleted: true };
+  }, { isolationLevel: "Serializable" });
 }

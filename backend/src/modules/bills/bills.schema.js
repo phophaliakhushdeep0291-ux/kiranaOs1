@@ -70,6 +70,7 @@ const paymentSchema = z.object({
 
 export const confirmBillSchema = z.object({
   locationId: z.string().min(1).optional(),
+  sourceOrderId: z.string().trim().min(1).max(120).optional(),
   billType: z.enum(["estimate", "normal_sale", "gst_invoice", "udhar_entry"]).default("normal_sale"),
   // inclusive (default): entered prices already contain GST — the payable stays
   // subtotal − discount and tax is extracted for the invoice breakup.
