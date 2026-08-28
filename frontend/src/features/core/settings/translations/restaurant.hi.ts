@@ -208,6 +208,5 @@ export const restaurantHi: { [K in keyof typeof restaurantEn]: string } = {
   "restaurant.kitchen.served": "परोसा गया",
   "restaurant.guest.ordered": "मेहमानों ने ऑर्डर किया",
   "restaurant.guest.fromTheQr": "QR से",
-  "restaurant.tables.bookedAt": "{time} बजे बुक",
-  "restaurant.tables.bookedFor": "{name} · {people}",
+  "restaurant.tables.booked": "{time} बजे बुक · {name} ({people})",
 };
