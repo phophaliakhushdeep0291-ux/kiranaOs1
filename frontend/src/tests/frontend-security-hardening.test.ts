@@ -126,20 +126,21 @@ describe("frontend security hardening", () => {
     expect(source).toContain("/sw.js?build=");
   });
 
-  it("serves app code from the atomic build cache without mixing releases", () => {
+  it("serves immutable app code atomically and refreshes stale HTML with an offline fallback", () => {
     const source = readFileSync("public/sw.js", "utf8");
 
     expect(source).toContain('const BUILD_ID = "__KIRANA_BUILD_ID__"');
     expect(source).toMatch(/const CACHE_VERSION = `kiranaos-shell-v\d+-\$\{BUILD_ID\}`/);
     expect(source).toContain("async function cacheFirstStatic");
-    expect(source).toContain("async function cacheFirstNavigation");
+    expect(source).toContain("async function networkFirstNavigation");
+    expect(source).toContain("NAVIGATION_NETWORK_TIMEOUT_MS");
+    expect(source).toContain('fetch(request, { cache: "no-store" })');
     expect(source).toContain("const cached = await cache.match(request)");
     expect(source).toContain("if (cached) return cached");
     expect(source).not.toContain("fetchAndStore");
     expect(source).toContain("event.respondWith(cacheFirstStatic(request))");
-    expect(source).toContain("event.respondWith(cacheFirstNavigation(request))");
+    expect(source).toContain("event.respondWith(networkFirstNavigation(request))");
     expect(source).not.toContain("async function networkFirstStatic");
-    expect(source).not.toContain("async function networkFirstNavigation");
     expect(source).toContain('["style", "script", "worker"].includes(request.destination)');
     expect(source).toContain('["font", "image"].includes(request.destination)');
     expect(source).toContain("CORE_ASSETS");

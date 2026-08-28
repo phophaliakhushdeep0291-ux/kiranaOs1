@@ -8,6 +8,7 @@ describe("cold boot experience", () => {
 
     expect(html).toContain('id="artha-boot-wait"');
     expect(html).toContain("Opening your counter");
+    expect(html).toContain('location.replace("/login?recover=" + Date.now())');
     expect(html).toContain("wait.parentNode === root");
     expect(html).toContain("}, 20000)");
     expect(html).toContain('window.addEventListener("error"');

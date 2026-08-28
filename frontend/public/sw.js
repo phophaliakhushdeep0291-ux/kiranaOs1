@@ -1,6 +1,7 @@
 /* Artha service worker: app-shell only. Business data stays in IndexedDB, not Cache Storage. */
 const BUILD_ID = "__KIRANA_BUILD_ID__";
-const CACHE_VERSION = `kiranaos-shell-v10-${BUILD_ID}`;
+const CACHE_VERSION = `kiranaos-shell-v11-${BUILD_ID}`;
+const NAVIGATION_NETWORK_TIMEOUT_MS = 3500;
 const CORE_ASSETS = __KIRANA_CORE_ASSETS__;
 const VERTICAL_ASSETS = __KIRANA_VERTICAL_ASSETS__;
 const APP_SHELL = [
@@ -76,23 +77,19 @@ function shouldBypass(request, url) {
   return NEVER_CACHE_PATTERNS.some((pattern) => pattern.test(url.pathname + url.search));
 }
 
-async function cacheFirstNavigation(request) {
+async function networkFirstNavigation(request) {
   const cache = await caches.open(CACHE_VERSION);
-  // Keep the HTML shell and its content-hashed chunks on the same installed
-  // release. Serving a newer network index through an older active worker can
-  // mix builds if connectivity drops halfway through startup. The app's normal
-  // service-worker update flow installs the next complete cache and asks the
-  // cashier before activating it.
-  const installedShell =
-    (await cache.match("/index.html")) ||
-    (await cache.match("/")) ||
-    (await cache.match("/offline.html"));
-  if (installedShell) return installedShell;
-
+  let timer;
   try {
-    const response = await fetch(request);
-    // Recovery path for a damaged/evicted cache. A normally installed worker
-    // always returns above because install publishes atomically.
+    // A stale installed shell can reference a bundle that no longer starts on a
+    // customer's browser. Prefer today's HTML while online, but bound the wait
+    // so a counter with no network still opens from its complete offline cache.
+    const response = await Promise.race([
+      fetch(request, { cache: "no-store" }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("navigation network timeout")), NAVIGATION_NETWORK_TIMEOUT_MS);
+      }),
+    ]);
     if (response && response.ok && response.type === "basic") {
       cache.put("/index.html", response.clone()).catch(() => undefined);
     }
@@ -107,6 +104,8 @@ async function cacheFirstNavigation(request) {
     // page instead of the browser's own error.
     if (!shell) throw error;
     return shell;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -135,7 +134,7 @@ self.addEventListener("fetch", (event) => {
   if (shouldBypass(request, url)) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(cacheFirstNavigation(request));
+    event.respondWith(networkFirstNavigation(request));
     return;
   }
 

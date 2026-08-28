@@ -99,7 +99,10 @@
           var clearBtn = document.getElementById("artha-boot-clear");
           if (clearBtn) {
             clearBtn.onclick = function () {
-              var done = function () { location.reload(); };
+              // /login is deliberately outside service-worker caching. Going
+              // through it prevents a damaged older worker from immediately
+              // serving the same stale shell after its caches are cleared.
+              var done = function () { location.replace("/login?recover=" + Date.now()); };
               try {
                 var work = [];
                 if (window.caches && caches.keys) {
