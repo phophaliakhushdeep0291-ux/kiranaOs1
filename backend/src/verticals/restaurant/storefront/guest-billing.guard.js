@@ -33,8 +33,16 @@ function lineMatchesSnapshot(item, snapshot) {
   }
 
   const snapshotUnit = normalizedUnit(snapshot.unit);
-  const enteredUnit = normalizedUnit(item.enteredUnit ?? item.sellingUnitLabel ?? item.unit);
-  return Boolean(snapshotUnit && enteredUnit && snapshotUnit === enteredUnit);
+  const submittedUnits = [item.enteredUnit, item.sellingUnitLabel, item.unit]
+    .map(normalizedUnit)
+    .filter(Boolean);
+  // Some older tills persisted the internal inventory code (for example
+  // `piece-1-piece`) as enteredUnit while retaining the human selling-unit
+  // label (`piece`) alongside it. The public order snapshot only knows that
+  // human unit. Accept any submitted human representation, but never the
+  // internal sellingUnitCode by itself; product, quantity and add-ons have
+  // already matched above, so this remains a narrow, fail-closed recovery.
+  return Boolean(snapshotUnit && submittedUnits.includes(snapshotUnit));
 }
 
 registerSaleGuard(async ({ shopId, tx, items, location }) => {

@@ -83,7 +83,7 @@ export async function retry(req, res, next) {
         retryAccepted: true,
         opIds,
         recovery,
-        message: recovery.replayed > 0
+        message: recovery.replayed > 0 || recovery.alreadyRecovered > 0
           ? "Stored conflict replayed successfully."
           : "Retry acknowledged. Frontend local outbox remains the source of truth for pending operations.",
       },

@@ -1337,13 +1337,34 @@ export async function pushOfflineActions(shopId, events, user = null) {
 }
 
 const RECOVERABLE_GUEST_BILL_MESSAGE = "include every guest order line before settling the table";
+const RECOVERABLE_GUEST_BILL_REASON_CODES = new Set([
+  "GUEST_ORDER_BILL_MISMATCH",
+  // Very early conflict rows were written before the originating AppError code
+  // was preserved. The exact message and mixed linked/unlinked payload checks
+  // below still make this a single-purpose compatibility path.
+  "CONFLICT",
+]);
 
-function recoverableGuestBillEvent(conflict, event) {
-  if (!conflict || conflict.status !== "open") return false;
-  if (String(conflict.entityType ?? "").toLowerCase() !== "bill") return false;
-  if (String(conflict.reasonCode ?? "") !== "GUEST_ORDER_BILL_MISMATCH") return false;
-  if (!String(conflict.message ?? "").toLowerCase().includes(RECOVERABLE_GUEST_BILL_MESSAGE)) return false;
-  if (String(event?.type ?? "").toUpperCase() !== SYNC_EVENT_TYPES.CREATE_BILL) return false;
+function guestBillRecoveryEligibility(stored, conflict, event) {
+  if (!stored) return { eligible: false, code: "SOURCE_EVENT_NOT_FOUND" };
+  if (!conflict) return { eligible: false, code: "CONFLICT_NOT_FOUND" };
+  if (
+    conflict.status !== "open" &&
+    stored.status === SYNC_EVENT_STATUSES.SYNCED &&
+    conflict.resolution === "replayed_after_validation_fix"
+  ) return { eligible: false, recovered: true, code: "ALREADY_RECOVERED" };
+  if (conflict.status !== "open") return { eligible: false, code: "CONFLICT_NOT_OPEN" };
+  if (String(conflict.entityType ?? "").toLowerCase() !== "bill") return { eligible: false, code: "ENTITY_NOT_SUPPORTED" };
+  if (!RECOVERABLE_GUEST_BILL_REASON_CODES.has(String(conflict.reasonCode ?? ""))) {
+    return { eligible: false, code: "REASON_NOT_SUPPORTED" };
+  }
+  if (!String(conflict.message ?? "").toLowerCase().includes(RECOVERABLE_GUEST_BILL_MESSAGE)) {
+    return { eligible: false, code: "MESSAGE_NOT_SUPPORTED" };
+  }
+  if (!event || typeof event !== "object") return { eligible: false, code: "EVENT_SNAPSHOT_INVALID" };
+  if (String(event.type ?? "").toUpperCase() !== SYNC_EVENT_TYPES.CREATE_BILL) {
+    return { eligible: false, code: "EVENT_TYPE_NOT_SUPPORTED" };
+  }
 
   const payload = getEventPayload(event);
   const bill = payload?.bill && typeof payload.bill === "object" && !Array.isArray(payload.bill)
@@ -1353,7 +1374,10 @@ function recoverableGuestBillEvent(conflict, event) {
   const hasLinkedLine = items.some((item) => item?.guestOrderId && item?.guestOrderLineId);
   const hasUnlinkedLine = items.some((item) => !item?.guestOrderId && !item?.guestOrderLineId);
   const hasHalfLinkedLine = items.some((item) => Boolean(item?.guestOrderId) !== Boolean(item?.guestOrderLineId));
-  return Boolean(hasLinkedLine && hasUnlinkedLine && !hasHalfLinkedLine);
+  if (!hasLinkedLine || !hasUnlinkedLine || hasHalfLinkedLine) {
+    return { eligible: false, code: "EVENT_SHAPE_NOT_SUPPORTED" };
+  }
+  return { eligible: true, code: "ELIGIBLE" };
 }
 
 /**
@@ -1373,7 +1397,15 @@ export async function retryStoredSyncConflicts(shopId, opIds = [], user = null) 
       db.syncConflict.findFirst({ where: { shopId, sourceEventId } }),
     ]);
     const event = safeJsonParse(stored?.requestJson);
-    if (!stored || !recoverableGuestBillEvent(conflict, event)) continue;
+    const eligibility = guestBillRecoveryEligibility(stored, conflict, event);
+    if (!eligibility.eligible) {
+      results.push({
+        sourceEventId,
+        status: eligibility.recovered ? "already_recovered" : "skipped",
+        code: eligibility.code,
+      });
+      continue;
+    }
 
     const claimed = await db.offlineSyncEvent.update({
       where: { shopId_eventId: { shopId, eventId: sourceEventId } },
@@ -1386,7 +1418,13 @@ export async function retryStoredSyncConflicts(shopId, opIds = [], user = null) 
       clientEventId: recoveryEventId,
     };
     const replay = (await pushOfflineActions(shopId, [replayEvent], user)).results[0];
-    results.push({ sourceEventId, recoveryEventId, replay });
+    results.push({
+      sourceEventId,
+      recoveryEventId,
+      status: replay?.success ? "replayed" : "failed",
+      code: replay?.success ? "RECOVERED" : (replay?.code ?? "REPLAY_FAILED"),
+      replay,
+    });
 
     if (!replay?.success) continue;
     const resolvedAt = new Date();
@@ -1427,8 +1465,10 @@ export async function retryStoredSyncConflicts(shopId, opIds = [], user = null) 
 
   return {
     requested: requestedIds.length,
-    replayed: results.filter((row) => row.replay?.success).length,
-    failed: results.filter((row) => !row.replay?.success).length,
+    replayed: results.filter((row) => row.status === "replayed").length,
+    alreadyRecovered: results.filter((row) => row.status === "already_recovered").length,
+    failed: results.filter((row) => row.status === "failed").length,
+    skipped: results.filter((row) => row.status === "skipped").length,
     results,
   };
 }

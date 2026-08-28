@@ -64,7 +64,7 @@ const recoveredBill = await settle({ clientBillId: randomUUID(), billType: "norm
     // The POS persists its default inventory-unit code even though the public
     // menu snapshot correctly has no restaurant variation code. That extra
     // representation must not prevent an otherwise exact legacy recovery.
-    { productId: product.id, sellingUnitCode: "piece-1-piece", sellingUnitLabel: "piece", name: "Dosa", quantity: 2, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
+    { productId: product.id, sellingUnitCode: "piece-1-piece", sellingUnitLabel: "piece", name: "Dosa", quantity: 2, enteredUnit: "piece-1-piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
   ],
   payments: [{ mode: "cash", amount: 300 }],
 });
@@ -96,18 +96,23 @@ const retryEvent = {
     locationId: location.id,
     items: [
       { productId: product.id, guestOrderId: retryOrder.id, guestOrderLineId: `${retryOrder.id}-0`, name: "Dosa", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
-      { productId: product.id, sellingUnitCode: "piece-1-piece", sellingUnitLabel: "piece", name: "Dosa", quantity: 2, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
+      { productId: product.id, sellingUnitCode: "piece-1-piece", sellingUnitLabel: "piece", name: "Dosa", quantity: 2, enteredUnit: "piece-1-piece", ratePerRateUnit: 100, gstRate: 0, lineDiscount: 0 },
     ],
     payments: [{ mode: "cash", amount: 300 }],
   },
 };
 await db.offlineSyncEvent.create({ data: { shopId: shop.id, eventId: retrySourceEventId, type: "CREATE_BILL", status: "conflict", attempts: 1, requestJson: JSON.stringify(retryEvent), error: "Include every guest order line before settling the table." } });
-const storedConflict = await db.syncConflict.create({ data: { shopId: shop.id, sourceEventId: retrySourceEventId, entityType: "bill", entityId: retryClientBillId, reasonCode: "GUEST_ORDER_BILL_MISMATCH", message: "Include every guest order line before settling the table.", localSnapshotJson: JSON.stringify(retryEvent.payload) } });
+const storedConflict = await db.syncConflict.create({ data: { shopId: shop.id, sourceEventId: retrySourceEventId, entityType: "bill", entityId: retryClientBillId, reasonCode: "CONFLICT", message: "Include every guest order line before settling the table.", localSnapshotJson: JSON.stringify(retryEvent.payload) } });
 const replayed = await retryStoredSyncConflicts(shop.id, [retrySourceEventId], { deviceId: "test-till" });
 assert.equal(replayed.replayed, 1, "the explicit retry replays the stored legacy bill");
+assert.equal(replayed.results[0].status, "replayed", "the endpoint reports the exact recovery outcome");
 assert.ok((await db.customerOrder.findUniqueOrThrow({ where: { id: retryOrder.id } })).billId, "the replay settles the guest order");
 assert.equal((await db.offlineSyncEvent.findUniqueOrThrow({ where: { shopId_eventId: { shopId: shop.id, eventId: retrySourceEventId } } })).status, "synced", "the old event is closed only after replay success");
 assert.equal((await db.syncConflict.findUniqueOrThrow({ where: { id: storedConflict.id } })).resolution, "replayed_after_validation_fix", "the old review records the successful replay");
+const replayedAgain = await retryStoredSyncConflicts(shop.id, [retrySourceEventId], { deviceId: "test-till" });
+assert.equal(replayedAgain.alreadyRecovered, 1, "repeating a successful recovery is an idempotent acknowledgement");
+const skippedReplay = await retryStoredSyncConflicts(shop.id, ["missing-source-event"], { deviceId: "test-till" });
+assert.equal(skippedReplay.results[0].code, "SOURCE_EVENT_NOT_FOUND", "the endpoint explains why a requested recovery was skipped");
 
 const ambiguousOrder = await db.customerOrder.create({ data: { shopId: shop.id, locationId: location.id, customerName: "T1", customerMobile: "", tableId: table.id, tableName: "T1", fulfillmentType: "dine_in", status: "accepted", fulfillmentStatus: "preparing",
   estimatedTotal: 200, itemsJson: JSON.stringify([
