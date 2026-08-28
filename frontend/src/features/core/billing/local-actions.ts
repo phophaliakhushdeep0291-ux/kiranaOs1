@@ -1,4 +1,4 @@
-import { offlineDB } from "@/lib/offline/db";
+import { offlineDB, type OfflineWriteTransaction } from "@/lib/offline/db";
 import { getOfflineScope } from "@/lib/offline/context";
 import { billCreationSchema, ownerPinRequiredActionSchema } from "@/lib/validation";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
@@ -91,7 +91,7 @@ function isSyncedBillRecord(bill: Bill & Record<string, unknown>): boolean {
   return !["local_only", "pending_sync", "syncing", "failed", "conflict", "draft"].includes(syncStatus || status);
 }
 
-function withBillAliases(bill: Bill): Bill {
+function withBillAliases<T extends Bill>(bill: T): T {
   const synced = isSyncedBillRecord(bill as Bill & Record<string, unknown>);
   return {
     ...bill,
@@ -123,8 +123,9 @@ async function prepareCustomerForCreditBill(data: BillInput, creditAmount: numbe
   if (creditAmount <= 0) return { billData: data, previousCustomerBalance: 0 };
   const now = new Date().toISOString();
   const cachedCustomers = readInstantCache<Customer[]>(CUSTOMER_CACHE_KEY, []).map(normaliseLocalCustomer) as Array<Customer & Record<string, unknown>>;
-  const dbCustomers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
-  const customers = [...cachedCustomers, ...dbCustomers.filter((row) => !cachedCustomers.some((cached) => cached.id === row.id))];
+  const dbCustomers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers");
+  // The durable balance can have changed in another tab since this cache painted.
+  const customers = [...dbCustomers, ...cachedCustomers.filter((row) => !dbCustomers.some((stored) => stored.id === row.id))];
 
   if (data.customerId) {
     const existing = customers.find((customer) => matchesCustomer(customer, data.customerId!));
@@ -346,9 +347,9 @@ async function loadBillProducts(items: BillInputItem[]) {
   if (ids.length === 0) return new Map<string, Product>();
 
   const cached = readInstantCache<Product[]>(PRODUCT_CACHE_KEY, []);
-  const dbRows = await offlineDB.getAll<Product>("products").catch(() => []);
+  const dbRows = await offlineDB.getAll<Product>("products");
   const byId = new Map<string, Product>();
-  for (const product of [...cached, ...dbRows]) {
+  for (const product of [...dbRows, ...cached]) {
     if (ids.includes(product.id) && !byId.has(product.id)) byId.set(product.id, product);
   }
   return byId;
@@ -601,9 +602,47 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     throw err;
   }
 
+  // The open bill owns its identity, not each click of Save. Check and commit
+  // under the same IndexedDB write transaction, including across browser tabs.
+  const clientBillId = input.clientBillId?.trim();
+  const checkoutFingerprint = JSON.stringify({ ...validated, ownerPin: undefined, reason: undefined, sensitiveActions: undefined });
+  const committed = await offlineDB.transaction(BILL_CREATION_TRANSACTION_TABLES, async (tx) => {
+    if (clientBillId) {
+      const bills = await offlineDB.getAll<Bill & Record<string, unknown>>("bills");
+      const matches = bills.filter((bill) => bill.clientBillId === clientBillId || bill.client_bill_id === clientBillId)
+        .map((bill) => bills.find((row) => row.id === bill.merged_into_id) ?? bill);
+      const existing = matches.find((bill) => isSyncedBillRecord(bill) && !bill.merged_into_id) ?? matches[0];
+      if (existing) {
+        if (existing.status === "cancelled" || existing.deletedAt || (existing.deleted_at && !existing.merged_into_id)) {
+          throw new Error("This receipt was cancelled or removed. Start a new bill instead of reusing it.");
+        }
+        if (existing.checkoutFingerprint && existing.checkoutFingerprint !== checkoutFingerprint) {
+          throw new Error("This bill was already saved with different details. Open the saved receipt, or start a new bill.");
+        }
+        return { bill: withBillAliases(existing), publish: (): void => undefined };
+      }
+    }
+    return persistLocalBill(tx, validated, inputForCreation, sensitiveActions, clientBillId, checkoutFingerprint);
+  });
+  // A cache/display failure after the financial commit is not a failed sale.
+  // Returning an error here invites the cashier to collect the same money again.
+  try { committed.publish(); } catch { /* Durable rows and outbox are already committed. */ }
+  return committed.bill;
+}
+
+async function persistLocalBill(
+  tx: OfflineWriteTransaction,
+  validated: BillInput,
+  inputForCreation: BillInput,
+  sensitiveActions: SensitiveBillAction[],
+  requestedClientBillId: string | undefined,
+  checkoutFingerprint: string,
+): Promise<{ bill: Bill; publish: () => void }> {
+  const productsById = await loadBillProducts(validated.items);
   const billId = createLocalId("bill");
+  const clientBillId = requestedClientBillId ?? billId;
   const scope = getOfflineScope();
-  const idempotencyKey = `create-bill:${scope.tenant_id}:${scope.store_id}:${scope.device_id}:${billId}`;
+  const idempotencyKey = `create-bill:${scope.tenant_id}:${scope.store_id}:${scope.device_id}:${clientBillId}`;
   const creditAmount = getCreditAmount(validated.payments);
   const customerPreparation = await prepareCustomerForCreditBill({ ...validated, payments: [...validated.payments] }, creditAmount);
   const billData = customerPreparation.billData;
@@ -642,8 +681,9 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     status: "pending_sync",
     isSynced: false,
     is_synced: false,
-    clientBillId: billId,
-    client_bill_id: billId,
+    clientBillId,
+    client_bill_id: clientBillId,
+    checkoutFingerprint,
     localBillId: billId,
     local_bill_id: billId,
     idempotencyKey,
@@ -784,8 +824,8 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
       credit_ledger_handled_in_payload: creditAmount > 0,
       localBillId: billId,
       local_bill_id: billId,
-      clientBillId: billId,
-      client_bill_id: billId,
+      clientBillId,
+      client_bill_id: clientBillId,
       idempotencyKey,
       idempotency_key: idempotencyKey,
       local_items: billItems.map((item) => ({
@@ -825,40 +865,33 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     : null;
   const cacheExpiresAt = Date.now() + BILL_CREATION_CACHE_EXPIRES_MS;
 
-  await offlineDB.transaction(BILL_CREATION_TRANSACTION_TABLES, async (tx) => {
-    if (customerPreparation.customerToPut) {
-      await tx.put("customers", customerPreparation.customerToPut);
-    }
-    await tx.put("bills", bill);
-    await tx.putMany("bill_items", billItems);
-    await tx.putMany("payments", billPayments);
-    await tx.putMany("inventory_movements", saleMovements);
-    await tx.putMany("products", updatedProducts);
-    if (ledgerEntry) {
-      await tx.put("customer_ledger", ledgerEntry);
-    }
-    await tx.putMany("local_audit_logs", auditLogs);
-    if (customerPreparation.customerCreateOutbox) {
-      await tx.enqueueOutboxOperation(customerPreparation.customerCreateOutbox);
-    }
-    for (const auditOutbox of auditOutboxes) {
-      await tx.enqueueOutboxOperation(auditOutbox);
-    }
-    await tx.enqueueOutboxOperation(billOutbox);
-    await tx.setSetting(`cache:${BILL_CACHE_KEY}`, nextBillsCache, cacheExpiresAt);
-    if (nextCustomersCache) await tx.setSetting(`cache:${CUSTOMER_CACHE_KEY}`, nextCustomersCache, cacheExpiresAt);
-    if (nextLedgerCache) await tx.setSetting("cache:customer_ledger", nextLedgerCache, cacheExpiresAt);
-  });
-
-  writeInstantMemoryCache(BILL_CACHE_KEY, nextBillsCache, BILL_CREATION_CACHE_DAYS);
-  if (nextCustomersCache) writeInstantMemoryCache(CUSTOMER_CACHE_KEY, nextCustomersCache, BILL_CREATION_CACHE_DAYS);
-  if (nextLedgerCache) writeInstantMemoryCache("customer_ledger", nextLedgerCache, BILL_CREATION_CACHE_DAYS);
-  updatedProducts.forEach((product) => {
-    upsertCachedListItem<Product>(PRODUCT_CACHE_KEY, product, 1000);
-    upsertCachedListItem<Product & Record<string, unknown>>(INVENTORY_CACHE_KEY, product, 1000);
-  });
-  emitLocalDataChanged({ type: "bill", id: billId, action: "created" });
-  updatedProducts.forEach((product) => emitLocalDataChanged({ type: "product", id: product.id, action: "stock-updated" }));
-  if (ledgerEntry) emitLocalDataChanged({ type: "ledger", id: ledgerEntry.id, customerId: billData.customerId, action: "appended" });
-  return bill;
+  if (customerPreparation.customerToPut) await tx.put("customers", customerPreparation.customerToPut);
+  await tx.put("bills", bill);
+  await tx.putMany("bill_items", billItems);
+  await tx.putMany("payments", billPayments);
+  await tx.putMany("inventory_movements", saleMovements);
+  await tx.putMany("products", updatedProducts);
+  if (ledgerEntry) await tx.put("customer_ledger", ledgerEntry);
+  await tx.putMany("local_audit_logs", auditLogs);
+  if (customerPreparation.customerCreateOutbox) await tx.enqueueOutboxOperation(customerPreparation.customerCreateOutbox);
+  for (const auditOutbox of auditOutboxes) await tx.enqueueOutboxOperation(auditOutbox);
+  await tx.enqueueOutboxOperation(billOutbox);
+  await tx.setSetting(`cache:${BILL_CACHE_KEY}`, nextBillsCache, cacheExpiresAt);
+  if (nextCustomersCache) await tx.setSetting(`cache:${CUSTOMER_CACHE_KEY}`, nextCustomersCache, cacheExpiresAt);
+  if (nextLedgerCache) await tx.setSetting("cache:customer_ledger", nextLedgerCache, cacheExpiresAt);
+  return {
+    bill,
+    publish: () => {
+      writeInstantMemoryCache(BILL_CACHE_KEY, nextBillsCache, BILL_CREATION_CACHE_DAYS);
+      if (nextCustomersCache) writeInstantMemoryCache(CUSTOMER_CACHE_KEY, nextCustomersCache, BILL_CREATION_CACHE_DAYS);
+      if (nextLedgerCache) writeInstantMemoryCache("customer_ledger", nextLedgerCache, BILL_CREATION_CACHE_DAYS);
+      updatedProducts.forEach((product) => {
+        upsertCachedListItem<Product>(PRODUCT_CACHE_KEY, product, 1000);
+        upsertCachedListItem<Product & Record<string, unknown>>(INVENTORY_CACHE_KEY, product, 1000);
+      });
+      emitLocalDataChanged({ type: "bill", id: billId, action: "created" });
+      updatedProducts.forEach((product) => emitLocalDataChanged({ type: "product", id: product.id, action: "stock-updated" }));
+      if (ledgerEntry) emitLocalDataChanged({ type: "ledger", id: ledgerEntry.id, customerId: billData.customerId, action: "appended" });
+    },
+  };
 }

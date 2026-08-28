@@ -80,9 +80,10 @@ vi.mock("@/lib/offline/db", () => ({
           expires_at: expiresAt ?? null,
         }, staged)),
       };
-      await callback(tx);
+      const result = await callback(tx);
       if (dbState.failTransactionBeforeCommit) throw new Error("simulated transaction commit failure");
       dbState.committed = staged;
+      return result;
     }),
   },
 }));
