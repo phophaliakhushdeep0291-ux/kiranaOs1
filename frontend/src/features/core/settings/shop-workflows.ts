@@ -287,7 +287,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
     actions: [
       { label: "workflow.restaurant.action.1", detail: "workflow.restaurant.action.1.detail", href: "/billing", icon: "billing" },
       { label: "workflow.restaurant.action.2", detail: "workflow.restaurant.action.2.detail", href: "/products?add=1", icon: "products" },
-      { label: "workflow.restaurant.action.3", detail: "workflow.restaurant.action.3.detail", href: "/orders-received", icon: "reports" },
+      { label: "workflow.restaurant.action.3", detail: "workflow.restaurant.action.3.detail", href: "/tables", icon: "reports" },
       { label: "workflow.restaurant.action.4", detail: "workflow.restaurant.action.4.detail", href: "/daily-closing", icon: "closing" },
     ],
     productEntry: {

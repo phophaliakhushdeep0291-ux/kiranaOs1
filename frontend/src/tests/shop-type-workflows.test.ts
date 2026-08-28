@@ -38,6 +38,8 @@ describe("shop-type workflows", () => {
     expect(SHOP_WORKFLOWS.pharmacy.productEntry.recommendBatchTracking).toBe(true);
     expect(SHOP_WORKFLOWS.cosmetics.productEntry.recommendBatchTracking).toBe(true);
     expect(SHOP_WORKFLOWS.restaurant.actions.some((action) => action.href === "/daily-closing")).toBe(true);
+    expect(SHOP_WORKFLOWS.restaurant.actions.some((action) => action.href === "/tables")).toBe(true);
+    expect(SHOP_WORKFLOWS.restaurant.actions.some((action) => action.href === "/orders-received")).toBe(false);
     expect(say(SHOP_WORKFLOWS.clothing.productEntry.helper)).toContain("separate SKU");
     expect(say(SHOP_WORKFLOWS.footwear.productEntry.helper)).toContain("one SKU");
     expect(say(SHOP_WORKFLOWS.auto_parts.productEntry.notesLabel)).toContain("Compatibility");

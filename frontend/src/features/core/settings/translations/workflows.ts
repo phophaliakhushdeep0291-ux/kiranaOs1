@@ -243,13 +243,13 @@ export const workflowsEn = {
 
   // -- restaurant --
   "workflow.restaurant.title": "Restaurant service workflow",
-  "workflow.restaurant.subtitle": "Open orders quickly, keep the menu current, receive online orders, and close the day cleanly.",
+  "workflow.restaurant.subtitle": "Open orders quickly, keep the menu current, manage table service, and close the day cleanly.",
   "workflow.restaurant.action.1": "New order",
   "workflow.restaurant.action.1.detail": "Start counter or table billing",
   "workflow.restaurant.action.2": "Menu setup",
   "workflow.restaurant.action.2.detail": "Add dishes, modifiers as notes, and prices",
-  "workflow.restaurant.action.3": "Incoming orders",
-  "workflow.restaurant.action.3.detail": "Review customer-link orders",
+  "workflow.restaurant.action.3": "Table service",
+  "workflow.restaurant.action.3.detail": "Seat guests and manage open table bills",
   "workflow.restaurant.action.4": "Close day",
   "workflow.restaurant.action.4.detail": "Reconcile sales and collections",
   "workflow.restaurant.entry.helper": "Use categories for menu sections and notes for ingredients, dietary flags, or preparation choices.",

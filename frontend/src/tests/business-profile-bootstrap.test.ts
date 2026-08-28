@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { SHARED_NAVIGATION, isPathInBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 
 describe("business profile bootstrap wiring", () => {
   it("sends the selected preset during registration", () => {
@@ -27,6 +28,26 @@ describe("business profile bootstrap wiring", () => {
     expect(mobile).toContain("isPathInBusinessProfile");
     expect(routes).toContain("BusinessProfileRouteGate");
     expect(routes).toContain('capability="BATCH_TRACKING"');
+  });
+
+  it("keeps the restaurant order inbox closed until marketplace ingestion is enabled", () => {
+    const restaurantWithoutMarketplace = [...SHARED_NAVIGATION, "tables", "kitchen-kot"];
+    expect(isPathInBusinessProfile("/orders-received", restaurantWithoutMarketplace)).toBe(false);
+    expect(isPathInBusinessProfile("/tables", restaurantWithoutMarketplace)).toBe(true);
+
+    // The explicit orders key is the future connector opt-in. A non-restaurant
+    // shop without Tables keeps its existing customer-order inbox through Sales.
+    expect(isPathInBusinessProfile("/orders-received", [...restaurantWithoutMarketplace, "orders"])).toBe(true);
+    expect(isPathInBusinessProfile("/orders-received", [...SHARED_NAVIGATION])).toBe(true);
+
+    const restaurantNavigation = readFileSync("../backend/src/verticals/restaurant/navigation.js", "utf8");
+    const navigationBody = restaurantNavigation.slice(restaurantNavigation.indexOf("["), restaurantNavigation.indexOf("]"));
+    const navigationKeys = [...navigationBody.matchAll(/"([a-z0-9-]+)"/g)].map((match) => match[1]);
+    expect(navigationKeys).toContain("tables");
+    expect(navigationKeys).not.toContain("orders");
+
+    const routes = readFileSync("src/app/routes.tsx", "utf8");
+    expect(routes).toContain('return <Redirect to="/tables" />');
   });
 
   it("opens the setup wizard after registration and syncs completion", () => {

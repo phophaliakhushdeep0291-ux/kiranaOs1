@@ -239,13 +239,13 @@ export const workflowsHi: Record<keyof typeof workflowsEn, string> = {
 
   // -- restaurant --
   "workflow.restaurant.title": "रेस्टोरेंट सर्विस का काम",
-  "workflow.restaurant.subtitle": "ऑर्डर जल्दी खोलें, मेन्यू ताज़ा रखें, ऑनलाइन ऑर्डर लें और दिन साफ़-साफ़ बंद करें।",
+  "workflow.restaurant.subtitle": "ऑर्डर जल्दी खोलें, मेन्यू ताज़ा रखें, टेबल सर्विस संभालें और दिन साफ़-साफ़ बंद करें।",
   "workflow.restaurant.action.1": "नया ऑर्डर",
   "workflow.restaurant.action.1.detail": "काउंटर या टेबल की बिलिंग शुरू करें",
   "workflow.restaurant.action.2": "मेन्यू सेट करें",
   "workflow.restaurant.action.2.detail": "व्यंजन, नोट में बदलाव और दाम जोड़ें",
-  "workflow.restaurant.action.3": "आए हुए ऑर्डर",
-  "workflow.restaurant.action.3.detail": "ग्राहक लिंक से आए ऑर्डर देखें",
+  "workflow.restaurant.action.3": "टेबल सर्विस",
+  "workflow.restaurant.action.3.detail": "मेहमान बैठाएँ और खुले टेबल बिल संभालें",
   "workflow.restaurant.action.4": "दिन बंद करें",
   "workflow.restaurant.action.4.detail": "बिक्री और वसूली का मिलान करें",
   "workflow.restaurant.entry.helper": "मेन्यू के हिस्सों के लिए श्रेणियां और सामग्री, परहेज़ या बनाने के तरीके के लिए नोट इस्तेमाल करें।",
