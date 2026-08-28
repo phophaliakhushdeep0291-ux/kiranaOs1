@@ -6,14 +6,14 @@ import { registerProductConfigurator, type ProductConfiguratorProps } from "@/fe
 import { getStoredBusinessType } from "@/features/core/settings/business-type-store";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { cn } from "@/lib/utils";
-import type { MenuAddonGroup, MenuDish } from "@/types/api";
+import type { MenuAddonGroup } from "@/types/api";
 import { getMenuBoard } from "./service/restaurant-api";
 
-let menuPromise: Promise<MenuDish[]> | null = null;
-
-async function loadGroups(productId: string): Promise<MenuAddonGroup[] | null> {
-  menuPromise ??= getMenuBoard().then((board) => board.courses.flatMap((section) => section.dishes));
-  const dish = (await menuPromise).find((row) => row.id === productId);
+export async function loadRestaurantAddonGroups(productId: string): Promise<MenuAddonGroup[] | null> {
+  // The API already has a scoped offline fallback. A module-level promise would
+  // retain old prices/choices (or a rejection) forever, even after a shop switch.
+  const board = await getMenuBoard();
+  const dish = board.courses.flatMap((section) => section.dishes).find((row) => row.id === productId);
   return dish?.addonGroups?.length ? dish.addonGroups : null;
 }
 
@@ -102,7 +102,7 @@ export function registerRestaurantAddonConfigurator() {
   registerProductConfigurator({
     id: "restaurant-addons",
     appliesTo: () => getStoredBusinessType() === "restaurant",
-    load: (product) => loadGroups(product.id),
+    load: (product) => loadRestaurantAddonGroups(product.id),
     Component: AddonConfigurator,
   });
 }

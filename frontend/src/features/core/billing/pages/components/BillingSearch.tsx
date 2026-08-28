@@ -20,8 +20,10 @@ import { toast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useListBills } from "@/features/core/bills/queries";
 import type { Bill, Product, ProductSellingUnit } from "@/lib/api/client";
-import { applyBindSheetPick, normalizeSearchText, productSearchText, productSellingPrice, resolveScanOutcome } from "../billing-calculations";
+import { applyBindSheetPick, normalizeSearchText, productInventoryBadge, productSearchText, productSellingPrice, resolveScanOutcome } from "../billing-calculations";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
+import { getShopBillingProfile } from "@/features/core/settings/shop-billing";
 import { ACTIVITY_EVENTS, trackEvent, useSearchTracking } from "@/lib/activity";
 import { lookupKnownProduct, type KnownProductDetails } from "@/features/core/products/product-knowledge";
 
@@ -181,6 +183,8 @@ export function BillingSearch({
   onChooseCustomer,
 }: BillingSearchProps) {
   const { t } = useAppLanguage();
+  const businessType = useBusinessTypeKey();
+  const showInventoryBadges = getShopBillingProfile(businessType).showInventoryBadges !== false;
   const [showAll, setShowAll] = useState(false);
   const [showAllCategories, setShowAllCategories] = useState(false);
   // The search field shares its row with the scan and voice buttons, so on a
@@ -901,6 +905,7 @@ export function BillingSearch({
                     product={product}
                     onAdd={() => addProduct(product)}
                     trending={trendingProductIds?.has(product.id) ?? false}
+                    showInventoryBadges={showInventoryBadges}
                     t={t}
                   />
                 ))}
@@ -1013,12 +1018,12 @@ export function BillingSearch({
 /* ─── Product card — spec: 176px height, absolute price + add button ─── */
 // `t` arrives as a prop rather than from the context: this renders once per tile in the
 // product grid, and the page above it already holds the translator.
-function ProductCard({ product, onAdd, trending = false, t }: { product: Product; onAdd: () => void; trending?: boolean; t: Translate }) {
+export function ProductCard({ product, onAdd, trending = false, showInventoryBadges, t }: { product: Product; onAdd: () => void; trending?: boolean; showInventoryBadges: boolean; t: Translate }) {
   const sellingUnits = (product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
   const defaultUnit = sellingUnits.find((unit) => unit.isDefault) ?? sellingUnits[0];
   const price = defaultUnit?.defaultPrice ?? productSellingPrice(product, 1);
   const unit = defaultUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "pc";
-  const stock = product.stockBaseQty ?? 0;
+  const inventoryBadge = productInventoryBadge(product, showInventoryBadges);
   const emoji = getProductEmoji(product.name, product.category);
 
   const priceLabel = price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1033,9 +1038,9 @@ function ProductCard({ product, onAdd, trending = false, t }: { product: Product
       {/* Image area — neutral photo placeholder */}
       <div className="relative mb-2.5 flex h-[76px] items-center justify-center overflow-hidden rounded-[7px] bg-[#f8fafc]">
         {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain p-1" /> : <span className="text-[40px] leading-none" aria-hidden="true">{emoji}</span>}
-        {stock <= 0 ? (
+        {inventoryBadge === "out" ? (
           <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">{t("billing.search.stockOut")}</span>
-        ) : stock <= 5 ? (
+        ) : inventoryBadge === "low" ? (
           <span className="absolute bottom-1 right-1 rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">{t("billing.search.stockLow")}</span>
         ) : null}
         {sellingUnits.length > 1 ? (

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import db from "../src/db.js";
 import "../src/verticals/restaurant/storefront/dine-in.storefront.js";
-import { createPublicGuestRequest, createPublicOrder, submitPublicOrderFeedback, getPublicOrderStatus } from "../src/modules/public/public.service.js";
+import { createPublicGuestRequest, createPublicOrder, submitPublicOrderFeedback, getPublicCatalog, getPublicOrderStatus } from "../src/modules/public/public.service.js";
 import { listGuestRequests, setGuestRequestStatus } from "../src/verticals/restaurant/service-ops/guest-requests.service.js";
+import { getMenuBoard, listCourses } from "../src/verticals/restaurant/menu/menu.service.js";
+import { productData } from "./integration/factories.js";
 
 async function withFailedAudit(action, operation) {
   const trigger = `force_guest_request_audit_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -31,6 +33,43 @@ const settingsJson = JSON.stringify({
 });
 const shop = await db.shop.create({ data: { name: `Guest experience ${Date.now()}`, ownerName: "Owner", city: "City", address: "Address", settingsJson } });
 const table = await db.restaurantTable.create({ data: { shopId: shop.id, code: "t5", name: "T5" } });
+
+// Exercise the actual catalogue read, not only the grouping helper: both the
+// flat compatibility list and DineIn's grouped payload must agree with the POS.
+const setupNote = "Starter item — review price, tax and stock before first sale.";
+const menuProducts = await Promise.all([
+  { name: "Coffee", category: "Beverages", description: setupNote },
+  { name: "Dal Fry", category: "Main Course", description: "Slow cooked lentils with a butter finish." },
+  { name: "Thali", category: "Main Course", menuCourse: "Chef's specials" },
+  { name: "Fries", category: "Snacks" },
+  { name: "Papad", category: "General" },
+  { name: "Sold out dish", category: "Main Course", menuAvailable: false },
+].map((patch) => db.product.create({ data: { ...productData(shop.id, { stockBaseQty: 0 }), ...patch } })));
+const catalog = await getPublicCatalog(shop.id, null, { tableCode: table.code });
+assert.equal(catalog.storefront.mode, "dine_in");
+assert.equal(catalog.storefront.table.code, "t5");
+assert.deepEqual(catalog.storefront.menu.map((section) => section.course), ["Main course", "Beverages", "Chef's specials", "Snacks", "Other"]);
+const menuItems = catalog.storefront.menu.flatMap((section) => section.items);
+assert.equal(menuItems.find((item) => item.name === "Coffee").description, null);
+assert.equal(menuItems.find((item) => item.name === "Dal Fry").description, "Slow cooked lentils with a butter finish.");
+assert.equal(menuItems.some((item) => item.name === "Sold out dish"), false, "86'd dishes remain hidden");
+for (const section of catalog.storefront.menu) {
+  for (const item of section.items) {
+    assert.equal(item.course, section.course);
+    assert.equal(catalog.products.find((product) => product.id === item.id).category, section.course);
+  }
+}
+const menuBoard = await getMenuBoard(shop.id);
+for (const section of catalog.storefront.menu) {
+  const counterSection = menuBoard.courses.find((row) => row.course === section.course);
+  assert.ok(counterSection, "counter and guest must resolve the same course");
+  for (const item of section.items) assert.ok(counterSection.dishes.some((dish) => dish.id === item.id));
+}
+assert.ok((await listCourses(shop.id)).includes("Snacks"), "existing categories appear in the course picker");
+const savedCoffee = await db.product.findUniqueOrThrow({ where: { id: menuProducts[0].id } });
+assert.equal(savedCoffee.description, setupNote, "guest cleanup does not overwrite the owner's product record");
+assert.equal(savedCoffee.menuCourse, null, "fallback courses do not rewrite owner configuration");
+
 const order = await db.customerOrder.create({ data: {
   shopId: shop.id, customerName: "T5", customerMobile: "", fulfillmentType: "dine_in",
   tableId: table.id, tableName: table.name, itemsJson: JSON.stringify([{ productId: "dish-test", name: "Dish", qty: 1, price: 100, variation: { unitCode: "large", name: "Large" } }]), status: "fulfilled", fulfillmentStatus: "fulfilled",

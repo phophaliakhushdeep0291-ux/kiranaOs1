@@ -53,6 +53,17 @@ function normalizeCourse(value) {
   return text.slice(0, 60) || null;
 }
 
+/** Reuse an existing food category until the owner chooses a menu course. */
+export function resolveMenuCourse(product) {
+  const explicit = normalizeCourse(product.menuCourse);
+  const category = normalizeCourse(product.category);
+  const fallback = category && !["general", "other", "uncategorised", "uncategorized"].includes(category.toLowerCase())
+    ? category : UNCATEGORISED_COURSE;
+  const course = explicit || fallback;
+  // Imported "Main Course" and the suggested "Main course" are one section.
+  return SUGGESTED_COURSES.find((suggestion) => suggestion.toLowerCase() === course.toLowerCase()) ?? course;
+}
+
 function normalizeTags(value) {
   if (value == null) return null;
   const list = Array.isArray(value) ? value : String(value).split(",");
@@ -75,7 +86,7 @@ export function parseTags(value) {
 export function groupMenuByCourse(dishes) {
   const byCourse = new Map();
   for (const dish of dishes) {
-    const course = dish.menuCourse || UNCATEGORISED_COURSE;
+    const course = resolveMenuCourse(dish);
     if (!byCourse.has(course)) byCourse.set(course, []);
     byCourse.get(course).push(dish);
   }
@@ -240,11 +251,11 @@ export async function bulkUpdateDishMenu(shopId, updates = []) {
 /** The courses this shop actually uses, for the pickers that offer them. */
 export async function listCourses(shopId) {
   const rows = await db.product.findMany({
-    where: { shopId, deletedAt: null, menuCourse: { not: null } },
-    select: { menuCourse: true },
-    distinct: ["menuCourse"],
+    where: { shopId, deletedAt: null },
+    select: { menuCourse: true, category: true },
+    distinct: ["menuCourse", "category"],
   });
-  const used = rows.map((row) => row.menuCourse).filter(Boolean);
+  const used = rows.map(resolveMenuCourse).filter((course) => course !== UNCATEGORISED_COURSE);
   return [...new Set([...used, ...SUGGESTED_COURSES])];
 }
 

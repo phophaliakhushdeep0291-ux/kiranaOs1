@@ -30,6 +30,8 @@ export interface ShopBillingProfile {
   billNounKey: TranslationKey;
   /** What the product grid is full of, for the empty-cart hint. */
   itemsNounKey: TranslationKey;
+  /** Cooked-to-order availability belongs to the menu, not finished-dish stock. */
+  showInventoryBadges?: boolean;
 }
 
 export const SHOP_BILLING: Record<BusinessType, ShopBillingProfile> = {
@@ -82,6 +84,7 @@ export const SHOP_BILLING: Record<BusinessType, ShopBillingProfile> = {
     tenderWordKey: SHOP_TENDER_WORD.restaurant,
     billNounKey: "billing.noun.order",
     itemsNounKey: "billing.noun.items.dishes",
+    showInventoryBadges: false,
   },
   manufacturing: {
     tenderWordKey: SHOP_TENDER_WORD.manufacturing,

@@ -1,7 +1,7 @@
 import { registerStorefrontMode } from "../../../shared/storefront-modes.js";
 import { restaurantWebsiteUrl } from "./restaurant-website.js";
 import { businessTypeFromSettings } from "../../registry.js";
-import { groupMenuByCourse, parseTags, PORTION_UNIT_TYPE, UNCATEGORISED_COURSE } from "../menu/menu.service.js";
+import { groupMenuByCourse, parseTags, PORTION_UNIT_TYPE, resolveMenuCourse } from "../menu/menu.service.js";
 import { addonGroupsByProduct, validateSelection } from "../menu/addons.service.js";
 import { portionsPossible } from "../recipes/recipes.service.js";
 import { resolvePublicTable } from "../tables/tables.service.js";
@@ -96,16 +96,24 @@ export function cancellationWindowMinutes(settings) {
   return Math.max(0, Math.min(60, Math.trunc(raw)));
 }
 
+/** The starter import's owner reminder is not a description for diners. */
+export function publicMenuDescription(value) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!text || /^Starter item\s*[—–-]\s*review price,\s*tax and stock before first sale\.?$/i.test(text)) return null;
+  return text;
+}
+
 function toMenuItem(product, { portionsLeft, hasRecipe, addonGroups = [] }) {
+  const course = resolveMenuCourse(product);
   return {
     id: product.id,
     name: product.name,
-    // The course is what a menu is organised by; the retail category is not
-    // shown to the guest at all, because "general" means nothing to a diner.
-    course: String(product.menuCourse ?? "").trim() || UNCATEGORISED_COURSE,
-    menuCourse: String(product.menuCourse ?? "").trim() || null,
+    // Keep the flat catalogue and grouped menu on the same resolved category.
+    course,
+    menuCourse: course,
     menuSortOrder: Number(product.menuSortOrder ?? 0),
-    description: product.description ?? null,
+    description: publicMenuDescription(product.description),
     price: Number(product.storefrontPrice ?? product.defaultPricePerRateUnit ?? 0),
     unit: product.rateUnit || product.displayUnit || "plate",
     imageUrl: product.imageUrl ?? null,

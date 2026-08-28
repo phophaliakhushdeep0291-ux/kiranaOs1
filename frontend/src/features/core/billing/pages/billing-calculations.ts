@@ -9,6 +9,14 @@ export function clampAmount(value: number, min: number, max: number): number {
 
 export { applyRoundOff, roundMoney, roundToRupee };
 
+/** Presentation only: never changes inventory movements or permission to bill. */
+export function productInventoryBadge(product: Product, showInventoryBadges = true): "out" | "low" | null {
+  if (!showInventoryBadges || (product.stockTrackingEnabled ?? product.trackStock) === false) return null;
+  const stock = Number(product.stockBaseQty ?? product.stockQuantity ?? 0);
+  if (!Number.isFinite(stock)) return null;
+  return stock <= 0 ? "out" : stock <= 5 ? "low" : null;
+}
+
 /** Quantities support millesimal precision (for example 0.005 kg = 5 g). */
 export function roundQuantity(value: number): number {
   const n = Number(value) || 0;

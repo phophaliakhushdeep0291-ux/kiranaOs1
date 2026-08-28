@@ -21,6 +21,7 @@ import {
   parseTags,
   planPortionWrite,
   resolveDefaultIndex,
+  resolveMenuCourse,
   SUGGESTED_COURSES,
   UNCATEGORISED_COURSE,
 } from "../src/verticals/restaurant/menu/menu.service.js";
@@ -28,6 +29,7 @@ import {
   dishIsOrderable,
   MENU_THEMES,
   resolveMenuBranding,
+  publicMenuDescription,
 } from "../src/verticals/restaurant/storefront/dine-in.storefront.js";
 import { createTableSchema, updateTableSchema } from "../src/verticals/restaurant/tables/tables.schema.js";
 import { setDishVariationsSchema, updateDishMenuSchema } from "../src/verticals/restaurant/menu/menu.schema.js";
@@ -189,6 +191,31 @@ assert.deepEqual(
 assert.ok(SUGGESTED_COURSES.includes("Main course"));
 assert.deepEqual(parseTags("bestseller, chef-special ,"), ["bestseller", "chef-special"]);
 assert.deepEqual(parseTags(null), []);
+
+// Existing product categories must work before an owner edits each menu row.
+assert.equal(resolveMenuCourse({ category: "Beverages" }), "Beverages");
+assert.equal(resolveMenuCourse({ menuCourse: "   ", category: " Main Course " }), "Main course");
+assert.equal(resolveMenuCourse({ menuCourse: "Chef's tasting", category: "Beverages" }), "Chef's tasting");
+assert.equal(resolveMenuCourse({ menuCourse: "Other", category: "Beverages" }), "Other", "an explicit owner choice wins");
+for (const category of [null, "", "general", " General ", "Other", "Uncategorized", "Uncategorised"]) {
+  assert.equal(resolveMenuCourse({ category }), UNCATEGORISED_COURSE);
+}
+assert.deepEqual(groupMenuByCourse([
+  { name: "Coffee", category: "Beverages", menuSortOrder: 0 },
+  { name: "Thali", category: "Main Course", menuSortOrder: 0 },
+  { name: "Dal", menuCourse: "Main course", menuSortOrder: 0 },
+  { name: "Fries", category: "Snacks", menuSortOrder: 0 },
+]).map(({ course, dishes }) => ({ course, names: dishes.map((dish) => dish.name) })), [
+  { course: "Main course", names: ["Dal", "Thali"] },
+  { course: "Beverages", names: ["Coffee"] },
+  { course: "Snacks", names: ["Fries"] },
+]);
+
+assert.equal(publicMenuDescription("Starter item — review price, tax and stock before first sale."), null);
+assert.equal(publicMenuDescription("  Starter item - review price, tax and stock before first sale.  "), null);
+assert.equal(publicMenuDescription("Slow cooked dal, finished with butter."), "Slow cooked dal, finished with butter.");
+assert.equal(publicMenuDescription("Starter item — our chef's seasonal special."), "Starter item — our chef's seasonal special.");
+for (const value of [null, undefined, "", "   ", 5]) assert.equal(publicMenuDescription(value), null);
 
 /* ── What a guest is allowed to order ──────────────────────────────────────── */
 
