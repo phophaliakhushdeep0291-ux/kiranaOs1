@@ -1,6 +1,7 @@
 import { registerSaleGuard } from "../../../shared/sale-guards.js";
 import { createAuditLog } from "../../../modules/audit/audit.service.js";
 import { AppError } from "../../../middleware/error.js";
+import { activeOrderLines } from "../../../shared/customer-order-lines.js";
 
 // Not a request field: only this guard can establish a trusted snapshot.
 export const guestSnapshot = Symbol("validated guest order snapshot");
@@ -68,23 +69,23 @@ registerSaleGuard(async ({ shopId, tx, items, location }) => {
     if ((order.billId && previousBill?.status !== "cancelled") || !["accepted", "ready", "fulfilled"].includes(order.status) || (order.locationId && order.locationId !== location.id)) {
       return refusal("A guest order is cancelled, already billed, or belongs to another store.");
     }
-    const snapshots = JSON.parse(order.itemsJson);
-    if (!Array.isArray(snapshots)) return refusal("The saved guest order is incomplete. Refresh it before settling.");
+    const snapshots = activeOrderLines(order);
+    if (!snapshots.length) return refusal("The saved guest order is incomplete. Refresh it before settling.");
     snapshotsByOrder.set(order.id, snapshots);
     const lines = items.filter((item) => item.guestOrderId === order.id);
-    for (const [index, snapshot] of snapshots.entries()) {
-      const matched = lines.filter((item) => item.guestOrderLineId === `${order.id}-${index}`);
+    for (const snapshot of snapshots) {
+      const matched = lines.filter((item) => item.guestOrderLineId === snapshot.lineId);
       if (matched.length > 1 || (matched.length === 1 && !lineMatchesSnapshot(matched[0], snapshot))) {
         return refusal("The bill does not match the guest's order. Restore the original lines before settling.");
       }
       if (matched.length === 0) {
         const key = snapshotIdentityKey(snapshot);
         const missing = missingByKey.get(key) ?? [];
-        missing.push({ orderId: order.id, lineId: `${order.id}-${index}`, snapshot });
+        missing.push({ orderId: order.id, lineId: snapshot.lineId, snapshot });
         missingByKey.set(key, missing);
       }
     }
-    if (lines.some((line) => !snapshots.some((_snapshot, index) => line.guestOrderLineId === `${order.id}-${index}`))) {
+    if (lines.some((line) => !snapshots.some((snapshot) => line.guestOrderLineId === snapshot.lineId))) {
       return refusal("The bill does not match the guest's order. Restore the original lines before settling.");
     }
   }
@@ -111,8 +112,8 @@ registerSaleGuard(async ({ shopId, tx, items, location }) => {
     const snapshots = snapshotsByOrder.get(order.id);
     const lines = items.filter((item) => item.guestOrderId === order.id);
     if (lines.length !== snapshots.length) return refusal("Include every guest order line before settling the table.");
-    for (const [index, snapshot] of snapshots.entries()) {
-      const matched = lines.filter((item) => item.guestOrderLineId === `${order.id}-${index}`);
+    for (const snapshot of snapshots) {
+      const matched = lines.filter((item) => item.guestOrderLineId === snapshot.lineId);
       const item = matched[0];
       if (matched.length !== 1 || !lineMatchesSnapshot(item, snapshot)) {
         return refusal("The bill does not match the guest's order. Restore the original lines before settling.");

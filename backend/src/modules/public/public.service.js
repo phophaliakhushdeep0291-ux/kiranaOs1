@@ -8,6 +8,7 @@ import { parseShopSettings } from "../shops/businessProfiles.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
+import { activeOrderLines, cancelledOrderLines, parseCancellationSelection, applyCancellationSelection } from "../../shared/customer-order-lines.js";
 
 /**
  * Public, unauthenticated read of a shop's catalog for the QR customer self-order page.
@@ -153,11 +154,12 @@ const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 // Customer-facing stage for each internal status, so the tracker reads like a real online order.
 const ORDER_STAGE = { new: "received", accepted: "preparing", ready: "ready", fulfilled: "ready", rejected: "declined", cancelled: "declined" };
 
-function parseOrderLines(json) {
+function parseOrderLines(order, cancelled = false) {
   try {
-    const parsed = JSON.parse(json || "[]");
-    if (!Array.isArray(parsed)) return [];
+    const parsed = cancelled ? cancelledOrderLines(order) : activeOrderLines(order);
     return parsed.map((l) => ({
+      lineId: l.lineId,
+      cancelledQty: l.cancelledQty ?? 0,
       productId: l.productId,
       name: l.name,
       qty: l.qty,
@@ -214,14 +216,16 @@ export async function getPublicOrderStatus(shopId, orderId) {
     location: order.location,
     itemCount: order.itemCount,
     estimatedTotal: order.estimatedTotal,
-    items: parseOrderLines(order.itemsJson),
+    items: parseOrderLines(order),
+    cancelledItems: parseOrderLines(order, true),
     shopName: shop.name,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
     cancellation: {
       windowMinutes: cancelMinutes,
       allowedUntil: cancelAllowedUntil,
-      allowed: order.status === "new" && cancelAllowedUntil !== null && Date.now() < cancelAllowedUntil.getTime(),
+      allowed: order.status === "new" && !order.billId && paymentStatus === "unpaid" && cancelAllowedUntil !== null && Date.now() < cancelAllowedUntil.getTime(),
+      itemSelectionAllowed: true,
     },
   };
 }
@@ -232,6 +236,7 @@ export async function getPublicOrderStatus(shopId, orderId) {
  * waiter accepting the ticket at the same moment always wins deterministically.
  */
 export async function cancelPublicOrder(shopId, orderId, options = {}) {
+  const selection = parseCancellationSelection(options.selection === undefined ? {} : options.selection);
   const shop = await db.shop.findUnique({ where: { id: shopId } });
   if (!shop || !isCustomerOrderingEnabled(shop.settingsJson)) {
     throw new AppError("This shop is not accepting online orders.", 404);
@@ -241,43 +246,56 @@ export async function cancelPublicOrder(shopId, orderId, options = {}) {
   const minutes = Number(cancelPolicy?.windowMinutes ?? 0);
   if (minutes <= 0) throw new AppError("This restaurant does not allow online cancellation.", 409, "ORDER_CANCELLATION_DISABLED");
 
-  const existing = await db.customerOrder.findFirst({ where: { id: String(orderId ?? ""), shopId } });
-  if (!existing) throw new AppError("We couldn't find that order.", 404);
-  if (existing.status === "cancelled") return getPublicOrderStatus(shopId, existing.id);
-  if (existing.status !== "new") {
-    throw new AppError("The kitchen has already started this order. Please speak to the restaurant.", 409, "ORDER_ALREADY_ACCEPTED");
-  }
-  const allowedUntil = new Date(existing.createdAt.getTime() + minutes * 60_000);
-  if (Date.now() >= allowedUntil.getTime()) {
-    throw new AppError(`The ${minutes}-minute cancellation window has ended. Please speak to the restaurant.`, 409, "ORDER_CANCELLATION_WINDOW_ENDED");
-  }
-
-  const now = new Date();
   const result = await db.$transaction(async (tx) => {
+    const existing = await tx.customerOrder.findFirst({ where: { id: String(orderId ?? ""), shopId } });
+    if (!existing) throw new AppError("We couldn't find that order.", 404);
+    if (existing.status === "cancelled" && !selection.items) return { deliveries: [] };
+    const change = applyCancellationSelection(existing, selection);
+    // A replay of already-cancelled quantities is read-only, including after
+    // acceptance or expiry. No additional quantity can be removed here.
+    if (selection.items && !change.changed) return { deliveries: [] };
+    if (existing.status !== "new") {
+      throw new AppError("The kitchen has already started this order. Please speak to the restaurant.", 409, "ORDER_ALREADY_ACCEPTED");
+    }
+    if (existing.billId || existing.paymentStatus !== "unpaid") {
+      throw new AppError("This order has a payment or bill attached. Please ask staff to adjust it and arrange any refund.", 409, "ORDER_PAYMENT_LOCKED");
+    }
+    const now = new Date();
+    if (now.getTime() >= existing.createdAt.getTime() + minutes * 60_000) {
+      throw new AppError(`The ${minutes}-minute cancellation window has ended. Please speak to the restaurant.`, 409, "ORDER_CANCELLATION_WINDOW_ENDED");
+    }
+    const fullyCancelled = change.itemCount === 0;
     const claimed = await tx.customerOrder.updateMany({
-      where: { id: existing.id, shopId, status: "new", updatedAt: existing.updatedAt },
-      data: { status: "cancelled", fulfillmentStatus: "cancelled", cancelledAt: now },
+      where: { id: existing.id, shopId, status: "new", updatedAt: existing.updatedAt,
+        createdAt: { gt: new Date(now.getTime() - minutes * 60_000) }, billId: null, paymentStatus: "unpaid" },
+      data: { itemsJson: JSON.stringify(change.snapshots), itemCount: change.itemCount, estimatedTotal: change.estimatedTotal,
+        updatedAt: new Date(Math.max(now.getTime(), existing.updatedAt.getTime() + 1)),
+        ...(fullyCancelled ? { status: "cancelled", fulfillmentStatus: "cancelled", cancelledAt: now } : {}) },
     });
     if (claimed.count !== 1) throw new AppError("The order changed before it could be cancelled. Refresh and check its status.", 409, "CONCURRENT_ORDER_UPDATE");
     const updated = await tx.customerOrder.findUniqueOrThrow({ where: { id: existing.id } });
     await writeRequiredPublicOrderAudit({
       shopId, userId: null, deviceId: null,
-      action: "CUSTOMER_ORDER_CANCELLED_BY_GUEST",
+      action: fullyCancelled ? "CUSTOMER_ORDER_CANCELLED_BY_GUEST" : "CUSTOMER_ORDER_ITEMS_CANCELLED_BY_GUEST",
       entityType: "CustomerOrder", entityId: updated.id,
-      before: { status: existing.status, fulfillmentStatus: existing.fulfillmentStatus, cancelledAt: existing.cancelledAt },
-      after: { status: updated.status, fulfillmentStatus: updated.fulfillmentStatus, cancelledAt: updated.cancelledAt },
-      metadata: { cancellationWindowMinutes: minutes }, req: options.actor?.req ?? null,
+      before: { status: existing.status, items: activeOrderLines(existing), estimatedTotal: existing.estimatedTotal },
+      after: { status: updated.status, items: activeOrderLines(updated), estimatedTotal: updated.estimatedTotal },
+      metadata: { cancellationWindowMinutes: minutes, selection: selection.items ?? "all" }, req: options.actor?.req ?? null,
     }, tx);
     const deliveries = await stageIntegrationEvent(shopId, "customer_order.updated", {
       id: updated.id, locationId: updated.locationId, fulfillmentType: updated.fulfillmentType,
       status: updated.status, sourceChannel: updated.sourceChannel,
       paymentStatus: updated.paymentStatus, fulfillmentStatus: updated.fulfillmentStatus,
       billId: updated.billId, updatedAt: updated.updatedAt,
+      itemCount: updated.itemCount, estimatedTotal: updated.estimatedTotal,
     }, { client: tx });
     return { deliveries };
-  }, { isolationLevel: "Serializable" });
+  }, { isolationLevel: "Serializable" }).catch((error) => {
+    if (error?.code === "P2034") throw new AppError("The order changed. Refresh it before trying again.", 409, "CONCURRENT_ORDER_UPDATE");
+    throw error;
+  });
   await dispatchIntegrationDeliveries(result.deliveries);
-  return getPublicOrderStatus(shopId, existing.id);
+  return getPublicOrderStatus(shopId, orderId);
 }
 
 export async function submitPublicOrderFeedback(shopId, orderId, body = {}, options = {}) {
@@ -419,7 +437,7 @@ export async function getPublicTableBill(shopId, tableId) {
   const billById = new Map(linked.map((bill) => [bill.id, bill]));
 
   const open = rounds.filter((round) => resolveOrderPaymentStatus(round, billById.get(round.billId)) !== "paid");
-  const items = open.flatMap((round) => parseOrderLines(round.itemsJson));
+  const items = open.flatMap((round) => parseOrderLines(round));
 
   return {
     tableId: table.id,

@@ -66,7 +66,7 @@ export async function orderStatus(req, res, next) {
 
 export async function cancelOrder(req, res, next) {
   try {
-    const data = await svc.cancelPublicOrder(req.params.shopId, req.params.orderId, { actor: { req } });
+    const data = await svc.cancelPublicOrder(req.params.shopId, req.params.orderId, { selection: req.body === undefined ? {} : req.body, actor: { req } });
     res.json({ success: true, data });
   } catch (err) {
     next(err);

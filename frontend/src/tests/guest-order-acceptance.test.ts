@@ -31,11 +31,24 @@ const order = { id: "o1", shopId: "s1", status: "new", fulfillmentType: "dine_in
   items: [{ productId: "p1", name: "Dosa", unit: "plate", price: 120, qty: 2, note: "No chilli" }] } as CustomerOrder;
 const bills = () => state.rows.get(HELD_BILLS_KEY) as HeldBill[];
 
-beforeEach(() => { state.rows.clear(); state.failKey = ""; state.queue = Promise.resolve(); state.update.mockReset().mockResolvedValue({ status: "accepted" }); });
+beforeEach(() => { state.rows.clear(); state.failKey = ""; state.queue = Promise.resolve(); state.update.mockReset().mockResolvedValue({ ...order, status: "accepted" }); });
 
 describe("durable guest acceptance", () => {
+  it("uses the accepted snapshot after cancellation instead of the stale inbox", async () => {
+    const stale = { ...order, items: [...order.items, { ...order.items[0], name: "Second dosa", qty: 3 }] };
+    state.update.mockResolvedValue({ ...stale, status: "accepted", items: [{ ...stale.items[1], qty: 2, lineId: "o1-1", cancelledQty: 1 }] });
+    await acceptGuestOrderToTable(stale, table, products);
+    expect(bills()[0].cart).toHaveLength(1);
+    expect(bills()[0].cart[0]).toMatchObject({ quantity: 2, guestOrderLineId: "o1-1" });
+  });
+  it("does not import an old quote if server confirmation is incomplete", async () => {
+    state.update.mockResolvedValue({ status: "accepted" });
+    await expect(acceptGuestOrderToTable(order, table, products)).rejects.toThrow("Could not confirm");
+    expect(bills()).toBeUndefined();
+    expect(await loadPendingGuestOrders()).toHaveLength(1);
+  });
   it("claims before saving a bill and commits the table and marker together", async () => {
-    state.update.mockImplementation(async () => { expect(bills()).toBeUndefined(); return { status: "accepted" }; });
+    state.update.mockImplementation(async () => { expect(bills()).toBeUndefined(); return { ...order, status: "accepted" }; });
     await acceptGuestOrderToTable(order, table, products);
     expect(bills()[0].cart[0]).toMatchObject({ quantity: 2, rate: 120, note: "No chilli — Serve together", manualRate: true });
     expect(state.rows.get(TABLE_BILLS_KEY)).toEqual({ t1: bills()[0].id });

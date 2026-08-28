@@ -2,6 +2,7 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { dispatchIntegrationDeliveries, stageIntegrationEvent } from "../integrations/integrations.service.js";
+import { activeOrderLines, cancelledOrderLines } from "../../shared/customer-order-lines.js";
 
 const ORDER_STATUSES = ["new", "accepted", "ready", "fulfilled", "rejected", "cancelled"];
 const PAYMENT_STATUSES = ["unpaid", "partially_paid", "paid", "refunded"];
@@ -22,18 +23,9 @@ const ALLOWED_TRANSITIONS = {
   cancelled: new Set(),
 };
 
-function parseItems(json) {
-  try {
-    const parsed = JSON.parse(json || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
 function shapeOrder(order) {
   const { itemsJson, acceptanceKey, ...rest } = order;
-  return { ...rest, items: parseItems(itemsJson) };
+  return { ...rest, items: activeOrderLines(order), cancelledItems: cancelledOrderLines(order) };
 }
 
 function orderStateSnapshot(order) {

@@ -107,7 +107,7 @@ export function guestOrderCartLines(order: CustomerOrder, products: Product[], _
       manualRate: true,
       guestSnapshot: true,
       guestOrderId: order.id,
-      guestOrderLineId: `${order.id}-${itemIndex}`,
+      guestOrderLineId: item.lineId ?? `${order.id}-${itemIndex}`,
       unit: item.unit || sellingUnit?.name || product.rateUnit || product.displayUnit || "piece",
       sellingUnit,
       addons,
@@ -191,8 +191,9 @@ export async function acceptGuestOrderToTable(
   });
   if (!operation) return { billId: "", added: 0, skipped: [] };
 
+  let canonical: CustomerOrder;
   try {
-    await updateCustomerOrder(order.id, { status: "accepted", acceptanceKey: operation.key });
+    canonical = await updateCustomerOrder(order.id, { status: "accepted", acceptanceKey: operation.key });
   } catch (error) {
     const failure = error as { status?: number; data?: { code?: string } };
     // Only a definitive server rejection can retire the journal. A timeout,
@@ -209,6 +210,18 @@ export async function acceptGuestOrderToTable(
     throw error;
   }
 
+  // A guest may cancel a dish between the inbox refresh and this acceptance.
+  // The server's atomic claim freezes the final snapshot. Never import the
+  // stale pre-claim journal, including on a retry after a lost response.
+  if (canonical.id !== operation.order.id || canonical.tableId !== operation.table.id
+    || canonical.status !== "accepted" || !Array.isArray(canonical.items)) {
+    throw new Error("Could not confirm the accepted order. Refresh and retry before adding food.");
+  }
+  const confirmed = guestOrderCartLines(canonical, products);
+  if (!confirmed.lines.length || confirmed.skipped.length) {
+    throw new Error(`Order accepted but not added. Refresh the catalogue and retry: ${confirmed.skipped.join(", ") || "no items available"}.`);
+  }
+
   return offlineDB.transaction(["settings"], async (tx) => {
     const accepted = await loadAcceptedOrderIds();
     if (accepted.includes(order.id)) return { billId: "", added: 0, skipped: [] };
@@ -219,14 +232,14 @@ export async function acceptGuestOrderToTable(
     await assertTableImportSafe(target.id);
     const existing = held.find((entry) => entry.id === map[target.id]);
     const bill: HeldBill = existing
-      ? { ...existing, cart: mergeCartLines(existing.cart ?? [], operation.lines) }
+      ? { ...existing, cart: mergeCartLines(existing.cart ?? [], confirmed.lines) }
       : { id: newBillId(), label: `${target.name} • table`, createdAt: new Date().toISOString(),
-          cart: operation.lines, selectedCustomerId: "walk_in", customerName: target.name };
+          cart: confirmed.lines, selectedCustomerId: "walk_in", customerName: target.name };
     delete pending[order.id];
     await tx.setSetting(HELD_BILLS_KEY, upsertOpenBill(held, bill));
     await tx.setSetting(TABLE_BILLS_KEY, { ...map, [target.id]: bill.id });
     await tx.setSetting(ACCEPTED_GUEST_ORDERS_KEY, [order.id, ...accepted].slice(0, MAX_ACCEPTED_GUEST_ORDER_IDS));
     await tx.setSetting(PENDING_GUEST_ORDERS_KEY, pending);
-    return { billId: bill.id, added: operation.lines.length, skipped: [] };
+    return { billId: bill.id, added: confirmed.lines.length, skipped: [] };
   });
 }
