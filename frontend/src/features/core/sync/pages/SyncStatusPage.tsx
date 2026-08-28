@@ -1360,8 +1360,21 @@ export default function SyncStatusPage() {
         .map((conflict) => readStringFromRecord(conflict, ["source_event_id", "sourceEventId"]))
         .filter((value): value is string => Boolean(value));
       const result = await retryFailedSyncOperations(undefined, storedConflictOpIds);
+      const recovery = result.storedConflictRecovery;
+      if (recovery && recovery.recovered < recovery.requested) {
+        toast({
+          title: t("sync.toast.recoveryNotCompleted"),
+          description: t("sync.toast.recoveryNotCompletedBody", {
+            recovered: recovery.recovered,
+            requested: recovery.requested,
+            code: recovery.codes[0] ?? "RETRY_NOT_COMPLETED",
+          }),
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
-        title: t("sync.toast.retryStarted"),
+        title: recovery?.recovered ? t("sync.toast.recoveryCompleted") : t("sync.toast.retryStarted"),
         description: t("sync.toast.syncResult", { pushed: result.pushed, failed: result.failed }),
       });
     } catch {

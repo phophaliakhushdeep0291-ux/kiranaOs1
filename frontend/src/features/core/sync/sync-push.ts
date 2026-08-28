@@ -463,6 +463,29 @@ async function handlePushResults(
   return { pushed, failed, conflicts };
 }
 
+/**
+ * Applies a successful protected server replay to the same local rows as a
+ * normal push response. The retry endpoint uses a fresh server event id, so
+ * pin the response back to the original local event identity before running
+ * the standard bill/id-mapping reconciliation.
+ */
+export async function applyRecoveredSyncEventResult(
+  event: PendingSyncEvent,
+  replay: SyncPushEventResult,
+): Promise<boolean> {
+  const result = {
+    ...replay,
+    op_id: event.op_id || event.clientEventId,
+    clientEventId: event.clientEventId,
+    eventId: event.clientEventId,
+  };
+  const outcome = await handlePushResults(
+    [{ event, operation: {} as SyncPushOperationPayload }],
+    [result],
+  );
+  return outcome.pushed === 1;
+}
+
 export async function pushPendingOutboxOperations(): Promise<{
   pushed: number;
   failed: number;

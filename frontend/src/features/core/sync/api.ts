@@ -10,6 +10,7 @@ import type {
   SyncPushResponse,
   SyncResolveConflictRequest,
   SyncRetryRequest,
+  SyncRetryResponse,
   SyncStatusResponse,
 } from "@/types/api";
 
@@ -99,7 +100,7 @@ export function getSyncDiagnostics(options: { background?: boolean } = {}) {
 }
 
 export function requestSyncRetry(body: SyncRetryRequest = {}) {
-  return apiRequest<SyncStatusResponse>("/sync/retry", {
+  return apiRequest<SyncRetryResponse>("/sync/retry", {
     method: "POST",
     body: JSON.stringify(body),
   });

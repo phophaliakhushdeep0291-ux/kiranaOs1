@@ -56,6 +56,13 @@ export interface SyncRunResult {
    */
   pullFailed?: boolean;
   pullFailureReason?: string;
+  storedConflictRecovery?: {
+    requested: number;
+    recovered: number;
+    failed: number;
+    skipped: number;
+    codes: string[];
+  };
 }
 
 export interface PreparedOperation {

@@ -587,7 +587,12 @@ export async function repairRetryableBillValidationConflicts(): Promise<number> 
   await dexieDB.open();
   const rows = filterRowsForCurrentScope(
     await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
-  ).filter((event) => retryableBillPaymentValidationConflict(event) || retryableGuestOrderBillValidationConflict(event));
+  // Payment-shape conflicts can be retried with their original event id after
+  // the validator repair. Guest-order bill conflicts cannot: the backend keeps
+  // terminal event ids immutable and must replay their protected snapshot under
+  // a fresh id through /sync/retry. Requeueing the original id only recreates
+  // "already ended in conflict" forever.
+  ).filter((event) => retryableBillPaymentValidationConflict(event));
 
   if (rows.length === 0) return 0;
   const now = nowIso();
@@ -607,6 +612,8 @@ function conflictIdentitySet(conflict: OfflineRow): Set<string> {
   addString(ids, conflict.entity_id);
   addString(ids, conflict.sourceId);
   addString(ids, conflict.source_id);
+  addString(ids, conflict.sourceEventId);
+  addString(ids, conflict.source_event_id);
   const local = isRecord(conflict.local_snapshot) ? conflict.local_snapshot : {};
   const server = isRecord(conflict.server_snapshot) ? conflict.server_snapshot : {};
   [local, server].forEach((row) => {

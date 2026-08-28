@@ -863,6 +863,30 @@ export interface SyncRetryRequest {
   op_ids?: string[];
 }
 
+export interface SyncStoredConflictRecoveryResult extends Record<string, unknown> {
+  sourceEventId: string;
+  recoveryEventId?: string;
+  status: "replayed" | "already_recovered" | "failed" | "skipped";
+  code: string;
+  replay?: SyncPushEventResult;
+}
+
+export interface SyncStoredConflictRecovery extends Record<string, unknown> {
+  requested: number;
+  replayed: number;
+  alreadyRecovered: number;
+  failed: number;
+  skipped: number;
+  results: SyncStoredConflictRecoveryResult[];
+}
+
+export interface SyncRetryResponse extends SyncStatusResponse {
+  retryAccepted: boolean;
+  opIds: string[];
+  recovery: SyncStoredConflictRecovery;
+  message: string;
+}
+
 export interface SyncAcknowledgement extends Record<string, unknown> {
   device_id: string;
   accepted: boolean;

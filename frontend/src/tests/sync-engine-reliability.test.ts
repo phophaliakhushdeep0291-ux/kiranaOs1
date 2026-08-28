@@ -563,6 +563,90 @@ describe("sync engine reliability", () => {
     );
   });
 
+  it("reconciles a protected stored bill replay without resending its terminal event id", async () => {
+    const conflict = seedOutbox({
+      type: "CREATE_BILL",
+      operation_type: "CREATE_BILL",
+      entity_type: "bill",
+      entity_id: "bill_local_recovered",
+      payload: {
+        clientBillId: "bill_local_recovered",
+        localBillId: "bill_local_recovered",
+        items: [{ productId: "dish-1", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 180 }],
+        payments: [{ mode: "cash", amount: 180 }],
+      },
+      status: "CONFLICT",
+      sync_status: "conflict",
+      error_message: "Include every guest order line before settling the table.",
+    });
+    dbState.putInto("bills", {
+      id: "bill_local_recovered",
+      local_id: "bill_local_recovered",
+      total: 180,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "conflict",
+      isSynced: false,
+    });
+    requestSyncRetryMock.mockResolvedValueOnce({
+      recovery: {
+        requested: 1,
+        replayed: 1,
+        alreadyRecovered: 0,
+        failed: 0,
+        skipped: 0,
+        results: [{
+          sourceEventId: conflict.op_id,
+          recoveryEventId: `${conflict.op_id}:recovery:2`,
+          status: "replayed",
+          code: "RECOVERED",
+          replay: {
+            eventId: `${conflict.op_id}:recovery:2`,
+            status: "synced",
+            success: true,
+            entity_type: "bill",
+            local_id: "bill_local_recovered",
+            server_id: "bill_server_recovered",
+            result: { localBillId: "bill_local_recovered", bill: { id: "bill_server_recovered", total: 180 } },
+          },
+        }],
+      },
+    });
+
+    const result = await retryFailedSyncOperations(undefined, [String(conflict.op_id)]);
+
+    expect(result.storedConflictRecovery).toEqual(expect.objectContaining({ requested: 1, recovered: 1, failed: 0, skipped: 0 }));
+    expect(mockedSyncPush).not.toHaveBeenCalled();
+    expect(scopedRows("sync_outbox")[0]).toEqual(expect.objectContaining({ status: "SYNCED", sync_status: "synced" }));
+  });
+
+  it("keeps a stored bill conflict parked when the server says it is not recoverable", async () => {
+    const conflict = seedOutbox({
+      type: "CREATE_BILL",
+      operation_type: "CREATE_BILL",
+      entity_type: "bill",
+      status: "CONFLICT",
+      sync_status: "conflict",
+      error_message: "Include every guest order line before settling the table.",
+    });
+    requestSyncRetryMock.mockResolvedValueOnce({
+      recovery: {
+        requested: 1,
+        replayed: 0,
+        alreadyRecovered: 0,
+        failed: 0,
+        skipped: 1,
+        results: [{ sourceEventId: conflict.op_id, status: "skipped", code: "EVENT_SHAPE_NOT_SUPPORTED" }],
+      },
+    });
+
+    const result = await retryFailedSyncOperations(undefined, [String(conflict.op_id)]);
+
+    expect(result.storedConflictRecovery).toEqual(expect.objectContaining({ requested: 1, recovered: 0, skipped: 1 }));
+    expect(mockedSyncPush).not.toHaveBeenCalled();
+    expect(scopedRows("sync_outbox")[0]).toEqual(expect.objectContaining({ status: "CONFLICT", sync_status: "conflict" }));
+  });
+
   it("force sync auto-recovers old udhar payment validation conflicts", async () => {
     dbState.putInto("bills", {
       id: "bill_udhar_conflict",

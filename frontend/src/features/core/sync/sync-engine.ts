@@ -1,7 +1,7 @@
 import { dexieDB, offlineDB, rowMatchesCurrentScope, type PendingSyncEvent } from "@/lib/offline/db";
 import { getSyncStatus, requestSyncRetry } from "@/features/core/sync/api";
 import { pullServerChanges } from "@/features/core/sync/sync-pull";
-import { pushPendingOutboxOperations } from "@/features/core/sync/sync-push";
+import { applyRecoveredSyncEventResult, pushPendingOutboxOperations } from "@/features/core/sync/sync-push";
 import { getCurrentSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { readSyncQueueCounts, repairResolvedSyncStatusNoise, repairRetryableBillValidationConflicts } from "@/features/core/sync/sync-status-repair";
 import { entityTypeFromOperation, tableNameForEntity, type SyncRunResult } from "@/features/core/sync/sync-types";
@@ -189,9 +189,55 @@ export async function retryFailedSyncOperations(
           ),
         );
 
-  if (rows.length > 0) {
+  const storedIds = new Set(storedConflictOpIds);
+  const sourceIdFor = (row: PendingSyncEvent) => row.op_id || row.clientEventId;
+  // A stored terminal conflict must be recovered by the server with a fresh
+  // event id. Never put its original id back into PENDING: the backend correctly
+  // rejects duplicate terminal events, which was the endless ₹180 bill loop.
+  const locallyRetryableRows = rows.filter((row) => !storedIds.has(sourceIdFor(row)));
+  const storedRows = rows.filter((row) => storedIds.has(sourceIdFor(row)));
+
+  let retryResponse: Awaited<ReturnType<typeof requestSyncRetry>> | null = null;
+  const retryIds = [...new Set([
+    ...locallyRetryableRows.map(sourceIdFor),
+    ...storedConflictOpIds,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0))];
+
+  try {
+    retryResponse = await requestSyncRetry({ op_ids: retryIds.length > 0 ? retryIds : opIds });
+  } catch (error) {
+    // The endpoint remains advisory for ordinary local failures: their outbox
+    // bytes are still the source of truth. It is required for stored terminal
+    // conflicts because only the server has the immutable recovery snapshot.
+    if (storedConflictOpIds.length > 0) throw error;
+  }
+
+  const recoveryRows = retryResponse?.recovery?.results ?? [];
+  const recoveredIds = new Set(
+    recoveryRows
+      .filter((row) => row.status === "replayed" || row.status === "already_recovered")
+      .map((row) => row.sourceEventId),
+  );
+  for (const row of storedRows) {
+    const sourceId = sourceIdFor(row);
+    const recovery = recoveryRows.find((result) => result.sourceEventId === sourceId);
+    if (recovery?.status === "replayed" && recovery.replay) {
+      await applyRecoveredSyncEventResult(row, recovery.replay);
+    } else if (recovery?.status === "already_recovered") {
+      await dexieDB.sync_outbox.put({
+        ...row,
+        status: "SYNCED",
+        sync_status: "synced",
+        error_message: null,
+        last_error: null,
+        next_retry_at: null,
+      });
+    }
+  }
+
+  if (locallyRetryableRows.length > 0) {
     await dexieDB.transaction("rw", dexieDB.sync_outbox, async () => {
-      for (const row of rows) {
+      for (const row of locallyRetryableRows) {
         await dexieDB.sync_outbox.put({
           ...row,
           status: "PENDING",
@@ -224,17 +270,20 @@ export async function retryFailedSyncOperations(
     });
   }
 
-  try {
-    const retryIds = [...new Set([
-      ...rows.map((row) => row.op_id || row.clientEventId),
-      ...storedConflictOpIds,
-    ].filter((value): value is string => typeof value === "string" && value.length > 0))];
-    await requestSyncRetry({ op_ids: retryIds.length > 0 ? retryIds : opIds });
-  } catch {
-    // Backend retry endpoint is advisory. The local outbox retry below remains the source of truth.
-  }
-
-  return runSyncCycle();
+  const syncResult = await runSyncCycle();
+  if (storedConflictOpIds.length === 0) return syncResult;
+  return {
+    ...syncResult,
+    storedConflictRecovery: {
+      requested: storedConflictOpIds.length,
+      recovered: recoveredIds.size,
+      failed: recoveryRows.filter((row) => row.status === "failed").length,
+      skipped: recoveryRows.filter((row) => row.status === "skipped").length,
+      codes: recoveryRows
+        .filter((row) => row.status === "failed" || row.status === "skipped")
+        .map((row) => row.code),
+    },
+  };
 }
 
 export { pullServerChanges } from "@/features/core/sync/sync-pull";
