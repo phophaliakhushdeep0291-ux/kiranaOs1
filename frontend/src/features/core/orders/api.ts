@@ -1,6 +1,9 @@
 import { apiRequest } from "@/lib/api/http";
 
 export interface CustomerOrderItem {
+  /** Stable server snapshot identity; filtering cancelled items must not renumber it. */
+  lineId?: string;
+  cancelledQty?: number;
   productId: string;
   name: string;
   unit: string;
@@ -21,6 +24,7 @@ export interface CustomerOrder {
   customerAddress: string | null;
   note: string | null;
   items: CustomerOrderItem[];
+  cancelledItems?: CustomerOrderItem[];
   itemCount: number;
   estimatedTotal: number;
   fulfillmentType: "delivery" | "pickup" | "dine_in";

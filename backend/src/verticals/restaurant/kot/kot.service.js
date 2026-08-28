@@ -1,4 +1,5 @@
 import db from "../../../db.js";
+import { activeOrderLines } from "../../../shared/customer-order-lines.js";
 import { AppError } from "../../../middleware/error.js";
 import { resolveOperationalLocation } from "../../../modules/stores/location-context.service.js";
 import { KOT_STATUSES } from "./kot.schema.js";
@@ -151,9 +152,9 @@ export async function fireTicket(shopId, input, context = {}) {
     if (!order || (order.tableId !== input.tableId && order.tableName !== input.tableName)) {
       throw new AppError("Guest order is not accepted for this table", 409, "GUEST_KOT_ORDER_MISMATCH");
     }
-    const items = parseLines(order.itemsJson);
+    const items = activeOrderLines(order);
     for (const line of lines.filter((row) => row.guestOrderId === orderId)) {
-      if (!items.some((_, index) => line.guestOrderLineId === `${orderId}-${index}`)) {
+      if (!items.some((item) => line.guestOrderLineId === item.lineId && Number(line.qty) > 0 && Number(line.qty) <= item.qty)) {
         throw new AppError("Guest order line is not recognised", 409, "GUEST_KOT_LINE_MISMATCH");
       }
     }
@@ -209,11 +210,11 @@ export async function setTicketStatus(shopId, id, status) {
     for (const orderId of orderIds) {
       const order = await tx.customerOrder.findFirst({ where: { id: orderId, shopId, status: { in: ["accepted", "ready"] } } });
       if (!order) continue; // Never resurrect a cancelled or already settled order.
-      const items = parseLines(order.itemsJson);
-      const covered = (states) => items.length > 0 && items.every((item, index) => {
+      const items = activeOrderLines(order);
+      const covered = (states) => items.length > 0 && items.every((item) => {
         const quantity = siblings.filter((row) => states.includes(row.status))
           .flatMap((row) => parseLines(row.linesJson))
-          .filter((line) => line.guestOrderId === orderId && line.guestOrderLineId === `${orderId}-${index}`)
+          .filter((line) => line.guestOrderId === orderId && line.guestOrderLineId === item.lineId)
           .reduce((sum, line) => sum + Number(line.qty), 0);
         return quantity >= Number(item.qty);
       });
