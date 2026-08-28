@@ -294,7 +294,7 @@ export default function TablesPage() {
             <ChefHat size={15} /> {t("restaurant.tables.kitchen")}
           </Button>
           <Button className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-black" onClick={() => openForm(null)}>
-            <Plus size={15} /> Add table
+            <Plus size={15} /> {t("restaurant.tables.addTable")}
           </Button>
         </div>
       </header>
