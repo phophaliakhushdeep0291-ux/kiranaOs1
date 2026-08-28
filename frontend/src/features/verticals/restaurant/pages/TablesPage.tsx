@@ -25,6 +25,7 @@ import { fireKitchenTicket, listKitchenTickets, listTables, publishFloorPlan } f
 import { mergeServerCodes, unpublishedTables } from "../service/table-qr";
 import { TableQrDialog } from "./components/TableQrDialog";
 import { GuestRequestsStrip } from "./components/GuestRequestsStrip";
+import { GuestOrdersStrip } from "./components/GuestOrdersStrip";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
@@ -263,7 +264,7 @@ export default function TablesPage() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-[#64748b]">
-        <Loader2 className="mr-2 animate-spin" size={18} /> Loading the floor…
+        <Loader2 className="mr-2 animate-spin" size={18} /> {t("restaurant.tables.loading")}
       </div>
     );
   }
@@ -274,7 +275,7 @@ export default function TablesPage() {
         <div>
           <h1 className="font-display text-[24px] font-black tracking-tight text-[var(--brand-ink)]">{t("restaurant.tables.title")}</h1>
           <p className="text-[13px] text-[#52627e]">
-            Seat a table to open its order. It stays parked until you settle it at the counter.
+            {t("restaurant.tables.subtitle")}
           </p>
           {/* Said plainly rather than implied: the floor and its tickets live on
               this device, so a second tablet keeps its own. */}
@@ -287,10 +288,10 @@ export default function TablesPage() {
             data-testid="print-table-qr"
             onClick={() => setQrSheetOpen(true)}
           >
-            <QrCode size={15} /> Table QR codes
+            <QrCode size={15} /> {t("restaurant.tables.qrCodes")}
           </Button>
           <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/kitchen")}>
-            <ChefHat size={15} /> Kitchen
+            <ChefHat size={15} /> {t("restaurant.tables.kitchen")}
           </Button>
           <Button className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-black" onClick={() => openForm(null)}>
             <Plus size={15} /> Add table
@@ -298,6 +299,12 @@ export default function TablesPage() {
         </div>
       </header>
 
+      {/* Accepting a guest's QR order writes to the TABLE'S BILL, and DineIn tells
+          the guest their order is "waiting for the billing counter". Until now
+          the only place to accept one was the kitchen board — so the person the
+          guest was told about could not see it, and the person who could see it
+          is refused whenever the counter has that table open. */}
+      <GuestOrdersStrip onAccepted={() => void refresh()} />
       <GuestRequestsStrip />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -432,7 +439,7 @@ function TableCard({
         <div className="min-w-0">
           <div className="truncate font-display text-[17px] font-black text-[var(--brand-ink)]">{row.table.name}</div>
           <div className="flex items-center gap-1 text-[11px] font-semibold text-[#64748b]">
-            <Users size={11} /> {row.table.seats || "—"} seats
+            <Users size={11} /> {t("restaurant.tables.seats", { count: row.table.seats || "—" })}
           </div>
         </div>
         <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black uppercase", CHIP_TONES[occupied ? "amber" : "green"])}>
@@ -450,11 +457,11 @@ function TableCard({
             <Clock size={11} /> {sinceLabel(row.openedAt)}
             {pending > 0 ? (
               <span className={cn("ml-auto rounded-full px-2 py-0.5 text-[10px] font-black", CHIP_TONES.orange)}>
-                {pending} to fire
+                {t("restaurant.tables.toFire", { count: pending })}
               </span>
             ) : row.tickets.length > 0 ? (
               <span className={cn("ml-auto rounded-full px-2 py-0.5 text-[10px] font-black", CHIP_TONES.green)}>
-                kitchen has it
+                {t("restaurant.tables.kitchenHasIt")}
               </span>
             ) : null}
           </div>
@@ -469,7 +476,7 @@ function TableCard({
         </Button>
         {occupied && pending > 0 ? (
           <Button size="sm" variant="outline" className="h-11 lg:mouse:h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={onKot}>
-            <ChefHat size={13} /> Fire {pending}
+            <ChefHat size={13} /> {t("restaurant.tables.fire", { count: pending })}
           </Button>
         ) : null}
         {/* Shown whether or not the table is seated: a curling sticker gets

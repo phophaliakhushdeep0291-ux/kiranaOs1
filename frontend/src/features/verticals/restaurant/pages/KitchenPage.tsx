@@ -145,7 +145,7 @@ export default function KitchenPage() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-[#64748b]">
-        <Loader2 className="mr-2 animate-spin" size={18} /> Loading the pass…
+        <Loader2 className="mr-2 animate-spin" size={18} /> {t("restaurant.kitchen.loading")}
       </div>
     );
   }
@@ -156,12 +156,12 @@ export default function KitchenPage() {
         <div>
           <h1 className="font-display text-[24px] font-black tracking-tight text-[var(--brand-ink)]">{t("restaurant.kitchen.title")}</h1>
           <p className="text-[13px] text-[#52627e]">
-            Tickets fired from the tables screen. Move each one along as it is cooked and served.
+            {t("restaurant.kitchen.subtitle")}
           </p>
           <p className="mt-0.5 text-[12px] text-[#8494ad]">{t("restaurant.kitchen.sharedNote")}</p>
         </div>
         <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/tables")}>
-          <LayoutGrid size={15} /> Tables
+          <LayoutGrid size={15} /> {t("restaurant.kitchen.tables")}
         </Button>
       </header>
       {refreshFailed && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{t("restaurant.kitchen.boardStale")} <button type="button" className="ml-2 min-h-11 underline" onClick={() => void refresh()}>{t("restaurant.guest.retryNow")}</button></div>}
@@ -215,7 +215,7 @@ export default function KitchenPage() {
       {served.length > 0 ? (
         <section className="space-y-2">
           <h2 className="flex items-center gap-2 text-[12px] font-black uppercase tracking-wider text-[#64748b]">
-            <CheckCheck size={13} /> Served
+            <CheckCheck size={13} /> {t("restaurant.kitchen.served")}
           </h2>
           <div className="flex flex-wrap gap-2">
             {served.map((ticket) => (

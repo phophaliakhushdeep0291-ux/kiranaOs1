@@ -116,7 +116,7 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
       {loadFailed ? <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{t("restaurant.guest.ordersStale")} <button type="button" className="ml-2 min-h-11 underline" onClick={() => void refresh()}>{t("restaurant.guest.retryNow")}</button></div> : null}
       {orders.length > 0 ? <>
       <h2 className="flex items-center gap-2 text-[12px] font-black uppercase tracking-wider text-[#64748b]">
-        <QrCode size={13} /> Guests have ordered
+        <QrCode size={13} /> {t("restaurant.guest.ordered")}
         <span className={cn("rounded-full px-2 py-0.5 text-[10px]", CHIP_TONES.violet)}>{orders.length}</span>
       </h2>
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -127,7 +127,7 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
                 {order.tableName ?? "Table"}
               </div>
               <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black uppercase", CHIP_TONES.violet)}>
-                from the QR
+                {t("restaurant.guest.fromTheQr")}
               </span>
             </div>
             <ul className="mt-2 space-y-1">
