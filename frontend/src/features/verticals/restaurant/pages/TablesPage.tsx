@@ -26,6 +26,7 @@ import { mergeServerCodes, unpublishedTables } from "../service/table-qr";
 import { TableQrDialog } from "./components/TableQrDialog";
 import { GuestRequestsStrip } from "./components/GuestRequestsStrip";
 import { useAuth } from "@/features/core/auth/useAuth";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { websiteFromPrefs } from "@/features/core/customer-order/restaurant-website";
 
@@ -80,6 +81,7 @@ async function syncFloorCodes(plan: RestaurantTable[]): Promise<RestaurantTable[
 export default function TablesPage() {
   const { prefs } = useSettingsPrefs();
   const { toast } = useToast();
+  const { t } = useAppLanguage();
   const { shop } = useAuth();
   const [, navigate] = useLocation();
   const [qrFor, setQrFor] = useState<RestaurantTable | null>(null);
@@ -170,8 +172,8 @@ export default function TablesPage() {
       // running order. The waiter has to be told, or the tap looks broken and
       // they try again on a busier floor.
       toast({
-        title: `Could not open ${row.table.name}`,
-        description: error instanceof Error ? error.message : "Try again.",
+        title: t("restaurant.tables.seatFailed", { table: row.table.name }),
+        description: error instanceof Error ? error.message : t("restaurant.tables.tryAgain"),
         variant: "destructive",
       });
       return;
@@ -198,16 +200,18 @@ export default function TablesPage() {
       });
       setTickets([ticket, ...tickets]);
       toast({
-        title: `KOT #${ticket.ticketNo} sent`,
-        description: `${ticket.lines.length} item${ticket.lines.length === 1 ? "" : "s"} from ${row.table.name} are with the kitchen.`,
+        title: t("restaurant.tables.kotSent", { number: ticket.ticketNo }),
+        description: ticket.lines.length === 1
+          ? t("restaurant.tables.kotSentOne", { table: row.table.name })
+          : t("restaurant.tables.kotSentMany", { count: ticket.lines.length, table: row.table.name }),
       });
     } catch {
       // Deliberately not saved locally as a consolation. A ticket the kitchen
       // screen cannot see is not a sent ticket, and a success toast over one
       // would be exactly the bug this whole change removes.
       toast({
-        title: "The kitchen did not get that",
-        description: "The board is shared with the kitchen screen, so sending needs a connection. Check the network — nothing has been taken off the table.",
+        title: t("restaurant.tables.kitchenFailed"),
+        description: t("restaurant.tables.kitchenFailedHelp"),
         variant: "destructive",
       });
     }
@@ -229,7 +233,7 @@ export default function TablesPage() {
   async function submitForm() {
     const name = form.name.trim();
     if (!name) {
-      toast({ title: "Name the table", description: "A table needs a name the staff calls it by.", variant: "destructive" });
+      toast({ title: t("restaurant.tables.nameRequired"), description: t("restaurant.tables.nameRequiredHelp"), variant: "destructive" });
       return;
     }
     const seats = Math.max(0, Math.round(Number(form.seats) || 0));
@@ -247,7 +251,7 @@ export default function TablesPage() {
     await releaseTable(releasing.table.id);
     setReleasing(null);
     await refresh();
-    toast({ title: `${releasing.table.name} cleared`, description: "The parked order was discarded and the table is free." });
+    toast({ title: `${releasing.table.name} cleared`, description: t("restaurant.tables.clearedHelp") });
   }
 
   async function confirmRemove() {
@@ -268,13 +272,13 @@ export default function TablesPage() {
     <div className="space-y-5 p-4 lg:p-6" data-testid="tables-page">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-[24px] font-black tracking-tight text-[var(--brand-ink)]">Tables</h1>
+          <h1 className="font-display text-[24px] font-black tracking-tight text-[var(--brand-ink)]">{t("restaurant.tables.title")}</h1>
           <p className="text-[13px] text-[#52627e]">
             Seat a table to open its order. It stays parked until you settle it at the counter.
           </p>
           {/* Said plainly rather than implied: the floor and its tickets live on
               this device, so a second tablet keeps its own. */}
-          <p className="mt-0.5 text-[12px] text-[#8494ad]">Use one designated billing counter for open table bills and seating. Kitchen tickets are shared online; open bills and occupied seats are not shared between counters.</p>
+          <p className="mt-0.5 text-[12px] text-[#8494ad]">{t("restaurant.tables.deviceNote")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -297,15 +301,15 @@ export default function TablesPage() {
       <GuestRequestsStrip />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={<Utensils size={15} />} label="Occupied" value={String(totals.open)} />
-        <Stat icon={<LayoutGrid size={15} />} label="Free" value={String(totals.free)} />
-        <Stat icon={<IndianRupee size={15} />} label="On the floor" value={inr(totals.running)} />
-        <Stat icon={<ChefHat size={15} />} label="Not sent to kitchen" value={String(totals.awaitingKitchen)} />
+        <Stat icon={<Utensils size={15} />} label={t("restaurant.tables.occupied")} value={String(totals.open)} />
+        <Stat icon={<LayoutGrid size={15} />} label={t("restaurant.tables.free")} value={String(totals.free)} />
+        <Stat icon={<IndianRupee size={15} />} label={t("restaurant.tables.onTheFloor")} value={inr(totals.running)} />
+        <Stat icon={<ChefHat size={15} />} label={t("restaurant.tables.notSentToKitchen")} value={String(totals.awaitingKitchen)} />
       </div>
 
       {sections.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-10 text-center text-[13px] text-[#64748b]">
-          No tables yet. Add the first one to start seating.
+          {t("restaurant.tables.noTables")}
         </div>
       ) : null}
 
@@ -331,29 +335,29 @@ export default function TablesPage() {
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>{editing ? "Edit table" : "Add table"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t("restaurant.tables.editTable") : t("restaurant.tables.addTable")}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input value={form.name} placeholder="T9 / Terrace 2 / Takeaway"
+              <Label>{t("restaurant.tables.nameLabel")}</Label>
+              <Input value={form.name} placeholder={t("restaurant.tables.namePlaceholder")}
                 onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Section</Label>
-                <Input value={form.section} placeholder="Dining"
+                <Label>{t("restaurant.tables.sectionLabel")}</Label>
+                <Input value={form.section} placeholder={t("restaurant.tables.sectionPlaceholder")}
                   onChange={(e) => setForm({ ...form, section: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Seats</Label>
+                <Label>{t("restaurant.tables.seatsLabel")}</Label>
                 <Input value={form.seats} inputMode="numeric"
                   onChange={(e) => setForm({ ...form, seats: e.target.value })} />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
-            <Button onClick={() => void submitForm()}>{editing ? "Save" : "Add table"}</Button>
+            <Button variant="outline" onClick={() => setFormOpen(false)}>{t("restaurant.tables.cancel")}</Button>
+            <Button onClick={() => void submitForm()}>{editing ? t("restaurant.tables.save") : t("restaurant.tables.addTable")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -362,7 +366,7 @@ export default function TablesPage() {
         open={Boolean(releasing)}
         title={`Clear ${releasing?.table.name ?? "table"}?`}
         description={`The parked order (${inr(releasing?.runningTotal ?? 0)}) is discarded without billing. Kitchen tickets already sent are not recalled.`}
-        confirmLabel="Clear table"
+        confirmLabel={t("restaurant.tables.clearTable")}
         destructive
         onConfirm={() => void confirmRelease()}
         onCancel={() => setReleasing(null)}
@@ -371,8 +375,8 @@ export default function TablesPage() {
       <ConfirmDialog
         open={Boolean(removing)}
         title={`Remove ${removing?.name ?? "table"}?`}
-        description="The table disappears from the floor plan. Nothing that was already billed changes."
-        confirmLabel="Remove"
+        description={t("restaurant.tables.removeHelp")}
+        confirmLabel={t("restaurant.tables.remove")}
         destructive
         onConfirm={() => void confirmRemove()}
         onCancel={() => setRemoving(null)}
@@ -413,6 +417,7 @@ function TableCard({
   onRelease: () => void;
   onRemove: () => void;
 }) {
+  const { t } = useAppLanguage();
   const occupied = Boolean(row.bill);
   const pending = row.pendingKotLines.length;
   return (
@@ -438,7 +443,7 @@ function TableCard({
       {occupied ? (
         <div className="space-y-1 text-[12px] text-[#52627e]">
           <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1"><Receipt size={12} /> {row.items} item{row.items === 1 ? "" : "s"}</span>
+            <span className="flex items-center gap-1"><Receipt size={12} /> {row.items === 1 ? t("restaurant.tables.itemsOne") : t("restaurant.tables.itemsMany", { count: row.items })}</span>
             <span className="font-black text-[var(--brand-ink)]">{inr(row.runningTotal)}</span>
           </div>
           <div className="flex items-center gap-1 text-[11px]">
@@ -455,7 +460,7 @@ function TableCard({
           </div>
         </div>
       ) : (
-        <p className="text-[12px] text-[#64748b]">Tap to start an order.</p>
+        <p className="text-[12px] text-[#64748b]">{t("restaurant.tables.tapToStart")}</p>
       )}
 
       <div className="mt-auto flex flex-wrap gap-1.5">
@@ -485,15 +490,15 @@ function TableCard({
           </Button>
         ) : null}
         {occupied ? (
-          <Button size="sm" variant="ghost" className="h-11 w-11 rounded-[8px] p-0 text-[#64748b] lg:mouse:h-8 lg:mouse:w-8" aria-label={`Clear ${row.table.name}`} title="Clear table" onClick={onRelease}>
+          <Button size="sm" variant="ghost" className="h-11 w-11 rounded-[8px] p-0 text-[#64748b] lg:mouse:h-8 lg:mouse:w-8" aria-label={`Clear ${row.table.name}`} title={t("restaurant.tables.clearTable")} onClick={onRelease}>
             <X size={14} />
           </Button>
         ) : (
           <>
-            <Button size="sm" variant="ghost" className="h-11 w-11 rounded-[8px] p-0 text-[#64748b] lg:mouse:h-8 lg:mouse:w-8" aria-label={`Edit ${row.table.name}`} title="Edit table" onClick={onEdit}>
+            <Button size="sm" variant="ghost" className="h-11 w-11 rounded-[8px] p-0 text-[#64748b] lg:mouse:h-8 lg:mouse:w-8" aria-label={`Edit ${row.table.name}`} title={t("restaurant.tables.editTable")} onClick={onEdit}>
               <Pencil size={13} />
             </Button>
-            <Button size="sm" variant="ghost" className="h-11 w-11 rounded-[8px] p-0 text-[#64748b] lg:mouse:h-8 lg:mouse:w-8" aria-label={`Remove ${row.table.name}`} title="Remove table" onClick={onRemove}>
+            <Button size="sm" variant="ghost" className="h-11 w-11 rounded-[8px] p-0 text-[#64748b] lg:mouse:h-8 lg:mouse:w-8" aria-label={`Remove ${row.table.name}`} title={t("restaurant.tables.removeTable")} onClick={onRemove}>
               <Trash2 size={13} />
             </Button>
           </>
