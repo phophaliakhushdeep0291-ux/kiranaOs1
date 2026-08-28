@@ -98,11 +98,46 @@ network fault.
 ### Private networking
 
 `KIRANAOS_BASE_URL` can use `backend.railway.internal` instead of the public
-domain, which keeps guest traffic off the public edge. **Confirm this works
-before relying on it**: Railway's private network is IPv6-only, so the backend
-has to be listening on `::` rather than `0.0.0.0` for it to resolve. If a
-private URL 502s, that is the reason — use the public domain and move on. It is
-one café's traffic.
+domain, which keeps guest traffic off the public edge.
+
+DineIn's own guard will not stand in the way: `validateProductionEnvironment()`
+rejects only `localhost`, `127.0.0.1` and `::1`, and accepts `http:` as well as
+`https:`, so an internal URL passes. **Railway's side still needs confirming** —
+its private network is IPv6-only, so the backend has to be listening on `::`
+rather than `0.0.0.0` for the name to resolve. If a private URL 502s, that is
+the reason; use the public domain and move on. It is one café's traffic.
+
+That guard is worth knowing in full, because it stops the container rather than
+degrading: in production it refuses to start unless `ORDERING_GATEWAY=http`,
+`KIRANAOS_SHOP_MAP` parses and maps at least one slug, `KIRANAOS_TIMEOUT_MS` is
+between 1000 and 30000, and `DINEIN_CLOCK` is unset. A misconfigured DineIn
+fails its deploy instead of serving a café the wrong menu.
+
+---
+
+## Config as code
+
+`backend/railway.json` and `dinein/railway.json` carry the build and deploy
+settings, so a rebuilt service comes back configured rather than depending on
+someone remembering which fields were filled in. Railway reads them from the
+service root, which is why each sits beside its own Dockerfile.
+
+Both set `builder: DOCKERFILE`. Neither sets `startCommand`, and that omission
+is load-bearing:
+
+> **Do not add `startCommand` to `backend/railway.json`.** It overrides the
+> Dockerfile `CMD`, and the backend's CMD is what runs `prisma:deploy:postgres`
+> before `npm start`. Setting a start command here would skip migrations
+> silently — the API would boot happily against an out-of-date schema.
+
+`healthcheckTimeout` is 300s on the backend for the same reason: the first
+deploy against an empty database runs every migration before the port opens,
+and a shorter timeout would kill it mid-migration and retry from the top.
+
+The frontend has **no** `railway.json`. It is a Vite build with no Dockerfile,
+and its `serve` script is `vite preview`, which Vite's own documentation says is
+not for production. Configure that service deliberately — a static host, or a
+real static server in a container — rather than inheriting a preview server.
 
 ---
 
@@ -113,8 +148,18 @@ one café's traffic.
 | `backend` | `/health/ready` — checks the database, not just the process |
 | `dinein` | `/api/health/ready` |
 
-Both Dockerfiles already declare these; set the same path in Railway's health
-check field so a failed deploy is caught before it takes traffic. `/api/health`
+Both Dockerfiles already declare these, and `railway.json` sets them for the
+deploy gate too.
+
+**DineIn's readiness depends on the backend.** `/api/health/ready` calls
+`KIRANAOS_BASE_URL/api/health` and returns 503 if it cannot reach it — so
+DineIn's deploy will fail its health check while the backend is down. Deploy
+the backend first, and do not diagnose a red DineIn deploy before checking the
+backend is green.
+
+Verified locally against the built images: DineIn's container answers
+`/api/health/ready` with `200 {"status":"ready","service":"DineIn"}` and Docker
+reports the container `healthy`. `/api/health`
 and `/health` on the backend are liveness only — they answer while the database
 is unreachable, so do not point the deploy gate at them.
 
