@@ -21,6 +21,10 @@ export const PRESERVED_SHOP_MODELS = Object.freeze([
   // installation's selected payment account. A portable restore must not
   // overwrite them with credentials from another device or an older snapshot.
   "PaymentProviderEvent", "PaymentProviderConnection", "IntegrationApiKey", "WebhookEndpoint", "WebhookDelivery",
+  // Provider bindings, inbox receipts and delivery claims are transport state.
+  // Restoring an old snapshot must not re-send an already acknowledged order.
+  "RestaurantMarketplaceConnection", "RestaurantMarketplaceOrder",
+  "RestaurantMarketplaceEvent", "RestaurantMarketplaceCommand",
   "Device", "DeviceReplacementChallenge", "DeviceLicense",
 ]);
 
