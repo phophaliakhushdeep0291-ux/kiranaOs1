@@ -28,6 +28,13 @@ const guards = [];
  *   Returns null to allow the sale, or a refusal describing why. `onConfirmed`,
  *   when present, runs after the bill exists — that is where a guard records
  *   what its own ledger needs to say about the sale it just permitted.
+ *
+ *   `stockHandledProductIds` claims a line's stock: billing will not decrement
+ *   those products, because the guard has already moved what actually left the
+ *   store room. A restaurant uses it for dishes — nobody stocks a cooked plate,
+ *   its ingredients are what leave the fridge — and without it one sale moved
+ *   stock twice: once against a real ingredient and once against a number that
+ *   means nothing and that no purchase order ever puts back.
  */
 export function registerSaleGuard(guard) {
   if (typeof guard !== "function") throw new TypeError("A sale guard must be a function");
@@ -42,18 +49,21 @@ export function registerSaleGuard(guard) {
  * a counter that works around the feature instead of with it.
  */
 export async function evaluateSaleGuards(context) {
-  if (guards.length === 0) return { refusal: null, onConfirmed: [], decorateBillItem: [] };
+  const empty = { refusal: null, onConfirmed: [], decorateBillItem: [], stockHandledProductIds: new Set() };
+  if (guards.length === 0) return empty;
 
   const onConfirmed = [];
   const decorateBillItem = [];
+  const stockHandledProductIds = new Set();
   for (const guard of guards) {
     const result = await guard(context);
     if (!result) continue;
-    if (result.code) return { refusal: result, onConfirmed: [], decorateBillItem: [] };
+    if (result.code) return { ...empty, refusal: result };
     if (result.onConfirmed) onConfirmed.push(result.onConfirmed);
     if (result.decorateBillItem) decorateBillItem.push(result.decorateBillItem);
+    for (const productId of result.stockHandledProductIds ?? []) stockHandledProductIds.add(productId);
   }
-  return { refusal: null, onConfirmed, decorateBillItem };
+  return { refusal: null, onConfirmed, decorateBillItem, stockHandledProductIds };
 }
 
 /** Test seam: drop every registration so one suite cannot leak into the next. */

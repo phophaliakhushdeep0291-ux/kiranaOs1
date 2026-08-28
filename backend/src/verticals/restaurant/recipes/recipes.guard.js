@@ -63,6 +63,11 @@ export function registerRecipeConsumptionGuard() {
     });
     if (components.length === 0) return null;
 
+    // Every dish on this bill that is assembled here rather than bought in.
+    // Having a recipe is the line: a bottled drink sold off the menu has none,
+    // is genuinely bought and stored, and keeps its own stock.
+    const recipeBackedDishIds = new Set(components.map((component) => component.dishProductId));
+
     const sellingUnits = await tx.productSellingUnit.findMany({
       where: { shopId, productId: { in: [...new Set(dishIds)] }, isActive: true },
     });
@@ -90,9 +95,12 @@ export function registerRecipeConsumptionGuard() {
     }
 
     const consumption = aggregateRecipeConsumption(dishPortions, components);
-    if (consumption.length === 0) return null;
+    // Even with nothing to consume, the dish's own stock is still not the
+    // restaurant's inventory — claim it either way so billing never moves it.
+    if (consumption.length === 0) return { stockHandledProductIds: recipeBackedDishIds };
 
     return {
+      stockHandledProductIds: recipeBackedDishIds,
       onConfirmed: async ({ tx: confirmTx, bill, location: confirmedLocation, actor }) => {
         for (const row of consumption) {
           const ingredient = await confirmTx.product.findFirst({
