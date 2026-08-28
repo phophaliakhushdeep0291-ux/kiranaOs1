@@ -29,11 +29,15 @@ const MIGRATION = path.resolve(
 const statement = fs.readFileSync(MIGRATION, "utf8")
   .split("\n").filter((line) => !line.trim().startsWith("--")).join("\n").trim()
   .replace(/;\s*$/, "")
-  // SQLite stores booleans as 0/1 and has no IS DISTINCT FROM on older engines.
-  .replace(/"stockTrackingEnabled" IS DISTINCT FROM false/, '"stockTrackingEnabled" <> 0');
+  // SQLite stores booleans as 0/1, has no IS DISTINCT FROM on older engines, and
+  // spells the clock differently. The shipped Postgres statement is the subject
+  // of this test; only its dialect is translated, never its meaning.
+  .replace(/"stockTrackingEnabled" IS DISTINCT FROM false/, '"stockTrackingEnabled" <> 0')
+  .replaceAll("NOW()", "CURRENT_TIMESTAMP");
 
 assert.match(statement, /UPDATE "Product"/, "000125 must still be the backfill this test proves");
 assert.match(statement, /"menuCourse" IS NOT NULL/, "being on the menu is the signal, not having a recipe");
+assert.match(statement, /"updatedAt"/, "the correction has to move the timestamp or the till never pulls it");
 
 const shop = await db.shop.create({ data: {
   name: `Dish backfill ${Date.now()}`, ownerName: "Owner", city: "City", address: "Address",
@@ -49,6 +53,12 @@ await dish("French Fries", "Starters", -2);
 await dish("Dal Fry", "Main Course", -1);
 const rice = await db.product.create({ data: productData(shop.id, { name: "Basmati Rice", stockBaseQty: 25 }) });
 
+// The till pulls incrementally on `updatedAt >= since`, so park every row in
+// the past first: a correction that does not move the timestamp is a correction
+// the device never receives.
+const SINCE = new Date("2020-01-01T00:00:00.000Z");
+await db.product.updateMany({ where: { shopId: shop.id }, data: { updatedAt: SINCE } });
+
 const scoped = `${statement} AND "shopId" = '${shop.id}'`;
 assert.equal(await db.$executeRawUnsafe(scoped), 3, "every dish on the menu is corrected, recipe or no recipe");
 assert.equal(await db.$executeRawUnsafe(scoped), 0, "and replaying the migration is a no-op");
@@ -61,6 +71,24 @@ for (const name of ["Fresh Lime Soda", "French Fries", "Dal Fry"]) {
 assert.equal(
   (await db.product.findUniqueOrThrow({ where: { id: rice.id } })).stockTrackingEnabled, true,
   "the ingredients a dish is made from are real stock and keep counting",
+);
+
+/* ------------- and the till actually pulls the correction down to its cache */
+
+// This is the half that decides what the shopkeeper sees. The store room renders
+// from an offline copy of these products, and the pull is incremental, so a row
+// whose timestamp never moved is a row that stays wrong on screen however right
+// the server is. `updatedAt` is @updatedAt — Prisma maintains it from the client
+// and raw SQL leaves it alone unless the migration says otherwise.
+const resynced = await db.product.findMany({
+  where: { shopId: shop.id, updatedAt: { gt: SINCE } },
+  select: { name: true },
+  orderBy: { name: "asc" },
+});
+assert.deepEqual(
+  resynced.map((row) => row.name),
+  ["Dal Fry", "French Fries", "Fresh Lime Soda"],
+  "the next incremental pull carries exactly the corrected dishes, and nothing else",
 );
 
 const storeRoom = await getInventory(shop.id);
