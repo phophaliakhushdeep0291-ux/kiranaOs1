@@ -264,6 +264,12 @@ runStep({
     NODE_ENV: "test",
     DATABASE_URL: sqliteTestUrl,
     TEST_DATABASE_URL: sqliteTestUrl,
+    // The workflow exposes PostgreSQL globally for its dedicated proof below.
+    // DB example helpers intentionally prefer POSTGRES_TEST_DATABASE_URL when
+    // present, so clear it here or this supposedly isolated SQLite suite runs
+    // against PostgreSQL a first time and then proof:postgres repeats it.
+    POSTGRES_TEST_DATABASE_URL: "",
+    DIRECT_DATABASE_URL: "",
     PRISMA_CLIENT_VARIANT: "certification",
     FORCE_DB_TESTS: "true",
   },
@@ -276,6 +282,8 @@ runStep({
     NODE_ENV: "test",
     DATABASE_URL: sqliteTestUrl,
     TEST_DATABASE_URL: sqliteTestUrl,
+    POSTGRES_TEST_DATABASE_URL: "",
+    DIRECT_DATABASE_URL: "",
     PRISMA_CLIENT_VARIANT: "certification",
     FORCE_DB_TESTS: "true",
     // backend-source-db generated the isolated client immediately above. The
@@ -295,6 +303,7 @@ runStep({
     DATABASE_URL: sqliteTestUrl,
     TEST_DATABASE_URL: sqliteTestUrl,
     POSTGRES_TEST_DATABASE_URL: "",
+    DIRECT_DATABASE_URL: "",
     PRISMA_CLIENT_VARIANT: "certification",
     FORCE_DB_TESTS: "true",
     SKIP_PRISMA_GENERATE: "true",
@@ -311,6 +320,7 @@ runStep({
     DATABASE_URL: sqliteTestUrl,
     TEST_DATABASE_URL: sqliteTestUrl,
     POSTGRES_TEST_DATABASE_URL: "",
+    DIRECT_DATABASE_URL: "",
     PRISMA_CLIENT_VARIANT: "certification",
     FORCE_DB_TESTS: "true",
     SKIP_PRISMA_GENERATE: mode === "local" ? "true" : "false",

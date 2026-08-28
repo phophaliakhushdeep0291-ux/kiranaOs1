@@ -158,13 +158,28 @@ if (regression.status !== 0) {
 // nothing to do with the code under test, and the same files pass individually.
 // Isolating them costs a second of startup each and makes the gate deterministic.
 const failed = [];
+const perFileTimeoutMs = Number(process.env.INTEGRATION_TEST_FILE_TIMEOUT_MS || 4 * 60_000);
 for (const file of files) {
-  const run = spawnSync(process.execPath, ["--test", "--test-concurrency=1", file], {
+  console.log(`\n[integration] ${file}`);
+  const run = spawnSync(process.execPath, [
+    "--test",
+    "--test-concurrency=1",
+    "--test-timeout=120000",
+    "--test-force-exit",
+    file,
+  ], {
     cwd: process.cwd(),
     env,
     stdio: "inherit",
+    timeout: perFileTimeoutMs,
   });
-  if (run.status !== 0) failed.push(file);
+  if (run.status !== 0 || run.error) {
+    failed.push(file);
+    if (run.error?.code === "ETIMEDOUT") {
+      console.error(`[integration] ${file} exceeded ${perFileTimeoutMs}ms; stopping because its database state is no longer trustworthy.`);
+      break;
+    }
+  }
 }
 
 if (failed.length) {

@@ -10,19 +10,48 @@ const shop = await db.shop.create({ data: { name: `Payments ${suffix}`, ownerNam
 const otherShop = await db.shop.create({ data: { name: `Other ${suffix}`, ownerName: "Owner", city: "Pune", address: "Test" } });
 
 async function withFailedAudit(action, operation) {
-  const trigger = `force_payment_connection_audit_${crypto.randomUUID().replaceAll("-", "")}`;
-  await db.$executeRawUnsafe(`
-    CREATE TRIGGER ${trigger}
-    BEFORE INSERT ON AuditLog
-    WHEN NEW.action = '${action}'
-    BEGIN
-      SELECT RAISE(ABORT, 'forced payment connection audit failure');
-    END
-  `);
+  assert.match(action, /^[A-Z0-9_]+$/);
+  const uniqueId = crypto.randomUUID().replaceAll("-", "");
+  const trigger = `force_payment_connection_audit_${uniqueId}`;
+  const triggerFunction = `${trigger}_fn`;
+  const databaseUrl = process.env.POSTGRES_TEST_DATABASE_URL || process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || "";
+  const isPostgres = /^postgres(?:ql)?:\/\//i.test(databaseUrl);
+
+  if (isPostgres) {
+    await db.$executeRawUnsafe(`
+      CREATE FUNCTION "${triggerFunction}"() RETURNS trigger AS $$
+      BEGIN
+        IF NEW."action" = '${action}' THEN
+          RAISE EXCEPTION 'forced payment connection audit failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql
+    `);
+    await db.$executeRawUnsafe(`
+      CREATE TRIGGER "${trigger}"
+      BEFORE INSERT ON "AuditLog"
+      FOR EACH ROW EXECUTE FUNCTION "${triggerFunction}"()
+    `);
+  } else {
+    await db.$executeRawUnsafe(`
+      CREATE TRIGGER "${trigger}"
+      BEFORE INSERT ON "AuditLog"
+      WHEN NEW."action" = '${action}'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced payment connection audit failure');
+      END
+    `);
+  }
   try {
     await assert.rejects(operation, (error) => error?.code === "PAYMENT_PROVIDER_AUDIT_WRITE_FAILED");
   } finally {
-    await db.$executeRawUnsafe(`DROP TRIGGER IF EXISTS ${trigger}`);
+    if (isPostgres) {
+      await db.$executeRawUnsafe(`DROP TRIGGER IF EXISTS "${trigger}" ON "AuditLog"`);
+      await db.$executeRawUnsafe(`DROP FUNCTION IF EXISTS "${triggerFunction}"()`);
+    } else {
+      await db.$executeRawUnsafe(`DROP TRIGGER IF EXISTS "${trigger}"`);
+    }
   }
 }
 

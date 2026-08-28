@@ -42,6 +42,11 @@ const commands = [
     : [["node", ["node_modules/prisma/build/index.js", "validate", "--schema", "prisma-postgres/schema.prisma"], "Validate PostgreSQL Prisma schema"]]),
   ["npm", ["run", "setup:test-db"], "Reset isolated PostgreSQL test database"],
   ["npm", ["run", "test:integration"], "Run DB-backed integration and concurrency tests"],
+  [
+    "node",
+    ["scripts/run-db-example-tests.js", "tests/payment-provider-connections.examples.js"],
+    "Prove tenant-owned payment credentials and audit rollback on PostgreSQL",
+  ],
   ["npm", ["run", "money:paise:reconcile"], "Reconcile rupee Float columns with paise shadow columns"],
   ...(staticChecksAlreadyRan
     ? []
