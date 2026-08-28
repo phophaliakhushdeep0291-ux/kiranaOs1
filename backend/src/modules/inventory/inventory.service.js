@@ -116,8 +116,12 @@ export async function getInventory(shopId, requestedLocationId = null) {
       isLooseItem: p.isLooseItem,
       batchTrackingEnabled: p.batchTrackingEnabled,
       lowStockThreshold: p.lowStockThreshold,
-      stockTrackingEnabled: true,
-      trackStock: true,
+      // The real column, not a constant. The inventory screen has always
+      // honoured this — it hides untracked rows and excludes them from the
+      // totals — but nothing could ever set it false, so a restaurant's cooked
+      // dishes sat in the store room carrying a quantity nobody stocks.
+      stockTrackingEnabled: p.stockTrackingEnabled !== false,
+      trackStock: p.stockTrackingEnabled !== false,
       isLowStock: p.lowStockThreshold > 0 && stockBaseQty <= p.lowStockThreshold,
     };
   }));
