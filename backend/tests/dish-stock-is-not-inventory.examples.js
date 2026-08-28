@@ -135,4 +135,52 @@ assert.equal(
   "nobody assembles it here any more, so it goes back to being an ordinary counted product",
 );
 
+/* ------------------ a dish with NO recipe: the live store room's actual case */
+
+// This is what the Krish Store screenshot showed: Dal Fry, Gulab Jamun and
+// Coffee sitting in the store room at -1 and -2, none of them carrying a
+// recipe because nobody had written one yet. Keying "is this stock" on recipes
+// missed every one of them — a kitchen puts dishes on the menu long before it
+// writes them down, and Dal Fry is no more stock on day one than on day thirty.
+const { updateDishMenu } = await import("../src/verticals/restaurant/menu/menu.service.js");
+
+const dalFry = await sellable("Dal Fry", 180, 0);
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: dalFry.id } })).stockTrackingEnabled, true,
+  "an ordinary product starts tracked, whatever trade the shop is in",
+);
+
+await updateDishMenu(shop.id, dalFry.id, { menuCourse: "Main Course" });
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: dalFry.id } })).stockTrackingEnabled, false,
+  "putting it on the menu is what says the kitchen makes it — no recipe required",
+);
+
+await sell(dalFry, 2, 180);
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: dalFry.id } })).stockBaseQty, 0,
+  "and selling two does not drive it to -2",
+);
+assert.ok(
+  !(await getInventory(shop.id)).some((row) => row.name === "Dal Fry" && row.stockTrackingEnabled !== false),
+  "so the store room stops listing it as something to count",
+);
+
+/* ------------------- an owner's override survives an ordinary menu edit */
+
+const water = await sellable("Mineral Water", 20, 48);
+await updateDishMenu(shop.id, water.id, { menuCourse: "Beverages" });
+// A bottle really is bought and stored, so the owner turns tracking back on.
+await db.product.update({ where: { id: water.id }, data: { stockTrackingEnabled: true } });
+await updateDishMenu(shop.id, water.id, { menuCourse: "Drinks" });
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: water.id } })).stockTrackingEnabled, true,
+  "renaming its course must not silently undo the owner's decision",
+);
+await sell(water, 3, 20);
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: water.id } })).stockBaseQty, 45,
+  "and a genuinely stocked menu item keeps counting",
+);
+
 console.log("dish-stock-is-not-inventory: ok");

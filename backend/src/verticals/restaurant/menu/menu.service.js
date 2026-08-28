@@ -205,7 +205,20 @@ export async function updateDishMenu(shopId, productId, patch = {}) {
   if (!product) throw new AppError("Dish not found", 404);
 
   const data = {};
-  if (patch.menuCourse !== undefined) data.menuCourse = normalizeCourse(patch.menuCourse);
+  if (patch.menuCourse !== undefined) {
+    data.menuCourse = normalizeCourse(patch.menuCourse);
+    // Putting something on the menu says the kitchen makes it, so it stops
+    // being stock — and taking it off says it is an ordinary product again.
+    //
+    // Only on the transition, never on every save: an owner who has turned
+    // tracking back on for bottled water must not lose that the next time they
+    // rename its course. Recipes are deliberately not the trigger — a dish is
+    // cooked to order from the day it is added, long before anyone writes the
+    // recipe down.
+    const wasOnMenu = product.menuCourse != null;
+    const nowOnMenu = data.menuCourse != null;
+    if (wasOnMenu !== nowOnMenu) data.stockTrackingEnabled = !nowOnMenu;
+  }
   if (patch.foodType !== undefined) {
     data.foodType = patch.foodType && FOOD_TYPES.includes(patch.foodType) ? patch.foodType : null;
   }
