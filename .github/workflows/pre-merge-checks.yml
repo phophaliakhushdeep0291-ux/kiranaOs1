@@ -41,7 +41,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
+        # Full history: the append-only migration check compares each migration
+        # against the commit that first added it, which a shallow clone lacks.
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -56,6 +60,9 @@ jobs:
 
       - name: Reject tracked generated and runtime artifacts
         run: node scripts/check-repository-hygiene.mjs
+
+      - name: Migrations are append-only
+        run: node scripts/check-migrations-append-only.mjs
 
   frontend:
     name: Frontend typecheck and build
