@@ -163,7 +163,19 @@ export default function TablesPage() {
   };
 
   async function seat(row: TableOccupancy) {
-    await openTableInBilling(row.table);
+    try {
+      await openTableInBilling(row.table);
+    } catch (error) {
+      // A full till refuses the seating rather than evicting another table's
+      // running order. The waiter has to be told, or the tap looks broken and
+      // they try again on a busier floor.
+      toast({
+        title: `Could not open ${row.table.name}`,
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     navigate("/billing");
   }
 
