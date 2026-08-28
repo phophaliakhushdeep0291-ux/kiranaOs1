@@ -367,7 +367,12 @@ export async function confirmBill(shopId, body, actor = {}) {
     // Schedule H medicine leave without a doctor's slip. Billing never names a
     // trade; verticals register guards and this asks the registry. No guards
     // registered is one array-length check.
-    const { refusal: saleRefusal, onConfirmed: saleGuardHooks, decorateBillItem: saleItemDecorators } = await evaluateSaleGuards({
+    const {
+      refusal: saleRefusal,
+      onConfirmed: saleGuardHooks,
+      decorateBillItem: saleItemDecorators,
+      stockHandledProductIds,
+    } = await evaluateSaleGuards({
       shopId, tx, body, items, productMap, isEstimate, location,
     });
     if (saleRefusal) {
@@ -671,7 +676,13 @@ export async function confirmBill(shopId, body, actor = {}) {
       );
     }
 
+    // A guard may have claimed a line's stock, in which case what actually left
+    // the store room has already been moved and the product itself must not be
+    // touched. A restaurant's dish is the case: its ingredients were consumed,
+    // and decrementing the plate as well would move stock twice and drive a
+    // number nothing ever restocks further negative every service.
     const stockUpdatesByProduct = aggregateStockUpdates(stockUpdates);
+    for (const productId of stockHandledProductIds) stockUpdatesByProduct.delete(productId);
     if (!allowStockShortfall) {
       for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {
         const availableAtLocation = locationStockByProduct.get(product.id) ?? 0;
