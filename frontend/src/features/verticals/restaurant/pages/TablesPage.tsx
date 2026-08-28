@@ -474,9 +474,11 @@ function TableCard({
         <div className={cn("flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-bold", CHIP_TONES.violet)}>
           <CalendarClock size={11} className="shrink-0" />
           <span className="truncate">
-            {t("restaurant.tables.bookedAt", { time: new Date(booking.reservedFor).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}
-            {" · "}
-            {t("restaurant.tables.bookedFor", { name: booking.guestName, people: booking.partySize })}
+            {t("restaurant.tables.booked", {
+              time: new Date(booking.reservedFor).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              name: booking.guestName,
+              people: booking.partySize,
+            })}
           </span>
         </div>
       ) : null}
