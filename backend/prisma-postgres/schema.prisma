@@ -33,121 +33,125 @@ model Shop {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  users                         User[]
-  products                      Product[]
-  customers                     Customer[]
-  bills                         Bill[]
-  payments                      Payment[]
-  retailPaymentIntents          RetailPaymentIntent[]
-  paymentProviderConnections    PaymentProviderConnection[]
-  stockLedger                   StockLedger[]
-  udharLedger                   UdharLedger[]
-  suppliers                     Supplier[]
-  purchaseHistory               PurchaseHistory[]
-  purchaseOrders                PurchaseOrder[]
-  purchaseReceipts              PurchaseReceipt[]
-  purchaseReturns               PurchaseReturn[]
-  userLocationAccess            UserLocationAccess[]
-  aiActionLogs                  AiActionLog[]
-  auditLogs                     AuditLog[]
-  sessions                      Session[]
-  authTokens                    AuthToken[]
-  offlineSyncEvents             OfflineSyncEvent[]
-  syncConflicts                 SyncConflict[]
-  syncIdMappings                SyncIdMapping[]
-  syncCommands                  SyncCommand[]
-  changeLogs                    ChangeLog[]
-  financialLedger               FinancialLedger[]
-  chartOfAccounts               ChartOfAccount[]
-  journalEntries                JournalEntry[]
-  journalLines                  JournalLine[]
-  accountingPeriods             AccountingPeriod[]
-  accountingDocuments           AccountingDocument[]
-  accountingDocumentEvents      AccountingDocumentEvent[]
-  billCounter                   BillCounter?
-  subscriptions                 Subscription[]
-  onboardingPurchases           OnboardingPurchase[]
-  paymentTransactions           PaymentTransaction[]
-  devices                       Device[]
-  deviceLicenses                DeviceLicense[]
-  deviceReplacementChallenges   DeviceReplacementChallenge[]
-  reportExportJobs              ReportExportJob[]
-  reminderTemplates             ReminderTemplate[]
-  reminderLogs                  ReminderLog[]
-  dailyClosingSnapshots         DailyClosingSnapshot[]
-  expenses                      Expense[]
-  offers                        Offer[]
-  customerOrders                CustomerOrder[]
-  pricingRules                  PricingRule[]
-  inventoryLots                 InventoryLot[]
-  productSellingUnits           ProductSellingUnit[]
-  pricingDecisionEvents         PricingDecisionEvent[]
-  integrationApiKeys            IntegrationApiKey[]
-  webhookEndpoints              WebhookEndpoint[]
-  webhookDeliveries             WebhookDelivery[]
-  tallyPosts                    TallyPost[]
-  storeLocations                StoreLocation[]
-  locationStocks                LocationStock[]
-  stockTransfers                StockTransfer[]
-  transferDocumentCounters      TransferDocumentCounter[]
-  loyaltyPrograms               LoyaltyProgram[]
-  loyaltyAccounts               LoyaltyAccount[]
-  loyaltyTransactions           LoyaltyTransaction[]
-  complianceDocuments           ComplianceDocument[]
-  stockCountSessions            StockCountSession[]
-  storageBins                   StorageBin[]
-  binPlacements                 BinPlacement[]
-  giftCards                     GiftCard[]
-  giftCardTransactions          GiftCardTransaction[]
-  backupArtifacts               BackupArtifact[]
-  errorGroups                   ErrorGroup[]
-  errorEvents                   ErrorEvent[]
-  supportRequests               SupportRequest[]
-  deviceHealthSnapshots         DeviceHealthSnapshot[]
-  supportSessions               SupportSession[]
-  deviceCommands                DeviceCommand[]
-  activityEvents                ActivityEvent[]
-  activityAggregates            ActivityAggregate[]
-  rentalBookings                RentalBooking[]
-  prescriptions                 Prescription[]
-  productUnits                  ProductUnit[]
-  partFitments                  PartFitment[]
-  partCrossReferences           PartCrossReference[]
-  footwearSizeProfiles          FootwearSizeProfile[]
-  bookLists                     BookList[]
-  furnitureOrders               FurnitureOrder[]
-  testerUnits                   TesterUnit[]
-  restaurantTables              RestaurantTable[]
-  tableReservations             TableReservation[]
-  restaurantGuestRequests       RestaurantGuestRequest[]
-  staffShifts                   StaffShift[]
-  kioskTerminals                KioskTerminal[]
-  kitchenTickets                KitchenTicket[]
-  dishRecipeComponents          DishRecipeComponent[]
-  menuAddonGroups               MenuAddonGroup[]
-  menuAddonOptions              MenuAddonOption[]
-  productAddonGroups            ProductAddonGroup[]
-  menuComboComponents           MenuComboComponent[]
-  auditRules                    AuditRule[]
-  auditRuns                     AuditRun[]
-  auditEvaluations              AuditEvaluation[]
-  auditFindings                 AuditFinding[]
-  auditFindingRules             AuditFindingRule[]
-  auditEvidenceRequirements     AuditEvidenceRequirement[]
-  auditEvidence                 AuditEvidence[]
-  auditFindingStatusHistory     AuditFindingStatusHistory[]
-  auditReviews                  AuditReview[]
-  auditCases                    AuditCase[]
-  auditCaseFindings             AuditCaseFinding[]
-  auditBaselines                AuditBaseline[]
-  bankStatementImports          BankStatementImport[]
-  bankStatementTransactions     BankStatementTransaction[]
-  bankReconciliationAllocations BankReconciliationAllocation[]
-  bankReconciliationEvents      BankReconciliationEvent[]
-  channelSettlementImports      ChannelSettlementImport[]
-  channelSettlementRows         ChannelSettlementRow[]
-  channelSettlementEvents       ChannelSettlementEvent[]
-  maintenanceLock               ShopMaintenanceLock?
+  users                            User[]
+  products                         Product[]
+  customers                        Customer[]
+  bills                            Bill[]
+  payments                         Payment[]
+  retailPaymentIntents             RetailPaymentIntent[]
+  paymentProviderConnections       PaymentProviderConnection[]
+  restaurantMarketplaceConnections RestaurantMarketplaceConnection[]
+  restaurantMarketplaceOrders      RestaurantMarketplaceOrder[]
+  restaurantMarketplaceEvents      RestaurantMarketplaceEvent[]
+  restaurantMarketplaceCommands    RestaurantMarketplaceCommand[]
+  stockLedger                      StockLedger[]
+  udharLedger                      UdharLedger[]
+  suppliers                        Supplier[]
+  purchaseHistory                  PurchaseHistory[]
+  purchaseOrders                   PurchaseOrder[]
+  purchaseReceipts                 PurchaseReceipt[]
+  purchaseReturns                  PurchaseReturn[]
+  userLocationAccess               UserLocationAccess[]
+  aiActionLogs                     AiActionLog[]
+  auditLogs                        AuditLog[]
+  sessions                         Session[]
+  authTokens                       AuthToken[]
+  offlineSyncEvents                OfflineSyncEvent[]
+  syncConflicts                    SyncConflict[]
+  syncIdMappings                   SyncIdMapping[]
+  syncCommands                     SyncCommand[]
+  changeLogs                       ChangeLog[]
+  financialLedger                  FinancialLedger[]
+  chartOfAccounts                  ChartOfAccount[]
+  journalEntries                   JournalEntry[]
+  journalLines                     JournalLine[]
+  accountingPeriods                AccountingPeriod[]
+  accountingDocuments              AccountingDocument[]
+  accountingDocumentEvents         AccountingDocumentEvent[]
+  billCounter                      BillCounter?
+  subscriptions                    Subscription[]
+  onboardingPurchases              OnboardingPurchase[]
+  paymentTransactions              PaymentTransaction[]
+  devices                          Device[]
+  deviceLicenses                   DeviceLicense[]
+  deviceReplacementChallenges      DeviceReplacementChallenge[]
+  reportExportJobs                 ReportExportJob[]
+  reminderTemplates                ReminderTemplate[]
+  reminderLogs                     ReminderLog[]
+  dailyClosingSnapshots            DailyClosingSnapshot[]
+  expenses                         Expense[]
+  offers                           Offer[]
+  customerOrders                   CustomerOrder[]
+  pricingRules                     PricingRule[]
+  inventoryLots                    InventoryLot[]
+  productSellingUnits              ProductSellingUnit[]
+  pricingDecisionEvents            PricingDecisionEvent[]
+  integrationApiKeys               IntegrationApiKey[]
+  webhookEndpoints                 WebhookEndpoint[]
+  webhookDeliveries                WebhookDelivery[]
+  tallyPosts                       TallyPost[]
+  storeLocations                   StoreLocation[]
+  locationStocks                   LocationStock[]
+  stockTransfers                   StockTransfer[]
+  transferDocumentCounters         TransferDocumentCounter[]
+  loyaltyPrograms                  LoyaltyProgram[]
+  loyaltyAccounts                  LoyaltyAccount[]
+  loyaltyTransactions              LoyaltyTransaction[]
+  complianceDocuments              ComplianceDocument[]
+  stockCountSessions               StockCountSession[]
+  storageBins                      StorageBin[]
+  binPlacements                    BinPlacement[]
+  giftCards                        GiftCard[]
+  giftCardTransactions             GiftCardTransaction[]
+  backupArtifacts                  BackupArtifact[]
+  errorGroups                      ErrorGroup[]
+  errorEvents                      ErrorEvent[]
+  supportRequests                  SupportRequest[]
+  deviceHealthSnapshots            DeviceHealthSnapshot[]
+  supportSessions                  SupportSession[]
+  deviceCommands                   DeviceCommand[]
+  activityEvents                   ActivityEvent[]
+  activityAggregates               ActivityAggregate[]
+  rentalBookings                   RentalBooking[]
+  prescriptions                    Prescription[]
+  productUnits                     ProductUnit[]
+  partFitments                     PartFitment[]
+  partCrossReferences              PartCrossReference[]
+  footwearSizeProfiles             FootwearSizeProfile[]
+  bookLists                        BookList[]
+  furnitureOrders                  FurnitureOrder[]
+  testerUnits                      TesterUnit[]
+  restaurantTables                 RestaurantTable[]
+  tableReservations                TableReservation[]
+  restaurantGuestRequests          RestaurantGuestRequest[]
+  staffShifts                      StaffShift[]
+  kioskTerminals                   KioskTerminal[]
+  kitchenTickets                   KitchenTicket[]
+  dishRecipeComponents             DishRecipeComponent[]
+  menuAddonGroups                  MenuAddonGroup[]
+  menuAddonOptions                 MenuAddonOption[]
+  productAddonGroups               ProductAddonGroup[]
+  menuComboComponents              MenuComboComponent[]
+  auditRules                       AuditRule[]
+  auditRuns                        AuditRun[]
+  auditEvaluations                 AuditEvaluation[]
+  auditFindings                    AuditFinding[]
+  auditFindingRules                AuditFindingRule[]
+  auditEvidenceRequirements        AuditEvidenceRequirement[]
+  auditEvidence                    AuditEvidence[]
+  auditFindingStatusHistory        AuditFindingStatusHistory[]
+  auditReviews                     AuditReview[]
+  auditCases                       AuditCase[]
+  auditCaseFindings                AuditCaseFinding[]
+  auditBaselines                   AuditBaseline[]
+  bankStatementImports             BankStatementImport[]
+  bankStatementTransactions        BankStatementTransaction[]
+  bankReconciliationAllocations    BankReconciliationAllocation[]
+  bankReconciliationEvents         BankReconciliationEvent[]
+  channelSettlementImports         ChannelSettlementImport[]
+  channelSettlementRows            ChannelSettlementRow[]
+  channelSettlementEvents          ChannelSettlementEvent[]
+  maintenanceLock                  ShopMaintenanceLock?
 }
 
 model ShopMaintenanceLock {
@@ -2947,6 +2951,100 @@ model PaymentProviderEvent {
   @@index([shopId, createdAt])
   @@index([provider, eventType, createdAt])
   @@index([processingStatus, createdAt])
+}
+
+// Marketplace transport state is separate from bills and QR guest orders.
+// A provider adapter must authenticate and normalize its official contract
+// before any of these records can be used by the restaurant workflow.
+model RestaurantMarketplaceConnection {
+  id                    String    @id @default(cuid())
+  shopId                String
+  locationId            String
+  provider              String
+  externalOutletId      String
+  environment           String    @default("sandbox")
+  status                String    @default("pending") // pending | verified
+  enabled               Boolean   @default(false)
+  adapterVersion        String?
+  verificationReference String?
+  verifiedAt            DateTime?
+  createdByUserId       String?
+  updatedByUserId       String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  shop     Shop                           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  orders   RestaurantMarketplaceOrder[]
+  events   RestaurantMarketplaceEvent[]
+  commands RestaurantMarketplaceCommand[]
+
+  @@unique([shopId, provider, locationId])
+  @@index([provider, environment, externalOutletId, status], map: "RestaurantMarketplaceConnection_provider_outlet_status_idx")
+  @@index([shopId, status, enabled])
+}
+
+model RestaurantMarketplaceOrder {
+  id                  String   @id @default(cuid())
+  shopId              String
+  connectionId        String
+  externalOrderId     String
+  contentHash         String
+  snapshotJson        String
+  totalPaise          Int
+  status              String   @default("new")
+  providerPayment     String   @default("unknown") // unknown | platform_collected | collect_at_restaurant
+  lastProviderEventAt DateTime
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  shop       Shop                            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  connection RestaurantMarketplaceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  commands   RestaurantMarketplaceCommand[]
+
+  @@unique([connectionId, externalOrderId])
+  @@index([shopId, status, createdAt])
+}
+
+model RestaurantMarketplaceEvent {
+  id              String   @id @default(cuid())
+  shopId          String
+  connectionId    String
+  eventId         String
+  externalOrderId String
+  kind            String
+  payloadHash     String
+  result          String
+  occurredAt      DateTime
+  createdAt       DateTime @default(now())
+
+  shop       Shop                            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  connection RestaurantMarketplaceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, eventId])
+  @@index([shopId, createdAt])
+}
+
+model RestaurantMarketplaceCommand {
+  id            String    @id @default(cuid())
+  shopId        String
+  connectionId  String
+  orderId       String
+  requestKey    String
+  action        String
+  requestJson   String
+  status        String    @default("pending") // pending | sending | delivered | needs_review
+  attemptCount  Int       @default(0)
+  lastErrorCode String?
+  deliveredAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  shop       Shop                            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  connection RestaurantMarketplaceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  order      RestaurantMarketplaceOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, requestKey])
+  @@index([shopId, status, createdAt])
 }
 
 // External integration credentials are stored as irreversible hashes. The

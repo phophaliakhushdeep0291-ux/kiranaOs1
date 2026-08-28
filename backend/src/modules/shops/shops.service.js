@@ -2,6 +2,7 @@ import { database as db } from "../../infrastructure/database/index.js";
 import { AppError } from "../../shared/errors/index.js";
 import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
 import { BUSINESS_PROFILES, assertBusinessTypeOffered, bootstrapForShop, businessTypeFromSettings, parseShopSettings, requestedBusinessTypeFromSettings, settingsForBusinessType } from "./businessProfiles.js";
+import { RESTAURANT_MARKETPLACE_PROVIDERS, withMarketplaceNavigation } from "../integrations/restaurant-marketplace/registry.js";
 
 async function writeRequiredShopAudit(client, entry) {
   const audit = await createAuditLog({ ...entry, client });
@@ -21,7 +22,13 @@ export async function getBootstrap(shopId, role) {
     db.product.count({ where: { shopId } }),
     db.bill.count({ where: { shopId } }),
   ]);
-  return { ...bootstrapForShop(shop, role), businessTypeLocked: productCount + billCount > 0 };
+  const bootstrap = bootstrapForShop(shop, role);
+  // Do not add a query to every checkout while no production adapter exists.
+  const hasAdapter = RESTAURANT_MARKETPLACE_PROVIDERS.some((provider) => provider.implemented && provider.fulfilmentReady);
+  const connections = bootstrap.shop.businessType === "restaurant" && hasAdapter
+    ? await db.restaurantMarketplaceConnection.findMany({ where: { shopId, status: "verified", enabled: true, environment: "live" } })
+    : [];
+  return { ...withMarketplaceNavigation(bootstrap, connections), businessTypeLocked: productCount + billCount > 0 };
 }
 
 export async function updateShop(shopId, data, actor = {}) {

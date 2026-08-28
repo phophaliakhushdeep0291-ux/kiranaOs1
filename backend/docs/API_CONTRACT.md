@@ -416,6 +416,14 @@ than one seller GSTIN; one explicit registration must be selected. These are
 accountant-review working papers, never a claim that a statutory return was
 filed. Legal submission remains unavailable unless a configured certified
 provider explicitly reports legal-submission readiness.
+## Restaurant marketplace setup (not live ingestion)
+
+- `GET /api/integrations/restaurant-marketplaces`: owner-only setup status and active branch list. Both providers currently return unimplemented; live orders and the restaurant inbox remain disabled.
+- `PUT /api/integrations/restaurant-marketplaces/:provider`: owner PIN required. Accepts only `locationId`, `externalOutletId` and `environment` (`sandbox` or `live`). Saves pending, disabled details; does not submit an application or activate orders.
+- `POST /api/integrations/restaurant-marketplaces/connections/:id/verify`: owner PIN required; returns `503 MARKETPLACE_ADAPTER_REQUIRED` until the official provider adapter exists. Outlet proof is shop/branch/environment specific.
+
+All three require authentication and an activated device. No public provider webhook or command route is mounted. See [activation requirements](../../docs/deploy/restaurant-marketplaces.md) before implementing or enabling one.
+
 ## Frontend release gate
 
 Before a frontend build is considered compatible with this backend, verify:

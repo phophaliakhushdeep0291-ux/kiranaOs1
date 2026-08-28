@@ -47,6 +47,9 @@
     ]
   },
   "endpoints": [
+    { "method": "GET", "path": "/api/integrations/restaurant-marketplaces", "authRequired": true, "deviceRequired": true, "roles": ["owner"], "responseMustInclude": ["data.providers", "data.connections", "data.locations", "data.inboxEnabled", "data.liveOrdersSupported"], "purpose": "report restaurant outlet setup without claiming live provider connectivity" },
+    { "method": "PUT", "path": "/api/integrations/restaurant-marketplaces/:provider", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "roles": ["owner"], "requestFields": ["locationId", "externalOutletId", "environment"], "integrityGuarantees": ["shop and active location are server validated", "only pending disabled setup can be saved", "unrecognised fields including credentials and verification flags are rejected", "setup and audit commit atomically"], "purpose": "save unverified outlet details, not enable marketplace orders" },
+    { "method": "POST", "path": "/api/integrations/restaurant-marketplaces/connections/:id/verify", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "roles": ["owner"], "integrityGuarantees": ["returns MARKETPLACE_ADAPTER_REQUIRED while no official adapter is implemented", "outlet proof must match the shop, branch, provider outlet and environment", "stale verification and duplicate verified outlet bindings are rejected"], "purpose": "closed verification boundary reserved for official provider adapters" },
     {
       "method": "GET",
       "path": "/health",

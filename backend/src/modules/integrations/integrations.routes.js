@@ -6,6 +6,7 @@ import { validate, validateQuery } from "../../middleware/validate.js";
 import { requireFeature } from "../feature-gates/featureGate.middleware.js";
 import * as ctrl from "./integrations.controller.js";
 import * as svc from "./integrations.service.js";
+import restaurantMarketplaceRoutes from "./restaurant-marketplace/routes.js";
 import { createApiKeySchema, createWebhookSchema, updateWebhookSchema, integrationListQuerySchema, tallyExportQuerySchema, tallyPostedBodySchema, flipkartOrderSyncSchema } from "./integrations.schemas.js";
 
 const router = Router();
@@ -21,6 +22,7 @@ async function requireIntegrationKey(req, _res, next) {
 router.get("/v1/:resource", requireIntegrationKey, validateQuery(integrationListQuerySchema), ctrl.apiResource);
 
 router.use(requireAuth, requireShop, requireDeviceActivated(), requireRole("owner", "admin"));
+router.use("/restaurant-marketplaces", restaurantMarketplaceRoutes);
 router.get("/overview", ctrl.overview);
 router.get("/api-keys", ctrl.keys);
 router.post("/api-keys", requireFeature("api_webhook_later"), requireOwnerPin, validate(createApiKeySchema), ctrl.createKey);
