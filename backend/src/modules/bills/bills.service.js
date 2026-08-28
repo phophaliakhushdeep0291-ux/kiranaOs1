@@ -676,12 +676,20 @@ export async function confirmBill(shopId, body, actor = {}) {
       );
     }
 
-    // A guard may have claimed a line's stock, in which case what actually left
-    // the store room has already been moved and the product itself must not be
-    // touched. A restaurant's dish is the case: its ingredients were consumed,
-    // and decrementing the plate as well would move stock twice and drive a
-    // number nothing ever restocks further negative every service.
+    // Two reasons a line moves no stock of its own.
+    //
+    // `stockTrackingEnabled: false` is the product saying so: a cooked dish or a service
+    // is assembled or performed, not bought and counted. The shared path honours
+    // the column rather than asking what trade the shop is in.
+    //
+    // A guard may also claim a line at sale time, having already moved what
+    // actually left the store room. Both end in the same place: decrementing the
+    // plate as well as its ingredients moves stock twice against a number no
+    // purchase order ever puts back.
     const stockUpdatesByProduct = aggregateStockUpdates(stockUpdates);
+    for (const [productId, { product }] of stockUpdatesByProduct) {
+      if (product?.stockTrackingEnabled === false) stockUpdatesByProduct.delete(productId);
+    }
     for (const productId of stockHandledProductIds) stockUpdatesByProduct.delete(productId);
     if (!allowStockShortfall) {
       for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {

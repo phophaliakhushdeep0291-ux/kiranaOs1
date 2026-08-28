@@ -100,4 +100,39 @@ assert.equal(
   "and the dish still never moves",
 );
 
+/* ------------------------------------- the flag the store room already reads */
+
+// The inventory screen has always hidden untracked rows and left them out of
+// its totals; nothing could set the column, so it never fired. Writing a recipe
+// is what sets it, because writing a recipe is the statement that this thing is
+// assembled here rather than bought in.
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: tikka.id } })).stockTrackingEnabled, false,
+  "a dish with a recipe is not tracked as stock",
+);
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: cola.id } })).stockTrackingEnabled, true,
+  "a bottled drink with no recipe is still counted",
+);
+
+const { getInventory } = await import("../src/modules/inventory/inventory.service.js");
+const storeRoom = await getInventory(shop.id);
+const shelved = storeRoom.map((row) => row.name);
+assert.ok(shelved.includes("Bottled cola"), "the store room lists what the shop actually stocks");
+assert.ok(shelved.includes("Paneer"), "including the ingredients a dish is made from");
+const dishRow = storeRoom.find((row) => row.name === "Paneer tikka");
+assert.equal(
+  dishRow?.stockTrackingEnabled, false,
+  "and marks the cooked dish untracked, so the screen leaves it out of the shelf and its totals",
+);
+
+/* ------------------------------- clearing the recipe hands the stock back */
+
+const { deleteRecipe } = await import("../src/verticals/restaurant/recipes/recipes.service.js");
+await deleteRecipe(shop.id, tikka.id);
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: tikka.id } })).stockTrackingEnabled, true,
+  "nobody assembles it here any more, so it goes back to being an ordinary counted product",
+);
+
 console.log("dish-stock-is-not-inventory: ok");

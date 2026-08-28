@@ -527,6 +527,19 @@ model Product {
   baseUnit                     String    @default("piece")
   rateUnit                     String    @default("piece")
   stockBaseQty                 Float     @default(0)
+  /// Whether this product's own stock is a real number anybody counts.
+  ///
+  /// True for everything a shop buys, stores and runs out of — which is almost
+  /// everything, hence the default. False for a thing that is assembled or
+  /// performed rather than stocked: a restaurant's cooked dish, whose
+  /// ingredients are what actually leave the store room, or a service line.
+  ///
+  /// The shared stock path honours this rather than asking what trade a shop is
+  /// in. Selling an untracked product moves no stock of its own and writes no
+  /// stock-ledger row — before this, a dish was decremented alongside the
+  /// ingredients its recipe had already consumed, so one sale moved stock twice
+  /// and drove a number nothing restocks further negative every service.
+  stockTrackingEnabled         Boolean   @default(true)
   costPerRateUnit              Float     @default(0) // weighted average buy price
   costPerRateUnitPaise         BigInt? // Phase 27 shadow integer paise column
   minPricePerRateUnit          Float     @default(0) // never sell below this

@@ -187,6 +187,21 @@ export async function getRecipe(shopId, dishProductId, { locationId } = {}) {
  * changed as one thing ("this is what goes in it"), and a partial save would
  * leave the dish costing and depleting against a half-written list.
  */
+/**
+ * A dish with a recipe is assembled here, so it stops being stock.
+ *
+ * Kept beside the recipe rather than asked of the owner: writing a recipe IS the
+ * statement that this thing is made from other things, and a menu item with no
+ * recipe — a bottled drink off the shelf — is genuinely bought and counted, so
+ * clearing the recipe hands its stock back.
+ */
+async function syncDishStockTracking(client, shopId, dishProductId, hasRecipe) {
+  await client.product.updateMany({
+    where: { id: dishProductId, shopId },
+    data: { stockTrackingEnabled: !hasRecipe },
+  });
+}
+
 export async function saveRecipe(shopId, dishProductId, components = []) {
   if (components.length > MAX_COMPONENTS_PER_DISH) {
     throw new AppError(`A recipe can hold ${MAX_COMPONENTS_PER_DISH} ingredients.`, 400);
@@ -227,13 +242,23 @@ export async function saveRecipe(shopId, dishProductId, components = []) {
         },
       });
     }
+    // In the same transaction as the components: a dish that is stock in one
+    // table and assembled in another, because a write half-failed, is exactly
+    // the drift the store room cannot be reconciled out of.
+    await syncDishStockTracking(tx, shopId, dishProductId, components.length > 0);
   });
 
   return getRecipe(shopId, dishProductId);
 }
 
 export async function deleteRecipe(shopId, dishProductId) {
-  const { count } = await db.dishRecipeComponent.deleteMany({ where: { shopId, dishProductId } });
+  const count = await db.$transaction(async (tx) => {
+    const removed = await tx.dishRecipeComponent.deleteMany({ where: { shopId, dishProductId } });
+    // No recipe means nobody assembles it here any more, so it goes back to
+    // being an ordinary counted product — a bought-in item on the menu.
+    await syncDishStockTracking(tx, shopId, dishProductId, false);
+    return removed.count;
+  });
   return { dishProductId, removed: count };
 }
 
