@@ -19,7 +19,11 @@ describe("cloud hydration direct import wiring", () => {
     expect(hydration).toContain("hydratePurchaseHistoryFromSyncPull");
     expect(hydration).toContain("offlineDB.putMany(\"purchase_bills\"");
     expect(hydration).toContain("writeSubscriptionSnapshot(data)");
-    expect(hydration).toContain("offlineDB.putMany(\"bills\"");
+    expect(hydration).toContain("offlineDB.replaceSyncedSnapshot(\"bills\"");
+    expect(hydration).toContain("offlineDB.removeSyncedOrphans(");
+    expect(hydration).toContain("\"inventory_movements\"");
+    expect(hydration).toContain("\"bill_items\"");
+    expect(hydration).toContain("\"payments\"");
     expect(hydration).toContain("writeInstantCache(\"bills\"");
   });
 

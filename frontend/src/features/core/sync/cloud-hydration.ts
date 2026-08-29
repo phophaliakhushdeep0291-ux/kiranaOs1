@@ -40,6 +40,12 @@ const PRODUCT_ID_KEYS = ["id", "server_id", "serverId", "clientProductId", "clie
 const CUSTOMER_ID_KEYS = ["id", "server_id", "serverId", "clientCustomerId", "client_customer_id", "local_id", "localId"];
 const BILL_ID_KEYS = ["id", "server_id", "serverId", "clientBillId", "client_bill_id", "localBillId", "local_bill_id", "local_id", "localId"];
 
+function identityValues(rows: AnyRecord[], keys: string[]): Set<string> {
+  return new Set(rows.flatMap((row) => keys
+    .map((key) => row[key])
+    .filter((value): value is string => typeof value === "string" && value.length > 0)));
+}
+
 // A row is "unsynced" — carrying local work the server hasn't accepted — in any of these
 // states. A push that FAILED (e.g. a soft-delete whose CANCEL_BILL was rejected) lands in
 // "failed"/"conflict", not "pending_sync", so preserving only pending_sync would still let
@@ -96,6 +102,12 @@ async function importProducts() {
   const merged = await preserveLocalPending("products", products as unknown as AnyRecord[], PRODUCT_ID_KEYS);
   assertCurrentOfflineScope(scope);
   await offlineDB.replaceSyncedSnapshot("products", merged, scope);
+  await offlineDB.removeSyncedOrphans(
+    "inventory_movements",
+    identityValues(merged, PRODUCT_ID_KEYS),
+    ["product_id", "productId"],
+    scope,
+  );
   assertCurrentOfflineScope(scope);
   writeInstantCache("products", merged);
   return products.length;
@@ -145,16 +157,19 @@ async function importBills() {
     }
   }
 
-  if (bills.length > 0) {
-    // Preserve locally-unsynced bills (soft-deletes, cancellations, edits not yet accepted by the
-    // server) so a reload's bulk import doesn't resurrect a bill the shopkeeper just recycled —
-    // the server still lists it as active until its CANCEL_BILL/edit op syncs.
-    const merged = await preserveLocalPending("bills", bills as unknown as AnyRecord[], BILL_ID_KEYS);
-    assertCurrentOfflineScope(scope);
-    await offlineDB.putMany("bills", merged);
-    assertCurrentOfflineScope(scope);
-    writeInstantCache("bills", merged);
-  }
+  // Reconcile the same two-year window requested above. Older local history is retained,
+  // but a recent synced bill absent from this shop's authoritative result is quarantined.
+  const merged = await preserveLocalPending("bills", bills as unknown as AnyRecord[], BILL_ID_KEYS);
+  assertCurrentOfflineScope(scope);
+  const fromTime = new Date(`${from}T00:00:00.000Z`).getTime();
+  const toTime = new Date(`${to}T23:59:59.999Z`).getTime();
+  await offlineDB.replaceSyncedSnapshot("bills", merged, scope, (row) => {
+    const raw = row.businessDate ?? row.business_date ?? row.createdAt ?? row.created_at;
+    const time = new Date(String(raw ?? "")).getTime();
+    return Number.isFinite(time) && time >= fromTime && time <= toTime;
+  });
+  assertCurrentOfflineScope(scope);
+  writeInstantCache("bills", merged);
   if (billItems.length > 0) {
     assertCurrentOfflineScope(scope);
     await offlineDB.putMany("bill_items", uniqueById(billItems));
@@ -165,6 +180,11 @@ async function importBills() {
     assertCurrentOfflineScope(scope);
     writeInstantCache("payments", uniqueById(payments));
   }
+  const allCurrentBills = await offlineDB.getAll<AnyRecord>("bills");
+  assertCurrentOfflineScope(scope);
+  const currentBillIds = identityValues(allCurrentBills, BILL_ID_KEYS);
+  await offlineDB.removeSyncedOrphans("bill_items", currentBillIds, ["bill_id", "billId"], scope);
+  await offlineDB.removeSyncedOrphans("payments", currentBillIds, ["bill_id", "billId"], scope);
   return { bills: bills.length, billItems: billItems.length, payments: payments.length };
 }
 
