@@ -152,6 +152,29 @@ describe("bill creation transaction safety", () => {
     expect(tableRows("settings").some((row) => row.key === "cache:bills")).toBe(true);
   });
 
+  it("does not invent offline stock or ledger movement for an untracked dish", async () => {
+    dbState.committed.products = [{
+      id: "product_1",
+      name: "Dal Fry",
+      baseUnit: "piece",
+      stockBaseQty: 0,
+      defaultPricePerRateUnit: 180,
+      stockTrackingEnabled: false,
+      trackStock: false,
+    }];
+
+    const bill = await createBillLocalFirst(baseInput({
+      items: [{ productId: "product_1", name: "Dal Fry", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 180, gstRate: 0 }],
+      actualAmount: 180,
+      buyerPaidAmount: 180,
+      payments: [{ mode: BillPaymentMode.cash, amount: 180 }],
+    }));
+
+    expect(bill.id).toMatch(/^bill_/);
+    expect(tableRows("inventory_movements")).toHaveLength(0);
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 0, stockTrackingEnabled: false }));
+  });
+
   it("rolls back every bill table when any transactional write fails", async () => {
     dbState.failOnTable = "payments";
 

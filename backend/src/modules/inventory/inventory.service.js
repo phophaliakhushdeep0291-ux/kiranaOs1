@@ -26,6 +26,15 @@ async function writeRequiredInventoryAudit(entry, client) {
   return audit;
 }
 
+function assertStockTrackedProduct(product) {
+  if (product?.stockTrackingEnabled !== false) return;
+  throw new AppError(
+    "This item is not counted as stock. Track its ingredients or enable stock tracking first.",
+    409,
+    "PRODUCT_STOCK_NOT_TRACKED",
+  );
+}
+
 // Operation-level idempotency for replayed offline stock adjustments. The StockLedger row
 // carries a durable idempotencyKey (unique per shop), so a retried/replayed ADJUST_STOCK
 // — e.g. an event that committed but failed to mark SYNCED and then re-ran — returns the
@@ -284,6 +293,7 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
       where: { id: productId, shopId, deletedAt: null },
     });
     if (!product) throw new AppError("Product not found", 404);
+    assertStockTrackedProduct(product);
 
     // Receiving against a specific packaging ("12 boxes of the 8-pack"): `quantity`
     // counts that pack, so the base quantity comes from the pack's own conversion.
@@ -516,6 +526,7 @@ export async function recordDamage(shopId, data, identity = {}) {
         where: { id: productId, shopId, deletedAt: null },
       });
       if (!product) throw new AppError("Product not found", 404);
+      assertStockTrackedProduct(product);
 
       // Which packaging left the shelf ("2 of the 8-pack"). Mirrors recordPurchase:
       // `quantity` counts that pack and the base quantity comes from its own
@@ -650,6 +661,7 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
         where: { id: productId, shopId, deletedAt: null },
       });
       if (!product) throw new AppError("Product not found", 404);
+      assertStockTrackedProduct(product);
 
       const stockResult = await setLocationInventory(tx, { shopId, location, product, newStockBaseQty });
       const diff = stockResult.difference;
