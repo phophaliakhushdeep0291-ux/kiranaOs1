@@ -215,4 +215,37 @@ assert.equal(
   "and a genuinely stocked menu item keeps counting",
 );
 
+/* ------------- "Uncategorised" is still a dish, not a return to the shelf */
+
+// The Dishes screen sends `course.trim() || null`, so clearing the course box
+// arrives here as null. On that screen it means Uncategorised — it counts and
+// lists those as dishes — and not "the kitchen stopped cooking this". Reading it
+// as a removal put the plate back into the store room, where the next sale drove
+// it negative again and the whole problem rebuilt itself one dish at a time.
+const uncategorised = await sellable("Jeera Rice", 150, 0);
+await updateDishMenu(shop.id, uncategorised.id, { menuCourse: "Main Course" });
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: uncategorised.id } })).stockTrackingEnabled, false,
+  "putting it on the menu takes it out of the store room",
+);
+
+await updateDishMenu(shop.id, uncategorised.id, { menuCourse: "" });
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: uncategorised.id } })).stockTrackingEnabled, false,
+  "and clearing the course leaves it a dish — an empty box is not a decision to stock it",
+);
+
+await sell(uncategorised, 2, 150);
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: uncategorised.id } })).stockBaseQty, 0,
+  "so it still does not go negative after the course is cleared",
+);
+
+// Going back to being stock stays possible, but only as an explicit answer.
+await updateProduct(shop.id, uncategorised.id, updateProductSchema.parse({ stockTrackingEnabled: true }));
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: uncategorised.id } })).stockTrackingEnabled, true,
+  "the owner can still say it is stock, from the toggle on the product form",
+);
+
 console.log("dish-stock-is-not-inventory: ok");
