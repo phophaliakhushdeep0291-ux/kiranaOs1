@@ -102,7 +102,7 @@ async function importProducts() {
   const merged = await preserveLocalPending("products", products as unknown as AnyRecord[], PRODUCT_ID_KEYS);
   assertCurrentOfflineScope(scope);
   await offlineDB.replaceSyncedSnapshot("products", merged, scope);
-  await offlineDB.removeSyncedOrphans(
+  await offlineDB.removeOrphans(
     "inventory_movements",
     identityValues(merged, PRODUCT_ID_KEYS),
     ["product_id", "productId"],
@@ -183,8 +183,8 @@ async function importBills() {
   const allCurrentBills = await offlineDB.getAll<AnyRecord>("bills");
   assertCurrentOfflineScope(scope);
   const currentBillIds = identityValues(allCurrentBills, BILL_ID_KEYS);
-  await offlineDB.removeSyncedOrphans("bill_items", currentBillIds, ["bill_id", "billId"], scope);
-  await offlineDB.removeSyncedOrphans("payments", currentBillIds, ["bill_id", "billId"], scope);
+  await offlineDB.removeOrphans("bill_items", currentBillIds, ["bill_id", "billId"], scope);
+  await offlineDB.removeOrphans("payments", currentBillIds, ["bill_id", "billId"], scope);
   return { bills: bills.length, billItems: billItems.length, payments: payments.length };
 }
 
