@@ -424,10 +424,13 @@ export default function InventoryPage() {
     // card therefore read 1 above a panel that was empty and a filter that
     // matched nothing.
     const hasStock = (item: InventoryItem) => Number(item.stockBaseQty ?? 0) > 0;
-    const localLowStock = rows.filter((item) => isLowStock(item) && hasStock(item));
+    const localLowStock = tracked.filter((item) => isLowStock(item) && hasStock(item));
     const remoteLowStock = (lowStock.data ?? []).filter(hasStock);
     return {
-      products: rows.length,
+      // This is a Store Room card, so it counts only rows that belong in the
+      // Store Room. Menu dishes remain available through the explicit
+      // "Not counted as stock" filter without inflating the inventory total.
+      products: tracked.length,
       lowStock: (remoteLowStock.length > 0 ? remoteLowStock : localLowStock).length,
       outOfStock: tracked.filter((item) => Number(item.stockBaseQty ?? 0) <= 0).length,
       totalQuantity: roundInventoryValue(totalQuantity),
