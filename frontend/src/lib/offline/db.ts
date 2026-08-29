@@ -765,8 +765,13 @@ class OfflineDBFacade {
     });
   }
 
-  /** Remove server-owned child rows whose parent is not part of this shop's snapshot. */
-  async removeSyncedOrphans(
+  /**
+   * Remove child rows whose parent is not part of this shop's snapshot.
+   * Parent snapshot reconciliation preserves unsynced/local parents first, so an
+   * orphan cannot represent valid pending work even if an older build gave the
+   * child itself a pending status during a cross-shop session race.
+   */
+  async removeOrphans(
     storeName: string,
     parentIds: ReadonlySet<string>,
     foreignKeyFields: string[],
@@ -777,7 +782,6 @@ class OfflineDBFacade {
     await this.init();
     assertCurrentOfflineScope(expectedScope);
     const table = this.table<Record<string, unknown>>(storeName);
-    const keepStatuses = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
     let removed = 0;
 
     await dexieDB.transaction("rw", table, async () => {
@@ -788,7 +792,6 @@ class OfflineDBFacade {
         .catch(() => table.filter((row) => row.tenant_id === expectedScope.tenant_id && row.store_id === expectedScope.store_id).toArray());
       assertCurrentOfflineScope(expectedScope);
       const keys = rows
-        .filter((row) => !keepStatuses.has(String(row.sync_status ?? "synced").toLowerCase()))
         .filter((row) => {
           const parentId = foreignKeyFields
             .map((field) => row[field])
