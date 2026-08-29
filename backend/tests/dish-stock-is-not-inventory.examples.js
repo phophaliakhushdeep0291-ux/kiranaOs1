@@ -142,13 +142,27 @@ assert.equal(
   "and marks the cooked dish untracked, so the screen leaves it out of the shelf and its totals",
 );
 
-/* ------------------------------- clearing the recipe hands the stock back */
+/* --------------------- clearing the recipe does NOT hand the stock back */
 
+// This used to assert the opposite, on the reasoning that a menu item without a
+// recipe is genuinely bought and counted. That reasoning does not survive its
+// own premise: a kitchen puts dishes on the menu long before anybody writes the
+// recipes down, which is exactly why the backfills key on being a dish rather
+// than on having a recipe. Deleting a recipe does not mean the kitchen stopped
+// cooking the dish — it only means nobody has written down how.
 const { deleteRecipe } = await import("../src/verticals/restaurant/recipes/recipes.service.js");
 await deleteRecipe(shop.id, tikka.id);
 assert.equal(
-  (await db.product.findUniqueOrThrow({ where: { id: tikka.id } })).stockTrackingEnabled, true,
-  "nobody assembles it here any more, so it goes back to being an ordinary counted product",
+  (await db.product.findUniqueOrThrow({ where: { id: tikka.id } })).stockTrackingEnabled, false,
+  "the dish is still a dish, so it stays out of the store room",
+);
+
+// Nor when the last ingredient is removed, which reaches the same code path.
+await saveRecipe(shop.id, tikka.id, [{ ingredientProductId: paneer.id, qtyBase: 100 }]);
+await saveRecipe(shop.id, tikka.id, []);
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: tikka.id } })).stockTrackingEnabled, false,
+  "emptying a recipe is not a decision to start counting plates",
 );
 
 /* ------------------ a dish with NO recipe: the live store room's actual case */
@@ -213,6 +227,39 @@ await sell(water, 3, 20);
 assert.equal(
   (await db.product.findUniqueOrThrow({ where: { id: water.id } })).stockBaseQty, 45,
   "and a genuinely stocked menu item keeps counting",
+);
+
+/* ------------- "Uncategorised" is still a dish, not a return to the shelf */
+
+// The Dishes screen sends `course.trim() || null`, so clearing the course box
+// arrives here as null. On that screen it means Uncategorised — it counts and
+// lists those as dishes — and not "the kitchen stopped cooking this". Reading it
+// as a removal put the plate back into the store room, where the next sale drove
+// it negative again and the whole problem rebuilt itself one dish at a time.
+const uncategorised = await sellable("Jeera Rice", 150, 0);
+await updateDishMenu(shop.id, uncategorised.id, { menuCourse: "Main Course" });
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: uncategorised.id } })).stockTrackingEnabled, false,
+  "putting it on the menu takes it out of the store room",
+);
+
+await updateDishMenu(shop.id, uncategorised.id, { menuCourse: "" });
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: uncategorised.id } })).stockTrackingEnabled, false,
+  "and clearing the course leaves it a dish — an empty box is not a decision to stock it",
+);
+
+await sell(uncategorised, 2, 150);
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: uncategorised.id } })).stockBaseQty, 0,
+  "so it still does not go negative after the course is cleared",
+);
+
+// Going back to being stock stays possible, but only as an explicit answer.
+await updateProduct(shop.id, uncategorised.id, updateProductSchema.parse({ stockTrackingEnabled: true }));
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: uncategorised.id } })).stockTrackingEnabled, true,
+  "the owner can still say it is stock, from the toggle on the product form",
 );
 
 console.log("dish-stock-is-not-inventory: ok");

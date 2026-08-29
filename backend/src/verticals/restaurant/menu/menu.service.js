@@ -208,16 +208,26 @@ export async function updateDishMenu(shopId, productId, patch = {}) {
   if (patch.menuCourse !== undefined) {
     data.menuCourse = normalizeCourse(patch.menuCourse);
     // Putting something on the menu says the kitchen makes it, so it stops
-    // being stock — and taking it off says it is an ordinary product again.
+    // being stock.
     //
-    // Only on the transition, never on every save: an owner who has turned
-    // tracking back on for bottled water must not lose that the next time they
-    // rename its course. Recipes are deliberately not the trigger — a dish is
-    // cooked to order from the day it is added, long before anyone writes the
-    // recipe down.
+    // One direction only. Clearing the course does NOT hand it back: on the
+    // Dishes screen an empty course box means "Uncategorised", which that screen
+    // counts and lists as a dish like any other — it does not mean the kitchen
+    // stopped cooking it. Reading it as a removal put the plate straight back
+    // into the store room, where the next sale drove it negative again, and the
+    // problem rebuilt itself one dish at a time.
+    //
+    // A dish that really is bought and stocked — the bottled water sold beside
+    // it — goes back with the "Count this as stock" toggle on the product form,
+    // which is an explicit answer rather than one inferred from a blank field.
+    //
+    // Only on the transition, never on every save: an owner who has already
+    // turned tracking back on must not lose that when they rename its course.
+    // Recipes are deliberately not the trigger — a dish is cooked to order from
+    // the day it is added, long before anyone writes the recipe down.
     const wasOnMenu = product.menuCourse != null;
     const nowOnMenu = data.menuCourse != null;
-    if (wasOnMenu !== nowOnMenu) data.stockTrackingEnabled = !nowOnMenu;
+    if (nowOnMenu && !wasOnMenu) data.stockTrackingEnabled = false;
   }
   if (patch.foodType !== undefined) {
     data.foodType = patch.foodType && FOOD_TYPES.includes(patch.foodType) ? patch.foodType : null;

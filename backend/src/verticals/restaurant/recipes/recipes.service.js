@@ -190,15 +190,26 @@ export async function getRecipe(shopId, dishProductId, { locationId } = {}) {
 /**
  * A dish with a recipe is assembled here, so it stops being stock.
  *
- * Kept beside the recipe rather than asked of the owner: writing a recipe IS the
- * statement that this thing is made from other things, and a menu item with no
- * recipe — a bottled drink off the shelf — is genuinely bought and counted, so
- * clearing the recipe hands its stock back.
+ * One direction only. An earlier version of this handed the stock back when the
+ * recipe was cleared, on the reasoning that a menu item without a recipe — a
+ * bottled drink off the shelf — is genuinely bought and counted. That reasoning
+ * does not survive its own premise: a kitchen puts dishes on the menu long
+ * before anybody writes the recipes down, which is exactly why the backfills key
+ * on being a dish rather than on having a recipe. Deleting a recipe, or removing
+ * its last ingredient, does not mean the kitchen stopped cooking the dish — but
+ * it did put the plate back into the store room, where the next sale drove it
+ * negative again.
+ *
+ * Automatic rules only ever take something OUT of stock. Putting it back is an
+ * explicit answer from the owner, via "Count this as stock" on the product form,
+ * because the cost of guessing wrong here is a number no purchase order can
+ * correct.
  */
 async function syncDishStockTracking(client, shopId, dishProductId, hasRecipe) {
+  if (!hasRecipe) return;
   await client.product.updateMany({
     where: { id: dishProductId, shopId },
-    data: { stockTrackingEnabled: !hasRecipe },
+    data: { stockTrackingEnabled: false },
   });
 }
 
