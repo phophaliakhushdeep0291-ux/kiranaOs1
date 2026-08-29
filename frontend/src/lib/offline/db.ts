@@ -732,6 +732,7 @@ class OfflineDBFacade {
     storeName: string,
     values: T[],
     expectedScope: Pick<OfflineScope, "tenant_id" | "store_id"> = getOfflineScope(),
+    shouldReconcileExisting: (row: Record<string, unknown>) => boolean = () => true,
   ): Promise<void> {
     if (!BUSINESS_TABLES.has(storeName)) throw new Error(`Unsupported snapshot table: ${storeName}`);
     assertCurrentOfflineScope(expectedScope);
@@ -753,12 +754,53 @@ class OfflineDBFacade {
         .catch(() => table.filter((row) => row.tenant_id === scope.tenant_id && row.store_id === scope.store_id).toArray());
       assertCurrentOfflineScope(scope);
       const syncedKeys = current
-        .filter((row) => !keepStatuses.has(String(row.sync_status ?? "synced").toLowerCase()))
+        .filter((row) =>
+          !keepStatuses.has(String(row.sync_status ?? "synced").toLowerCase())
+          && shouldReconcileExisting(row),
+        )
         .map((row) => row.id)
         .filter((id): id is string => typeof id === "string" && id.length > 0);
       if (syncedKeys.length > 0) await table.bulkDelete(syncedKeys);
       if (rows.length > 0) await table.bulkPut(rows);
     });
+  }
+
+  /** Remove server-owned child rows whose parent is not part of this shop's snapshot. */
+  async removeSyncedOrphans(
+    storeName: string,
+    parentIds: ReadonlySet<string>,
+    foreignKeyFields: string[],
+    expectedScope: Pick<OfflineScope, "tenant_id" | "store_id"> = getOfflineScope(),
+  ): Promise<number> {
+    if (!BUSINESS_TABLES.has(storeName)) throw new Error(`Unsupported dependent table: ${storeName}`);
+    assertCurrentOfflineScope(expectedScope);
+    await this.init();
+    assertCurrentOfflineScope(expectedScope);
+    const table = this.table<Record<string, unknown>>(storeName);
+    const keepStatuses = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
+    let removed = 0;
+
+    await dexieDB.transaction("rw", table, async () => {
+      const rows = await table
+        .where("[tenant_id+store_id]")
+        .equals([expectedScope.tenant_id, expectedScope.store_id])
+        .toArray()
+        .catch(() => table.filter((row) => row.tenant_id === expectedScope.tenant_id && row.store_id === expectedScope.store_id).toArray());
+      assertCurrentOfflineScope(expectedScope);
+      const keys = rows
+        .filter((row) => !keepStatuses.has(String(row.sync_status ?? "synced").toLowerCase()))
+        .filter((row) => {
+          const parentId = foreignKeyFields
+            .map((field) => row[field])
+            .find((value): value is string => typeof value === "string" && value.length > 0);
+          return !parentId || !parentIds.has(parentId);
+        })
+        .map((row) => row.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0);
+      if (keys.length > 0) await table.bulkDelete(keys);
+      removed = keys.length;
+    });
+    return removed;
   }
 
   async transaction<T>(
