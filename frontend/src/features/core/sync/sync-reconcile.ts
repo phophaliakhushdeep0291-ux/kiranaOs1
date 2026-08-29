@@ -37,6 +37,54 @@ import type { SyncPullChange } from "@/types/api";
 import type { SyncStatus } from "@/types/domain";
 import { calculateLedgerBalance, dedupeLedgerEntries, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 
+const PRODUCT_PARENT_ID_KEYS = ["id", "server_id", "serverId", "clientProductId", "client_product_id", "local_id", "localId"];
+const BILL_PARENT_ID_KEYS = ["id", "server_id", "serverId", "clientBillId", "client_bill_id", "localBillId", "local_bill_id", "local_id", "localId"];
+
+function collectIdentityValues(rows: Array<Record<string, unknown>>, keys: string[]): Set<string> {
+  return new Set(rows.flatMap((row) => keys
+    .map((key) => row[key])
+    .filter((value): value is string => typeof value === "string" && value.length > 0)));
+}
+
+/**
+ * A sync pull can contain old child rows that were wrongly assigned to this
+ * shop by a previous cross-session race. Reconcile them after every pull/push,
+ * not only during the earlier authoritative snapshot import, otherwise the
+ * incremental pull immediately recreates the leaked rows.
+ */
+async function removeOrphanedDependentRows(): Promise<void> {
+  // Some recovery/test adapters can expose only the legacy read/write facade.
+  // Missing cleanup capability must never turn a successful bill push into a
+  // failed sync; the production facade always provides this method.
+  if (typeof offlineDB.removeOrphans !== "function") return;
+  const scope = getOfflineScope();
+  const [products, bills] = await Promise.all([
+    offlineDB.getAll<Record<string, unknown>>("products"),
+    offlineDB.getAll<Record<string, unknown>>("bills"),
+  ]);
+  await Promise.all([
+    offlineDB.removeOrphans(
+      "inventory_movements",
+      collectIdentityValues(products, PRODUCT_PARENT_ID_KEYS),
+      ["product_id", "productId"],
+      scope,
+    ),
+    offlineDB.removeOrphans(
+      "bill_items",
+      collectIdentityValues(bills, BILL_PARENT_ID_KEYS),
+      ["bill_id", "billId"],
+      scope,
+    ),
+    offlineDB.removeOrphans(
+      "payments",
+      collectIdentityValues(bills, BILL_PARENT_ID_KEYS),
+      ["bill_id", "billId"],
+      scope,
+      { removeWhenForeignKeyMissing: false },
+    ),
+  ]);
+}
+
 async function findExistingServerRow(
   tableName: string,
   serverId: string,
@@ -449,6 +497,7 @@ async function refreshCustomerBalancesFromLocalLedger(): Promise<void> {
 }
 
 export async function refreshBusinessCaches(): Promise<void> {
+  await removeOrphanedDependentRows();
   await refreshCustomerBalancesFromLocalLedger().catch(() => undefined);
   const listRows = async <T extends Record<string, unknown>>(
     tableName: string,

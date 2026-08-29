@@ -776,6 +776,7 @@ class OfflineDBFacade {
     parentIds: ReadonlySet<string>,
     foreignKeyFields: string[],
     expectedScope: Pick<OfflineScope, "tenant_id" | "store_id"> = getOfflineScope(),
+    options: { removeWhenForeignKeyMissing?: boolean } = {},
   ): Promise<number> {
     if (!BUSINESS_TABLES.has(storeName)) throw new Error(`Unsupported dependent table: ${storeName}`);
     assertCurrentOfflineScope(expectedScope);
@@ -796,7 +797,9 @@ class OfflineDBFacade {
           const parentId = foreignKeyFields
             .map((field) => row[field])
             .find((value): value is string => typeof value === "string" && value.length > 0);
-          return !parentId || !parentIds.has(parentId);
+          return parentId
+            ? !parentIds.has(parentId)
+            : options.removeWhenForeignKeyMissing !== false;
         })
         .map((row) => row.id)
         .filter((id): id is string => typeof id === "string" && id.length > 0);
