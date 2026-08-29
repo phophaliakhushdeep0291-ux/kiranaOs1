@@ -209,7 +209,19 @@ export interface InventoryStockRow {
   isLow: boolean;
 }
 
-/** One authoritative answer used by inventory and offline billing alike. */
+/**
+ * Whether this product's own stock is a number anybody counts.
+ *
+ * True for everything a shop buys, stores and runs out of, which is almost
+ * everything — hence the default when neither field is set. False for a thing
+ * that is made or performed rather than stocked: a cooked dish, whose
+ * ingredients are what actually leave the store room.
+ *
+ * One authoritative answer, used by inventory and offline billing alike. The
+ * inline copies it replaces are how the write paths drifted: billing, stock
+ * movements and both product save paths each asserted `true` instead of reading
+ * it, so every sale re-tracked the dish it had just driven one lower.
+ */
 export function productTracksStock(item?: Product | InventoryItem | null): boolean {
   return (item?.stockTrackingEnabled ?? item?.trackStock ?? true) !== false;
 }
