@@ -27,10 +27,14 @@ const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("restaurant_tables"), requireCapability("TABLE_MANAGEMENT"));
 
 // ── Reservations ────────────────────────────────────────────────────
-router.get("/reservations", validateQuery(reservationListQuery), ctrl.listReservations);
-router.post("/reservations", validate(createReservationSchema), ctrl.createReservation);
-router.patch("/reservations/:id", validate(updateReservationSchema), ctrl.updateReservation);
-router.post("/reservations/:id/status", validate(reservationStatusSchema), ctrl.setReservationStatus);
+// Bookings are their own entitlement, not a corollary of having tables. A
+// counter shop with no floor never takes one, and a floor that takes walk-ins
+// only should not be paying for a diary it does not open.
+const reservations = requireFeature("restaurant_reservations");
+router.get("/reservations", reservations, validateQuery(reservationListQuery), ctrl.listReservations);
+router.post("/reservations", reservations, validate(createReservationSchema), ctrl.createReservation);
+router.patch("/reservations/:id", reservations, validate(updateReservationSchema), ctrl.updateReservation);
+router.post("/reservations/:id/status", reservations, validate(reservationStatusSchema), ctrl.setReservationStatus);
 
 // ── Staff scheduling ────────────────────────────────────────────────
 // Static path before "/:id" so it is not swallowed by a detail route later.
