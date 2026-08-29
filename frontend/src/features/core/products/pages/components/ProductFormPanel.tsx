@@ -291,6 +291,7 @@ export function ProductFormPanel({
   const imageUrl = form.watch("imageUrl");
   const description = form.watch("description") ?? "";
   const batchTracking = form.watch("batchTrackingEnabled");
+  const stockTracking = form.watch("stockTrackingEnabled");
   const isLoose = !!form.watch("isLooseItem");
   const selectedUnit = form.watch("unit");
   const sellsLoose = hasCapability("LOOSE_ITEMS");
@@ -1361,6 +1362,26 @@ export function ProductFormPanel({
               <Field label={t("products.form.reorderLevel")}>
                 <Input className="h-11" type="number" inputMode="decimal" placeholder="0" {...form.register("reorderLevel")} />
               </Field>
+            </div>
+            {/* Not every line on a bill is a thing on a shelf. A cooked dish is
+                made to order and its ingredients are what leave the store room;
+                a service is performed. Counting those drives a number nothing
+                ever restocks further below zero every service.
+
+                Shown for every trade, and deliberately not hidden behind the
+                menu: putting something on a menu untracks it automatically,
+                which is right for Dal Fry and wrong for the bottled water sold
+                beside it. This is where the owner says so. */}
+            <div className="flex items-start justify-between gap-4 rounded-[12px] border border-[#e3eaf3] bg-[#f8fafc] p-3.5" data-testid="stock-tracking-toggle">
+              <div className="min-w-0">
+                <p className="text-[12px] font-black text-[#13274d]">{t("products.form.countAsStock")}</p>
+                <p className="mt-1 text-[10.5px] font-semibold leading-4 text-[#65748f]">{t("products.form.countAsStockHelp")}</p>
+              </div>
+              <Switch
+                checked={stockTracking}
+                onCheckedChange={(checked) => form.setValue("stockTrackingEnabled", checked, { shouldDirty: true })}
+                aria-label={t("products.form.countAsStock")}
+              />
             </div>
             {/* Dated stock is a real concern for a chemist, a grocer and a
                 beauty counter, and none at all for a garment or a spare part.

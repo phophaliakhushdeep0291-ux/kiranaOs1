@@ -48,12 +48,18 @@ function originalContent(file) {
   return blob.status === 0 ? blob.stdout : null;
 }
 
+// Present on the base branch, so it may already be applied somewhere. A
+// migration introduced by THIS pull request has run nowhere yet, and amending it
+// before it merges is ordinary work, not a correction to history.
+const onBase = (file) => git("cat-file", "-e", base + ":" + file).status === 0;
+
 const offenders = [];
 for (const line of diff.stdout.split("\n").map((l) => l.trim()).filter(Boolean)) {
   const [status, ...paths] = line.split(/\s+/);
+  const file = paths[0];
+  if (!onBase(file)) continue;
   if (status.startsWith("D")) { offenders.push(["deleted", paths.join(" -> ")]); continue; }
   if (status.startsWith("R")) { offenders.push(["renamed", paths.join(" -> ")]); continue; }
-  const file = paths[0];
   const original = originalContent(file);
   const current = git("show", `HEAD:${file}`);
   if (original === null || current.status !== 0 || current.stdout !== original) {

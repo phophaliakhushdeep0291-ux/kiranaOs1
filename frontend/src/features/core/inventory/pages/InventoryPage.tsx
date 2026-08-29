@@ -387,9 +387,23 @@ export default function InventoryPage() {
       .filter((item) => {
         const tracked = (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false;
         const qty = Number(item.stockBaseQty ?? 0);
-        if (stockFilter === "out") return tracked && qty <= 0;
-        if (stockFilter === "low") return tracked && qty > 0 && isLowStock(item);
-        if (stockFilter === "in") return !tracked || (qty > 0 && !isLowStock(item));
+        if (stockFilter === "untracked") return !tracked;
+        // The store room is the things the shop buys, stores and counts. A cooked
+        // dish has no stock of its own — its ingredients are what leave the shelf
+        // — and neither does a service, so neither belongs in this table.
+        //
+        // They were listed anyway: the flag reached the stat cards and the three
+        // named filters, but "All stock status" returned every row, and that is
+        // the default, so it is the only view most people ever see. A cafe opened
+        // its store room to a list of its own menu at -1 and -2 — numbers no
+        // purchase order can put back.
+        //
+        // Not dropped, only moved: "Not counted as stock" lists exactly these,
+        // and dishes have their own screen under Store Room.
+        if (!tracked) return false;
+        if (stockFilter === "out") return qty <= 0;
+        if (stockFilter === "low") return qty > 0 && isLowStock(item);
+        if (stockFilter === "in") return qty > 0 && !isLowStock(item);
         return true;
       });
   }, [allInventoryRows, brandFilter, categoryFilter, search, stockFilter, unitFilter]);
@@ -847,7 +861,7 @@ export default function InventoryPage() {
                   <InventoryFilterSelect value={unitFilter} onChange={setUnitFilter} placeholder={t("inventory.page.allUnits")} options={filterOptions.units} />
                   <Select value={stockFilter} onValueChange={setStockFilter}>
                     <SelectTrigger aria-label={t("inventory.page.allStockStatus")} className="h-9 rounded-[8px] border-[#dfe6ef] text-[11px] font-medium"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="all">{t("inventory.page.allStockStatus")}</SelectItem><SelectItem value="in">{t("inventory.stock.inStock")}</SelectItem><SelectItem value="low">{t("inventory.stock.lowStock")}</SelectItem><SelectItem value="out">{t("inventory.stock.outOfStock")}</SelectItem></SelectContent>
+                    <SelectContent><SelectItem value="all">{t("inventory.page.allStockStatus")}</SelectItem><SelectItem value="in">{t("inventory.stock.inStock")}</SelectItem><SelectItem value="low">{t("inventory.stock.lowStock")}</SelectItem><SelectItem value="out">{t("inventory.stock.outOfStock")}</SelectItem><SelectItem value="untracked">{t("inventory.stock.notCounted")}</SelectItem></SelectContent>
                   </Select>
                 </div>
               </div>

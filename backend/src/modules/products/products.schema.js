@@ -77,6 +77,15 @@ export const createProductSchema = z.object({
   // count and is reordered on its own (70 g packet vs 8-pack).
   packagingMode: z.enum(["pooled", "per_pack"]).default("pooled"),
   batchTrackingEnabled: z.boolean().default(false),
+  // Whether this product's own stock is a number anybody counts. True for
+  // everything a shop buys, stores and runs out of, hence the default.
+  //
+  // False for a thing that is made or performed rather than stocked: a cooked
+  // dish, whose ingredients are what actually leave the store room. Putting
+  // something on a menu sets it, which is right for a dish and wrong for the
+  // bottled water sold beside it — so the owner has to be able to say
+  // otherwise, and this is where they say it.
+  stockTrackingEnabled: z.boolean().default(true),
   // Which drug schedule this medicine falls under. Null/absent means "not a
   // scheduled drug", which is every product until someone classifies it — so
   // adding this changes nothing for an existing catalogue. Marking a product h,

@@ -168,10 +168,26 @@ assert.ok(
 
 /* ------------------- an owner's override survives an ordinary menu edit */
 
+const { updateProduct } = await import("../src/modules/products/products.service.js");
+
 const water = await sellable("Mineral Water", 20, 48);
 await updateDishMenu(shop.id, water.id, { menuCourse: "Beverages" });
-// A bottle really is bought and stored, so the owner turns tracking back on.
-await db.product.update({ where: { id: water.id }, data: { stockTrackingEnabled: true } });
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: water.id } })).stockTrackingEnabled, false,
+  "putting a bottle on the menu untracks it like anything else — the rule cannot read minds",
+);
+
+// Which is why the owner has to be able to say otherwise. A bottle really is
+// bought, stored and counted, and this is the path the product form uses: if the
+// API drops the field, the toggle is a decoration and the shopkeeper is stuck
+// with a drink they cannot count.
+const { updateProductSchema } = await import("../src/modules/products/products.schema.js");
+const edit = updateProductSchema.parse({ stockTrackingEnabled: true });
+assert.equal(
+  edit.stockTrackingEnabled, true,
+  "zod strips what it does not declare, so the schema is where a silent drop would happen",
+);
+await updateProduct(shop.id, water.id, edit);
 await updateDishMenu(shop.id, water.id, { menuCourse: "Drinks" });
 assert.equal(
   (await db.product.findUniqueOrThrow({ where: { id: water.id } })).stockTrackingEnabled, true,

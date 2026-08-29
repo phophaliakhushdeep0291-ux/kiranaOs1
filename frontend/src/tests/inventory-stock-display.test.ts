@@ -142,7 +142,29 @@ describe("inventory stock display", () => {
       expect(page).toContain("(lowStock.data ?? []).filter(hasStock)");
       // The panel and the table keep their own qty > 0 guards.
       expect(page).toContain('.filter((item) => Number(item.stockBaseQty ?? 0) > 0)');
-      expect(page).toContain('if (stockFilter === "low") return tracked && qty > 0 && isLowStock(item);');
+      expect(page).toContain('if (stockFilter === "low") return qty > 0 && isLowStock(item);');
+      // `tracked` moved to a stronger guard above the stock filters, so "low"
+      // cannot see an untracked row at all rather than re-checking it here.
+      expect(page).toContain("if (!tracked) return false;");
+    });
+
+    it("keeps what the shop does not count out of the store room", () => {
+      // The flag reached the stat cards and the three named filters, but "All
+      // stock status" returned every row — and that is the default, so it was
+      // the only view most people ever saw. A cafe opened its store room to a
+      // list of its own menu at -1 and -2: a cooked dish has no stock of its
+      // own, and no purchase order can put those numbers back.
+      const page = readFileSync("src/features/core/inventory/pages/InventoryPage.tsx", "utf8");
+      const filter = page.slice(page.indexOf("const tracked = (item.stockTrackingEnabled"));
+
+      // The untracked branch is answered before the guard, so the rows stay
+      // reachable instead of being dropped from the screen altogether.
+      expect(filter.indexOf('if (stockFilter === "untracked") return !tracked;'))
+        .toBeLessThan(filter.indexOf("if (!tracked) return false;"));
+      expect(page).toContain('<SelectItem value="untracked">{t("inventory.stock.notCounted")}</SelectItem>');
+
+      // And the default view no longer waves every row through.
+      expect(filter).not.toContain('if (stockFilter === "in") return !tracked || (qty > 0 && !isLowStock(item));');
     });
 
     it("is what the Low Stock Alerts panel actually calls", () => {

@@ -40,6 +40,7 @@ export const inventoryEn = {
   "inventory.stock.inStock": "In Stock",
   "inventory.stock.lowStock": "Low Stock",
   "inventory.stock.outOfStock": "Out of Stock",
+  "inventory.stock.notCounted": "Not counted as stock",
   "inventory.filter.allSuppliers": "All Suppliers",
   "inventory.filter.allTypes": "All Types",
   "inventory.filter.allStatus": "All Status",

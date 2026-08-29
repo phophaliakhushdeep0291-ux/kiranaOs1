@@ -73,6 +73,10 @@ export const productFormSchema = z.object({
   stockQuantity: z.coerce.number().min(0).default(0),
   lowStockAlert: z.coerce.number().min(0).default(0),
   batchTrackingEnabled: z.boolean().default(false),
+  // Whether this product's own stock is a number anybody counts. Almost
+  // everything a shop sells is, hence the default; a cooked dish is not,
+  // because its ingredients are what leave the store room.
+  stockTrackingEnabled: z.boolean().default(true),
   // h | h1 | x | otc, or null for anything that is not a scheduled drug — which
   // is every product until a pharmacy classifies it. Setting h/h1/x is what
   // makes billing demand a prescription for this medicine.
@@ -254,6 +258,7 @@ export function productToForm(product?: Product): ProductFormData {
         ? roundMoney(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
         : fromBaseQty(product?.lowStockThreshold, unit),
     batchTrackingEnabled: product?.batchTrackingEnabled ?? false,
+    stockTrackingEnabled: product?.stockTrackingEnabled ?? true,
     drugSchedule: product?.drugSchedule ?? null,
     attributes: normalizeProductAttributes(product?.attributes),
     reorderLevel: product?.reorderLevel ?? 0,
@@ -456,8 +461,13 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     stockBaseQty,
     stockQuantity,
     stockUnit: values.unit,
-    stockTrackingEnabled: true,
-    trackStock: true,
+    // Carried from the form, not asserted. Hardcoding these meant every save
+    // re-tracked the product: a dish edited once came straight back into the
+    // store room, and an owner who had said "do not count the bottled water"
+    // lost that the next time they touched its price. Harmless only for as long
+    // as the API ignored the field.
+    stockTrackingEnabled: values.stockTrackingEnabled,
+    trackStock: values.stockTrackingEnabled,
     costPerRateUnit: avgCost,
     costPrice: avgCost,
     averageCostPrice: avgCost,
@@ -546,6 +556,7 @@ const OWNER_APPROVAL_PRODUCT_FIELDS = [
   "variantAxes",
   "packagingMode",
   "batchTrackingEnabled",
+  "stockTrackingEnabled",
   "drugSchedule",
   "isActive",
   "status",
@@ -574,7 +585,7 @@ function normalizedApprovalValue(field: typeof OWNER_APPROVAL_PRODUCT_FIELDS[num
   if (["hsn", "barcode", "sku", "drugSchedule"].includes(field)) {
     return String(value ?? "").trim().toLowerCase() || null;
   }
-  if (["batchTrackingEnabled", "isActive"].includes(field)) return Boolean(value);
+  if (["batchTrackingEnabled", "stockTrackingEnabled", "isActive"].includes(field)) return Boolean(value);
   if (field === "status") return String(value ?? "active").trim().toLowerCase();
   if (field === "packagingMode") return String(value ?? "pooled").trim().toLowerCase();
   if (field === "variantAxes") {
