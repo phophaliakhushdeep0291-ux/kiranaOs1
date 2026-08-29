@@ -7,6 +7,7 @@ const engine = readFileSync("src/features/core/sync/sync-engine.ts", "utf8");
 const manualSync = readFileSync("src/features/core/sync/manual-sync.ts", "utf8");
 const offlineStatus = readFileSync("src/features/core/sync/useOfflineStatus.ts", "utf8");
 const syncBanner = readFileSync("src/features/core/sync/SyncAlertBanner.tsx", "utf8");
+const reconcile = readFileSync("src/features/core/sync/sync-reconcile.ts", "utf8");
 
 describe("cloud hydration direct import wiring", () => {
   it("imports backend snapshot data from normal APIs, not only sync pull", () => {
@@ -64,5 +65,16 @@ describe("cloud hydration direct import wiring", () => {
     expect(manualSync).toContain("syncError = error instanceof Error");
     expect(manualSync).toContain("Snapshot recovery incomplete");
     expect(hydration).toContain('preserveLocalPending("customers"');
+  });
+
+  it("removes dependent rows again after incremental sync can reintroduce them", () => {
+    expect(reconcile).toContain("async function removeOrphanedDependentRows()");
+    expect(reconcile).toContain('offlineDB.removeOrphans(\n      "inventory_movements"');
+    expect(reconcile).toContain('offlineDB.removeOrphans(\n      "bill_items"');
+    expect(reconcile).toContain('offlineDB.removeOrphans(\n      "payments"');
+    expect(reconcile).toContain("{ removeWhenForeignKeyMissing: false }");
+    expect(reconcile.indexOf("await removeOrphanedDependentRows()")).toBeLessThan(
+      reconcile.indexOf('listRows("inventory_movements"'),
+    );
   });
 });

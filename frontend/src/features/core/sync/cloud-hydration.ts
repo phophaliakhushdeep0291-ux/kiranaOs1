@@ -184,7 +184,13 @@ async function importBills() {
   assertCurrentOfflineScope(scope);
   const currentBillIds = identityValues(allCurrentBills, BILL_ID_KEYS);
   await offlineDB.removeOrphans("bill_items", currentBillIds, ["bill_id", "billId"], scope);
-  await offlineDB.removeOrphans("payments", currentBillIds, ["bill_id", "billId"], scope);
+  await offlineDB.removeOrphans(
+    "payments",
+    currentBillIds,
+    ["bill_id", "billId"],
+    scope,
+    { removeWhenForeignKeyMissing: false },
+  );
   return { bills: bills.length, billItems: billItems.length, payments: payments.length };
 }
 
