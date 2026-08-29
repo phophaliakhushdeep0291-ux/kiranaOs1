@@ -1,4 +1,5 @@
 import { offlineDB, type OfflineWriteTransaction } from "@/lib/offline/db";
+import { countsAsStock } from "@/features/core/inventory/stock-display";
 import { getOfflineScope } from "@/lib/offline/context";
 import { billCreationSchema, ownerPinRequiredActionSchema } from "@/lib/validation";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
@@ -364,6 +365,11 @@ function buildStockProjection(items: BillInputItem[], productsById: Map<string, 
     if (!item.productId) continue;
     const product = productsById.get(item.productId);
     if (!product) continue;
+    // A dish is cooked to order: its ingredients are what leave the store room,
+    // and the server stopped decrementing it. Projecting it here anyway put the
+    // plate back to -1 in the till's own copy after every sale — and that copy
+    // is what the store room renders.
+    if (!countsAsStock(product)) continue;
     const previous = runningStock.has(product.id) ? runningStock.get(product.id)! : productStockQty(product);
     const next = roundMoney(previous - billItemBaseQuantity(item, product));
     runningStock.set(product.id, next);
@@ -396,8 +402,8 @@ function buildStockProjection(items: BillInputItem[], productsById: Map<string, 
       sellingUnits,
       stockBaseQty: nextStock,
       stockQuantity: nextStock,
-      stockTrackingEnabled: true,
-      trackStock: true,
+      stockTrackingEnabled: product.stockTrackingEnabled ?? true,
+      trackStock: product.stockTrackingEnabled ?? true,
       updatedAt: now,
       updated_at: now,
       negativeStockWarning: nextStock < 0 ? "Stock went negative from billing. Add stock when inventory is updated." : undefined,
