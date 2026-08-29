@@ -7,7 +7,7 @@ const engine = readFileSync("src/features/core/sync/sync-engine.ts", "utf8");
 const manualSync = readFileSync("src/features/core/sync/manual-sync.ts", "utf8");
 const offlineStatus = readFileSync("src/features/core/sync/useOfflineStatus.ts", "utf8");
 const syncBanner = readFileSync("src/features/core/sync/SyncAlertBanner.tsx", "utf8");
-const reconcile = readFileSync("src/features/core/sync/sync-reconcile.ts", "utf8");
+const reconcile = readFileSync("src/features/core/sync/sync-reconcile.ts", "utf8").replaceAll("\r\n", "\n");
 
 describe("cloud hydration direct import wiring", () => {
   it("imports backend snapshot data from normal APIs, not only sync pull", () => {

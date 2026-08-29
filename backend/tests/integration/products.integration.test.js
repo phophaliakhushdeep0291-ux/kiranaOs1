@@ -105,6 +105,43 @@ if (ctx.skip) {
       assert.equal(history.entries[0].newStockBaseQty, 12);
     });
 
+    test("stock history rejects cross-shop and deleted-product ledger rows", async () => {
+      const first = await ownerCtx();
+      const second = await ownerCtx();
+      const foreignProduct = await createProduct(ctx.db, first.tenant.shop.id, { name: "Foreign Coffee" });
+      const deletedProduct = await createProduct(ctx.db, second.tenant.shop.id, { name: "Deleted Dish" });
+      await ctx.db.product.update({ where: { id: deletedProduct.id }, data: { deletedAt: new Date() } });
+
+      await ctx.db.stockLedger.createMany({
+        data: [
+          {
+            shopId: second.tenant.shop.id,
+            productId: foreignProduct.id,
+            productName: foreignProduct.name,
+            action: "sale",
+            changeBaseQty: -1,
+            oldStockBaseQty: 1,
+            newStockBaseQty: 0,
+          },
+          {
+            shopId: second.tenant.shop.id,
+            productId: deletedProduct.id,
+            productName: deletedProduct.name,
+            action: "sale",
+            changeBaseQty: -1,
+            oldStockBaseQty: 1,
+            newStockBaseQty: 0,
+          },
+        ],
+      });
+
+      const history = assertSuccess(await ctx.get("/api/inventory/ledger?page=1&limit=20", {
+        token: second.ownerAuth.accessToken,
+      }));
+      assert.equal(history.total, 0);
+      assert.deepEqual(history.entries, []);
+    });
+
     test("product update works", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Old Name" });
