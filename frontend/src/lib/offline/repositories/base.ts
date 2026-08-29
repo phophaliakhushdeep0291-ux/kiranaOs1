@@ -1,6 +1,8 @@
 import type { Table } from "dexie";
 import {
   dexieDB,
+  assertCurrentOfflineScope,
+  assertOfflineWriteScope,
   rowMatchesCurrentScope,
   type OfflineRow,
 } from "@/lib/offline/db";
@@ -31,6 +33,7 @@ export function withLocalEntityDefaults<T extends Record<string, unknown>>(
   syncStatus: SyncStatus = "synced",
 ): LocalEntityRecord<T> {
   const scope = getOfflineScope();
+  assertOfflineWriteScope(input);
   const now = nowIso();
   const createdAt = input.created_at ?? input.createdAt ?? now;
   const updatedAt = input.updated_at ?? input.updatedAt ?? now;
@@ -50,9 +53,9 @@ export function withLocalEntityDefaults<T extends Record<string, unknown>>(
           ? input.serverId
           : undefined,
     tenant_id:
-      typeof input.tenant_id === "string" ? input.tenant_id : scope.tenant_id,
+      scope.tenant_id,
     store_id:
-      typeof input.store_id === "string" ? input.store_id : scope.store_id,
+      scope.store_id,
     created_at: typeof createdAt === "string" ? createdAt : now,
     updated_at: typeof updatedAt === "string" ? updatedAt : now,
     deleted_at:
@@ -140,7 +143,9 @@ export class LocalRepository<T extends Record<string, unknown>> {
     input: T,
     syncStatus: SyncStatus = "synced",
   ): Promise<LocalEntityRecord<T>> {
+    const scope = getOfflineScope();
     await dexieDB.open();
+    assertCurrentOfflineScope(scope);
     const row = withLocalEntityDefaults(input, this.idPrefix, syncStatus);
     await this.table().put(row);
     return row;
@@ -150,7 +155,9 @@ export class LocalRepository<T extends Record<string, unknown>> {
     inputs: T[],
     syncStatus: SyncStatus = "synced",
   ): Promise<Array<LocalEntityRecord<T>>> {
+    const scope = getOfflineScope();
     await dexieDB.open();
+    assertCurrentOfflineScope(scope);
     if (inputs.length === 0) return [];
     const rows = inputs
       .filter(isRecord)
@@ -165,7 +172,9 @@ export class LocalRepository<T extends Record<string, unknown>> {
     id: string,
     syncStatus: SyncStatus = "pending_sync",
   ): Promise<void> {
+    const scope = getOfflineScope();
     await dexieDB.open();
+    assertCurrentOfflineScope(scope);
     const existing = await this.table().get(id);
     if (!existing || !rowMatchesCurrentScope(existing)) return;
     await this.table().put({
@@ -178,7 +187,9 @@ export class LocalRepository<T extends Record<string, unknown>> {
   }
 
   async hardDelete(id: string): Promise<void> {
+    const scope = getOfflineScope();
     await dexieDB.open();
+    assertCurrentOfflineScope(scope);
     const existing = await this.table().get(id);
     if (!existing || !rowMatchesCurrentScope(existing)) return;
     await this.table().delete(id);

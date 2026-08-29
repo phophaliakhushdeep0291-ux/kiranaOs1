@@ -1,5 +1,5 @@
 import type { AuthResponse } from "@/types/api";
-import { clearAuthStorage, getAuthValue, loadAuthSession, saveAuthSession } from "@/lib/storage/auth-storage";
+import { authSessionIdentity, clearAuthStorage, getAuthValue, loadAuthSession, saveAuthSession } from "@/lib/storage/auth-storage";
 import { getDeviceMetadata, hydrateDeviceIdentity } from "@/lib/device-identity";
 import { withCrossTabLock } from "@/lib/browser/multiTabCoordinator";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
@@ -44,7 +44,10 @@ export interface ApiRequestOptions extends RequestInit {
 
 let authTokenGetter: (() => string | null) | null = null;
 const readRateLimitCooldownByBucket = new Map<string, number>();
-let refreshPromise: Promise<AuthResponse> | null = null;
+// Refreshes are isolated by refresh token + shop identity. A single global promise
+// allowed a newly logged-in restaurant session to await an older Kirana refresh,
+// retry with that token, and cache the Kirana response under the restaurant scope.
+let refreshPromises = new Map<string, Promise<AuthResponse>>();
 const AUTH_REFRESH_LOCK_NAME = "kiranaos.auth.refresh";
 
 export const AUTH_SESSION_EXPIRED_EVENT = "kirana:auth-session-expired";
@@ -284,9 +287,30 @@ function notifyDeviceSessionRevoked(code: string, shopId?: string) {
   window.dispatchEvent(new CustomEvent(DEVICE_SESSION_REVOKED_EVENT, { detail: { code, shopId } }));
 }
 
-async function getSharedRefreshedAuth(refreshToken: string) {
-  if (!refreshPromise) {
-    refreshPromise = withCrossTabLock(AUTH_REFRESH_LOCK_NAME, async () => {
+function sessionChangedError() {
+  return new ApiClientError("The signed-in shop changed while this request was running.", 409, {
+    code: "AUTH_SESSION_CHANGED",
+  });
+}
+
+function assertAuthSessionUnchanged(expectedIdentity: string | null) {
+  if (!expectedIdentity || authSessionIdentity() === expectedIdentity) return;
+  throw sessionChangedError();
+}
+
+function authRefreshLockName(identity: string | null) {
+  // Identity contains only user/shop ids (never a token). Same-shop tabs still
+  // serialize refresh rotation; a different shop cannot be held behind them.
+  return `${AUTH_REFRESH_LOCK_NAME}:${identity ?? "anonymous"}`;
+}
+
+async function getSharedRefreshedAuth(refreshToken: string, expectedIdentity = authSessionIdentity()) {
+  const refreshKey = JSON.stringify([refreshToken, expectedIdentity]);
+  const existingPromise = refreshPromises.get(refreshKey);
+  if (existingPromise) return existingPromise;
+
+  const refreshPromise = withCrossTabLock(authRefreshLockName(expectedIdentity), async () => {
+      assertAuthSessionUnchanged(expectedIdentity);
       const stored = loadAuthSession();
       if (
         stored.refreshToken
@@ -306,6 +330,7 @@ async function getSharedRefreshedAuth(refreshToken: string) {
       return refreshAuthSession(stored.refreshToken || refreshToken);
     })
       .then((refreshed) => {
+        assertAuthSessionUnchanged(expectedIdentity);
         persistRefreshedAuth(refreshed);
         return refreshed;
       })
@@ -319,9 +344,9 @@ async function getSharedRefreshedAuth(refreshToken: string) {
         throw error;
       })
       .finally(() => {
-        refreshPromise = null;
+        if (refreshPromises.get(refreshKey) === refreshPromise) refreshPromises.delete(refreshKey);
       });
-  }
+  refreshPromises.set(refreshKey, refreshPromise);
   return refreshPromise;
 }
 
@@ -332,6 +357,9 @@ export function refreshStoredAuthSession(refreshToken = getStoredRefreshToken())
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { ownerPin, responseType = "json", skipAuth, skipRefresh, skipDevice, background, timeoutMs, ...fetchOptions } = options;
+  // Capture before the first await. Every authenticated response belongs only to
+  // this identity; a logout/shop-switch makes it stale even if the HTTP call succeeds.
+  const requestIdentity = skipAuth ? null : authSessionIdentity();
   if (!skipDevice) await hydrateDeviceIdentity();
   let token = getStoredAccessToken();
 
@@ -339,7 +367,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     const refreshToken = getStoredRefreshToken();
     if (refreshToken) {
       try {
-        const refreshed = await getSharedRefreshedAuth(refreshToken);
+        const refreshed = await getSharedRefreshedAuth(refreshToken, requestIdentity);
         token = refreshed.accessToken || refreshed.token || null;
       } catch (error) {
         if (isFinalRefreshFailure(error)) {
@@ -401,7 +429,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     const refreshToken = getStoredRefreshToken();
     if (refreshToken) {
       try {
-        const refreshed = await getSharedRefreshedAuth(refreshToken);
+        const refreshed = await getSharedRefreshedAuth(refreshToken, requestIdentity);
         const refreshedToken = refreshed.accessToken || refreshed.token;
 
         const retryHeaders = new Headers(headers);
@@ -425,6 +453,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   }
 
   try {
+    if (!skipAuth) assertAuthSessionUnchanged(requestIdentity);
     if (responseType === "blob") {
       if (!response.ok) return await parseResponse<T>(response);
       return await response.blob() as T;

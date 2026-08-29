@@ -175,6 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       stashCurrentProtectedLocation();
       authGenerationRef.current += 1;
       clearAuthStorage();
+      clearInstantMemoryCache();
+      queryClient.clear();
       setAccessToken(null);
       setUser(null);
       setShop(null);
@@ -183,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
     return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
-  }, [setLocation]);
+  }, [queryClient, setLocation]);
 
   useEffect(() => {
     const handleSharedSessionChange = (event: StorageEvent) => {
@@ -239,6 +241,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const pendingCount = await offlineDB.getPendingCount().catch(() => 0);
       try { window.sessionStorage.setItem("kirana:revoked-device-pending-count", String(pendingCount)); } catch { /* optional display hint */ }
       clearAuthStorage();
+      clearInstantMemoryCache();
+      queryClient.clear();
       setAccessToken(null);
       setUser(null);
       setShop(null);
@@ -310,6 +314,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateShop = (shopData: Shop | null) => {
+    const previousShopId = shop?.id ?? user?.shopId ?? null;
+    const nextShopId = shopData?.id ?? user?.shopId ?? null;
+    if (previousShopId !== nextShopId) {
+      clearInstantMemoryCache();
+      queryClient.clear();
+    }
     saveAuthSession({ shop: shopData });
     setShop(shopData);
   };

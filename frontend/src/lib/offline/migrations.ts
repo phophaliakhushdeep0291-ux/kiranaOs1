@@ -1,6 +1,6 @@
 import { offlineDB } from "@/lib/offline/db";
 import { hydrateInstantCacheFromIndexedDB, migrateLegacyInstantCache, RECENT_CACHE_DAYS } from "@/lib/offline/instant-cache";
-import { billsRepository, customersRepository, idMappingsRepository, inventoryMovementsRepository, productsRepository, settingsRepository } from "@/lib/offline/repositories";
+import { billsRepository, customersRepository, inventoryMovementsRepository, productsRepository } from "@/lib/offline/repositories";
 
 // The udhar summary snapshot is hydrated here too so a cold start while offline
 // shows the server's balances instead of the (possibly drifted) device ledger.
@@ -13,14 +13,9 @@ function canUseLegacyLocalStorage() {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
 
-function readLegacyJson<T>(key: string): T | null {
-  if (!canUseLegacyLocalStorage()) return null;
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) as T : null;
-  } catch {
-    return null;
-  }
+function removeLegacyValue(key: string): void {
+  if (!canUseLegacyLocalStorage()) return;
+  try { localStorage.removeItem(key); } catch { /* restricted storage */ }
 }
 
 async function migrateBusinessCaches(): Promise<void> {
@@ -40,22 +35,17 @@ async function migrateBusinessCaches(): Promise<void> {
 }
 
 async function migrateLegacyIdMap(): Promise<void> {
-  const map = readLegacyJson<Record<string, string>>(LEGACY_ID_MAP_KEY);
-  if (map && Object.keys(map).length > 0) {
-    await idMappingsRepository.putMany(map, "customer").catch(() => undefined);
-  }
+  // This old key predates tenant scoping. There is no trustworthy way to know
+  // which shop created it, so importing it into the currently logged-in shop can
+  // cross-link another business's records. Discard it; sync rebuilds mappings.
+  removeLegacyValue(LEGACY_ID_MAP_KEY);
 }
 
 async function migrateLegacySettingsBackedData(): Promise<void> {
-  const legacyBillingDraft = readLegacyJson<unknown>(LEGACY_BILLING_DRAFT_KEY);
-  if (legacyBillingDraft !== null && await settingsRepository.get(LEGACY_BILLING_DRAFT_KEY) === null) {
-    await settingsRepository.set(LEGACY_BILLING_DRAFT_KEY, legacyBillingDraft).catch(() => undefined);
-  }
-
-  const buyingAverageCache = readLegacyJson<unknown>(LEGACY_BUYING_AVG_CACHE_KEY);
-  if (buyingAverageCache !== null && await settingsRepository.get(LEGACY_BUYING_AVG_CACHE_KEY) === null) {
-    await settingsRepository.set(LEGACY_BUYING_AVG_CACHE_KEY, buyingAverageCache).catch(() => undefined);
-  }
+  // These unscoped keys can contain a previous shop's live bill and buying data.
+  // Never assign them to whichever shop happens to log in next.
+  removeLegacyValue(LEGACY_BILLING_DRAFT_KEY);
+  removeLegacyValue(LEGACY_BUYING_AVG_CACHE_KEY);
 }
 
 export async function migrateLegacyLocalStorageToDexie(): Promise<void> {
