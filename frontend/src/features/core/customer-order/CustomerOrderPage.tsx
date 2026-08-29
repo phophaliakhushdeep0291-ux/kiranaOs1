@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
 import { useParams } from "wouter";
 import { guestWebsiteRedirect } from "./restaurant-website";
 import {
@@ -94,6 +95,7 @@ interface CartItem {
 }
 
 export default function CustomerOrderPage() {
+  const { t } = useAppLanguage();
   const params = useParams<{ shopCode: string }>();
   const shopCode = params.shopCode ?? "";
 
@@ -141,7 +143,7 @@ export default function CustomerOrderPage() {
           setState({
             kind: "error",
             unavailable: false,
-            message: err instanceof Error ? err.message : "Something went wrong loading this shop.",
+            message: err instanceof Error ? err.message : t("storefront.loadFailed"),
           });
         }
       });
@@ -257,7 +259,7 @@ export default function CustomerOrderPage() {
       submitAttempt?.fingerprint === submitFingerprint ? submitAttempt.key : newOrderIdempotencyKey(shopCode);
     if (submitAttempt?.key !== idempotencyKey) setSubmitAttempt({ key: idempotencyKey, fingerprint: submitFingerprint });
     try {
-      if (state.kind !== "ready") throw new Error("Store catalog is not ready.");
+      if (state.kind !== "ready") throw new Error(t("storefront.catalogNotReady"));
       const result = await submitCustomerOrder(
         shopCode,
         {
@@ -288,7 +290,7 @@ export default function CustomerOrderPage() {
       // The storefront takes no money, so a failure here is the checkout itself
       // failing — which is the drop-off the owner most needs to see.
       trackEvent(ACTIVITY_EVENTS.ONLINE_PAYMENT_FAILED, { stage: "submit_order", itemCount: submitItems.length });
-      setSubmitError(err instanceof Error ? err.message : "Could not place the order.");
+      setSubmitError(err instanceof Error ? err.message : t("storefront.placeFailed"));
     } finally {
       setPlacing(false);
     }
@@ -298,7 +300,7 @@ export default function CustomerOrderPage() {
     return (
       <CenterScreen>
         <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#dbe6f5] border-t-[var(--brand)]" />
-        <p className="mt-4 text-sm font-medium text-[#5b6b85]">Loading shop...</p>
+        <p className="mt-4 text-sm font-medium text-[#5b6b85]">{t("storefront.loadingShop")}</p>
       </CenterScreen>
     );
   }
@@ -348,7 +350,7 @@ export default function CustomerOrderPage() {
       setCategory("all");
       setState({ kind: "ready", catalog: result.catalog, source: result.source });
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Could not switch stores.");
+      setSubmitError(error instanceof Error ? error.message : t("storefront.switchFailed"));
     } finally {
       setSwitchingLocation(false);
     }
@@ -481,6 +483,7 @@ function StorefrontHeader({
   switchingLocation: boolean;
   onLocationChange: (locationId: string) => void;
 }) {
+  const { t } = useAppLanguage();
   return (
     <header className="sticky top-0 z-30 border-b border-[#e4ecf7] bg-white/95 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-[1380px] items-center gap-3 px-3 pb-2 pt-3 sm:px-6 lg:hidden">
@@ -495,12 +498,12 @@ function StorefrontHeader({
                 {catalog.shop.name || "Artha"}
                 </h1>
                 <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#e8f9ee] px-2 py-1 text-[9px] font-black uppercase tracking-wide text-[#0f8f45]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" /> Open
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" /> {t("storefront.open")}
                 </span>
               </div>
               {catalog.locations.length > 1 ? (
                 <select
-                  aria-label="Order from store"
+                  aria-label={t("storefront.orderFromStore")}
                   value={catalog.location.id}
                   disabled={switchingLocation}
                   onChange={(event) => onLocationChange(event.target.value)}
@@ -523,14 +526,14 @@ function StorefrontHeader({
             <div className="flex items-center gap-2">
               <h1 className="truncate font-display text-xl font-black tracking-[-0.02em] text-[#071432]">{catalog.shop.name}</h1>
               <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f9ee] px-2 py-1 text-[11px] font-black text-[#0f9f4a]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" /> Accepting orders
+                <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" /> {t("storefront.acceptingOrders")}
               </span>
             </div>
             {catalog.locations.length > 1 ? (
               <label className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-[#66758f]">
-                <span className="sr-only">Order from store</span>
+                <span className="sr-only">{t("storefront.orderFromStore")}</span>
                 <select
-                  aria-label="Order from store"
+                  aria-label={t("storefront.orderFromStore")}
                   value={catalog.location.id}
                   disabled={switchingLocation}
                   onChange={(event) => onLocationChange(event.target.value)}
@@ -550,8 +553,8 @@ function StorefrontHeader({
             <input
               value={search}
               onChange={(e) => onSearch(e.target.value)}
-              placeholder="Search this store"
-              aria-label="Search products"
+              placeholder={t("storefront.searchThisStore")}
+              aria-label={t("storefront.searchProducts")}
               className="min-w-0 flex-1 bg-transparent py-3 text-sm font-semibold outline-none placeholder:text-[#7d8ba4]"
             />
           </div>
@@ -563,20 +566,20 @@ function StorefrontHeader({
             onClick={() => onFulfillment("delivery")}
             className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black ${fulfillment === "delivery" ? "bg-[#eaf2ff] text-[var(--brand)] shadow-sm" : "text-[#52617a]"}`}
           >
-            <Truck size={16} /> Delivery
+            <Truck size={16} /> {t("storefront.delivery")}
           </button>
           <button
             type="button"
             onClick={() => onFulfillment("pickup")}
             className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black ${fulfillment === "pickup" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#52617a]"}`}
           >
-            <ShoppingBag size={16} /> Self Pickup
+            <ShoppingBag size={16} /> {t("storefront.selfPickup")}
           </button>
         </div>
 
         {source === "cache" && (
           <span className="hidden items-center gap-1 rounded-full bg-[#fff7ed] px-2 py-1 text-[10px] font-bold text-[#c2410c] sm:inline-flex">
-            <WifiOff size={11} /> Offline
+            <WifiOff size={11} /> {t("storefront.offline")}
           </span>
         )}
       </div>
@@ -599,24 +602,25 @@ function ShopProductsSection({
   qty: Record<string, number>;
   setItemQty: (id: string, next: number) => void;
 }) {
+  const { t } = useAppLanguage();
   return (
     <section className="rounded-[24px] border border-[#e4ecf7] bg-white p-3 shadow-[0_18px_60px_rgba(20,60,120,0.06)] sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-display text-lg font-black tracking-[-0.01em] text-[#081332] sm:text-xl">Shop products</h2>
-          <p className="mt-1 text-xs font-medium text-[#6d7890] sm:text-sm">{filtered.length} available product{filtered.length === 1 ? "" : "s"}</p>
+          <h2 className="font-display text-lg font-black tracking-[-0.01em] text-[#081332] sm:text-xl">{t("storefront.shopProducts")}</h2>
+          <p className="mt-1 text-xs font-medium text-[#6d7890] sm:text-sm">{t(filtered.length === 1 ? "storefront.availableOne" : "storefront.availableMany", { count: filtered.length })}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-2 text-xs font-semibold text-[#52617a] sm:flex">
-            Sort by:
+            {t("storefront.sortBy")}
             <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-[#dfe8f5] bg-white px-3 py-2 font-bold text-[#172544]">
-              Popularity <ChevronDown size={14} />
+              {t("storefront.popularity")} <ChevronDown size={14} />
             </button>
           </div>
           <div className="flex rounded-xl border border-[#dfe8f5] bg-[var(--brand-softer)] p-1">
             <button
               type="button"
-              aria-label="Grid view"
+              aria-label={t("storefront.gridView")}
               onClick={() => setViewMode("grid")}
               className={`grid h-8 w-8 place-items-center rounded-lg ${viewMode === "grid" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#70809c]"}`}
             >
@@ -624,7 +628,7 @@ function ShopProductsSection({
             </button>
             <button
               type="button"
-              aria-label="List view"
+              aria-label={t("storefront.listView")}
               onClick={() => setViewMode("list")}
               className={`grid h-8 w-8 place-items-center rounded-lg ${viewMode === "list" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#70809c]"}`}
             >
@@ -656,12 +660,15 @@ function ShopProductsSection({
   );
 }
 
-const CUSTOMER_NAV: Array<{ view: CustomerStorefrontView; label: string; icon: typeof Home; badge?: string; sub?: string }> = [
-  { view: "shop", label: "Shop Now", icon: Home },
-  { view: "orders", label: "My Orders", icon: ShoppingBag },
+// Module scope has no dictionary to read, so these carry keys and whoever
+// renders them resolves the word.
+const CUSTOMER_NAV: Array<{ view: CustomerStorefrontView; labelKey: TranslationKey; icon: typeof Home; badge?: string; sub?: string }> = [
+  { view: "shop", labelKey: "storefront.navShop", icon: Home },
+  { view: "orders", labelKey: "storefront.navOrders", icon: ShoppingBag },
 ];
 
 function CustomerMobileNav({ activeView, onView }: { activeView: CustomerStorefrontView; onView: (view: CustomerStorefrontView) => void }) {
+  const { t } = useAppLanguage();
   return (
     <div className="border-b border-[#e4ecf7] bg-white/95 px-3 py-2 lg:hidden">
       <div className="grid grid-cols-2 gap-2">
@@ -676,75 +683,12 @@ function CustomerMobileNav({ activeView, onView }: { activeView: CustomerStorefr
               className={`inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black shadow-[0_8px_20px_rgba(20,40,90,0.04)] ${active ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#dfe8f5] bg-white text-[#243653]"}`}
             >
               <Icon size={15} />
-              {item.label.replace(" & Credits", "")}
+              {t(item.labelKey).replace(" & Credits", "")}
             </button>
           );
         })}
       </div>
     </div>
-  );
-}
-
-function CustomerSidebar({
-  shopName,
-  shopLocation,
-  trackedOrderId,
-  activeView,
-  onView,
-}: {
-  shopName: string;
-  shopLocation: string;
-  trackedOrderId: string | null;
-  activeView: CustomerStorefrontView;
-  onView: (view: CustomerStorefrontView) => void;
-}) {
-  return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col overflow-y-auto bg-[#061a39] px-4 py-6 text-white lg:flex xl:w-[280px]">
-      <div className="flex items-center gap-3">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_16px_36px_rgba(7,95,255,0.35)]">
-          <ShoppingCart size={25} />
-        </div>
-        <div>
-          <p className="font-display text-2xl font-black tracking-[-0.03em]">Ar<span className="text-[#0b77ff]">tha</span></p>
-          <p className="text-[11px] font-semibold text-[#b5c4df]">Order direct from your store</p>
-        </div>
-      </div>
-
-      <nav className="mt-8 space-y-2">
-        {CUSTOMER_NAV.map((item) => {
-          const Icon = item.icon;
-          const active = activeView === item.view;
-          return (
-            <button
-              type="button"
-              key={item.view}
-              onClick={() => onView(item.view)}
-              className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${active ? "bg-[var(--brand)] text-white shadow-[0_12px_30px_rgba(7,95,255,0.32)]" : "text-[#dbe7fb] hover:bg-white/8"}`}
-            >
-              <Icon size={19} />
-              <span className="min-w-0 flex-1">{item.label}</span>
-              {item.view === "orders" && trackedOrderId ? <span className="rounded-lg bg-[var(--brand)] px-2 py-0.5 text-xs">1</span> : item.badge ? <span className="rounded-lg bg-[var(--brand)] px-2 py-0.5 text-xs">{item.badge}</span> : null}
-              {item.sub ? <span className="text-[11px] text-[#2be07e]">{item.sub}</span> : null}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="mt-auto space-y-4 pt-8">
-        <div className="rounded-2xl bg-white p-4 text-[#071432] shadow-[0_16px_50px_rgba(0,0,0,0.24)]">
-          <p className="text-sm font-black">Order with confidence</p>
-          <p className="mt-2 text-xs font-semibold text-[#5f6e88]">Live branch catalog, server-verified prices, and order tracking.</p>
-        </div>
-        <div className="rounded-2xl border border-white/12 bg-white/8 p-4">
-          <p className="text-sm font-black">{shopName}</p>
-          <p className="mt-1 text-xs text-[#b5c4df]">{shopLocation}</p>
-          <p className="mt-3 inline-flex items-center gap-1 text-xs font-black text-[#2be07e]">
-            <span className="h-2 w-2 rounded-full bg-[#2be07e]" /> Accepting online orders
-          </p>
-        </div>
-        <p className="text-center text-[11px] text-[#8092b3]">Powered by Artha</p>
-      </div>
-    </aside>
   );
 }
 
@@ -757,9 +701,10 @@ function CategoryRail({
   active: string;
   onSelect: (key: string) => void;
 }) {
-  const all = [{ key: "all", label: "All" }, ...categories];
+  const { t } = useAppLanguage();
+  const all = [{ key: "all", label: t("storefront.allCategories") }, ...categories];
   return (
-    <nav aria-label="Product categories" className="-mx-3 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
+    <nav aria-label={t("storefront.productCategories")} className="-mx-3 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
       <div className="flex min-w-max gap-2">
         {all.map((cat) => {
           const selected = active === cat.key;
@@ -794,13 +739,14 @@ function CategoryRail({
 }
 
 function StorePromiseStrip({ source, fulfillment }: { source: "network" | "cache"; fulfillment: FulfillmentMode }) {
+  const { t } = useAppLanguage();
   const promises = [
     { Icon: source === "cache" ? WifiOff : ShieldCheck, label: source === "cache" ? "Saved catalog" : "Live catalog" },
-    { Icon: fulfillment === "pickup" ? ShoppingBag : Truck, label: fulfillment === "pickup" ? "Store pickup" : "Delivery" },
-    { Icon: CheckCircle2, label: "Store confirms" },
+    { Icon: fulfillment === "pickup" ? ShoppingBag : Truck, label: t(fulfillment === "pickup" ? "storefront.storePickup" : "storefront.delivery") },
+    { Icon: CheckCircle2, label: t("storefront.storeConfirms") },
   ];
   return (
-    <section aria-label="Ordering information" className="grid grid-cols-3 divide-x divide-[#e4ecf7] rounded-2xl border border-[#e4ecf7] bg-white px-1 py-3 shadow-[0_8px_28px_rgba(20,60,120,0.04)]">
+    <section aria-label={t("storefront.orderingInformation")} className="grid grid-cols-3 divide-x divide-[#e4ecf7] rounded-2xl border border-[#e4ecf7] bg-white px-1 py-3 shadow-[0_8px_28px_rgba(20,60,120,0.04)]">
       {promises.map(({ Icon, label }) => (
         <div key={label} className="flex min-w-0 flex-col items-center gap-1 px-1 text-center sm:flex-row sm:justify-center sm:gap-2">
           <Icon size={16} className={source === "cache" && label === "Saved catalog" ? "text-[#c2410c]" : "text-[var(--brand)]"} />
@@ -811,27 +757,8 @@ function StorePromiseStrip({ source, fulfillment }: { source: "network" | "cache
   );
 }
 
-function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; title: string; body: string }) {
-  const styles = {
-    green: "border-[#d8f5e2] bg-[#f1fbf5] text-[#0f9f4a]",
-    blue: "border-[#dce8ff] bg-[#f4f8ff] text-[var(--brand)]",
-    orange: "border-[#ffe4be] bg-[#fff8ed] text-[#f97316]",
-  }[tone];
-  const Icon = tone === "green" ? PackageCheck : tone === "blue" ? Clock : Store;
-  return (
-    <div className={`flex items-center gap-3 rounded-2xl border p-4 ${styles}`}>
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/80">
-        <Icon size={22} />
-      </span>
-      <div className="min-w-0">
-        <p className="text-sm font-black">{title}</p>
-        <p className="mt-1 line-clamp-2 text-xs font-semibold text-[#3f4f70]">{body}</p>
-      </div>
-    </div>
-  );
-}
-
 function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
+  const { t } = useAppLanguage();
   // §13 ONLINE_PRODUCT_VIEW — counted when the card is genuinely on screen.
   const impressionRef = useOnlineProductImpression(product.id, product.name);
   return (
@@ -857,7 +784,7 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
             <span className="ml-2 text-xs font-semibold text-[#95a3bb] line-through">{formatRs(product.mrp)}</span>
           ) : null}
         </p>
-        <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-[#0f9f4a]">Available</p>
+        <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-[#0f9f4a]">{t("storefront.available")}</p>
       </div>
       {qty > 0 ? (
         <QuantityStepper qty={qty} onChange={onChange} />
@@ -868,7 +795,7 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
           aria-label={`Add ${product.name} to order`}
           className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border border-[var(--brand-border)] bg-[#f8fbff] text-sm font-black text-[var(--brand)] transition hover:bg-[#eaf2ff] sm:mt-3"
         >
-          Add
+          {t("storefront.add")}
         </button>
       )}
     </article>
@@ -876,6 +803,7 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
 }
 
 function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
+  const { t } = useAppLanguage();
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-[#e3ebf7] bg-white p-3">
       <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[var(--brand-softer)] to-[var(--brand-soft)]">
@@ -896,7 +824,7 @@ function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogPr
         </div>
       ) : (
         <button type="button" onClick={() => onChange(1)} className="rounded-xl border border-[var(--brand-border)] px-4 py-2 text-sm font-black text-[var(--brand)]">
-          Add
+          {t("storefront.add")}
         </button>
       )}
     </div>
@@ -904,13 +832,14 @@ function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogPr
 }
 
 function QuantityStepper({ qty, onChange, compact = false }: { qty: number; onChange: (next: number) => void; compact?: boolean }) {
+  const { t } = useAppLanguage();
   return (
     <div className={`mt-2 flex items-center overflow-hidden rounded-xl border border-[#d9e4f2] bg-[#f8fbff] sm:mt-3 ${compact ? "mt-0 sm:mt-0" : ""}`}>
-      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-11 flex-1 place-items-center text-[var(--brand)]">
+      <button type="button" aria-label={t("storefront.decreaseQuantity")} onClick={() => onChange(qty - 1)} className="grid h-11 flex-1 place-items-center text-[var(--brand)]">
         <Minus size={16} />
       </button>
       <span className="grid h-11 min-w-10 place-items-center border-x border-[#d9e4f2] bg-white text-sm font-black tabular-nums">{qty}</span>
-      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-11 flex-1 place-items-center text-[var(--brand)]">
+      <button type="button" aria-label={t("storefront.increaseQuantity")} onClick={() => onChange(qty + 1)} className="grid h-11 flex-1 place-items-center text-[var(--brand)]">
         <Plus size={16} />
       </button>
     </div>
@@ -952,22 +881,23 @@ function OrderSummaryPanel({
   onPlace: () => void;
   onQr: () => void;
 }) {
+  const { t } = useAppLanguage();
   return (
     <aside className="sticky top-[92px] hidden max-h-[calc(100vh-112px)] min-h-0 overflow-y-auto rounded-[24px] border border-[#e3ebf7] bg-white p-4 shadow-[0_18px_60px_rgba(20,60,120,0.08)] lg:block">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-display text-lg font-black tracking-[-0.01em]">Your Order</h2>
-          <p className="text-xs font-semibold text-[#7a889f]">{cartItems.length} item{cartItems.length === 1 ? "" : "s"}</p>
+          <h2 className="font-display text-lg font-black tracking-[-0.01em]">{t("storefront.yourOrder")}</h2>
+          <p className="text-xs font-semibold text-[#7a889f]">{t(cartItems.length === 1 ? "storefront.itemOne" : "storefront.itemMany", { count: cartItems.length })}</p>
         </div>
         <button type="button" onClick={onClear} disabled={cartItems.length === 0} className="inline-flex items-center gap-1 text-xs font-black text-[#ef4444] disabled:opacity-40">
-          <Trash2 size={14} /> Clear Cart
+          <Trash2 size={14} /> {t("storefront.clearCart")}
         </button>
       </div>
 
       <div className="mt-4 space-y-2">
         {cartItems.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[#dce6f4] bg-[#f8fbff] py-10 text-center text-sm font-semibold text-[#71809a]">
-            Add products to start an order.
+            {t("storefront.addProductsToStartAnOrder")}
           </div>
         ) : (
           cartItems.map((item) => (
@@ -985,19 +915,19 @@ function OrderSummaryPanel({
             onClick={() => setFulfillment("delivery")}
             className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "delivery" ? "bg-[#eaf2ff] text-[var(--brand)]" : "text-[#52617a]"}`}
           >
-            Delivery
+            {t("storefront.delivery")}
           </button>
           <button
             type="button"
             onClick={() => setFulfillment("pickup")}
             className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "pickup" ? "bg-[#eaf2ff] text-[var(--brand)]" : "text-[#52617a]"}`}
           >
-            Self Pickup
+            {t("storefront.selfPickup")}
           </button>
         </div>
         <div className="mt-3 space-y-2">
           <CustomerDetailsFields form={form} setForm={setForm} mobileOk={mobileOk} fulfillment={fulfillment} compact />
-          <select aria-label="Preferred fulfillment time" value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} className="w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-2.5 text-sm font-bold outline-none">
+          <select aria-label={t("storefront.preferredFulfillmentTime")} value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} className="w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-2.5 text-sm font-bold outline-none">
             {timeSlots.map((slot) => <option key={slot}>{slot}</option>)}
           </select>
         </div>
@@ -1011,11 +941,11 @@ function OrderSummaryPanel({
         onClick={onPlace}
         className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand)] py-4 text-sm font-black text-white shadow-[0_18px_38px_rgba(7,95,255,0.24)] disabled:cursor-not-allowed disabled:bg-[#b8c6dc] disabled:shadow-none"
       >
-        {placing ? <><Loader2 size={17} className="animate-spin" /> Placing order...</> : <>Place Order <ChevronRight size={17} /></>}
+        {placing ? <><Loader2 size={17} className="animate-spin" /> {t("storefront.placingOrder")}</> : <>Place Order <ChevronRight size={17} /></>}
       </button>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button type="button" onClick={onQr} disabled={cartItems.length === 0} className="rounded-xl border border-[#d8f5e2] bg-[#f1fbf5] py-2.5 text-xs font-black text-[#0f9f4a] disabled:opacity-40">QR fallback</button>
-        <button type="button" onClick={onClear} disabled={cartItems.length === 0} className="rounded-xl border border-[#ffd6d6] bg-[#fff7f7] py-2.5 text-xs font-black text-[#ef4444] disabled:opacity-40">Clear cart</button>
+        <button type="button" onClick={onQr} disabled={cartItems.length === 0} className="rounded-xl border border-[#d8f5e2] bg-[#f1fbf5] py-2.5 text-xs font-black text-[#0f9f4a] disabled:opacity-40">{t("storefront.qrFallback")}</button>
+        <button type="button" onClick={onClear} disabled={cartItems.length === 0} className="rounded-xl border border-[#ffd6d6] bg-[#fff7f7] py-2.5 text-xs font-black text-[#ef4444] disabled:opacity-40">{t("storefront.clearCart2")}</button>
       </div>
     </aside>
   );
@@ -1026,6 +956,7 @@ function useOrderTotalsShape() {
 }
 
 function CartLine({ item, onQtyChange }: { item: CartItem; onQtyChange: (id: string, next: number) => void }) {
+  const { t } = useAppLanguage();
   return (
     <div className="grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-[#edf2f8] bg-white p-2">
       <div className="grid h-12 w-12 place-items-center rounded-xl bg-[var(--brand-softer)]">
@@ -1049,19 +980,21 @@ function CartLine({ item, onQtyChange }: { item: CartItem; onQtyChange: (id: str
 }
 
 function PriceBreakdown({ totals }: { totals: ReturnType<typeof useOrderTotalsShape> }) {
+  const { t } = useAppLanguage();
   return (
     <div className="mt-4 space-y-2 border-t border-[#edf2f8] pt-4 text-sm">
-      <Row label="Subtotal" value={formatRs(totals.subtotal)} />
+      <Row label={t("storefront.subtotal")} value={formatRs(totals.subtotal)} />
       <div className="mt-3 flex items-center justify-between border-t border-[#edf2f8] pt-3">
-        <span className="text-base font-black">Estimated item total</span>
+        <span className="text-base font-black">{t("storefront.estimatedItemTotal")}</span>
         <span className="font-display text-2xl font-black text-[var(--brand)]">{formatRs(totals.grandTotal)}</span>
       </div>
-      <p className="text-[11px] font-semibold leading-4 text-[#71809a]">The store confirms taxes, delivery charges, discounts, and the final payable amount before billing.</p>
+      <p className="text-[11px] font-semibold leading-4 text-[#71809a]">{t("storefront.theStoreConfirmsTaxesDeliveryCharges")}</p>
     </div>
   );
 }
 
 function Row({ label, value, valueClass = "text-[var(--brand-ink)]" }: { label: string; value: string; valueClass?: string }) {
+  const { t } = useAppLanguage();
   return (
     <div className="flex items-center justify-between">
       <span className="font-semibold text-[#60708b]">{label}</span>
@@ -1083,34 +1016,36 @@ function CustomerDetailsFields({
   fulfillment: FulfillmentMode;
   compact?: boolean;
 }) {
+  const { t } = useAppLanguage();
   const input = "mt-1 w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-3 text-sm font-semibold outline-none transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[#eaf2ff]";
   return (
     <div className={compact ? "space-y-2" : "space-y-3"}>
       <label className="block text-xs font-black text-[#405173]">
-        Name
-        <input autoComplete="name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Your full name" className={input} />
+        {t("storefront.name")}
+        <input autoComplete="name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder={t("storefront.yourFullName")} className={input} />
       </label>
       <label className="block text-xs font-black text-[#405173]">
-        Mobile number
-        <input autoComplete="tel" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile number" className={input} aria-describedby="mobile-help" />
-        {form.mobile && !mobileOk ? <p className="mt-1 text-[11px] font-bold text-[#e11d48]">Enter a valid 10-digit mobile number.</p> : null}
-        <span id="mobile-help" className="mt-1 block text-[10px] font-semibold text-[#7b89a0]">Used only for this order and status updates.</span>
+        {t("storefront.mobileNumber")}
+        <input autoComplete="tel" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} inputMode="numeric" maxLength={10} placeholder={t("storefront.10DigitMobileNumber")} className={input} aria-describedby="mobile-help" />
+        {form.mobile && !mobileOk ? <p className="mt-1 text-[11px] font-bold text-[#e11d48]">{t("storefront.enterAValid10DigitMobile")}</p> : null}
+        <span id="mobile-help" className="mt-1 block text-[10px] font-semibold text-[#7b89a0]">{t("storefront.usedOnlyForThisOrderAnd")}</span>
       </label>
       {fulfillment === "delivery" ? (
         <label className="block text-xs font-black text-[#405173]">
-          Delivery address
-          <textarea autoComplete="street-address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} rows={compact ? 2 : 3} placeholder="House, street, area and landmark" className={`${input} resize-none`} />
+          {t("storefront.deliveryAddress")}
+          <textarea autoComplete="street-address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} rows={compact ? 2 : 3} placeholder={t("storefront.houseStreetAreaAndLandmark")} className={`${input} resize-none`} />
         </label>
       ) : null}
       <label className="block text-xs font-black text-[#405173]">
-        Note <span className="font-semibold text-[#8290a8]">(optional)</span>
-        <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="Substitutions, packaging or directions" className={input} />
+        {t("storefront.note")} <span className="font-semibold text-[#8290a8]">{t("storefront.optional")}</span>
+        <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder={t("storefront.substitutionsPackagingOrDirections")} className={input} />
       </label>
     </div>
   );
 }
 
 function MobileCartBar({ count, amount, disabled, onOpen }: { count: number; amount: number; disabled: boolean; onOpen: () => void }) {
+  const { t } = useAppLanguage();
   if (disabled) return null;
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#dce6f4] bg-white/95 p-3 pb-[max(12px,env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
@@ -1119,10 +1054,10 @@ function MobileCartBar({ count, amount, disabled, onOpen }: { count: number; amo
           <ShoppingBag size={19} />
         </span>
         <span className="min-w-0 flex-1 text-left">
-          <span className="block text-xs font-bold opacity-90">{count} item{count === 1 ? "" : "s"} · {formatRs(amount)}</span>
-          <span className="block text-[11px] font-semibold opacity-80">Estimated item total</span>
+          <span className="block text-xs font-bold opacity-90">{t(count === 1 ? "storefront.itemOne" : "storefront.itemMany", { count })} · {formatRs(amount)}</span>
+          <span className="block text-[11px] font-semibold opacity-80">{t("storefront.estimatedItemTotal")}</span>
         </span>
-        <span className="text-sm font-black">Review order</span>
+        <span className="text-sm font-black">{t("storefront.reviewOrder")}</span>
         <ChevronRight size={18} />
       </button>
     </div>
@@ -1164,21 +1099,22 @@ function CheckoutSheet({
   onQr: () => void;
   onClose: () => void;
 }) {
+  const { t } = useAppLanguage();
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-[#0b1424]/60 backdrop-blur-sm sm:items-center sm:p-5" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="checkout-title" className="flex h-[96dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] bg-[#f7f9fc] shadow-2xl sm:h-auto sm:max-h-[92vh] sm:rounded-[28px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-[#e4ecf7] bg-white px-4 py-4 sm:px-5">
           <div>
-            <h2 id="checkout-title" className="font-display text-xl font-black text-[var(--brand-ink)]">Review your order</h2>
-            <p className="text-xs font-semibold text-[#6b7a93]">The store verifies availability and final amount.</p>
+            <h2 id="checkout-title" className="font-display text-xl font-black text-[var(--brand-ink)]">{t("storefront.reviewYourOrder")}</h2>
+            <p className="text-xs font-semibold text-[#6b7a93]">{t("storefront.theStoreVerifiesAvailabilityAndFinal")}</p>
           </div>
-          <button type="button" aria-label="Close checkout" onClick={onClose} className="grid h-11 w-11 place-items-center rounded-xl text-[#64748b] hover:bg-[#f1f5fb]"><X size={19} /></button>
+          <button type="button" aria-label={t("storefront.closeCheckout")} onClick={onClose} className="grid h-11 w-11 place-items-center rounded-xl text-[#64748b] hover:bg-[#f1f5fb]"><X size={19} /></button>
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
           <section className="rounded-2xl border border-[#e3ebf7] bg-white p-3.5">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-black text-[var(--brand-ink)]">1 · Items</h3>
-              <span className="text-xs font-bold text-[#6b7a93]">{totals.count} total</span>
+              <h3 className="text-sm font-black text-[var(--brand-ink)]">{t("storefront.1Items")}</h3>
+              <span className="text-xs font-bold text-[#6b7a93]">{t("storefront.totalCount", { count: totals.count })}</span>
             </div>
             <div className="space-y-2">
               {cartItems.map((item) => <CartLine key={item.product.id} item={item} onQtyChange={onQtyChange} />)}
@@ -1187,13 +1123,13 @@ function CheckoutSheet({
           </section>
 
           <section className="rounded-2xl border border-[#e3ebf7] bg-white p-3.5">
-            <h3 className="text-sm font-black text-[var(--brand-ink)]">2 · Fulfillment</h3>
+            <h3 className="text-sm font-black text-[var(--brand-ink)]">{t("storefront.2Fulfillment")}</h3>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setFulfillment("delivery")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black ${fulfillment === "delivery" ? "border-[var(--brand)] bg-[#eaf2ff] text-[var(--brand)]" : "border-[#dfe8f5] text-[#52617a]"}`}><Truck size={16} /> Delivery</button>
-              <button type="button" onClick={() => setFulfillment("pickup")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black ${fulfillment === "pickup" ? "border-[var(--brand)] bg-[#eaf2ff] text-[var(--brand)]" : "border-[#dfe8f5] text-[#52617a]"}`}><ShoppingBag size={16} /> Store pickup</button>
+              <button type="button" onClick={() => setFulfillment("delivery")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black ${fulfillment === "delivery" ? "border-[var(--brand)] bg-[#eaf2ff] text-[var(--brand)]" : "border-[#dfe8f5] text-[#52617a]"}`}><Truck size={16} /> {t("storefront.delivery")}</button>
+              <button type="button" onClick={() => setFulfillment("pickup")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black ${fulfillment === "pickup" ? "border-[var(--brand)] bg-[#eaf2ff] text-[var(--brand)]" : "border-[#dfe8f5] text-[#52617a]"}`}><ShoppingBag size={16} /> {t("storefront.storePickup")}</button>
             </div>
             <label className="mt-3 block text-xs font-black text-[#405173]">
-              Preferred time
+              {t("storefront.preferredTime")}
               <select value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} className="mt-1 w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-3 text-sm font-bold outline-none focus:border-[var(--brand)]">
                 {timeSlots.map((slot) => <option key={slot}>{slot}</option>)}
               </select>
@@ -1201,14 +1137,14 @@ function CheckoutSheet({
           </section>
 
           <section className="rounded-2xl border border-[#e3ebf7] bg-white p-3.5">
-            <h3 className="mb-3 text-sm font-black text-[var(--brand-ink)]">3 · Contact details</h3>
+            <h3 className="mb-3 text-sm font-black text-[var(--brand-ink)]">{t("storefront.3ContactDetails")}</h3>
             <CustomerDetailsFields form={form} setForm={setForm} mobileOk={mobileOk} fulfillment={fulfillment} />
           </section>
 
           {submitError && (
             <div role="alert" className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-3 py-2.5 text-[12px] font-semibold text-[#be123c]">
               {submitError}
-              <button type="button" onClick={onQr} className="ml-1 font-black underline">Show counter QR instead</button>
+              <button type="button" onClick={onQr} className="ml-1 font-black underline">{t("storefront.showCounterQrInstead")}</button>
             </div>
           )}
         </div>
@@ -1216,10 +1152,10 @@ function CheckoutSheet({
         <div className="border-t border-[#e4ecf7] bg-white p-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:px-5">
           <div className="mb-3 flex items-start gap-2 rounded-xl bg-[#f4f8ff] px-3 py-2 text-[11px] font-semibold leading-4 text-[#52617a]">
             <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[var(--brand)]" />
-            <span>No payment is taken now. The store confirms stock and the final payable amount before billing.</span>
+            <span>{t("storefront.noPaymentIsTakenNowThe")}</span>
           </div>
           <button type="button" disabled={!canPlace || placing} onClick={onPlace} className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand)] px-4 text-sm font-black text-white shadow-[0_16px_32px_rgba(7,95,255,0.22)] disabled:cursor-not-allowed disabled:bg-[#b8c6dc] disabled:shadow-none">
-            {placing ? <><Loader2 size={17} className="animate-spin" /> Sending order...</> : <><Send size={17} /> Place order · {formatRs(totals.grandTotal)}</>}
+            {placing ? <><Loader2 size={17} className="animate-spin" /> {t("storefront.sendingOrder")}</> : <><Send size={17} /> {t("storefront.placeOrder", { total: formatRs(totals.grandTotal) })}</>}
           </button>
         </div>
       </div>
@@ -1228,6 +1164,7 @@ function CheckoutSheet({
 }
 
 function HowOrderingWorks() {
+  const { t } = useAppLanguage();
   const steps = [
     ["1", "Browse Items", "Explore products by category"],
     ["2", "Add to Cart", "Adjust quantity and review"],
@@ -1237,7 +1174,7 @@ function HowOrderingWorks() {
   ];
   return (
     <section className="hidden rounded-[24px] border border-[#e4ecf7] bg-white p-5 shadow-[0_18px_60px_rgba(20,60,120,0.05)] lg:block">
-      <h2 className="font-display text-lg font-black text-[#081332]">How Ordering Works</h2>
+      <h2 className="font-display text-lg font-black text-[#081332]">{t("storefront.howOrderingWorks")}</h2>
       <div className="mt-4 grid grid-cols-5 gap-3">
         {steps.map(([num, title, body], idx) => (
           <div key={num} className="flex items-center gap-3">
@@ -1265,12 +1202,14 @@ function CustomerPortalPage({
   onView: (view: CustomerStorefrontView) => void;
   onAddProduct: (productId: string) => void;
 }) {
+  const { t } = useAppLanguage();
   // Only real, server-backed customer views are exposed. Historical visual mockups for wallet,
   // saved payments, offers and support are intentionally not routed until matching APIs exist.
   return <OrdersPortalPage products={products.slice(0, 6)} onView={onView} />;
 }
 
 function PortalHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
+  const { t } = useAppLanguage();
   return (
     <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
@@ -1283,6 +1222,7 @@ function PortalHeader({ title, subtitle, action }: { title: string; subtitle: st
 }
 
 function PortalCard({ children, className = "" }: { children: ReactNode; className?: string }) {
+  const { t } = useAppLanguage();
   return (
     <section className={`rounded-[22px] border border-[#e3ebf7] bg-white p-4 shadow-[0_18px_60px_rgba(20,60,120,0.055)] ${className}`}>
       {children}
@@ -1291,6 +1231,7 @@ function PortalCard({ children, className = "" }: { children: ReactNode; classNa
 }
 
 function IconBubble({ icon: Icon, tone = "blue" }: { icon: typeof Home; tone?: "blue" | "green" | "orange" | "red" | "purple" | "slate" }) {
+  const { t } = useAppLanguage();
   const styles = {
     blue: "bg-[#eaf2ff] text-[var(--brand)]",
     green: "bg-[#e9fbf0] text-[#0f9f4a]",
@@ -1307,6 +1248,7 @@ function IconBubble({ icon: Icon, tone = "blue" }: { icon: typeof Home; tone?: "
 }
 
 function ProductThumb({ product, size = "h-12 w-12" }: { product?: CustomerCatalogProduct; size?: string }) {
+  const { t } = useAppLanguage();
   return (
     <div className={`grid ${size} shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[var(--brand-softer)] to-[var(--brand-soft)]`}>
       {product?.imageUrl ? (
@@ -1319,393 +1261,19 @@ function ProductThumb({ product, size = "h-12 w-12" }: { product?: CustomerCatal
 }
 
 function OrdersPortalPage({ onView }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void }) {
+  const { t } = useAppLanguage();
   return (
     <div className="mx-auto max-w-xl py-16 text-center">
       <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#eaf2ff] text-[var(--brand)]"><ShoppingBag size={28} /></span>
-      <h1 className="mt-5 font-display text-2xl font-black text-[#071432]">No order to track yet</h1>
-      <p className="mt-2 text-sm font-semibold text-[#66758f]">Your latest order will appear here after you place it. Tracking is stored only on this device for privacy.</p>
-      <button type="button" onClick={() => onView("shop")} className="mt-6 rounded-xl bg-[var(--brand)] px-6 py-3 text-sm font-black text-white">Start an order</button>
-    </div>
-  );
-}
-
-function LegacyOrdersPortalPage({ products, onView }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void }) {
-  const orderItems = products.slice(0, 4);
-  const orders = [
-    { id: "KOS12345678", date: "Today, 10:32 AM", total: 847.3, status: "Out for Delivery", method: "Delivery" },
-    { id: "KOS12345677", date: "9 May 2025, 08:45 PM", total: 1235.6, status: "Delivered", method: "Delivery" },
-    { id: "KOS12345676", date: "8 May 2025, 07:15 PM", total: 635, status: "Delivered", method: "Self Pickup" },
-    { id: "KOS12345675", date: "7 May 2025, 06:20 PM", total: 892.4, status: "Returned", method: "Delivery" },
-  ];
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div>
-        <PortalHeader title="My Orders" subtitle="Track, manage, and reorder your purchases" />
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
-          <SearchBox placeholder="Search by order ID or item..." />
-          <div className="flex gap-2 overflow-x-auto">
-            {["All", "Processing", "Packed", "Out for Delivery", "Delivered", "Cancelled"].map((tab, index) => (
-              <button key={tab} type="button" className={`shrink-0 rounded-xl border px-4 py-2 text-xs font-black ${index === 0 ? "border-[var(--brand)] bg-[#eaf2ff] text-[var(--brand)]" : "border-[#dfe8f5] bg-white text-[#52617a]"}`}>{tab}</button>
-            ))}
-          </div>
-        </div>
-        <PortalCard className="mb-5 border-[#89b5ff] bg-[#f8fbff]">
-          <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_120px] lg:items-center">
-            <div>
-              <span className="rounded-full bg-[#eaf2ff] px-3 py-1 text-xs font-black text-[var(--brand)]">Active Order</span>
-              <h2 className="mt-4 text-lg font-black">Order #KOS12345678</h2>
-              <p className="text-sm font-semibold text-[#66758f]">8 items - {formatRs(847.3)}</p>
-              <p className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#eaf2ff] px-3 py-2 text-xs font-black text-[var(--brand)]"><Truck size={15} /> Out for Delivery</p>
-            </div>
-            <div className="grid grid-cols-5 gap-2">
-              {["Placed", "Confirmed", "Packed", "Out", "Delivered"].map((step, index) => (
-                <div key={step} className="text-center">
-                  <span className={`mx-auto grid h-11 w-11 place-items-center rounded-full ${index < 4 ? "bg-[var(--brand)] text-white" : "bg-white text-[#8aa0bd]"}`}>
-                    {index < 4 ? <CheckCircle2 size={18} /> : <PackageCheck size={18} />}
-                  </span>
-                  <p className="mt-2 text-[11px] font-black text-[#172544]">{step}</p>
-                </div>
-              ))}
-            </div>
-            <button type="button" className="rounded-xl bg-[var(--brand)] px-4 py-3 text-sm font-black text-white">Track Order</button>
-          </div>
-        </PortalCard>
-        <PortalCard className="overflow-hidden p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="bg-[#f8fbff] text-xs font-black uppercase tracking-wide text-[#70809a]">
-                <tr><th className="px-4 py-3">Order</th><th>Date & Time</th><th>Items</th><th>Total</th><th>Status</th><th>Method</th><th>Actions</th></tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id} className="border-t border-[#edf2f8]">
-                    <td className="px-4 py-4 font-black">#{order.id}</td>
-                    <td className="font-semibold text-[#52617a]">{order.date}</td>
-                    <td className="font-semibold">{Math.max(4, products.length)} items</td>
-                    <td className="font-black">{formatRs(order.total)}</td>
-                    <td><StatusPill status={order.status} /></td>
-                    <td className="font-semibold text-[#52617a]">{order.method}</td>
-                    <td><button type="button" className="rounded-xl border border-[#dfe8f5] px-3 py-2 text-xs font-black text-[var(--brand)]">View Details</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </PortalCard>
-      </div>
-      <aside className="space-y-4">
-        <PortalCard>
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg font-black">Order #KOS12345678</h2>
-            <button type="button" className="text-[#71809a]"><X size={18} /></button>
-          </div>
-          <p className="mt-2 rounded-xl bg-[#eaf2ff] px-3 py-2 text-sm font-black text-[var(--brand)]">Out for Delivery - Today, 12:15 PM</p>
-          <h3 className="mt-5 text-sm font-black">Items ({orderItems.length || 1})</h3>
-          <div className="mt-3 space-y-3">
-            {(orderItems.length ? orderItems : [undefined]).map((product, index) => (
-              <div key={product?.id ?? index} className="flex items-center gap-3">
-                <ProductThumb product={product} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-black">{product?.name ?? "Store item"}</p>
-                  <p className="text-xs font-semibold text-[#66758f]">{formatRs(product?.price ?? 120)}</p>
-                </div>
-                <span className="text-xs font-black">x1</span>
-              </div>
-            ))}
-          </div>
-          <PriceSummaryLine label="Grand Total" value={formatRs(847.3)} strong />
-          <button type="button" onClick={() => onView("shop")} className="mt-4 w-full rounded-xl border border-[var(--brand-border)] py-3 text-sm font-black text-[var(--brand)]">Reorder</button>
-        </PortalCard>
-        <PortalCard className="bg-[#f1fbf5]">
-          <p className="font-black text-[#0f9f4a]">Need help?</p>
-          <p className="mt-1 text-sm font-semibold text-[#52617a]">Contact the store for order help.</p>
-          <button type="button" onClick={() => onView("support")} className="mt-4 w-full rounded-xl bg-white py-3 text-sm font-black text-[var(--brand)]">Chat with Support</button>
-        </PortalCard>
-      </aside>
-    </div>
-  );
-}
-
-function ListsPortalPage({ products, onView, onAddProduct }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void; onAddProduct: (id: string) => void }) {
-  const [selected, setSelected] = useState(() => new Set(products.slice(0, 3).map((p) => p.id)));
-  const total = products.reduce((sum, p) => sum + p.price, 0);
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div>
-        <PortalHeader
-          title="My Lists"
-          subtitle="Save time by creating and managing your shopping lists."
-          action={<button type="button" className="rounded-xl bg-[var(--brand)] px-5 py-3 text-sm font-black text-white"><Plus size={16} className="inline" /> Create New List</button>}
-        />
-        <div className="mb-5 grid gap-3 md:grid-cols-4">
-          {["Monthly Grocery", "Breakfast Items", "Cleaning Supplies", "Festival Shopping"].map((list, index) => (
-            <PortalCard key={list} className={index === 0 ? "border-[var(--brand)] bg-[#f8fbff]" : ""}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-black text-[var(--brand)]">{list}</p>
-                  <p className="mt-2 text-xs font-semibold text-[#66758f]">{24 - index * 4} items</p>
-                  <p className="mt-3 text-sm font-black">Est. {formatRs(1847 - index * 320)}</p>
-                </div>
-                {index === 0 ? <Star size={17} className="fill-[#facc15] text-[#facc15]" /> : null}
-              </div>
-            </PortalCard>
-          ))}
-        </div>
-        <PortalCard className="overflow-hidden p-0">
-          <div className="flex flex-col gap-3 border-b border-[#edf2f8] p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="font-display text-lg font-black">Monthly Grocery</h2>
-              <p className="text-xs font-semibold text-[#66758f]">{products.length || 8} items - Updated 2 hrs ago</p>
-            </div>
-            <div className="flex gap-2">
-              <button type="button" className="rounded-xl border border-[#dfe8f5] px-4 py-2 text-xs font-black text-[#405173]"><Edit3 size={14} className="inline" /> Rename</button>
-              <button type="button" className="rounded-xl bg-[var(--brand)] px-4 py-2 text-xs font-black text-white" onClick={() => products.forEach((p) => selected.has(p.id) && onAddProduct(p.id))}>Move to Cart</button>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-          <div className="min-w-[720px] divide-y divide-[#edf2f8]">
-            {(products.length ? products : []).map((product) => {
-              const checked = selected.has(product.id);
-              return (
-                <div key={product.id} className="grid grid-cols-[28px_52px_minmax(0,1fr)_120px_110px_40px] items-center gap-3 px-4 py-3 text-sm">
-                  <input type="checkbox" checked={checked} onChange={(e) => setSelected((prev) => {
-                    const next = new Set(prev);
-                    if (e.target.checked) next.add(product.id);
-                    else next.delete(product.id);
-                    return next;
-                  })} />
-                  <ProductThumb product={product} />
-                  <div className="min-w-0"><p className="truncate font-black">{product.name}</p><p className="text-xs font-semibold text-[#66758f]">{product.unit}</p></div>
-                  <p className="font-black">{formatRs(product.price)}</p>
-                  <p className="font-black text-[#0f9f4a]">In Stock</p>
-                  <button type="button" className="text-[#ef4444]"><Trash2 size={16} /></button>
-                </div>
-              );
-            })}
-          </div>
-          </div>
-          {products.length === 0 ? <EmptyPortal label="No list items yet" /> : null}
-        </PortalCard>
-      </div>
-      <aside className="space-y-4">
-        <PortalCard>
-          <h2 className="font-display text-lg font-black">Smart Suggestions</h2>
-          <div className="mt-3 space-y-3">
-            {products.slice(0, 4).map((p) => (
-              <div key={p.id} className="flex items-center gap-3">
-                <ProductThumb product={p} />
-                <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{p.name}</p><p className="text-xs text-[#66758f]">Frequently bought</p></div>
-                <button type="button" onClick={() => onAddProduct(p.id)} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--brand-border)] text-[var(--brand)]"><Plus size={15} /></button>
-              </div>
-            ))}
-          </div>
-        </PortalCard>
-        <PortalCard>
-          <h2 className="font-display text-lg font-black">List Summary</h2>
-          <PriceSummaryLine label="Items in list" value={`${products.length}`} />
-          <PriceSummaryLine label="Items selected" value={`${selected.size}`} />
-          <PriceSummaryLine label="Estimated total" value={formatRs(total)} strong />
-          <button type="button" onClick={() => onView("shop")} className="mt-4 w-full rounded-xl bg-[var(--brand)] py-3 text-sm font-black text-white">Continue Shopping</button>
-        </PortalCard>
-      </aside>
-    </div>
-  );
-}
-
-function OffersPortalPage({ products, onView, onAddProduct }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void; onAddProduct: (id: string) => void }) {
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="space-y-5">
-        <PortalHeader title="Offers & Deals" subtitle="Best offers, biggest savings. Shop more, save more!" />
-        <section className="overflow-hidden rounded-[24px] bg-[#061a5f] p-6 text-white shadow-[0_24px_70px_rgba(7,95,255,0.22)]">
-          <h2 className="font-display text-3xl font-black">Weekend Super Saver!</h2>
-          <p className="mt-2 text-xl font-black text-[#ffc247]">Up to 50% OFF <span className="text-white">on daily essentials</span></p>
-          <button type="button" onClick={() => onView("shop")} className="mt-5 rounded-xl bg-white px-5 py-3 text-sm font-black text-[var(--brand)]">Shop Now</button>
-        </section>
-        <div className="grid gap-3 md:grid-cols-4">
-          {["FLAT Rs 50 OFF", "10% OFF", "FAST PICKUP", "Rs 75 CASHBACK"].map((offer, index) => (
-            <PortalCard key={offer} className={["border-dashed border-[#82e6b0] bg-[#f5fff8]", "border-dashed border-[#bcd0ff] bg-[var(--brand-softer)]", "border-dashed border-[#ffd08a] bg-[#fff8ed]", "border-dashed border-[#ddb7ff] bg-[#fbf6ff]"][index]}>
-              <IconBubble icon={index === 2 ? Store : index === 3 ? WalletCards : Gift} tone={index === 2 ? "orange" : index === 3 ? "purple" : "green"} />
-              <p className="mt-3 font-black">{offer}</p>
-              <p className="mt-1 text-xs font-semibold text-[#66758f]">Valid on selected orders</p>
-              <button type="button" className="mt-4 w-full rounded-xl bg-[var(--brand)] py-2 text-xs font-black text-white">Claim Offer</button>
-            </PortalCard>
-          ))}
-        </div>
-        <PortalCard>
-          <div className="flex items-center justify-between"><h2 className="font-display text-lg font-black">Limited Time Deals</h2><button className="text-sm font-black text-[var(--brand)]" type="button">View All</button></div>
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {products.map((product, index) => (
-              <div key={product.id} className="flex items-center gap-3 rounded-2xl border border-[#edf2f8] p-3">
-                <ProductThumb product={product} />
-                <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{product.name}</p><p className="text-xs text-[#ef4444]">{20 + index * 2}% OFF</p><p className="font-black">{formatRs(product.price * 0.9)}</p></div>
-                <button type="button" onClick={() => onAddProduct(product.id)} className="rounded-lg border border-[var(--brand-border)] px-3 py-2 text-xs font-black text-[var(--brand)]">Add</button>
-              </div>
-            ))}
-          </div>
-        </PortalCard>
-      </div>
-      <aside className="space-y-4">
-        <PortalCard><h2 className="font-display text-lg font-black">Your Savings Summary</h2><PriceSummaryLine label="Coupons Available" value="7" /><PriceSummaryLine label="Wallet Cashback" value="Rs 350.00" /><PriceSummaryLine label="Total Savings" value="Rs 326.00" strong /></PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black">Applied Promotions</h2><p className="mt-4 rounded-xl bg-[#f1fbf5] p-3 text-sm font-black text-[#0f9f4a]">GROCERY10 - saved Rs 82.50</p><p className="mt-2 rounded-xl bg-[var(--brand-softer)] p-3 text-sm font-black text-[var(--brand)]">PICKUP20 - priority pickup</p></PortalCard>
-      </aside>
-    </div>
-  );
-}
-
-function WalletPortalPage({ onView }: { onView: (view: CustomerStorefrontView) => void }) {
-  const rows = [
-    ["23 May 2025", "Order #ORD12345", "Payment", "-Rs 796.00", "Success"],
-    ["21 May 2025", "Added Money", "Add Money", "+Rs 500.00", "Success"],
-    ["20 May 2025", "Cashback - Offer", "Cashback", "+Rs 35.00", "Success"],
-    ["19 May 2025", "Refund - Order #ORD12210", "Refund", "+Rs 65.00", "Pending"],
-  ];
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="space-y-5">
-        <PortalHeader title="Wallet & Credits" subtitle="Manage your balance, credits and transactions" action={<span className="inline-flex items-center gap-2 text-sm font-black text-[#0f9f4a]"><ShieldCheck size={18} /> 100% Secure Payments</span>} />
-        <div className="grid gap-4 md:grid-cols-4">
-          <PortalCard className="bg-[var(--brand)] text-white md:col-span-2"><p className="text-sm font-bold opacity-90">Main Wallet Balance</p><p className="mt-5 font-display text-4xl font-black">Rs 250.00</p><button type="button" className="mt-5 w-full rounded-xl bg-white py-3 text-sm font-black text-[var(--brand)]"><Plus size={15} className="inline" /> Add Money</button></PortalCard>
-          <PortalCard className="bg-[#f1fbf5]"><p className="font-black text-[#0f9f4a]">Store Credit</p><p className="mt-8 font-display text-2xl font-black">Rs 120.00</p><p className="text-xs text-[#66758f]">Available to use</p></PortalCard>
-          <PortalCard className="bg-[#fff8ed]"><p className="font-black text-[#f97316]">Cashback Earned</p><p className="mt-8 font-display text-2xl font-black">Rs 85.00</p><p className="text-xs text-[#66758f]">Earned from offers</p></PortalCard>
-        </div>
-        <div className="grid gap-3 md:grid-cols-4">
-          {[["Add Money", WalletCards], ["Use Credit", Gift], ["Refer & Earn", UsersFallbackIcon], ["View Offers", Gift]].map(([label, Icon]) => (
-            <PortalCard key={String(label)}><div className="flex items-center gap-3"><IconBubble icon={Icon as typeof Home} /><div><p className="font-black">{String(label)}</p><p className="text-xs text-[#66758f]">Quick wallet action</p></div><ChevronRight size={16} className="ml-auto" /></div></PortalCard>
-          ))}
-        </div>
-        <PortalCard className="overflow-hidden p-0">
-          <div className="flex items-center justify-between p-4"><h2 className="font-display text-lg font-black">Recent Wallet Transactions</h2><button type="button" className="text-sm font-black text-[var(--brand)]">View All Transactions</button></div>
-          <div className="divide-y divide-[#edf2f8]">
-            {rows.map(([date, ref, type, amount, status]) => <TransactionRow key={ref} left={date} title={ref} sub={type} amount={amount} status={status} />)}
-          </div>
-        </PortalCard>
-      </div>
-      <aside className="space-y-4">
-        <PortalCard><h2 className="font-display text-lg font-black">How to use Credits</h2>{["Store Credit can reduce your order amount.", "Cashback is added after delivery.", "Refunds arrive within 24-48 hours."].map((text) => <InfoLine key={text} text={text} />)}</PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black">Credit Expiry</h2><p className="mt-4 rounded-xl bg-[#fff8ed] p-3 text-sm font-black">Store Credit Rs 45.00 expires on 30 May 2025</p></PortalCard>
-        <PortalCard className="bg-[#061a39] text-white"><h2 className="font-display text-lg font-black">Loyalty Tier</h2><p className="mt-4 text-xl font-black">Gold Member</p><button type="button" onClick={() => onView("offers")} className="mt-4 text-sm font-black text-[#6fb0ff]">Explore All Benefits <ChevronRight size={15} className="inline" /></button></PortalCard>
-      </aside>
-    </div>
-  );
-}
-
-function AddressesPortalPage({ catalog }: { catalog: CustomerCatalog; onView: (view: CustomerStorefrontView) => void }) {
-  const [addresses, setAddresses] = useState([
-    { label: "Home", detail: "21, Gandhi Market, Jaipur, Rajasthan - 302001", phone: "+91 98290 12345", default: true },
-    { label: "Work", detail: "2nd Floor, C-56, Patrika Gate, Malviya Nagar, Jaipur - 302017", phone: "+91 98765 43210", default: false },
-    { label: "Parents' House", detail: "14/102, Vaishali Nagar, Jaipur, Rajasthan - 302021", phone: "+91 99887 77665", default: false },
-  ]);
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div>
-        <PortalHeader title="Addresses" subtitle="Manage your delivery and pickup addresses" action={<button type="button" className="rounded-xl bg-[var(--brand)] px-5 py-3 text-sm font-black text-white"><Plus size={15} className="inline" /> Add New Address</button>} />
-        <div className="mb-5 flex gap-2 overflow-x-auto">{["All Addresses (3)", "Delivery Addresses (3)", "Pickup Addresses (0)"].map((tab, index) => <button key={tab} className={`shrink-0 rounded-xl px-4 py-2 text-sm font-black ${index === 0 ? "bg-[#eaf2ff] text-[var(--brand)]" : "text-[#52617a]"}`} type="button">{tab}</button>)}</div>
-        <div className="space-y-4">
-          {addresses.map((address) => (
-            <PortalCard key={address.label}>
-              <div className="flex gap-4">
-                <IconBubble icon={address.label === "Home" ? Home : address.label === "Work" ? ShoppingBag : User} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2"><h2 className="font-display text-lg font-black">{address.label}</h2>{address.default ? <span className="rounded-full bg-[#e9fbf0] px-2 py-1 text-xs font-black text-[#0f9f4a]">Default</span> : null}</div>
-                  <p className="mt-2 text-sm font-semibold text-[#283957]">{address.detail}</p>
-                  <p className="mt-2 text-sm text-[#66758f]">{address.phone}</p>
-                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    <button type="button" className="rounded-xl border border-[#dfe8f5] py-2 text-sm font-black text-[var(--brand)]"><Edit3 size={14} className="inline" /> Edit</button>
-                    <button type="button" onClick={() => setAddresses((rows) => rows.filter((row) => row.label !== address.label))} className="rounded-xl border border-[#ffd6d6] py-2 text-sm font-black text-[#ef4444]"><Trash2 size={14} className="inline" /> Delete</button>
-                    <button type="button" onClick={() => setAddresses((rows) => rows.map((row) => ({ ...row, default: row.label === address.label })))} className="rounded-xl border border-[#dfe8f5] py-2 text-sm font-black text-[#405173]"><Star size={14} className="inline" /> Set as Default</button>
-                  </div>
-                </div>
-              </div>
-            </PortalCard>
-          ))}
-        </div>
-      </div>
-      <aside className="space-y-4">
-        <PortalCard><h2 className="font-display text-lg font-black">Serviceability Check</h2><div className="mt-4 grid h-56 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand)]"><MapPin size={46} /></div><p className="mt-3 text-sm font-black text-[#0f9f4a]">We deliver to this location</p></PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black">Pickup from Store</h2><p className="mt-3 font-black">{catalog.shop.name}</p><p className="text-sm text-[#66758f]">{catalog.shop.city || "Local store"}</p><p className="mt-4 rounded-xl bg-[#f1fbf5] p-3 text-sm font-black text-[#0f9f4a]">Pickup in 20 mins</p></PortalCard>
-      </aside>
-    </div>
-  );
-}
-
-function PaymentsPortalPage({ onView }: { onView: (view: CustomerStorefrontView) => void }) {
-  const methods = ["ramesh@okicici", "Visa **** 4242", "Mastercard **** 8567", "HDFC Bank", "Cash on Delivery", "Artha Wallet"];
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="space-y-5">
-        <PortalHeader title="Payments" subtitle="Manage your payment methods, preferences and transaction history" action={<button type="button" className="rounded-xl border border-[var(--brand-border)] px-4 py-2 text-sm font-black text-[var(--brand)]"><Plus size={15} className="inline" /> Add Payment Method</button>} />
-        <PortalCard>
-          <h2 className="font-display text-lg font-black">Saved Payment Methods</h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {methods.map((method, index) => <div key={method} className={`rounded-2xl border p-4 ${index === 0 ? "border-[var(--brand)] bg-[#f8fbff]" : "border-[#e3ebf7]"}`}><div className="flex justify-between"><IconBubble icon={index < 3 ? CreditCard : index === 3 ? Store : WalletCards} tone={index === 0 ? "green" : "blue"} /><MoreVertical size={18} /></div><p className="mt-5 font-black">{method}</p><button className="mt-4 rounded-lg bg-[#eaf2ff] px-3 py-1.5 text-xs font-black text-[var(--brand)]" type="button">{index === 0 ? "Default" : "Set as Default"}</button></div>)}
-          </div>
-        </PortalCard>
-        <PortalCard className="overflow-hidden p-0">
-          <div className="flex items-center justify-between p-4"><h2 className="font-display text-lg font-black">Transaction History</h2><button type="button" className="rounded-xl border border-[#dfe8f5] px-3 py-2 text-xs font-black">Filter</button></div>
-          {["ORD-84521", "ORD-84520", "ORD-84519", "ORD-84518", "ORD-84517"].map((id, index) => <TransactionRow key={id} left={`#${id}`} title={`${12 - index} May 2025`} sub={methods[index % methods.length]} amount={formatRs([265, 120, 560, 200, 160][index])} status={index === 4 ? "Pending" : "Paid"} />)}
-        </PortalCard>
-      </div>
-      <aside className="space-y-4">
-        <PortalCard><IconBubble icon={ShieldCheck} /><h2 className="mt-3 font-display text-lg font-black">Payment Security</h2>{["PCI DSS compliant", "Bank-level encryption", "Secure UPI & card processing", "Your data is never stored"].map((text) => <InfoLine key={text} text={text} />)}</PortalCard>
-        <PortalCard><IconBubble icon={RefreshCw} /><h2 className="mt-3 font-display text-lg font-black">Refunds & Returns</h2><p className="mt-2 text-sm text-[#66758f]">Refunds are initiated to your original payment method within 3-5 business days.</p><button type="button" onClick={() => onView("support")} className="mt-4 text-sm font-black text-[var(--brand)]">View Refund Policy <ChevronRight size={15} className="inline" /></button></PortalCard>
-      </aside>
-    </div>
-  );
-}
-
-function CustomerSettingsPortalPage({ catalog, onView }: { catalog: CustomerCatalog; onView: (view: CustomerStorefrontView) => void }) {
-  const [toggles, setToggles] = useState({ offers: true, arrivals: true, discounts: true, delivered: true, whatsapp: true, sms: true, analytics: true });
-  const toggle = (key: keyof typeof toggles) => setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div>
-        <PortalHeader title="Settings" subtitle="Manage your account, preferences and privacy settings" />
-        <div className="mb-5 flex max-w-xl rounded-2xl border border-[#dfe8f5] bg-white p-1">
-          {["Account", "Preferences", "Notifications", "Privacy & Security"].map((tab, index) => <button key={tab} className={`flex-1 rounded-xl px-3 py-2 text-xs font-black ${index === 0 ? "bg-[#eaf2ff] text-[var(--brand)]" : "text-[#52617a]"}`} type="button">{tab}</button>)}
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <PortalCard><SectionTitle icon={User} title="Profile Information" sub="Update your personal details and profile information." /><SettingsInput label="Full Name" value="Ramesh Sharma" /><SettingsInput label="Email Address" value="ramesh.sharma91@gmail.com" verified /><SettingsInput label="Date of Birth" value="12 March 1991" /><button type="button" className="mt-4 rounded-xl border border-[var(--brand-border)] px-4 py-2 text-sm font-black text-[var(--brand)]">Edit Profile</button></PortalCard>
-          <PortalCard><SectionTitle icon={Phone} title="Mobile Number" sub="Used for order updates and notifications." /><SettingsInput label="Mobile Number" value="+91 98920 12345" verified /><div className="mt-4 rounded-2xl bg-[#f1fbf5] p-4 text-sm font-black text-[#0f9f4a]">Your account is secure</div></PortalCard>
-          <PortalCard><SectionTitle icon={Bell} title="Notification Preferences" sub="Choose how you want to receive updates." />{[["Promotions & Offers", "offers"], ["New Arrivals & Updates", "arrivals"], ["Exclusive Discounts", "discounts"]].map(([label, key]) => <ToggleRow key={key} label={label} checked={toggles[key as keyof typeof toggles]} onClick={() => toggle(key as keyof typeof toggles)} />)}</PortalCard>
-          <PortalCard><SectionTitle icon={Truck} title="Order Updates" sub="Get real-time updates for your orders." />{[["Order Delivered", "delivered"], ["WhatsApp Notifications", "whatsapp"], ["SMS Notifications", "sms"]].map(([label, key]) => <ToggleRow key={key} label={label} checked={toggles[key as keyof typeof toggles]} onClick={() => toggle(key as keyof typeof toggles)} />)}</PortalCard>
-          <PortalCard><SectionTitle icon={Settings} title="Theme Appearance" sub="Choose your preferred theme." /><div className="grid grid-cols-2 gap-3"><button type="button" className="rounded-xl border border-[var(--brand)] bg-[#f8fbff] py-3 font-black text-[var(--brand)]">Light</button><button type="button" className="rounded-xl border border-[#dfe8f5] py-3 font-black text-[#405173]">Dark</button></div></PortalCard>
-          <PortalCard><SectionTitle icon={ShieldCheck} title="Privacy Controls" sub="Manage your data and privacy preferences." /><ToggleRow label="Share data for recommendations" checked={toggles.analytics} onClick={() => toggle("analytics")} /><button type="button" className="mt-4 text-sm font-black text-[#ef4444]">Logout from All Devices</button></PortalCard>
-        </div>
-      </div>
-      <aside className="space-y-4">
-        <PortalCard><h2 className="font-display text-lg font-black">Account Summary</h2><div className="mt-4 flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-full bg-[#eaf2ff] font-black text-[var(--brand)]">RS</span><div><p className="font-black">Ramesh Sharma</p><p className="text-xs text-[#66758f]">Customer</p></div></div><PriceSummaryLine label="Wallet Balance" value="Rs 250.00" /><PriceSummaryLine label="Preferred Store" value={catalog.shop.name} /></PortalCard>
-        <PortalCard className="bg-[#061a39] text-white"><h2 className="font-display text-lg font-black">Artha Plus</h2><p className="mt-3 text-sm text-[#b5c4df]">You are Rs 56 away from Gold membership</p><div className="mt-4 h-2 rounded-full bg-white/15"><div className="h-full w-2/3 rounded-full bg-[#ffc247]" /></div></PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black">Quick Actions</h2>{[["Manage Addresses", "addresses"], ["Payment Methods", "payments"], ["My Lists", "lists"], ["Help & Support", "support"]].map(([label, target]) => <button key={label} type="button" onClick={() => onView(target as CustomerStorefrontView)} className="flex w-full items-center justify-between border-b border-[#edf2f8] py-3 text-sm font-black"><span>{label}</span><ChevronRight size={15} /></button>)}</PortalCard>
-      </aside>
-    </div>
-  );
-}
-
-function SupportPortalPage({ catalog }: { catalog: CustomerCatalog; onView: (view: CustomerStorefrontView) => void }) {
-  return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="space-y-5">
-        <PortalHeader title="Help & Support" subtitle="We're here to help! Find answers or connect with support." />
-        <PortalCard>
-          <h2 className="font-display text-lg font-black">How can we help you today?</h2>
-          <div className="mt-4 flex gap-3"><SearchBox placeholder="Search help articles, FAQs or issues..." /><button type="button" className="rounded-xl bg-[var(--brand)] px-6 text-sm font-black text-white">Search</button></div>
-          <div className="mt-3 flex flex-wrap gap-2">{["Track Order", "Refund Status", "Cancel Order", "Payment Issues", "Wrong Item"].map((tag) => <button key={tag} type="button" className="rounded-full border border-[#dfe8f5] px-3 py-1.5 text-xs font-black text-[#52617a]">{tag}</button>)}</div>
-        </PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black">Browse Help Topics</h2><div className="mt-4 grid gap-3 md:grid-cols-5">{[["Late Delivery", Clock, "Track delivery issues"], ["Wrong Item", PackageCheck, "Received wrong item"], ["Refund & Returns", RefreshCw, "Refund status"], ["Payment Issue", CreditCard, "Failed payments"], ["App & Technical", Settings, "Technical glitches"]].map(([title, Icon, sub], index) => <div key={String(title)} className="rounded-2xl border border-[#e3ebf7] p-4 text-center"><IconBubble icon={Icon as typeof Home} tone={["blue", "green", "purple", "orange", "red"][index] as "blue"} /><p className="mt-3 font-black">{String(title)}</p><p className="mt-1 text-xs text-[#66758f]">{String(sub)}</p></div>)}</div></PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black">Contact Support</h2><div className="mt-4 grid gap-3 md:grid-cols-4">{[["Live Chat", MessageCircle, "Start Chat"], ["WhatsApp Help", MessageCircle, "Chat on WhatsApp"], ["Raise a Ticket", Mail, "Raise Ticket"], ["Call Support", Phone, "+91 98920 12345"]].map(([title, Icon, action]) => <div key={String(title)} className="rounded-2xl border border-[#e3ebf7] p-4"><IconBubble icon={Icon as typeof Home} /><p className="mt-3 font-black">{String(title)}</p><button type="button" className="mt-4 w-full rounded-xl border border-[var(--brand-border)] py-2 text-xs font-black text-[var(--brand)]">{String(action)}</button></div>)}</div></PortalCard>
-        <PortalCard className="overflow-hidden p-0"><div className="p-4"><h2 className="font-display text-lg font-black">Your Support Tickets</h2></div>{["Late delivery", "Wrong item received", "Refund not received", "Payment failed but amount debited"].map((issue, index) => <TransactionRow key={issue} left={`#TK-${12458 - index}`} title={issue} sub={`Order #ORD-${89231 - index}`} amount={index === 0 ? "Today" : "Resolved"} status={index === 0 ? "In Progress" : "Resolved"} />)}</PortalCard>
-      </div>
-      <aside className="space-y-4">
-        <PortalCard><h2 className="font-display text-lg font-black">Store Contact</h2><div className="mt-4 flex gap-3"><IconBubble icon={Store} tone="orange" /><div><p className="font-black">{catalog.shop.name}</p><p className="text-sm text-[#66758f]">{catalog.shop.city || "Local store"}</p><p className="text-xs font-black text-[#0f9f4a]">Open</p></div></div><button type="button" className="mt-4 w-full rounded-xl border border-[var(--brand-border)] py-3 text-sm font-black text-[var(--brand)]"><Phone size={15} className="inline" /> Call Store</button><button type="button" className="mt-2 w-full rounded-xl border border-[#cdebd8] bg-[#f1fbf5] py-3 text-sm font-black text-[#0f9f4a]"><MessageCircle size={15} className="inline" /> WhatsApp Store</button></PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black">Store Operating Hours</h2>{["Mon - Fri 7:00 AM - 10:00 PM", "Saturday 7:00 AM - 10:00 PM", "Sunday 7:00 AM - 10:00 PM"].map((row) => <p key={row} className="border-b border-[#edf2f8] py-3 text-sm font-semibold text-[#52617a]">{row}</p>)}</PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black text-[#ef4444]">Emergency Support</h2><InfoLine text="Customer Support (24x7): +91 98920 12345" /><InfoLine text={`Email: ${SUPPORT_EMAIL}`} /></PortalCard>
-      </aside>
+      <h1 className="mt-5 font-display text-2xl font-black text-[#071432]">{t("storefront.noOrderToTrackYet")}</h1>
+      <p className="mt-2 text-sm font-semibold text-[#66758f]">{t("storefront.yourLatestOrderWillAppearHere")}</p>
+      <button type="button" onClick={() => onView("shop")} className="mt-6 rounded-xl bg-[var(--brand)] px-6 py-3 text-sm font-black text-white">{t("storefront.startAnOrder")}</button>
     </div>
   );
 }
 
 function SearchBox({ placeholder }: { placeholder: string }) {
+  const { t } = useAppLanguage();
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-[#dfe8f5] bg-white px-3">
       <Search size={17} className="text-[#72819a]" />
@@ -1715,6 +1283,7 @@ function SearchBox({ placeholder }: { placeholder: string }) {
 }
 
 function StatusPill({ status }: { status: string }) {
+  const { t } = useAppLanguage();
   const tone = status.includes("Delivered") || status.includes("Paid") || status.includes("Resolved") || status.includes("Success")
     ? "bg-[#e9fbf0] text-[#0f9f4a]"
     : status.includes("Return") || status.includes("Pending") || status.includes("Progress")
@@ -1724,6 +1293,7 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function PriceSummaryLine({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  const { t } = useAppLanguage();
   return (
     <div className="mt-3 flex items-center justify-between border-t border-[#edf2f8] pt-3 text-sm">
       <span className="font-semibold text-[#66758f]">{label}</span>
@@ -1733,6 +1303,7 @@ function PriceSummaryLine({ label, value, strong = false }: { label: string; val
 }
 
 function TransactionRow({ left, title, sub, amount, status }: { left: string; title: string; sub: string; amount: string; status: string }) {
+  const { t } = useAppLanguage();
   return (
     <div className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[120px_minmax(0,1fr)_110px_110px] sm:items-center sm:gap-3">
       <p className="font-black text-[var(--brand)]">{left}</p>
@@ -1744,6 +1315,7 @@ function TransactionRow({ left, title, sub, amount, status }: { left: string; ti
 }
 
 function InfoLine({ text }: { text: string }) {
+  const { t } = useAppLanguage();
   return (
     <div className="mt-3 flex items-start gap-2 text-sm font-semibold text-[#52617a]">
       <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#0f9f4a]" />
@@ -1753,6 +1325,7 @@ function InfoLine({ text }: { text: string }) {
 }
 
 function SectionTitle({ icon, title, sub }: { icon: typeof Home; title: string; sub: string }) {
+  const { t } = useAppLanguage();
   return (
     <div className="mb-4 flex gap-3">
       <IconBubble icon={icon} />
@@ -1762,18 +1335,20 @@ function SectionTitle({ icon, title, sub }: { icon: typeof Home; title: string; 
 }
 
 function SettingsInput({ label, value, verified = false }: { label: string; value: string; verified?: boolean }) {
+  const { t } = useAppLanguage();
   return (
     <label className="mt-3 block">
       <span className="text-xs font-black text-[#405173]">{label}</span>
       <span className="mt-1 flex items-center justify-between rounded-xl border border-[#dfe8f5] bg-white px-3 py-2.5 text-sm font-semibold">
         {value}
-        {verified ? <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[10px] font-black text-[#0f9f4a]">Verified</span> : null}
+        {verified ? <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[10px] font-black text-[#0f9f4a]">{t("storefront.verified")}</span> : null}
       </span>
     </label>
   );
 }
 
 function ToggleRow({ label, checked, onClick }: { label: string; checked: boolean; onClick: () => void }) {
+  const { t } = useAppLanguage();
   return (
     <button type="button" onClick={onClick} className="flex w-full items-center justify-between border-t border-[#edf2f8] py-3 text-sm font-black">
       <span>{label}</span>
@@ -1785,12 +1360,14 @@ function ToggleRow({ label, checked, onClick }: { label: string; checked: boolea
 }
 
 function EmptyPortal({ label }: { label: string }) {
+  const { t } = useAppLanguage();
   return <div className="py-14 text-center text-sm font-semibold text-[#70809a]">{label}</div>;
 }
 
 const UsersFallbackIcon = User;
 
 function OrderQrOverlay({ urls, count, amount, onClose }: { urls: string[]; count: number; amount: number; onClose: () => void }) {
+  const { t } = useAppLanguage();
   const [part, setPart] = useState(0);
   const total = urls.length;
   const multi = total > 1;
@@ -1800,33 +1377,33 @@ function OrderQrOverlay({ urls, count, amount, onClose }: { urls: string[]; coun
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#0b1424]/70 backdrop-blur-sm">
       <button type="button" onClick={onClose} className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-lg bg-white/15 px-3 py-2 text-sm font-bold text-white">
-        <ArrowLeft size={16} /> Back
+        <ArrowLeft size={16} /> {t("storefront.back")}
       </button>
       <div className="m-auto w-[min(92vw,380px)] rounded-3xl bg-white p-6 text-center shadow-2xl">
         <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full bg-[#eaf2ff] px-3 py-1 text-xs font-bold text-[var(--brand)]">
-          <ShoppingBag size={14} /> {count} item{count === 1 ? "" : "s"} - {formatRs(amount)}
+          <ShoppingBag size={14} /> {t(count === 1 ? "storefront.itemOne" : "storefront.itemMany", { count })} - {formatRs(amount)}
         </div>
         <div className="mx-auto grid place-items-center rounded-2xl border border-[#eef2f8] p-3">
-          <QrCodeView value={current} level="L" size={272} title={multi ? `Order QR part ${safePart + 1} of ${total}` : "Your order QR"} />
+          <QrCodeView value={current} level="L" size={272} title={multi ? t("storefront.qrPartTitle", { part: safePart + 1, total }) : t("storefront.qrTitle")} />
         </div>
         {multi ? (
           <>
             <div className="mt-3 flex items-center justify-center gap-2">
-              <button type="button" disabled={safePart === 0} onClick={() => setPart((p) => Math.max(0, p - 1))} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[var(--brand)] disabled:opacity-40" aria-label="Previous QR">
+              <button type="button" disabled={safePart === 0} onClick={() => setPart((p) => Math.max(0, p - 1))} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[var(--brand)] disabled:opacity-40" aria-label={t("storefront.previousQr")}>
                 <ChevronLeft size={18} />
               </button>
-              <span className="min-w-[92px] text-[13px] font-black text-[var(--brand-ink)]">Part {safePart + 1} of {total}</span>
-              <button type="button" disabled={safePart === total - 1} onClick={() => setPart((p) => Math.min(total - 1, p + 1))} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[var(--brand)] disabled:opacity-40" aria-label="Next QR">
+              <span className="min-w-[92px] text-[13px] font-black text-[var(--brand-ink)]">{t("storefront.qrPart", { part: safePart + 1, total })}</span>
+              <button type="button" disabled={safePart === total - 1} onClick={() => setPart((p) => Math.min(total - 1, p + 1))} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[var(--brand)] disabled:opacity-40" aria-label={t("storefront.nextQr")}>
                 <ChevronRight size={18} />
               </button>
             </div>
-            <h2 className="mt-3 font-display text-base font-black text-[var(--brand-ink)]">Big order - show all {total} QRs</h2>
-            <p className="mt-1 text-[12px] leading-relaxed text-[#5b6b85]">The shopkeeper scans each part in order. Final price is set by the shop.</p>
+            <h2 className="mt-3 font-display text-base font-black text-[var(--brand-ink)]">{t("storefront.bigOrderQrs", { total })}</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#5b6b85]">{t("storefront.theShopkeeperScansEachPartIn")}</p>
           </>
         ) : (
           <>
-            <h2 className="mt-4 font-display text-base font-black text-[var(--brand-ink)]">Show this at the counter</h2>
-            <p className="mt-1 text-[12px] leading-relaxed text-[#5b6b85]">The shopkeeper scans it to load your order. Final price is set by the shop.</p>
+            <h2 className="mt-4 font-display text-base font-black text-[var(--brand-ink)]">{t("storefront.showThisAtTheCounter")}</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#5b6b85]">{t("storefront.theShopkeeperScansItToLoad")}</p>
           </>
         )}
       </div>
@@ -1834,10 +1411,10 @@ function OrderQrOverlay({ urls, count, amount, onClose }: { urls: string[]; coun
   );
 }
 
-const STAGE_STEPS: Array<{ key: OrderStage; label: string; sub: string; Icon: typeof Clock }> = [
-  { key: "received", label: "Order received", sub: "Waiting for the shop to accept", Icon: Clock },
-  { key: "preparing", label: "Preparing your order", sub: "The shop accepted and is getting it ready", Icon: ChefHat },
-  { key: "ready", label: "Ready", sub: "Your order is ready - please collect it", Icon: PackageCheck },
+const STAGE_STEPS: Array<{ key: OrderStage; labelKey: TranslationKey; subKey: TranslationKey; Icon: typeof Clock }> = [
+  { key: "received", labelKey: "storefront.stageReceived", subKey: "storefront.stageReceivedSub", Icon: Clock },
+  { key: "preparing", labelKey: "storefront.stagePreparing", subKey: "storefront.stagePreparingSub", Icon: ChefHat },
+  { key: "ready", labelKey: "storefront.stageReady", subKey: "storefront.stageReadySub", Icon: PackageCheck },
 ];
 
 function orderTimeAgo(iso: string): string {
@@ -1863,6 +1440,7 @@ function OrderTracker({
   onBackToMenu: () => void;
   onOrderAgain: () => void;
 }) {
+  const { t } = useAppLanguage();
   const [status, setStatus] = useState<CustomerOrderStatus | null>(null);
   const [gone, setGone] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1905,7 +1483,7 @@ function OrderTracker({
     return (
       <CenterScreen>
         <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#dbe6f5] border-t-[var(--brand)]" />
-        <p className="mt-4 text-sm font-medium text-[#5b6b85]">Loading your order...</p>
+        <p className="mt-4 text-sm font-medium text-[#5b6b85]">{t("storefront.loadingYourOrder")}</p>
       </CenterScreen>
     );
   }
@@ -1916,9 +1494,9 @@ function OrderTracker({
         <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[#f1f5f9] text-[#64748b]">
           <ShoppingBag size={26} />
         </div>
-        <h1 className="mt-4 font-display text-lg font-black text-[var(--brand-ink)]">Order not found</h1>
-        <p className="mt-1 max-w-xs text-center text-sm text-[#5b6b85]">This order is no longer available. You can place a new one.</p>
-        <button type="button" onClick={onOrderAgain} className="mt-6 rounded-xl bg-[var(--brand)] px-5 py-3 text-sm font-bold text-white">Back to menu</button>
+        <h1 className="mt-4 font-display text-lg font-black text-[var(--brand-ink)]">{t("storefront.orderNotFound")}</h1>
+        <p className="mt-1 max-w-xs text-center text-sm text-[#5b6b85]">{t("storefront.thisOrderIsNoLongerAvailable")}</p>
+        <button type="button" onClick={onOrderAgain} className="mt-6 rounded-xl bg-[var(--brand)] px-5 py-3 text-sm font-bold text-white">{t("storefront.backToMenu")}</button>
       </CenterScreen>
     );
   }
@@ -1930,14 +1508,14 @@ function OrderTracker({
     <div className="min-h-screen bg-[#f5f8fd] text-[var(--brand-ink)]">
       <header className="sticky top-0 z-20 border-b border-[#e4ecf7] bg-white/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-xl items-center gap-2">
-          <button type="button" onClick={onBackToMenu} aria-label="Back to menu" className="grid h-9 w-9 place-items-center rounded-lg text-[#405273] hover:bg-[#f1f5fb]">
+          <button type="button" onClick={onBackToMenu} aria-label={t("storefront.backToMenu")} className="grid h-9 w-9 place-items-center rounded-lg text-[#405273] hover:bg-[#f1f5fb]">
             <ArrowLeft size={18} />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-base font-black leading-tight">{status?.shopName ?? "Your order"}</h1>
-            <p className="truncate text-[11px] font-semibold text-[#6b7a93]">Order tracking</p>
+            <h1 className="truncate font-display text-base font-black leading-tight">{status?.shopName ?? t("storefront.yourOrder2")}</h1>
+            <p className="truncate text-[11px] font-semibold text-[#6b7a93]">{t("storefront.orderTracking")}</p>
           </div>
-          <button type="button" onClick={() => void load(true)} aria-label="Refresh" className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe7f2] text-[#405273] hover:bg-[var(--brand-softer)]">
+          <button type="button" onClick={() => void load(true)} aria-label={t("storefront.refresh")} className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe7f2] text-[#405273] hover:bg-[var(--brand-softer)]">
             <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
           </button>
         </div>
@@ -1947,15 +1525,15 @@ function OrderTracker({
         {justPlaced && !declined && (
           <div className="mb-4 flex items-center gap-2 rounded-2xl bg-[#e9fbf0] px-4 py-3 text-[#16a34a]">
             <CheckCircle2 size={20} />
-            <p className="text-[13px] font-bold">Order sent! The shop has been notified.</p>
+            <p className="text-[13px] font-bold">{t("storefront.orderSentTheShopHasBeen")}</p>
           </div>
         )}
 
         {declined ? (
           <div className="rounded-2xl border border-[#f4d4d4] bg-[#fff5f5] p-5 text-center">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white text-[#e11d48]"><XCircle size={28} /></div>
-            <h2 className="mt-3 font-display text-lg font-black text-[var(--brand-ink)]">Order could not be taken</h2>
-            <p className="mt-1 text-[13px] text-[#5b6b85]">The shop declined this order. Please call them or place a new one.</p>
+            <h2 className="mt-3 font-display text-lg font-black text-[var(--brand-ink)]">{t("storefront.orderCouldNotBeTaken")}</h2>
+            <p className="mt-1 text-[13px] text-[#5b6b85]">{t("storefront.theShopDeclinedThisOrderPlease")}</p>
           </div>
         ) : (
           <ol className="rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
@@ -1972,11 +1550,11 @@ function OrderTracker({
                     {i < STAGE_STEPS.length - 1 && <span className={`my-1 w-0.5 flex-1 ${i < currentIndex ? "bg-[#16a34a]" : "bg-[#e6ecf4]"}`} />}
                   </div>
                   <div className={i === STAGE_STEPS.length - 1 ? "pb-0" : "pb-6"}>
-                    <p className={`text-[14px] font-black ${active || done ? "text-[var(--brand-ink)]" : "text-[#9aa7bd]"}`}>{step.label}</p>
-                    <p className="mt-0.5 text-[12px] font-medium text-[#6b7a93]">{step.key === "ready" && status?.fulfillmentType === "delivery" ? "Your order is ready for delivery handover" : step.sub}</p>
+                    <p className={`text-[14px] font-black ${active || done ? "text-[var(--brand-ink)]" : "text-[#9aa7bd]"}`}>{t(step.labelKey)}</p>
+                    <p className="mt-0.5 text-[12px] font-medium text-[#6b7a93]">{step.key === "ready" && status?.fulfillmentType === "delivery" ? t("storefront.readyForHandover") : t(step.subKey)}</p>
                     {active && (
                       <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[#eaf2ff] px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[var(--brand)]">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--brand)]" /> Now
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--brand)]" /> {t("storefront.now")}
                       </span>
                     )}
                   </div>
@@ -1989,7 +1567,7 @@ function OrderTracker({
         {status && (
           <div className="mt-4 rounded-2xl border border-[#e6ecf4] bg-white p-4">
             <div className="flex items-center justify-between">
-              <p className="text-[13px] font-black text-[var(--brand-ink)]">Your order</p>
+              <p className="text-[13px] font-black text-[var(--brand-ink)]">{t("storefront.yourOrder2")}</p>
               <p className="text-[11px] font-semibold text-[#8290a8]">{orderTimeAgo(status.createdAt)}</p>
             </div>
             <div className="mt-2 space-y-1">
@@ -2001,20 +1579,20 @@ function OrderTracker({
               ))}
             </div>
             <div className="mt-3 grid gap-2 rounded-xl bg-[var(--brand-softer)] p-3 text-[12px] text-[#52617a] sm:grid-cols-2">
-              <p><span className="font-black text-[var(--brand-ink)]">Method:</span> {status.fulfillmentType === "pickup" ? "Store pickup" : "Delivery"}</p>
-              {status.promisedSlot ? <p><span className="font-black text-[var(--brand-ink)]">Preferred:</span> {status.promisedSlot}</p> : null}
-              {status.location ? <p className="sm:col-span-2"><span className="font-black text-[var(--brand-ink)]">Store:</span> {status.location.name}{status.location.city ? ` · ${status.location.city}` : ""}</p> : null}
+              <p><span className="font-black text-[var(--brand-ink)]">{t("storefront.method")}</span> {t(status.fulfillmentType === "pickup" ? "storefront.storePickup" : "storefront.delivery")}</p>
+              {status.promisedSlot ? <p><span className="font-black text-[var(--brand-ink)]">{t("storefront.preferred")}</span> {status.promisedSlot}</p> : null}
+              {status.location ? <p className="sm:col-span-2"><span className="font-black text-[var(--brand-ink)]">{t("storefront.store")}</span> {status.location.name}{status.location.city ? ` · ${status.location.city}` : ""}</p> : null}
             </div>
             <div className="mt-2 flex items-center justify-between border-t border-[#eef2f8] pt-2 text-[14px] font-black text-[var(--brand-ink)]">
-              <span>Estimated total</span><span>{formatRs(status.estimatedTotal)}</span>
+              <span>{t("storefront.estimatedTotal")}</span><span>{formatRs(status.estimatedTotal)}</span>
             </div>
-            <p className="mt-1 text-[11px] text-[#8290a8]">Final price is set by the shop.</p>
+            <p className="mt-1 text-[11px] text-[#8290a8]">{t("storefront.finalPriceIsSetByThe")}</p>
           </div>
         )}
 
         <div className="mt-5 flex gap-2">
-          <button type="button" onClick={onBackToMenu} className="flex-1 rounded-xl border border-[#dce5f1] py-3 text-sm font-bold text-[#405273]">Back to menu</button>
-          <button type="button" onClick={onOrderAgain} className="flex-1 rounded-xl bg-[var(--brand)] py-3 text-sm font-bold text-white">Order again</button>
+          <button type="button" onClick={onBackToMenu} className="flex-1 rounded-xl border border-[#dce5f1] py-3 text-sm font-bold text-[#405273]">{t("storefront.backToMenu")}</button>
+          <button type="button" onClick={onOrderAgain} className="flex-1 rounded-xl bg-[var(--brand)] py-3 text-sm font-bold text-white">{t("storefront.orderAgain")}</button>
         </div>
       </main>
     </div>
@@ -2022,5 +1600,6 @@ function OrderTracker({
 }
 
 function CenterScreen({ children }: { children: ReactNode }) {
+  const { t } = useAppLanguage();
   return <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f8fd] px-6">{children}</div>;
 }
