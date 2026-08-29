@@ -115,6 +115,22 @@ assert.equal(
   "a bottled drink with no recipe is still counted",
 );
 
+/* ---------------- stale clients cannot manually move a cooked dish as stock */
+
+const { recordPurchase, recordDamage, correctStock } = await import("../src/modules/inventory/inventory.service.js");
+for (const action of [
+  () => recordPurchase(shop.id, { productId: tikka.id, quantity: 1, enteredUnit: "piece", billAmount: 260 }),
+  () => recordDamage(shop.id, { productId: tikka.id, quantity: 1, enteredUnit: "piece", note: "test" }),
+  () => correctStock(shop.id, { productId: tikka.id, newStockBaseQty: 12, note: "test" }),
+]) {
+  await assert.rejects(action, (error) => error?.code === "PRODUCT_STOCK_NOT_TRACKED");
+}
+assert.equal(
+  (await db.product.findUniqueOrThrow({ where: { id: tikka.id } })).stockBaseQty,
+  10,
+  "manual stock endpoints cannot restore the fictitious plate balance",
+);
+
 const { getInventory } = await import("../src/modules/inventory/inventory.service.js");
 const storeRoom = await getInventory(shop.id);
 const shelved = storeRoom.map((row) => row.name);

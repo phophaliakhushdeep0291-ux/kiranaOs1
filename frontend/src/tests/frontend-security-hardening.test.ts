@@ -124,6 +124,10 @@ describe("frontend security hardening", () => {
     expect(source).toContain("controllerchange");
     expect(source).toContain("PROD_SW_CONTROLLER_RELOAD_KEY");
     expect(source).toContain("/sw.js?build=");
+    expect(source).toContain("notifyWaitingServiceWorker(registration)");
+    expect(source).toContain("isServiceWorkerUpdateReady");
+    expect(source).toContain("registration.waiting");
+    expect(source).toContain("registration.update()");
   });
 
   it("serves immutable app code atomically and refreshes stale HTML with an offline fallback", () => {

@@ -203,6 +203,11 @@ function defaultSellingUnitFor(businessType: BusinessType): string {
   return primaryUnits.find((unit) => !isScaleUnit(unit)) ?? "piece";
 }
 
+/** A restaurant creates dishes by default; ingredients can be opted into stock. */
+export function defaultStockTrackingForBusinessType(businessType: BusinessType): boolean {
+  return businessType !== "restaurant";
+}
+
 export function productToForm(product?: Product): ProductFormData {
   const defaultUnit = product?.sellingUnits?.find((row) => row.isDefault) ?? product?.sellingUnits?.[0];
   // Products saved before `packagingMode` existed may still have an individual
@@ -258,7 +263,8 @@ export function productToForm(product?: Product): ProductFormData {
         ? roundMoney(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
         : fromBaseQty(product?.lowStockThreshold, unit),
     batchTrackingEnabled: product?.batchTrackingEnabled ?? false,
-    stockTrackingEnabled: product?.stockTrackingEnabled ?? true,
+    stockTrackingEnabled: product?.stockTrackingEnabled ?? product?.trackStock
+      ?? defaultStockTrackingForBusinessType(businessType),
     drugSchedule: product?.drugSchedule ?? null,
     attributes: normalizeProductAttributes(product?.attributes),
     reorderLevel: product?.reorderLevel ?? 0,

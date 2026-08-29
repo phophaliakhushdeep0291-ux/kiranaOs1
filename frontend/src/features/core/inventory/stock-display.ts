@@ -3,25 +3,6 @@ import type { InventoryItem, Product, ProductSellingUnit } from "@/types/api";
 
 type StockRecord = (Product | InventoryItem) & Record<string, unknown>;
 
-/**
- * Whether this product's own stock is a number anybody counts.
- *
- * True for everything a shop buys, stores and runs out of, which is almost
- * everything — hence the default when neither field is set. False for a thing
- * that is made or performed rather than stocked: a cooked dish, whose
- * ingredients are what actually leave the store room.
- *
- * One place rather than the seven inline copies this replaces. Those copies are
- * how the write paths drifted: billing, stock movements and both product save
- * paths each asserted `true` instead of reading it, so every sale re-tracked the
- * dish it had just driven one lower.
- */
-export function countsAsStock(
-  item?: { stockTrackingEnabled?: boolean | null; trackStock?: boolean | null } | null,
-): boolean {
-  return (item?.stockTrackingEnabled ?? item?.trackStock ?? true) !== false;
-}
-
 function readNumber(...values: unknown[]): number | undefined {
   for (const value of values) {
     if (value === "" || value === null || value === undefined) continue;
@@ -229,6 +210,23 @@ export interface InventoryStockRow {
 }
 
 /**
+ * Whether this product's own stock is a number anybody counts.
+ *
+ * True for everything a shop buys, stores and runs out of, which is almost
+ * everything — hence the default when neither field is set. False for a thing
+ * that is made or performed rather than stocked: a cooked dish, whose
+ * ingredients are what actually leave the store room.
+ *
+ * One authoritative answer, used by inventory and offline billing alike. The
+ * inline copies it replaces are how the write paths drifted: billing, stock
+ * movements and both product save paths each asserted `true` instead of reading
+ * it, so every sale re-tracked the dish it had just driven one lower.
+ */
+export function productTracksStock(item?: Product | InventoryItem | null): boolean {
+  return (item?.stockTrackingEnabled ?? item?.trackStock ?? true) !== false;
+}
+
+/**
  * Expand a product into the rows an inventory screen should show.
  *
  * A product that counts each size separately becomes ONE ROW PER SIZE, because
@@ -239,7 +237,7 @@ export interface InventoryStockRow {
  */
 export function inventoryStockRows(item: Product | InventoryItem): InventoryStockRow[] {
   const normalized = normalizeInventoryItem(item);
-  const isTracked = (normalized.stockTrackingEnabled ?? normalized.trackStock ?? true) !== false;
+  const isTracked = productTracksStock(normalized);
   const packs = activeInventorySellingUnits(normalized);
 
   if (normalized.packagingMode === "per_pack" && packs.length > 0) {

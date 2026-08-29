@@ -155,6 +155,24 @@ describe("product reliability", () => {
     expect(mockedEmitLocalDataChanged).toHaveBeenCalledWith({ entityType: "product", action: "created", entityId: created.id });
   });
 
+  it("keeps a restaurant dish untracked through an offline create", async () => {
+    const created = await createProductLocalFirst({
+      ...baseProductInput,
+      name: "Dal Fry",
+      barcode: "8901000000029",
+      stockBaseQty: 0,
+      stockTrackingEnabled: false,
+      trackStock: false,
+    });
+
+    expect(created).toEqual(expect.objectContaining({ stockTrackingEnabled: false, trackStock: false }));
+    expect(mockState.committed.products[0]).toEqual(expect.objectContaining({
+      name: "Dal Fry",
+      stockTrackingEnabled: false,
+      trackStock: false,
+    }));
+  });
+
   it("product update works offline", async () => {
     const updated = await updateProductLocalFirst("product_sugar", {
       ...baseProductInput,
@@ -194,6 +212,14 @@ describe("product reliability", () => {
         }),
       }),
     ]));
+  });
+
+  it("does not re-enable dish stock during a partial offline edit", async () => {
+    mockState.products = [{ ...existingProduct, stockTrackingEnabled: false, trackStock: false }];
+
+    const updated = await patchProductLocalFirst("product_sugar", { defaultPricePerRateUnit: 48 });
+
+    expect(updated).toEqual(expect.objectContaining({ stockTrackingEnabled: false, trackStock: false }));
   });
 
   it("blocks a pack-tracking conversion until the product has zero stock", async () => {

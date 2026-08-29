@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { normaliseProductInput } from "@/features/core/products/api";
 import { formToInput, productToForm } from "@/features/core/products/pages/product-form-state";
+import { saveBusinessType } from "@/features/core/settings/business-type-store";
 import type { Product } from "@/types/api";
 
 /**
@@ -15,6 +17,8 @@ import type { Product } from "@/types/api";
  * to be able to say otherwise, and the form has to carry what they said.
  */
 describe("counting a product as stock", () => {
+  afterEach(() => saveBusinessType("kirana"));
+
   const base = (over: Partial<Product> = {}) => productToForm({
     id: "p1", name: "Mineral Water", category: "general", unit: "piece",
     ...over,
@@ -45,5 +49,23 @@ describe("counting a product as stock", () => {
     const once = formToInput({ ...base(), stockTrackingEnabled: false });
     const again = formToInput(productToForm({ ...(once as unknown as Product), id: "p1" }));
     expect(again.stockTrackingEnabled).toBe(false);
+  });
+
+  it("does not get overwritten while the API payload is normalized", () => {
+    const input = formToInput({ ...base(), stockTrackingEnabled: false });
+    expect(normaliseProductInput(input)).toEqual(expect.objectContaining({
+      stockTrackingEnabled: false,
+      trackStock: false,
+    }));
+  });
+
+  it("starts a new restaurant dish as untracked", () => {
+    saveBusinessType("restaurant");
+    expect(productToForm().stockTrackingEnabled).toBe(false);
+  });
+
+  it("still respects an explicit packaged-goods override in a restaurant", () => {
+    saveBusinessType("restaurant");
+    expect(base({ stockTrackingEnabled: true }).stockTrackingEnabled).toBe(true);
   });
 });

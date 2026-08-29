@@ -14,6 +14,7 @@ import {
   inventoryQuantityToBase,
   inventorySimpleUnit,
   inventoryUnitLabel,
+  productTracksStock,
 } from "@/features/core/inventory/stock-display";
 
 const PRODUCT_CACHE_KEY = "products";
@@ -64,6 +65,9 @@ function assertStockMovementRules(input: {
   data: StockMovementInput;
 }) {
   if (!input.product) throw new Error("Product not found in local records");
+  if (!productTracksStock(input.product)) {
+    throw new Error("This item is not counted as stock. Track its ingredients or enable stock tracking first.");
+  }
 
   // The server sync handler requires an owner PIN for BOTH correction and damage
   // stock adjustments. Enforce it locally too, so we never persist a movement whose
@@ -150,8 +154,8 @@ function buildUpdatedProduct(
     unit: simpleUnit,
     displayUnit,
     rateUnit: simpleUnit,
-    stockTrackingEnabled: product.stockTrackingEnabled ?? true,
-    trackStock: product.stockTrackingEnabled ?? true,
+    stockTrackingEnabled: productTracksStock(product),
+    trackStock: productTracksStock(product),
     averageCostPrice: nextAverageCost,
     costPerRateUnit: nextAverageCost,
     costPrice: nextAverageCost,

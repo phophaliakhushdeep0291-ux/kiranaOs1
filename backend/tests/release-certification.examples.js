@@ -58,7 +58,7 @@ for (const snippet of [
 }
 
 const compose = read("docker-compose.yml");
-const apiService = compose.match(/\n  api:\n[\s\S]*?\n  worker:/)?.[0] ?? "";
+const apiService = compose.match(/\r?\n  api:\r?\n[\s\S]*?\r?\n  worker:/)?.[0] ?? "";
 assert.ok(apiService.includes('QUEUES_ENABLED: "true"'), "Compose API must enqueue work when the worker is enabled");
 
 const storageVerifier = read("scripts/verify-object-storage.js");
