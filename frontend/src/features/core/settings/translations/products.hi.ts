@@ -164,6 +164,8 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.form.rateStockUnit": "रेट / स्टॉक यूनिट",
   "products.form.batchExpiry": "बैच और एक्सपायरी ट्रैकिंग चालू करें",
   "products.form.batchExpiryTitle": "बैच और एक्सपायरी ट्रैकिंग",
+  "products.form.countAsStock": "इसे स्टॉक में गिनें",
+  "products.form.countAsStockHelp": "जो आप खरीदते, रखते और खत्म होता है, उसके लिए चालू रखें। ऑर्डर पर बनने वाले पकवान या सेवा के लिए बंद रखें — स्टोर रूम से उसकी सामग्री जाती है।",
   "products.form.additionalInfo": "और जानकारी",
   "products.form.productImage": "माल की फोटो",
   "products.form.uploadImage": "फोटो डालें",

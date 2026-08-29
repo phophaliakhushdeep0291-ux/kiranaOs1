@@ -174,6 +174,8 @@ export const productsEn = {
   "products.form.rateStockUnit": "Rate / Stock Unit",
   "products.form.batchExpiry": "Enable batch and expiry tracking",
   "products.form.batchExpiryTitle": "Batch and expiry tracking",
+  "products.form.countAsStock": "Count this as stock",
+  "products.form.countAsStockHelp": "On for anything you buy, store and run out of. Off for a dish you cook to order or a service you perform — its ingredients are what leave the store room.",
   "products.form.additionalInfo": "Additional Information",
   "products.form.productImage": "Product Image",
   "products.form.uploadImage": "Upload Image",
