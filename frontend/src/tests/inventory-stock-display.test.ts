@@ -138,7 +138,7 @@ describe("inventory stock display", () => {
       // finished product is counted once — under Out of Stock.
       const page = readFileSync("src/features/core/inventory/pages/InventoryPage.tsx", "utf8");
       expect(page).toContain("const hasStock = (item: InventoryItem) => Number(item.stockBaseQty ?? 0) > 0;");
-      expect(page).toContain("rows.filter((item) => isLowStock(item) && hasStock(item))");
+      expect(page).toContain("tracked.filter((item) => isLowStock(item) && hasStock(item))");
       expect(page).toContain("(lowStock.data ?? []).filter(hasStock)");
       // The panel and the table keep their own qty > 0 guards.
       expect(page).toContain('.filter((item) => Number(item.stockBaseQty ?? 0) > 0)');
@@ -162,6 +162,8 @@ describe("inventory stock display", () => {
       expect(filter.indexOf('if (stockFilter === "untracked") return !tracked;'))
         .toBeLessThan(filter.indexOf("if (!tracked) return false;"));
       expect(page).toContain('<SelectItem value="untracked">{t("inventory.stock.notCounted")}</SelectItem>');
+      expect(page).toContain("products: tracked.length");
+      expect(page).not.toContain("products: rows.length");
 
       // And the default view no longer waves every row through.
       expect(filter).not.toContain('if (stockFilter === "in") return !tracked || (qty > 0 && !isLowStock(item));');
