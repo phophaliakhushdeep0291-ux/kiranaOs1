@@ -37,6 +37,7 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.stock.inStock": "स्टॉक में है",
   "inventory.stock.lowStock": "कम स्टॉक",
   "inventory.stock.outOfStock": "स्टॉक खत्म",
+  "inventory.stock.notCounted": "स्टॉक में नहीं गिना जाता",
   "inventory.filter.allSuppliers": "सभी सप्लायर",
   "inventory.filter.allTypes": "सभी प्रकार",
   "inventory.filter.allStatus": "सभी स्थिति",
