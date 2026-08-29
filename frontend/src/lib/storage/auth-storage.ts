@@ -13,6 +13,25 @@ export interface AuthSession {
   shop?: Shop | null;
 }
 
+/**
+ * Stable identity for the business boundary represented by an auth session.
+ *
+ * Access tokens rotate, so they cannot identify a session safely. The user + shop
+ * pair does not rotate and is exactly the boundary local/offline data must obey.
+ * `null` deliberately means "no authenticated business" rather than a shared local
+ * tenant; callers use it to fail closed while logged out or between two logins.
+ */
+export function authSessionIdentity(session: AuthSession = loadAuthSession()): string | null {
+  const userId = typeof session.user?.id === "string" ? session.user.id : null;
+  const shopId = typeof session.shop?.id === "string"
+    ? session.shop.id
+    : typeof session.user?.shopId === "string"
+      ? session.user.shopId
+      : null;
+  if (!userId || !shopId) return null;
+  return JSON.stringify([userId, shopId]);
+}
+
 function safeGet(storage: Storage | undefined, key: string): string | null {
   if (typeof window === "undefined" || !storage) return null;
   try {

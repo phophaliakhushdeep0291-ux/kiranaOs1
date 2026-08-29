@@ -1,4 +1,5 @@
 import {
+  assertCurrentOfflineScope,
   dexieDB,
   rowMatchesCurrentScope,
   type LocalSettingRow,
@@ -23,8 +24,9 @@ export const settingsRepository = {
     value: T,
     expiresAt?: number | null,
   ): Promise<LocalSettingRow> {
-    await dexieDB.open();
     const scope = getOfflineScope();
+    await dexieDB.open();
+    assertCurrentOfflineScope(scope);
     const row: LocalSettingRow = {
       key,
       value,

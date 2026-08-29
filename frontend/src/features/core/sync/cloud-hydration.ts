@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api/http";
-import { dexieDB, offlineDB, rowMatchesCurrentScope } from "@/lib/offline/db";
+import { assertCurrentOfflineScope, dexieDB, offlineDB } from "@/lib/offline/db";
+import { getOfflineScope } from "@/lib/offline/context";
 import { writeInstantCache, emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import { refreshBusinessCaches } from "@/features/core/sync/sync-reconcile";
 import { syncPull } from "@/features/core/sync/api";
@@ -89,32 +90,35 @@ async function safeFetch<T>(label: string, fn: () => Promise<T>): Promise<{ labe
 }
 
 async function importProducts() {
+  const scope = getOfflineScope();
   const rows = await apiRequest<Product[]>(`/products?limit=${DIRECT_IMPORT_LIMIT}`, { method: "GET", cache: "no-store", background: true });
   const products = Array.isArray(rows) ? rows : [];
-  if (products.length > 0) {
-    const merged = await preserveLocalPending("products", products as unknown as AnyRecord[], PRODUCT_ID_KEYS);
-    await offlineDB.putMany("products", merged);
-    writeInstantCache("products", merged);
-  }
+  const merged = await preserveLocalPending("products", products as unknown as AnyRecord[], PRODUCT_ID_KEYS);
+  assertCurrentOfflineScope(scope);
+  await offlineDB.replaceSyncedSnapshot("products", merged, scope);
+  assertCurrentOfflineScope(scope);
+  writeInstantCache("products", merged);
   return products.length;
 }
 
 async function importCustomers() {
+  const scope = getOfflineScope();
   const rows = await apiRequest<Customer[]>(`/customers?limit=${DIRECT_IMPORT_LIMIT}`, { method: "GET", cache: "no-store", background: true });
   const customers = Array.isArray(rows) ? rows.map((customer) => {
     const parsed = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);
     const udhar = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
     return { ...customer, udharAmount: udhar, totalUdhar: udhar };
   }) : [];
-  if (customers.length > 0) {
-    const merged = await preserveLocalPending("customers", customers as unknown as AnyRecord[], CUSTOMER_ID_KEYS);
-    await offlineDB.putMany("customers", merged);
-    writeInstantCache("customers", merged);
-  }
+  const merged = await preserveLocalPending("customers", customers as unknown as AnyRecord[], CUSTOMER_ID_KEYS);
+  assertCurrentOfflineScope(scope);
+  await offlineDB.replaceSyncedSnapshot("customers", merged, scope);
+  assertCurrentOfflineScope(scope);
+  writeInstantCache("customers", merged);
   return customers.length;
 }
 
 async function importBills() {
+  const scope = getOfflineScope();
   const now = new Date();
   const from = toDateInput(addDays(now, -730));
   const to = toDateInput(addDays(now, 1));
@@ -146,18 +150,26 @@ async function importBills() {
     // server) so a reload's bulk import doesn't resurrect a bill the shopkeeper just recycled —
     // the server still lists it as active until its CANCEL_BILL/edit op syncs.
     const merged = await preserveLocalPending("bills", bills as unknown as AnyRecord[], BILL_ID_KEYS);
+    assertCurrentOfflineScope(scope);
     await offlineDB.putMany("bills", merged);
+    assertCurrentOfflineScope(scope);
     writeInstantCache("bills", merged);
   }
-  if (billItems.length > 0) await offlineDB.putMany("bill_items", uniqueById(billItems));
+  if (billItems.length > 0) {
+    assertCurrentOfflineScope(scope);
+    await offlineDB.putMany("bill_items", uniqueById(billItems));
+  }
   if (payments.length > 0) {
+    assertCurrentOfflineScope(scope);
     await offlineDB.putMany("payments", uniqueById(payments));
+    assertCurrentOfflineScope(scope);
     writeInstantCache("payments", uniqueById(payments));
   }
   return { bills: bills.length, billItems: billItems.length, payments: payments.length };
 }
 
 async function importInventory() {
+  const scope = getOfflineScope();
   const rows = await apiRequest<AnyRecord[]>(`/inventory`, { method: "GET", cache: "no-store", background: true });
   const invRows = Array.isArray(rows)
     ? rows.map((row) => {
@@ -179,6 +191,7 @@ async function importInventory() {
   }
   const products = invRows.map((row) => ({ ...(byId.get(String(row.id)) ?? {}), ...row }));
   const merged = await preserveLocalPending("products", products, PRODUCT_ID_KEYS);
+  assertCurrentOfflineScope(scope);
   await offlineDB.putMany("products", merged);
   return products.length;
 }
@@ -193,6 +206,7 @@ export async function resyncUdharLedgerFromServer(): Promise<number> {
 }
 
 async function importUdharLedger() {
+  const scope = getOfflineScope();
   const result = await apiRequest<{ entries?: unknown[]; ledger?: unknown[]; total?: number }>(`/udhar?limit=${DIRECT_IMPORT_LIMIT}`, {
     method: "GET",
     cache: "no-store", background: true,
@@ -201,19 +215,25 @@ async function importUdharLedger() {
   const entries = rows.filter(isRecord);
   // The endpoint is a full server snapshot. Retaining old server rows makes
   // balances device-dependent, but pending local work must survive hydration.
+  assertCurrentOfflineScope(scope);
   const staleKeys = await dexieDB.customer_ledger
     .filter((row) => {
-      if (!rowMatchesCurrentScope(row)) return false;
+      if (row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id) return false;
       const status = String(row.sync_status ?? "synced").toLowerCase();
       return !["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(status);
     })
     .primaryKeys();
+  assertCurrentOfflineScope(scope);
   if (staleKeys.length > 0) await dexieDB.customer_ledger.bulkDelete(staleKeys as string[]);
-  if (entries.length > 0) await offlineDB.putMany("customer_ledger", entries);
+  if (entries.length > 0) {
+    assertCurrentOfflineScope(scope);
+    await offlineDB.putMany("customer_ledger", entries);
+  }
   return entries.length;
 }
 
 export async function hydratePurchaseHistoryFromSyncPull(): Promise<number> {
+  const scope = getOfflineScope();
   await offlineDB.init();
   let purchaseCursor: string | null = null;
   let imported = 0;
@@ -240,6 +260,7 @@ export async function hydratePurchaseHistoryFromSyncPull(): Promise<number> {
       : [];
     const safeRows = rows.filter((row) => !rowMatchesPurchaseOverride(row, overrideMatcher));
     if (safeRows.length > 0) {
+      assertCurrentOfflineScope(scope);
       await offlineDB.putMany("purchase_bills", uniqueById(safeRows));
       imported += safeRows.length;
     }
@@ -255,6 +276,7 @@ export async function hydratePurchaseHistoryFromSyncPull(): Promise<number> {
   }
 
   if (imported > 0) {
+    assertCurrentOfflineScope(scope);
     await refreshBusinessCaches().catch(() => undefined);
     emitLocalDataChanged({ type: "cloud-hydration", action: "purchase-history-import", count: imported });
   }
@@ -263,8 +285,10 @@ export async function hydratePurchaseHistoryFromSyncPull(): Promise<number> {
 }
 
 async function importSubscription() {
+  const scope = getOfflineScope();
   const data = await apiRequest<AnyRecord>(`/subscription/current`, { method: "GET", cache: "no-store", background: true });
   if (isRecord(data)) {
+    assertCurrentOfflineScope(scope);
     await writeSubscriptionSnapshot(data);
   }
   return isRecord(data) ? 1 : 0;
@@ -284,6 +308,7 @@ export interface CloudHydrationResult {
 }
 
 export async function hydrateFromBackendSnapshot(): Promise<CloudHydrationResult> {
+  const scope = getOfflineScope();
   await offlineDB.init();
 
   const [subscription, products, customers, bills, udharLedger, purchaseHistory] = await Promise.all([
@@ -314,7 +339,9 @@ export async function hydrateFromBackendSnapshot(): Promise<CloudHydrationResult
       .map(({ label, error }) => ({ label, error })),
   };
 
+  assertCurrentOfflineScope(scope);
   await refreshBusinessCaches().catch(() => undefined);
+  assertCurrentOfflineScope(scope);
   emitLocalDataChanged({ type: "cloud-hydration", action: "direct-import", result });
   return result;
 }

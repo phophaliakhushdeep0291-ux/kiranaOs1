@@ -455,6 +455,32 @@ export function rowMatchesCurrentScope(row: unknown): boolean {
   return row.tenant_id === scope.tenant_id && row.store_id === scope.store_id;
 }
 
+export class OfflineScopeMismatchError extends Error {
+  constructor() {
+    super("Offline data belongs to a different shop than the active session.");
+    this.name = "OfflineScopeMismatchError";
+  }
+}
+
+export function assertCurrentOfflineScope(expected: Pick<OfflineScope, "tenant_id" | "store_id">): void {
+  const active = getOfflineScope();
+  if (active.tenant_id !== expected.tenant_id || active.store_id !== expected.store_id) {
+    throw new OfflineScopeMismatchError();
+  }
+}
+
+/** Reject explicitly-labelled foreign rows instead of silently re-labelling them. */
+export function assertOfflineWriteScope(value: unknown): void {
+  if (!isRecord(value)) return;
+  const scope = getOfflineScope();
+  if (
+    (typeof value.tenant_id === "string" && value.tenant_id !== scope.tenant_id)
+    || (typeof value.store_id === "string" && value.store_id !== scope.store_id)
+  ) {
+    throw new OfflineScopeMismatchError();
+  }
+}
+
 export function filterRowsForCurrentScope<T>(rows: T[]): T[] {
   return rows.filter((row) => rowMatchesCurrentScope(row));
 }
@@ -616,6 +642,7 @@ function withBusinessMetadata<T>(
   const scope = getOfflineScope();
   const now = nowIso();
   const raw: Record<string, unknown> = isRecord(value) ? value : {};
+  assertOfflineWriteScope(raw);
   const id = getRowId(raw);
   const created = raw.created_at ?? raw.createdAt ?? now;
   const updated = raw.updated_at ?? raw.updatedAt ?? now;
@@ -624,8 +651,8 @@ function withBusinessMetadata<T>(
     ...raw,
     id,
     tenant_id:
-      typeof raw.tenant_id === "string" ? raw.tenant_id : scope.tenant_id,
-    store_id: typeof raw.store_id === "string" ? raw.store_id : scope.store_id,
+      scope.tenant_id,
+    store_id: scope.store_id,
     created_at: typeof created === "string" ? created : now,
     updated_at: typeof updated === "string" ? updated : now,
     deleted_at:
@@ -668,8 +695,11 @@ class OfflineDBFacade {
   }
 
   async put<T>(storeName: string, value: T): Promise<void> {
+    const writeScope = getOfflineScope();
     await this.init();
+    assertCurrentOfflineScope(writeScope);
     if (storeName === "settings") {
+      assertOfflineWriteScope(value);
       await this.table<LocalSettingRow>(storeName).put(
         value as LocalSettingRow,
       );
@@ -682,7 +712,9 @@ class OfflineDBFacade {
   }
 
   async putMany<T>(storeName: string, values: T[]): Promise<void> {
+    const writeScope = getOfflineScope();
     await this.init();
+    assertCurrentOfflineScope(writeScope);
     if (values.length === 0) return;
     const rows = BUSINESS_TABLES.has(storeName)
       ? values.map((value) => withBillSyncFlagForStore(storeName, withBusinessMetadata(value)))
@@ -690,11 +722,52 @@ class OfflineDBFacade {
     await this.table<T>(storeName).bulkPut(rows as T[]);
   }
 
+  /**
+   * Replace the server-owned portion of one current-shop table atomically.
+   * Pending/local-only rows survive, while stale synced rows that are absent from
+   * a successful authoritative snapshot are removed. Besides normal reconciliation,
+   * this quarantines rows that an older build may have mislabelled during a shop switch.
+   */
+  async replaceSyncedSnapshot<T>(
+    storeName: string,
+    values: T[],
+    expectedScope: Pick<OfflineScope, "tenant_id" | "store_id"> = getOfflineScope(),
+  ): Promise<void> {
+    if (!BUSINESS_TABLES.has(storeName)) throw new Error(`Unsupported snapshot table: ${storeName}`);
+    assertCurrentOfflineScope(expectedScope);
+    // Normalize before the first await, while the captured shop is still active.
+    const rows = values.map((value) =>
+      withBillSyncFlagForStore(storeName, withBusinessMetadata(value)) as Record<string, unknown>,
+    );
+    await this.init();
+    assertCurrentOfflineScope(expectedScope);
+    const scope = expectedScope;
+    const table = this.table<Record<string, unknown>>(storeName);
+    const keepStatuses = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
+
+    await dexieDB.transaction("rw", table, async () => {
+      const current = await table
+        .where("[tenant_id+store_id]")
+        .equals([scope.tenant_id, scope.store_id])
+        .toArray()
+        .catch(() => table.filter((row) => row.tenant_id === scope.tenant_id && row.store_id === scope.store_id).toArray());
+      assertCurrentOfflineScope(scope);
+      const syncedKeys = current
+        .filter((row) => !keepStatuses.has(String(row.sync_status ?? "synced").toLowerCase()))
+        .map((row) => row.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0);
+      if (syncedKeys.length > 0) await table.bulkDelete(syncedKeys);
+      if (rows.length > 0) await table.bulkPut(rows);
+    });
+  }
+
   async transaction<T>(
     storeNames: string[],
     callback: (tx: OfflineWriteTransaction) => Promise<T>,
   ): Promise<T> {
+    const writeScope = getOfflineScope();
     await this.init();
+    assertCurrentOfflineScope(writeScope);
     const tables = Array.from(new Set(storeNames)).map((name) =>
       this.table(name),
     );
@@ -703,6 +776,7 @@ class OfflineDBFacade {
       const tx: OfflineWriteTransaction = {
         put: async <Row>(storeName: string, value: Row) => {
           if (storeName === "settings") {
+            assertOfflineWriteScope(value);
             await this.table<LocalSettingRow>(storeName).put(
               value as LocalSettingRow,
             );
@@ -721,6 +795,7 @@ class OfflineDBFacade {
           await this.table<Row>(storeName).bulkPut(rows as Row[]);
         },
         enqueueOutboxOperation: async (event: PendingSyncEvent) => {
+          assertOfflineWriteScope(event);
           await this.table<PendingSyncEvent>("sync_outbox").put(event);
           outboxEvents.push(event);
         },
@@ -846,6 +921,7 @@ class OfflineDBFacade {
 
   async enqueueOutboxOperation(event: PendingSyncEvent): Promise<void> {
     await this.init();
+    assertOfflineWriteScope(event);
     await this.table<PendingSyncEvent>("sync_outbox").put(event);
     emitSyncQueueUpdated({
       clientEventId: event.clientEventId,
