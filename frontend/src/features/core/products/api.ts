@@ -11,7 +11,10 @@ export function normaliseProductInput(data: ProductInput): ProductInput {
   const retail = data.retailPricePerRateUnit ?? data.retailPrice ?? selling;
   const wholesale = data.wholesalePricePerRateUnit ?? data.wholesalePrice ?? selling;
   const lowStock = data.lowStockThreshold ?? data.lowStockAlert ?? 0;
-  const trackStock = true;
+  // Preserve the owner's answer. Hardcoding this to true made every save turn a
+  // cooked dish back into inventory, even though the product form correctly
+  // submitted false.
+  const trackStock = data.stockTrackingEnabled ?? data.trackStock ?? true;
 
   return {
     ...data,

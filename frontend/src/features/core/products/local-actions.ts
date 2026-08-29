@@ -181,6 +181,8 @@ function mergeLocalProductAttributes(
 function toProduct(data: ProductInput, id = createLocalId("product"), existing?: Product): Product {
   const now = new Date().toISOString();
   const normalized = normaliseProductInput(data);
+  const trackStock = normalized.stockTrackingEnabled ?? normalized.trackStock
+    ?? existing?.stockTrackingEnabled ?? existing?.trackStock ?? true;
   return {
     ...existing,
     id,
@@ -197,8 +199,8 @@ function toProduct(data: ProductInput, id = createLocalId("product"), existing?:
     stockBaseQty: normalized.stockBaseQty,
     stockQuantity: normalized.stockQuantity,
     stockUnit: normalized.stockUnit ?? normalized.displayUnit,
-    stockTrackingEnabled: true,
-    trackStock: true,
+    stockTrackingEnabled: trackStock,
+    trackStock,
     costPerRateUnit: normalized.averageCostPrice ?? normalized.costPerRateUnit,
     costPrice: normalized.averageCostPrice ?? normalized.costPrice ?? normalized.costPerRateUnit,
     averageCostPrice: normalized.averageCostPrice ?? normalized.costPrice ?? normalized.costPerRateUnit,
@@ -770,7 +772,7 @@ export async function patchProductLocalFirst(id: string, data: Partial<ProductIn
     barcode: existing?.barcode ?? undefined,
     aliases: existing?.aliases ?? [],
     stockBaseQty: existing?.stockBaseQty ?? 0,
-    stockTrackingEnabled: true,
+    stockTrackingEnabled: existing?.stockTrackingEnabled ?? existing?.trackStock ?? true,
     costPerRateUnit: existing?.averageCostPrice ?? existing?.costPerRateUnit ?? existing?.costPrice ?? 0,
     costPrice: existing?.averageCostPrice ?? existing?.costPrice ?? existing?.costPerRateUnit ?? 0,
     averageCostPrice: existing?.averageCostPrice ?? existing?.costPrice ?? existing?.costPerRateUnit ?? 0,
