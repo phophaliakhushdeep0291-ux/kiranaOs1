@@ -470,7 +470,7 @@ export default function Dashboard() {
   const loadDemoShop = async () => {
     setSeedingDemo(true);
     try {
-      const result = await seedDemoShopData();
+      const result = await seedDemoShopData(businessType);
       toast({
         title: result.created ? "Demo shop loaded" : "Demo shop already loaded",
         description: t("dashboard.demoLoaded"),

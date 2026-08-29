@@ -16,7 +16,52 @@ function row<T extends Record<string, unknown>>(value: T): T {
   };
 }
 
-export async function seedDemoShopData(): Promise<{ created: boolean }> {
+/**
+ * What the four demo products are called in each trade.
+ *
+ * Ids and selling prices are deliberately untouched: every bill, payment,
+ * ledger row and stock movement below is written against those ids and adds up
+ * to those prices, so renaming is the only safe thing to vary. Costs are
+ * derived figures and move with the trade — a kitchen does not run a 88% food
+ * cost on a curry.
+ *
+ * A demo is a sales tool. Offering a cafe owner "Aashirvaad Atta 5kg" as their
+ * sample menu is worse than offering nothing: it says the software was built
+ * for a different shop and nobody thought about theirs.
+ */
+type DemoItem = { name: string; category: string; unit: string; cost: number };
+
+const DEMO_CATALOGUE: Record<string, Record<string, DemoItem>> = {
+  restaurant: {
+    demo_product_atta:  { name: "Paneer Butter Masala", category: "Main Course", unit: "plate", cost: 78 },
+    demo_product_rice:  { name: "Jeera Rice",           category: "Main Course", unit: "plate", cost: 34 },
+    demo_product_sugar: { name: "Masala Chai",          category: "Beverages",   unit: "glass", cost: 11 },
+    demo_product_tea:   { name: "Butter Naan (2)",      category: "Breads",      unit: "plate", cost: 38 },
+  },
+};
+
+const UNIT_FIELDS = ["displayUnit", "rateUnit", "baseUnit", "stockUnit", "unit", "display_unit", "rate_unit"];
+const COST_FIELDS = ["costPrice", "costPerRateUnit", "cost_per_rate_unit", "averageCostPrice"];
+
+/** Rewrite a seeded row into the trade's own vocabulary, leaving ids and totals alone. */
+function localiseDemoRow(businessType: string | undefined, value: Record<string, unknown>) {
+  const catalogue = DEMO_CATALOGUE[businessType ?? ""];
+  if (!catalogue) return value;
+  const key = (value.productId ?? value.product_id ?? value.id) as string | undefined;
+  const item = key ? catalogue[key] : undefined;
+  if (!item) return value;
+
+  const next: Record<string, unknown> = { ...value };
+  if (typeof next.name === "string") next.name = item.name;
+  if (typeof next.category === "string") next.category = item.category;
+  for (const field of UNIT_FIELDS) if (typeof next[field] === "string") next[field] = item.unit;
+  for (const field of COST_FIELDS) if (typeof next[field] === "number") next[field] = item.cost;
+  return next;
+}
+
+export async function seedDemoShopData(businessType?: string): Promise<{ created: boolean }> {
+  const put = (table: string, values: Record<string, unknown>[]) =>
+    offlineDB.putMany(table, values.map((value) => localiseDemoRow(businessType, value)));
   const existing = await offlineDB.getSetting<{ seededAt: string }>(DEMO_SETTING_KEY).catch(() => null);
   if (existing?.seededAt) return { created: false };
 
@@ -25,7 +70,7 @@ export async function seedDemoShopData(): Promise<{ created: boolean }> {
   const paymentAt = todayIso(11, 22);
   const purchaseAt = todayIso(8, 30);
 
-  await offlineDB.putMany("products", [
+  await put("products", [
     row({
       id: "demo_product_atta",
       name: "Aashirvaad Atta 5kg",
@@ -88,7 +133,7 @@ export async function seedDemoShopData(): Promise<{ created: boolean }> {
     }),
   ]);
 
-  await offlineDB.putMany("customers", [
+  await put("customers", [
     row({
       id: "demo_customer_ramesh",
       name: "Ramesh Kumar",
@@ -101,7 +146,7 @@ export async function seedDemoShopData(): Promise<{ created: boolean }> {
     }),
   ]);
 
-  await offlineDB.putMany("suppliers", [
+  await put("suppliers", [
     row({
       id: "demo_supplier_wholesale",
       name: "City Wholesale",
@@ -112,7 +157,7 @@ export async function seedDemoShopData(): Promise<{ created: boolean }> {
     }),
   ]);
 
-  await offlineDB.putMany("bills", [
+  await put("bills", [
     row({
       id: "demo_bill_today",
       billNo: "DEMO-1001",
@@ -138,7 +183,7 @@ export async function seedDemoShopData(): Promise<{ created: boolean }> {
     }),
   ]);
 
-  await offlineDB.putMany("bill_items", [
+  await put("bill_items", [
     row({
       id: "demo_item_atta",
       billId: "demo_bill_today",
@@ -205,7 +250,7 @@ export async function seedDemoShopData(): Promise<{ created: boolean }> {
     }),
   ]);
 
-  await offlineDB.putMany("payments", [
+  await put("payments", [
     row({
       id: "demo_payment_cash",
       billId: "demo_bill_today",
@@ -234,7 +279,7 @@ export async function seedDemoShopData(): Promise<{ created: boolean }> {
     }),
   ]);
 
-  await offlineDB.putMany("customer_ledger", [
+  await put("customer_ledger", [
     row({
       id: "demo_ledger_old_udhar",
       customerId: "demo_customer_ramesh",
@@ -264,7 +309,7 @@ export async function seedDemoShopData(): Promise<{ created: boolean }> {
     }),
   ]);
 
-  await offlineDB.putMany("inventory_movements", [
+  await put("inventory_movements", [
     row({
       id: "demo_purchase_sugar",
       productId: "demo_product_sugar",

@@ -55,8 +55,57 @@ async function withStaffInviteTransaction(shopId, work) {
   }));
 }
 
+/**
+ * How long after a registration a repeat of the SAME registration is treated as
+ * the same one rather than a second shop.
+ *
+ * Long enough to cover a slow first attempt that the client gave up on and sent
+ * again; short enough that a genuine second shop opened by the same owner, with
+ * the same name and number, is never folded into the first.
+ */
+const REGISTRATION_REPLAY_WINDOW_MS = 2 * 60 * 1000;
+
+/**
+ * The same registration arriving twice must not open two shops.
+ *
+ * The submit button is already disabled while the request is in flight, so a
+ * double click is not the path. A slow request that the client abandons and
+ * retries is: the first attempt had already committed its shop, and the retry
+ * opened a second one. The owner then has two shops with the same name, enters
+ * a day's menu into whichever they landed in, and finds the other one empty
+ * tomorrow — which reads as lost data rather than a duplicate.
+ *
+ * The password is checked before any shop is handed back, so this can only ever
+ * return a shop to the person who just created it. Someone else registering the
+ * same name and number seconds later fails the comparison and gets their own
+ * shop, exactly as before.
+ */
+async function findReplayedRegistration({ shopName, mobile, password }) {
+  const since = new Date(Date.now() - REGISTRATION_REPLAY_WINDOW_MS);
+  const candidates = await db.user.findMany({
+    where: { mobile, role: "owner", createdAt: { gte: since }, disabledAt: null, shop: { name: shopName } },
+    include: { shop: true },
+    orderBy: { createdAt: "asc" },
+  });
+  for (const candidate of candidates) {
+    if (!candidate.shop || !candidate.passwordHash) continue;
+    if (await bcrypt.compare(password, candidate.passwordHash)) return candidate;
+  }
+  return null;
+}
+
 export async function registerShop({ shopName, ownerName, city, address, mobile, email, password, ownerPin, gstNumber, phone, businessType }, reqMeta = {}) {
   assertBusinessTypeOffered(businessType);
+
+  const replayed = await findReplayedRegistration({ shopName, mobile, password });
+  if (replayed) {
+    // Same registration, second delivery. Hand back the shop that already exists
+    // rather than opening another, and issue a fresh session so the caller is
+    // signed in exactly as a first delivery would have left them.
+    const auth = await issueAuthResponse(replayed, replayed.shop, { ...reqMeta, loginMethod: "registration" });
+    return { ...auth, emailVerification: null };
+  }
+
   // Mobile numbers are unique per shop, not globally. The same owner/staff mobile
   // may legitimately exist in multiple shop tenants; login handles that safely.
   const passwordHash = await bcrypt.hash(password, 10);
