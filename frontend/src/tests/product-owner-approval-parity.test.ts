@@ -57,6 +57,7 @@ const CHANGED_VALUES: Record<string, [unknown, unknown]> = {
   packagingMode: ["pooled", "per_pack"],
   batchTrackingEnabled: [false, true],
   drugSchedule: [null, "H"],
+  restaurantItemType: ["packaged", "prepared"],
   isActive: [true, false],
   status: ["active", "inactive"],
 };
@@ -81,6 +82,7 @@ const BASE = {
   packagingMode: "pooled",
   batchTrackingEnabled: false,
   drugSchedule: null,
+  restaurantItemType: "packaged",
   isActive: true,
   status: "active",
 };

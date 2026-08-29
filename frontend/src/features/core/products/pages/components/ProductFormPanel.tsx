@@ -291,6 +291,7 @@ export function ProductFormPanel({
   const imageUrl = form.watch("imageUrl");
   const description = form.watch("description") ?? "";
   const batchTracking = form.watch("batchTrackingEnabled");
+  const restaurantItemType = form.watch("restaurantItemType");
   const isLoose = !!form.watch("isLooseItem");
   const selectedUnit = form.watch("unit");
   const sellsLoose = hasCapability("LOOSE_ITEMS");
@@ -1332,7 +1333,51 @@ export function ProductFormPanel({
             ) : null}
           </Section>
 
-          {/* Stock & Inventory */}
+          {businessType === "restaurant" ? (
+            <Section title={t("products.form.restaurantItemTypeTitle")}>
+              <Field label={t("products.form.restaurantItemTypeLabel")} required>
+                <Select
+                  value={restaurantItemType ?? "prepared"}
+                  onValueChange={(value) => {
+                    const next = value as NonNullable<ProductFormData["restaurantItemType"]>;
+                    form.setValue("restaurantItemType", next, { shouldDirty: true, shouldValidate: true });
+                    if (next === "prepared") {
+                      form.setValue("stockQuantity", 0, { shouldDirty: true });
+                      form.setValue("lowStockAlert", 0, { shouldDirty: true });
+                      form.setValue("reorderLevel", 0, { shouldDirty: true });
+                    }
+                  }}
+                >
+                  <SelectTrigger data-testid="restaurant-item-type" className="h-11"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="prepared">{t("products.form.restaurantPreparedOption")}</SelectItem>
+                    <SelectItem value="packaged">{t("products.form.restaurantPackagedOption")}</SelectItem>
+                    <SelectItem value="ingredient">{t("products.form.restaurantIngredientOption")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1.5 text-[10.5px] font-semibold leading-4 text-[#65748f]">
+                  {restaurantItemType === "ingredient"
+                    ? t("products.form.restaurantIngredientHint")
+                    : restaurantItemType === "packaged"
+                      ? t("products.form.restaurantPackagedHint")
+                      : t("products.form.restaurantPreparedHint")}
+                </p>
+              </Field>
+            </Section>
+          ) : null}
+
+          {/* Stock & Inventory. A prepared restaurant dish owns no finished-goods
+              balance; its recipe and kitchen stock are the only truthful inputs. */}
+          {restaurantItemType === "prepared" ? (
+            <Section title={t("products.form.stockInventory")}>
+              <div className="rounded-[12px] border border-emerald-200 bg-emerald-50 p-3.5">
+                <p className="text-[12px] font-black text-emerald-900">{t("products.form.recipeTrackedTitle")}</p>
+                <p className="mt-1 text-[10.5px] font-semibold leading-4 text-emerald-800">
+                  {t("products.form.recipeTrackedHint")}
+                </p>
+              </div>
+            </Section>
+          ) : (
           <Section title={t("products.form.stockInventory")}>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {/* With a size grid the product's stock IS the sum of its cells —
@@ -1411,6 +1456,7 @@ export function ProductFormPanel({
             </div>
             ) : null}
           </Section>
+          )}
 
           {/* What this trade needs on a product and no other trade does — the
               chemist's salt, the garment shop's fabric, the parts shop's bin.

@@ -166,6 +166,7 @@ export async function setComboComponents(shopId, comboProductId, components = []
   }
 
   await db.$transaction(async (tx) => {
+    await tx.product.update({ where: { id: comboProductId }, data: { restaurantItemType: "prepared" } });
     await tx.menuComboComponent.deleteMany({ where: { shopId, comboProductId } });
     for (const [index, component] of components.entries()) {
       await tx.menuComboComponent.create({

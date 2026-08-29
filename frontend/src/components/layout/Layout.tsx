@@ -537,7 +537,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
     const profileCapabilities = businessProfile.data?.capabilities;
     const pathEnabled = (href: string) =>
       isHrefEnabled(href)
-      && isPathInBusinessProfile(href, profileNavigation)
+      && isPathInBusinessProfile(href, profileNavigation, businessProfile.data?.shop.businessType)
       // Dated-stock tooling belongs to shops that hold the capability, not to
       // every shop that happens to carry the "inventory" nav key.
       && isPathAllowedByCapabilities(href, profileCapabilities);
@@ -555,7 +555,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
         overviewHref: item.overviewHref && CASHIER_NAV_PATHS.has(item.overviewHref) ? item.overviewHref : undefined,
       }];
     });
-  }, [businessProfile.data?.navigation, isHrefEnabled, user?.role, verticalPack]);
+  }, [businessProfile.data?.navigation, businessProfile.data?.shop.businessType, isHrefEnabled, user?.role, verticalPack]);
 
   // auto-expand groups when child route is active
   useEffect(() => {

@@ -82,6 +82,9 @@ export const createProductSchema = z.object({
   // adding this changes nothing for an existing catalogue. Marking a product h,
   // h1 or x is what makes billing demand a prescription for it.
   drugSchedule: z.enum(["h", "h1", "x", "otc"]).nullish(),
+  // Restaurant stock/menu role. This is a real column because billing,
+  // inventory and the guest menu all branch on it.
+  restaurantItemType: z.enum(["prepared", "packaged", "ingredient"]).nullish(),
   // The variant grid this product declares, in axis order. Empty for ordinary
   // products. A product with axes is forced to "per_pack" in the service: each
   // size/colour holds its own stock, and pooled they would share one number.

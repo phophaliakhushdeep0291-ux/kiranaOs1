@@ -77,6 +77,7 @@ import {
   inventoryUnitLabel,
   enrichInventoryRows,
   mergeInventoryRows,
+  productTracksStock,
 } from "@/features/core/inventory/stock-display";
 import { PageShell, StatCard, StatsGrid, TradeFocusStrip } from "@/components/shared";
 import { offlineDB } from "@/lib/offline/db";
@@ -385,11 +386,11 @@ export default function InventoryPage() {
       .filter((item) => brandFilter === "all" || item.brand === brandFilter)
       .filter((item) => unitFilter === "all" || inventoryUnitLabel(item) === unitFilter)
       .filter((item) => {
-        const tracked = (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false;
+        const tracked = productTracksStock(item);
         const qty = Number(item.stockBaseQty ?? 0);
         if (stockFilter === "out") return tracked && qty <= 0;
         if (stockFilter === "low") return tracked && qty > 0 && isLowStock(item);
-        if (stockFilter === "in") return !tracked || (qty > 0 && !isLowStock(item));
+        if (stockFilter === "in") return tracked && qty > 0 && !isLowStock(item);
         return true;
       });
   }, [allInventoryRows, brandFilter, categoryFilter, search, stockFilter, unitFilter]);
@@ -398,7 +399,7 @@ export default function InventoryPage() {
 
   const stockStats = useMemo(() => {
     const rows = allInventoryRows;
-    const tracked = rows.filter((item) => (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false);
+    const tracked = rows.filter(productTracksStock);
     const stockValue = tracked.reduce((sum, item) => sum + inventoryStockValue(item), 0);
     const totalQuantity = tracked.reduce((sum, item) => sum + inventoryDisplayQuantity(item), 0);
     const soldLast30Days = movementRows
@@ -582,8 +583,9 @@ export default function InventoryPage() {
       const unit = inventoryUnitLabel(item);
       const qty = inventoryDisplayQuantity(item);
       const cost = inventoryAverageUnitCost(item);
-      const status = Number(item.stockBaseQty ?? 0) <= 0 ? t("inventory.stock.outOfStock") : isLowStock(item) ? t("inventory.stock.lowStock") : t("inventory.stock.inStock");
-      return [item.name, item.sku ?? item.barcode ?? "", item.category ?? "", item.brand ?? "", unit, qty, cost, roundInventoryValue(qty * cost), status];
+      const tracked = productTracksStock(item);
+      const status = !tracked ? t("inventory.page.notTracked") : Number(item.stockBaseQty ?? 0) <= 0 ? t("inventory.stock.outOfStock") : isLowStock(item) ? t("inventory.stock.lowStock") : t("inventory.stock.inStock");
+      return [item.name, item.sku ?? item.barcode ?? "", item.category ?? "", item.brand ?? "", unit, tracked ? qty : "", tracked ? cost : "", tracked ? roundInventoryValue(qty * cost) : "", status];
     });
     const csv = [header, ...lines]
       .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
@@ -861,14 +863,14 @@ export default function InventoryPage() {
                   const unit = inventoryUnitLabel(item);
                   const qty = inventoryDisplayQuantity(item);
                   const cost = inventoryAverageUnitCost(item);
-                  const tracked = (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false;
+                  const tracked = productTracksStock(item);
                   const out = tracked && Number(item.stockBaseQty ?? 0) <= 0;
                   const low = tracked && !out && isLowStock(item);
                   // A product that counts each size separately gets a line per size:
                   // one blended number cannot say WHICH size ran out.
-                  const packRows = item.packagingMode === "per_pack" ? inventoryStockRows(item) : [];
+                  const packRows = tracked && item.packagingMode === "per_pack" ? inventoryStockRows(item) : [];
                   return (
-                    <button key={item.id} type="button" onClick={() => openMovement("purchase", item)} className="w-full px-4 py-4 text-left transition-colors hover:bg-[#f8fbff]">
+                    <button key={item.id} type="button" onClick={() => { if (tracked) openMovement("purchase", item); }} className={cn("w-full px-4 py-4 text-left transition-colors", tracked && "hover:bg-[#f8fbff]")}>
                       <span className="grid w-full grid-cols-[58px_1fr_auto] items-center gap-3">
                         <InventoryProductAvatar item={item} />
                         <span className="min-w-0">
@@ -878,8 +880,8 @@ export default function InventoryPage() {
                         </span>
                         <span className="min-w-[88px] text-right">
                           <span className={cn("block text-[16px] font-black", out ? "text-[#ff304f]" : low ? "text-[#f08a00]" : "text-[#10a948]")}>{tracked ? `${qty.toLocaleString("en-IN")} ${unit}` : t("inventory.page.notTracked")}</span>
-                          <span className="mt-1 block text-[12px] text-[#718096]">{t("inventory.page.valueLabel", { value: fmtMoney(qty * cost) })}</span>
-                          <span className="mt-2 inline-block"><InventoryStatusBadge status={out ? "out" : low ? "low" : "in"} /></span>
+                          <span className="mt-1 block text-[12px] text-[#718096]">{tracked ? t("inventory.page.valueLabel", { value: fmtMoney(qty * cost) }) : t("inventory.page.notTracked")}</span>
+                          <span className="mt-2 inline-block"><InventoryStatusBadge status={!tracked ? "untracked" : out ? "out" : low ? "low" : "in"} /></span>
                         </span>
                       </span>
                       {packRows.length > 0 ? (
@@ -914,22 +916,22 @@ export default function InventoryPage() {
                       const unit = inventoryUnitLabel(item);
                       const qty = inventoryDisplayQuantity(item);
                       const cost = inventoryAverageUnitCost(item);
-                      const tracked = (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false;
+                      const tracked = productTracksStock(item);
                       const out = tracked && Number(item.stockBaseQty ?? 0) <= 0;
                       const low = tracked && !out && isLowStock(item);
                       // A product that counts each size separately gets a line per
                       // size: one blended number cannot say WHICH size ran out.
-                      const packRows = item.packagingMode === "per_pack" ? inventoryStockRows(item) : [];
+                      const packRows = tracked && item.packagingMode === "per_pack" ? inventoryStockRows(item) : [];
                       return <Fragment key={item.id}>
-                        <tr onClick={() => openMovement("purchase", item)} className="cursor-pointer border-b border-[#eef2f6] text-[#243653] transition-colors last:border-0 hover:bg-[#f8fbff]">
+                        <tr onClick={() => { if (tracked) openMovement("purchase", item); }} className={cn("border-b border-[#eef2f6] text-[#243653] transition-colors last:border-0", tracked && "cursor-pointer hover:bg-[#f8fbff]")}>
                         <td className="px-4 py-2.5"><div className="flex min-w-[160px] items-center gap-2.5"><InventoryProductAvatar item={item} /><div className="min-w-0"><p className="truncate font-semibold text-[#13223f]">{item.name}</p><p className="truncate text-[10px] text-[#7a89a3]">{item.brand ?? t("inventory.page.unbranded")}</p></div></div></td>
                         <td className="px-3 py-2.5 font-mono text-[10px] text-[#52627d]">{item.sku ?? item.barcode ?? "-"}</td>
                         <td className="px-3 py-2.5 text-[#52627d]">{item.category ?? t("products.filter.general")}</td>
                         <td className="px-3 py-2.5 capitalize text-[#52627d]">{packRows.length > 0 ? t("inventory.page.sizesCount", { count: packRows.length }) : unit}</td>
                         <td className="px-3 py-2.5 text-right font-semibold">{tracked ? qty.toLocaleString("en-IN") : t("inventory.page.notTracked")}</td>
-                        <td className="px-3 py-2.5 text-right text-[#52627d]">{fmtMoney(cost)}</td>
-                        <td className="px-3 py-2.5 text-right font-semibold">{fmtMoney(qty * cost)}</td>
-                        <td className="px-4 py-2.5 text-center"><InventoryStatusBadge status={out ? "out" : low ? "low" : "in"} /></td>
+                        <td className="px-3 py-2.5 text-right text-[#52627d]">{tracked ? fmtMoney(cost) : "—"}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold">{tracked ? fmtMoney(qty * cost) : "—"}</td>
+                        <td className="px-4 py-2.5 text-center"><InventoryStatusBadge status={!tracked ? "untracked" : out ? "out" : low ? "low" : "in"} /></td>
                         </tr>
                         {packRows.map((row) => (
                           <tr key={row.key} onClick={() => openMovement("purchase", item)} className="cursor-pointer border-b border-[#eef2f6] bg-[#fbfcfe] text-[11px] text-[#52627d] transition-colors last:border-0 hover:bg-[#f8fbff]">
@@ -1240,10 +1242,10 @@ function InventoryProductAvatar({ item, compact = false }: { item: InventoryItem
   );
 }
 
-function InventoryStatusBadge({ status }: { status: "in" | "low" | "out" }) {
+function InventoryStatusBadge({ status }: { status: "in" | "low" | "out" | "untracked" }) {
   const { t } = useAppLanguage();
-  const style = status === "in" ? "border-[#c7ecd4] bg-[#eaf9ef] text-[#169447]" : status === "low" ? "border-[#ffddb1] bg-[#fff5e8] text-[#ed8a00]" : "border-[#ffcdd4] bg-[#fff0f2] text-[#f2384f]";
-  return <span className={`inline-flex rounded-[6px] border px-2 py-1 text-[10px] font-semibold ${style}`}>{status === "in" ? t("inventory.stock.inStock") : status === "low" ? t("inventory.stock.lowStock") : t("inventory.stock.outOfStock")}</span>;
+  const style = status === "untracked" ? "border-[#b9e6d4] bg-[#eefaf5] text-[#087b59]" : status === "in" ? "border-[#c7ecd4] bg-[#eaf9ef] text-[#169447]" : status === "low" ? "border-[#ffddb1] bg-[#fff5e8] text-[#ed8a00]" : "border-[#ffcdd4] bg-[#fff0f2] text-[#f2384f]";
+  return <span className={`inline-flex rounded-[6px] border px-2 py-1 text-[10px] font-semibold ${style}`}>{status === "untracked" ? t("inventory.page.notTracked") : status === "in" ? t("inventory.stock.inStock") : status === "low" ? t("inventory.stock.lowStock") : t("inventory.stock.outOfStock")}</span>;
 }
 
 function InventoryPagination({ page, pages, total, onChange }: { page: number; pages: number; total: number; onChange: (page: number) => void }) {

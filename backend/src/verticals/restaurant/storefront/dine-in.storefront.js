@@ -1,6 +1,7 @@
 import { registerStorefrontMode } from "../../../shared/storefront-modes.js";
 import { restaurantWebsiteUrl } from "./restaurant-website.js";
 import { businessTypeFromSettings } from "../../registry.js";
+import { productAppearsOnRestaurantMenu } from "../../../modules/products/restaurant-item-type.js";
 import { groupMenuByCourse, parseTags, PORTION_UNIT_TYPE, resolveMenuCourse } from "../menu/menu.service.js";
 import { addonGroupsByProduct, validateSelection } from "../menu/addons.service.js";
 import { portionsPossible } from "../recipes/recipes.service.js";
@@ -170,6 +171,7 @@ async function shapeCatalog({ shopId, shop, settings, products, request }) {
 
   const items = [];
   for (const product of products) {
+    if (!productAppearsOnRestaurantMenu(product)) continue;
     const dishComponents = componentsByDish.get(product.id) ?? null;
     if (!dishIsOrderable(product, { components: dishComponents, stock })) continue;
     items.push(toMenuItem(product, {

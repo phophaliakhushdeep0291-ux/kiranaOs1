@@ -77,6 +77,7 @@ export const productFormSchema = z.object({
   // is every product until a pharmacy classifies it. Setting h/h1/x is what
   // makes billing demand a prescription for this medicine.
   drugSchedule: z.enum(["h", "h1", "x", "otc"]).nullable().default(null),
+  restaurantItemType: z.enum(["prepared", "packaged", "ingredient"]).nullable().default(null),
   // Trade details — the facts this shop type needs and no other does. Held as a
   // bag rather than as named fields because the set changes with the business
   // type; product-attributes.ts is the catalogue that says which keys are real.
@@ -209,6 +210,8 @@ export function productToForm(product?: Product): ProductFormData {
     ? "per_pack"
     : "pooled";
   const businessType = getStoredBusinessType();
+  const restaurantItemType = product?.restaurantItemType
+    ?? (businessType === "restaurant" ? (product ? "packaged" : "prepared") : null);
   const unit = defaultUnit?.unitType ?? product?.unit ?? product?.rateUnit ?? product?.displayUnit
     ?? defaultSellingUnitFor(businessType);
   const sellingPrice = product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? 0;
@@ -243,7 +246,7 @@ export function productToForm(product?: Product): ProductFormData {
     // shelf as if it were all 1 kg packets (10 x 1 kg + 20 x 500 g read back as
     // "20 packets"), and saving wrote that inflated figure onto the 1 kg row:
     // opening a per-pack product and pressing Save silently created stock.
-    stockQuantity: packagingMode === "per_pack"
+    stockQuantity: restaurantItemType === "prepared" ? 0 : packagingMode === "per_pack"
       ? roundMoney(Number(defaultUnit?.onHandQty ?? 0))
       : defaultUnit?.conversionToBase
         ? roundMoney(Number(product?.stockBaseQty ?? 0) / defaultUnit.conversionToBase)
@@ -255,6 +258,7 @@ export function productToForm(product?: Product): ProductFormData {
         : fromBaseQty(product?.lowStockThreshold, unit),
     batchTrackingEnabled: product?.batchTrackingEnabled ?? false,
     drugSchedule: product?.drugSchedule ?? null,
+    restaurantItemType,
     attributes: normalizeProductAttributes(product?.attributes),
     reorderLevel: product?.reorderLevel ?? 0,
     description: product?.description ?? "",
@@ -326,6 +330,7 @@ export function convertPackagingMode(
 }
 
 export function formToInput(values: ProductFormData, ownerPin?: string, reason?: string): ProductInput {
+  const tracksStock = values.restaurantItemType !== "prepared";
   const baseUnit = values.isLooseItem ? baseUnitFor(values.unit) : baseUnitFor(values.packSizeUnit);
   const conversionToBase = values.isLooseItem
     ? toBaseQty(1, values.unit)
@@ -399,6 +404,15 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     const { onHandQty: _onHandQty, lowStockThreshold: _lowStockThreshold, ...rest } = row;
     return rest;
   };
+  const forUntracked = (row: ProductSellingUnit): ProductSellingUnit => {
+    const {
+      onHandQty: _onHandQty,
+      lowStockThreshold: _lowStockThreshold,
+      reorderLevel: _reorderLevel,
+      ...rest
+    } = row;
+    return rest;
+  };
   const alternateUnits = values.sellingUnits.filter((row) => {
     const isPersistedDefault = Boolean(previousDefault?.id && row.id === previousDefault.id);
     return !row.isDefault && !isPersistedDefault && row.unitCode !== defaultSellingUnit.unitCode;
@@ -431,15 +445,19 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
   ), 0));
   const perPack = !hasGrid && values.packagingMode === "per_pack";
   // A cell is one piece, never a pack, so the grid's total is already in base units.
-  const stockBaseQty = hasGrid ? gridQty : perPack ? perPackBaseQty : roundMoney(values.stockQuantity * conversionToBase);
+  const stockBaseQty = tracksStock
+    ? (hasGrid ? gridQty : perPack ? perPackBaseQty : roundMoney(values.stockQuantity * conversionToBase))
+    : 0;
   // The product's stock counted in its own default pack — a display figure that
   // must stay the base total's twin, because readers that have no selling unit to
   // hand multiply it back by the default conversion (see inventoryBaseQuantity).
-  const stockQuantity = hasGrid
-    ? gridQty
-    : perPack && conversionToBase > 0
-      ? roundMoney(perPackBaseQty / conversionToBase)
-      : values.stockQuantity;
+  const stockQuantity = tracksStock
+    ? hasGrid
+      ? gridQty
+      : perPack && conversionToBase > 0
+        ? roundMoney(perPackBaseQty / conversionToBase)
+        : values.stockQuantity
+    : 0;
 
   return {
     name: values.name.trim(),
@@ -456,8 +474,9 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     stockBaseQty,
     stockQuantity,
     stockUnit: values.unit,
-    stockTrackingEnabled: true,
-    trackStock: true,
+    stockTrackingEnabled: tracksStock,
+    trackStock: tracksStock,
+    restaurantItemType: values.restaurantItemType,
     costPerRateUnit: avgCost,
     costPrice: avgCost,
     averageCostPrice: avgCost,
@@ -473,19 +492,22 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     wholesaleFromQuantity: Number(values.wholesaleFromQuantity || 10),
     quantitySlabPricing: [],
     customerSpecificPricing: [],
-    sellingUnits,
+    // Prepared dishes are menu identities, not finished-goods inventory. Strip
+    // stale per-pack counters when a legacy product is reclassified so those
+    // numbers cannot reappear in the mobile stock view after an offline sync.
+    sellingUnits: tracksStock ? sellingUnits : sellingUnits.map(forUntracked),
     variantAxes,
     // A grid always counts per row — that is what makes "which size is out?"
     // answerable, and the server forces it anyway.
-    packagingMode: hasGrid ? "per_pack" : values.packagingMode,
+    packagingMode: tracksStock ? (hasGrid ? "per_pack" : values.packagingMode) : "pooled",
     mrp: roundMoney(values.mrp),
     gstRate: Number(values.gstRate || 0),
-    reorderLevel: Number(values.reorderLevel || 0),
+    reorderLevel: tracksStock ? Number(values.reorderLevel || 0) : 0,
     description: values.description?.trim() || undefined,
     imageUrl: values.imageUrl || undefined,
     isLooseItem: values.isLooseItem,
-    lowStockThreshold: roundMoney(values.lowStockAlert * conversionToBase),
-    batchTrackingEnabled: values.batchTrackingEnabled,
+    lowStockThreshold: tracksStock ? roundMoney(values.lowStockAlert * conversionToBase) : 0,
+    batchTrackingEnabled: tracksStock && values.batchTrackingEnabled,
     /**
      * The schedule that makes billing demand a prescription.
      *
@@ -547,6 +569,7 @@ const OWNER_APPROVAL_PRODUCT_FIELDS = [
   "packagingMode",
   "batchTrackingEnabled",
   "drugSchedule",
+  "restaurantItemType",
   "isActive",
   "status",
 ] as const;
@@ -571,7 +594,7 @@ function normalizedApprovalValue(field: typeof OWNER_APPROVAL_PRODUCT_FIELDS[num
   ].includes(field)) {
     return approvalNumber(value);
   }
-  if (["hsn", "barcode", "sku", "drugSchedule"].includes(field)) {
+  if (["hsn", "barcode", "sku", "drugSchedule", "restaurantItemType"].includes(field)) {
     return String(value ?? "").trim().toLowerCase() || null;
   }
   if (["batchTrackingEnabled", "isActive"].includes(field)) return Boolean(value);

@@ -33,11 +33,16 @@ describe("business profile bootstrap wiring", () => {
   it("keeps the restaurant order inbox closed until marketplace ingestion is enabled", () => {
     const restaurantWithoutMarketplace = [...SHARED_NAVIGATION, "tables", "kitchen-kot"];
     expect(isPathInBusinessProfile("/orders-received", restaurantWithoutMarketplace)).toBe(false);
+    // A cached profile from an older server may not carry the Tables key. The
+    // explicit business type still keeps the inbox closed until `orders` exists.
+    expect(isPathInBusinessProfile("/orders-received", [...SHARED_NAVIGATION], "restaurant")).toBe(false);
+    expect(isPathInBusinessProfile("/orders-received", undefined, "restaurant")).toBe(false);
     expect(isPathInBusinessProfile("/tables", restaurantWithoutMarketplace)).toBe(true);
 
     // The explicit orders key is the future connector opt-in. A non-restaurant
     // shop without Tables keeps its existing customer-order inbox through Sales.
     expect(isPathInBusinessProfile("/orders-received", [...restaurantWithoutMarketplace, "orders"])).toBe(true);
+    expect(isPathInBusinessProfile("/orders-received", [...SHARED_NAVIGATION, "orders"], "restaurant")).toBe(true);
     expect(isPathInBusinessProfile("/orders-received", [...SHARED_NAVIGATION])).toBe(true);
 
     const restaurantNavigation = readFileSync("../backend/src/verticals/restaurant/navigation.js", "utf8");

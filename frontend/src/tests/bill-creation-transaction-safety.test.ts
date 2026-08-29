@@ -152,6 +152,30 @@ describe("bill creation transaction safety", () => {
     expect(tableRows("settings").some((row) => row.key === "cache:bills")).toBe(true);
   });
 
+  it("does not invent finished-item stock movement for a prepared restaurant dish", async () => {
+    dbState.committed.products = [{
+      id: "product_1",
+      name: "Paneer Butter Masala",
+      baseUnit: "piece",
+      stockBaseQty: 0,
+      defaultPricePerRateUnit: 180,
+      restaurantItemType: "prepared",
+      stockTrackingEnabled: true,
+      trackStock: true,
+    }];
+
+    const bill = await createBillLocalFirst(baseInput({
+      items: [{ productId: "product_1", name: "Paneer Butter Masala", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 180, gstRate: 0 }],
+      actualAmount: 180,
+      buyerPaidAmount: 180,
+      payments: [{ mode: BillPaymentMode.cash, amount: 180 }],
+    }));
+
+    expect(bill.id).toMatch(/^bill_/);
+    expect(tableRows("inventory_movements")).toHaveLength(0);
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 0, restaurantItemType: "prepared" }));
+  });
+
   it("rolls back every bill table when any transactional write fails", async () => {
     dbState.failOnTable = "payments";
 

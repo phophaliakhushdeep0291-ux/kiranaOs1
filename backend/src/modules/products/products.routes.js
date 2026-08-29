@@ -30,6 +30,7 @@ const protectedProductFields = [
   "packagingMode",
   "batchTrackingEnabled",
   "drugSchedule",
+  "restaurantItemType",
   "isActive",
   "status",
 ];

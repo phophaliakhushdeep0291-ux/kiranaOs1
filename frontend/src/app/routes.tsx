@@ -164,7 +164,7 @@ function BusinessProfileRouteGate({ capability, children }: { capability?: strin
   // startup was slow. Cached data still filters synchronously; without it, the
   // requested page opens and the completed bootstrap applies on the next render.
   if (!profile.data) return <>{children}</>;
-  if (!isPathInBusinessProfile(location, profile.data.navigation)) {
+  if (!isPathInBusinessProfile(location, profile.data.navigation, profile.data.shop.businessType)) {
     // Old restaurant bookmarks should land on the real dine-in inbox. Once a
     // verified marketplace connector adds the `orders` navigation key, this
     // route passes the profile check and opens normally.

@@ -209,6 +209,16 @@ export interface InventoryStockRow {
   isLow: boolean;
 }
 
+/** One stock answer shared by inventory, products and billing presentation. */
+export function productTracksStock(item: Product | InventoryItem): boolean {
+  // The saved restaurant role is authoritative. This also repairs an older
+  // offline row that still carries the historical hard-coded `true` flag after
+  // it is merged with a newly classified server product.
+  if (item.restaurantItemType === "prepared") return false;
+  const explicit = item.stockTrackingEnabled ?? item.trackStock;
+  return explicit ?? true;
+}
+
 /**
  * Expand a product into the rows an inventory screen should show.
  *
@@ -220,7 +230,7 @@ export interface InventoryStockRow {
  */
 export function inventoryStockRows(item: Product | InventoryItem): InventoryStockRow[] {
   const normalized = normalizeInventoryItem(item);
-  const isTracked = (normalized.stockTrackingEnabled ?? normalized.trackStock ?? true) !== false;
+  const isTracked = productTracksStock(normalized);
   const packs = activeInventorySellingUnits(normalized);
 
   if (normalized.packagingMode === "per_pack" && packs.length > 0) {

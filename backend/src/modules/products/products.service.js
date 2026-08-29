@@ -20,6 +20,7 @@ import {
   writeLocationStockRow,
 } from "../stores/location-context.service.js";
 import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
+import { productTracksStock } from "./restaurant-item-type.js";
 
 async function writeRequiredProductAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -77,6 +78,7 @@ export const SENSITIVE_PRODUCT_FIELDS = Object.freeze([
   "packagingMode",
   "batchTrackingEnabled",
   "drugSchedule",
+  "restaurantItemType",
   "isActive",
   "status",
 ]);
@@ -103,6 +105,7 @@ function productAuditSnapshot(product) {
     packagingMode: product.packagingMode ?? "pooled",
     batchTrackingEnabled: Boolean(product.batchTrackingEnabled),
     drugSchedule: product.drugSchedule ?? null,
+    restaurantItemType: product.restaurantItemType ?? null,
     isActive: product.isActive !== false,
     variantAxes: parseVariantAxes(product.variantAxesJson),
     sellingUnits: Array.isArray(product.sellingUnits)
@@ -192,7 +195,7 @@ export async function listProducts(shopId, { category, search, lowStock, locatio
 
   if (lowStock) {
     return parsed.filter(
-      (p) => p.lowStockThreshold > 0 && p.stockBaseQty <= p.lowStockThreshold
+      (p) => productTracksStock(p) && p.lowStockThreshold > 0 && p.stockBaseQty <= p.lowStockThreshold
     );
   }
 
@@ -1210,6 +1213,7 @@ async function getPermanentDeleteBlockReason(productId, client = db) {
 
 // ── Internal helper ───────────────────────────────────────────
 export function deserializeProduct(p) {
+  const tracksStock = productTracksStock(p);
   return {
     ...p,
     // Keep the legacy aliases while the canonical persisted fields stay explicit.
@@ -1220,6 +1224,8 @@ export function deserializeProduct(p) {
     variantAxes: parseVariantAxes(p.variantAxesJson),
     attributes: parseProductAttributes(p.attributesJson),
     sellingUnits: Array.isArray(p.sellingUnits) ? p.sellingUnits : undefined,
+    stockTrackingEnabled: tracksStock,
+    trackStock: tracksStock,
   };
 }
 

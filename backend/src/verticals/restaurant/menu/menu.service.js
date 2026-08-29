@@ -4,6 +4,7 @@ import { listProducts } from "../../../modules/products/products.service.js";
 import { listRecipeComponents, portionsPossible } from "../recipes/recipes.service.js";
 import { addonGroupsByProduct } from "./addons.service.js";
 import { comboComponentsByProduct, comboSaving } from "./combos.service.js";
+import { productAppearsOnRestaurantMenu } from "../../../modules/products/restaurant-item-type.js";
 
 /**
  * The menu card.
@@ -151,6 +152,8 @@ export function serializeDish(product, { portionsLeft = null, hasRecipe = false,
     hasRecipe,
     portionsLeft,
     stockBaseQty: Number(product.stockBaseQty ?? 0),
+    restaurantItemType: product.restaurantItemType ?? null,
+    stockTrackingEnabled: product.restaurantItemType !== "prepared",
   };
 }
 
@@ -182,6 +185,7 @@ export async function getMenuBoard(shopId, { locationId, includeUnavailable = tr
 
   const dishes = products
     .filter((product) => product.status !== "inactive" && product.isActive !== false)
+    .filter(productAppearsOnRestaurantMenu)
     .map((product) => {
       const recipe = componentsByDish.get(product.id);
       const comboComponents = combosByProduct.get(product.id) ?? [];
@@ -216,6 +220,9 @@ export async function updateDishMenu(shopId, productId, patch = {}) {
   if (!product) throw new AppError("Dish not found", 404);
 
   const data = {};
+  // The first time a legacy product is deliberately edited as a dish, classify
+  // it. Explicit packaged items keep their stock role.
+  if (product.restaurantItemType == null) data.restaurantItemType = "prepared";
   if (patch.menuCourse !== undefined) data.menuCourse = normalizeCourse(patch.menuCourse);
   if (patch.foodType !== undefined) {
     data.foodType = patch.foodType && FOOD_TYPES.includes(patch.foodType) ? patch.foodType : null;

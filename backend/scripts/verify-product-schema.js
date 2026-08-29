@@ -24,6 +24,7 @@ const REQUIRED_PRODUCT_COLUMNS = [
   "gstRate",
   "hsn",
   "brand",
+  "restaurantItemType",
   "mrp",
   "reorderLevel",
   "description",

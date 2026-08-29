@@ -64,6 +64,7 @@ const protectedProductFields = [
   "packagingMode",
   "batchTrackingEnabled",
   "drugSchedule",
+  "restaurantItemType",
   "isActive",
   "status",
 ];
@@ -83,7 +84,7 @@ const numericProtectedProductFields = new Set([
 
 function normalizedProductApprovalValue(field, value) {
   if (numericProtectedProductFields.has(field)) return round2(Number(value ?? 0));
-  if (["hsn", "barcode", "sku", "drugSchedule"].includes(field)) {
+  if (["hsn", "barcode", "sku", "drugSchedule", "restaurantItemType"].includes(field)) {
     const text = value == null ? "" : String(value).trim().toLowerCase();
     return text || null;
   }

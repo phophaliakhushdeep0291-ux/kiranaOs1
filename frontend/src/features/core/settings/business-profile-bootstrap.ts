@@ -73,16 +73,16 @@ export const SHARED_NAVIGATION = [
 ] as const;
 
 /** Unknown/shared-core routes remain visible; only profile-mapped trade routes are filtered. */
-export function isPathInBusinessProfile(path: string, navigation?: string[]) {
-  if (!navigation) return true;
+export function isPathInBusinessProfile(path: string, navigation?: string[], businessType?: string) {
   // Restaurant QR orders live on Tables, not in the generic retail/customer
   // order inbox. `tables` identifies the restaurant profile; `orders` is the
   // explicit opt-in a future verified Swiggy/Zomato-style connector can add.
   // Other shop types keep their existing Orders Received workflow through the
   // shared `sales` spine.
   if (/^\/orders-received(?:\/|$)/.test(path)
-    && navigation.includes("tables")
-    && !navigation.includes("orders")) return false;
+    && (businessType === "restaurant" || navigation?.includes("tables"))
+    && !navigation?.includes("orders")) return false;
+  if (!navigation) return true;
   const rule = PATH_NAVIGATION_KEYS.find(([pattern]) => pattern.test(path));
   return !rule || rule[1].some((key) => navigation.includes(key));
 }
@@ -129,11 +129,12 @@ export function useIsShopPathVisible(): (href: string) => boolean {
   const profile = useShopBusinessProfile();
   const navigation = profile.data?.navigation;
   const capabilities = profile.data?.capabilities;
+  const businessType = profile.data?.shop.businessType;
   return useCallback(
     (href: string) =>
       isHrefEnabled(href)
-      && isPathInBusinessProfile(href, navigation)
+      && isPathInBusinessProfile(href, navigation, businessType)
       && isPathAllowedByCapabilities(href, capabilities),
-    [capabilities, isHrefEnabled, navigation],
+    [businessType, capabilities, isHrefEnabled, navigation],
   );
 }

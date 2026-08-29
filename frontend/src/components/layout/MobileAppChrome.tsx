@@ -329,7 +329,7 @@ function MoreNavigation({ location, userRole }: { location: string; userRole?: s
   // trade's own entries join their named group — another trade's never do.
   const groups = useMemo(() => {
     const navigation = businessProfile.data?.navigation;
-    const reachable = (path: string) => isHrefEnabled(path) && isPathInBusinessProfile(path, navigation);
+    const reachable = (path: string) => isHrefEnabled(path) && isPathInBusinessProfile(path, navigation, businessProfile.data?.shop.businessType);
     const extras = verticalPack.nav.filter((entry) => entry.mobile && isHrefEnabled(entry.href));
     const visibleGroups = userRole === "staff"
       ? MORE_GROUPS.map((group) => ({
@@ -357,7 +357,7 @@ function MoreNavigation({ location, userRole }: { location: string; userRole?: s
           }),
       }))
       .filter((group) => group.items.length > 0);
-  }, [businessProfile.data?.navigation, isHrefEnabled, t, userRole, verticalPack]);
+  }, [businessProfile.data?.navigation, businessProfile.data?.shop.businessType, isHrefEnabled, t, userRole, verticalPack]);
 
   return (
     <div className="mobile-more-groups">
@@ -409,8 +409,8 @@ export function MobileBottomNav({
   const businessProfile = useShopBusinessProfile();
   const tabs = useMemo(
     () => TOP_LEVEL_TABS.filter((tab) => isHrefEnabled(tab.href))
-      .filter((tab) => isPathInBusinessProfile(tab.href, businessProfile.data?.navigation)),
-    [businessProfile.data?.navigation, isHrefEnabled],
+      .filter((tab) => isPathInBusinessProfile(tab.href, businessProfile.data?.navigation, businessProfile.data?.shop.businessType)),
+    [businessProfile.data?.navigation, businessProfile.data?.shop.businessType, isHrefEnabled],
   );
 
   return (

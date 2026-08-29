@@ -168,6 +168,9 @@ export interface Product {
   /** h | h1 | x | otc, or null for anything that is not a scheduled drug.
    *  Setting h/h1/x is what makes billing demand a prescription for it. */
   drugSchedule?: "h" | "h1" | "x" | "otc" | null;
+  /** Restaurant operational role: cooked dish, stocked ready-made item, or
+   *  kitchen-only ingredient. Null outside the restaurant vertical. */
+  restaurantItemType?: "prepared" | "packaged" | "ingredient" | null;
   /** Trade details: the facts this shop type needs and no other does, keyed by
    *  the catalogue in features/core/products/product-attributes.ts. Descriptive
    *  only — anything the app branches on is a field of its own. */
@@ -199,6 +202,7 @@ export interface ProductInput {
   stockUnit?: string;
   stockTrackingEnabled?: boolean;
   trackStock?: boolean;
+  restaurantItemType?: "prepared" | "packaged" | "ingredient" | null;
   costPerRateUnit?: number;
   costPrice?: number;
   averageCostPrice?: number;
@@ -1775,6 +1779,8 @@ export interface MenuDish {
   hasRecipe: boolean;
   portionsLeft: number | null;
   stockBaseQty: number;
+  restaurantItemType: "prepared" | "packaged" | null;
+  stockTrackingEnabled: boolean;
   /**
    * Half and Full, Small and Large. Empty for a dish sold one way, which is most
    * of them — the dish's own `price` is what a guest pays then.

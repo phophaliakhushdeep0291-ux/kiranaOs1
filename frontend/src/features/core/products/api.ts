@@ -11,7 +11,7 @@ export function normaliseProductInput(data: ProductInput): ProductInput {
   const retail = data.retailPricePerRateUnit ?? data.retailPrice ?? selling;
   const wholesale = data.wholesalePricePerRateUnit ?? data.wholesalePrice ?? selling;
   const lowStock = data.lowStockThreshold ?? data.lowStockAlert ?? 0;
-  const trackStock = true;
+  const trackStock = data.restaurantItemType !== "prepared";
 
   return {
     ...data,

@@ -28,6 +28,9 @@ export interface StarterCatalogItem {
   readonly packSizeUnit: string;
   readonly isLooseItem: boolean;
   readonly isActive: boolean;
+  /** Not a CSV column: the built-in restaurant list overlays this role after
+   *  the ordinary import parser has validated the row. */
+  readonly restaurantItemType?: "prepared" | "packaged" | "ingredient";
 }
 
 // The item count a screen needs for a button label lives in

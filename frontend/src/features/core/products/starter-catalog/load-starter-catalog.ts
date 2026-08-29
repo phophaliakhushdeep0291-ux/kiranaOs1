@@ -76,7 +76,16 @@ export async function importStarterCatalogItems(
   const plan = planProductImport(parsed, existing, "skip-existing");
   const operations: ProductImportOperation[] = plan.rows.flatMap((row) => (
     row.action === "create" && row.finalInput
-      ? [{ action: "create" as const, rowNumber: row.rowNumber, input: row.finalInput }]
+      ? [{
+          action: "create" as const,
+          rowNumber: row.rowNumber,
+          input: {
+            ...row.finalInput,
+            ...(items[row.rowNumber - 2]?.restaurantItemType
+              ? { restaurantItemType: items[row.rowNumber - 2].restaurantItemType }
+              : {}),
+          },
+        }]
       : []
   ));
 

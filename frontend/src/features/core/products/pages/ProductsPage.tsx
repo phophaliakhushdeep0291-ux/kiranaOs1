@@ -69,7 +69,7 @@ import {
   readProductDraftEventDetail,
   type ProductFormData,
 } from "./product-form-state";
-import { activeInventorySellingUnits, packSizeLabel } from "@/features/core/inventory/stock-display";
+import { activeInventorySellingUnits, packSizeLabel, productTracksStock } from "@/features/core/inventory/stock-display";
 import { ProductFormPanel } from "./components/ProductFormPanel";
 import { ImportProductsDialog } from "./components/ImportProductsDialog";
 import { buildProductExportCsv, productExportFileName } from "@/features/core/products/export/product-export-csv";
@@ -281,11 +281,12 @@ export default function ProductsPage() {
       .filter((product) => statusFilter === "all" || (statusFilter === "active" ? !isInactiveProduct(product) : isInactiveProduct(product)))
       .filter((product) => {
         if (stockFilter === "all") return true;
-        const out = Number(product.stockBaseQty ?? 0) <= 0;
-        const low = isLowStock(product) && !out;
+        const tracked = productTracksStock(product);
+        const out = tracked && Number(product.stockBaseQty ?? 0) <= 0;
+        const low = tracked && isLowStock(product) && !out;
         if (stockFilter === "out") return out;
         if (stockFilter === "low") return low;
-        return !out && !low; // "in"
+        return tracked && !out && !low;
       })
       .filter((product) => typeFilter === "all" || (typeFilter === "loose" ? !!product.isLooseItem : !product.isLooseItem))
       .filter((product) => productMatchesSearch(product, q));
@@ -302,8 +303,8 @@ export default function ProductsPage() {
     all.forEach((product) => categories.add((product.category ?? "general").trim() || "general"));
     return {
       total: all.length,
-      lowStock: all.filter((p) => isLowStock(p) && Number(p.stockBaseQty ?? 0) > 0).length,
-      outOfStock: all.filter((p) => Number(p.stockBaseQty ?? 0) <= 0).length,
+      lowStock: all.filter((p) => productTracksStock(p) && isLowStock(p) && Number(p.stockBaseQty ?? 0) > 0).length,
+      outOfStock: all.filter((p) => productTracksStock(p) && Number(p.stockBaseQty ?? 0) <= 0).length,
       categories: categories.size,
     };
   }, [productRows]);
@@ -636,11 +637,12 @@ export default function ProductsPage() {
             const defaultUnit = product.sellingUnits?.find((row) => row.isDefault) ?? product.sellingUnits?.[0];
             const unit = defaultUnit?.name ?? productDisplayUnit(product);
             const stockBase = Number(product.stockBaseQty ?? 0);
+            const tracked = productTracksStock(product);
             const stock = defaultUnit?.conversionToBase
               ? Math.round((stockBase / defaultUnit.conversionToBase + Number.EPSILON) * 100) / 100
               : fromBaseQty(product.stockBaseQty, productDisplayUnit(product));
-            const outOfStock = stockBase <= 0;
-            const low = isLowStock(product) && !outOfStock;
+            const outOfStock = tracked && stockBase <= 0;
+            const low = tracked && isLowStock(product) && !outOfStock;
             const price = product.sellingPrice ?? product.defaultPricePerRateUnit;
             // The same sizes the table shows. A phone is the screen a counter
             // actually uses, so leaving them out here is where "how will I know
@@ -676,7 +678,7 @@ export default function ProductsPage() {
                     )}
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="text-[15px] font-black text-[var(--brand)]">{rs(price)}</span>
-                      {outOfStock ? <StatusPill tone="rose">{t("products.badge.outOfStockShort")}</StatusPill> : low ? <StatusPill tone="amber">{t("products.badge.lowStockShort")}</StatusPill> : <StatusPill tone="emerald">{stock} available</StatusPill>}
+                      {!tracked ? <StatusPill tone="emerald">{t("products.badge.preparedToOrder")}</StatusPill> : outOfStock ? <StatusPill tone="rose">{t("products.badge.outOfStockShort")}</StatusPill> : low ? <StatusPill tone="amber">{t("products.badge.lowStockShort")}</StatusPill> : <StatusPill tone="emerald">{stock} available</StatusPill>}
                     </div>
                     {cardPackCounts.length > 0 && (
                       <p
@@ -747,11 +749,12 @@ export default function ProductsPage() {
                   const defaultSellingUnit = product.sellingUnits?.find((row) => row.isDefault) ?? product.sellingUnits?.[0];
                   const unit = defaultSellingUnit?.name ?? productDisplayUnit(product);
                   const stockBase = Number(product.stockBaseQty ?? 0);
+                  const tracked = productTracksStock(product);
                   const stock = defaultSellingUnit?.conversionToBase
                     ? Math.round((stockBase / defaultSellingUnit.conversionToBase + Number.EPSILON) * 100) / 100
                     : fromBaseQty(product.stockBaseQty, productDisplayUnit(product));
-                  const outOfStock = stockBase <= 0;
-                  const low = isLowStock(product) && !outOfStock;
+                  const outOfStock = tracked && stockBase <= 0;
+                  const low = tracked && isLowStock(product) && !outOfStock;
                   const cat = (product.category ?? "general").trim() || "general";
                   const brandLine = product.brand ?? product.aliases?.[0] ?? "";
                   // No fallback to the selling price. MRP is a printed, legally
@@ -831,7 +834,7 @@ export default function ProductsPage() {
                       {/* Stock + status underneath, centered */}
                       <td className="px-3 py-3">
                         <div className="flex flex-col items-center gap-1">
-                          <span className={`font-bold ${outOfStock ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{stock}</span>
+                          <span className={`font-bold ${outOfStock ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{tracked ? stock : "—"}</span>
                           {perPackCounts.length > 0 && (
                             <p
                               className="text-center text-[10.5px] font-semibold leading-tight text-[#8a97ad]"
@@ -840,7 +843,9 @@ export default function ProductsPage() {
                               {summariseList(perPackCounts)}
                             </p>
                           )}
-                          {outOfStock ? (
+                          {!tracked ? (
+                            <StatusPill tone="emerald">{t("products.badge.preparedToOrder")}</StatusPill>
+                          ) : outOfStock ? (
                             <StatusPill tone="rose">{t("products.badge.outOfStock")}</StatusPill>
                           ) : low ? (
                             <StatusPill tone="amber">{t("products.badge.lowStock")}</StatusPill>

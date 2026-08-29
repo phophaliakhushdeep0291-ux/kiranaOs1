@@ -587,10 +587,16 @@ model Product {
   // catalogue nobody has classified behaves exactly as it does today. Marking a
   // product IS the act of opting it into the prescription requirement.
   drugSchedule                 String?
+  // A restaurant product has one operational role:
+  //   prepared   — a cooked dish/menu identity; its recipe ingredients are stock
+  //   packaged   — a ready-to-sell bottle/packet shown on the menu and stock-counted
+  //   ingredient — kitchen stock that must never appear on the guest menu
+  // Null keeps every non-restaurant catalogue and unclassified legacy row unchanged.
+  restaurantItemType           String?
   // ── Menu card (restaurants) ────────────────────────────────────────────────
-  // A dish is an ordinary Product — it is priced, billed, taxed and stocked
-  // through exactly the same path as a packet of biscuits. What a menu adds is
-  // how the dish is *presented and cooked*, which no retail column carries.
+  // A dish is an ordinary Product for price, tax, billing and reports. Prepared
+  // dishes are not finished-goods stock: their recipe ingredients are. What a
+  // menu adds is how the dish is *presented and cooked*.
   //
   // Every one of these is nullable or defaulted, so a kirana catalogue is
   // untouched and a restaurant fills them in one dish at a time.

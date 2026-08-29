@@ -104,6 +104,7 @@ const COLUMN_ALIASES: Partial<Record<ProductImportField, string[]>> = {
   packSizeUnit: ["pack unit", "packet unit", "weight unit", "size unit", "net unit"],
   isLooseItem: ["loose item", "is loose", "loose", "item type", "stock type"],
   isActive: ["active", "is active", "status", "enabled"],
+  restaurantItemType: ["restaurant item type", "restaurant role", "menu item type", "kitchen role"],
   // Deliberately none of "size"/"pack size" — those belong to the DEFAULT pack above,
   // and stealing them here would move a product's own size into its extra-sizes list.
   sellingUnits: ["pack sizes", "other pack sizes", "extra packs", "selling units"],
@@ -152,7 +153,10 @@ export function productImportAttributeColumns(businessType: BusinessType): Impor
 }
 
 export function productImportColumns(businessType: BusinessType = getStoredBusinessType()): ImportColumn[] {
-  return [...PRODUCT_IMPORT_COLUMNS, ...productImportAttributeColumns(businessType)];
+  const restaurantColumns: ImportColumn[] = businessType === "restaurant"
+    ? [{ header: "Restaurant Item Type", field: "restaurantItemType", example: "prepared" }]
+    : [];
+  return [...PRODUCT_IMPORT_COLUMNS, ...restaurantColumns, ...productImportAttributeColumns(businessType)];
 }
 
 export function buildProductTemplateCsv(businessType: BusinessType = getStoredBusinessType()): string {
@@ -498,6 +502,12 @@ function rowToFormData(
     // A bulk import never classifies a controlled drug — that is a decision
     // someone makes per medicine, not a column to be trusted from a CSV.
     drugSchedule: null,
+    // Older restaurant sheets have no role column, so they remain useful: a
+    // menu import is a prepared dish unless it explicitly says packaged or
+    // ingredient. The form schema rejects any non-empty unknown value.
+    restaurantItemType: businessType === "restaurant"
+      ? (((values.restaurantItemType ?? "").trim().toLowerCase() || "prepared") as ProductFormData["restaurantItemType"])
+      : null,
     reorderLevel: numberValue("reorderLevel"),
     description: (values.description ?? "").trim() || undefined,
     imageUrl: importedImageUrl(values.imageUrl),

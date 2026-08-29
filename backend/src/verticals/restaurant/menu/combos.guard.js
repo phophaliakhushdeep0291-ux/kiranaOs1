@@ -20,8 +20,9 @@ import { stockLedgerProvenance } from "../../../modules/inventory/stock-ledger-p
  *
  * The second level is delegated to the recipe layer's own arithmetic rather than
  * reimplemented, so a thali's dal depletes precisely what ordering that dal
- * à la carte would. Components that have no recipe are stocked goods — a bottled
- * drink in a meal deal — and are decremented directly.
+ * à la carte would. Components that have no recipe are decremented directly only
+ * when they are stocked goods — a bottled drink in a meal deal. A prepared dish
+ * without a configured recipe remains a made-to-order item, not imaginary stock.
  *
  * Depth cannot exceed two because combos.service.js refuses to store a combo
  * inside a combo, so this never has to detect a cycle at sale time, when the only
@@ -78,16 +79,25 @@ export function registerComboConsumptionGuard() {
     const recipeComponents = await tx.dishRecipeComponent.findMany({
       where: { shopId, dishProductId: { in: [...new Set(componentIds)] } },
     });
+    const componentProducts = await tx.product.findMany({
+      where: { shopId, id: { in: [...new Set(componentIds)] }, deletedAt: null },
+      select: { id: true, restaurantItemType: true },
+    });
+    const preparedComponents = new Set(componentProducts
+      .filter((product) => product.restaurantItemType === "prepared")
+      .map((product) => product.id));
     const dishPortions = new Map(expanded.map((row) => [row.componentProductId, row.portions]));
     const ingredientConsumption = aggregateRecipeConsumption(dishPortions, recipeComponents);
 
     /*
      * A component with a recipe is consumed through its ingredients — deducting
      * the dish itself as well would charge the kitchen twice for one plate. A
-     * component with no recipe is a stocked good and is the thing that moves.
+     * component with no recipe moves directly only when it is a stocked good.
+     * Prepared dishes without recipes intentionally do not invent finished stock.
      */
     const dishesWithRecipes = new Set(recipeComponents.map((row) => row.dishProductId));
-    const directStock = expanded.filter((row) => !dishesWithRecipes.has(row.componentProductId));
+    const directStock = expanded.filter((row) => !dishesWithRecipes.has(row.componentProductId)
+      && !preparedComponents.has(row.componentProductId));
 
     return {
       // A combo's components are its stock. The combo product itself is only the

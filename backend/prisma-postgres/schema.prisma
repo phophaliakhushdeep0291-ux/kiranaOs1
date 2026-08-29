@@ -554,10 +554,14 @@ model Product {
   // catalogue nobody has classified behaves exactly as it does today. Marking a
   // product IS the act of opting it into the prescription requirement.
   drugSchedule                 String?
+  // Restaurant operational role. Prepared dishes consume recipe ingredients,
+  // packaged items keep ordinary stock, and ingredients stay off the guest menu.
+  // Null leaves every non-restaurant and unclassified legacy product unchanged.
+  restaurantItemType           String?
   // ── Menu card (restaurants) ────────────────────────────────────────────────
-  // A dish is an ordinary Product — priced, billed, taxed and stocked through
-  // the same path as a packet of biscuits. What a menu adds is how the dish is
-  // presented and cooked, which no retail column carries. See the SQLite twin.
+  // A dish is an ordinary Product for price, tax, billing and reports. Prepared
+  // dishes consume ingredients instead of a fictitious finished plate. See the
+  // SQLite twin for the full role definition.
   //
   // Every one is nullable or defaulted, so a kirana catalogue is untouched.
   menuCourse                   String? // "Starters" / "Main course" / "Breads" — free text

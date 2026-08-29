@@ -212,6 +212,15 @@ export async function saveRecipe(shopId, dishProductId, components = []) {
   }
 
   await db.$transaction(async (tx) => {
+    await tx.product.update({ where: { id: dishProductId }, data: { restaurantItemType: "prepared" } });
+    if (ingredientIds.length > 0) {
+      // Only classify untouched legacy rows. An explicitly packaged item may be
+      // both sold as-is and used by a recipe, so the owner's choice wins.
+      await tx.product.updateMany({
+        where: { shopId, id: { in: ingredientIds }, restaurantItemType: null },
+        data: { restaurantItemType: "ingredient" },
+      });
+    }
     await tx.dishRecipeComponent.deleteMany({ where: { shopId, dishProductId } });
     for (const component of components) {
       await tx.dishRecipeComponent.create({

@@ -13,6 +13,7 @@ import {
 import { createAuditLog } from "../audit/audit.service.js";
 import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
 import { stockLedgerProvenance } from "./stock-ledger-provenance.js";
+import { productTracksStock } from "../products/restaurant-item-type.js";
 
 async function writeRequiredInventoryAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -24,6 +25,15 @@ async function writeRequiredInventoryAudit(entry, client) {
     );
   }
   return audit;
+}
+
+function assertStockTrackedProduct(product) {
+  if (productTracksStock(product)) return;
+  throw new AppError(
+    "Prepared dishes are tracked through recipe ingredients, not finished-item stock",
+    409,
+    "PREPARED_DISH_STOCK_NOT_TRACKED",
+  );
 }
 
 // Operation-level idempotency for replayed offline stock adjustments. The StockLedger row
@@ -84,6 +94,7 @@ export async function getInventory(shopId, requestedLocationId = null) {
   });
   return Promise.all(products.map(async (p) => {
     const stockBaseQty = await getLocationQuantity(db, shopId, location, p);
+    const tracksStock = productTracksStock(p);
     return {
       id: p.id,
       name: p.name,
@@ -116,9 +127,10 @@ export async function getInventory(shopId, requestedLocationId = null) {
       isLooseItem: p.isLooseItem,
       batchTrackingEnabled: p.batchTrackingEnabled,
       lowStockThreshold: p.lowStockThreshold,
-      stockTrackingEnabled: true,
-      trackStock: true,
-      isLowStock: p.lowStockThreshold > 0 && stockBaseQty <= p.lowStockThreshold,
+      restaurantItemType: p.restaurantItemType ?? null,
+      stockTrackingEnabled: tracksStock,
+      trackStock: tracksStock,
+      isLowStock: tracksStock && p.lowStockThreshold > 0 && stockBaseQty <= p.lowStockThreshold,
     };
   }));
 }
@@ -280,6 +292,7 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
       where: { id: productId, shopId, deletedAt: null },
     });
     if (!product) throw new AppError("Product not found", 404);
+    assertStockTrackedProduct(product);
 
     // Receiving against a specific packaging ("12 boxes of the 8-pack"): `quantity`
     // counts that pack, so the base quantity comes from the pack's own conversion.
@@ -512,6 +525,7 @@ export async function recordDamage(shopId, data, identity = {}) {
         where: { id: productId, shopId, deletedAt: null },
       });
       if (!product) throw new AppError("Product not found", 404);
+      assertStockTrackedProduct(product);
 
       // Which packaging left the shelf ("2 of the 8-pack"). Mirrors recordPurchase:
       // `quantity` counts that pack and the base quantity comes from its own
@@ -646,6 +660,7 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
         where: { id: productId, shopId, deletedAt: null },
       });
       if (!product) throw new AppError("Product not found", 404);
+      assertStockTrackedProduct(product);
 
       const stockResult = await setLocationInventory(tx, { shopId, location, product, newStockBaseQty });
       const diff = stockResult.difference;

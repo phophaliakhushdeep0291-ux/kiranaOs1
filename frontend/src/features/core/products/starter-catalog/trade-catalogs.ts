@@ -1,11 +1,11 @@
 import type { BusinessType } from "@/features/core/settings/business-type-store";
 import type { StarterCatalogItem } from "./starter-catalog";
 
-type Seed = readonly [name: string, category: string, price: number, unit?: string];
+type Seed = readonly [name: string, category: string, price: number, unit?: string, restaurantItemType?: "prepared" | "packaged" | "ingredient"];
 
 const SEEDS: Record<Exclude<BusinessType, "kirana">, readonly Seed[]> = {
   restaurant: [
-    ["Tea", "Beverages", 20], ["Coffee", "Beverages", 40], ["Mineral Water", "Beverages", 20],
+    ["Tea", "Beverages", 20], ["Coffee", "Beverages", 40], ["Mineral Water", "Beverages", 20, "piece", "packaged"],
     ["Fresh Lime Soda", "Beverages", 80], ["Veg Sandwich", "Snacks", 100], ["French Fries", "Snacks", 120],
     ["Veg Thali", "Main Course", 180], ["Dal Fry", "Main Course", 140], ["Jeera Rice", "Main Course", 120],
     ["Paneer Butter Masala", "Main Course", 220], ["Tandoori Roti", "Breads", 20], ["Gulab Jamun", "Desserts", 50],
@@ -75,15 +75,16 @@ const SEEDS: Record<Exclude<BusinessType, "kirana">, readonly Seed[]> = {
   ],
 };
 
-function item([name, category, price, unit = "piece"]: Seed): StarterCatalogItem {
+function item([name, category, price, unit = "piece", restaurantItemType]: Seed, businessType: Exclude<BusinessType, "kirana">): StarterCatalogItem {
   return {
     name, category, unit, skuBarcode: "", mrp: price, costPrice: 0, sellingPrice: price,
     gstRate: 0, stockQuantity: 0, lowStockAlert: 0, reorderLevel: 0, hsn: "", brand: "",
     aliases: [], description: "Starter item — review price, tax and stock before first sale.",
     packSizeValue: 1, packSizeUnit: unit, isLooseItem: false, isActive: true,
+    ...(businessType === "restaurant" ? { restaurantItemType: restaurantItemType ?? "prepared" } : {}),
   };
 }
 
 export function tradeStarterCatalog(businessType: Exclude<BusinessType, "kirana">): readonly StarterCatalogItem[] {
-  return SEEDS[businessType].map(item);
+  return SEEDS[businessType].map((seed) => item(seed, businessType));
 }

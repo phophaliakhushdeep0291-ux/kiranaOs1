@@ -192,7 +192,7 @@ describe("module visibility wiring", () => {
   it("filters both mobile navigation surfaces", () => {
     expect(mobileChrome).toContain("useModuleVisibility");
     expect(mobileChrome).toContain("TOP_LEVEL_TABS.filter((tab) => isHrefEnabled(tab.href))");
-    expect(mobileChrome).toContain("const reachable = (path: string) => isHrefEnabled(path) && isPathInBusinessProfile(path, navigation);");
+    expect(mobileChrome).toContain("const reachable = (path: string) => isHrefEnabled(path) && isPathInBusinessProfile(path, navigation, businessProfile.data?.shop.businessType);");
     // Drawer rows: a plain row on its own href, an expandable section on the
     // children it has left — so switching a module off cannot strand a section
     // that still lists the screens it owns.
