@@ -309,7 +309,7 @@ export default function MerchantSetupPage() {
               className="mt-4 w-full rounded-[9px] bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]"
               onClick={() => continueStep ? void openStep(continueStep) : navigate("/billing")}
             >
-              Continue setup <ChevronRight size={16} />
+              {t("setup.continue")} <ChevronRight size={16} />
             </Button>
           </div>
         </div>
@@ -384,12 +384,12 @@ export default function MerchantSetupPage() {
                   <div className="flex min-w-0 flex-wrap gap-2 md:justify-end">
                     {step.confirmable && !step.complete && (
                       <Button variant="outline" className="rounded-[8px]" onClick={() => void confirmStep(step.id)}>
-                        Mark ready
+                        {t("setup.markReady")}
                       </Button>
                     )}
                     {step.skippable && !step.complete && (
                       <Button variant="outline" className="rounded-[8px]" onClick={() => void skipStep(step.id)}>
-                        Not needed
+                        {t("setup.notNeeded")}
                       </Button>
                     )}
                     <Button className="rounded-[8px] bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]" onClick={() => void openStep(step)}>

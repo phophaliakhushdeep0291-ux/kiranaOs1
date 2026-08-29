@@ -11,6 +11,7 @@ import { stashGoogleSignupPrefill } from "@/features/core/auth/google-signup";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { getLandingRoute } from "@/features/core/settings/landing-page";
 import { consumePostLoginRedirect } from "@/features/core/auth/post-login-redirect";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,7 +75,15 @@ function getShopChoices(error: unknown): ShopChoice[] {
   });
 }
 
+/**
+ * The wordmark. A proper noun reads the same in every language, so it lives here
+ * rather than in the dictionary — and splitting it in the markup is what the
+ * two-tone logotype needs, not two things to translate.
+ */
+const BRAND = { head: "Ar", tail: "tha", full: "Artha" } as const;
+
 export default function Login() {
+  const { t } = useAppLanguage();
   const [, setLocation] = useLocation();
   const auth = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -246,11 +255,11 @@ export default function Login() {
             <div className="relative inline-flex h-12 w-12 items-center justify-center rounded-[14px] bg-[var(--brand)] text-white shadow-[0_14px_30px_rgba(0,74,255,0.35)] ring-1 ring-white/20">
               <BrandMark size={26} />
             </div>
-            <p className="relative mt-8 text-[11px] font-black uppercase tracking-[0.2em] text-[#78a8ff]">Retail operating system</p>
-            <h1 className="relative mt-3 font-display text-4xl font-black tracking-tight text-white">Ar<span className="text-[#4c8dff]">tha</span></h1>
-            <h2 className="relative mt-7 max-w-md font-display text-[30px] font-black leading-[1.08] tracking-tight text-white">Run the counter.<br />Know the business.</h2>
+            <p className="relative mt-8 text-[11px] font-black uppercase tracking-[0.2em] text-[#78a8ff]">{t("auth.tagline")}</p>
+            <h1 className="relative mt-3 font-display text-4xl font-black tracking-tight text-white">{BRAND.head}<span className="text-[#4c8dff]">{BRAND.tail}</span></h1>
+            <h2 className="relative mt-7 max-w-md font-display text-[30px] font-black leading-[1.08] tracking-tight text-white">{t("auth.headline")}<br />{t("auth.headlineTwo")}</h2>
             <p className="relative mt-4 max-w-md text-sm leading-6 text-white/70">
-              Fast billing, clear cash visibility, customer credit, inventory, and reliable offline work—built for every kind of retail counter.
+              {t("auth.blurb")}
             </p>
           </div>
           <div className="relative grid gap-3 text-sm">
@@ -265,14 +274,14 @@ export default function Login() {
         <div className="w-full p-6 sm:p-9">
         <div className="mb-8 text-center lg:text-left">
           <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-lg bg-primary text-primary-foreground lg:hidden">
-            <BrandMark className="text-primary-foreground" size={30} title="Artha" />
+            <BrandMark className="text-primary-foreground" size={30} title={BRAND.full} />
           </div>
           <div className="hidden items-center gap-2 text-sm font-bold text-primary lg:flex">
             <LockKeyhole size={16} aria-hidden="true" />
-            Secure shop sign in
+            {t("auth.secureSignIn")}
           </div>
-          <h1 className="font-display text-3xl font-black tracking-tight text-foreground lg:mt-3">Welcome back</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Sign in to manage today&apos;s counter.</p>
+          <h1 className="font-display text-3xl font-black tracking-tight text-foreground lg:mt-3">{t("auth.welcomeBack")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t("auth.welcomeSub")}</p>
           <LanguageToggle />
         </div>
 
@@ -280,9 +289,9 @@ export default function Login() {
           {shopChoices ? (
             <div className="space-y-4" data-testid="shop-selection-panel">
               <div>
-                <h2 className="text-lg font-bold text-card-foreground">Choose your shop</h2>
+                <h2 className="text-lg font-bold text-card-foreground">{t("auth.chooseShop")}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Select the shop you want to manage.
+                  {t("auth.chooseShopSub")}
                 </p>
               </div>
 
@@ -304,7 +313,7 @@ export default function Login() {
                       {shop.city && <span className="block truncate text-xs text-muted-foreground">{shop.city}</span>}
                     </span>
                     {authPending && loginShopId === shop.id
-                      ? <Loader2 size={18} className="shrink-0 animate-spin text-primary" aria-label="Opening shop" />
+                      ? <Loader2 size={18} className="shrink-0 animate-spin text-primary" aria-label={t("auth.openingShop")} />
                       : <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden="true" />}
                   </button>
                 ))}
@@ -318,19 +327,19 @@ export default function Login() {
 
               <Button type="button" variant="outline" className="w-full" onClick={backToSignIn} disabled={authPending}>
                 <ChevronLeft size={16} className="mr-2" aria-hidden="true" />
-                Back to sign in
+                {t("auth.backToSignIn")}
               </Button>
             </div>
           ) : deviceLimit ? (
             <div className="space-y-4" data-testid="device-limit-panel">
               <div>
-                <h2 className="text-lg font-bold text-card-foreground">Device limit reached</h2>
+                <h2 className="text-lg font-bold text-card-foreground">{t("auth.deviceLimit")}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {deviceLimit.message}
                 </p>
                 {deviceLimit.plan?.code && (
                   <p className="mt-2 inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                    {deviceLimit.plan.code} plan - {deviceLimit.plan.allowedMaxDevices ?? deviceLimit.plan.maxDevices} registered devices
+                    {t("auth.registeredDevices", { plan: deviceLimit.plan.code, count: deviceLimit.plan.allowedMaxDevices ?? deviceLimit.plan.maxDevices ?? 0 })}
                   </p>
                 )}
               </div>
@@ -348,7 +357,7 @@ export default function Login() {
                       <Laptop size={18} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-card-foreground">{device.deviceName || "Active device"}</p>
+                      <p className="truncate text-sm font-bold text-card-foreground">{device.deviceName || t("auth.activeDevice")}</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {device.userName || "Shop user"}{device.lastSeenAt ? ` - last used ${new Date(device.lastSeenAt).toLocaleString()}` : ""}
                       </p>
@@ -361,7 +370,7 @@ export default function Login() {
               </div>
 
               <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-                <Label htmlFor="replacement-owner-pin">Owner PIN</Label>
+                <Label htmlFor="replacement-owner-pin">{t("auth.ownerPin")}</Label>
                 <Input
                   id="replacement-owner-pin"
                   type="password"
@@ -370,9 +379,9 @@ export default function Login() {
                   autoComplete="one-time-code"
                   value={replacementOwnerPin}
                   onChange={(event) => setReplacementOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                  placeholder="4-digit PIN"
+                  placeholder={t("auth.ownerPinPlaceholder")}
                 />
-                <p className="text-xs text-muted-foreground">Removing a device immediately revokes its sessions. Unsynced local records on that device are preserved for owner-approved recovery.</p>
+                <p className="text-xs text-muted-foreground">{t("auth.removeDeviceNote")}</p>
               </div>
 
               {serverError && (
@@ -383,25 +392,25 @@ export default function Login() {
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <Button type="button" variant="outline" onClick={backToSignIn}>
-                  Back to sign in
+                  {t("auth.backToSignIn")}
                 </Button>
                 <Button type="button" onClick={() => void replaceSelectedDevice()} disabled={!selectedReplacementDeviceId || replacementOwnerPin.length !== 4 || revokingDeviceId !== null}>
-                  {revokingDeviceId ? <><Loader2 size={16} className="mr-2 animate-spin" />Replacing...</> : "Remove selected device and continue"}
+                  {revokingDeviceId ? <><Loader2 size={16} className="mr-2 animate-spin" />{t("auth.replacing")}</> : t("auth.removeAndContinue")}
                 </Button>
               </div>
             </div>
           ) : (
           <>
-          <h2 className="mb-5 text-lg font-bold text-card-foreground">Sign in to your shop</h2>
+          <h2 className="mb-5 text-lg font-bold text-card-foreground">{t("auth.signInToShop")}</h2>
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <Label htmlFor="mobile">Mobile number or email</Label>
+              <Label htmlFor="mobile">{t("auth.identifier")}</Label>
               <Input
                 id="mobile"
                 data-testid="input-mobile"
                 className="mt-1 h-11 rounded-lg"
-                placeholder="Enter mobile or email"
+                placeholder={t("auth.identifierPlaceholder")}
                 {...form.register("identifier")}
               />
               {form.formState.errors.identifier && (
@@ -410,13 +419,13 @@ export default function Login() {
             </div>
 
             <div>
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("auth.password")}</Label>
               <Input
                 id="password"
                 data-testid="input-password"
                 type="password"
                 className="mt-1 h-11 rounded-lg"
-                placeholder="Enter your password"
+                placeholder={t("auth.passwordPlaceholder")}
                 {...form.register("password")}
               />
               {form.formState.errors.password && (
@@ -432,7 +441,7 @@ export default function Login() {
                 href="/forgot-password"
                 className="inline-flex min-h-[44px] cursor-pointer items-center px-1 text-sm font-semibold text-primary hover:underline"
               >
-                Forgot password?
+                {t("auth.forgotPassword")}
               </Link>
             </div>
 
@@ -449,7 +458,7 @@ export default function Login() {
               disabled={authPending}
             >
               {authPending ? (
-                <><Loader2 size={16} className="mr-2 animate-spin" />Signing in...</>
+                <><Loader2 size={16} className="mr-2 animate-spin" />{t("auth.signingIn")}</>
               ) : "Sign In"}
             </Button>
           </form>
@@ -468,13 +477,13 @@ export default function Login() {
           )}
 
           <p className="mt-3 text-center text-sm text-muted-foreground">
-            New shop?{" "}
+            {t("auth.newShop")}{" "}
             <Link
               href="/register"
               className="inline-flex min-h-[44px] cursor-pointer items-center px-1 align-middle font-medium text-primary hover:underline"
               data-testid="link-register"
             >
-              Register here
+              {t("auth.registerHere")}
             </Link>
           </p>
           </>

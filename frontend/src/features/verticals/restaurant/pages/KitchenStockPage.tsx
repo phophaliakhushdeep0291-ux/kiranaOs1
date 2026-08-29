@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import {
   AlertTriangle, ChefHat, CircleSlash, Loader2, Package, Plus, RefreshCw, Trash2, TrendingDown, Utensils,
 } from "lucide-react";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +44,7 @@ function qtyLabel(qty: number, unit: string | null): string {
 }
 
 export default function KitchenStockPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [stock, setStock] = useState<KitchenStock | null>(null);
@@ -64,7 +66,7 @@ export default function KitchenStockPage() {
       setProducts(catalogue);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load kitchen stock.");
+      setError(err instanceof Error ? err.message : t("restaurant.kitchenStock.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -84,7 +86,7 @@ export default function KitchenStockPage() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-[#64748b]">
-        <Loader2 className="mr-2 animate-spin" size={18} /> Reading the kitchen…
+        <Loader2 className="mr-2 animate-spin" size={18} /> {t("restaurant.kitchenStock.reading")}
       </div>
     );
   }
@@ -95,15 +97,15 @@ export default function KitchenStockPage() {
   return (
     <div className="space-y-5 p-4 lg:p-6" data-testid="kitchen-stock-page">
       <PageHeader
-        title="Kitchen stock"
-        description="What the kitchen has left, and which dishes it can still put out. Selling a dish takes its ingredients out of stock automatically."
+        title={t("restaurant.kitchenStock.title")}
+        description={t("restaurant.kitchenStock.description")}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => void refresh()}>
-              <RefreshCw size={15} /> Refresh
+              <RefreshCw size={15} /> {t("restaurant.kitchenStock.refresh")}
             </Button>
             <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/menu")}>
-              <Utensils size={15} /> Menu
+              <Utensils size={15} /> {t("restaurant.kitchenStock.menu")}
             </Button>
           </div>
         }
@@ -120,7 +122,7 @@ export default function KitchenStockPage() {
         >
           <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[#ea580c]" />
           <div className="text-[13px] leading-relaxed text-[#9a3412]">
-            <span className="font-black">Before service: </span>
+            <span className="font-black">{t("restaurant.kitchenStock.beforeService")} </span>
             {[
               summary?.ingredientsOut ? `${summary.ingredientsOut} ingredient${summary.ingredientsOut === 1 ? " has" : "s have"} run out` : null,
               summary?.ingredientsLow ? `${summary.ingredientsLow} running low` : null,
@@ -131,17 +133,17 @@ export default function KitchenStockPage() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={<CircleSlash size={15} />} label="Out of stock" value={String(summary?.ingredientsOut ?? 0)} alarming={Boolean(summary?.ingredientsOut)} />
-        <Stat icon={<TrendingDown size={15} />} label="Running low" value={String(summary?.ingredientsLow ?? 0)} alarming={Boolean(summary?.ingredientsLow)} />
-        <Stat icon={<Utensils size={15} />} label="Dishes off" value={String(summary?.dishesOut ?? 0)} alarming={Boolean(summary?.dishesOut)} />
-        <Stat icon={<ChefHat size={15} />} label="Dishes with recipes" value={String(summary?.dishesWithRecipes ?? 0)} />
+        <Stat icon={<CircleSlash size={15} />} label={t("restaurant.kitchenStock.statOut")} value={String(summary?.ingredientsOut ?? 0)} alarming={Boolean(summary?.ingredientsOut)} />
+        <Stat icon={<TrendingDown size={15} />} label={t("restaurant.kitchenStock.statLow")} value={String(summary?.ingredientsLow ?? 0)} alarming={Boolean(summary?.ingredientsLow)} />
+        <Stat icon={<Utensils size={15} />} label={t("restaurant.kitchenStock.statDishesOff")} value={String(summary?.dishesOut ?? 0)} alarming={Boolean(summary?.dishesOut)} />
+        <Stat icon={<ChefHat size={15} />} label={t("restaurant.kitchenStock.statWithRecipes")} value={String(summary?.dishesWithRecipes ?? 0)} />
       </div>
 
       <section className="space-y-2">
-        <h2 className="text-[12px] font-black uppercase tracking-wider text-[#64748b]">What is running out</h2>
+        <h2 className="text-[12px] font-black uppercase tracking-wider text-[#64748b]">{t("restaurant.kitchenStock.runningOut")}</h2>
         {(stock?.ingredients.length ?? 0) === 0 ? (
           <EmptyCard>
-            No ingredients tracked yet. Write a recipe for a dish below and its ingredients start showing here.
+            {t("restaurant.kitchenStock.noIngredients")}
           </EmptyCard>
         ) : (
           <div className="overflow-hidden rounded-2xl border bg-white">
@@ -169,9 +171,9 @@ export default function KitchenStockPage() {
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-[12px] font-black uppercase tracking-wider text-[#64748b]">What the kitchen can still serve</h2>
+        <h2 className="text-[12px] font-black uppercase tracking-wider text-[#64748b]">{t("restaurant.kitchenStock.canServe")}</h2>
         {(stock?.dishes.length ?? 0) === 0 ? (
-          <EmptyCard>No recipes yet — pick a dish below to write one.</EmptyCard>
+          <EmptyCard>{t("restaurant.kitchenStock.noRecipes")}</EmptyCard>
         ) : (
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {stock?.dishes.map((row) => {
@@ -197,7 +199,7 @@ export default function KitchenStockPage() {
                   </div>
                   {row.blockedBy.length > 0 ? (
                     <p className="mt-1.5 rounded-lg bg-[#fef2f2] px-2 py-1 text-[11px] font-semibold text-[#b91c1c]">
-                      Waiting on {row.blockedBy.slice(0, 3).join(", ")}
+                      {t("restaurant.kitchenStock.waitingOn", { items: row.blockedBy.slice(0, 3).join(", ") })}
                     </p>
                   ) : null}
                 </button>
@@ -210,10 +212,10 @@ export default function KitchenStockPage() {
       {withoutRecipe.length > 0 ? (
         <section className="space-y-2">
           <h2 className="text-[12px] font-black uppercase tracking-wider text-[#64748b]">
-            Dishes with no recipe yet
+            {t("restaurant.kitchenStock.noRecipeYet")}
           </h2>
           <p className="text-[12px] text-[#64748b]">
-            These sell fine — but selling them moves no ingredient stock, so nothing warns you before they run out.
+            {t("restaurant.kitchenStock.noRecipeHelp")}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {withoutRecipe.slice(0, 40).map((dish) => (
@@ -282,6 +284,7 @@ function RecipeEditor({
   onClose: () => void;
   onSaved: (message: string) => Promise<void>;
 }) {
+  const { t } = useAppLanguage();
   const [rows, setRows] = useState<DraftComponent[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -330,22 +333,21 @@ function RecipeEditor({
   return (
     <Dialog open onOpenChange={(next) => { if (!next) onClose(); }}>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader><DialogTitle>What goes into {dish.name}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t("restaurant.kitchenStock.whatGoesInto", { dish: dish.name })}</DialogTitle></DialogHeader>
 
         {loading ? (
           <div className="flex items-center gap-2 py-8 text-[13px] text-[#64748b]">
-            <Loader2 className="animate-spin" size={16} /> Loading the recipe…
+            <Loader2 className="animate-spin" size={16} /> {t("restaurant.kitchenStock.loadingRecipe")}
           </div>
         ) : (
           <div className="space-y-3 py-1">
             <p className="text-[12px] leading-relaxed text-[#64748b]">
-              Per one portion, in each ingredient's own unit. Selling this dish takes exactly these amounts
-              out of stock.
+              {t("restaurant.kitchenStock.perPortionHelp")}
             </p>
 
             {rows.length === 0 ? (
               <div className="rounded-xl border border-dashed p-5 text-center text-[12px] text-[#64748b]">
-                Nothing in the recipe yet. Search below to add the first ingredient.
+                {t("restaurant.kitchenStock.emptyRecipe")}
               </div>
             ) : null}
 
@@ -357,7 +359,7 @@ function RecipeEditor({
                   <div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[var(--brand-ink)]">
                       {product?.name ?? row.ingredientName}
-                      {!product ? <span className="ml-1 text-[11px] font-normal text-[#dc2626]">(no longer in the catalogue)</span> : null}
+                      {!product ? <span className="ml-1 text-[11px] font-normal text-[#dc2626]">{t("restaurant.kitchenStock.notInCatalogue")}</span> : null}
                     </span>
                     <button
                       type="button"
@@ -370,7 +372,7 @@ function RecipeEditor({
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <Label className="text-[11px]">Per portion ({unit || "unit"})</Label>
+                      <Label className="text-[11px]">{t("restaurant.kitchenStock.perPortion", { unit: unit || "unit" })}</Label>
                       <Input
                         value={String(row.qtyBase ?? 0)}
                         inputMode="decimal"
@@ -379,7 +381,7 @@ function RecipeEditor({
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-[11px]">Wastage %</Label>
+                      <Label className="text-[11px]">{t("restaurant.kitchenStock.wastage")}</Label>
                       <Input
                         value={String(row.wastagePct ?? 0)}
                         inputMode="decimal"
@@ -395,15 +397,15 @@ function RecipeEditor({
                         item.key === row.key ? { ...item, optional: next } : item))}
                       aria-label={`${row.ingredientName} is optional`}
                     />
-                    Garnish — the dish can still be served without it
+                    {t("restaurant.kitchenStock.garnish")}
                   </label>
                 </div>
               );
             })}
 
             <div className="space-y-1.5">
-              <Label>Add an ingredient</Label>
-              <Input value={search} placeholder="Paneer, cream, chicken…" onChange={(event) => setSearch(event.target.value)} />
+              <Label>{t("restaurant.kitchenStock.addIngredient")}</Label>
+              <Input value={search} placeholder={t("restaurant.kitchenStock.ingredientPlaceholder")} onChange={(event) => setSearch(event.target.value)} />
               {candidates.length > 0 ? (
                 <div className="overflow-hidden rounded-xl border">
                   {candidates.map((product) => (
@@ -426,7 +428,7 @@ function RecipeEditor({
 
             {cost > 0 ? (
               <p className="text-[12px] text-[#64748b]">
-                Ingredients last cost about <span className="font-black text-[var(--brand-ink)]">{rupees(cost)}</span> per portion
+                {t("restaurant.kitchenStock.lastCost", { amount: rupees(cost) })}
                 {dish.price > 0 ? ` against a ${rupees(dish.price)} price` : ""}.
               </p>
             ) : null}
@@ -446,10 +448,10 @@ function RecipeEditor({
                 await onSaved(`Recipe removed from ${dish.name}`);
               }}
             >
-              Remove recipe
+              {t("restaurant.kitchenStock.removeRecipe")}
             </Button>
           ) : null}
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t("restaurant.kitchenStock.cancel")}</Button>
           <Button
             disabled={saving || loading}
             onClick={async () => {

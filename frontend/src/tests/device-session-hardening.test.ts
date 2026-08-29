@@ -25,7 +25,9 @@ describe("device-bound frontend sessions", () => {
   it("uses the owner-verified one-use replacement flow at login", () => {
     expect(loginPage).toContain("completeDeviceReplacement");
     expect(loginPage).toContain("replacementToken");
-    expect(loginPage).toContain("Remove selected device and continue");
+    // The label moved into the dictionary; the button it names is what this
+    // pins, so the key stands in for the English that used to be inline.
+    expect(loginPage).toContain('t("auth.removeAndContinue")');
     expect(loginPage).toContain("ownerPin");
   });
 
