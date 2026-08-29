@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { restaurantWebsiteUrl } from "@/features/core/customer-order/restaurant-website";
-import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
 import {
   ChefHat, Clock, ExternalLink, Flame, Loader2, Palette, Search, Settings2, Sparkles, Trash2, Utensils,
 } from "lucide-react";
@@ -40,12 +40,14 @@ import {
  * bring back on Tuesday.
  */
 
-const FOOD_TYPES: Array<{ key: FoodType; label: string; ring: string }> = [
-  { key: "veg", label: "Veg", ring: "#15803d" },
-  { key: "nonveg", label: "Non-veg", ring: "#b91c1c" },
-  { key: "egg", label: "Egg", ring: "#d97706" },
-  { key: "vegan", label: "Vegan", ring: "#15803d" },
-  { key: "jain", label: "Jain", ring: "#15803d" },
+// The label is a key, not a word: this array is module scope and has no
+// dictionary to read. Whoever renders a mark resolves it.
+const FOOD_TYPES: Array<{ key: FoodType; labelKey: TranslationKey; ring: string }> = [
+  { key: "veg", labelKey: "restaurant.menu.markVeg", ring: "#15803d" },
+  { key: "nonveg", labelKey: "restaurant.menu.markNonVeg", ring: "#b91c1c" },
+  { key: "egg", labelKey: "restaurant.menu.markEgg", ring: "#d97706" },
+  { key: "vegan", labelKey: "restaurant.menu.markVegan", ring: "#15803d" },
+  { key: "jain", labelKey: "restaurant.menu.markJain", ring: "#15803d" },
 ];
 
 const SUGGESTED_TAGS = ["bestseller", "chef-special", "new", "must-try"];
@@ -75,7 +77,7 @@ export default function MenuPage() {
       setAddonGroups(nextAddonGroups);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load the menu.");
+      setError(err instanceof Error ? err.message : t("restaurant.menu.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -134,8 +136,8 @@ export default function MenuPage() {
     } catch (err) {
       await refresh();
       toast({
-        title: "Could not save that",
-        description: err instanceof Error ? err.message : "The menu was put back as it was.",
+        title: t("restaurant.menu.saveFailed"),
+        description: err instanceof Error ? err.message : t("restaurant.menu.putBack"),
         variant: "destructive",
       });
     }
@@ -158,8 +160,8 @@ export default function MenuPage() {
     } catch (err) {
       await refresh();
       toast({
-        title: "Could not save the portions",
-        description: err instanceof Error ? err.message : "The menu was put back as it was.",
+        title: t("restaurant.menu.savePortionsFailed"),
+        description: err instanceof Error ? err.message : t("restaurant.menu.putBack"),
         variant: "destructive",
       });
     }
@@ -181,8 +183,8 @@ export default function MenuPage() {
     } catch (err) {
       await refresh();
       toast({
-        title: "Could not save the combo",
-        description: err instanceof Error ? err.message : "The menu was put back as it was.",
+        title: t("restaurant.menu.saveComboFailed"),
+        description: err instanceof Error ? err.message : t("restaurant.menu.putBack"),
         variant: "destructive",
       });
     }
@@ -201,7 +203,7 @@ export default function MenuPage() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-[#64748b]">
-        <Loader2 className="mr-2 animate-spin" size={18} /> Loading the menu…
+        <Loader2 className="mr-2 animate-spin" size={18} /> {t("restaurant.menu.loading")}
       </div>
     );
   }
@@ -209,23 +211,23 @@ export default function MenuPage() {
   return (
     <div className="space-y-5 p-4 lg:p-6" data-testid="menu-page">
       <PageHeader
-        title="Menu"
-        description="How your dishes read to a guest: the course they sit in, the veg mark, how long the kitchen needs — and what you've run out of tonight."
+        title={t("restaurant.menu.title")}
+        description={t("restaurant.menu.description")}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => setBrandOpen(true)}>
-              <Palette size={15} /> Menu look
+              <Palette size={15} /> {t("restaurant.menu.look")}
             </Button>
             <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => setAddonsOpen(true)}>
-              <Settings2 size={15} /> Add-ons
+              <Settings2 size={15} /> {t("restaurant.menu.addons")}
             </Button>
             <Button variant="outline" className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-bold" onClick={() => navigate("/kitchen-stock")}>
-              <ChefHat size={15} /> Kitchen stock
+              <ChefHat size={15} /> {t("restaurant.menu.kitchenStock")}
             </Button>
             {menuUrl ? (
               <Button asChild className="h-11 lg:mouse:h-10 gap-2 rounded-[10px] font-black">
                 <a href={menuUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink size={15} /> Preview guest menu
+                  <ExternalLink size={15} /> {t("restaurant.menu.previewGuest")}
                 </a>
               </Button>
             ) : null}
@@ -238,10 +240,10 @@ export default function MenuPage() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat icon={<Utensils size={15} />} label="Dishes" value={String(stats.total)} />
-        <Stat icon={<Flame size={15} />} label="Off tonight" value={String(stats.offTonight)} tone={stats.offTonight > 0 ? "orange" : undefined} />
-        <Stat icon={<Sparkles size={15} />} label="No course yet" value={String(stats.uncategorised)} tone={stats.uncategorised > 0 ? "amber" : undefined} />
-        <Stat icon={<ChefHat size={15} />} label="With recipes" value={String(stats.withRecipes)} />
+        <Stat icon={<Utensils size={15} />} label={t("restaurant.menu.statDishes")} value={String(stats.total)} />
+        <Stat icon={<Flame size={15} />} label={t("restaurant.menu.statOffTonight")} value={String(stats.offTonight)} tone={stats.offTonight > 0 ? "orange" : undefined} />
+        <Stat icon={<Sparkles size={15} />} label={t("restaurant.menu.statNoCourse")} value={String(stats.uncategorised)} tone={stats.uncategorised > 0 ? "amber" : undefined} />
+        <Stat icon={<ChefHat size={15} />} label={t("restaurant.menu.statWithRecipes")} value={String(stats.withRecipes)} />
       </div>
 
       {/* The bare input was 20px tall — the border box around it is what looked
@@ -251,8 +253,8 @@ export default function MenuPage() {
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Find a dish"
-          aria-label="Find a dish"
+          placeholder={t("restaurant.menu.findDish")}
+          aria-label={t("restaurant.menu.findDish")}
           className="h-11 w-full bg-transparent text-[13px] outline-none lg:mouse:h-10"
           data-testid="menu-search"
         />
@@ -345,12 +347,13 @@ function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: stri
 }
 
 function FoodMark({ foodType }: { foodType: FoodType | null }) {
+  const { t } = useAppLanguage();
   const mark = FOOD_TYPES.find((row) => row.key === foodType);
   if (!mark) return null;
   return (
     <span
-      title={mark.label}
-      aria-label={mark.label}
+      title={t(mark.labelKey)}
+      aria-label={t(mark.labelKey)}
       className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[3px] border-[1.5px]"
       style={{ borderColor: mark.ring }}
     >
@@ -366,6 +369,7 @@ function DishCard({
   onEdit: () => void;
   onToggleAvailable: (next: boolean) => void;
 }) {
+  const { t } = useAppLanguage();
   // A dish with a recipe that cannot be made is a different fact from one the
   // cook switched off, and the card says which — otherwise the only way to find
   // out is to turn the switch back on and watch it do nothing.
@@ -394,7 +398,7 @@ function DishCard({
             {dish.hasRecipe && dish.portionsLeft !== null ? (
               <span className={cn("rounded-full px-1.5 py-0.5 text-[9.5px] font-black uppercase",
                 CHIP_TONES[dish.portionsLeft <= 0 ? "red" : dish.portionsLeft <= 5 ? "amber" : "green"])}>
-                {dish.portionsLeft} left
+                {t("restaurant.menu.portionsLeft", { count: dish.portionsLeft })}
               </span>
             ) : null}
           </div>
@@ -424,7 +428,7 @@ function DishCard({
 
       {shortOfIngredients ? (
         <p className="rounded-lg bg-[#fff7ed] px-2 py-1.5 text-[11px] font-semibold text-[#9a3412]">
-          Ingredients have run out — guests can't order this even while it's switched on.
+          {t("restaurant.menu.ingredientsOut")}
         </p>
       ) : null}
     </div>
@@ -446,6 +450,7 @@ function DishEditor({
   addonGroups: MenuAddonGroup[];
   onSaveAddons: (groupIds: string[]) => Promise<void>;
 }) {
+  const { t } = useAppLanguage();
   const [course, setCourse] = useState(dish.menuCourse ?? "");
   const [foodType, setFoodType] = useState<FoodType | null>(dish.foodType);
   const [spice, setSpice] = useState(dish.spiceLevel ?? 0);
@@ -483,11 +488,11 @@ function DishEditor({
 
         <div className="space-y-3.5 py-1">
           <div className="space-y-1.5">
-            <Label>Course</Label>
+            <Label>{t("restaurant.menu.course")}</Label>
             <Input
               value={course}
               list="menu-course-options"
-              placeholder="Starters / Main course / Breads"
+              placeholder={t("restaurant.menu.coursePlaceholder")}
               onChange={(event) => setCourse(event.target.value)}
             />
             {/* A datalist rather than a select: "Dim sum", "Thali" and "Tandoor"
@@ -499,7 +504,7 @@ function DishEditor({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Food type</Label>
+            <Label>{t("restaurant.menu.foodType")}</Label>
             <div className="flex flex-wrap gap-1.5">
               {FOOD_TYPES.map((row) => (
                 <button
@@ -514,7 +519,7 @@ function DishEditor({
                   <span className="grid h-3 w-3 place-items-center rounded-[2px] border-[1.5px]" style={{ borderColor: row.ring }}>
                     <span className="h-1 w-1 rounded-full" style={{ background: row.ring }} />
                   </span>
-                  {row.label}
+                  {t(row.labelKey)}
                 </button>
               ))}
             </div>
@@ -522,7 +527,7 @@ function DishEditor({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Spice</Label>
+              <Label>{t("restaurant.menu.spice")}</Label>
               <div className="flex gap-1">
                 {[0, 1, 2, 3].map((level) => (
                   <button
@@ -538,7 +543,7 @@ function DishEditor({
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Kitchen time (min)</Label>
+              <Label>{t("restaurant.menu.kitchenTime")}</Label>
               <Input value={prep} inputMode="numeric" placeholder="15" onChange={(event) => setPrep(event.target.value)} />
             </div>
           </div>
@@ -553,9 +558,9 @@ function DishEditor({
           />
 
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-3"><Label>Add-on groups</Label><span className="text-[10.5px] text-[#64748b]">Managed from Add-ons on the menu page</span></div>
+            <div className="flex items-center justify-between gap-3"><Label>{t("restaurant.menu.addonGroups")}</Label><span className="text-[10.5px] text-[#64748b]">{t("restaurant.menu.addonsManagedFrom")}</span></div>
             {addonGroups.length === 0 ? (
-              <p className="rounded-xl border border-dashed p-3 text-[11px] text-[#64748b]">No reusable groups yet. Save this dish, then create one from Add-ons.</p>
+              <p className="rounded-xl border border-dashed p-3 text-[11px] text-[#64748b]">{t("restaurant.menu.noAddonGroups")}</p>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
                 {addonGroups.map((group) => {
@@ -577,7 +582,7 @@ function DishEditor({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Tags</Label>
+            <Label>{t("restaurant.menu.tags")}</Label>
             <div className="flex flex-wrap gap-1.5">
               {[...new Set([...SUGGESTED_TAGS, ...tags])].map((tag) => (
                 <button
@@ -595,7 +600,7 @@ function DishEditor({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t("restaurant.menu.cancel")}</Button>
           <Button
             disabled={saving}
             onClick={async () => {
@@ -644,6 +649,7 @@ function PortionEditor({
   dishPrice: number;
   onChange: (next: DishVariationInput[]) => void;
 }) {
+  const { t } = useAppLanguage();
   function update(index: number, patch: Partial<DishVariationInput>) {
     onChange(rows.map((row, position) => (position === index ? { ...row, ...patch } : row)));
   }
@@ -666,11 +672,11 @@ function PortionEditor({
 
   return (
     <div className="space-y-1.5">
-      <Label>Portions</Label>
+      <Label>{t("restaurant.menu.portions")}</Label>
       {rows.length === 0 ? (
         <div className="rounded-[10px] border border-dashed border-[#dbe4f0] p-3">
           <p className="text-[12px] text-[#64748b]">
-            Sold one way, at ₹{dishPrice.toLocaleString("en-IN")}. Add portions if this dish comes in more than one size.
+            {t("restaurant.menu.soldOneWay", { price: `₹${dishPrice.toLocaleString("en-IN")}` })}
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <button
@@ -683,14 +689,14 @@ function PortionEditor({
                 add("Full", 1, dishPrice);
               }}
             >
-              + Half and Full
+              {t("restaurant.menu.addHalfFull")}
             </button>
             <button
               type="button"
               className="rounded-full border border-[#dbe4f0] px-3 py-1.5 text-[11px] font-bold text-[#31527e]"
               onClick={() => add("Regular", 1, dishPrice)}
             >
-              + Add a portion
+              {t("restaurant.menu.addPortion")}
             </button>
           </div>
         </div>
@@ -711,12 +717,11 @@ function PortionEditor({
             className="rounded-full border border-[#dbe4f0] px-3 py-1.5 text-[11px] font-bold text-[#31527e]"
             onClick={() => add("", 1, dishPrice)}
           >
-            + Add a portion
+            {t("restaurant.menu.addPortion")}
           </button>
           {hasRecipe ? (
             <p className="text-[11px] leading-4 text-[#64748b]">
-              "Uses" is how much of one full portion the kitchen actually spends — a Half at 0.5
-              takes half the recipe out of stock.
+              {t("restaurant.menu.usesHelp")}
             </p>
           ) : null}
         </div>
@@ -742,6 +747,7 @@ function ComboEditor({
   allDishes: MenuDish[];
   onChange: (next: ComboComponentInput[]) => void;
 }) {
+  const { t } = useAppLanguage();
   const [picking, setPicking] = useState("");
 
   const priceById = useMemo(
@@ -781,10 +787,10 @@ function ComboEditor({
 
   return (
     <div className="space-y-1.5">
-      <Label>Combo dishes</Label>
+      <Label>{t("restaurant.menu.comboDishes")}</Label>
       {rows.length === 0 ? (
         <p className="text-[12px] text-[#64748b]">
-          Add dishes to turn this into a thali or meal deal. It keeps its own price of {rupees(dish.price)}.
+          {t("restaurant.menu.comboHelp", { price: rupees(dish.price) })}
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -810,7 +816,7 @@ function ComboEditor({
             </div>
           ))}
           <div className="flex items-baseline justify-between rounded-[8px] bg-[#f4f9ff] px-2.5 py-2">
-            <span className="text-[11px] text-[#64748b]">Separately {rupees(separately)}</span>
+            <span className="text-[11px] text-[#64748b]">{t("restaurant.menu.separately", { amount: rupees(separately) })}</span>
             {/* A combo dearer than its parts is a pricing mistake, and saying so is
                 more use to an owner than showing a negative "saving". */}
             <span className={cn("text-[11px] font-bold", saving > 0 ? "text-[#15803d]" : "text-[#b4404f]")}>
@@ -823,11 +829,11 @@ function ComboEditor({
       {choosable.length > 0 ? (
         <select
           value={picking}
-          aria-label="Add a dish to this combo"
+          aria-label={t("restaurant.menu.addDishToCombo")}
           onChange={(event) => add(event.target.value)}
           className="h-11 lg:mouse:h-9 w-full rounded-[8px] border border-[#dbe4f0] bg-white px-2 text-[12px] font-semibold text-[#31527e]"
         >
-          <option value="">+ Add a dish…</option>
+          <option value="">{t("restaurant.menu.addDishOption")}</option>
           {choosable.map((row) => (
             <option key={row.id} value={row.id}>{row.name} · {rupees(row.price)}</option>
           ))}
@@ -838,10 +844,11 @@ function ComboEditor({
 }
 
 function ComboQuantity({ quantity, onChange }: { quantity: number; onChange: (next: number) => void }) {
+  const { t } = useAppLanguage();
   // A draft, not raw onChange: committing Number("") as 0 on the keystroke that
   // clears the box would drop the dish out of the combo as the shopkeeper typed.
   const props = useQuantityDraft(quantity, onChange);
-  return <Input {...props} inputMode="decimal" className="h-11 lg:mouse:h-8 w-16" aria-label="How many of this dish" />;
+  return <Input {...props} inputMode="decimal" className="h-11 lg:mouse:h-8 w-16" aria-label={t("restaurant.menu.howMany")} />;
 }
 
 function PortionRow({
@@ -853,6 +860,7 @@ function PortionRow({
   onMakeDefault: () => void;
   onRemove: () => void;
 }) {
+  const { t } = useAppLanguage();
   // Drafts, not raw onChange: committing Number("") as 0 on the keystroke that
   // clears the box is what once wrote ₹0 across a shop's catalogue.
   const priceProps = useMoneyDraft(row.price, (next) => onChange({ price: next }));
@@ -874,14 +882,14 @@ function PortionRow({
       </button>
       <Input
         value={row.name}
-        placeholder="Half"
+        placeholder={t("restaurant.menu.halfPlaceholder")}
         className="h-11 lg:mouse:h-9 flex-1"
-        aria-label="Portion name"
+aria-label={t("restaurant.menu.portionName")}
         onChange={(event) => onChange({ name: event.target.value })}
       />
-      <Input {...priceProps} inputMode="decimal" className="h-11 lg:mouse:h-9 w-20" aria-label="Portion price" />
+      <Input {...priceProps} inputMode="decimal" className="h-11 lg:mouse:h-9 w-20" aria-label={t("restaurant.menu.portionPrice")} />
       {showFactor ? (
-        <Input {...factorProps} inputMode="decimal" className="h-11 lg:mouse:h-9 w-16" aria-label="Portion of one full recipe" />
+        <Input {...factorProps} inputMode="decimal" className="h-11 lg:mouse:h-9 w-16" aria-label={t("restaurant.menu.portionFactor")} />
       ) : null}
       <button
         type="button"

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { AlertTriangle, Printer, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { encodeQrSvg } from "@/lib/qr/qr-encoder";
 import { describeTableQr, tablesForPrinting, type PrintableTable } from "../../service/table-qr";
@@ -44,6 +45,9 @@ function printSheet(
   targets: ReturnType<typeof qrTargets>,
   shopName: string,
   title: string,
+  // Passed in rather than written here: this builds a print window, not a
+  // component, so it has no dictionary of its own to read.
+  scanLabel: string,
 ) {
   const win = window.open("", "_blank", "width=860,height=1000");
   if (!win) return;
@@ -53,8 +57,8 @@ function printSheet(
         <p class="shop">${escapeHtml(shopName)}</p>
         <p class="table">${escapeHtml(table.name)}</p>
         <div class="qr">${encodeQrSvg(url, { border: 2 })}</div>
-        <p class="lead">Scan to see the menu &amp; order</p>
-        <p class="code">${escapeHtml(table.section ?? "")} &middot; ${escapeHtml(table.code ?? "")}</p>
+        <p class="lead">${escapeHtml(scanLabel)}</p>
+        <p class="code">${[table.section, table.code].filter(Boolean).map((part) => escapeHtml(String(part))).join(" &middot; ")}</p>
       </figure>`)
     .join("");
 
@@ -80,6 +84,7 @@ function escapeHtml(value: string) {
 }
 
 export function TableQrDialog({ open, onClose, shopId, shopName, table, tables, configuredBaseUrl, websiteUrl }: TableQrDialogProps) {
+  const { t } = useAppLanguage();
   const printable = useMemo(() => tablesForPrinting(tables), [tables]);
   const targets = useMemo(
     () => qrTargets(table ? [table] : printable, shopId, configuredBaseUrl, websiteUrl),
@@ -110,8 +115,7 @@ export function TableQrDialog({ open, onClose, shopId, shopName, table, tables, 
               <QrCodeView value={single.url} size={236} title={`QR for ${table?.name}`} />
             </div>
             <p className="text-[12px] leading-relaxed text-[#5b6b85]">
-              Stick this on {table?.name}. A guest scans it and sees your menu with their table already chosen —
-              no name, no number, nothing to type.
+              {t("restaurant.tableQr.stickOn", { table: table?.name ?? "" })}
             </p>
             <p className="break-all text-[11px] text-[#94a3b8]">{single.url}</p>
           </div>
@@ -126,17 +130,17 @@ export function TableQrDialog({ open, onClose, shopId, shopName, table, tables, 
               ))}
             </div>
             {printable.length === 0 ? (
-              <p className="text-center text-[12px] text-[#64748b]">Add a table first — there is nothing to print yet.</p>
+              <p className="text-center text-[12px] text-[#64748b]">{t("restaurant.tableQr.addTableFirst")}</p>
             ) : null}
           </div>
         )}
 
         <div className="flex justify-end gap-2">
-          <Button variant="outline" className="h-10 rounded-[10px] font-bold" onClick={onClose}>Close</Button>
+          <Button variant="outline" className="h-10 rounded-[10px] font-bold" onClick={onClose}>{t("restaurant.tableQr.close")}</Button>
           <Button
             className="h-10 gap-2 rounded-[10px] font-black"
             disabled={targets.length === 0}
-            onClick={() => printSheet(targets, shopName, table ? `${table.name} QR` : "Table QR codes")}
+            onClick={() => printSheet(targets, shopName, table ? `${table.name} QR` : "Table QR codes", t("restaurant.tableQr.scanToOrder"))}
           >
             {table ? <Printer size={15} /> : <QrCode size={15} />}
             {table ? "Print" : `Print ${targets.length}`}
