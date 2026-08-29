@@ -7,6 +7,7 @@ import {
   type ProductAttributes,
 } from "@/features/core/products/product-attributes";
 import {
+  defaultStockTrackingForBusinessType,
   formToInput,
   productFormSchema,
   productToForm,
@@ -495,10 +496,9 @@ function rowToFormData(
     stockQuantity: numberValue("stockQuantity"),
     lowStockAlert: numberValue("lowStockAlert"),
     batchTrackingEnabled: false,
-    // A spreadsheet of products is a list of things the shop buys and stores.
-    // Anything that turns out not to be gets switched off on its own row, or by
-    // being put on a menu.
-    stockTrackingEnabled: true,
+    // A restaurant product import is normally its menu. Ingredients and bottled
+    // goods can still be opted into stock on their row after import.
+    stockTrackingEnabled: defaultStockTrackingForBusinessType(businessType),
     // A bulk import never classifies a controlled drug — that is a decision
     // someone makes per medicine, not a column to be trusted from a CSV.
     drugSchedule: null,
