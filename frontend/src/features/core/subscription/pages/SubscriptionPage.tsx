@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, CloudOff, CreditCard, Database, RefreshCcw
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getPlanForBusinessType, PUBLIC_PLAN_ORDER, type PlanCode } from "@/features/core/subscription/plans";
+import { getPlanForBusinessType, offeredPlanCodes, type PlanCode } from "@/features/core/subscription/plans";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { CancelSubscriptionDialog, PlanBadge, UpgradeModal } from "@/features/core/subscription/components";
@@ -21,6 +21,8 @@ function formatDate(value: string | null) {
 
 export default function SubscriptionPage() {
   const businessType = useBusinessTypeKey();
+  // What this trade is sold — a restaurant is offered two plans, not three.
+  const offeredPlans = offeredPlanCodes(businessType);
   const { snapshot, loading, refresh } = useSubscriptionSnapshot();
   const { toast } = useToast();
   const [targetPlan, setTargetPlan] = useState<PlanCode | null>(null);
@@ -56,11 +58,11 @@ export default function SubscriptionPage() {
 
   // Only a paid, active plan can be cancelled (trials/expired/grace have nothing to cancel).
   const canCancel = snapshot.status === "active";
-  const publicCurrentIndex = PUBLIC_PLAN_ORDER.indexOf(snapshot.planCode as (typeof PUBLIC_PLAN_ORDER)[number]);
+  const publicCurrentIndex = offeredPlans.indexOf(snapshot.planCode as (typeof offeredPlans)[number]);
   const currentIndex = snapshot.planCode === "standard" ? 0 : Math.max(0, publicCurrentIndex);
   const nextPlan = snapshot.planCode === "standard"
     ? "growth"
-    : currentIndex < PUBLIC_PLAN_ORDER.length - 1 ? PUBLIC_PLAN_ORDER[currentIndex + 1] : null;
+    : currentIndex < offeredPlans.length - 1 ? offeredPlans[currentIndex + 1] : null;
   const periodEndLabel = snapshot.currentPeriodEnd ? new Date(snapshot.currentPeriodEnd).toLocaleDateString("en-IN") : null;
   const planMessage = snapshot.status === "active" && snapshot.cloudSyncAllowed
     ? `Your ${snapshot.plan.name} features are ready and this device is protected.`
@@ -123,7 +125,7 @@ export default function SubscriptionPage() {
           <CardDescription>Choose the capacity that matches how your store works.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
-          {PUBLIC_PLAN_ORDER.map((code, index) => {
+          {offeredPlans.map((code, index) => {
             const plan = getPlanForBusinessType(code, businessType);
             const isCurrent = snapshot.planCode === plan.code;
             const isHigher = index > currentIndex;

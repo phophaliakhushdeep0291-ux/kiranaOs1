@@ -89,7 +89,9 @@ export type FeatureName =
   | "restaurant_tables"
   | "restaurant_kot"
   | "restaurant_menu"
-  | "restaurant_recipe_inventory";
+  | "restaurant_recipe_inventory"
+  | "restaurant_table_qr"
+  | "restaurant_reservations";
 
 export interface PlanDefinition {
   code: PlanCode;
@@ -273,7 +275,9 @@ const BUSINESS_TYPE_PRICES: Record<BusinessType, Record<Exclude<PlanCode, "stand
   electronics: { starter: [399, 3999], growth: [799, 6999], pro: [1199, 10999] },
   furniture:   { starter: [399, 3999], growth: [799, 6999], pro: [1199, 10999] },
   pharmacy:    { starter: [499, 4999], growth: [899, 7999], pro: [1299, 11999] },
-  restaurant:  { starter: [599, 5999], growth: [1499, 14999], pro: [1999, 19999] },
+  // Sold as two plans, Counter and Dine-in. `pro` resolves onto Dine-in rather
+  // than sitting above it; the code stays valid for tills that have been offline.
+  restaurant:  { starter: [699, 6990], growth: [1499, 14990], pro: [1499, 14990] },
   manufacturing: { starter: [999, 9999], growth: [1999, 18999], pro: [3499, 32999] },
 };
 
@@ -341,11 +345,26 @@ const BUSINESS_TYPE_PLAN_ENTITLEMENTS: Record<BusinessType, BusinessTypePlanEnti
     starterBullets: ["Shade variants with batch and expiry control", "Tester stock and its real product cost"],
     growthBullets: ["Loyalty and customer-specific pricing", "Staff controls, audit logs and monthly reports"],
   },
+  // A food business divides at one question: do guests sit down? Counter cooks
+  // and sells; Dine-in adds the floor. Recipes sit on Counter because a cloud
+  // kitchen still needs selling a dish to move its ingredients.
   restaurant: {
-    starter: ["batch_expiry", "restaurant_tables", "restaurant_kot", "restaurant_menu"],
-    growth: ["restaurant_recipe_inventory", "advanced_inventory"],
-    starterBullets: ["Menu, tables, KOT and kitchen display", "Split billing plus batch/expiry for perishable stock"],
-    growthBullets: ["Recipe-level ingredient and kitchen-stock control", "Staff roles, audit logs and advanced reports"],
+    starter: ["batch_expiry", "restaurant_menu", "restaurant_recipe_inventory"],
+    growth: [
+      "restaurant_tables",
+      "restaurant_kot",
+      "restaurant_table_qr",
+      "restaurant_reservations",
+      "advanced_inventory",
+    ],
+    starterBullets: [
+      "Menu, recipes and kitchen stock — selling a dish moves its ingredients",
+      "Your own online ordering page, with no commission on it",
+    ],
+    growthBullets: [
+      "Tables, running table bills and kitchen tickets by station",
+      "A QR on every table, plus reservations and staff roles",
+    ],
   },
   manufacturing: {
     starter: ["batch_expiry"],
@@ -382,12 +401,42 @@ function shopTypeBullets(code: PlanCode, businessType: BusinessType): string[] {
   return [base[0], `All ${businessType.replaceAll("_", " ")} Starter and Growth workflows`, ...base.slice(1)];
 }
 
+/**
+ * What a trade calls its plans, and which of them it is offered.
+ *
+ * Mirrors BUSINESS_TYPE_PLAN_PRESENTATION on the server. Restaurant is sold two
+ * — Counter and Dine-in — so `pro` is not shown, though it stays a valid stored
+ * code for a till that has been offline.
+ */
+const BUSINESS_TYPE_PLAN_PRESENTATION: Partial<Record<BusinessType, {
+  offered: readonly PlanCode[];
+  names: Partial<Record<PlanCode, string>>;
+}>> = {
+  restaurant: {
+    offered: ["starter", "growth"],
+    names: { starter: "Counter", growth: "Dine-in", pro: "Dine-in" },
+  },
+};
+
+/** The plan codes a trade may be sold, in the order they should be shown. */
+export function offeredPlanCodes(businessType: BusinessType): readonly PlanCode[] {
+  return BUSINESS_TYPE_PLAN_PRESENTATION[businessType]?.offered ?? PUBLIC_PLAN_ORDER;
+}
+
+/** What this trade calls a plan, which is not always what the catalogue calls it. */
+export function planNameForBusinessType(code: PlanCode, businessType: BusinessType): string {
+  return BUSINESS_TYPE_PLAN_PRESENTATION[businessType]?.names?.[code] ?? PLAN_DEFINITIONS[code].name;
+}
+
 export function getPlanForBusinessType(code: PlanCode, businessType: BusinessType): PlanDefinition {
   const base = PLAN_DEFINITIONS[code];
   if (code === "standard") return base;
   const [price, annualPrice] = BUSINESS_TYPE_PRICES[businessType]?.[code] ?? BUSINESS_TYPE_PRICES.other[code];
   return {
     ...base,
+    // The name travels with the trade: a restaurant is sold Counter and Dine-in,
+    // and showing it "Starter" would name a plan it sees nowhere else.
+    name: planNameForBusinessType(code, businessType),
     price,
     annualPrice,
     headline: businessType === "kirana" && code === "starter"
@@ -494,6 +543,8 @@ export const FEATURE_LABELS: Record<FeatureName, string> = {
   restaurant_tables: "Restaurant table management",
   restaurant_kot: "Kitchen order tickets and display",
   restaurant_menu: "Restaurant menu management",
+  restaurant_table_qr: "Per-table guest QR ordering",
+  restaurant_reservations: "Table reservations and bookings",
   restaurant_recipe_inventory: "Recipe and ingredient inventory",
 };
 

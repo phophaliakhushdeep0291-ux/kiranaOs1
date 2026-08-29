@@ -2,7 +2,7 @@ import { CheckCircle2, Crown, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getPlanForBusinessType, PUBLIC_PLAN_ORDER, type BillingCycle, type PlanCode } from "@/features/core/subscription/plans";
+import { getPlanForBusinessType, offeredPlanCodes, type BillingCycle, type PlanCode } from "@/features/core/subscription/plans";
 import { BUSINESS_TYPE_DEFS, useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { PlanBadge, UpgradeModal } from "@/features/core/subscription/components";
@@ -17,6 +17,8 @@ export default function PlansPage() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("yearly");
   const [, navigate] = useLocation();
   const businessType = useBusinessTypeKey();
+  // What this trade is sold — a restaurant is offered two plans, not three.
+  const offeredPlans = offeredPlanCodes(businessType);
   // The trade name and the self-serve copy are translated; the rest of this page
   // is still English and carries its remaining count in the i18n allowlist.
   const { t } = useAppLanguage();
@@ -55,7 +57,7 @@ export default function PlansPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {PUBLIC_PLAN_ORDER.map((code) => {
+        {offeredPlans.map((code) => {
           const plan = getPlanForBusinessType(code, businessType);
           const isCurrent = snapshot?.planCode === code;
           return (

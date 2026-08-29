@@ -13,6 +13,7 @@ import {
   FIRST_YEAR_ONBOARDING_SKU,
   isOnboardingServiceAvailable,
   getPlanConfigForBusinessType,
+  offeredPlanCodesForBusinessType,
 } from "./planConfig.js";
 import { businessTypeFromSettings, parseShopSettings } from "../shops/businessProfiles.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -53,8 +54,17 @@ export async function seedPlans(tx = db) {
 
 export async function listPlans(businessType = "kirana") {
   await ensurePlansSeeded();
-  const plans = await db.plan.findMany({ where: { isActive: true }, orderBy: { priceMonthlyPaise: "asc" } });
-  return plans.map((plan) => serializePlan(planForBusinessType(plan, businessType)));
+  const plans = await db.plan.findMany({ where: { isActive: true } });
+  const byCode = new Map(plans.map((plan) => [plan.code, plan]));
+  // What this trade is actually sold, in the order it should be shown — not
+  // every row that happens to be active. `standard` is seeded so existing
+  // subscriptions and signed device licenses keep resolving, and was being
+  // offered at checkout as a fourth plan nobody sells; a restaurant is sold two
+  // and was being offered four.
+  return offeredPlanCodesForBusinessType(businessType)
+    .map((code) => byCode.get(code))
+    .filter(Boolean)
+    .map((plan) => serializePlan(planForBusinessType(plan, businessType)));
 }
 
 export async function ensurePlansSeeded(client = db) {
@@ -630,6 +640,10 @@ function planForBusinessType(plan, businessType) {
   const configured = getPlanConfigForBusinessType(plan.code, businessType);
   return {
     ...plan,
+    // The name travels with the trade too: a restaurant is sold Counter and
+    // Dine-in, and showing it the stored "Starter" would name a plan that
+    // appears nowhere else it looks.
+    name: configured.name,
     priceMonthlyPaise: configured.priceMonthlyPaise,
     priceYearlyPaise: configured.priceYearlyPaise,
     featuresJson: JSON.stringify(configured.features),

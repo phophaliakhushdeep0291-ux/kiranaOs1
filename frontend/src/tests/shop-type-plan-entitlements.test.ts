@@ -24,9 +24,13 @@ describe("shop-type subscription entitlements", () => {
   it("puts counter-critical workflows in Starter and operational extras in Growth", () => {
     expect(getPlanForBusinessType("starter", "pharmacy").features).toEqual(expect.arrayContaining(["prescription_tracking", "batch_expiry"]));
     expect(getPlanForBusinessType("starter", "electronics").features).toContain("serial_imei_tracking");
-    expect(getPlanForBusinessType("starter", "restaurant").features).toEqual(expect.arrayContaining(["restaurant_tables", "restaurant_kot", "restaurant_menu"]));
-    expect(getPlanForBusinessType("starter", "restaurant").features).not.toContain("restaurant_recipe_inventory");
-    expect(getPlanForBusinessType("growth", "restaurant").features).toContain("restaurant_recipe_inventory");
+    // Restaurant divides at "do guests sit down?". Counter cooks and sells;
+    // Dine-in runs a floor. Recipes sit on Counter because a cloud kitchen still
+    // needs selling a dish to move its ingredients.
+    expect(getPlanForBusinessType("starter", "restaurant").features).toEqual(expect.arrayContaining(["restaurant_menu", "restaurant_recipe_inventory"]));
+    expect(getPlanForBusinessType("starter", "restaurant").features).not.toContain("restaurant_tables");
+    expect(getPlanForBusinessType("starter", "restaurant").features).not.toContain("restaurant_kot");
+    expect(getPlanForBusinessType("growth", "restaurant").features).toEqual(expect.arrayContaining(["restaurant_tables", "restaurant_kot", "restaurant_table_qr", "restaurant_reservations"]));
     expect(getPlanForBusinessType("starter", "clothing").features).not.toContain("clothing_rentals");
     expect(getPlanForBusinessType("growth", "clothing").features).toContain("clothing_rentals");
   });
