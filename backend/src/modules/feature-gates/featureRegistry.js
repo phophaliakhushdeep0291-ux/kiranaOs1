@@ -58,10 +58,17 @@ export const FEATURE_REGISTRY = {
   academic_book_lists: { minimumPlan: "starter", description: "School and academic book lists" },
   furniture_order_book: { minimumPlan: "starter", description: "Furniture quotations and order book" },
   tester_stock: { minimumPlan: "starter", description: "Cosmetics tester stock" },
-  restaurant_tables: { minimumPlan: "starter", description: "Restaurant table management" },
-  restaurant_kot: { minimumPlan: "starter", description: "Kitchen order tickets and display" },
+  // The floor: seating, routing tickets to a station, and taking bookings. A
+  // takeaway or cloud kitchen opens none of these, which is why they sit on
+  // Dine-in and the menu below does not.
+  restaurant_tables: { minimumPlan: "growth", description: "Tables, seating and running table bills" },
+  restaurant_kot: { minimumPlan: "growth", description: "Kitchen order tickets routed by station" },
+  restaurant_table_qr: { minimumPlan: "growth", description: "Per-table guest QR ordering" },
+  restaurant_reservations: { minimumPlan: "growth", description: "Table reservations and bookings" },
   restaurant_menu: { minimumPlan: "starter", description: "Restaurant menu management" },
-  restaurant_recipe_inventory: { minimumPlan: "growth", description: "Recipe and ingredient inventory" },
+  // Selling a dish has to take its ingredients out of stock on every plan: a
+  // cloud kitchen has no floor to buy and no other way to know what it has left.
+  restaurant_recipe_inventory: { minimumPlan: "starter", description: "Recipe and ingredient inventory" },
 };
 
 export const OLD_DATA_VIEW_FEATURE = "view_old_data";

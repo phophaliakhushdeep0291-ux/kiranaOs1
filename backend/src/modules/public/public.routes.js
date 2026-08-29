@@ -1,11 +1,30 @@
 import { Router } from "express";
 import * as ctrl from "./public.controller.js";
 import { storefrontWriteLimiter } from "../../middleware/security.js";
+import { hasFeature } from "../feature-gates/featureGate.service.js";
 
 // Public, unauthenticated routes for the QR customer self-order flow. No requireAuth /
 // requireShop / requireDeviceActivated here on purpose — these are read-only, storefront-safe,
 // owner-opted-in endpoints. They still ride the global /api rate limiter mounted in app.js.
 const router = Router();
+
+/**
+ * A table QR belongs to a shop that seats guests.
+ *
+ * Answered as a flat 404 rather than the 403 an authenticated route would give.
+ * The person holding the phone is a diner, not a customer of ours: they have
+ * done nothing wrong, cannot act on "feature not included", and are owed no
+ * detail about what this restaurant does or does not pay for. A sticker that is
+ * no longer in service simply does not resolve.
+ */
+function requireTableOrdering() {
+  return async (req, res, next) => {
+    try {
+      if (await hasFeature(req.params.shopId, "restaurant_table_qr")) return next();
+      return res.status(404).json({ success: false, error: "Not found" });
+    } catch (err) { return next(err); }
+  };
+}
 
 router.get("/shops/:shopId/catalog", ctrl.catalog);
 // A self-order screen waking up asks whether it is still a live terminal. No
@@ -18,12 +37,12 @@ router.post("/shops/:shopId/orders", storefrontWriteLimiter, ctrl.submitOrder);
 router.get("/shops/:shopId/orders/:orderId", ctrl.orderStatus);
 router.post("/shops/:shopId/orders/:orderId/cancel", storefrontWriteLimiter, ctrl.cancelOrder);
 router.post("/shops/:shopId/orders/:orderId/feedback", storefrontWriteLimiter, ctrl.submitFeedback);
-router.post("/shops/:shopId/tables/:tableId/requests", storefrontWriteLimiter, ctrl.createGuestRequest);
+router.post("/shops/:shopId/tables/:tableId/requests", requireTableOrdering(), storefrontWriteLimiter, ctrl.createGuestRequest);
 // What a table currently owes, across every round it has ordered. A dine-in
 // table orders more than once and settles once, so a guest asking for the bill
 // must be shown the whole sitting — reading one round back would put a smaller
 // number in front of them than the counter is about to charge.
-router.get("/shops/:shopId/tables/:tableId/bill", ctrl.tableBill);
+router.get("/shops/:shopId/tables/:tableId/bill", requireTableOrdering(), ctrl.tableBill);
 // Online-session activity (§13). Only ONLINE_* event types are accepted and no
 // user is ever attributed — see online-activity.service.js for the full box.
 router.post("/shops/:shopId/activity", ctrl.onlineActivity);

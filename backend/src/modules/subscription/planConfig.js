@@ -98,6 +98,8 @@ export const SHOP_TYPE_FEATURES = Object.freeze([
   "restaurant_kot",
   "restaurant_menu",
   "restaurant_recipe_inventory",
+  "restaurant_table_qr",
+  "restaurant_reservations",
 ]);
 
 export function hasLegacyShopTypeFeatureAccess(features, featureName) {
@@ -144,9 +146,29 @@ export const BUSINESS_TYPE_PLAN_FEATURES = Object.freeze({
     starter: ["product_variants", "batch_expiry", "tester_stock"],
     growth: ["loyalty_program"],
   },
+  // A food business divides at one question: do guests sit down?
+  //
+  // Counter is a takeaway, cloud kitchen, bakery or tea shop. It bills a queue
+  // and sends food out, so it gets the menu, the recipes that deplete its
+  // ingredients, and expiry dates — everything needed to sell food.
+  //
+  // Dine-in adds the floor: tables to seat, tickets routed to a station, a QR on
+  // each table, and bookings. A cloud kitchen never opens any of them, so
+  // charging it for them is charging it for nothing.
+  //
+  // recipe_inventory moves DOWN from growth. A cloud kitchen lives or dies on
+  // ingredient depletion, and putting it behind the table plan would sell that
+  // shop a floor it does not have in order to reach the one stock feature it
+  // actually needs.
   restaurant: {
-    starter: ["batch_expiry", "restaurant_tables", "restaurant_kot", "restaurant_menu"],
-    growth: ["restaurant_recipe_inventory", "advanced_inventory"],
+    starter: ["batch_expiry", "restaurant_menu", "restaurant_recipe_inventory"],
+    growth: [
+      "restaurant_tables",
+      "restaurant_kot",
+      "restaurant_table_qr",
+      "restaurant_reservations",
+      "advanced_inventory",
+    ],
   },
   other: {
     starter: [],
@@ -211,11 +233,34 @@ export const BUSINESS_TYPE_PLAN_PRICING = Object.freeze({
   electronics: { starter: [39900, 399900], growth: [79900, 699900], pro: [119900, 1099900] },
   furniture:   { starter: [39900, 399900], growth: [79900, 699900], pro: [119900, 1099900] },
   pharmacy:    { starter: [49900, 499900], growth: [89900, 799900], pro: [129900, 1199900] },
-  restaurant:  { starter: [59900, 599900], growth: [149900, 1499900], pro: [199900, 1999900] },
+  // Restaurant is sold as two plans — Counter and Dine-in — so `pro` resolves
+  // onto the Dine-in price rather than sitting above it. The code stays valid
+  // because tills that have not synced in a fortnight still send it.
+  restaurant:  { starter: [69900, 699000], growth: [149900, 1499000], pro: [149900, 1499000] },
 });
 
 export function normalizeBusinessType(businessType) {
   return Object.hasOwn(BUSINESS_TYPE_PLAN_PRICING, businessType) ? businessType : "other";
+}
+
+/**
+ * What a trade calls its plans, and which of them it is offered.
+ *
+ * Restaurant is sold as two: Counter for a takeaway or cloud kitchen, Dine-in
+ * for a floor with tables. `pro` stays a valid code because installed tills
+ * still send it after a fortnight offline, but it is not offered to anyone new
+ * and it resolves onto Dine-in rather than to a third thing nobody can buy.
+ */
+export const BUSINESS_TYPE_PLAN_PRESENTATION = Object.freeze({
+  restaurant: {
+    offered: ["starter", "growth"],
+    names: { starter: "Counter", growth: "Dine-in", pro: "Dine-in" },
+  },
+});
+
+/** The plan codes a trade may be sold, in the order they should be shown. */
+export function offeredPlanCodesForBusinessType(businessType = "kirana") {
+  return BUSINESS_TYPE_PLAN_PRESENTATION[normalizeBusinessType(businessType)]?.offered ?? PUBLIC_PLAN_CODES;
 }
 
 export function getPlanConfigForBusinessType(planCode = "starter", businessType = "kirana") {
@@ -228,6 +273,7 @@ export function getPlanConfigForBusinessType(planCode = "starter", businessType 
   const growthEntitlements = planAtLeast(planCode, "growth") ? vertical.growth : [];
   return {
     ...base,
+    name: BUSINESS_TYPE_PLAN_PRESENTATION[normalizedType]?.names?.[planCode] ?? base.name,
     priceMonthlyPaise: priceMonthlyPaise ?? base.priceMonthlyPaise,
     priceYearlyPaise: priceYearlyPaise ?? base.priceYearlyPaise,
     features: [...new Set([...base.features, SHOP_TYPE_ENTITLEMENTS_V1, ...starterEntitlements, ...growthEntitlements])],
