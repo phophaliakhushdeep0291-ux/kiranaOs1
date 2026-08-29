@@ -96,8 +96,6 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/core/bills/components/EditBillDialog.tsx": 1,
   "features/core/bills/pages/BillsPage.tsx": 4,
   "features/core/customer-order/BillingOrderQrButton.tsx": 16,
-  "features/core/customer-order/CustomerOrderPage.tsx": 280,
-  "features/core/customer-order/DineInMenuPage.tsx": 34,
   "features/core/customer-order/ImportOrderPage.tsx": 16,
   "features/core/customer-order/OwnerOrderingCard.tsx": 13,
   "features/core/customers/pages/CustomersPage.tsx": 3,

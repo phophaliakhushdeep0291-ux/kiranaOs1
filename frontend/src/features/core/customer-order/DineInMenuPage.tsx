@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
+import { useAppLanguage, type TranslationKey } from "@/features/core/settings/i18n";
 import { guestWebsiteRedirect } from "./restaurant-website";
 import {
   AlertTriangle, ChefHat, CheckCircle2, Clock, Flame, Leaf, Loader2, Minus, Plus,
@@ -43,12 +44,14 @@ import { dineInTheme } from "./dine-in-theme";
  * public page free of any one trade's code.
  */
 
-const FOOD_TYPE_MARK: Record<string, { label: string; ring: string; dot: string }> = {
-  veg: { label: "Veg", ring: "#15803d", dot: "#15803d" },
-  vegan: { label: "Vegan", ring: "#15803d", dot: "#15803d" },
-  jain: { label: "Jain", ring: "#15803d", dot: "#15803d" },
-  egg: { label: "Egg", ring: "#b45309", dot: "#d97706" },
-  nonveg: { label: "Non-veg", ring: "#b91c1c", dot: "#b91c1c" },
+// Module scope has no dictionary to read, so the mark carries a key and
+// whoever renders it resolves the word.
+const FOOD_TYPE_MARK: Record<string, { labelKey: TranslationKey; ring: string; dot: string }> = {
+  veg: { labelKey: "guest.menu.markVeg", ring: "#15803d", dot: "#15803d" },
+  vegan: { labelKey: "guest.menu.markVegan", ring: "#15803d", dot: "#15803d" },
+  jain: { labelKey: "guest.menu.markJain", ring: "#15803d", dot: "#15803d" },
+  egg: { labelKey: "guest.menu.markEgg", ring: "#b45309", dot: "#d97706" },
+  nonveg: { labelKey: "guest.menu.markNonVeg", ring: "#b91c1c", dot: "#b91c1c" },
 };
 
 const rupees = (n: number) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -77,6 +80,7 @@ function newIdempotencyKey(shopCode: string, tableCode: string): string {
 }
 
 export default function DineInMenuPage() {
+  const { t } = useAppLanguage();
   const params = useParams<{ shopCode: string; tableCode?: string }>();
   const shopCode = params.shopCode ?? "";
   const tableCode = params.tableCode ?? new URLSearchParams(window.location.search).get("table") ?? "";
@@ -115,7 +119,7 @@ export default function DineInMenuPage() {
           setState({
             kind: "error",
             unavailable: false,
-            message: err instanceof Error ? err.message : "Could not load this menu.",
+            message: err instanceof Error ? err.message : t("guest.menu.loadFailed"),
           });
         }
       });
@@ -180,10 +184,12 @@ export default function DineInMenuPage() {
   const waitMinutes = chosen.reduce((max, row) => Math.max(max, row.item.prepMinutes ?? 0), 0);
 
   function itemQuantity(itemId: string) {
+  const { t } = useAppLanguage();
     return cartLines.filter((line) => line.itemId === itemId).reduce((sum, line) => sum + line.count, 0);
   }
 
   function addConfiguredLine(item: CustomerMenuItem, variationCode: string | undefined, variationName: string | undefined, basePrice: number, addons: GuestAddon[]) {
+  const { t } = useAppLanguage();
     const fingerprint = addons.map((addon) => `${addon.optionId}x${addon.quantity}`).sort().join(",") || "plain";
     const key = `${item.id}::${variationCode ?? "default"}::${fingerprint}`;
     const unitPrice = basePrice + addons.reduce((sum, addon) => sum + addon.price * addon.quantity, 0);
@@ -195,6 +201,7 @@ export default function DineInMenuPage() {
   }
 
   function addItem(item: CustomerMenuItem) {
+  const { t } = useAppLanguage();
     if ((item.variations?.length ?? 0) > 0 || (item.addonGroups?.length ?? 0) > 0) {
       setConfiguring(item);
       return;
@@ -203,6 +210,7 @@ export default function DineInMenuPage() {
   }
 
   function removeOneItem(itemId: string) {
+  const { t } = useAppLanguage();
     setCartLines((current) => {
       const index = current.map((line) => line.itemId).lastIndexOf(itemId);
       if (index < 0) return current;
@@ -213,6 +221,7 @@ export default function DineInMenuPage() {
   }
 
   function setLineQuantity(key: string, next: number) {
+  const { t } = useAppLanguage();
     setCartLines((current) => current
       .map((line) => line.key === key ? { ...line, count: Math.max(0, Math.min(30, next)) } : line)
       .filter((line) => line.count > 0));
@@ -247,7 +256,7 @@ export default function DineInMenuPage() {
       setNote("");
       setReviewOpen(false);
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Could not send your order.");
+      setSubmitError(err instanceof Error ? err.message : t("guest.menu.sendFailed"));
     } finally {
       setPlacing(false);
     }
@@ -256,7 +265,7 @@ export default function DineInMenuPage() {
   if (state.kind === "loading") {
     return (
       <div className="grid min-h-screen place-items-center bg-[#faf7f2] text-[#57534e]">
-        <div className="flex items-center gap-2 text-[14px]"><Loader2 className="animate-spin" size={18} /> Loading the menu…</div>
+        <div className="flex items-center gap-2 text-[14px]"><Loader2 className="animate-spin" size={18} /> {t("guest.menu.loadingTheMenu")}</div>
       </div>
     );
   }
@@ -277,7 +286,7 @@ export default function DineInMenuPage() {
             onClick={() => reload()}
             className="mx-auto flex items-center gap-2 rounded-xl bg-[#1c1917] px-4 py-2.5 text-[13px] font-bold text-white"
           >
-            <RefreshCw size={15} /> Try again
+            <RefreshCw size={15} /> {t("guest.menu.tryAgain")}
           </button>
         </div>
       </div>
@@ -337,7 +346,7 @@ export default function DineInMenuPage() {
             {tracked.stage === "received" ? "Order sent to the kitchen" : tracked.stage === "preparing" ? "Your food is being prepared" : "Ready"}
           </div>
           <p className="mt-1 text-[12px]" style={{ color: "var(--menu-muted)" }}>
-            {tracked.itemCount} item{tracked.itemCount === 1 ? "" : "s"} · {rupees(tracked.estimatedTotal)}
+            {t(tracked.itemCount === 1 ? "guest.menu.itemOne" : "guest.menu.itemMany", { count: tracked.itemCount })} · {rupees(tracked.estimatedTotal)}
             {tracked.tableName ? ` · ${tracked.tableName}` : ""}
           </p>
         </div>
@@ -349,17 +358,17 @@ export default function DineInMenuPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search the menu"
+            placeholder={t("guest.menu.searchTheMenu")}
             className="h-11 w-full bg-transparent text-[13px] outline-none placeholder:text-[color:var(--menu-muted)]"
           />
-          {search ? <button type="button" onClick={() => setSearch("")} aria-label="Clear" className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl"><X size={14} style={{ color: "var(--menu-muted)" }} /></button> : null}
+          {search ? <button type="button" onClick={() => setSearch("")} aria-label={t("guest.menu.clear")} className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-xl"><X size={14} style={{ color: "var(--menu-muted)" }} /></button> : null}
         </div>
 
         <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Chip active={vegOnly} onClick={() => setVegOnly((on) => !on)} accentWhenActive="#15803d">
-            <Leaf size={12} /> Veg only
+            <Leaf size={12} /> {t("guest.menu.vegOnly")}
           </Chip>
-          <Chip active={course === "all"} onClick={() => setCourse("all")}>All</Chip>
+          <Chip active={course === "all"} onClick={() => setCourse("all")}>{t("guest.menu.all")}</Chip>
           {sections.map((section) => (
             <Chip key={section.course} active={course === section.course} onClick={() => setCourse(section.course)}>
               {section.course}
@@ -371,7 +380,7 @@ export default function DineInMenuPage() {
       <main className="space-y-6 px-4 pt-3">
         {visible.length === 0 ? (
           <p className="py-14 text-center text-[13px]" style={{ color: "var(--menu-muted)" }}>
-            Nothing matches that. Try another search.
+            {t("guest.menu.nothingMatchesThatTryAnotherSearch")}
           </p>
         ) : null}
 
@@ -402,7 +411,7 @@ export default function DineInMenuPage() {
         ) : null}
         {!guestOrdersOn ? (
           <p className="pb-4 text-center text-[12px]" style={{ color: "var(--menu-muted)" }}>
-            Please place your order with a member of staff.
+            {t("guest.menu.pleasePlaceYourOrderWithA")}
           </p>
         ) : null}
       </main>
@@ -416,9 +425,9 @@ export default function DineInMenuPage() {
           style={{ background: "var(--menu-accent)" }}
         >
           <span className="flex items-center gap-2 text-[13px] font-black">
-            <ShoppingBag size={16} /> {itemCount} item{itemCount === 1 ? "" : "s"}
+            <ShoppingBag size={16} /> {t(itemCount === 1 ? "guest.menu.itemOne" : "guest.menu.itemMany", { count: itemCount })}
           </span>
-          <span className="text-[14px] font-black">{rupees(total)} · Review</span>
+          <span className="text-[14px] font-black">{t("guest.menu.reviewTotal", { total: rupees(total) })}</span>
         </button>
       ) : null}
 
@@ -430,8 +439,8 @@ export default function DineInMenuPage() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
-              <p className="font-display text-[18px] font-black">Your order · {table?.name}</p>
-              <button type="button" aria-label="Close" onClick={() => setReviewOpen(false)} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl"><X size={20} /></button>
+              <p className="font-display text-[18px] font-black">{t("guest.menu.yourOrder", { table: table?.name ?? "" })}</p>
+              <button type="button" aria-label={t("guest.menu.close")} onClick={() => setReviewOpen(false)} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl"><X size={20} /></button>
             </div>
 
             <div className="space-y-2">
@@ -440,7 +449,7 @@ export default function DineInMenuPage() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13px] font-bold">{item.name}{line.variationName ? ` · ${line.variationName}` : ""}</div>
                     {line.addons.length > 0 ? <div className="mt-0.5 line-clamp-2 text-[10.5px]" style={{ color: "var(--menu-muted)" }}>{line.addons.map((addon) => `${addon.quantity > 1 ? `${addon.quantity}× ` : ""}${addon.name}`).join(", ")}</div> : null}
-                    <div className="text-[11px]" style={{ color: "var(--menu-muted)" }}>{rupees(line.unitPrice)} each</div>
+                    <div className="text-[11px]" style={{ color: "var(--menu-muted)" }}>{t("guest.menu.each", { price: rupees(line.unitPrice) })}</div>
                   </div>
                   <Stepper qty={line.count} onChange={(next) => setLineQuantity(line.key, next)} />
                   <div className="w-16 text-right text-[13px] font-black">{rupees(line.unitPrice * line.count)}</div>
@@ -451,7 +460,7 @@ export default function DineInMenuPage() {
             <textarea
               value={note}
               onChange={(event) => setNote(event.target.value.slice(0, 300))}
-              placeholder="Anything the kitchen should know? (less spicy, no onion…)"
+              placeholder={t("guest.menu.anythingTheKitchenShouldKnowLess")}
               rows={2}
               className="mt-3 w-full rounded-xl border p-3 text-[13px] outline-none"
               style={{ borderColor: "var(--menu-line)", background: "var(--menu-card)", color: "var(--menu-ink)" }}
@@ -459,13 +468,13 @@ export default function DineInMenuPage() {
 
             <div className="mt-3 flex items-baseline justify-between">
               <span className="text-[13px]" style={{ color: "var(--menu-muted)" }}>
-                {itemCount} item{itemCount === 1 ? "" : "s"}
-                {waitMinutes > 0 ? ` · about ${waitMinutes} min` : ""}
+                {t(itemCount === 1 ? "guest.menu.itemOne" : "guest.menu.itemMany", { count: itemCount })}
+                {waitMinutes > 0 ? t("guest.menu.aboutMin", { minutes: waitMinutes }) : ""}
               </span>
               <span className="font-display text-[20px] font-black">{rupees(total)}</span>
             </div>
             <p className="mt-1 text-[11px]" style={{ color: "var(--menu-muted)" }}>
-              Taxes and any service charge are added to the bill you settle at the table.
+              {t("guest.menu.taxesAndAnyServiceChargeAre")}
             </p>
 
             {submitError ? (
@@ -492,10 +501,9 @@ export default function DineInMenuPage() {
             <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl" style={{ background: "var(--menu-tint)", color: "var(--menu-accent)" }}>
               <CheckCircle2 size={32} />
             </div>
-            <p className="mt-3 font-display text-[19px] font-black">The kitchen has your order</p>
+            <p className="mt-3 font-display text-[19px] font-black">{t("guest.menu.theKitchenHasYourOrder")}</p>
             <p className="mt-1.5 text-[13px] leading-relaxed" style={{ color: "var(--menu-muted)" }}>
-              {placed.itemCount} item{placed.itemCount === 1 ? "" : "s"} for {placed.tableName ?? table?.name}.
-              Add more anytime from this page — it all goes on one bill.
+              {t("guest.menu.placedSummary", { count: placed.itemCount, table: placed.tableName ?? table?.name ?? "" })}
             </p>
             <button
               type="button"
@@ -503,7 +511,7 @@ export default function DineInMenuPage() {
               className="mt-4 w-full rounded-2xl py-3 text-[14px] font-black text-white"
               style={{ background: "var(--menu-accent)" }}
             >
-              Back to the menu
+              {t("guest.menu.backToTheMenu")}
             </button>
           </div>
         </div>
@@ -531,6 +539,7 @@ function Chip({
   children: React.ReactNode;
   accentWhenActive?: string;
 }) {
+  const { t } = useAppLanguage();
   return (
     <button
       type="button"
@@ -562,6 +571,7 @@ function DishRow({
   onAdd: () => void;
   onRemove: () => void;
 }) {
+  const { t } = useAppLanguage();
   const mark = item.foodType ? FOOD_TYPE_MARK[item.foodType] : null;
   return (
     <article
@@ -573,8 +583,8 @@ function DishRow({
         <div className="flex items-center gap-1.5">
           {mark ? (
             <span
-              aria-label={mark.label}
-              title={mark.label}
+              aria-label={t(mark.labelKey)}
+              title={t(mark.labelKey)}
               className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[3px] border-[1.5px]"
               style={{ borderColor: mark.ring }}
             >
@@ -610,11 +620,11 @@ function DishRow({
           <span className="text-[14px] font-black">{rupees(item.price)}</span>
           {item.prepMinutes ? (
             <span className="flex items-center gap-1 text-[11px]" style={{ color: "var(--menu-muted)" }}>
-              <Clock size={11} /> {item.prepMinutes} min
+              <Clock size={11} /> {t("guest.menu.minutes", { minutes: item.prepMinutes })}
             </span>
           ) : null}
           {item.lastFew ? (
-            <span className="rounded-full bg-[#fef3c7] px-1.5 py-0.5 text-[9.5px] font-black uppercase text-[#92400e]">Last few</span>
+            <span className="rounded-full bg-[#fef3c7] px-1.5 py-0.5 text-[9.5px] font-black uppercase text-[#92400e]">{t("guest.menu.lastFew")}</span>
           ) : null}
         </div>
       </div>
@@ -650,6 +660,7 @@ function GuestDishConfigurator({
   onCancel: () => void;
   onConfirm: (selection: { variationCode?: string; variationName?: string; basePrice: number; addons: GuestAddon[] }) => void;
 }) {
+  const { t } = useAppLanguage();
   const variations = item.variations ?? [];
   const groups = item.addonGroups ?? [];
   const defaultVariation = variations.find((variation) => variation.isDefault) ?? variations[0];
@@ -676,6 +687,7 @@ function GuestDishConfigurator({
   const unitPrice = basePrice + addons.reduce((sum, addon) => sum + addon.price * addon.quantity, 0);
 
   function setOption(group: NonNullable<CustomerMenuItem["addonGroups"]>[number], optionId: string, next: number) {
+  const { t } = useAppLanguage();
     const currentCount = group.options.reduce((sum, option) => sum + (selected[option.id] ?? 0), 0);
     const previous = selected[optionId] ?? 0;
     const clamped = Math.max(0, Math.min(20, next));
@@ -694,13 +706,13 @@ function GuestDishConfigurator({
       <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl p-5" style={{ background: "var(--menu-surface)", color: "var(--menu-ink)" }} onClick={(event) => event.stopPropagation()}>
         <div className="mx-auto max-w-xl">
           <div className="flex items-start justify-between gap-3">
-            <div><p className="font-display text-[19px] font-black">{item.name}</p><p className="mt-0.5 text-[12px]" style={{ color: "var(--menu-muted)" }}>Make it exactly how you want it.</p></div>
-            <button type="button" aria-label="Close choices" onClick={onCancel} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--menu-line)" }}><X size={18} /></button>
+            <div><p className="font-display text-[19px] font-black">{item.name}</p><p className="mt-0.5 text-[12px]" style={{ color: "var(--menu-muted)" }}>{t("guest.menu.makeItExactlyHowYouWant")}</p></div>
+            <button type="button" aria-label={t("guest.menu.closeChoices")} onClick={onCancel} className="grid h-11 w-11 shrink-0 place-items-center rounded-full border" style={{ borderColor: "var(--menu-line)" }}><X size={18} /></button>
           </div>
 
           {variations.length > 0 ? (
             <section className="mt-4">
-              <h3 className="text-[12px] font-black uppercase tracking-wider" style={{ color: "var(--menu-accent)" }}>Choose a portion</h3>
+              <h3 className="text-[12px] font-black uppercase tracking-wider" style={{ color: "var(--menu-accent)" }}>{t("guest.menu.chooseAPortion")}</h3>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {variations.map((row) => (
                   <button key={row.unitCode} type="button" onClick={() => setVariationCode(row.unitCode)} className="flex min-h-12 items-center justify-between rounded-xl border p-3 text-left" style={row.unitCode === variation?.unitCode ? { borderColor: "var(--menu-accent)", background: "var(--menu-tint)" } : { borderColor: "var(--menu-line)", background: "var(--menu-card)" }}>
@@ -716,7 +728,7 @@ function GuestDishConfigurator({
               <section key={group.id} className="rounded-2xl border p-3.5" style={{ borderColor: attempted && !groupValid ? "#fca5a5" : "var(--menu-line)", background: "var(--menu-card)" }}>
                 <div className="flex items-start justify-between gap-3">
                   <div><h3 className="text-[13px] font-black">{group.name}</h3><p className="text-[10.5px]" style={{ color: "var(--menu-muted)" }}>{group.minSelect > 0 ? `Choose at least ${group.minSelect}` : "Optional"}{group.maxSelect > 0 ? ` · up to ${group.maxSelect}` : ""}</p></div>
-                  <span className="rounded-full px-2 py-1 text-[10px] font-black" style={{ background: "var(--menu-tint)", color: "var(--menu-accent)" }}>{count} chosen</span>
+                  <span className="rounded-full px-2 py-1 text-[10px] font-black" style={{ background: "var(--menu-tint)", color: "var(--menu-accent)" }}>{t("guest.menu.chosen", { count })}</span>
                 </div>
                 <div className="mt-2 space-y-2">
                   {group.options.map((option) => {
@@ -729,7 +741,7 @@ function GuestDishConfigurator({
                     );
                   })}
                 </div>
-                {attempted && !groupValid ? <p className="mt-2 text-[11px] font-bold text-[#b91c1c]">Please complete this choice.</p> : null}
+                {attempted && !groupValid ? <p className="mt-2 text-[11px] font-bold text-[#b91c1c]">{t("guest.menu.pleaseCompleteThisChoice")}</p> : null}
               </section>
             ))}
           </div>
@@ -744,7 +756,7 @@ function GuestDishConfigurator({
             className="mt-5 flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-[14px] font-black text-white"
             style={{ background: "var(--menu-accent)" }}
           >
-            <span>Add this dish</span><span>{rupees(unitPrice)}</span>
+            <span>{t("guest.menu.addThisDish")}</span><span>{rupees(unitPrice)}</span>
           </button>
         </div>
       </div>
@@ -753,13 +765,14 @@ function GuestDishConfigurator({
 }
 
 function Stepper({ qty, onChange }: { qty: number; onChange: (next: number) => void }) {
+  const { t } = useAppLanguage();
   return (
     <div className="flex shrink-0 items-center gap-1 rounded-xl px-1 py-1" style={{ background: "var(--menu-tint)" }}>
-      <button type="button" aria-label="One less" onClick={() => onChange(qty - 1)} className="grid h-11 w-11 place-items-center rounded-lg" style={{ color: "var(--menu-accent)" }}>
+      <button type="button" aria-label={t("guest.menu.oneLess")} onClick={() => onChange(qty - 1)} className="grid h-11 w-11 place-items-center rounded-lg" style={{ color: "var(--menu-accent)" }}>
         <Minus size={14} />
       </button>
       <span className="min-w-[18px] text-center text-[13px] font-black" style={{ color: "var(--menu-accent)" }}>{qty}</span>
-      <button type="button" aria-label="One more" onClick={() => onChange(qty + 1)} className="grid h-11 w-11 place-items-center rounded-lg" style={{ color: "var(--menu-accent)" }}>
+      <button type="button" aria-label={t("guest.menu.oneMore")} onClick={() => onChange(qty + 1)} className="grid h-11 w-11 place-items-center rounded-lg" style={{ color: "var(--menu-accent)" }}>
         <Plus size={14} />
       </button>
     </div>

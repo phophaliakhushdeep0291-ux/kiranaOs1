@@ -7,11 +7,17 @@ const merchantQueue = readFileSync("src/features/core/orders/pages/OrdersReceive
 
 describe("online ordering production contract", () => {
   it("keeps the customer journey transparent and fulfillment-aware", () => {
-    expect(storefront).toContain("Review your order");
-    expect(storefront).toContain("The store verifies availability and final amount.");
-    expect(storefront).toContain("No payment is taken now.");
+    // The copy moved into the dictionary, so the page is pinned by the key it
+    // renders and the promise itself is pinned where the words now live — the
+    // same split the merchant queue below already uses.
+    expect(storefront).toContain('t("storefront.reviewYourOrder")');
+    expect(storefront).toContain('t("storefront.theStoreVerifiesAvailabilityAndFinal")');
+    expect(storefront).toContain('t("storefront.noPaymentIsTakenNowThe")');
+    expect(storefront).toContain('t("storefront.usedOnlyForThisOrderAnd")');
+    expect(englishTranslations["storefront.theStoreVerifiesAvailabilityAndFinal"]).toContain("verifies availability");
+    expect(englishTranslations["storefront.noPaymentIsTakenNowThe"]).toContain("No payment is taken now.");
+    expect(englishTranslations["storefront.usedOnlyForThisOrderAnd"]).toContain("status updates");
     expect(storefront).toContain('fulfillment === "delivery" ? (');
-    expect(storefront).toContain("Used only for this order and status updates.");
     expect(storefront).toContain('role="dialog"');
   });
 
