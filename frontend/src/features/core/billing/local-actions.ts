@@ -12,6 +12,7 @@ import type { Bill, BillInput, BillInputItem, BillPayment, Customer, Product } f
 import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/features/core/audit-logs/local-actions";
 import { BillPaymentMode } from "@/types/api";
 import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
+import { productTracksStock } from "@/features/core/inventory/stock-display";
 
 const BILL_CACHE_KEY = "bills";
 const CUSTOMER_CACHE_KEY = "customers";
@@ -364,6 +365,10 @@ function buildStockProjection(items: BillInputItem[], productsById: Map<string, 
     if (!item.productId) continue;
     const product = productsById.get(item.productId);
     if (!product) continue;
+    // Cooked dishes and services are deliberately not stock. The server already
+    // honours this flag; the offline projection must do the same or it invents
+    // negative plate counts until the next cloud reconciliation.
+    if (!productTracksStock(product)) continue;
     const previous = runningStock.has(product.id) ? runningStock.get(product.id)! : productStockQty(product);
     const next = roundMoney(previous - billItemBaseQuantity(item, product));
     runningStock.set(product.id, next);
@@ -410,7 +415,11 @@ function buildSaleMovements(billId: string, items: BillInputItem[], productsById
   const now = new Date().toISOString();
   const runningStock = new Map<string, number>();
   return items
-    .filter((item) => item.productId)
+    .filter((item) => {
+      if (!item.productId) return false;
+      const product = productsById.get(item.productId);
+      return !product || productTracksStock(product);
+    })
     .map((item) => {
       const product = item.productId ? productsById.get(item.productId) : undefined;
       const delta = -billItemBaseQuantity(item, product);

@@ -209,6 +209,11 @@ export interface InventoryStockRow {
   isLow: boolean;
 }
 
+/** One authoritative answer used by inventory and offline billing alike. */
+export function productTracksStock(item?: Product | InventoryItem | null): boolean {
+  return (item?.stockTrackingEnabled ?? item?.trackStock ?? true) !== false;
+}
+
 /**
  * Expand a product into the rows an inventory screen should show.
  *
@@ -220,7 +225,7 @@ export interface InventoryStockRow {
  */
 export function inventoryStockRows(item: Product | InventoryItem): InventoryStockRow[] {
   const normalized = normalizeInventoryItem(item);
-  const isTracked = (normalized.stockTrackingEnabled ?? normalized.trackStock ?? true) !== false;
+  const isTracked = productTracksStock(normalized);
   const packs = activeInventorySellingUnits(normalized);
 
   if (normalized.packagingMode === "per_pack" && packs.length > 0) {

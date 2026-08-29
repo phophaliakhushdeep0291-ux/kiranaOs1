@@ -152,6 +152,26 @@ describe("stock adjustment transaction safety", () => {
     ]));
   });
 
+  it("refuses manual stock movement for an item that is not counted as stock", async () => {
+    dbState.committed.products = [{ ...productRow, stockTrackingEnabled: false, trackStock: false }];
+
+    await expect(recordPurchaseLocalFirst({
+      productId: "product_1",
+      quantity: 1,
+      unit: "kg",
+      costPerRateUnit: 50,
+    })).rejects.toThrow(/not counted as stock/i);
+    await expect(recordSaleLocalFirst({
+      productId: "product_1",
+      quantity: 1,
+      unit: "kg",
+      reason: "Counter stock out",
+    })).rejects.toThrow(/not counted as stock/i);
+
+    expect(tableRows("inventory_movements")).toHaveLength(0);
+    expect(tableRows("products")[0]?.stockBaseQty).toBe(10);
+  });
+
   it("rejects stock purchase without cost or bill amount before local stock changes", async () => {
     await expect(recordPurchaseLocalFirst({ productId: "product_1", quantity: 5, unit: "kg" })).rejects.toThrow(/purchase cost or bill amount/i);
 

@@ -9,7 +9,7 @@ import { ApiClientError } from "@/lib/api/http";
 import { initializeOfflineStorage } from "@/lib/offline/migrations";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { activateWaitingServiceWorker } from "@/lib/pwa/registerServiceWorker";
+import { activateWaitingServiceWorker, isServiceWorkerUpdateReady } from "@/lib/pwa/registerServiceWorker";
 import { AppLanguageProvider } from "@/features/core/settings/i18n";
 import { AppThemeProvider } from "@/features/core/settings/theme";
 import { useRealtimeRefreshBridge } from "@/lib/realtime/useRealtimeRefreshBridge";
@@ -124,6 +124,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
     };
     window.addEventListener("kirana:pwa-update-ready", onUpdateReady);
     window.addEventListener("kirana:pwa-registration-failed", onRegistrationFailed);
+    // A cached installed PWA can finish finding its waiting worker before React
+    // mounts (notably while the Hindi dictionary is loading). Do not lose the
+    // only prompt that tells the operator to move onto the deployed build.
+    if (isServiceWorkerUpdateReady()) onUpdateReady();
     return () => {
       window.removeEventListener("kirana:pwa-update-ready", onUpdateReady);
       window.removeEventListener("kirana:pwa-registration-failed", onRegistrationFailed);

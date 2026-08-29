@@ -8,8 +8,21 @@ const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const LOCAL_SW_CLEANUP_RELOAD_KEY = "kirana-os:local-sw-cleanup-reloaded:v1";
 const PROD_SW_CONTROLLER_RELOAD_KEY = "kirana-os:sw-controller-reloaded:v1";
 const KIRANA_CACHE_PREFIXES = ["kiranaos-shell"];
+let lastNotifiedWaitingWorker: ServiceWorker | null = null;
 
 declare const __KIRANA_BUILD_ID__: string;
+
+function notifyWaitingServiceWorker(registration: ServiceWorkerRegistration): void {
+  const worker = registration.waiting;
+  if (!worker || !navigator.serviceWorker.controller || worker === lastNotifiedWaitingWorker) return;
+  lastNotifiedWaitingWorker = worker;
+  window.dispatchEvent(new CustomEvent("kirana:pwa-update-ready"));
+}
+
+/** Lets React recover an update event fired before its toast listener mounted. */
+export function isServiceWorkerUpdateReady(): boolean {
+  return lastNotifiedWaitingWorker !== null;
+}
 
 function isLocalAppHost(): boolean {
   if (typeof window === "undefined") return false;
@@ -150,15 +163,23 @@ export function registerServiceWorker(): void {
     void navigator.serviceWorker
       .register(swUrl, { scope: "/" })
       .then((registration) => {
+        // `updatefound` does not fire when a worker finished installing before
+        // this window opened. That left an installed POS on the old release even
+        // though Vercel and Railway were already serving the new commit.
+        notifyWaitingServiceWorker(registration);
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;
           if (!worker) return;
           worker.addEventListener("statechange", () => {
             if (worker.state === "installed" && navigator.serviceWorker.controller) {
-              window.dispatchEvent(new CustomEvent("kirana:pwa-update-ready"));
+              notifyWaitingServiceWorker(registration);
             }
           });
         });
+        // Registration normally performs an update check, but browsers may
+        // throttle it for an installed PWA. An explicit check on each launch is
+        // cheap and makes the deployed build visible without clearing shop data.
+        void registration.update().then(() => notifyWaitingServiceWorker(registration)).catch(() => undefined);
       })
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : "Service worker registration failed";
