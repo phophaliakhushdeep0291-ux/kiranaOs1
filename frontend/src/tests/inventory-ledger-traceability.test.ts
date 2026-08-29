@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { normalizeInventoryLedgerEntry } from "@/features/core/inventory/queries";
+import {
+  keepInventoryLedgerRowsWithActiveProducts,
+  normalizeInventoryLedgerEntry,
+  reconcileInventoryLedgerEntries,
+} from "@/features/core/inventory/queries";
 
 describe("inventory ledger traceability", () => {
   it("normalizes the server ledger contract without losing quantity or balances", () => {
@@ -54,6 +58,68 @@ describe("inventory ledger traceability", () => {
       actorName: "Ravi Cashier",
       sourceType: "manual_damage",
       sync_status: "pending_sync",
+    }));
+  });
+
+  it("drops stale synced cache rows after an authoritative server response", () => {
+    const entries = reconcileInventoryLedgerEntries([
+      {
+        id: "old_shop_movement",
+        product_name: "Coffee",
+        action: "sale",
+        sync_status: "synced",
+        created_at: "2026-08-24T12:00:00.000Z",
+      },
+    ], [], 50);
+
+    expect(entries).toEqual([]);
+  });
+
+  it("does not paint cached movements whose product is outside the active shop", () => {
+    const rows = keepInventoryLedgerRowsWithActiveProducts([
+      { id: "foreign", product_id: "kirana_product", sync_status: "synced" },
+      { id: "current", productId: "restaurant_product", sync_status: "pending_sync" },
+      { id: "unlinked", sync_status: "pending_sync" },
+    ], new Set(["restaurant_product"]));
+
+    expect(rows).toEqual([
+      expect.objectContaining({ id: "current", productId: "restaurant_product" }),
+    ]);
+  });
+
+  it("preserves only unsent local work and replaces its optimistic id with the server row", () => {
+    const entries = reconcileInventoryLedgerEntries([
+      {
+        id: "local_movement_1",
+        product_id: "product_rice",
+        product_name: "Rice",
+        action: "purchase",
+        sync_status: "pending_sync",
+        created_at: "2026-08-24T12:00:00.000Z",
+      },
+      {
+        id: "stale_synced_movement",
+        product_id: "product_old",
+        product_name: "Old item",
+        sync_status: "synced",
+        created_at: "2026-08-24T11:00:00.000Z",
+      },
+    ], [
+      {
+        id: "server_movement_1",
+        clientMovementId: "local_movement_1",
+        product: { name: "Rice", baseUnit: "kg" },
+        action: "purchase",
+        createdAt: "2026-08-24T12:00:01.000Z",
+      },
+    ], 50);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual(expect.objectContaining({
+      id: "server_movement_1",
+      productName: "Rice",
+      unit: "kg",
+      sync_status: "synced",
     }));
   });
 

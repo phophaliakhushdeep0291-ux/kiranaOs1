@@ -46,7 +46,7 @@ export function normalizeInventoryLedgerEntry(raw: Record<string, unknown>): Inv
   return {
     ...raw,
     id: String(raw.id ?? raw.clientMovementId ?? raw.client_movement_id ?? ""),
-    productName: String(raw.productName ?? raw.product_name ?? ""),
+    productName: String(raw.productName ?? raw.product_name ?? product?.name ?? ""),
     action: String(raw.action ?? raw.type ?? "movement"),
     quantityDelta: Number(raw.quantityDelta ?? raw.quantity_delta ?? raw.changeBaseQty ?? 0),
     stockBefore: Number(raw.stockBefore ?? raw.stock_before ?? raw.oldStockBaseQty ?? 0),
@@ -59,6 +59,65 @@ export function normalizeInventoryLedgerEntry(raw: Record<string, unknown>): Inv
     createdAt: String(raw.createdAt ?? raw.created_at ?? new Date(0).toISOString()),
     sync_status: raw.sync_status ?? "synced",
   };
+}
+
+const UNSYNCED_LEDGER_STATUSES = new Set(["local_only", "pending_sync", "syncing", "failed", "conflict"]);
+
+function isUnsyncedLedgerEntry(raw: Record<string, unknown>): boolean {
+  return UNSYNCED_LEDGER_STATUSES.has(String(raw.sync_status ?? raw.syncStatus ?? raw.status ?? "").toLowerCase());
+}
+
+function ledgerProductId(raw: Record<string, unknown>): string {
+  return String(raw.productId ?? raw.product_id ?? "");
+}
+
+function readCachedActiveProductIds(): Set<string> {
+  const rows = [
+    ...readInstantCache<Product[]>(PRODUCTS_CACHE_KEY, []),
+    ...readInstantCache<InventoryItem[]>(INVENTORY_CACHE_KEY, []),
+  ];
+  return new Set(rows
+    .filter((row) => row.deletedAt == null && (row as { deleted_at?: unknown }).deleted_at == null)
+    .map((row) => String(row.id ?? ""))
+    .filter(Boolean));
+}
+
+export function keepInventoryLedgerRowsWithActiveProducts(
+  rows: Record<string, unknown>[],
+  activeProductIds: ReadonlySet<string>,
+): Record<string, unknown>[] {
+  return rows.filter((row) => {
+    const productId = ledgerProductId(row);
+    return productId.length > 0 && activeProductIds.has(productId);
+  });
+}
+
+/**
+ * Reconcile an authoritative server ledger page with local work that has not
+ * reached the server yet. Synced cache rows are deliberately not carried over:
+ * retaining them made a previous shop's history immortal even after a clean
+ * server response and after the scoped IndexedDB tables had been repaired.
+ */
+export function reconcileInventoryLedgerEntries(
+  localEntries: Record<string, unknown>[],
+  serverEntries: Record<string, unknown>[],
+  limit = 50,
+): InventoryLedgerDisplayEntry[] {
+  const merged = new Map<string, InventoryLedgerDisplayEntry>();
+  for (const raw of localEntries) {
+    if (!isUnsyncedLedgerEntry(raw)) continue;
+    const entry = normalizeInventoryLedgerEntry(raw);
+    if (entry.id) merged.set(entry.id, entry);
+  }
+  for (const raw of serverEntries) {
+    const entry = normalizeInventoryLedgerEntry(raw);
+    const clientMovementId = String(raw.clientMovementId ?? raw.client_movement_id ?? "");
+    if (clientMovementId) merged.delete(clientMovementId);
+    if (entry.id) merged.set(entry.id, entry);
+  }
+  return [...merged.values()]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, Number.isFinite(limit) ? limit : 50);
 }
 
 function readCachedInventory(): InventoryItem[] {
@@ -175,7 +234,10 @@ export function useGetStockLedger(
   const extra = getQueryOptions<InventoryLedgerResponse, StockLedgerQueryKey>(options);
   const limit = Number(params?.limit ?? 50);
   const readCachedLedger = () => {
-    const cachedEntries = readInstantCache<Record<string, unknown>[]>(INVENTORY_MOVEMENTS_CACHE_KEY, [])
+    const cachedEntries = keepInventoryLedgerRowsWithActiveProducts(
+      readInstantCache<Record<string, unknown>[]>(INVENTORY_MOVEMENTS_CACHE_KEY, []),
+      readCachedActiveProductIds(),
+    )
       .map(normalizeInventoryLedgerEntry);
     return { entries: cachedEntries.slice(0, Number.isFinite(limit) ? limit : 50), total: cachedEntries.length };
   };
@@ -184,25 +246,28 @@ export function useGetStockLedger(
     ...extra,
     queryKey: getGetStockLedgerQueryKey(params),
     initialData: extra.initialData ?? cached,
-    // Dated so the cached rows paint instantly without posing as the server's
-    // answer: undated initialData counts as fresh from now, so nothing refetches
-    // until staleTime lapses and the screen stays pinned to the cache.
-    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(INVENTORY_MOVEMENTS_CACHE_KEY),
+    // Ledger history is security-sensitive during an account/shop switch. Paint
+    // the scoped cache immediately, but always validate it against the server on
+    // mount instead of allowing a recent cache write to postpone that fetch.
+    initialDataUpdatedAt: extra.initialDataUpdatedAt ?? 0,
     queryFn: async () => {
       const liveCached = readCachedLedger();
       if (!isBrowserOnline()) return liveCached;
       try {
         const response = await inventoryApi.getStockLedger(params) as LedgerResult<Record<string, unknown>>;
-        const merged = new Map(liveCached.entries.map((entry) => [entry.id, entry]));
-        for (const raw of response.entries ?? []) {
-          const entry = normalizeInventoryLedgerEntry(raw);
-          const clientMovementId = String(raw.clientMovementId ?? raw.client_movement_id ?? "");
-          if (clientMovementId) merged.delete(clientMovementId);
-          merged.set(entry.id, entry);
-        }
-        const entries = [...merged.values()]
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-          .slice(0, Number.isFinite(limit) ? limit : 50);
+        const [indexedRows, indexedProducts] = await Promise.all([
+          offlineDB.getAll<Record<string, unknown>>(INVENTORY_MOVEMENTS_CACHE_KEY).catch(() => []),
+          offlineDB.getAll<Product>(PRODUCTS_CACHE_KEY).catch(() => []),
+        ]);
+        const activeProductIds = new Set(indexedProducts
+          .filter((product) => product.deletedAt == null && (product as { deleted_at?: unknown }).deleted_at == null)
+          .map((product) => String(product.id ?? ""))
+          .filter(Boolean));
+        const entries = reconcileInventoryLedgerEntries(
+          keepInventoryLedgerRowsWithActiveProducts([...liveCached.entries, ...indexedRows], activeProductIds),
+          response.entries ?? [],
+          limit,
+        );
         writeInstantCache(INVENTORY_MOVEMENTS_CACHE_KEY, entries);
         return { ...response, entries, total: Math.max(response.total ?? 0, entries.length) };
       } catch (error) {

@@ -737,6 +737,13 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
 export async function getLedger(shopId, { productId, action, locationId, from, to, page, limit }) {
   const where = {
     shopId,
+    // StockLedger has its own shopId for efficient tenant-scoped reads, but its
+    // product relation is keyed only by productId. Keep the relation in the
+    // tenant boundary as well: this prevents a legacy or malformed row whose
+    // ledger shop was mislabelled from exposing another shop's product history.
+    // Deleted products are absent from the active inventory, so their movements
+    // must not survive as nameless "legacy" rows on that screen either.
+    product: { is: { shopId, deletedAt: null } },
     ...(productId && { productId }),
     ...(action && { action }),
     ...(locationId && { locationId }),
@@ -751,7 +758,7 @@ export async function getLedger(shopId, { productId, action, locationId, from, t
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
-      include: { product: { select: { baseUnit: true } } },
+      include: { product: { select: { name: true, baseUnit: true } } },
     }),
     db.stockLedger.count({ where }),
   ]);
@@ -759,6 +766,9 @@ export async function getLedger(shopId, { productId, action, locationId, from, t
   return {
     entries: entries.map(({ product, ...entry }) => ({
       ...entry,
+      productName: typeof entry.productName === "string" && entry.productName.trim()
+        ? entry.productName
+        : product?.name ?? "",
       unit: product?.baseUnit ?? null,
     })),
     total,
