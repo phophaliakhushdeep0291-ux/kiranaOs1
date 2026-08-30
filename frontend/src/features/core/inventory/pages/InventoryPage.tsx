@@ -1221,10 +1221,33 @@ const INVENTORY_TONES: Record<InventoryTone, string> = {
   orange: "border-[#ffd7ae] bg-[#fff3e7] text-[#ff7a00]",
 };
 
+/**
+ * The badge belongs with the label, not beside the value.
+ *
+ * It used to share a flex row with the number, and neither would give way: the
+ * badge is `shrink-0`, and a text node will not shrink below its own width
+ * without `min-w-0`. On a 375px phone this card's content box is 137px, and at
+ * a real shop's stock value — "₹6,31,945.05" measures 131px at 21px bold — the
+ * pair needs about 179px. The card is `overflow: visible`, so the badge escaped
+ * and landed on top of the card beside it.
+ *
+ * Giving the number the full width fixes it by construction rather than by
+ * clamping. A label is short and leaves the badge room, and a money figure is
+ * never truncated to make a layout work — a shopkeeper reading a stock value
+ * needs all of it. `break-words` is the backstop for a figure longer than any
+ * shop this is sold to.
+ *
+ * It only appeared with real data: at ₹5,000 everything fits, which is why
+ * seeded QA never saw it.
+ */
 function InventoryMetricCard({ label, value, detail, tone, icon }: { label: string; value: string; detail: string; tone: InventoryTone; icon: ReactNode }) {
   return (
     <div className="min-h-[108px] rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-medium text-[#6d7c98]">{label}</p><p className="mt-2 text-[21px] font-bold leading-none text-[#13223f]">{value}</p></div><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border ${INVENTORY_TONES[tone]}`}>{icon}</span></div>
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 text-[11px] font-medium text-[#6d7c98]">{label}</p>
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border ${INVENTORY_TONES[tone]}`}>{icon}</span>
+      </div>
+      <p className="mt-2 break-words text-[21px] font-bold leading-none tabular-nums text-[#13223f]">{value}</p>
       <p className={`mt-3 text-[10px] font-medium ${tone === "green" ? "text-[#15803d]" : "text-[#718096]"}`}>{detail}</p>
     </div>
   );
