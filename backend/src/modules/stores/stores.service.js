@@ -141,25 +141,41 @@ export async function ensurePrimaryLocation(shopId, client = db) {
   // Several freshly opened tabs can request the location list together. A
   // find-then-create sequence makes all of them observe "missing" and turns the
   // expected loser into a noisy P2002 (or, with SQLite, a fatal concurrent-write
-  // edge). The shop/code unique key makes this initialization atomic.
-  return client.storeLocation.upsert({
-    where: { shopId_code: { shopId, code: "MAIN" } },
-    create: {
-        shopId,
-        code: "MAIN",
-        name: `${shop.name} - Main`,
-        address: shop.address,
-        city: shop.city,
-        gstNumber: registration.gstNumber ?? null,
-        gstStateCode: registration.gstStateCode ?? null,
-        gstLegalName: registration.gstLegalName ?? shop.name,
-        gstTradeName: shop.name,
-        gstRegistrationType: registration.gstRegistrationType ?? (shop.gstNumber ? "regular" : "unregistered"),
-        phone: shop.phone,
-        isPrimary: true,
-    },
-    update: {},
-  });
+  // edge). The shop/code unique key gives the expected loser one authoritative
+  // row to resolve below.
+  const mainLocation = {
+    shopId,
+    code: "MAIN",
+    name: `${shop.name} - Main`,
+    address: shop.address,
+    city: shop.city,
+    gstNumber: registration.gstNumber ?? null,
+    gstStateCode: registration.gstStateCode ?? null,
+    gstLegalName: registration.gstLegalName ?? shop.name,
+    gstTradeName: shop.name,
+    gstRegistrationType: registration.gstRegistrationType ?? (shop.gstNumber ? "regular" : "unregistered"),
+    phone: shop.phone,
+    isPrimary: true,
+  };
+  try {
+    return await client.storeLocation.upsert({
+      where: { shopId_code: { shopId, code: "MAIN" } },
+      create: mainLocation,
+      update: {},
+    });
+  } catch (error) {
+    // Prisma can implement an upsert as SELECT + INSERT. Under PostgreSQL two
+    // genuinely parallel first requests may therefore both choose INSERT and
+    // one loses on the unique (shopId, code) key. The winner has already made
+    // the exact row we need, so resolve that row instead of turning a harmless
+    // startup race into a 409 on billing, barcode binding, or location loading.
+    if (error?.code !== "P2002") throw error;
+    const racedLocation = await client.storeLocation.findUnique({
+      where: { shopId_code: { shopId, code: "MAIN" } },
+    });
+    if (racedLocation) return racedLocation;
+    throw error;
+  }
 }
 
 export async function listLocations(shopId, user = null) {
