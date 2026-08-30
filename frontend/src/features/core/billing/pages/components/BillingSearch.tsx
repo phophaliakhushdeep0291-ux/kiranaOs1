@@ -108,6 +108,12 @@ interface BillingSearchProps {
   allProducts: Product[];
   onAddProduct: (product: Product, sellingUnit?: ProductSellingUnit) => void;
   /**
+   * The multiplier the cashier typed (`3*rice`), or null. Display only — the
+   * page applies it when the item is added, so this component never has to
+   * know the difference between an untyped default and an explicit one.
+   */
+  typedQuantity?: number | null;
+  /**
    * Capture-on-first-scan: bind the scanned code to this product, then add it to the cart.
    * Rejects when the code is already owned; the sheet shows the reason and stays open.
    */
@@ -157,6 +163,7 @@ export function BillingSearch({
   filteredProducts,
   allProducts,
   onAddProduct,
+  typedQuantity = null,
   onBindBarcode,
   onCreateProductWithBarcode,
   categories,
@@ -888,9 +895,22 @@ export function BillingSearch({
           ) : (
             <>
               {search && (
-                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#536383]">
-                  {filteredProducts.length === 1 ? t("billing.search.resultCount", { count: filteredProducts.length }) : t("billing.search.resultCountPlural", { count: filteredProducts.length })}
-                </p>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#536383]">
+                    {filteredProducts.length === 1 ? t("billing.search.resultCount", { count: filteredProducts.length }) : t("billing.search.resultCountPlural", { count: filteredProducts.length })}
+                  </p>
+                  {/* A typed multiplier changes what tapping a card does, so it
+                      has to be on screen. Silent quantity is how a cashier
+                      bills three of something and finds out at the total. */}
+                  {typedQuantity != null && (
+                    <span
+                      data-testid="typed-quantity-badge"
+                      className="rounded-full bg-[#eaf1ff] px-2.5 py-1 text-xs font-semibold tabular-nums text-[#1b4dbb]"
+                    >
+                      {t("billing.search.addingQuantity", { count: typedQuantity })}
+                    </span>
+                  )}
+                </div>
               )}
 
               {/* Keep cards comfortably scannable at counter-sized laptop widths. */}

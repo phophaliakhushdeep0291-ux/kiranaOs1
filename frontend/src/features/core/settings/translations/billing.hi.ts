@@ -318,6 +318,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.search.noResultsFor": "\"{term}\" कुछ नहीं मिला",
   "billing.search.resultCount": "{count} मिला",
   "billing.search.resultCountPlural": "{count} मिले",
+  "billing.search.addingQuantity": "{count} × जोड़ रहे हैं",
   "billing.search.itemSingular": "चीज़",
 
   "billing.page.internetRequired": "इंटरनेट चाहिए",
