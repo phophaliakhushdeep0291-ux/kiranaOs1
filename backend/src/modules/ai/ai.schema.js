@@ -22,6 +22,34 @@ export const parseCommandSchema = z.object({
   }).strict().optional(),
 }).strict();
 
+/**
+ * One turn of conversation with the agent.
+ *
+ * History is capped here as well as in the service: an unbounded transcript is
+ * a way to push the system prompt out of the model's attention, and it is a way
+ * to run up a token bill on someone else's key.
+ */
+export const agentChatSchema = z.object({
+  message: z.string().trim().min(1, "Say what you need").max(2_000),
+  history: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string().max(4_000),
+  }).strict()).max(20).optional(),
+  // The shop's UI language. Optional, and absent means Hindi rather than
+  // English: that is this app's default, and a till that omits the field is far
+  // more likely to be a Hindi shop than an English one.
+  language: z.enum(["hi", "en"]).optional(),
+}).strict();
+
+/**
+ * The plan is referenced, never re-sent. A body carrying tool names and
+ * arguments would be a way around both the model and the confirmation the
+ * shopkeeper just gave.
+ */
+export const agentPlanSchema = z.object({
+  planId: z.string().trim().min(1).max(60),
+}).strict();
+
 export const logActionSchema = z.object({
   transcript: z.string().max(2_000),
   parsedAction: z.record(z.unknown()),

@@ -9,7 +9,7 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default("15m"),
   // Groq — free tier, recommended (https://console.groq.com)
   GROQ_API_KEY: z.string().optional(),
-  GROQ_MODEL: z.string().default("llama3-8b-8192"),
+  GROQ_MODEL: z.string().default("openai/gpt-oss-20b"),
   GROQ_TRANSCRIBE_MODEL: z.string().default("whisper-large-v3-turbo"),
   // OpenAI — paid fallback
   OPENAI_API_KEY: z.string().optional(),

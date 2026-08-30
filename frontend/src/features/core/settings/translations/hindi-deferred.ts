@@ -10,6 +10,7 @@
 //
 // Nothing here may be imported statically from shell code — that would defeat
 // the split and put the tables back into the startup download.
+import { assistantHi } from "./assistant.hi";
 import { assuranceHi } from "./assurance.hi";
 import { customersHi } from "./customers.hi";
 import { inventoryHi } from "./inventory.hi";
@@ -26,6 +27,7 @@ import { workflowsHi } from "./workflows.hi";
 
 export const hindiDeferredTranslations = {
   ...productsHi,
+  ...assistantHi,
   ...assuranceHi,
   ...customersHi,
   ...restaurantHi,
@@ -43,6 +45,7 @@ export const hindiDeferredTranslations = {
 /** Registered deferred modules. `hindi.ts` re-exports these into HI_MODULES. */
 export const HI_DEFERRED_MODULES = {
   products: productsHi,
+  assistant: assistantHi,
   assurance: assuranceHi,
   customers: customersHi,
   restaurant: restaurantHi,

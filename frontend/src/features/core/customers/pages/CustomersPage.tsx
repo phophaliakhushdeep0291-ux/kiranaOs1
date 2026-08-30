@@ -1015,7 +1015,7 @@ export default function CustomersPage() {
           </DropdownMenu>
           <Button variant="outline" onClick={exportCustomers} className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Download size={16} />{t("customers.export")}</Button>
           <Button variant="outline" onClick={() => openPayment()} className="h-12 w-full gap-2 rounded-[14px] border-[var(--brand-border)] bg-[var(--brand-softer)] px-3 text-[11px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] lg:h-11 lg:w-auto lg:rounded-[10px]"><Wallet size={16} />{t("customers.collectPayment")}</Button>
-          <Button onClick={openCreate} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] px-3 text-[11px] font-bold shadow-[0_8px_18px_var(--brand-shadow)] hover:from-[var(--brand-strong)] hover:to-[var(--brand-strong)] lg:h-11 lg:w-auto lg:rounded-[10px] lg:px-[18px]"><Plus size={16} className="shrink-0" /><span>{t("customers.list.addCustomer")}</span></Button>
+          <Button onClick={openCreate} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-[#174ea6] px-3 text-[11px] font-bold text-white shadow-[0_8px_18px_rgba(23,78,166,0.2)] hover:bg-[#123f86] lg:h-11 lg:w-auto lg:rounded-[10px] lg:px-[18px]"><Plus size={16} className="shrink-0" /><span>{t("customers.list.addCustomer")}</span></Button>
         </div>
       </section>
 

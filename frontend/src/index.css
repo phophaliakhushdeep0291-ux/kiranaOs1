@@ -2409,33 +2409,21 @@ html[data-density="compact"] {
   }
 
   /* Horizontal rails ------------------------------------------------------
-     Filter chips and category strips scroll sideways, but a row that ends
-     flush at the screen edge reads as "that is all there is". Fading the last
-     few pixels is the standing cue that the rail continues.
-
-     PUT ONLY CHIPS IN HERE. A rail is the wrong home for anything that opens a
-     dialog, popover or sheet, for two reasons:
-       • it scrolls, so a shop with a few more categories pushes the control
-         hundreds of pixels past the right edge where nobody will find it;
-       • `mask-image` below makes this element the containing block for
-         `position: fixed` descendants, so a modal rendered from inside stops
-         covering the viewport and collapses into the 44px rail — clipped by
-         this very mask. Billing's "Order QR" did exactly that.
-     Pin such controls as a sibling of the rail instead. */
+     Keep these as ordinary overflow containers. A previous fade implemented
+     with `mask-image` made visible chip text's effective background impossible
+     for contrast engines to determine and changed the containing block for
+     fixed descendants. Billing already pins dialog actions beside the rail;
+     the native clipped edge and horizontal gesture now provide the overflow
+     cue without obscuring the last chip. */
   .scroll-rail {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 22px), transparent 100%);
   }
 
   .scroll-rail::-webkit-scrollbar {
     display: none;
   }
 
-  /* A rail scrolled to its end has nothing left to hint at. */
-  .scroll-rail[data-rail-end="true"] {
-    mask-image: none;
-  }
 }
 
 @media (max-width: 374px) {
