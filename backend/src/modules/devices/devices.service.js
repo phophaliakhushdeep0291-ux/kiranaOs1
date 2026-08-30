@@ -536,57 +536,6 @@ async function getActiveSessionDeviceIds(shopId, client = db) {
   return new Set(sessionDeviceIds.filter((deviceId) => !inactiveDeviceIds.has(deviceId)));
 }
 
-async function getActiveDeviceSessionRows(shopId) {
-  return db.session.findMany({
-    where: {
-      shopId,
-      revokedAt: null,
-      expiresAt: { gt: new Date() },
-      deviceId: { not: null },
-    },
-    select: {
-      id: true,
-      userId: true,
-      deviceId: true,
-      userAgent: true,
-      ipAddress: true,
-      createdAt: true,
-      user: { select: { id: true, name: true, role: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-}
-
-function serializeActiveDeviceRows(rows, currentDeviceId = null, deviceById = new Map()) {
-  const byDevice = new Map();
-  for (const row of rows) {
-    const deviceId = row.deviceId;
-    if (!deviceId) continue;
-    const device = deviceById.get(deviceId);
-    const existing = byDevice.get(deviceId);
-    if (!existing) {
-      byDevice.set(deviceId, {
-        deviceId,
-        deviceName: device?.deviceName ?? inferDeviceName(row.userAgent),
-        platform: device?.platform ?? null,
-        lastSeenAt: device?.lastActiveAt ?? row.createdAt,
-        current: Boolean(currentDeviceId && deviceId === currentDeviceId),
-        userId: row.userId,
-        userName: row.user?.name ?? null,
-        userRole: row.user?.role ?? null,
-        sessionCount: 1,
-      });
-    } else {
-      existing.sessionCount += 1;
-      if (new Date(row.createdAt).getTime() > new Date(existing.lastSeenAt).getTime()) {
-        existing.lastSeenAt = row.createdAt;
-      }
-      if (currentDeviceId && deviceId === currentDeviceId) existing.current = true;
-    }
-  }
-  return [...byDevice.values()].sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime());
-}
-
 function inferDeviceName(userAgent) {
   const ua = String(userAgent || "");
   if (/Android/i.test(ua)) return "Android browser";

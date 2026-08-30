@@ -385,13 +385,6 @@ function formatMoney(value) {
   return `Rs. ${Number(value ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function formatPeriod(params) {
-  const from = params.from ?? params.date ?? null;
-  const to = params.to ?? params.date ?? null;
-  if (!from && !to) return "All time";
-  return `${String(from ?? "").slice(0, 10)} to ${String(to ?? "").slice(0, 10)}`;
-}
-
 async function buildReportPdf(shopId, reportType, params) {
   const shop = await db.shop.findUnique({
     where: { id: shopId },

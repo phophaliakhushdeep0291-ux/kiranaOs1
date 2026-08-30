@@ -7,6 +7,7 @@ import {
   buildBankCandidateSuggestions,
   parseBankStatementCsv,
 } from "../src/modules/finance/bank-reconciliation.service.js";
+import { RESTORABLE_SHOP_MODELS } from "../src/modules/backups/backup-policy.js";
 
 const account = { accountType: "bank", accountName: "HDFC current", accountLast4: "1234" };
 
@@ -176,12 +177,16 @@ for (const path of [
 }
 
 const backupSource = fs.readFileSync(new URL("../src/modules/backups/backup.service.js", import.meta.url), "utf8");
+// The tenant backup walks RESTORABLE_SHOP_MODELS instead of naming each delegate,
+// so membership in that registry is what actually decides whether these tables
+// survive a restore. This used to grep the service source for `findMany` calls,
+// which kept passing against a superseded builder nothing called any more.
 for (const model of [
-  "bankStatementImport.findMany",
-  "bankStatementTransaction.findMany",
-  "bankReconciliationAllocation.findMany",
-  "bankReconciliationEvent.findMany",
-]) assert.ok(backupSource.includes(model), `encrypted tenant backup must include ${model}`);
+  "BankStatementImport",
+  "BankStatementTransaction",
+  "BankReconciliationAllocation",
+  "BankReconciliationEvent",
+]) assert.ok(RESTORABLE_SHOP_MODELS.includes(model), `encrypted tenant backup must include ${model}`);
 // Pinned on purpose: adding a model to the tenant backup must be a deliberate
 // act, so bumping BACKUP_SCHEMA_VERSION is expected to fail here until the new
 // shape has been reviewed. Last reviewed for complete transactional restore,
