@@ -96,6 +96,8 @@ interface BillingSummaryProps {
   retailPaymentVerified: boolean;
   retailPaymentLoading: boolean;
   onVerifyRetailPayment: () => void;
+  upiReference: string;
+  setUpiReference: (value: string) => void;
   cardTerminalConfigured: boolean;
   cardTerminalApproved: boolean;
   cardTerminalLoading: boolean;
@@ -233,6 +235,8 @@ export function BillingSummary({
   retailPaymentVerified,
   retailPaymentLoading,
   onVerifyRetailPayment,
+  upiReference,
+  setUpiReference,
   cardTerminalConfigured,
   cardTerminalApproved,
   cardTerminalLoading,
@@ -743,6 +747,8 @@ export function BillingSummary({
             retailPaymentVerified={retailPaymentVerified}
             retailPaymentLoading={retailPaymentLoading}
             onVerifyRetailPayment={onVerifyRetailPayment}
+            upiReference={upiReference}
+            setUpiReference={setUpiReference}
             cardTerminalConfigured={cardTerminalConfigured}
             cardTerminalApproved={cardTerminalApproved}
             cardTerminalLoading={cardTerminalLoading}

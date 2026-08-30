@@ -66,6 +66,13 @@ const paymentSchema = z.object({
   idempotency_key: z.string().min(1).optional(),
   retailPaymentIntentId: z.string().min(1).optional(),
   retail_payment_intent_id: z.string().min(1).optional(),
+  // The UTR a cashier reads off their own bank alert after a guest pays the
+  // shop's UPI QR. Nothing about it confirms the payment — there is no provider
+  // in that flow and nothing tells this software the money arrived. It is the
+  // one string that makes an otherwise unverifiable claim reconcilable against a
+  // statement at day close, which is the only reason to collect it.
+  upiReference: z.string().trim().regex(/^[A-Za-z0-9-]{6,35}$/, "A UPI reference is 6-35 letters, numbers or hyphens").optional(),
+  upi_reference: z.string().trim().regex(/^[A-Za-z0-9-]{6,35}$/, "A UPI reference is 6-35 letters, numbers or hyphens").optional(),
 });
 
 export const confirmBillSchema = z.object({

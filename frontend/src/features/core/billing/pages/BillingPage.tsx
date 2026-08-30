@@ -142,6 +142,11 @@ function clearBillingDraft() {
   void offlineDB.delete("settings", BILLING_DRAFT_KEY).catch(() => undefined);
 }
 
+function normalizeUpiReference(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.replace(/[^A-Za-z0-9-]/g, "").slice(0, 35);
+}
+
 async function loadSettingList<T>(key: string, fallback: T[]): Promise<T[]> {
   return (await offlineDB.getSetting<T[]>(key).catch(() => null)) ?? fallback;
 }
@@ -195,6 +200,7 @@ export default function Billing() {
   const [paidAmount, setPaidAmount] = useState<number | "">(() => readBillingDraft().paidAmount ?? "");
   const [splitCashAmount, setSplitCashAmount] = useState<number | "">(() => readBillingDraft().splitCashAmount ?? "");
   const [splitUpiAmount, setSplitUpiAmount] = useState<number | "">(() => readBillingDraft().splitUpiAmount ?? "");
+  const [upiReference, setUpiReference] = useState(() => normalizeUpiReference(readBillingDraft().upiReference));
   const [allowAdvancePayment, setAllowAdvancePayment] = useState(() => readBillingDraft().allowAdvancePayment === true);
   const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
@@ -650,6 +656,7 @@ export default function Billing() {
           setPaidAmount(draft.paidAmount ?? "");
           setSplitCashAmount(draft.splitCashAmount ?? "");
           setSplitUpiAmount(draft.splitUpiAmount ?? "");
+          setUpiReference(normalizeUpiReference(draft.upiReference));
           // `=== true`, never `?? false`: the draft is unvalidated persisted JSON, and
           // ?? only replaces null/undefined — a stored 0/1 would flow through as a
           // NUMBER and every save would then fail Zod with "Expected boolean, received
@@ -674,8 +681,8 @@ export default function Billing() {
 
   useEffect(() => {
     if (!draftHydrated) return;
-    writeBillingDraft({ activeBillId, sourceOrderId, sourceOrderFingerprint, cart, discount: safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
-  }, [draftHydrated, activeBillId, sourceOrderId, sourceOrderFingerprint, cart, safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
+    writeBillingDraft({ activeBillId, sourceOrderId, sourceOrderFingerprint, cart, discount: safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, upiReference, allowAdvancePayment });
+  }, [draftHydrated, activeBillId, sourceOrderId, sourceOrderFingerprint, cart, safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, upiReference, allowAdvancePayment]);
 
   // Re-price the cart when a pricing input changes (customer, group, payment
   // mode, or the shop's rules). Manual/custom lines keep the cashier's price;
@@ -716,6 +723,7 @@ export default function Billing() {
     setPaidAmount("");
     setSplitCashAmount("");
     setSplitUpiAmount("");
+    setUpiReference("");
     setAllowAdvancePayment(false);
   }, [billType, draftHydrated]);
 
@@ -1630,6 +1638,11 @@ export default function Billing() {
       toast({ title: t("billing.page.verifyUpiPayment"), description: t("billing.page.providerRequired"), variant: "destructive" });
       return;
     }
+    const manualUpiReference = normalizeUpiReference(upiReference);
+    if (upiTenderPaise > 0 && !retailPaymentVerified && manualUpiReference.length > 0 && manualUpiReference.length < 6) {
+      toast({ title: t("billing.pay.upi.utrLabel"), description: t("billing.pay.upi.utrInvalid"), variant: "destructive" });
+      return;
+    }
 
     if (negativeStockWarnings.length > 0) {
       const first = negativeStockWarnings[0];
@@ -1661,7 +1674,7 @@ export default function Billing() {
     const payments = paymentMode === SPLIT_PAYMENT
       ? [
           ...(splitCash > 0 ? [{ mode: BillPaymentMode.cash, amount: splitCash }] : []),
-          ...(splitUpi > 0 ? [{ mode: BillPaymentMode.upi, amount: splitUpi, ...(retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : {}) }] : []),
+          ...(splitUpi > 0 ? [{ mode: BillPaymentMode.upi, amount: splitUpi, ...(retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : manualUpiReference ? { upiReference: manualUpiReference } : {}) }] : []),
           ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
         ]
       : paymentMode === BillPaymentMode.credit || isUdharEntry
@@ -1676,6 +1689,7 @@ export default function Billing() {
               mode: paymentMode,
               amount: paid,
               ...(paymentMode === BillPaymentMode.upi && retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : {}),
+              ...(paymentMode === BillPaymentMode.upi && !retailPaymentVerified && manualUpiReference ? { upiReference: manualUpiReference } : {}),
               ...(paymentMode === BillPaymentMode.bank && cardPaymentApproved ? { retailPaymentIntentId: approvedCardPayment?.intentId } : {}),
             }] : []),
             ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
@@ -1789,6 +1803,7 @@ export default function Billing() {
       paidAmount,
       splitCashAmount,
       splitUpiAmount,
+      upiReference,
       allowAdvancePayment,
     };
   }
@@ -1809,6 +1824,7 @@ export default function Billing() {
     setPaidAmount(bill.paidAmount ?? "");
     setSplitCashAmount(bill.splitCashAmount ?? "");
     setSplitUpiAmount(bill.splitUpiAmount ?? "");
+    setUpiReference(normalizeUpiReference(bill.upiReference));
     setAllowAdvancePayment(bill.allowAdvancePayment === true);
     setDraftRestored(Boolean(bill.cart?.length));
   }
@@ -2209,6 +2225,8 @@ export default function Billing() {
         retailPaymentVerified={retailPaymentVerified}
         retailPaymentLoading={retailPaymentLoading}
         onVerifyRetailPayment={() => void handleVerifyRetailPayment()}
+        upiReference={upiReference}
+        setUpiReference={setUpiReference}
         giftCardCode={giftCardCode}
         setGiftCardCode={setGiftCardCode}
         giftCardBalance={giftCardBalance}

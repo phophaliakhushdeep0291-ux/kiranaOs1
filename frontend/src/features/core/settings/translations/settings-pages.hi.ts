@@ -1023,4 +1023,5 @@ export const settingsPagesHi: Record<keyof typeof settingsPagesEn, string> = {
   "settings.theme.orangeHelp": "जीवंत और खुशनुमा",
   "settings.theme.slate": "स्लेटी",
   "settings.theme.slateHelp": "सादा और सरल",
+  "settings.store.upiIdInvalid": "यह UPI ID जैसी नहीं लगती। यह name@bank जैसी होनी चाहिए।",
 };

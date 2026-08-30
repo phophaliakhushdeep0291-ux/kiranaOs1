@@ -657,4 +657,8 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.noun.items.styles": "स्टाइल",
   "billing.noun.items.models": "मॉडल",
   "billing.noun.items.titles": "किताबें",
+  "billing.pay.upi.utrLabel": "UPI रेफ़रेंस (UTR)",
+  "billing.pay.upi.utrPlaceholder": "जैसे 412345678901",
+  "billing.pay.upi.utrHelp": "वैकल्पिक, अपने भुगतान अलर्ट से। दिन के अंत में यही इस बिल को आपके बैंक स्टेटमेंट से मिलाता है।",
+  "billing.pay.upi.utrInvalid": "कम से कम 6 अक्षर या अंक डालें, या रेफ़रेंस खाली छोड़ें।",
 };

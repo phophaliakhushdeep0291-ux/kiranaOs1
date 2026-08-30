@@ -66,13 +66,14 @@ describe("open bills switcher helpers", () => {
       activeBillId: "active-1",
       sourceOrderId: "order-9",
       customerName: "Ramesh",
+      upiReference: "UTR90001111",
       cart: bill("seed", 2).cart,
     };
     const held = heldBillFromBillingDraft(draft);
-    expect(held).toMatchObject({ id: "active-1", sourceOrderId: "order-9", customerName: "Ramesh" });
+    expect(held).toMatchObject({ id: "active-1", sourceOrderId: "order-9", customerName: "Ramesh", upiReference: "UTR90001111" });
 
     const restored = billingDraftFromHeldBill(held!);
-    expect(restored).toMatchObject({ activeBillId: "active-1", sourceOrderId: "order-9", customerName: "Ramesh" });
+    expect(restored).toMatchObject({ activeBillId: "active-1", sourceOrderId: "order-9", customerName: "Ramesh", upiReference: "UTR90001111" });
     expect(restored.cart).toHaveLength(2);
   });
 });

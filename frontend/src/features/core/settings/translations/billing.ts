@@ -695,4 +695,8 @@ export const billingEn = {
   "billing.noun.items.styles": "styles",
   "billing.noun.items.models": "models",
   "billing.noun.items.titles": "titles",
+  "billing.pay.upi.utrLabel": "UPI reference (UTR)",
+  "billing.pay.upi.utrPlaceholder": "e.g. 412345678901",
+  "billing.pay.upi.utrHelp": "Optional, from your own payment alert. It is what matches this bill to your bank statement at day close.",
+  "billing.pay.upi.utrInvalid": "Enter at least 6 letters or numbers, or leave the reference empty.",
 } as const;

@@ -43,6 +43,39 @@ if (ctx.skip) {
       assert.equal(JSON.parse(audit.afterJson).grandTotal, 100);
     });
 
+    test("manual UPI references are reconcilable but never confirm a non-UPI payment", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });
+
+      const upiBill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 1,
+        ratePerRateUnit: 50,
+        buyerPaidAmount: 50,
+        payments: [{ mode: "upi", amount: 50, upiReference: "UTR90001111" }],
+      }), { token: ownerAuth.accessToken }), 201);
+      const upiPayment = await ctx.db.payment.findFirstOrThrow({ where: { billId: upiBill.id } });
+      assert.equal(upiPayment.provider, "manual");
+      assert.equal(upiPayment.providerReference, "UTR90001111");
+      assert.equal(upiPayment.confirmationSource, "manual");
+
+      const cashBill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 1,
+        ratePerRateUnit: 50,
+        buyerPaidAmount: 50,
+        payments: [{ mode: "cash", amount: 50, upiReference: "UTR-MUST-NOT-LEAK" }],
+      }), { token: ownerAuth.accessToken }), 201);
+      const cashPayment = await ctx.db.payment.findFirstOrThrow({ where: { billId: cashBill.id } });
+      assert.equal(cashPayment.providerReference, null);
+
+      const invalid = await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 1,
+        ratePerRateUnit: 50,
+        buyerPaidAmount: 50,
+        payments: [{ mode: "upi", amount: 50, upiReference: "bad!" }],
+      }), { token: ownerAuth.accessToken });
+      assertFailure(invalid, 400);
+    });
+
     test("bill creation rolls back bill, stock, and accounting when its required audit cannot be stored", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50, costPerRateUnit: 30 });
