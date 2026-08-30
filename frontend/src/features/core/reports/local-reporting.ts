@@ -11,6 +11,11 @@ import {
 } from "@/features/core/finance/services/FinancialAggregationService";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
 import { fromBaseQty, productDisplayUnit } from "@/features/core/products/pages/product-pricing";
+import {
+  findInventorySellingUnit,
+  inventoryDisplayQuantity,
+  inventoryMovementUnit,
+} from "@/features/core/inventory/stock-display";
 import { isMergedBillTwin } from "@/features/core/sync/bill-reconciliation";
 
 export interface DateRange {
@@ -542,8 +547,20 @@ function movementValue(
     movement.damageLossValue ?? movement.damage_loss_value ?? movement.valueImpact ?? movement.value_impact,
     0,
   );
-  const rateUnit = product ? (product.rateUnit ?? product.displayUnit ?? productDisplayUnit(product)) : undefined;
-  const quantityInRateUnit = product ? fromBaseQty(Math.abs(change), rateUnit) : Math.abs(change);
+  // Use the same selling-unit conversion as the Inventory screen. A selling-unit
+  // label can be a shop-facing name such as "Gram 1 Piece", which the generic
+  // mass/unit parser does not understand; treating that label as a raw base unit
+  // inflated a 10,000 g opening movement to 10,000 packs instead of 10 kg/packs.
+  const movementUnit = product ? inventoryMovementUnit(product) : undefined;
+  const sellingUnit = product ? findInventorySellingUnit(product, movementUnit) : undefined;
+  const quantityInRateUnit = product && sellingUnit && sellingUnit.conversionToBase > 0
+    ? inventoryDisplayQuantity(
+      { ...product, stockBaseQty: Math.abs(change) },
+      movementUnit,
+    )
+    : product
+      ? fromBaseQty(Math.abs(change), product.rateUnit ?? product.displayUnit ?? productDisplayUnit(product))
+      : Math.abs(change);
   const derivedValue = roundMoney(quantityInRateUnit * unitCost);
   const value = roundMoney(Math.abs((inbound && !outbound ? explicitInboundValue : explicitOutboundValue) || derivedValue));
   return {

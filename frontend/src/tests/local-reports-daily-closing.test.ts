@@ -523,6 +523,55 @@ describe("local reports and daily closing", () => {
     expect(snapshot.dailyTrend.at(-1)?.stockOut).toBe(1200);
   });
 
+  it("values named-pack opening stock with the same conversion as Inventory", async () => {
+    setRows({
+      products: [
+        product("product_named_pack", {
+          displayUnit: "Gram 1 Piece",
+          rateUnit: "Gram 1 Piece",
+          baseUnit: "gram",
+          stockBaseQty: 10_000,
+          costPerRateUnit: 680,
+          costPrice: 680,
+          sellingUnits: [
+            {
+              id: "unit_named_pack",
+              unitCode: "gram-1-piece",
+              name: "Gram 1 Piece",
+              unitType: "kg",
+              conversionToBase: 1_000,
+              isDefault: true,
+              isActive: true,
+            },
+          ],
+        }),
+      ],
+      inventory_movements: [
+        {
+          id: "opening_named_pack",
+          productId: "product_named_pack",
+          product_id: "product_named_pack",
+          productName: "Named pack",
+          type: "opening_stock",
+          action: "opening_stock",
+          changeBaseQty: 10_000,
+          change_base_qty: 10_000,
+          createdAt: "2026-06-06T12:00:00.000Z",
+          created_at: "2026-06-06T12:00:00.000Z",
+          sync_status: "synced",
+          ...scope,
+        },
+      ],
+    });
+
+    const snapshot = await buildLocalReportSnapshot({
+      from: "2026-06-06",
+      to: "2026-06-06",
+    });
+
+    expect(snapshot.stockMovement.totalIn).toBe(6_800);
+    expect(snapshot.dailyTrend.at(-1)?.stockIn).toBe(6_800);
+  });
   it("profit estimate uses item cost before product cost", async () => {
     setRows({
       bills: [
