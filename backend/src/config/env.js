@@ -108,6 +108,10 @@ const envSchema = z.object({
   ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   REDIS_URL: z.string().optional(),
   QUEUES_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  // auto keeps one-service deployments affordable: API + worker when queues
+  // are enabled, API only otherwise. api/worker allow a later split into two
+  // independently scaled Railway services without changing the image.
+  PROCESS_ROLE: z.enum(["auto", "api", "worker", "all"]).default("auto"),
   // §11 event streaming. "none" keeps the platform byte-identical to before;
   // "redis" uses Redis Streams; "kafka" is reserved for a future adapter.
   EVENT_BUS_PROVIDER: z.enum(["none", "redis", "kafka"]).default("none"),

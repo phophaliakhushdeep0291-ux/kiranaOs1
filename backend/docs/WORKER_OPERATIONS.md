@@ -4,17 +4,24 @@ Phase 23 makes background worker readiness visible. Queues being enabled is not 
 
 ## Required production setup
 
-Run the API process and the worker process separately:
+For a single Railway service, use the supervised runtime. With
+`QUEUES_ENABLED=true` it starts the API and worker as separate child processes
+and restarts the whole container if either one stops:
 
 ```bash
-npm start
-npm run worker
+npm run start:runtime
 ```
+
+`PROCESS_ROLE=auto` is the default. To scale them separately later, deploy the
+same image twice with `PROCESS_ROLE=api` on the web service and
+`PROCESS_ROLE=worker` on the worker service. `npm run worker` remains useful for
+local development and direct worker-only operation.
 
 Use the same `REDIS_URL`, `DATABASE_URL`, and secrets for both processes. Set:
 
 ```env
 QUEUES_ENABLED=true
+PROCESS_ROLE=auto
 REDIS_URL=redis://...
 WORKER_CONCURRENCY=3
 WORKER_HEARTBEAT_INTERVAL_MS=30000

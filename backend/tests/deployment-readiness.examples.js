@@ -23,6 +23,7 @@ const pkg = JSON.parse(read("package.json"));
 for (const scriptName of [
   "dev",
   "start",
+  "start:runtime",
   "prisma:generate",
   "prisma:migrate",
   "prisma:deploy",
@@ -52,7 +53,7 @@ assert.ok(app.includes("requestLogger"), "request logging middleware must be wir
 const dockerfile = read("Dockerfile");
 assert.ok(dockerfile.includes("npm run deploy:migrate:postgres"), "Dockerfile must run Postgres prisma deploy helper before start");
 assert.ok(dockerfile.includes("npm run prisma:generate:postgres"), "Dockerfile must generate Prisma client before/after migration");
-assert.ok(dockerfile.includes("npm run deploy:migrate:postgres && npm start"), "Dockerfile must deploy migrations and verify schema during startup");
+assert.ok(dockerfile.includes("npm run deploy:migrate:postgres") && dockerfile.includes("npm run start:runtime"), "Dockerfile must deploy migrations, verify schema, and start the supervised API/worker runtime");
 assert.ok(dockerfile.includes("HEALTHCHECK"), "Dockerfile must include health check");
 
 const compose = read("docker-compose.yml");
