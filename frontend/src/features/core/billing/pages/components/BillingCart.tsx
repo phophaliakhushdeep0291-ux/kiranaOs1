@@ -35,7 +35,7 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onU
           <ShoppingCart size={20} aria-hidden="true" />
         </span>
         <div>
-          <p className="text-sm font-bold text-[#2F3446]">{t("billing.cart.empty")}</p>
+          <p className="text-sm font-bold text-[#3D4354]">{t("billing.cart.empty")}</p>
           <p className="mt-0.5 text-xs text-[#6B6455]">{t("billing.cart.emptyHint", { items: words.items })}</p>
         </div>
       </div>
@@ -176,7 +176,7 @@ function CartRow({
 
       {/* Name + editable rate */}
       <div className="col-start-2 row-start-1 min-w-0 sm:col-auto sm:row-auto">
-        <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#2F3446]">
+        <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#3D4354]">
           {item.product.name}
         </p>
         {(item.guestSnapshot || item.guestOrderId) && <p className="mt-1 text-[11px] font-medium text-[#6B6455]">{t("billing.cart.guestItemProtected")}</p>}
@@ -195,12 +195,12 @@ function CartRow({
             disabled={guestLocked}
             value={item.sellingUnit?.unitCode ?? sellingUnits.find((unit) => unit.isDefault)?.unitCode ?? sellingUnits[0]?.unitCode}
             onChange={(event) => onUpdateUnit(lineKey, event.target.value)}
-            className="mt-1 h-11 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#4B5068] outline-none focus:border-[var(--brand)]"
+            className="mt-1 h-11 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#585E76] outline-none focus:border-[var(--brand)]"
           >
             {sellingUnits.map((unit) => <option key={unit.unitCode} value={unit.unitCode}>{t("billing.cart.unitOption", { name: unit.name, price: Number(unit.defaultPrice).toLocaleString("en-IN") })}</option>)}
           </select>
         ) : item.sellingUnit ? (
-          <p className="mt-1 inline-flex max-w-full items-center rounded-md border border-[#dfe8f5] bg-[var(--brand-softer)] px-1.5 py-1 text-[10px] font-bold text-[#4B5068]">
+          <p className="mt-1 inline-flex max-w-full items-center rounded-md border border-[#dfe8f5] bg-[var(--brand-softer)] px-1.5 py-1 text-[10px] font-bold text-[#585E76]">
             {t("billing.cart.pack", { name: item.sellingUnit.name })}
           </p>
         ) : null}
@@ -236,7 +236,7 @@ function CartRow({
                 if (e.key === "Enter") { e.preventDefault(); commitRate(); }
                 if (e.key === "Escape") { setRateDraft(String(item.rate)); setEditingRate(false); }
               }}
-              className="w-12 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#2F3446] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-12 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#3D4354] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
             <span className="whitespace-nowrap text-[11px] font-semibold text-[#98917F]">/{item.unit}</span>
           </div>
@@ -275,7 +275,7 @@ function CartRow({
                 if (e.key === "Escape") { setEditingDiscount(false); }
               }}
               placeholder={t("billing.cart.discountPlaceholder")}
-              className="w-14 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#2F3446] focus:outline-none"
+              className="w-14 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#3D4354] focus:outline-none"
             />
             <span className="whitespace-nowrap text-[10px] font-semibold text-[#98917F]">{t("billing.cart.offLineSuffix")}</span>
           </div>
@@ -352,7 +352,7 @@ function CartRow({
           inputMode="decimal"
           aria-label={t("billing.cart.quantityFor", { name: item.product.name })}
           {...qtyProps}
-          className="min-h-11 min-w-11 border-x border-[#EAE4D8] bg-white text-center text-[12px] font-extrabold text-[#2F3446] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="min-h-11 min-w-11 border-x border-[#EAE4D8] bg-white text-center text-[12px] font-extrabold text-[#3D4354] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         <button
           data-testid={`button-inc-${item.product.id}`}
@@ -366,7 +366,7 @@ function CartRow({
       </div>
 
       {/* Line total (net of its own discount, with the gross struck through) */}
-      <span className="col-start-3 row-start-2 self-center text-right text-[12px] font-black text-[#2F3446] tabular-nums sm:col-auto sm:row-auto">
+      <span className="col-start-3 row-start-2 self-center text-right text-[12px] font-black text-[#3D4354] tabular-nums sm:col-auto sm:row-auto">
         {lineDiscount > 0 ? (
           <span className="mr-1 text-[10px] font-semibold text-[#9aa7bd] line-through">₹{lineGross.toLocaleString("en-IN")}</span>
         ) : null}

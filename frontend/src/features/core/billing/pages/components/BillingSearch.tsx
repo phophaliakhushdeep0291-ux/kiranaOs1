@@ -597,10 +597,10 @@ export function BillingSearch({
                           {p.imageUrl ? <img src={p.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(p.name, p.category)}
                         </span>
                         <div className="min-w-0 text-left">
-                          <p className="max-w-[120px] truncate text-[11px] font-extrabold leading-[1.15] text-[#2F3446]">
+                          <p className="max-w-[120px] truncate text-[11px] font-extrabold leading-[1.15] text-[#3D4354]">
                             {p.name}
                           </p>
-                          <p className="mt-0.5 text-[11px] font-black text-[#2F3446]">₹{price}</p>
+                          <p className="mt-0.5 text-[11px] font-black text-[#3D4354]">₹{price}</p>
                         </div>
                       </button>
                     );
@@ -649,7 +649,7 @@ export function BillingSearch({
                     key={p.id}
                     type="button"
                     onClick={() => addProduct(p)}
-                    className="flex items-center gap-1.5 rounded-full border border-[#dce6f6] bg-[var(--brand-softer)] px-3 py-1.5 text-[11px] font-bold text-[#2F3446] transition-colors hover:border-[var(--brand-border)] hover:bg-[var(--brand-soft)]"
+                    className="flex items-center gap-1.5 rounded-full border border-[#dce6f6] bg-[var(--brand-softer)] px-3 py-1.5 text-[11px] font-bold text-[#3D4354] transition-colors hover:border-[var(--brand-border)] hover:bg-[var(--brand-soft)]"
                   >
                     <span aria-hidden="true">{getProductEmoji(p.name, p.category)}</span>
                     <span className="max-w-[140px] truncate">{p.name}</span>
@@ -701,7 +701,7 @@ export function BillingSearch({
             <div className="w-full max-w-[460px] overflow-hidden rounded-[14px] border border-white/20 bg-white shadow-[0_24px_70px_rgba(3,12,30,0.32)]">
               <div className="flex items-center justify-between border-b border-[#EAE4D8] px-4 py-3">
                 <div>
-                  <p className="text-[14px] font-black text-[#2F3446]">{t("billing.search.scanBarcode")}</p>
+                  <p className="text-[14px] font-black text-[#3D4354]">{t("billing.search.scanBarcode")}</p>
                   <p className="text-[12px] font-semibold text-[#837C6D]">{scannerMessage}</p>
                 </div>
                 <button
@@ -760,7 +760,7 @@ export function BillingSearch({
             >
               <div className="flex items-start justify-between gap-3 border-b border-[#F1ECE2] px-4 pb-3 pt-4">
                 <div className="min-w-0">
-                  <p className="text-[13px] font-black text-[#2F3446]">
+                  <p className="text-[13px] font-black text-[#3D4354]">
                     {t("billing.search.bindTitle", { code: bindCode })}
                   </p>
                   <p className="mt-0.5 text-[12px] font-semibold text-[#837C6D]">
@@ -824,7 +824,7 @@ export function BillingSearch({
                           : getProductEmoji(product.name, product.category)}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-extrabold text-[#2F3446]">{product.name}</span>
+                        <span className="block truncate text-[13px] font-extrabold text-[#3D4354]">{product.name}</span>
                         <span className="block truncate text-[11px] font-semibold text-[#837C6D]">
                           {product.barcode
                             ? t("billing.search.bindHasCode", { code: String(product.barcode) })
@@ -883,7 +883,7 @@ export function BillingSearch({
             <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
               <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[#FAF7F0] text-2xl text-[#6B6455]">?</span>
               <div>
-                <p className="text-sm font-bold text-[#2F3446]">
+                <p className="text-sm font-bold text-[#3D4354]">
                   {search ? t("billing.search.noResultsFor", { term: search }) : t("billing.search.noProductsYet")}
                 </p>
                 <p className="mt-1 text-xs text-[#6B6455]">
@@ -904,7 +904,7 @@ export function BillingSearch({
                   {typedQuantity != null && (
                     <span
                       data-testid="typed-quantity-badge"
-                      className="rounded-full bg-[#E7E9F5] px-2.5 py-1 text-xs font-semibold tabular-nums text-[#4A5796]"
+                      className="rounded-full bg-[#E7E9F5] px-2.5 py-1 text-xs font-semibold tabular-nums text-[#5463AB]"
                     >
                       {t("billing.search.addingQuantity", { count: typedQuantity })}
                     </span>
@@ -968,7 +968,7 @@ export function BillingSearch({
                   <ReceiptText size={14} className="text-[var(--brand)]" />
                 </span>
                 <div>
-                  <p className="text-[13px] font-black text-[#2F3446]">
+                  <p className="text-[13px] font-black text-[#3D4354]">
                     {cartItemCount} {cartItemCount === 1 ? t("billing.search.itemSingular") : t("billing.search.items")}
                   </p>
                   <p className="text-[10px] text-[#7a89a3]">{t("billing.search.products")}</p>
@@ -980,7 +980,7 @@ export function BillingSearch({
                   ₹
                 </span>
                 <div>
-                  <p className="text-[13px] font-black text-[#2F3446]">
+                  <p className="text-[13px] font-black text-[#3D4354]">
                     ₹{cartSubtotal.toLocaleString("en-IN")}
                   </p>
                   <p className="text-[10px] text-[#7a89a3]">{t("billing.search.subtotal")}</p>
@@ -993,7 +993,7 @@ export function BillingSearch({
                     %
                   </span>
                   <div>
-                    <p className="text-[13px] font-black text-[#2F3446]">
+                    <p className="text-[13px] font-black text-[#3D4354]">
                       ₹{(Math.round(cartTax * 100) / 100).toLocaleString("en-IN")}
                     </p>
                     <p className="text-[10px] text-[#7a89a3]">{t("billing.search.gst")}</p>
@@ -1071,7 +1071,7 @@ function ProductCard({ product, onAdd, trending = false, t }: { product: Product
       </div>
 
       {/* Name + size/category */}
-      <p className="line-clamp-1 text-[13px] font-extrabold leading-[1.2] text-[#2F3446]">
+      <p className="line-clamp-1 text-[13px] font-extrabold leading-[1.2] text-[#3D4354]">
         {product.name}
       </p>
       <p className="mt-1 truncate text-[12px] font-medium text-[#687895]">{subtitle}</p>
@@ -1141,7 +1141,7 @@ function RecentBillsPanel() {
   return (
     <div className="h-full overflow-hidden rounded-[13px] border border-[#EAE4D8] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <div className="mb-[14px] flex items-center justify-between">
-        <h3 className="font-display text-[14px] font-black tracking-tight text-[#2F3446]">{t("billing.search.recentBills")}</h3>
+        <h3 className="font-display text-[14px] font-black tracking-tight text-[#3D4354]">{t("billing.search.recentBills")}</h3>
         <Link
           to="/bills"
           className="flex items-center gap-0.5 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
@@ -1177,10 +1177,10 @@ function RecentBillsPanel() {
                 key={bill.id ?? `${fullBillNo}-${i}`}
                 className="flex h-[38px] items-center gap-2 text-[11px]"
               >
-                <span className="w-[70px] shrink-0 truncate font-extrabold text-[#2F3446]">{billNo}</span>
+                <span className="w-[70px] shrink-0 truncate font-extrabold text-[#3D4354]">{billNo}</span>
                 <span className="w-[60px] shrink-0 font-semibold text-[#837C6D]">{time}</span>
                 <span className="min-w-0 flex-1 truncate font-semibold text-[#837C6D]">{customer}</span>
-                <span className="shrink-0 text-right font-black text-[#2F3446] tabular-nums">
+                <span className="shrink-0 text-right font-black text-[#3D4354] tabular-nums">
                   ₹{amount.toLocaleString("en-IN")}
                 </span>
                 <span className={`shrink-0 inline-flex h-[22px] items-center justify-center rounded-[7px] px-2 text-[10px] font-extrabold ${badgeClass(pmtLabel)}`}>
@@ -1235,7 +1235,7 @@ function QuickActionsPanel({ onHoldBill, onApplyDiscount, onApplyCoupon, onChoos
 
   return (
     <div className="h-full overflow-hidden rounded-[13px] border border-[#EAE4D8] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-      <h3 className="mb-[14px] font-display text-[14px] font-black tracking-tight text-[#2F3446]">{t("billing.search.quickActions")}</h3>
+      <h3 className="mb-[14px] font-display text-[14px] font-black tracking-tight text-[#3D4354]">{t("billing.search.quickActions")}</h3>
       <div className="space-y-0">
         {actions.map((action) => (
           <button
@@ -1247,7 +1247,7 @@ function QuickActionsPanel({ onHoldBill, onApplyDiscount, onApplyCoupon, onChoos
               {action.iconEl}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-extrabold text-[#2F3446]">{action.title}</p>
+              <p className="text-[12px] font-extrabold text-[#3D4354]">{action.title}</p>
               <p className="text-[10.5px] text-[#837C6D]">{action.description}</p>
             </div>
             {action.hint && (
@@ -1276,7 +1276,7 @@ function BillingTipsPanel() {
   return (
     <div className="h-full overflow-hidden rounded-[13px] border border-[#EAE4D8] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <div className="mb-[14px] flex items-center gap-2">
-        <h3 className="font-display text-[14px] font-black tracking-tight text-[#2F3446]">{t("billing.search.tipsTitle")}</h3>
+        <h3 className="font-display text-[14px] font-black tracking-tight text-[#3D4354]">{t("billing.search.tipsTitle")}</h3>
         <Clock size={13} className="text-[#6B6455]" />
       </div>
       <div className="space-y-0">
