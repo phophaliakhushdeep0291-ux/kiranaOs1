@@ -31,12 +31,12 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onU
   if (cart.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-        <span className="grid h-12 w-12 place-items-center rounded-xl bg-[#f7f9fd] text-[#536383]">
+        <span className="grid h-12 w-12 place-items-center rounded-xl bg-[#FAF7F0] text-[#6B6455]">
           <ShoppingCart size={20} aria-hidden="true" />
         </span>
         <div>
-          <p className="text-sm font-bold text-[#13274d]">{t("billing.cart.empty")}</p>
-          <p className="mt-0.5 text-xs text-[#536383]">{t("billing.cart.emptyHint", { items: words.items })}</p>
+          <p className="text-sm font-bold text-[#1B2145]">{t("billing.cart.empty")}</p>
+          <p className="mt-0.5 text-xs text-[#6B6455]">{t("billing.cart.emptyHint", { items: words.items })}</p>
         </div>
       </div>
     );
@@ -176,10 +176,10 @@ function CartRow({
 
       {/* Name + editable rate */}
       <div className="col-start-2 row-start-1 min-w-0 sm:col-auto sm:row-auto">
-        <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#13274d]">
+        <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#1B2145]">
           {item.product.name}
         </p>
-        {(item.guestSnapshot || item.guestOrderId) && <p className="mt-1 text-[11px] font-medium text-[#52627e]">{t("billing.cart.guestItemProtected")}</p>}
+        {(item.guestSnapshot || item.guestOrderId) && <p className="mt-1 text-[11px] font-medium text-[#6B6455]">{t("billing.cart.guestItemProtected")}</p>}
         {item.addons?.length ? (
           <div className="mt-1 flex max-w-full flex-wrap gap-1" data-testid={`addons-${item.product.id}`}>
             {item.addons.map((addon) => (
@@ -195,12 +195,12 @@ function CartRow({
             disabled={guestLocked}
             value={item.sellingUnit?.unitCode ?? sellingUnits.find((unit) => unit.isDefault)?.unitCode ?? sellingUnits[0]?.unitCode}
             onChange={(event) => onUpdateUnit(lineKey, event.target.value)}
-            className="mt-1 h-11 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#31527e] outline-none focus:border-[var(--brand)]"
+            className="mt-1 h-11 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#363C6B] outline-none focus:border-[var(--brand)]"
           >
             {sellingUnits.map((unit) => <option key={unit.unitCode} value={unit.unitCode}>{t("billing.cart.unitOption", { name: unit.name, price: Number(unit.defaultPrice).toLocaleString("en-IN") })}</option>)}
           </select>
         ) : item.sellingUnit ? (
-          <p className="mt-1 inline-flex max-w-full items-center rounded-md border border-[#dfe8f5] bg-[var(--brand-softer)] px-1.5 py-1 text-[10px] font-bold text-[#31527e]">
+          <p className="mt-1 inline-flex max-w-full items-center rounded-md border border-[#dfe8f5] bg-[var(--brand-softer)] px-1.5 py-1 text-[10px] font-bold text-[#363C6B]">
             {t("billing.cart.pack", { name: item.sellingUnit.name })}
           </p>
         ) : null}
@@ -223,7 +223,7 @@ function CartRow({
               isBelowMin ? "border-red-300 ring-red-100" : "border-[var(--brand)] ring-[var(--brand)]/15",
             )}
           >
-            <span className="text-[11px] font-bold text-[#8290a8]">₹</span>
+            <span className="text-[11px] font-bold text-[#98917F]">₹</span>
             <input
               ref={rateInputRef}
               data-testid={`rate-input-${item.product.id}`}
@@ -236,9 +236,9 @@ function CartRow({
                 if (e.key === "Enter") { e.preventDefault(); commitRate(); }
                 if (e.key === "Escape") { setRateDraft(String(item.rate)); setEditingRate(false); }
               }}
-              className="w-12 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-12 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#1B2145] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
-            <span className="whitespace-nowrap text-[11px] font-semibold text-[#8290a8]">/{item.unit}</span>
+            <span className="whitespace-nowrap text-[11px] font-semibold text-[#98917F]">/{item.unit}</span>
           </div>
         ) : (
           <button
@@ -261,7 +261,7 @@ function CartRow({
         )}
         {editingDiscount ? (
           <div className="mt-1 inline-flex h-11 items-center gap-0.5 rounded-[7px] border border-[var(--brand)] bg-white px-1.5 shadow-sm ring-2 ring-[var(--brand)]/15">
-            <span className="text-[11px] font-bold text-[#8290a8]">−₹</span>
+            <span className="text-[11px] font-bold text-[#98917F]">−₹</span>
             <input
               ref={discountInputRef}
               data-testid={`line-discount-input-${item.product.id}`}
@@ -275,9 +275,9 @@ function CartRow({
                 if (e.key === "Escape") { setEditingDiscount(false); }
               }}
               placeholder={t("billing.cart.discountPlaceholder")}
-              className="w-14 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#13274d] focus:outline-none"
+              className="w-14 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#1B2145] focus:outline-none"
             />
-            <span className="whitespace-nowrap text-[10px] font-semibold text-[#8290a8]">{t("billing.cart.offLineSuffix")}</span>
+            <span className="whitespace-nowrap text-[10px] font-semibold text-[#98917F]">{t("billing.cart.offLineSuffix")}</span>
           </div>
         ) : lineDiscount > 0 ? (
           <button
@@ -340,7 +340,7 @@ function CartRow({
           data-testid={`button-dec-${item.product.id}`}
           disabled={guestLocked}
           onClick={() => onUpdateQty(lineKey, item.quantity - 1)}
-          className="min-h-11 min-w-11 bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
+          className="min-h-11 min-w-11 bg-white text-sm font-extrabold text-[#425679] hover:bg-[#FAF7F0]"
           aria-label={t("billing.cart.decrease", { name: item.product.name })}
         >
           −
@@ -352,13 +352,13 @@ function CartRow({
           inputMode="decimal"
           aria-label={t("billing.cart.quantityFor", { name: item.product.name })}
           {...qtyProps}
-          className="min-h-11 min-w-11 border-x border-[#e6ecf4] bg-white text-center text-[12px] font-extrabold text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="min-h-11 min-w-11 border-x border-[#EAE4D8] bg-white text-center text-[12px] font-extrabold text-[#1B2145] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         <button
           data-testid={`button-inc-${item.product.id}`}
           disabled={guestLocked}
           onClick={() => onUpdateQty(lineKey, item.quantity + 1)}
-          className="min-h-11 min-w-11 bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
+          className="min-h-11 min-w-11 bg-white text-sm font-extrabold text-[#425679] hover:bg-[#FAF7F0]"
           aria-label={t("billing.cart.increase", { name: item.product.name })}
         >
           +
@@ -366,7 +366,7 @@ function CartRow({
       </div>
 
       {/* Line total (net of its own discount, with the gross struck through) */}
-      <span className="col-start-3 row-start-2 self-center text-right text-[12px] font-black text-[#13274d] tabular-nums sm:col-auto sm:row-auto">
+      <span className="col-start-3 row-start-2 self-center text-right text-[12px] font-black text-[#1B2145] tabular-nums sm:col-auto sm:row-auto">
         {lineDiscount > 0 ? (
           <span className="mr-1 text-[10px] font-semibold text-[#9aa7bd] line-through">₹{lineGross.toLocaleString("en-IN")}</span>
         ) : null}
@@ -378,7 +378,7 @@ function CartRow({
         data-testid={`button-remove-${item.product.id}`}
         disabled={guestLocked}
         onClick={() => onRemoveItem(lineKey)}
-        className="col-start-3 row-start-1 grid h-11 w-11 place-items-center rounded text-[#536383] transition-colors hover:bg-red-50 hover:text-red-600 sm:col-auto sm:row-auto"
+        className="col-start-3 row-start-1 grid h-11 w-11 place-items-center rounded text-[#6B6455] transition-colors hover:bg-red-50 hover:text-red-600 sm:col-auto sm:row-auto"
         aria-label={t("billing.cart.remove", { name: item.product.name })}
       >
         <X size={15} />

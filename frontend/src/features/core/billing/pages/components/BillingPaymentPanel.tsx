@@ -124,7 +124,7 @@ export function BillingPaymentPanel({
   return (
     <div className="space-y-3">
       {/* Payment method header */}
-      <p className="text-[12px] font-extrabold text-[#13274d]">{t("billing.pay.method")}</p>
+      <p className="text-[12px] font-extrabold text-[#1B2145]">{t("billing.pay.method")}</p>
 
       {showPaymentMode ? (
         <div className="grid grid-cols-3 gap-2">
@@ -157,9 +157,9 @@ export function BillingPaymentPanel({
 
       {showPaymentMode ? (
         <div className="rounded-xl border border-[#e5ebf4] bg-[#f8fbff]">
-          <button type="button" onClick={() => setShowMorePaymentMethods((value) => !value)} aria-expanded={showMorePaymentMethods} className="flex min-h-11 w-full items-center px-3 text-left text-[11px] font-black text-[#536383]">
+          <button type="button" onClick={() => setShowMorePaymentMethods((value) => !value)} aria-expanded={showMorePaymentMethods} className="flex min-h-11 w-full items-center px-3 text-left text-[11px] font-black text-[#6B6455]">
             {t("billing.pay.moreOptions")}
-            <span className="ml-2 text-[10px] font-semibold text-[#8290a8]">{t("billing.pay.moreOptionsHint")}</span>
+            <span className="ml-2 text-[10px] font-semibold text-[#98917F]">{t("billing.pay.moreOptionsHint")}</span>
             <ChevronDown size={15} className={`ml-auto transition-transform ${showMorePaymentMethods ? "rotate-180" : ""}`} />
           </button>
           {(showMorePaymentMethods || paymentMode === BillPaymentMode.bank || paymentMode === SPLIT_PAYMENT || paymentMode === BillPaymentMode.gift_card) ? (
@@ -236,7 +236,7 @@ export function BillingPaymentPanel({
 
       {/* Amount received (cash/UPI mode) */}
       {showPaymentMode && paymentMode !== SPLIT_PAYMENT && paymentMode !== BillPaymentMode.credit && paymentMode !== BillPaymentMode.gift_card && !(showReceivedAmount || typeof paidAmount === "number" || allowAdvancePayment) ? (
-        <button type="button" onClick={() => setShowReceivedAmount(true)} className="min-h-11 w-full rounded-[8px] border border-dashed border-[#d7e2f1] py-2 text-[11px] font-semibold text-[#536383] transition-colors hover:border-[#b9cdf6] hover:bg-[#f8fbff] hover:text-[var(--brand)]">
+        <button type="button" onClick={() => setShowReceivedAmount(true)} className="min-h-11 w-full rounded-[8px] border border-dashed border-[#d7e2f1] py-2 text-[11px] font-semibold text-[#6B6455] transition-colors hover:border-[#b9cdf6] hover:bg-[#f8fbff] hover:text-[var(--brand)]">
           {t("billing.pay.enterPartial")}
         </button>
       ) : null}
@@ -304,7 +304,7 @@ export function BillingPaymentPanel({
                   type="button"
                   data-testid={`tender-chip-${amount}`}
                   onClick={() => setCashTendered(amount)}
-                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-[#dbe3ef] bg-white px-2.5 py-1 text-[12px] font-bold text-[#31527e] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-[#dbe3ef] bg-white px-2.5 py-1 text-[12px] font-bold text-[#363C6B] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
                 >
                   {fmtRs(amount)}
                 </button>
@@ -441,7 +441,7 @@ function PayModeBtn({
       data-testid={testId}
       onClick={onClick}
       className={`flex h-[62px] flex-col items-center justify-center gap-1.5 rounded-[10px] border text-[12px] font-extrabold transition-all ${
-        selected ? activeClass : "border-[#dfe8f5] bg-white text-[#536383] hover:bg-[#f7f9fd]"
+        selected ? activeClass : "border-[#dfe8f5] bg-white text-[#6B6455] hover:bg-[#FAF7F0]"
       }`}
     >
       {icon}

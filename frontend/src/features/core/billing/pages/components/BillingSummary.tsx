@@ -362,7 +362,7 @@ export function BillingSummary({
 
   return (
     <div
-      className="relative flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-[15px] border border-[#e6ecf4] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.055)] lg:w-[var(--bill-summary-width)]"
+      className="relative flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-[15px] border border-[#EAE4D8] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.055)] lg:w-[var(--bill-summary-width)]"
       style={{ "--bill-summary-width": `${summaryWidth}px` } as CSSProperties}
       data-testid="bill-summary-panel"
     >
@@ -384,7 +384,7 @@ export function BillingSummary({
               <User size={15} />
             </span>
             <div className="ml-[11px] min-w-0 flex-1">
-              <p className="truncate text-[13px] font-extrabold text-[#13274d]">
+              <p className="truncate text-[13px] font-extrabold text-[#1B2145]">
                 {selectedCustomerId === "walk_in" && !customerName
                   ? t("billing.summary.walkInCustomer")
                   : selectedCustomerName}
@@ -413,7 +413,7 @@ export function BillingSummary({
               className={`flex min-h-[58px] items-center gap-2 rounded-[9px] border px-3 text-left transition-all ${
                 !isEstimateBill
                   ? "border-[#b9f0cb] bg-white text-[#0f9f49] shadow-[0_8px_18px_rgba(25,184,90,0.12)]"
-                  : "border-transparent bg-transparent text-[#536383] hover:bg-white"
+                  : "border-transparent bg-transparent text-[#6B6455] hover:bg-white"
               }`}
             >
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#e9fff0] text-[#16a34a]">
@@ -432,7 +432,7 @@ export function BillingSummary({
               className={`flex min-h-[58px] items-center gap-2 rounded-[9px] border px-3 text-left transition-all ${
                 isEstimateBill
                   ? "border-[#d8c7ff] bg-white text-[#6d3df0] shadow-[0_8px_18px_rgba(124,63,242,0.12)]"
-                  : "border-transparent bg-transparent text-[#536383] hover:bg-white"
+                  : "border-transparent bg-transparent text-[#6B6455] hover:bg-white"
               }`}
             >
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#f1edff] text-[#7c3ff2]">
@@ -446,9 +446,9 @@ export function BillingSummary({
           </div>
 
           {(showCustomerOptions || needsOptionsVisible) && (
-            <div className="space-y-2 rounded-[10px] border border-[#e3eaf3] bg-[#f7f9fd] p-3">
+            <div className="space-y-2 rounded-[10px] border border-[#e3eaf3] bg-[#FAF7F0] p-3">
               <div className="flex items-center gap-3">
-                <span className="shrink-0 text-xs font-semibold text-[#536383]">{t("billing.summary.billType")}</span>
+                <span className="shrink-0 text-xs font-semibold text-[#6B6455]">{t("billing.summary.billType")}</span>
                 <Select value={billType} onValueChange={(v) => setBillType(v as BillTypeSelection)}>
                   <SelectTrigger data-testid="select-bill-type" className="h-8 flex-1 text-xs font-semibold">
                     <SelectValue />
@@ -545,7 +545,7 @@ export function BillingSummary({
                 <button className="inline-flex min-h-11 items-center text-[12px] font-extrabold text-[var(--brand)] hover:underline">
                   {t("billing.summary.addMoreItems")}
                 </button>
-                <span className="ml-auto text-[12px] font-bold text-[#536383]">
+                <span className="ml-auto text-[12px] font-bold text-[#6B6455]">
                   {cart.length === 1
                     ? t("billing.summary.itemCount", { count: cart.length })
                     : t("billing.summary.itemCountPlural", { count: cart.length })}
@@ -577,20 +577,20 @@ export function BillingSummary({
           <div className="rounded-[11px] border border-[#e5ebf4] bg-white px-3 pb-3.5 pt-3">
             {/* Subtotal */}
             <div className="flex h-[29px] items-center justify-between text-[12px]">
-              <span className="font-semibold text-[#536383]">{t("billing.summary.subtotal")}</span>
-              <span data-testid="text-subtotal" className="font-black text-[#13274d]">{fmtRs(subtotal)}</span>
+              <span className="font-semibold text-[#6B6455]">{t("billing.summary.subtotal")}</span>
+              <span data-testid="text-subtotal" className="font-black text-[#1B2145]">{fmtRs(subtotal)}</span>
             </div>
 
             {lineDiscountTotal > 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
-                <span className="font-semibold text-[#536383]">{t("billing.summary.lineDiscounts")} <span className="text-[10px] text-[#94a3b8]">{t("billing.summary.lineDiscountsHint")}</span></span>
+                <span className="font-semibold text-[#6B6455]">{t("billing.summary.lineDiscounts")} <span className="text-[10px] text-[#A9A395]">{t("billing.summary.lineDiscountsHint")}</span></span>
                 <span data-testid="text-line-discounts" className="font-black text-[#1a8a4e]">−{fmtRs(lineDiscountTotal)}</span>
               </div>
             )}
 
             {loyaltyDiscount > 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
-                <span className="font-semibold text-[#536383]">{t("billing.summary.loyaltyRewards")} <span className="text-[10px] text-[#94a3b8]">{t("billing.summary.loyaltyPointsHint", { points: loyaltyPoints.toLocaleString("en-IN") })}</span></span>
+                <span className="font-semibold text-[#6B6455]">{t("billing.summary.loyaltyRewards")} <span className="text-[10px] text-[#A9A395]">{t("billing.summary.loyaltyPointsHint", { points: loyaltyPoints.toLocaleString("en-IN") })}</span></span>
                 <span className="font-black text-violet-700">−{fmtRs(loyaltyDiscount)}</span>
               </div>
             )}
@@ -598,10 +598,10 @@ export function BillingSummary({
             {/* GST — exclusive adds to the payable; inclusive is informational */}
             {gstAmount > 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
-                <span className="font-semibold text-[#536383]">
-                  {t("billing.summary.gst")} <span className="text-[10.5px] text-[#94a3b8]">({describeTaxSplit(gstAmount, { cgst: gstCgst, sgst: gstSgst, igst: gstIgst, supplyType: gstSupplyType })})</span>
+                <span className="font-semibold text-[#6B6455]">
+                  {t("billing.summary.gst")} <span className="text-[10.5px] text-[#A9A395]">({describeTaxSplit(gstAmount, { cgst: gstCgst, sgst: gstSgst, igst: gstIgst, supplyType: gstSupplyType })})</span>
                 </span>
-                <span data-testid="text-gst" className={gstMode === "exclusive" ? "font-black text-[#13274d]" : "font-bold text-[#64748b]"}>
+                <span data-testid="text-gst" className={gstMode === "exclusive" ? "font-black text-[#1B2145]" : "font-bold text-[#7C7566]"}>
                   {gstMode === "exclusive" ? `+${fmtRs(gstAmount)}` : t("billing.summary.gstInclusive", { amount: fmtRs(gstAmount) })}
                 </span>
               </div>
@@ -609,7 +609,7 @@ export function BillingSummary({
 
             {/* Discount */}
             <div className="flex h-[29px] items-center justify-between text-[12px]">
-              <span className="font-semibold text-[#536383]">{t("billing.summary.discount")}</span>
+              <span className="font-semibold text-[#6B6455]">{t("billing.summary.discount")}</span>
               <div className="flex items-center gap-2">
                 {safeDiscount > 0 && !editingDiscount && (
                   <span className="font-black text-[#16a34a]">−{fmtRs(safeDiscount)}</span>
@@ -640,7 +640,7 @@ export function BillingSummary({
             {/* Why the discount — feeds the discounts report. Only shown once a discount exists. */}
             {safeDiscount > 0 && (
               <div className="flex h-[29px] items-center justify-between gap-2 text-[12px]">
-                <span className="shrink-0 font-semibold text-[#8290a8]">{t("billing.summary.discountReason")}</span>
+                <span className="shrink-0 font-semibold text-[#98917F]">{t("billing.summary.discountReason")}</span>
                 <input
                   data-testid="input-discount-reason"
                   type="text"
@@ -648,7 +648,7 @@ export function BillingSummary({
                   value={discountReason}
                   onChange={(e) => setDiscountReason(e.target.value)}
                   placeholder={t("billing.summary.discountReasonPlaceholder")}
-                  className="w-full max-w-[200px] rounded-[7px] border border-transparent bg-[#f7f9fd] px-2 py-1 text-right text-[11px] font-semibold text-[#31527e] placeholder:text-[#9aa7bd] focus:border-[#dbe8ff] focus:bg-white focus:outline-none"
+                  className="w-full max-w-[200px] rounded-[7px] border border-transparent bg-[#FAF7F0] px-2 py-1 text-right text-[11px] font-semibold text-[#363C6B] placeholder:text-[#9aa7bd] focus:border-[#dbe8ff] focus:bg-white focus:outline-none"
                 />
               </div>
             )}
@@ -656,8 +656,8 @@ export function BillingSummary({
             {/* Round off — the nearest-rupee adjustment folded into the grand total. */}
             {roundOff !== 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
-                <span className="font-semibold text-[#536383]">{t("billing.summary.roundOff")}</span>
-                <span data-testid="text-round-off" className="font-black text-[#13274d]">
+                <span className="font-semibold text-[#6B6455]">{t("billing.summary.roundOff")}</span>
+                <span data-testid="text-round-off" className="font-black text-[#1B2145]">
                   {roundOff > 0 ? "+" : "−"}{fmtRs(Math.abs(roundOff))}
                 </span>
               </div>
@@ -672,9 +672,9 @@ export function BillingSummary({
             </div>
           </div>
 
-          <button type="button" onClick={() => setShowSaleExtras((value) => !value)} aria-expanded={showSaleExtras} className="flex min-h-11 w-full items-center rounded-[9px] border border-[#dfe8f5] bg-[#f8fbff] px-3.5 text-left text-[12px] font-extrabold text-[#536383]">
+          <button type="button" onClick={() => setShowSaleExtras((value) => !value)} aria-expanded={showSaleExtras} className="flex min-h-11 w-full items-center rounded-[9px] border border-[#dfe8f5] bg-[#f8fbff] px-3.5 text-left text-[12px] font-extrabold text-[#6B6455]">
             {t("billing.summary.moreOptions")}
-            <span className="ml-2 text-[10px] font-semibold text-[#8290a8]">{t("billing.summary.moreOptionsHint")}</span>
+            <span className="ml-2 text-[10px] font-semibold text-[#98917F]">{t("billing.summary.moreOptionsHint")}</span>
             <ChevronDown size={15} className={`ml-auto transition-transform ${showSaleExtras ? "rotate-180" : ""}`} />
           </button>
 
@@ -840,7 +840,7 @@ export function BillingSummary({
           <button
             data-testid="button-clear-cart"
             onClick={onClearCart}
-            className="mt-1 min-h-11 w-full rounded-lg py-1.5 text-xs font-medium text-[#536383] hover:bg-red-50 hover:text-red-600"
+            className="mt-1 min-h-11 w-full rounded-lg py-1.5 text-xs font-medium text-[#6B6455] hover:bg-red-50 hover:text-red-600"
           >
             {t("billing.summary.clearCart")}
           </button>
@@ -890,11 +890,11 @@ function SecBtn({
       data-testid={testId}
       onClick={onClick}
       disabled={disabled}
-      className={primary ? "flex min-h-11 flex-col items-center gap-1 rounded-[9px] border border-[#15803d] bg-[#16a34a] py-2 text-xs font-bold text-white transition-colors hover:bg-[#15803d] disabled:pointer-events-none disabled:opacity-40" : "flex min-h-11 flex-col items-center gap-1 rounded-[9px] border border-[#e2eaf5] bg-white py-2 text-xs font-bold text-[#13274d] transition-colors hover:bg-[#f7f9fd] disabled:pointer-events-none disabled:opacity-40"}
+      className={primary ? "flex min-h-11 flex-col items-center gap-1 rounded-[9px] border border-[#15803d] bg-[#16a34a] py-2 text-xs font-bold text-white transition-colors hover:bg-[#15803d] disabled:pointer-events-none disabled:opacity-40" : "flex min-h-11 flex-col items-center gap-1 rounded-[9px] border border-[#e2eaf5] bg-white py-2 text-xs font-bold text-[#1B2145] transition-colors hover:bg-[#FAF7F0] disabled:pointer-events-none disabled:opacity-40"}
     >
       {icon}
       <span>{label}</span>
-      {shortcut && <span className="hidden text-[9px] text-[#536383] sm:inline">{shortcut}</span>}
+      {shortcut && <span className="hidden text-[9px] text-[#6B6455] sm:inline">{shortcut}</span>}
     </button>
   );
 }

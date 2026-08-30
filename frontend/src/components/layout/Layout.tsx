@@ -806,7 +806,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
                 <Store size={16} className="shrink-0 text-primary" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[11px] font-black text-[var(--brand-ink)]">{activeStoreLocation.name}</span>
-                  <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-[#64748b]">{activeStoreLocation.code}{activeStoreLocation.isPrimary ? " · Primary" : " · Branch"}</span>
+                  <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-[#7C7566]">{activeStoreLocation.code}{activeStoreLocation.isPrimary ? " · Primary" : " · Branch"}</span>
                 </span>
                 <ChevronDown size={13} className="shrink-0 text-muted-foreground" />
               </button>
@@ -858,7 +858,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
               <button className="app-topbar-account">
                 <div className="hidden min-w-0 max-w-[150px] text-right 2xl:block">
                   <div className="truncate text-[13px] font-extrabold leading-tight text-[var(--brand-ink)]">{storeName}</div>
-                  <div className="truncate text-[11px] leading-tight text-[#64748b]">{storeLocation}</div>
+                  <div className="truncate text-[11px] leading-tight text-[#7C7566]">{storeLocation}</div>
                 </div>
                 <div className="app-topbar-avatar">
                   {initials(storeName)}

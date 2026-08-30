@@ -2148,15 +2148,15 @@ export default function Billing() {
       {/* ── RIGHT PANEL: cart + customer + payment ── */}
       <div
         className={mobileCheckoutOpen
-          ? "fixed inset-0 z-[70] flex min-h-0 flex-col bg-[#f7f9fd] lg:static lg:z-auto lg:flex lg:bg-transparent"
+          ? "fixed inset-0 z-[70] flex min-h-0 flex-col bg-[#FAF7F0] lg:static lg:z-auto lg:flex lg:bg-transparent"
           : "hidden lg:static lg:flex lg:min-h-0"}
         role={mobileCheckoutOpen ? "dialog" : undefined}
         aria-modal={mobileCheckoutOpen ? "true" : undefined}
         aria-label={mobileCheckoutOpen ? t("billing.page.reviewCollectPayment") : undefined}
       >
-        <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#e1e8f2] bg-white px-4 lg:hidden">
+        <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#E5DFD1] bg-white px-4 lg:hidden">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#64748b]">{t("billing.page.checkout")}</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7C7566]">{t("billing.page.checkout")}</p>
             <h2 className="font-display text-[19px] font-black text-[var(--brand-ink)]">{t("billing.page.reviewCollect", { amount: grandTotal.toLocaleString("en-IN") })}</h2>
           </div>
           <button
@@ -2295,12 +2295,12 @@ export default function Billing() {
           summary panel always, so this is mobile-only. Sits above the bottom nav. */}
       {cart.length > 0 && !mobileCheckoutOpen && (
         <div
-          className="fixed inset-x-0 z-40 border-t border-[#e6ecf4] bg-white px-3 py-2.5 shadow-[0_-6px_22px_rgba(15,35,80,0.10)] lg:hidden"
+          className="fixed inset-x-0 z-40 border-t border-[#EAE4D8] bg-white px-3 py-2.5 shadow-[0_-6px_22px_rgba(15,35,80,0.10)] lg:hidden"
           style={{ bottom: "var(--app-mobile-bottom-nav-clearance)" }}
         >
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-bold text-[#64748b]">
+              <div className="text-[11px] font-bold text-[#7C7566]">
                 {cart.length} item{cart.length === 1 ? "" : "s"}
                 {creditAmount > 0 ? " · udhar" : ""}
               </div>
