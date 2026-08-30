@@ -384,7 +384,7 @@ export function BillingSummary({
               <User size={15} />
             </span>
             <div className="ml-[11px] min-w-0 flex-1">
-              <p className="truncate text-[13px] font-extrabold text-[#1B2145]">
+              <p className="truncate text-[13px] font-extrabold text-[#2F3446]">
                 {selectedCustomerId === "walk_in" && !customerName
                   ? t("billing.summary.walkInCustomer")
                   : selectedCustomerName}
@@ -578,7 +578,7 @@ export function BillingSummary({
             {/* Subtotal */}
             <div className="flex h-[29px] items-center justify-between text-[12px]">
               <span className="font-semibold text-[#6B6455]">{t("billing.summary.subtotal")}</span>
-              <span data-testid="text-subtotal" className="font-black text-[#1B2145]">{fmtRs(subtotal)}</span>
+              <span data-testid="text-subtotal" className="font-black text-[#2F3446]">{fmtRs(subtotal)}</span>
             </div>
 
             {lineDiscountTotal > 0 && (
@@ -601,7 +601,7 @@ export function BillingSummary({
                 <span className="font-semibold text-[#6B6455]">
                   {t("billing.summary.gst")} <span className="text-[10.5px] text-[#A9A395]">({describeTaxSplit(gstAmount, { cgst: gstCgst, sgst: gstSgst, igst: gstIgst, supplyType: gstSupplyType })})</span>
                 </span>
-                <span data-testid="text-gst" className={gstMode === "exclusive" ? "font-black text-[#1B2145]" : "font-bold text-[#7C7566]"}>
+                <span data-testid="text-gst" className={gstMode === "exclusive" ? "font-black text-[#2F3446]" : "font-bold text-[#7C7566]"}>
                   {gstMode === "exclusive" ? `+${fmtRs(gstAmount)}` : t("billing.summary.gstInclusive", { amount: fmtRs(gstAmount) })}
                 </span>
               </div>
@@ -648,7 +648,7 @@ export function BillingSummary({
                   value={discountReason}
                   onChange={(e) => setDiscountReason(e.target.value)}
                   placeholder={t("billing.summary.discountReasonPlaceholder")}
-                  className="w-full max-w-[200px] rounded-[7px] border border-transparent bg-[#FAF7F0] px-2 py-1 text-right text-[11px] font-semibold text-[#363C6B] placeholder:text-[#9aa7bd] focus:border-[#dbe8ff] focus:bg-white focus:outline-none"
+                  className="w-full max-w-[200px] rounded-[7px] border border-transparent bg-[#FAF7F0] px-2 py-1 text-right text-[11px] font-semibold text-[#4B5068] placeholder:text-[#9aa7bd] focus:border-[#dbe8ff] focus:bg-white focus:outline-none"
                 />
               </div>
             )}
@@ -657,7 +657,7 @@ export function BillingSummary({
             {roundOff !== 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
                 <span className="font-semibold text-[#6B6455]">{t("billing.summary.roundOff")}</span>
-                <span data-testid="text-round-off" className="font-black text-[#1B2145]">
+                <span data-testid="text-round-off" className="font-black text-[#2F3446]">
                   {roundOff > 0 ? "+" : "−"}{fmtRs(Math.abs(roundOff))}
                 </span>
               </div>
@@ -890,7 +890,7 @@ function SecBtn({
       data-testid={testId}
       onClick={onClick}
       disabled={disabled}
-      className={primary ? "flex min-h-11 flex-col items-center gap-1 rounded-[9px] border border-[#15803d] bg-[#16a34a] py-2 text-xs font-bold text-white transition-colors hover:bg-[#15803d] disabled:pointer-events-none disabled:opacity-40" : "flex min-h-11 flex-col items-center gap-1 rounded-[9px] border border-[#e2eaf5] bg-white py-2 text-xs font-bold text-[#1B2145] transition-colors hover:bg-[#FAF7F0] disabled:pointer-events-none disabled:opacity-40"}
+      className={primary ? "flex min-h-11 flex-col items-center gap-1 rounded-[9px] border border-[#15803d] bg-[#16a34a] py-2 text-xs font-bold text-white transition-colors hover:bg-[#15803d] disabled:pointer-events-none disabled:opacity-40" : "flex min-h-11 flex-col items-center gap-1 rounded-[9px] border border-[#e2eaf5] bg-white py-2 text-xs font-bold text-[#2F3446] transition-colors hover:bg-[#FAF7F0] disabled:pointer-events-none disabled:opacity-40"}
     >
       {icon}
       <span>{label}</span>
