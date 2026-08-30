@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { runSyncCycle } from "@/features/core/sync/engine";
-import { runManualSyncCycle } from "@/features/core/sync/manual-sync";
+import { runManualSyncCycle, runSyncCycle } from "@/features/core/sync/deferred-runtime";
 import { clearRetryBackoffAfterReconnect, readSyncQueueCounts, type SyncQueueCounts } from "@/features/core/sync/sync-status-repair";
 import {
   probeBackendConnection,

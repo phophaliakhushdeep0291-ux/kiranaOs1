@@ -1,4 +1,19 @@
-import { apiRequest } from "@/lib/api/http";
+import { apiRequest, ApiClientError } from "@/lib/api/http";
+
+/**
+ * The failure code, from wherever the client actually put it.
+ *
+ * apiRequest throws ApiClientError, which carries the server's `code` on
+ * `.data`, not on the error itself. Reading `error.code` therefore always came
+ * back undefined and every specific failure — no provider configured, rate
+ * limited, owner PIN required — collapsed into "that did not work". The cause
+ * was on screen in production and unreadable.
+ */
+export function agentErrorCode(error: unknown): string | undefined {
+  if (error instanceof ApiClientError) return error.data?.code;
+  const loose = error as { data?: { code?: string }; code?: string } | null;
+  return loose?.data?.code ?? loose?.code;
+}
 
 /**
  * Talking to the agent.

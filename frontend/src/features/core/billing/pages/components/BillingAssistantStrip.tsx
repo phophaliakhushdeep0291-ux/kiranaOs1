@@ -5,6 +5,7 @@ import {
   sendAgentMessage,
   confirmAgentPlan,
   rejectAgentPlan,
+  agentErrorCode,
   type AgentCartLine,
   type AgentTurn,
 } from "@/features/core/assistant/agent-client";
@@ -65,7 +66,7 @@ export function BillingAssistantStrip({
         if (!cancelled) setTurn(result);
       } catch (caught) {
         if (cancelled) return;
-        const code = (caught as { code?: string })?.code;
+        const code = agentErrorCode(caught);
         setNote(
           code === "AI_KEY_MISSING" ? t("assistant.unavailable")
             : code === "AI_RATE_LIMITED" ? t("assistant.busy")
@@ -91,7 +92,7 @@ export function BillingAssistantStrip({
       setNote(added > 0 ? t("assistant.till.applied") : t("assistant.till.nothingToAdd"));
       setTurn(null);
     } catch (caught) {
-      const code = (caught as { code?: string })?.code;
+      const code = agentErrorCode(caught);
       // A price or stock change proposed from the till still needs the owner's
       // PIN, and that dialog belongs in the full panel rather than squeezed in
       // beside a keypad — so say so and send them there.

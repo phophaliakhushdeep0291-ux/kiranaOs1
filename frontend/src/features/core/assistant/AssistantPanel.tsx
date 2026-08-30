@@ -8,6 +8,7 @@ import {
   confirmAgentPlan,
   rejectAgentPlan,
   type AgentChatMessage,
+  agentErrorCode,
   type AgentTurn,
 } from "./agent-client";
 import {
@@ -89,7 +90,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
       setMessages((current) => [...current, { role: "assistant", content: turn.reply, turn }]);
       if (turn.requiresConfirmation && turn.planId) setPending(turn);
     } catch (caught) {
-      const code = (caught as { code?: string })?.code;
+      const code = agentErrorCode(caught);
       setError(
         code === "AI_KEY_MISSING" ? t("assistant.unavailable")
           : code === "AI_RATE_LIMITED" ? t("assistant.busy")
@@ -121,7 +122,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
       setPending(null);
       setPin("");
     } catch (caught) {
-      const code = (caught as { code?: string })?.code;
+      const code = agentErrorCode(caught);
       if (code === "OWNER_PIN_REQUIRED") {
         setPlanState({ status: "pin", wrong: false });
         return;

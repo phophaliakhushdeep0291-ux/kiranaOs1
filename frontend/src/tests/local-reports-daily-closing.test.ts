@@ -523,6 +523,181 @@ describe("local reports and daily closing", () => {
     expect(snapshot.dailyTrend.at(-1)?.stockOut).toBe(1200);
   });
 
+  it("values named-pack opening stock with the same conversion as Inventory", async () => {
+    setRows({
+      products: [
+        product("product_named_pack", {
+          displayUnit: "Gram 1 Piece",
+          rateUnit: "Gram 1 Piece",
+          baseUnit: "gram",
+          stockBaseQty: 10_000,
+          costPerRateUnit: 680,
+          costPrice: 680,
+          sellingUnits: [
+            {
+              id: "unit_named_pack",
+              unitCode: "gram-1-piece",
+              name: "Gram 1 Piece",
+              unitType: "kg",
+              conversionToBase: 1_000,
+              isDefault: true,
+              isActive: true,
+            },
+          ],
+        }),
+      ],
+      inventory_movements: [
+        {
+          id: "opening_named_pack",
+          productId: "product_named_pack",
+          product_id: "product_named_pack",
+          productName: "Named pack",
+          type: "opening_stock",
+          action: "opening_stock",
+          changeBaseQty: 10_000,
+          change_base_qty: 10_000,
+          createdAt: "2026-06-06T12:00:00.000Z",
+          created_at: "2026-06-06T12:00:00.000Z",
+          sync_status: "synced",
+          ...scope,
+        },
+      ],
+    });
+
+    const snapshot = await buildLocalReportSnapshot({
+      from: "2026-06-06",
+      to: "2026-06-06",
+    });
+
+    expect(snapshot.stockMovement.totalIn).toBe(6_800);
+    expect(snapshot.dailyTrend.at(-1)?.stockIn).toBe(6_800);
+  });
+
+  it("uses Inventory's average-cost priority for derived movement values", async () => {
+    setRows({
+      products: [
+        product("product_average_cost", {
+          baseUnit: "gram",
+          rateUnit: "kg",
+          displayUnit: "kg",
+          stockBaseQty: 10_000,
+          averageCostPrice: 70,
+          costPerRateUnit: 60,
+          costPrice: 50,
+        }),
+      ],
+      inventory_movements: [
+        {
+          id: "opening_average_cost",
+          productId: "product_average_cost",
+          action: "opening_stock",
+          changeBaseQty: 10_000,
+          createdAt: "2026-06-06T12:00:00.000Z",
+          ...scope,
+        },
+      ],
+    });
+
+    const snapshot = await buildLocalReportSnapshot({ from: "2026-06-06", to: "2026-06-06" });
+
+    expect(snapshot.stockMovement.totalIn).toBe(700);
+  });
+
+  it("uses a recorded purchase amount when an earlier ledger alias is zero", async () => {
+    setRows({
+      products: [product("product_sugar", { baseUnit: "gram", rateUnit: "kg", costPrice: 60 })],
+      inventory_movements: [
+        {
+          id: "purchase_with_zero_alias",
+          productId: "product_sugar",
+          action: "purchase",
+          changeBaseQty: 1_000,
+          totalCost: 0,
+          purchaseBillAmount: 85,
+          createdAt: "2026-06-06T12:00:00.000Z",
+          ...scope,
+        },
+      ],
+    });
+
+    const snapshot = await buildLocalReportSnapshot({ from: "2026-06-06", to: "2026-06-06" });
+
+    expect(snapshot.stockMovement.totalIn).toBe(85);
+  });
+
+  it("uses the moved pack quantity and its own cost for per-pack stock", async () => {
+    setRows({
+      products: [
+        product("product_per_pack", {
+          packagingMode: "per_pack",
+          baseUnit: "gram",
+          stockBaseQty: 10_000,
+          costPerRateUnit: 100,
+          sellingUnits: [
+            {
+              id: "unit_1kg",
+              unitCode: "bag-1kg",
+              name: "Bag 1 kg",
+              unitType: "kg",
+              conversionToBase: 1_000,
+              costPrice: 100,
+              isDefault: true,
+              isActive: true,
+            },
+            {
+              id: "unit_5kg",
+              unitCode: "bag-5kg",
+              name: "Bag 5 kg",
+              unitType: "kg",
+              conversionToBase: 5_000,
+              costPrice: 450,
+              isDefault: false,
+              isActive: true,
+            },
+          ],
+        }),
+      ],
+      inventory_movements: [
+        {
+          id: "opening_5kg_bags",
+          productId: "product_per_pack",
+          action: "opening_stock",
+          changeBaseQty: 10_000,
+          sellingUnitId: "unit_5kg",
+          sellingUnitQty: 2,
+          createdAt: "2026-06-06T12:00:00.000Z",
+          ...scope,
+        },
+      ],
+    });
+
+    const snapshot = await buildLocalReportSnapshot({ from: "2026-06-06", to: "2026-06-06" });
+
+    expect(snapshot.stockMovement.totalIn).toBe(900);
+  });
+
+  it("excludes merged movement tombstones and sync conflicts", async () => {
+    const movement = {
+      productId: "product_sugar",
+      action: "opening_stock",
+      changeBaseQty: 1_000,
+      createdAt: "2026-06-06T12:00:00.000Z",
+      ...scope,
+    };
+    setRows({
+      products: [product("product_sugar", { baseUnit: "gram", rateUnit: "kg", costPrice: 60 })],
+      inventory_movements: [
+        { ...movement, id: "server_movement", sync_status: "synced" },
+        { ...movement, id: "local_tombstone", deleted_at: "2026-06-06T12:01:00.000Z", merged_into_id: "server_movement" },
+        { ...movement, id: "rejected_movement", sync_status: "conflict" },
+      ],
+    });
+
+    const snapshot = await buildLocalReportSnapshot({ from: "2026-06-06", to: "2026-06-06" });
+
+    expect(snapshot.stockMovement.totalIn).toBe(60);
+  });
+
   it("profit estimate uses item cost before product cost", async () => {
     setRows({
       bills: [

@@ -11,6 +11,13 @@ import {
 } from "@/features/core/finance/services/FinancialAggregationService";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
 import { fromBaseQty, productDisplayUnit } from "@/features/core/products/pages/product-pricing";
+import {
+  findInventorySellingUnit,
+  inventoryAverageUnitCost,
+  inventoryDisplayQuantity,
+  inventoryMovementUnit,
+  inventoryPackUnitCost,
+} from "@/features/core/inventory/stock-display";
 import { isMergedBillTwin } from "@/features/core/sync/bill-reconciliation";
 
 export interface DateRange {
@@ -253,6 +260,15 @@ interface LocalFinanceRows {
 function readNumber(value: unknown, fallback = 0): number {
   const num = Number(value ?? fallback);
   return Number.isFinite(num) ? num : fallback;
+}
+
+function readFirstNonZeroNumber(...values: unknown[]): number {
+  for (const value of values) {
+    if (value === "" || value === null || value === undefined) continue;
+    const num = Number(value);
+    if (Number.isFinite(num) && num !== 0) return num;
+  }
+  return 0;
 }
 
 
@@ -522,30 +538,63 @@ function movementValue(
   productsById: Map<string, Product>,
 ): { inbound: number; outbound: number } {
   const action = readString(movement, ["action", "type", "movementType", "movement_type"]).toLowerCase();
-  const change = readNumber(
-    movement.changeBaseQty ?? movement.change_base_qty ?? movement.quantityChange ?? movement.quantity_change ?? movement.quantity,
-    0,
+  const change = readFirstNonZeroNumber(
+    movement.changeBaseQty,
+    movement.change_base_qty,
+    movement.quantityChange,
+    movement.quantity_change,
+    movement.quantity,
   );
   const productId = readString(movement, ["productId", "product_id"]);
   const product = productsById.get(productId);
-  const unitCost = readNumber(
-    product?.costPerRateUnit ?? product?.costPrice ?? product?.averageCostPrice,
-    0,
+  // Quantity sign is authoritative. Action names are only a legacy fallback for
+  // rows that did not persist a usable quantity; e.g. "purchase_return" contains
+  // "purchase" but is still stock-out.
+  const outbound = change < 0 || (change === 0 && /sale|out|damage|return_to_supplier|purchase_return|expired/.test(action));
+  const inbound = change > 0 || (change === 0 && /purchase|stock_in|add|receive|return_from_customer/.test(action));
+  const purchaseValue = readFirstNonZeroNumber(
+    movement.totalCost,
+    movement.total_cost,
+    movement.purchaseBillAmount,
+    movement.purchase_bill_amount,
+    movement.billAmount,
+    movement.bill_amount,
   );
-  const outbound = change < 0 || /sale|out|damage|return_to_supplier|expired/.test(action);
-  const inbound = change > 0 || /purchase|stock_in|add|receive|return_from_customer/.test(action);
-  const explicitInboundValue = readNumber(
-    movement.totalCost ?? movement.total_cost ?? movement.purchaseBillAmount ?? movement.purchase_bill_amount ?? movement.billAmount ?? movement.bill_amount,
-    0,
+  const lossValue = readFirstNonZeroNumber(
+    movement.damageLossValue,
+    movement.damage_loss_value,
+    movement.valueImpact,
+    movement.value_impact,
   );
-  const explicitOutboundValue = readNumber(
-    movement.damageLossValue ?? movement.damage_loss_value ?? movement.valueImpact ?? movement.value_impact,
-    0,
-  );
-  const rateUnit = product ? (product.rateUnit ?? product.displayUnit ?? productDisplayUnit(product)) : undefined;
-  const quantityInRateUnit = product ? fromBaseQty(Math.abs(change), rateUnit) : Math.abs(change);
+  const movementUnitId = readString(movement, ["sellingUnitId", "selling_unit_id"]);
+  const recordedUnit = readString(movement, [
+    "sellingUnitCode", "selling_unit_code", "enteredUnit", "entered_unit", "displayUnit", "display_unit", "unit",
+  ]);
+  const sellingUnit = product
+    ? product.sellingUnits?.find((unit) => unit.id === movementUnitId)
+      ?? findInventorySellingUnit(product, recordedUnit || inventoryMovementUnit(product))
+    : undefined;
+  const movementUnit = sellingUnit?.unitCode ?? (recordedUnit || (product ? inventoryMovementUnit(product) : undefined));
+  const recordedSellingUnitQty = readFirstNonZeroNumber(movement.sellingUnitQty, movement.selling_unit_qty);
+  const quantityInRateUnit = recordedSellingUnitQty !== 0
+    ? Math.abs(recordedSellingUnitQty)
+    : product && sellingUnit && sellingUnit.conversionToBase > 0
+      ? inventoryDisplayQuantity(
+        { ...product, stockBaseQty: Math.abs(change) },
+        sellingUnit.unitCode,
+      )
+      : product
+        ? fromBaseQty(Math.abs(change), product.rateUnit ?? product.displayUnit ?? productDisplayUnit(product))
+        : Math.abs(change);
+  const unitCost = product
+    ? sellingUnit
+      ? inventoryPackUnitCost(product, sellingUnit)
+      : inventoryAverageUnitCost(product, movementUnit)
+    : 0;
   const derivedValue = roundMoney(quantityInRateUnit * unitCost);
-  const value = roundMoney(Math.abs((inbound && !outbound ? explicitInboundValue : explicitOutboundValue) || derivedValue));
+  const returnToSupplier = /purchase_return|return_to_supplier/.test(action);
+  const explicitValue = outbound ? lossValue || (returnToSupplier ? purchaseValue : 0) : purchaseValue;
+  const value = roundMoney(Math.abs(explicitValue || derivedValue));
   return {
     inbound: inbound && !outbound ? value : 0,
     outbound: outbound ? value : 0,
@@ -558,7 +607,7 @@ function buildDailyTrend(rows: LocalFinanceRows, range: DateRange): ReportDailyP
     const dayRange = { from: date, to: date };
     const snapshot = aggregate(rows, dayRange);
     const stock = rows.inventoryMovements
-      .filter((movement) => isWithinRange(movement, dayRange))
+      .filter((movement) => !isDeleted(movement) && !isRejectedBySync(movement) && isWithinRange(movement, dayRange))
       .reduce<{ inbound: number; outbound: number }>((total, movement) => {
         const value = movementValue(movement, productsById);
         return { inbound: roundMoney(total.inbound + value.inbound), outbound: roundMoney(total.outbound + value.outbound) };

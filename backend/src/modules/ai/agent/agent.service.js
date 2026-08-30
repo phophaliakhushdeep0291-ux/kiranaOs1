@@ -72,6 +72,8 @@ const SYSTEM_PROMPT = [
   "- Do not call the same tool twice with the same arguments. You already have that result; use it. Every repeat is a customer waiting longer.",
   "- If something is genuinely ambiguous, ask one short question. Do not guess a product, a customer, or an amount.",
   "- Money is in rupees. Quantities are in the product's own unit.",
+  "- Never drop a minus sign. A negative stock figure means the shop sold more than it had recorded — say so as a negative, and never report it as stock in hand. Some shops allow this deliberately and reconcile later, so it is something to report, not a mistake to correct.",
+  "- Do not describe a product as running out unless the tool said so. A product that simply has not sold recently is not running out, and one that is oversold is not running low.",
   "",
   "Language:",
   "- Reply in the shop's language, given below. Most shops here run in Hindi. Answer in that language even when the shopkeeper types in English.",
@@ -556,7 +558,7 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
 }
 
 /** Test surface. Not used on a request path. */
-export const __agentInternals = { jsonSafe, toolResultMessage, validateArgs };
+export const __agentInternals = { jsonSafe, toolResultMessage, validateArgs, sanitizeCart };
 
 /** Decline a plan without running it, so the audit row records the refusal. */
 export async function rejectPlan(ctx, { planId }) {
