@@ -277,7 +277,7 @@ const BUSINESS_TYPE_PRICES: Record<BusinessType, Record<Exclude<PlanCode, "stand
   pharmacy:    { starter: [499, 4999], growth: [899, 7999], pro: [1299, 11999] },
   // Sold as two plans, Counter and Dine-in. `pro` resolves onto Dine-in rather
   // than sitting above it; the code stays valid for tills that have been offline.
-  restaurant:  { starter: [699, 6990], growth: [1499, 14990], pro: [1499, 14990] },
+  restaurant:  { starter: [799, 7990], growth: [1499, 14990], pro: [1499, 14990] },
   manufacturing: { starter: [999, 9999], growth: [1999, 18999], pro: [3499, 32999] },
 };
 
