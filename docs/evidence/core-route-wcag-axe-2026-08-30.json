@@ -1,0 +1,46 @@
+{
+  "generatedAt": "2026-08-30T12:26:38.896Z",
+  "status": "passed-automated-without-incomplete-results",
+  "scope": "Authenticated core-route responsive, semantic, axe WCAG and sequential-keyboard matrix",
+  "sourceArtifact": "frontend/qa-artifacts/core-contrast-zero-20260830/report.json",
+  "sourceArtifactSha256": "17F1151F0263A36987D87806BA3E8A8E933FC12D2C897FFAA03A5C7B458300EC",
+  "engine": {
+    "name": "axe-core",
+    "version": "4.10.3",
+    "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]
+  },
+  "responsiveCaptures": {
+    "passed": 36,
+    "total": 36,
+    "routes": 9,
+    "viewports": ["375x667", "390x844", "430x932", "768x1024"],
+    "definiteAxeViolations": 0,
+    "axeIncompleteRuleOccurrences": 0,
+    "axeIncompleteNodes": 0,
+    "axePassedNodes": 7778,
+    "horizontalOverflowFindings": 0,
+    "undersizedTargetFindings": 0,
+    "customSemanticFindings": 0,
+    "runtimeErrors": 0
+  },
+  "keyboardTraversal": {
+    "passedRoutes": 9,
+    "totalRoutes": 9,
+    "unnamedFocusStops": 0,
+    "invisibleFocusIndicators": 0,
+    "hiddenOrInertFocusLeaks": 0,
+    "missedSequentialControls": 0
+  },
+  "statefulChecks": {
+    "udharSpaTransition": {
+      "path": "/customers",
+      "search": "?filter=udhar",
+      "activeFilter": "udhar"
+    }
+  },
+  "limitations": [
+    "Manual NVDA, TalkBack and VoiceOver task walkthroughs remain required.",
+    "Keyboard-only end-to-end mutation tasks remain required; this run proves settled-route traversal.",
+    "This is first-party automated browser evidence, not a third-party accessibility certification."
+  ]
+}

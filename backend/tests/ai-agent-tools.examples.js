@@ -12,6 +12,7 @@
 import assert from "node:assert/strict";
 import { defineTool, toolAvailableTo, TOOL_RISK } from "../src/modules/ai/agent/tool-contract.js";
 import { registerTools, toolsFor, getTool, registrySnapshot, ownerOf } from "../src/modules/ai/agent/tool-registry.js";
+import { __agentInternals } from "../src/modules/ai/agent/agent.service.js";
 import { CORE_READ_TOOLS } from "../src/modules/ai/agent/tools/core-read.js";
 import { CORE_WRITE_TOOLS } from "../src/modules/ai/agent/tools/core-write.js";
 import { RESTAURANT_TOOLS } from "../src/verticals/restaurant/ai/tools.js";
@@ -152,6 +153,32 @@ const rolebound = defineTool({
 assert.equal(toolAvailableTo(rolebound, { role: "owner", features: { has: () => true } }), true);
 assert.equal(toolAvailableTo(rolebound, { role: "staff", features: { has: () => true } }), false);
 ok("role-bound tools are hidden from the wrong role");
+
+/* --------------------------------------------------------------- registry */
+
+/* --------------------------------------------------- tool result encoding */
+
+// Prisma returns BigInt for every `*Paise` shadow column, and JSON.stringify
+// throws on one. This was a real failure: get_customer_khata queried correctly,
+// then died at serialisation, and the trace recorded the same call as both ok
+// and error. Any tool reading a money row would have hit it.
+const encoded = __agentInternals.toolResultMessage("call_1", "get_customer_khata", {
+  balancePaise: 123456789012345678n,
+  paidAt: new Date("2026-08-30T00:00:00.000Z"),
+  name: "Ramesh",
+});
+const decoded = JSON.parse(encoded.content);
+assert.equal(decoded.result.balancePaise, "123456789012345678", "a paise BigInt must survive as an exact string");
+assert.equal(decoded.result.paidAt, "2026-08-30T00:00:00.000Z");
+assert.equal(decoded.untrustedData, true, "tool output must be labelled as data, not instructions");
+ok("tool results encode BigInt money without throwing");
+
+// Encoding must never take the turn down, whatever a service hands back.
+const circular = { name: "loop" };
+circular.self = circular;
+const safe = __agentInternals.toolResultMessage("call_2", "search_products", circular);
+assert.ok(JSON.parse(safe.content).error, "an unencodable result becomes a reported error, not a crash");
+ok("an unencodable result degrades instead of crashing the turn");
 
 /* --------------------------------------------------------------- registry */
 

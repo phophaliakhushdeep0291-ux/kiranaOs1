@@ -28,17 +28,28 @@ import {
 
 const MAX_ROWS = 25;
 
-/** A product as the model should see it: identity, what it costs, what is left. */
+/**
+ * A product as the model should see it: identity, what it costs, what is left.
+ *
+ * `lowStockThreshold` and `reorderLevel` are different numbers and were being
+ * conflated here. The threshold is when to worry; the reorder level is how much
+ * to buy. Answering "what should I reorder" off the wrong one gives a confident
+ * answer about the wrong products, so both are named for what they are.
+ */
 function productRow(product) {
+  const stock = product.stockBaseQty ?? null;
+  const lowStockAt = product.lowStockThreshold ?? null;
   return {
     id: product.id,
     name: product.name,
-    unit: product.rateUnit ?? product.unit ?? null,
-    stock: product.stockBaseQty ?? null,
+    unit: product.rateUnit ?? product.baseUnit ?? null,
+    stock,
     tracksStock: product.stockTrackingEnabled !== false,
     price: product.defaultPricePerRateUnit ?? null,
     mrp: product.mrp ?? null,
-    lowStockAt: product.reorderLevel ?? null,
+    lowStockAt,
+    reorderQty: product.reorderLevel ?? null,
+    isLow: Number(lowStockAt) > 0 && Number(stock) <= Number(lowStockAt),
   };
 }
 
@@ -135,10 +146,20 @@ export const CORE_READ_TOOLS = [
       properties: { customerId: { type: "string", description: "Customer id from find_customer." } },
       required: ["customerId"],
     },
+    // A read that throws on "not found" makes the model retry and then run out
+    // of turns with nothing to say. Answering "found: false" lets it recover in
+    // the same turn — usually by searching for the right customer instead.
     handler: async ({ customerId }, ctx) => {
-      const khata = await getKhata(ctx.shopId, customerId);
-      const entries = Array.isArray(khata?.entries) ? khata.entries : khata?.ledger ?? [];
-      return { ...khata, entries: entries.slice(0, MAX_ROWS) };
+      try {
+        const khata = await getKhata(ctx.shopId, customerId);
+        const entries = Array.isArray(khata?.entries) ? khata.entries : khata?.ledger ?? [];
+        return { found: true, ...khata, entries: entries.slice(0, MAX_ROWS) };
+      } catch (error) {
+        if (error?.status === 404 || /not found/i.test(String(error?.message))) {
+          return { found: false, hint: "No customer has that id. Call find_customer and use the id it returns." };
+        }
+        throw error;
+      }
     },
   }),
 
@@ -214,10 +235,42 @@ export const CORE_READ_TOOLS = [
         windowDays: { type: "integer", minimum: 1, maximum: 365, description: "Days of movement to consider. Default 30." },
       },
     },
-    handler: async ({ windowDays }, ctx) => getInventoryHealth(ctx.shopId, {
-      windowDays: windowDays ?? 30,
-      includeCost: ctx.role === "owner" || ctx.role === "admin",
-    }),
+    /**
+     * Trimmed on purpose. The service returns low stock, dead stock, fast and
+     * slow movers, negative stock and a full valuation — handed over whole, the
+     * model latches onto whichever list is longest and answers from that. In a
+     * shop with no recent bills every product is "dead stock", which is true and
+     * useless: the question "what should I reorder" is answered by the low-stock
+     * list, so that goes first and the rest is summarised.
+     */
+    handler: async ({ windowDays }, ctx) => {
+      const health = await getInventoryHealth(ctx.shopId, {
+        windowDays: windowDays ?? 30,
+        includeCost: ctx.role === "owner" || ctx.role === "admin",
+      });
+      const brief = (rows) => (rows ?? []).slice(0, MAX_ROWS).map((row) => ({
+        name: row.productName,
+        stock: row.stockBaseQty,
+        unit: row.baseUnit,
+        lowStockAt: row.lowStockThreshold,
+        soldInWindow: row.quantitySoldBase,
+      }));
+      return {
+        windowDays: health.windowDays,
+        // What actually needs buying: stock has fallen to or below its alert level.
+        lowStock: brief(health.lowStock),
+        lowStockCount: (health.lowStock ?? []).length,
+        // Sold nothing in the window. In a shop with no bills yet this is every
+        // product, so it is reported with that caveat rather than as a finding.
+        notSellingCount: (health.deadStock ?? []).length,
+        notSelling: brief(health.deadStock).slice(0, 10),
+        negativeStock: brief(health.negativeStock),
+        totalProducts: health.totalProducts,
+        note: (health.lowStock ?? []).length === 0
+          ? "No product is at or below its low-stock threshold. If a product has no threshold set, it can never appear here."
+          : null,
+      };
+    },
   }),
 
   defineTool({

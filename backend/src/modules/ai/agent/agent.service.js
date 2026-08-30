@@ -151,12 +151,31 @@ function withTimeout(promise, ms, label) {
  * what makes that instruction actionable rather than aspirational, and it is
  * cheap.
  */
+/**
+ * Prisma hands back BigInt for every `*Paise` shadow column and Decimal for some
+ * money fields, and JSON.stringify throws outright on a BigInt. Unreplaced, any
+ * tool that happens to read a row carrying one fails at serialisation — after
+ * the query succeeded — which reads as a broken tool rather than a broken
+ * encoder. Money is stringified rather than coerced to Number so a paise value
+ * beyond 2^53 cannot quietly lose its last digits.
+ */
+function jsonSafe(_key, value) {
+  if (typeof value === "bigint") return value.toString();
+  if (value instanceof Date) return value.toISOString();
+  if (value && typeof value === "object" && typeof value.toFixed === "function" && !Array.isArray(value)) {
+    return value.toString();
+  }
+  return value;
+}
+
 function toolResultMessage(toolCallId, name, payload) {
-  return {
-    role: "tool",
-    tool_call_id: toolCallId,
-    content: JSON.stringify({ tool: name, untrustedData: true, result: payload }).slice(0, 12_000),
-  };
+  let content;
+  try {
+    content = JSON.stringify({ tool: name, untrustedData: true, result: payload }, jsonSafe);
+  } catch (error) {
+    content = JSON.stringify({ tool: name, untrustedData: true, error: `Result could not be encoded: ${error?.message}` });
+  }
+  return { role: "tool", tool_call_id: toolCallId, content: String(content).slice(0, 12_000) };
 }
 
 function trimHistory(history) {
@@ -289,12 +308,40 @@ export async function runAgentTurn(ctx, { message, history = [] } = {}) {
       try {
         const result = await withTimeout(tool.handler(args, agentCtx), TOOL_TIMEOUT_MS, name);
         rememberLabels(labels, result);
+        // Encoded before the step is recorded: a result that cannot be encoded
+        // is not a successful lookup, and recording "ok" first left the trace
+        // claiming both ok and error for the same call.
+        const message = toolResultMessage(call.id, name, result);
         trace.push({ tool: name, kind: "read", status: "ok" });
-        messages.push(toolResultMessage(call.id, name, result));
+        messages.push(message);
       } catch (error) {
         trace.push({ tool: name, kind: "read", status: "error" });
         messages.push(toolResultMessage(call.id, name, { error: error?.message ?? "The lookup failed." }));
       }
+    }
+  }
+
+  // Running out of steps having read real rows is not a failure — the answer is
+  // sitting in the transcript, unspoken. One more call with the tools withheld
+  // forces the model to say it, instead of the shopkeeper getting "I could not
+  // complete that" after six successful lookups.
+  if (!reply && trace.some((step) => step.status === "ok")) {
+    try {
+      const closing = await selected.client.chat.completions.create({
+        model: selected.model,
+        messages: [
+          ...messages,
+          {
+            role: "system",
+            content: "Answer now, in one or two sentences, using only what the tool results above actually contain. No more tools are available. If they do not answer the question, say briefly what is missing.",
+          },
+        ],
+        temperature: 0,
+      });
+      reply = String(closing?.choices?.[0]?.message?.content ?? "").trim();
+      if (reply) stoppedBecause = `${stoppedBecause}_then_summarised`;
+    } catch {
+      // Falls through to the generic reply below.
     }
   }
 
@@ -419,6 +466,9 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
 
   return { planId: record.id, results, allSucceeded: failed.length === 0 };
 }
+
+/** Test surface. Not used on a request path. */
+export const __agentInternals = { jsonSafe, toolResultMessage, validateArgs };
 
 /** Decline a plan without running it, so the audit row records the refusal. */
 export async function rejectPlan(ctx, { planId }) {
