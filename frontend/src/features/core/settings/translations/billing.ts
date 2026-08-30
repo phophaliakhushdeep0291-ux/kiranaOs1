@@ -330,6 +330,7 @@ export const billingEn = {
   "billing.search.noResultsFor": "No results for \"{term}\"",
   "billing.search.resultCount": "{count} result",
   "billing.search.resultCountPlural": "{count} results",
+  "billing.search.addingQuantity": "Adding {count} ×",
   "billing.search.itemSingular": "Item",
 
   // Billing page — toasts, dialogs and the mobile checkout sheet
