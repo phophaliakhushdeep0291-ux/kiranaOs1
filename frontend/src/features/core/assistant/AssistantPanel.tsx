@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, Check, Loader2, Send, Sparkles, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Check, Loader2, Mic, Send, Sparkles, Square, X } from "lucide-react";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import {
   sendAgentMessage,
@@ -8,6 +8,11 @@ import {
   type AgentChatMessage,
   type AgentTurn,
 } from "./agent-client";
+import {
+  startBackendTranscription,
+  backendTranscriptionErrorMessage,
+  type BackendTranscriptionSession,
+} from "@/features/core/voice/backend-transcription";
 
 /**
  * The assistant panel.
@@ -43,6 +48,8 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
   const [planState, setPlanState] = useState<PlanState>({ status: "idle" });
   const [pin, setPin] = useState("");
   const [showTrace, setShowTrace] = useState(false);
+  const [mic, setMic] = useState<"idle" | "listening" | "transcribing">("idle");
+  const micSession = useRef<BackendTranscriptionSession | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -128,6 +135,42 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     setPending(null);
     setPlanState({ status: "done", ok: true, message: t("assistant.rejected") });
   }, [pending, t]);
+
+  // Voice in, because the person asking "what is running out" usually has stock
+  // in one hand. The transcript is sent straight away rather than parked in the
+  // box: talking to it should feel like talking. That is safe here for the same
+  // reason everything else is — a mis-heard word can start a lookup, but every
+  // change still stops at a confirmation the shopkeeper reads.
+  const toggleMic = useCallback(async () => {
+    if (micSession.current) {
+      micSession.current.stop();
+      return;
+    }
+    setError(null);
+    try {
+      micSession.current = await startBackendTranscription({
+        onStart: () => setMic("listening"),
+        onTranscribing: () => setMic("transcribing"),
+        onTranscript: (result) => {
+          const spoken = result.transcript?.trim();
+          if (spoken) void ask(spoken);
+        },
+        onError: (message) => setError(message),
+        onEnd: () => {
+          micSession.current = null;
+          setMic("idle");
+        },
+      });
+    } catch (caught) {
+      micSession.current = null;
+      setMic("idle");
+      setError(backendTranscriptionErrorMessage(caught) || t("assistant.micDenied"));
+    }
+  }, [ask, t]);
+
+  // Closing the panel mid-recording has to release the microphone, or a shared
+  // shop tablet sits there with the recording indicator lit.
+  useEffect(() => () => micSession.current?.cancel(), []);
 
   if (!open) return null;
 
@@ -309,12 +352,27 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
           onSubmit={(event) => { event.preventDefault(); ask(draft); }}
           className="flex items-center gap-2 border-t border-slate-200 px-3 py-3"
         >
+          <button
+            type="button"
+            onClick={toggleMic}
+            disabled={busy || mic === "transcribing"}
+            aria-label={mic === "listening" ? t("assistant.listening") : t("assistant.speak")}
+            aria-pressed={mic === "listening"}
+            className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${
+              mic === "listening"
+                ? "animate-pulse border-rose-300 bg-rose-50 text-rose-600"
+                : "border-slate-300 text-slate-600 hover:border-[var(--brand)] hover:text-[var(--brand)]"
+            }`}
+          >
+            {mic === "transcribing" ? <Loader2 size={17} className="animate-spin" /> : mic === "listening" ? <Square size={15} /> : <Mic size={17} />}
+          </button>
           <input
             ref={inputRef}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder={t("assistant.inputPlaceholder")}
-            className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-[var(--brand)]"
+            placeholder={mic === "idle" ? t("assistant.inputPlaceholder") : mic === "listening" ? t("assistant.listening") : t("assistant.transcribing")}
+            disabled={mic !== "idle"}
+            className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm font-semibold outline-none focus:border-[var(--brand)] disabled:bg-slate-50"
           />
           <button
             type="submit"

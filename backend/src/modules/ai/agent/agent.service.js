@@ -236,6 +236,8 @@ export async function runAgentTurn(ctx, { message, history = [], language } = {}
 
   // Labels learned from reads, so a proposal can name a product instead of an id.
   const labels = new Map();
+  // Every name seen this turn, for the spelling reminder below.
+  const names = new Set();
   agentCtx.labelFor = (id) => labels.get(id) ?? null;
 
   const trace = [];
@@ -244,6 +246,7 @@ export async function runAgentTurn(ctx, { message, history = [], language } = {}
   let toolCallCount = 0;
   let reply = "";
   let stoppedBecause = "completed";
+  let reinforcedNames = false;
 
   for (let step = 0; step < MAX_STEPS; step += 1) {
     if (Date.now() > deadline) { stoppedBecause = "turn_timeout"; break; }
@@ -329,7 +332,7 @@ export async function runAgentTurn(ctx, { message, history = [], language } = {}
 
       try {
         const result = await withTimeout(tool.handler(args, agentCtx), TOOL_TIMEOUT_MS, name);
-        rememberLabels(labels, result);
+        rememberLabels(labels, names, result);
         // Encoded before the step is recorded: a result that cannot be encoded
         // is not a successful lookup, and recording "ok" first left the trace
         // claiming both ok and error for the same call.
@@ -340,6 +343,20 @@ export async function runAgentTurn(ctx, { message, history = [], language } = {}
         trace.push({ tool: name, kind: "read", status: "error" });
         messages.push(toolResultMessage(call.id, name, { error: error?.message ?? "The lookup failed." }));
       }
+    }
+
+    // A general rule in the system prompt ("never translate a product name") is
+    // followed most of the time and not all of the time — a smaller model
+    // answering in Hindi will still reach for साखर when the catalogue says
+    // Sugar, and the shopkeeper then cannot find the row being discussed. Naming
+    // the exact strings, once, right after they are read, is far stickier than
+    // the rule alone, because it is concrete and it is adjacent to the answer.
+    if (names.size && !reinforcedNames) {
+      reinforcedNames = true;
+      messages.push({
+        role: "system",
+        content: `Names from this shop's records. Write each one exactly like this, character for character, whatever language you answer in — do not translate or transliterate them: ${[...names].slice(0, 40).join(", ")}`,
+      });
     }
   }
 
@@ -412,20 +429,32 @@ function safeSummary(tool, args, ctx) {
   }
 }
 
-/** Learn id -> human name from read results, so proposals read like sentences. */
-function rememberLabels(labels, result) {
-  const collect = (rows) => {
-    if (!Array.isArray(rows)) return;
-    for (const row of rows) {
-      if (row && typeof row === "object" && typeof row.id === "string" && typeof row.name === "string") {
-        labels.set(row.id, row.name);
-      }
+/**
+ * Learn the names this turn is talking about.
+ *
+ * Two collections, because they answer different questions. `labels` maps id to
+ * name so a proposal can say "Sugar" instead of an id. `names` is every name
+ * seen anywhere in a result, id or not — reports return rows without ids, and
+ * those products were the ones still being transliterated once the id-keyed
+ * reinforcement was in place.
+ */
+function rememberLabels(labels, names, result) {
+  const seen = new Set();
+  const walk = (node, depth) => {
+    if (!node || typeof node !== "object" || depth > 4 || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) {
+      for (const item of node.slice(0, 60)) walk(item, depth + 1);
+      return;
     }
+    const name = typeof node.name === "string" ? node.name : typeof node.productName === "string" ? node.productName : null;
+    if (name) {
+      names.add(name);
+      if (typeof node.id === "string") labels.set(node.id, name);
+    }
+    for (const value of Object.values(node)) if (value && typeof value === "object") walk(value, depth + 1);
   };
-  if (!result || typeof result !== "object") return;
-  collect(result.products);
-  collect(result.customers);
-  if (result.product?.id && result.product?.name) labels.set(result.product.id, result.product.name);
+  walk(result, 0);
 }
 
 /**
