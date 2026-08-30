@@ -248,30 +248,70 @@ export const CORE_READ_TOOLS = [
         windowDays: windowDays ?? 30,
         includeCost: ctx.role === "owner" || ctx.role === "admin",
       });
-      const brief = (rows) => (rows ?? []).slice(0, MAX_ROWS).map((row) => ({
-        name: row.productName,
-        stock: row.stockBaseQty,
-        // Stock is counted in the base unit, which is not always the unit the
-        // product is priced in. Naming it explicitly stops "3 kg of rice" being
-        // reported as "3 pieces" when the two differ.
-        unit: row.baseUnit ?? null,
-        lowStockAt: row.lowStockThreshold,
-        soldInWindow: row.quantitySoldBase,
-      }));
+      /**
+       * Each row says which list it came from and what its number means.
+       *
+       * Both halves of this are load-bearing, and both were learned the hard
+       * way against a real shop. Rows carrying only `stock` and `lowStockAt`
+       * read alike whichever list they came from, so a product that had simply
+       * not sold was reported as "running out". And a stock of -23 was read back
+       * as "23000 gram" — the minus sign dropped, turning 23 kg oversold into 23
+       * kg in hand, which is the opposite of the truth about money.
+       *
+       * So negative rows carry the sign twice: once in `stock`, once in an
+       * `oversoldBy` that cannot be read as anything else.
+       */
+      const brief = (rows, status) => (rows ?? []).slice(0, MAX_ROWS).map((row) => {
+        const stock = Number(row.stockBaseQty);
+        return {
+          name: row.productName,
+          stock: row.stockBaseQty,
+          // Stock is counted in the base unit, which is not always the unit the
+          // product is priced in. Naming it explicitly stops "3 kg of rice"
+          // being reported as "3 pieces" when the two differ.
+          unit: row.baseUnit ?? null,
+          status,
+          ...(status === "low_stock" ? { lowStockAt: row.lowStockThreshold } : {}),
+          ...(status === "not_selling" ? { soldInWindow: row.quantitySoldBase } : {}),
+          ...(Number.isFinite(stock) && stock < 0
+            ? {
+              oversoldBy: Math.abs(stock),
+              meaning: `Stock is NEGATIVE. The shop sold ${Math.abs(stock)} ${row.baseUnit ?? "units"} more than it had recorded. This is not low stock and it is not stock in hand.`,
+            }
+            : {}),
+        };
+      });
+
+      const negative = health.negativeStock ?? [];
+      // An oversold product satisfies `stock <= threshold` too, so the service
+      // returns it in both lists — correct for a report, ruinous for a sentence.
+      // It is reported once, as oversold, because "Moong Dal is running low" is
+      // a false statement about a product the shop is 23 kg short on.
+      // getInventoryHealth itself is left alone: the dashboard and the inventory
+      // screen read it, and this is a presentation choice, not a data one.
+      const lowStock = (health.lowStock ?? []).filter((row) => !(Number(row.stockBaseQty) < 0));
       return {
         windowDays: health.windowDays,
         // What actually needs buying: stock has fallen to or below its alert level.
-        lowStock: brief(health.lowStock),
-        lowStockCount: (health.lowStock ?? []).length,
+        lowStock: brief(lowStock, "low_stock"),
+        lowStockCount: lowStock.length,
+        // Sold more than was recorded. Deliberate in some shops, which reconcile
+        // later — so it is reported, never corrected and never called low stock.
+        negativeStock: brief(negative, "negative_stock"),
+        negativeStockCount: negative.length,
         // Sold nothing in the window. In a shop with no bills yet this is every
         // product, so it is reported with that caveat rather than as a finding.
         notSellingCount: (health.deadStock ?? []).length,
-        notSelling: brief(health.deadStock).slice(0, 10),
-        negativeStock: brief(health.negativeStock),
+        notSelling: brief(health.deadStock, "not_selling").slice(0, 10),
         totalProducts: health.totalProducts,
-        note: (health.lowStock ?? []).length === 0
-          ? "No product is at or below its low-stock threshold. If a product has no threshold set, it can never appear here."
-          : null,
+        note: [
+          lowStock.length === 0
+            ? "Nothing is at or below its low-stock threshold, so nothing needs reordering on that basis. A product with no threshold set can never appear in lowStock."
+            : null,
+          negative.length > 0
+            ? "negativeStock is a separate thing from lowStock: those products are oversold, not running low. Report the negative figure as negative."
+            : null,
+        ].filter(Boolean).join(" ") || null,
       };
     },
   }),

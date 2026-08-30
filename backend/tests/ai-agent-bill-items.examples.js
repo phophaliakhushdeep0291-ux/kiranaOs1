@@ -13,6 +13,7 @@
 import assert from "node:assert/strict";
 import db from "../src/db.js";
 import { CORE_WRITE_TOOLS } from "../src/modules/ai/agent/tools/core-write.js";
+import { CORE_READ_TOOLS } from "../src/modules/ai/agent/tools/core-read.js";
 
 const ok = (label) => console.log(`  ok ${label}`);
 const addItems = CORE_WRITE_TOOLS.find((tool) => tool.name === "add_items_to_bill");
@@ -101,6 +102,46 @@ ok("one bad item does not throw away the good ones");
 const noUnit = await run([{ query: "sugar", quantity: 2 }]);
 assert.equal(noUnit.lines[0].unit, "kg", "an unspoken unit falls back to the product's own");
 ok("an unspoken unit comes from the product, not from a default");
+
+
+/* ------------------------------------------------- negative stock reporting */
+
+// A real shop showed Moong dal at -23 kg -- deliberately oversold, to be
+// reconciled later. The assistant reported "~23000 gram", dropping the minus
+// sign, which turns 23 kg owed into 23 kg in hand. The tool now carries the
+// sign twice so it cannot be read away, and says which list a row came from so
+// oversold is never narrated as "running out".
+const inventoryTool = CORE_READ_TOOLS.find((tool) => tool.name === "get_inventory_health");
+assert.ok(inventoryTool, "get_inventory_health must exist");
+
+await db.product.create({
+  data: {
+    shopId: shop.id,
+    name: "Moong Dal",
+    baseUnit: "gram",
+    rateUnit: "kg",
+    defaultPricePerRateUnit: 95,
+    stockBaseQty: -23000,
+    lowStockThreshold: 20000,
+  },
+});
+
+const health = await inventoryTool.handler({}, ctx);
+const oversold = health.negativeStock.find((row) => row.name === "Moong Dal");
+assert.ok(oversold, "an oversold product must appear under negativeStock");
+assert.equal(oversold.stock, -23000, "the stock figure keeps its sign");
+assert.equal(oversold.oversoldBy, 23000, "and the amount oversold is stated separately");
+assert.equal(oversold.status, "negative_stock");
+assert.match(oversold.meaning, /NEGATIVE/, "the row says in words what a negative stock means");
+
+// The trap: it must not also be counted as low stock, which is what made the
+// live answer call an oversold item "running out".
+assert.ok(
+  !health.lowStock.some((row) => row.name === "Moong Dal"),
+  "oversold is not the same as low, and must not appear in both",
+);
+assert.match(health.note ?? "", /oversold, not running low/, "the note keeps the two apart");
+ok("negative stock keeps its sign and stays out of the low-stock list");
 
 await db.$disconnect();
 console.log("ai-agent-bill-items.examples.js OK");

@@ -1,10 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/core/auth/useAuth";
-import { runSyncCycle } from "@/features/core/sync/engine";
+import { hydrateFromBackendSnapshot, runSyncCycle } from "@/features/core/sync/deferred-runtime";
 import { getApiBaseUrl } from "@/lib/api/http";
 import { shouldPassSharedThrottle, shouldRunScheduledNetworkWork } from "@/lib/browser/multiTabCoordinator";
-import { hydrateFromBackendSnapshot } from "@/features/core/sync/cloud-hydration";
 
 const FIRST_BOOTSTRAP_DELAY_MS = 900;
 const BOOTSTRAP_THROTTLE_MS = 12_000;
