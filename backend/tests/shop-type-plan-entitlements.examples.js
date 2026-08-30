@@ -40,9 +40,9 @@ for (const businessType of Object.keys(BUSINESS_TYPE_PLAN_PRICING)) {
   );
 }
 
-// Restaurant is now two plans: Counter at ₹699 and Dine-in at ₹1,499, each
+// Restaurant is now two plans: Counter at ₹799 and Dine-in at ₹1,499, each
 // billed yearly as ten months.
-assert.equal(getPlanConfigForBusinessType("starter", "restaurant").priceYearlyPaise, 699000);
+assert.equal(getPlanConfigForBusinessType("starter", "restaurant").priceYearlyPaise, 799000);
 assert.equal(getPlanConfigForBusinessType("growth", "restaurant").priceYearlyPaise, 1499000);
 assert.equal(getPlanConfigForBusinessType("growth", "auto_parts").priceYearlyPaise, 899900);
 assert.equal(getPlanConfigForBusinessType("starter", "kirana").priceYearlyPaise, 99900);
