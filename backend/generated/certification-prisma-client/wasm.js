@@ -352,6 +352,7 @@ exports.Prisma.ProductScalarFieldEnum = {
   baseUnit: 'baseUnit',
   rateUnit: 'rateUnit',
   stockBaseQty: 'stockBaseQty',
+  stockTrackingEnabled: 'stockTrackingEnabled',
   costPerRateUnit: 'costPerRateUnit',
   costPerRateUnitPaise: 'costPerRateUnitPaise',
   minPricePerRateUnit: 'minPricePerRateUnit',
@@ -560,6 +561,24 @@ exports.Prisma.RetailPaymentIntentScalarFieldEnum = {
   confirmationSource: 'confirmationSource',
   consumedAt: 'consumedAt',
   failureReason: 'failureReason',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PaymentProviderConnectionScalarFieldEnum = {
+  id: 'id',
+  shopId: 'shopId',
+  provider: 'provider',
+  environment: 'environment',
+  encryptedCredentials: 'encryptedCredentials',
+  keyIdHint: 'keyIdHint',
+  webhookSecretConfigured: 'webhookSecretConfigured',
+  selected: 'selected',
+  status: 'status',
+  verifiedAt: 'verifiedAt',
+  lastVerifiedAt: 'lastVerifiedAt',
+  createdByUserId: 'createdByUserId',
+  updatedByUserId: 'updatedByUserId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -2796,6 +2815,7 @@ exports.Prisma.ModelName = {
   BillItem: 'BillItem',
   Payment: 'Payment',
   RetailPaymentIntent: 'RetailPaymentIntent',
+  PaymentProviderConnection: 'PaymentProviderConnection',
   StoreLocation: 'StoreLocation',
   LocationStock: 'LocationStock',
   StorageBin: 'StorageBin',
