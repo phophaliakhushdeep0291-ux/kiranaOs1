@@ -8,6 +8,7 @@ import {
   maskDatabaseUrl,
   shouldGracefullySkipPrismaRuntime,
 } from "../../scripts/test-db-utils.js";
+import { formatDateInTimeZone } from "../../src/utils/dates.js";
 
 Object.assign(process.env, buildTestEnv());
 
@@ -353,10 +354,7 @@ export function assertFailure(response, expectedStatus) {
   return response.body;
 }
 
-export function todayRangeQuery() {
-  const from = new Date();
-  from.setHours(0, 0, 0, 0);
-  const to = new Date();
-  to.setHours(23, 59, 59, 999);
-  return `from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`;
+export function todayRangeQuery(now = new Date(), timeZone = process.env.DAILY_CLOSING_TIMEZONE || "Asia/Kolkata") {
+  const dateKey = formatDateInTimeZone(now, timeZone);
+  return `from=${encodeURIComponent(dateKey)}&to=${encodeURIComponent(dateKey)}`;
 }

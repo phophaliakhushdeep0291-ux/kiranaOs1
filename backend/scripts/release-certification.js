@@ -332,6 +332,17 @@ runStep({
   id: "ai-safety",
   label: "AI command and diagnostic hallucination safety gates",
   args: ["run", "test:ai-safety"],
+  env: {
+    NODE_ENV: "test",
+    DATABASE_URL: sqliteTestUrl,
+    TEST_DATABASE_URL: sqliteTestUrl,
+    POSTGRES_TEST_DATABASE_URL: "",
+    DIRECT_DATABASE_URL: "",
+    PRISMA_CLIENT_VARIANT: "certification",
+    FORCE_DB_TESTS: "true",
+    SKIP_PRISMA_GENERATE: "true",
+    LOG_LEVEL: "silent",
+  },
 });
 runStep({ id: "api-contract", label: "Static API contract proof", args: ["run", "contract:check"] });
 runStep({ id: "razorpay-fixtures", label: "Razorpay signature fixture proof", args: ["run", "razorpay:fixtures"] });
