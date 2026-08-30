@@ -20,7 +20,7 @@ export const ACCENT_COLORS: Record<AccentColor, AccentDefinition> = {
    * Blue stays in the picker. This changes what a shop is given, not what it
    * is allowed to choose.
    */
-  indigo: { swatch: "#4A5796" },
+  indigo: { swatch: "#5463AB" },
   emerald: { swatch: "#16a34a" },
   teal: { swatch: "#0d9488" },
   blue: { swatch: "#2563eb" },
