@@ -37,10 +37,27 @@ export interface AgentTurn {
   provider: { name: string; model: string; toolsOffered: number };
 }
 
+/**
+ * Something the till has to do itself, because it is where that state lives.
+ *
+ * Adding to a bill is the case: the cart is React state persisted offline so a
+ * shop can bill through a power cut, so the server resolves and prices the lines
+ * and the till merges them. The action has NOT happened when confirm returns.
+ */
+export interface AgentClientAction {
+  ref: string;
+  action: "add_bill_lines" | string;
+  payload: {
+    lines?: Array<{ productId: string; name: string; quantity: number; unit: string; rate: number }>;
+    problems?: Array<{ query: string; reason: string; candidates?: string[] }>;
+  };
+}
+
 export interface AgentExecutionResult {
   planId: string;
   allSucceeded: boolean;
   results: Array<{ ref: string; ok: boolean; summary?: string; error?: string }>;
+  clientActions?: AgentClientAction[];
 }
 
 export interface AgentChatMessage {

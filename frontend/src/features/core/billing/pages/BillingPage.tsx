@@ -21,6 +21,7 @@ import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
 import { BillingOrderQrButton } from "@/features/core/customer-order/BillingOrderQrButton";
 import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills } from "./open-bills";
+import { takeStagedBillLines } from "../assistant-staging";
 import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace } from "./billing-workspace";
 import { updateCustomerOrder } from "@/features/core/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
@@ -1117,6 +1118,66 @@ export default function Billing() {
     }
     return created.length;
   }
+
+
+  // Items the assistant resolved while the shopkeeper was on another screen.
+  //
+  // Drained here rather than written into the billing draft by the assistant,
+  // because this is the only place that knows how to merge a line: which selling
+  // unit it belongs to, whether it collapses into a line already in the cart,
+  // and how the quantity rounds. A second copy of that in the assistant would
+  // eventually mis-price a real bill.
+  //
+  // It waits for the catalogue, since a staged line is an id until there is a
+  // Product to hang it on, and takeStagedBillLines clears as it reads so a
+  // remount cannot bill the same items twice.
+  useEffect(() => {
+    if (allProducts.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const staged = await takeStagedBillLines();
+      if (cancelled || staged.length === 0) return;
+      const resolved = staged
+        .map((line) => ({ line, product: productById.get(line.productId) }))
+        .filter((entry): entry is { line: typeof staged[number]; product: Product } => entry.product != null);
+      if (resolved.length === 0) return;
+
+      setCart((previous) => {
+        let next = [...previous];
+        for (const { line, product } of resolved) {
+          const sellingUnit = activeSellingUnits(product).find((unit) =>
+            [unit.name, unit.unitType, unit.packSizeUnit].filter(Boolean).some((value) => String(value).toLowerCase() === line.unit.toLowerCase()),
+          ) ?? defaultSellingUnit(product);
+          const candidate: CartItem = {
+            product,
+            quantity: line.quantity,
+            rate: line.rate,
+            unit: sellingUnit?.name ?? line.unit,
+            sellingUnit,
+            manualRate: true,
+          };
+          const candidateKey = cartItemKey(candidate);
+          const existing = next.find((item) => cartItemKey(item) === candidateKey);
+          if (existing) {
+            next = next.map((item) => cartItemKey(item) === candidateKey
+              ? { ...item, quantity: roundQuantity(item.quantity + line.quantity), rate: line.rate, unit: candidate.unit, sellingUnit, manualRate: true }
+              : item);
+          } else {
+            next.push(candidate);
+          }
+        }
+        return next;
+      });
+
+      for (const { product } of resolved) {
+        rememberRecentProduct(product.id);
+        trackEvent(ACTIVITY_EVENTS.PRODUCT_ADDED_TO_BILL, { productId: product.id, productName: product.name, via: "assistant" });
+      }
+      if (billingStartedAtRef.current === null) billingStartedAtRef.current = Date.now();
+      toast({ title: t("billing.page.addedToCart"), description: t("billing.page.addedToCartDetail") });
+    })();
+    return () => { cancelled = true; };
+  }, [allProducts.length, productById, t]);
 
   function addVoiceDraftToCart() {
     if (!voiceDraft) return;

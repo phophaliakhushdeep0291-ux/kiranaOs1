@@ -181,6 +181,49 @@ const safe = __agentInternals.toolResultMessage("call_2", "search_products", cir
 assert.ok(JSON.parse(safe.content).error, "an unencodable result becomes a reported error, not a crash");
 ok("an unencodable result degrades instead of crashing the turn");
 
+/* ------------------------------------------------------ where a write lands */
+
+// A read has no confirmation step and no client to hand anything to, so a read
+// that claims to target the till is a definition mistake, not a runtime one.
+assert.throws(() => defineTool({
+  name: "client_read",
+  kind: "read",
+  risk: TOOL_RISK.SAFE,
+  target: "client",
+  description: "A read pretending it has somewhere on the client to land.",
+  handler: async () => ({}),
+}), /only a write can target the client/);
+assert.throws(() => defineTool({
+  name: "nowhere_write",
+  kind: "write",
+  risk: TOOL_RISK.CONFIRM,
+  target: "somewhere_else",
+  description: "A write aimed at a destination that does not exist.",
+  summarize: () => "x",
+  handler: async () => ({}),
+}), /target must be one of/);
+ok("a tool cannot claim a destination it does not have");
+
+// The bill is the one write that does not land in the database: the cart is
+// state on the till so a shop can keep billing through a power cut. It still
+// goes through confirmation like every other write.
+const addToBill = byName.add_items_to_bill;
+assert.ok(addToBill, "add_items_to_bill must stay registered");
+assert.equal(addToBill.kind, "write");
+assert.equal(addToBill.target, "client", "the cart lives on the till, not the server");
+assert.equal(addToBill.risk, TOOL_RISK.CONFIRM, "items reaching a bill are confirmed like any other change");
+assert.equal(
+  addToBill.summarize({ items: [{ query: "Sugar", quantity: 2, unit: "kg" }, { query: "Maggi", quantity: 1 }] }, {}),
+  "Add 2 kg Sugar, 1 Maggi to the bill",
+  "the confirmation names the real items and quantities",
+);
+// Every other write still lands server-side; only the bill is different.
+for (const tool of CORE_WRITE_TOOLS) {
+  if (tool.name === "add_items_to_bill") continue;
+  assert.equal(tool.target, "server", `${tool.name} must still write through a service`);
+}
+ok("adding to a bill resolves on the server and lands on the till");
+
 /* --------------------------------------------------------------- language */
 
 // Hindi is this app's default language, so a request that omits the field must
@@ -202,15 +245,25 @@ assert.equal(getTool("nonexistent_tool"), null);
 ok("the registry reports what it holds");
 
 /** Plausible arguments for a write tool, so summarize() can be exercised. */
-function sampleArgsFor(tool) {
-  const sample = {};
-  for (const [key, spec] of Object.entries(tool.parameters?.properties ?? {})) {
-    if (Array.isArray(spec.enum)) sample[key] = spec.enum[0];
-    else if (spec.type === "number" || spec.type === "integer") sample[key] = 5;
-    else if (spec.type === "boolean") sample[key] = true;
-    else sample[key] = "sample";
+function sampleValueFor(spec) {
+  if (Array.isArray(spec?.enum)) return spec.enum[0];
+  if (spec?.type === "number" || spec?.type === "integer") return 5;
+  if (spec?.type === "boolean") return true;
+  // An array parameter handed a string is how this harness previously fed
+  // add_items_to_bill a value its summarize could not map over.
+  if (spec?.type === "array") return [sampleValueFor(spec.items)];
+  if (spec?.type === "object") {
+    return Object.fromEntries(
+      Object.entries(spec.properties ?? {}).map(([key, child]) => [key, sampleValueFor(child)]),
+    );
   }
-  return sample;
+  return "sample";
+}
+
+function sampleArgsFor(tool) {
+  return Object.fromEntries(
+    Object.entries(tool.parameters?.properties ?? {}).map(([key, spec]) => [key, sampleValueFor(spec)]),
+  );
 }
 
 console.log("ai-agent-tools.examples.js OK");

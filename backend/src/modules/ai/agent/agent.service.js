@@ -499,7 +499,7 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
     try {
       assertToolAllowed(tool, execCtx);
       const output = await withTimeout(tool.handler(item.args, execCtx), TOOL_TIMEOUT_MS, tool.name);
-      results.push({ ref: item.ref, ok: true, summary: item.summary, output });
+      results.push({ ref: item.ref, ok: true, summary: item.summary, target: tool.target, output });
     } catch (error) {
       results.push({ ref: item.ref, ok: false, summary: item.summary, error: error?.message ?? "Failed" });
     }
@@ -515,7 +515,14 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
     },
   });
 
-  return { planId: record.id, results, allSucceeded: failed.length === 0 };
+  // A client-target write has not happened yet when this returns — the till still
+  // has to merge it into the cart. Handed over separately so the caller cannot
+  // mistake "resolved and priced" for "on the bill".
+  const clientActions = results
+    .filter((result) => result.ok && result.target === "client" && result.output?.clientAction)
+    .map((result) => ({ ref: result.ref, action: result.output.clientAction, payload: result.output }));
+
+  return { planId: record.id, results, clientActions, allSucceeded: failed.length === 0 };
 }
 
 /** Test surface. Not used on a request path. */

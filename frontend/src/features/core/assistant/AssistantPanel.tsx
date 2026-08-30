@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, Check, Loader2, Mic, Send, Sparkles, Square, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Check, Loader2, Mic, Send, ShoppingCart, Sparkles, Square, X } from "lucide-react";
+import { useLocation } from "wouter";
 import { useAppLanguage } from "@/features/core/settings/i18n";
+import { stageBillLines } from "@/features/core/billing/assistant-staging";
 import {
   sendAgentMessage,
   confirmAgentPlan,
@@ -40,6 +42,8 @@ type PlanState =
 
 export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, language } = useAppLanguage();
+  const [, navigate] = useLocation();
+  const [stagedCount, setStagedCount] = useState(0);
   const [messages, setMessages] = useState<Bubble[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -101,6 +105,14 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     setPlanState({ status: "working" });
     try {
       const result = await confirmAgentPlan(pending.planId, ownerPin);
+      // Lines the server resolved are not on the bill yet — the till owns the
+      // cart. Stage them and offer the trip rather than claiming it is done.
+      let staged = 0;
+      for (const action of result.clientActions ?? []) {
+        if (action.action !== "add_bill_lines") continue;
+        staged += await stageBillLines(action.payload?.lines ?? []);
+      }
+      setStagedCount(staged);
       setPlanState({
         status: "done",
         ok: result.allSucceeded,
@@ -322,6 +334,16 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
             <p className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold ${planState.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
               <Check size={15} /> {planState.message ?? t("assistant.confirmed")}
             </p>
+          ) : null}
+
+          {stagedCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => { setStagedCount(0); onClose(); navigate("/billing"); }}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand)] py-3 text-sm font-black text-white"
+            >
+              <ShoppingCart size={16} /> {t("assistant.openBill", { count: stagedCount })}
+            </button>
           ) : null}
 
           {lastTrace.length > 0 ? (

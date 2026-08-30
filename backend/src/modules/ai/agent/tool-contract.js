@@ -41,6 +41,21 @@ export const TOOL_RISK = Object.freeze({
 export const TOOL_RISK_VALUES = Object.freeze(Object.values(TOOL_RISK));
 export const TOOL_KINDS = Object.freeze(["read", "write"]);
 
+/**
+ * Where a confirmed write actually lands.
+ *
+ * Most writes land in the database through a service. A bill does not: the cart
+ * is React state on the till, persisted offline, and it has to stay there — a
+ * shop bills through a power cut, and a server-side cart would break the one
+ * flow that must never need a network.
+ *
+ * So a `client` write resolves and prices server-side, where the catalogue and
+ * the tenant boundary live, and returns lines the till merges into its own cart
+ * using the same code path the voice parser already uses. The confirmation step
+ * is identical either way; only the destination differs.
+ */
+export const TOOL_TARGETS = Object.freeze(["server", "client"]);
+
 const NAME_PATTERN = /^[a-z][a-z0-9_]{2,48}$/;
 
 /**
@@ -78,6 +93,7 @@ export function defineTool(definition) {
     name,
     kind,
     risk,
+    target = "server",
     description,
     parameters = { type: "object", properties: {}, additionalProperties: false },
     roles = null,
@@ -91,6 +107,8 @@ export function defineTool(definition) {
   }
   if (!TOOL_KINDS.includes(kind)) throw new Error(`Tool ${name}: kind must be one of ${TOOL_KINDS.join(", ")}`);
   if (!TOOL_RISK_VALUES.includes(risk)) throw new Error(`Tool ${name}: risk must be one of ${TOOL_RISK_VALUES.join(", ")}`);
+  if (!TOOL_TARGETS.includes(target)) throw new Error(`Tool ${name}: target must be one of ${TOOL_TARGETS.join(", ")}`);
+  if (kind === "read" && target !== "server") throw new Error(`Tool ${name}: only a write can target the client`);
   if (typeof description !== "string" || description.trim().length < 20) {
     throw new Error(`Tool ${name}: needs a description the model can actually route on (20+ chars)`);
   }
@@ -106,7 +124,7 @@ export function defineTool(definition) {
   assertNoTenantParameters(name, parameters);
 
   return Object.freeze({
-    name, kind, risk, description, parameters, roles, feature, summarize, handler,
+    name, kind, risk, target, description, parameters, roles, feature, summarize, handler,
   });
 }
 
