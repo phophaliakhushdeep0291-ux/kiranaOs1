@@ -74,6 +74,10 @@ for (const topic of topics) {
 const productionEnv = {
   ...process.env,
   NODE_ENV: "production",
+  // This block proves the event-bus transport contract in isolation. A release
+  // runner may itself enable BullMQ; inheriting that unrelated flag makes the
+  // child fail the queue prerequisite before it reaches the event-bus check.
+  QUEUES_ENABLED: "false",
   DATABASE_URL: "postgresql://u:p@localhost:5432/db",
   JWT_SECRET: "event-bus-test-jwt-secret-long-enough-1234567890",
   OWNER_PIN_REQUIRED: "true",

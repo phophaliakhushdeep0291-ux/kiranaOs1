@@ -506,8 +506,13 @@ if (ctx.skip) {
         { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
       );
       assert.equal(createdResponse.status, 202, JSON.stringify(createdResponse.body));
-      const created = createdResponse.body.data.backup;
-      assert.equal(created.status, "completed", "development mode safely executes inline when Redis is disabled");
+      let created = createdResponse.body.data.backup;
+      assert.ok(["queued", "completed"].includes(created.status), "backup is accepted by either the inline or worker-backed runner");
+      if (created.status === "queued") {
+        await processShopBackupArtifact(created.id, tenant.shop.id);
+        created = await ctx.db.backupArtifact.findUnique({ where: { id: created.id } });
+      }
+      assert.equal(created.status, "completed", "the accepted backup can be completed by the configured runner");
 
       const listed = await ctx.get("/api/jobs/backups", { token: ownerAuth.accessToken });
       assert.equal(listed.status, 200);
