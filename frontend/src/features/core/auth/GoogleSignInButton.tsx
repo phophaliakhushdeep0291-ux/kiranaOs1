@@ -65,7 +65,7 @@ export function isGoogleSignInConfigured(): boolean {
 const GOOGLE_BUTTON_MIN_WIDTH = 200;
 const GOOGLE_BUTTON_MAX_WIDTH = 400;
 
-function googleButtonWidth(available: number): number {
+export function googleButtonWidth(available: number): number {
   if (!Number.isFinite(available) || available <= 0) return GOOGLE_BUTTON_MIN_WIDTH;
   return Math.round(Math.min(GOOGLE_BUTTON_MAX_WIDTH, Math.max(GOOGLE_BUTTON_MIN_WIDTH, available)));
 }
@@ -119,8 +119,10 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (credential
 
   if (!CLIENT_ID || failed) return null;
 
-  // `min-w-0` and the clip are the belt to the measurement's braces: whatever
-  // width Google decides on, it can no longer widen the page around it.
+  // Defensive, not the fix. `overflow-x-clip` stops an oversized child painting
+  // outside the host, but its layout box still extends — measured at 360px — so
+  // these only stop the container adding width of its own. The measurement above
+  // is what actually keeps the card on screen.
   return (
     <div
       ref={containerRef}
