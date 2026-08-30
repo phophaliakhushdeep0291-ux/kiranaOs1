@@ -14,7 +14,7 @@ import { getLatestHealthForDevice, listLatestHealthPerDevice } from "../devices/
 function getReportProvider() {
   try {
     if (env.GROQ_API_KEY) {
-      return { client: new OpenAI({ apiKey: env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" }), model: env.GROQ_MODEL || "llama3-8b-8192", provider: "groq" };
+      return { client: new OpenAI({ apiKey: env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" }), model: env.GROQ_MODEL || "openai/gpt-oss-20b", provider: "groq" };
     }
     if (env.OPENAI_API_KEY) {
       return { client: new OpenAI({ apiKey: env.OPENAI_API_KEY }), model: env.OPENAI_MODEL || "gpt-4o-mini", provider: "openai" };
