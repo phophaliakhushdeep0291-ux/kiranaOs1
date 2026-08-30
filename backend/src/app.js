@@ -47,6 +47,10 @@ import manufacturingRoutes from "./verticals/manufacturing/manufacturing.routes.
 import dishRecipeRoutes from "./verticals/restaurant/recipes/recipes.routes.js";
 import kitchenTicketRoutes from "./verticals/restaurant/kot/kot.routes.js";
 import restaurantServiceOpsRoutes from "./verticals/restaurant/service-ops/service-ops.routes.js";
+// Registers this trade's assistant tools on import. The composition root is the
+// only place allowed to name a vertical, which is why registration happens here
+// alongside the route mounting rather than inside the shared AI module.
+import "./verticals/restaurant/ai/tools.js";
 import integrationRoutes from "./modules/integrations/integrations.routes.js";
 import { taxRoutes as complianceRoutes } from "./core/taxes/index.js";
 import loyaltyRoutes from "./modules/loyalty/loyalty.routes.js";

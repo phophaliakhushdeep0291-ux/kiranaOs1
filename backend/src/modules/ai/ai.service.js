@@ -48,7 +48,7 @@ function getCommandProvider() {
         apiKey: env.GROQ_API_KEY,
         baseURL: "https://api.groq.com/openai/v1",
       }),
-      model: env.GROQ_MODEL || "llama3-8b-8192",
+      model: env.GROQ_MODEL || "openai/gpt-oss-20b",
       provider: "groq",
     };
     return cachedCommandProvider;
