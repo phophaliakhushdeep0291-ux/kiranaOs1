@@ -12,7 +12,7 @@ export type Tone = "blue" | "green" | "amber" | "red" | "gray" | "violet";
 // Vivid mid-tone text on a soft tint — matches the reference chips (see lib/chip-tones).
 const BADGE_TONES: Record<Tone, string> = {
   blue: "bg-[#e8f0fe] text-[var(--brand)]",
-  green: "bg-[#e6f7ee] text-[#16a34a]",
+  green: "bg-[#e6f7ee] text-[var(--success-ink)]",
   amber: "bg-[#fdf3e1] text-[#d97706]",
   red: "bg-[#fdebeb] text-[#ef4444]",
   gray: "bg-[#eef2f7] text-[#64748b]",

@@ -419,7 +419,7 @@ export default function ReportsPage() {
       previous: previous?.cashSales ?? 0,
       icon: <Banknote size={16} />,
       color: "#16ad52",
-      iconClass: "bg-[#eaf9ef] text-[#16ad52]",
+      iconClass: "bg-[#eaf9ef] text-[var(--success-ink)]",
       spark: trend.map((point) => point.cash),
     },
     {
@@ -449,7 +449,7 @@ export default function ReportsPage() {
       previous: previous?.profitEstimate ?? 0,
       icon: <CircleDollarSign size={16} />,
       color: "#16ad52",
-      iconClass: "bg-[#eaf9ef] text-[#16ad52]",
+      iconClass: "bg-[#eaf9ef] text-[var(--success-ink)]",
       spark: trend.map((point) => point.profit),
     },
     {
@@ -991,12 +991,12 @@ function RiskChip({ balance }: { balance: number }) {
 }
 
 function StockStat({ icon, label, value, deltaValue, tone }: { icon: ReactNode; label: string; value: string; deltaValue: string; tone: "blue" | "red" | "green" | "amber" }) {
-  const colors = { blue: "bg-[var(--brand-soft)] text-[var(--brand)]", red: "bg-[#ffedef] text-[#ff334d]", green: "bg-[#eaf9ef] text-[#16ad52]", amber: "bg-[#fff3e8] text-[#ff8a00]" }[tone];
+  const colors = { blue: "bg-[var(--brand-soft)] text-[var(--brand)]", red: "bg-[#ffedef] text-[#ff334d]", green: "bg-[#eaf9ef] text-[var(--success-ink)]", amber: "bg-[#fff3e8] text-[#ff8a00]" }[tone];
   return <div className="flex min-h-[68px] gap-2.5 p-3"><span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[7px]", colors)}>{icon}</span><div className="min-w-0"><p className="text-[9px] font-semibold text-[#64738e]">{label}</p><p className="mt-0.5 text-[14px] font-black text-[#15264b]">{value}</p><p className="mt-0.5 text-[8.5px] text-[#7b89a0]">{deltaValue}</p></div></div>;
 }
 
 function InsightRow({ tone, title, detail }: { tone: "green" | "amber" | "red"; title: string; detail: string }) {
-  const colors = { green: "bg-[#eaf9ef] text-[#16ad52]", amber: "bg-[#fff3e8] text-[#ff8a00]", red: "bg-[#ffedef] text-[#ff334d]" }[tone];
+  const colors = { green: "bg-[#eaf9ef] text-[var(--success-ink)]", amber: "bg-[#fff3e8] text-[#ff8a00]", red: "bg-[#ffedef] text-[#ff334d]" }[tone];
   const icon = tone === "green" ? <TrendingUp size={14} /> : tone === "amber" ? <Sparkles size={14} /> : <AlertTriangle size={14} />;
   return <div className="flex gap-2.5 py-2.5"><span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", colors)}>{icon}</span><div><p className="text-[10px] font-semibold leading-4 text-[#20345a]">{title}</p><p className="text-[9px] leading-4 text-[#76839b]">{detail}</p></div></div>;
 }

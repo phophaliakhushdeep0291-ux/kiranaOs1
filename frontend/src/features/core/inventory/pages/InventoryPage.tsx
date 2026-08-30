@@ -894,7 +894,7 @@ export default function InventoryPage() {
                           <span className="mt-1 block truncate text-[12px] text-[#718096]">{t("inventory.page.categoryLabel", { value: item.category ?? t("products.filter.general") })}</span>
                         </span>
                         <span className="min-w-[88px] text-right">
-                          <span className={cn("block text-[16px] font-black", out ? "text-[#ff304f]" : low ? "text-[#f08a00]" : "text-[#10a948]")}>{tracked ? `${qty.toLocaleString("en-IN")} ${unit}` : t("inventory.page.notTracked")}</span>
+                          <span className={cn("block text-[16px] font-black", out ? "text-[#ff304f]" : low ? "text-[#f08a00]" : "text-[var(--success-ink)]")}>{tracked ? `${qty.toLocaleString("en-IN")} ${unit}` : t("inventory.page.notTracked")}</span>
                           <span className="mt-1 block text-[12px] text-[#718096]">{t("inventory.page.valueLabel", { value: fmtMoney(qty * cost) })}</span>
                           <span className="mt-2 inline-block"><InventoryStatusBadge status={out ? "out" : low ? "low" : "in"} /></span>
                         </span>
@@ -904,7 +904,7 @@ export default function InventoryPage() {
                           {packRows.map((row) => (
                             <span key={row.key} className="flex items-center justify-between gap-3 text-[12px]">
                               <span className="min-w-0 truncate font-semibold text-[#243653]">{row.label}</span>
-                              <span className={cn("shrink-0 font-black", row.isOut ? "text-[#ff304f]" : row.isLow ? "text-[#f08a00]" : "text-[#10a948]")}>{row.quantity.toLocaleString("en-IN")}</span>
+                              <span className={cn("shrink-0 font-black", row.isOut ? "text-[#ff304f]" : row.isLow ? "text-[#f08a00]" : "text-[var(--success-ink)]")}>{row.quantity.toLocaleString("en-IN")}</span>
                             </span>
                           ))}
                         </span>

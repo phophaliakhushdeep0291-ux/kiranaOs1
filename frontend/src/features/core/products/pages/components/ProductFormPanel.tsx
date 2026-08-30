@@ -954,7 +954,7 @@ export function ProductFormPanel({
                     <p className="truncate text-[11.5px] font-black text-[#12346b]">Billing unit: {currentSellingUnitName}</p>
                     <p className="mt-0.5 text-[10px] font-semibold text-[#6d7c98]">1 {selectedUnit} removes {packBaseQuantity || 0} {packBaseUnit} from stock</p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-[#e9fff0] px-2 py-1 text-[9.5px] font-black uppercase text-[#159447]">{t("products.form.exactPack")}</span>
+                  <span className="shrink-0 rounded-full bg-[#e9fff0] px-2 py-1 text-[9.5px] font-black uppercase text-[var(--success-ink)]">{t("products.form.exactPack")}</span>
                 </div>
               </div>
             ) : null}

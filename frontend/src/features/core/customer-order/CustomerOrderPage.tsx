@@ -507,7 +507,7 @@ function StorefrontHeader({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="truncate font-display text-xl font-black tracking-[-0.02em] text-[#071432]">{catalog.shop.name}</h1>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f9ee] px-2 py-1 text-[11px] font-black text-[#0f9f4a]">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f9ee] px-2 py-1 text-[11px] font-black text-[var(--success-ink)]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" /> {t("storefront.acceptingOrders")}
               </span>
             </div>
@@ -766,7 +766,7 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
             <span className="ml-2 text-xs font-semibold text-[#95a3bb] line-through">{formatRs(product.mrp)}</span>
           ) : null}
         </p>
-        <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-[#0f9f4a]">{t("storefront.available")}</p>
+        <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-[var(--success-ink)]">{t("storefront.available")}</p>
       </div>
       {qty > 0 ? (
         <QuantityStepper qty={qty} onChange={onChange} />
@@ -926,7 +926,7 @@ function OrderSummaryPanel({
         {placing ? <><Loader2 size={17} className="animate-spin" /> {t("storefront.placingOrder")}</> : <>Place Order <ChevronRight size={17} /></>}
       </button>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button type="button" onClick={onQr} disabled={cartItems.length === 0} className="rounded-xl border border-[#d8f5e2] bg-[#f1fbf5] py-2.5 text-xs font-black text-[#0f9f4a] disabled:opacity-40">{t("storefront.qrFallback")}</button>
+        <button type="button" onClick={onQr} disabled={cartItems.length === 0} className="rounded-xl border border-[#d8f5e2] bg-[#f1fbf5] py-2.5 text-xs font-black text-[var(--success-ink)] disabled:opacity-40">{t("storefront.qrFallback")}</button>
         <button type="button" onClick={onClear} disabled={cartItems.length === 0} className="rounded-xl border border-[#ffd6d6] bg-[#fff7f7] py-2.5 text-xs font-black text-[#ef4444] disabled:opacity-40">{t("storefront.clearCart2")}</button>
       </div>
     </aside>
@@ -1359,7 +1359,7 @@ function OrderTracker({
 
       <main className="mx-auto max-w-xl px-4 py-5">
         {justPlaced && !declined && (
-          <div className="mb-4 flex items-center gap-2 rounded-2xl bg-[#e9fbf0] px-4 py-3 text-[#16a34a]">
+          <div className="mb-4 flex items-center gap-2 rounded-2xl bg-[#e9fbf0] px-4 py-3 text-[var(--success-ink)]">
             <CheckCircle2 size={20} />
             <p className="text-[13px] font-bold">{t("storefront.orderSentTheShopHasBeen")}</p>
           </div>

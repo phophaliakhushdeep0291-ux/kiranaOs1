@@ -1135,7 +1135,7 @@ function RecentBillsPanel() {
     if (label === "Udhar") return "bg-amber-50 text-amber-700";
     if (label === "Bank") return "bg-blue-50 text-blue-700";
     if (label === "Card") return "bg-[#f3e8ff] text-[#7c3aed]";
-    return "bg-[#e9fff0] text-[#16a34a]";
+    return "bg-[#e9fff0] text-[var(--success-ink)]";
   }
 
   return (
@@ -1201,7 +1201,7 @@ function QuickActionsPanel({ onHoldBill, onApplyDiscount, onApplyCoupon, onChoos
   const actions = [
     {
       iconEl: <Zap size={15} />,
-      iconBg: "bg-[#e9fff0] text-[#16a34a]",
+      iconBg: "bg-[#e9fff0] text-[var(--success-ink)]",
       title: t("billing.search.actionDiscount"),
       description: t("billing.search.actionDiscountHint"),
       hint: "F4",
@@ -1282,7 +1282,7 @@ function BillingTipsPanel() {
       <div className="space-y-0">
         {tips.map((tip) => (
           <div key={tip.key} className="flex min-h-[32px] items-center gap-2 text-[11px] font-semibold text-[#5d6f8d]">
-            <span className="h-[13px] w-[13px] shrink-0 text-[#16a34a]">✓</span>
+            <span className="h-[13px] w-[13px] shrink-0 text-[var(--success-ink)]">✓</span>
             <span>
               {tip.action}{" "}
               <span className="inline-flex h-5 min-w-[26px] items-center justify-center rounded-[5px] bg-[var(--brand-soft)] px-1.5 text-[10px] font-black text-[var(--brand)]">

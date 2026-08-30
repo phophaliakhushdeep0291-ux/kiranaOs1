@@ -7,7 +7,7 @@
 export type ChipTone = "green" | "violet" | "blue" | "amber" | "orange" | "red" | "gray";
 
 export const CHIP_TONES: Record<ChipTone, string> = {
-  green: "bg-[#e6f7ee] text-[#16a34a]",
+  green: "bg-[#e6f7ee] text-[var(--success-ink)]",
   violet: "bg-[#f1ecfe] text-[#7c3aed]",
   blue: "bg-[#e8f0fe] text-[var(--brand)]",
   amber: "bg-[#fdf3e1] text-[#d97706]",

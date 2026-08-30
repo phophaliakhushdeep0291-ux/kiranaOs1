@@ -395,7 +395,7 @@ export default function SalesOverviewPage() {
 
   const kpis = [
     { label: "Total Sales", value: money(selected?.sales), current: selected?.sales ?? 0, previous: previous?.sales ?? 0, icon: <IndianRupee size={16} />, iconClass: "bg-[var(--brand-soft)] text-[var(--brand)]", color: BLUE, spark: snapshot?.dailyTrend.map((point) => point.sales) ?? [] },
-    { label: "Total Orders", value: String(selected?.bills ?? 0), current: selected?.bills ?? 0, previous: previous?.bills ?? 0, icon: <ShoppingCart size={16} />, iconClass: "bg-[#eaf9ef] text-[#16ad52]", color: GREEN, spark: snapshot?.dailyTrend.map((point) => point.collection) ?? [] },
+    { label: "Total Orders", value: String(selected?.bills ?? 0), current: selected?.bills ?? 0, previous: previous?.bills ?? 0, icon: <ShoppingCart size={16} />, iconClass: "bg-[#eaf9ef] text-[var(--success-ink)]", color: GREEN, spark: snapshot?.dailyTrend.map((point) => point.collection) ?? [] },
     { label: "Average Order Value", value: money(avgOrderValue), current: avgOrderValue, previous: previousAvgOrderValue, icon: <Tag size={16} />, iconClass: "bg-[#fff3e8] text-[#ff8a00]", color: ORANGE, spark: snapshot?.dailyTrend.map((point) => {
       const bills = dailyOrderCounts.get(point.date) ?? 0;
       return bills > 0 ? point.sales / bills : 0;
@@ -584,10 +584,10 @@ function MetricCard({ label, value, current, previous, icon, iconClass, color, s
   const comparison = Math.abs(current) < 0.005 && Math.abs(previous) < 0.005
     ? { label: "No change", tone: "text-[#64748b]" }
     : Math.abs(previous) < 0.005
-      ? { label: "New activity", tone: positiveIsBad ? "text-[#ff314f]" : "text-[#10a948]" }
+      ? { label: "New activity", tone: positiveIsBad ? "text-[#ff314f]" : "text-[var(--success-ink)]" }
       : Math.abs(current) < 0.005
-        ? { label: "No activity this period", tone: positiveIsBad ? "text-[#10a948]" : "text-[#ff314f]" }
-        : { label: `${Math.abs(change)}%`, tone: bad ? "text-[#ff314f]" : "text-[#10a948]" };
+        ? { label: "No activity this period", tone: positiveIsBad ? "text-[var(--success-ink)]" : "text-[#ff314f]" }
+        : { label: `${Math.abs(change)}%`, tone: bad ? "text-[#ff314f]" : "text-[var(--success-ink)]" };
   const points = spark.length > 1 ? spark.map((item, index) => ({ index, value: item })) : [{ index: 0, value: previous }, { index: 1, value: current }];
   const gradientId = `sales-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
