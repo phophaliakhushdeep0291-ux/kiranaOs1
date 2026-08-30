@@ -48,15 +48,23 @@ export interface AgentChatMessage {
   content: string;
 }
 
-/** One turn. History is sent back so follow-ups like "make it 3kg" resolve. */
+/**
+ * One turn. History is sent back so follow-ups like "make it 3kg" resolve, and
+ * the shop's UI language goes with it so the reply comes back in the language
+ * the rest of the app is already speaking.
+ */
 export async function sendAgentMessage(
   message: string,
   history: AgentChatMessage[],
-  init?: { signal?: AbortSignal },
+  init?: { signal?: AbortSignal; language?: "hi" | "en" },
 ): Promise<AgentTurn> {
   return apiRequest<AgentTurn>("/ai/agent/chat", {
     method: "POST",
-    body: JSON.stringify({ message, history: history.slice(-12) }),
+    body: JSON.stringify({
+      message,
+      history: history.slice(-12),
+      ...(init?.language ? { language: init.language } : {}),
+    }),
     signal: init?.signal,
   });
 }

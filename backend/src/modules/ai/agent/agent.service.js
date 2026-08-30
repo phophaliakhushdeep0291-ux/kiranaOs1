@@ -70,8 +70,14 @@ const SYSTEM_PROMPT = [
   "- Look things up before you answer. You have tools that read this shop's real products, customers, stock and sales. Never state a number you have not read.",
   "- A shopkeeper's sentence often contains several tasks. Handle all of them.",
   "- If something is genuinely ambiguous, ask one short question. Do not guess a product, a customer, or an amount.",
-  "- Answer in the language the shopkeeper used. Hindi, Hinglish and English are all normal here. Keep it short: they are standing at a counter.",
   "- Money is in rupees. Quantities are in the product's own unit.",
+  "",
+  "Language:",
+  "- Reply in the shop's language, given below. Most shops here run in Hindi.",
+  "- Match the script the shopkeeper wrote in. Devanagari gets Devanagari back. Roman Hinglish (\"Ramesh ka udhar kitna hai\") gets roman Hinglish back — do not answer that in Devanagari, because someone who types in roman usually reads it faster too.",
+  "- Write the way a shopkeeper speaks, not the way a textbook does. Keep the words a shop actually uses — udhar, stock, bill, rate, kirana, GST — instead of translating them into formal Hindi nobody says aloud.",
+  "- Keep numbers in digits, and prices as ₹45, in every language.",
+  "- Keep it short. They are standing at a counter with a customer waiting.",
   "",
   "About changing things:",
   "- Tools that change data are proposals, not actions. When you call one, it is queued for the shopkeeper to confirm — it has NOT happened.",
@@ -193,7 +199,10 @@ function trimHistory(history) {
  * what was read to get there — the trace matters, because a shopkeeper deciding
  * whether to trust a number is owed the ability to see where it came from.
  */
-export async function runAgentTurn(ctx, { message, history = [] } = {}) {
+/** What to call the shop's language when telling the model which one to use. */
+const LANGUAGE_NAMES = { hi: "Hindi", en: "English" };
+
+export async function runAgentTurn(ctx, { message, history = [], language } = {}) {
   if (typeof message !== "string" || !message.trim()) {
     throw new AppError("A message is required", 400, "AI_MESSAGE_REQUIRED");
   }
@@ -207,7 +216,18 @@ export async function runAgentTurn(ctx, { message, history = [] } = {}) {
 
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "system", content: `Shop trade: ${ctx.businessType}. Your role here: ${ctx.role}. Today: ${new Date().toISOString().slice(0, 10)}.` },
+    {
+      role: "system",
+      // Hindi is this app's default, so an unset language means Hindi rather
+      // than English — the opposite of the usual assumption, and the one that
+      // matches who actually runs these shops.
+      content: [
+        `Shop trade: ${ctx.businessType}.`,
+        `Your role here: ${ctx.role}.`,
+        `Today: ${new Date().toISOString().slice(0, 10)}.`,
+        `Shop's language: ${LANGUAGE_NAMES[language] ?? LANGUAGE_NAMES.hi}.`,
+      ].join(" "),
+    },
     ...trimHistory(history),
     { role: "user", content: message.slice(0, 4_000) },
   ];
@@ -333,7 +353,7 @@ export async function runAgentTurn(ctx, { message, history = [] } = {}) {
           ...messages,
           {
             role: "system",
-            content: "Answer now, in one or two sentences, using only what the tool results above actually contain. No more tools are available. If they do not answer the question, say briefly what is missing.",
+            content: `Answer now, in one or two sentences, using only what the tool results above actually contain. No more tools are available. If they do not answer the question, say briefly what is missing. Reply in ${LANGUAGE_NAMES[language] ?? LANGUAGE_NAMES.hi}, matching the script the shopkeeper wrote in.`,
           },
         ],
         temperature: 0,
