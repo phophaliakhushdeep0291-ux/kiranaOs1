@@ -7,9 +7,9 @@ const shop = await db.shop.create({
   data: { name: "Hindi Kirana", ownerName: "Owner", city: "Indore", address: "Test" },
 });
 for (const data of [
-  { name: "Sugar", rateUnit: "kg", defaultPricePerRateUnit: 42, costPerRateUnit: 38, stockBaseQty: 2, lowStockThreshold: 10 },
-  { name: "Mustard Oil", rateUnit: "ltr", defaultPricePerRateUnit: 180, costPerRateUnit: 160, stockBaseQty: 40, lowStockThreshold: 5 },
-  { name: "Basmati Rice", rateUnit: "kg", defaultPricePerRateUnit: 95, costPerRateUnit: 80, stockBaseQty: 3, lowStockThreshold: 15 },
+  { name: "Sugar", baseUnit: "kg", rateUnit: "kg", defaultPricePerRateUnit: 42, costPerRateUnit: 38, stockBaseQty: 2, lowStockThreshold: 10 },
+  { name: "Mustard Oil", baseUnit: "ltr", rateUnit: "ltr", defaultPricePerRateUnit: 180, costPerRateUnit: 160, stockBaseQty: 40, lowStockThreshold: 5 },
+  { name: "Basmati Rice", baseUnit: "kg", rateUnit: "kg", defaultPricePerRateUnit: 95, costPerRateUnit: 80, stockBaseQty: 3, lowStockThreshold: 15 },
 ]) await db.product.create({ data: { shopId: shop.id, ...data } });
 await db.customer.create({ data: { shopId: shop.id, name: "Ramesh Kumar", mobile: "9876543210" } });
 

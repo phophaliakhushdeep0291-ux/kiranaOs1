@@ -251,7 +251,10 @@ export const CORE_READ_TOOLS = [
       const brief = (rows) => (rows ?? []).slice(0, MAX_ROWS).map((row) => ({
         name: row.productName,
         stock: row.stockBaseQty,
-        unit: row.baseUnit,
+        // Stock is counted in the base unit, which is not always the unit the
+        // product is priced in. Naming it explicitly stops "3 kg of rice" being
+        // reported as "3 pieces" when the two differ.
+        unit: row.baseUnit ?? null,
         lowStockAt: row.lowStockThreshold,
         soldInWindow: row.quantitySoldBase,
       }));
