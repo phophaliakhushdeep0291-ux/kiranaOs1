@@ -161,7 +161,10 @@ export const CORE_READ_TOOLS = [
         const entries = Array.isArray(khata?.entries) ? khata.entries : khata?.ledger ?? [];
         return { found: true, ...khata, entries: entries.slice(0, MAX_ROWS) };
       } catch (error) {
-        if (error?.status === 404 || /not found/i.test(String(error?.message))) {
+        // AppError carries `statusCode`, not `status`. Matching only on the
+        // message worked by luck; a reworded string would have silently turned
+        // this back into a hard failure mid-turn.
+        if (error?.statusCode === 404 || error?.status === 404 || /not found/i.test(String(error?.message))) {
           return { found: false, hint: "No customer has that id. Call find_customer and use the id it returns." };
         }
         throw error;
