@@ -327,7 +327,7 @@ export default function MerchantSetupPage() {
                     <span
                       className={cn(
                         "grid h-10 w-10 shrink-0 place-items-center rounded-[10px]",
-                        step.complete ? "bg-[#e6f7ee] text-[#16a34a]" : step.required ? "bg-[#fff7e8] text-[#d97706]" : "bg-[var(--brand-soft)] text-[var(--brand)]",
+                        step.complete ? "bg-[#e6f7ee] text-[var(--success-ink)]" : step.required ? "bg-[#fff7e8] text-[#d97706]" : "bg-[var(--brand-soft)] text-[var(--brand)]",
                       )}
                     >
                       {step.complete ? <BadgeCheck size={18} /> : <Icon size={18} />}

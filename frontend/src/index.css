@@ -166,6 +166,13 @@
 
   /* Oxide, not emergency red. A cancelled bill is money moving backwards, not
      a fire, and the counter sees this several times a day. */
+  /* Green that can actually be read.
+     The shop-facing greens were literals between #10a948 and #16a34a — 2.94:1
+     to 3.3:1 on white, against a 4.5 floor. They are fine as a fill or an icon,
+     where 3:1 is the bar, and they were being used for the stock figures a
+     shopkeeper reads at arm's length. This is #15803d, already in the codebase
+     for the same meaning, at 5.02:1. */
+  --success-ink: hsl(142 72% 29%);
   --destructive: 8 62% 40%;
   --destructive-foreground: 0 0% 100%;
 
@@ -193,7 +200,17 @@
   --app-banner-height: 0px;
   --app-mobile-bottom-nav-clearance: calc(var(--app-mobile-nav-height) + 1.5rem + env(safe-area-inset-bottom));
   --app-mobile-fixed-action-height: 76px;
-  --app-mobile-content-bottom-clearance: calc(var(--app-mobile-fixed-action-height) + 1.25rem + env(safe-area-inset-bottom));
+  /**
+   * The assistant button, which nothing used to allow for.
+   *
+   * It is `fixed bottom-20 h-12`, so its top edge sits 128px above the viewport
+   * bottom — higher than the tab bar it is meant to clear. Measured on
+   * production at 375px it covered the last 46px of the scroll area, which put
+   * a 48px circle on top of the final row of cards on every page that scrolls
+   * to its end. The value is the part that intrudes, plus a gutter.
+   */
+  --app-mobile-assistant-clearance: 3.5rem;
+  --app-mobile-content-bottom-clearance: calc(var(--app-mobile-fixed-action-height) + var(--app-mobile-assistant-clearance) + 1.25rem + env(safe-area-inset-bottom));
   /* The mobile checkout panel is `fixed inset-0` — it covers the tab bar, and
      its actions scroll inline rather than sitting in a pinned footer. So it
      needs a breathing gutter and the home-indicator inset, NOT clearance for
@@ -825,7 +842,7 @@
   .purchase-totals { @apply grid grid-cols-2 gap-y-2 rounded-[10px] bg-[#f7f9fd] px-3.5 py-3 sm:grid-cols-4; }
   .purchase-totals p:first-child { @apply text-[10px] font-semibold text-[#64748b]; }
   .purchase-totals p:last-child { @apply text-[13px] font-black text-[var(--brand-ink)]; }
-  .purchase-totals > div:nth-child(3) p:last-child { @apply text-[#16a34a]; }
+  .purchase-totals > div:nth-child(3) p:last-child { color: var(--success-ink); }
   .purchase-totals > div:nth-child(4) p:last-child { @apply text-[#ef4444]; }
   .backup-grid { @apply grid gap-4 lg:grid-cols-[0.8fr_1.2fr]; }
   .backup-create { @apply min-h-11 gap-1.5 rounded-[8px] text-[12px] font-bold; }
@@ -1472,7 +1489,9 @@ html[data-density="compact"] {
     --app-mobile-nav-height: 76px;
     --app-mobile-bottom-nav-clearance: calc(var(--app-mobile-nav-height) + 1rem + env(safe-area-inset-bottom));
     --app-mobile-fixed-action-height: 74px;
-    --app-mobile-content-bottom-clearance: calc(var(--app-mobile-bottom-nav-clearance) + 1.15rem);
+    /* Same allowance for the assistant button as the base block. This override
+       exists to swap the nav-height term, not to opt out of clearing the FAB. */
+    --app-mobile-content-bottom-clearance: calc(var(--app-mobile-bottom-nav-clearance) + var(--app-mobile-assistant-clearance) + 1.15rem);
     /* The phone palette. Unbleached paper rather than screen white: a till is
        read at arm's length under a shop's tube light, through a scratched
        protector, for nine hours, and full-brightness white is glare. Cards stay

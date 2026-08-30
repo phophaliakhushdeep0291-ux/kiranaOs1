@@ -416,7 +416,7 @@ export function BillingSummary({
                   : "border-transparent bg-transparent text-[#6B6455] hover:bg-white"
               }`}
             >
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#e9fff0] text-[#16a34a]">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#e9fff0] text-[var(--success-ink)]">
                 <CheckCircle size={16} />
               </span>
               <span className="min-w-0">
@@ -612,7 +612,7 @@ export function BillingSummary({
               <span className="font-semibold text-[#6B6455]">{t("billing.summary.discount")}</span>
               <div className="flex items-center gap-2">
                 {safeDiscount > 0 && !editingDiscount && (
-                  <span className="font-black text-[#16a34a]">−{fmtRs(safeDiscount)}</span>
+                  <span className="font-black text-[var(--success-ink)]">−{fmtRs(safeDiscount)}</span>
                 )}
                 {editingDiscount && (
                   <input
@@ -691,7 +691,7 @@ export function BillingSummary({
                 <input autoFocus value={couponCode} onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); onCouponApplied?.(null, 0, ""); setCouponMsg(null); }} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder={t("billing.summary.couponPlaceholder")} className="h-11 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[var(--brand)]" />
                 <button onClick={() => void handleApplyCoupon()} disabled={couponBusy || !couponCode.trim() || subtotal <= 0} className="inline-flex h-11 items-center gap-1 rounded-[7px] bg-[var(--brand)] px-3 text-[11px] font-semibold text-white hover:bg-[#0054e8] disabled:opacity-50">{couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply</button>
               </div>
-              {couponMsg && <p className={`pt-1.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}
+              {couponMsg && <p className={`pt-1.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[var(--success-ink)]" : "text-rose-500"}`}>{couponMsg.text}</p>}
             </div>
           )}
 

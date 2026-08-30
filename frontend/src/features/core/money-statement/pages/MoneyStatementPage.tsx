@@ -138,7 +138,7 @@ export default function MoneyStatementPage() {
       icon: <Wallet size={18} />,
       href: "/money-statement?mode=cash",
       color: "#18ad50",
-      bg: "border-[#c8f1d5] bg-[#e7faee] text-[#159447] shadow-[0_0_0_4px_rgba(17,168,75,0.035),0_10px_26px_rgba(17,168,75,0.20)]",
+      bg: "border-[#c8f1d5] bg-[#e7faee] text-[var(--success-ink)] shadow-[0_0_0_4px_rgba(17,168,75,0.035),0_10px_26px_rgba(17,168,75,0.20)]",
     },
     {
       label: "UPI Balance",
@@ -192,7 +192,7 @@ export default function MoneyStatementPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className={cn("grid h-11 w-11 place-items-center rounded-[12px] border", card.bg)}>{card.icon}</div>
-                <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-black", card.value >= 0 ? "bg-[#e8f9ee] text-[#159447]" : "bg-[#ffecef] text-[#ef3340]")}>
+                <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-black", card.value >= 0 ? "bg-[#e8f9ee] text-[var(--success-ink)]" : "bg-[#ffecef] text-[#ef3340]")}>
                   {card.value >= 0 ? "Net +" : "Net -"}
                 </span>
               </div>
@@ -329,7 +329,7 @@ export default function MoneyStatementPage() {
                       <p className="text-[11px] text-[#718096]">{row.reference}</p>
                     </td>
                     <td className="px-4 py-3"><ModeBadge mode={row.mode} /></td>
-                    <td className="px-4 py-3 text-right font-black text-[#159447]">{row.direction === "in" ? money(row.amount) : "-"}</td>
+                    <td className="px-4 py-3 text-right font-black text-[var(--success-ink)]">{row.direction === "in" ? money(row.amount) : "-"}</td>
                     <td className="px-4 py-3 text-right font-black text-[#ef3340]">{row.direction === "out" ? money(row.amount) : "-"}</td>
                     <td className="px-4 py-3"><span className="rounded-full bg-[#f3f7fc] px-2 py-1 text-[10px] font-black uppercase text-[#62708a]">{row.status || "posted"}</span></td>
                   </tr>
@@ -346,7 +346,7 @@ export default function MoneyStatementPage() {
                     <p className="truncate text-[14px] font-black text-[var(--brand-ink)]">{row.partyName}</p>
                     <p className="mt-1 text-[11px] font-semibold text-[#718096]">{row.dateLabel} · {row.timeLabel}</p>
                   </div>
-                  <p className={cn("text-[17px] font-black", row.direction === "in" ? "text-[#159447]" : "text-[#ef3340]")}>
+                  <p className={cn("text-[17px] font-black", row.direction === "in" ? "text-[var(--success-ink)]" : "text-[#ef3340]")}>
                     {row.direction === "in" ? "+" : "-"}{money(row.amount)}
                   </p>
                 </div>
@@ -377,7 +377,7 @@ export default function MoneyStatementPage() {
 
 function ModeBadge({ mode }: { mode: MoneyStatementMode }) {
   const styles = {
-    cash: "border-[#c8f1d5] bg-[#e7faee] text-[#159447]",
+    cash: "border-[#c8f1d5] bg-[#e7faee] text-[var(--success-ink)]",
     upi: "border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb]",
     bank: "border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)]",
   }[mode];
@@ -388,7 +388,7 @@ function DetailMetric({ label, value, tone = "default" }: { label: string; value
   return (
     <div className="rounded-[14px] border border-[#e3eaf4] bg-[#fbfdff] p-3">
       <p className="text-[10px] font-black uppercase tracking-[0.04em] text-[#75839d]">{label}</p>
-      <p className={cn("mt-1 font-display text-[18px] font-black", tone === "in" ? "text-[#159447]" : tone === "out" ? "text-[#ef3340]" : "text-[#071333]")}>
+      <p className={cn("mt-1 font-display text-[18px] font-black", tone === "in" ? "text-[var(--success-ink)]" : tone === "out" ? "text-[#ef3340]" : "text-[#071333]")}>
         {typeof value === "number" ? money(value) : "-"}
       </p>
     </div>
@@ -434,7 +434,7 @@ function MoneyStatementDetailPanel({ row, onClose }: { row: MoneyStatementRow; o
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <ModeBadge mode={row.mode} />
                 <span className="rounded-full bg-[#f3f7fc] px-2.5 py-1 text-[10px] font-black uppercase text-[#62708a]">{row.status || "posted"}</span>
-                <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-black uppercase", row.direction === "in" ? "bg-[#e8f9ee] text-[#159447]" : "bg-[#ffecef] text-[#ef3340]")}>
+                <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-black uppercase", row.direction === "in" ? "bg-[#e8f9ee] text-[var(--success-ink)]" : "bg-[#ffecef] text-[#ef3340]")}>
                   {row.direction === "in" ? "Received" : "Paid"}
                 </span>
               </div>

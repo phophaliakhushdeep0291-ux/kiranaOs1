@@ -71,7 +71,7 @@ function deltaTrendIcon(delta: number, size: number) {
 function RecentBillPaymentBadge({ mode }: { mode: string }) {
   const normalized = mode.trim().toLowerCase();
   const style = normalized === "cash"
-    ? "border-[#c7efd4] bg-[#e8f9ee] text-[#159447]"
+    ? "border-[#c7efd4] bg-[#e8f9ee] text-[var(--success-ink)]"
     : normalized === "upi" || normalized === "bank" || normalized === "bank_transfer"
       ? "border-[#ccdcff] bg-[#eaf1ff] text-[#2864e8]"
       : normalized === "udhar" || normalized === "credit"
@@ -883,7 +883,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                 <DashboardPeriodSelect value={period} onChange={setPeriod} />
                 {periodSalesDelta !== null && (
                   <span className="flex items-center gap-1.5 text-[11px] font-semibold">
-                    <span className={cn("inline-flex items-center gap-0.5 font-bold", periodSalesDelta === 0 ? "text-[#62708a]" : periodSalesDelta > 0 ? "text-[#16a34a]" : "text-[#ff304f]")}>
+                    <span className={cn("inline-flex items-center gap-0.5 font-bold", periodSalesDelta === 0 ? "text-[#62708a]" : periodSalesDelta > 0 ? "text-[var(--success-ink)]" : "text-[#ff304f]")}>
                       {deltaTrendIcon(periodSalesDelta, 11)}
                       {Math.abs(periodSalesDelta)}%
                     </span>
@@ -1321,12 +1321,12 @@ function MobileHealthCard({ href, label, value, detail, delta, positiveIsBad = f
   tone: "green" | "red" | "amber" | "violet";
 }) {
   const { t } = useAppLanguage();
-  const iconTone = tone === "green" ? "bg-[#e8f9ee] text-[#159447]" : tone === "red" ? "bg-[#ffedf0] text-[#e63c51]" : tone === "amber" ? "bg-[#fff3e1] text-[#d98200]" : "bg-[#f0ebff] text-[#7047eb]";
+  const iconTone = tone === "green" ? "bg-[#e8f9ee] text-[var(--success-ink)]" : tone === "red" ? "bg-[#ffedf0] text-[#e63c51]" : tone === "amber" ? "bg-[#fff3e1] text-[#d98200]" : "bg-[#f0ebff] text-[#7047eb]";
   // Math.sign rather than a `> 0 : … < 0` chain: the hardcoded-string scanner
   // matches `>text<`, so a comparison followed by a comparison reads to it as a
   // user-visible string and pins the file to the untranslated allowlist.
   const bad = delta != null && Math.sign(delta) === (positiveIsBad ? 1 : -1);
-  const deltaTone = delta == null ? "text-[#7b8799]" : bad ? "text-[#df3347]" : "text-[#159447]";
+  const deltaTone = delta == null ? "text-[#7b8799]" : bad ? "text-[#df3347]" : "text-[var(--success-ink)]";
   return (
     <Link href={href} className="flex min-h-[142px] min-w-0 flex-col rounded-[19px] border border-[#e1e9f3] bg-white p-3.5 shadow-[0_10px_26px_rgba(26,57,112,0.055)] transition-transform active:scale-[0.98]">
       <div className="flex items-start justify-between gap-2">
@@ -1347,7 +1347,7 @@ function MobileDelta({ delta, inverse = false }: { delta: number | null; inverse
   const { t } = useAppLanguage();
   const color = inverse
     ? delta == null || delta === 0 ? "text-blue-100/70" : delta > 0 ? "text-emerald-300" : "text-rose-300"
-    : delta == null ? "text-[#94a3b8]" : delta === 0 ? "text-[#718096]" : delta > 0 ? "text-[#16a34a]" : "text-[#ef3340]";
+    : delta == null ? "text-[#94a3b8]" : delta === 0 ? "text-[#718096]" : delta > 0 ? "text-[var(--success-ink)]" : "text-[#ef3340]";
   const deltaIcon = delta == null ? null : deltaTrendIcon(delta, 9);
   return (
     <span className="inline-flex items-center gap-1 text-[9px] font-semibold">
@@ -1361,7 +1361,7 @@ function MobileDelta({ delta, inverse = false }: { delta: number | null; inverse
 }
 
 function MobileInsight({ tone, icon, title, subtitle }: { tone: "emerald" | "orange" | "rose"; icon: ReactNode; title: string; subtitle: string }) {
-  const toneClass = tone === "emerald" ? "bg-[#e8f9ee] text-[#159447]" : tone === "orange" ? "bg-[#fff3e1] text-[#e98400]" : "bg-[#ffecef] text-[#ef3340]";
+  const toneClass = tone === "emerald" ? "bg-[#e8f9ee] text-[var(--success-ink)]" : tone === "orange" ? "bg-[#fff3e1] text-[#e98400]" : "bg-[#ffecef] text-[#ef3340]";
   return (
     <div className="flex min-h-[68px] gap-3 border-b border-[#edf2f8] px-3.5 py-3">
       <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-[13px]", toneClass)}>{icon}</span>
@@ -1451,7 +1451,7 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
           {delta === null || delta === undefined ? (
             <span className="font-bold text-[#94a3b8]">—</span>
           ) : (
-            <span className={cn("inline-flex items-center gap-0.5 font-bold", delta === 0 ? "text-[#62708a]" : isBad ? "text-[#ff304f]" : "text-[#16a34a]")}>
+            <span className={cn("inline-flex items-center gap-0.5 font-bold", delta === 0 ? "text-[#62708a]" : isBad ? "text-[#ff304f]" : "text-[var(--success-ink)]")}>
               <DeltaIcon size={11} aria-hidden="true" />
               {Math.abs(delta)}%
             </span>

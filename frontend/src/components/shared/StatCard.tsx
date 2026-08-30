@@ -6,7 +6,7 @@ export type StatCardTone = "default" | "green" | "blue" | "amber" | "violet" | "
 
 const toneIconClasses: Record<StatCardTone, string> = {
   default: "bg-[var(--brand-soft)] text-[var(--brand)] ring-[var(--brand-border)]",
-  green: "bg-[#e8f9ee] text-[#159447] ring-[#c8f1d5] dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900",
+  green: "bg-[#e8f9ee] text-[var(--success-ink)] ring-[#c8f1d5] dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900",
   blue: "bg-[var(--brand-soft)] text-[var(--brand)] ring-[var(--brand-border)] dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900",
   amber: "bg-[#fff3e1] text-[#e98400] ring-[#ffdca8] dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900",
   violet: "bg-[#f0ebff] text-[#7047eb] ring-[#ddd3ff] dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900",

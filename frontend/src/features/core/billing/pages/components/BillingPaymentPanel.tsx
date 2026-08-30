@@ -130,10 +130,10 @@ export function BillingPaymentPanel({
         <div className="grid grid-cols-3 gap-2">
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.cash}`}
-            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e9fff0] text-[#16a34a]"><Banknote size={17} /></span>}
+            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e9fff0] text-[var(--success-ink)]"><Banknote size={17} /></span>}
             label={t("billing.pay.cash")}
             selected={paymentMode === BillPaymentMode.cash}
-            activeClass="border-[#b9f0cb] bg-[#effff5] text-[#16a34a]"
+            activeClass="border-[#b9f0cb] bg-[#effff5] text-[var(--success-ink)]"
             onClick={() => setPaymentMode(BillPaymentMode.cash)}
           />
           <PayModeBtn
