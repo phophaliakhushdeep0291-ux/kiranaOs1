@@ -124,7 +124,7 @@ export function BillingPaymentPanel({
   return (
     <div className="space-y-3">
       {/* Payment method header */}
-      <p className="text-[12px] font-extrabold text-[#1B2145]">{t("billing.pay.method")}</p>
+      <p className="text-[12px] font-extrabold text-[#2F3446]">{t("billing.pay.method")}</p>
 
       {showPaymentMode ? (
         <div className="grid grid-cols-3 gap-2">
@@ -304,7 +304,7 @@ export function BillingPaymentPanel({
                   type="button"
                   data-testid={`tender-chip-${amount}`}
                   onClick={() => setCashTendered(amount)}
-                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-[#dbe3ef] bg-white px-2.5 py-1 text-[12px] font-bold text-[#363C6B] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-[#dbe3ef] bg-white px-2.5 py-1 text-[12px] font-bold text-[#4B5068] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
                 >
                   {fmtRs(amount)}
                 </button>
