@@ -79,6 +79,7 @@ async function resolveBillItem(shopId, { query, quantity, unit }) {
 export const CORE_WRITE_TOOLS = [
   defineTool({
     name: "add_items_to_bill",
+    keywords: ["bill", "cart", "add", "put", "daal", "dal do", "dalo", "jod", "chahiye", "le lo", "बिल", "जोड़", "डाल", "चाहिए", "लगा"],
     kind: "write",
     // The cart is React state on the till, persisted offline, because a shop
     // bills through a power cut. So this resolves and prices here, where the
@@ -135,6 +136,7 @@ export const CORE_WRITE_TOOLS = [
 
   defineTool({
     name: "create_customer",
+    keywords: ["add customer", "new customer", "customer add", "register", "naya grahak", "grahak", "customer", "ग्राहक", "जोड़", "नया"],
     kind: "write",
     risk: TOOL_RISK.CONFIRM,
     description:
@@ -161,6 +163,7 @@ export const CORE_WRITE_TOOLS = [
 
   defineTool({
     name: "record_udhar_payment",
+    keywords: ["paid", "payment", "repaid", "received", "settle", "chukaya", "diya", "jama", "भुगतान", "चुका", "दिया", "जमा", "वापस"],
     kind: "write",
     risk: TOOL_RISK.CONFIRM,
     description:
@@ -193,6 +196,7 @@ export const CORE_WRITE_TOOLS = [
 
   defineTool({
     name: "update_product_price",
+    keywords: ["price", "rate", "cost", "charge", "mrp", "daam", "rate kar", "भाव", "रेट", "दाम", "कीमत", "बदल"],
     kind: "write",
     risk: TOOL_RISK.OWNER_PIN,
     description:
@@ -227,6 +231,7 @@ export const CORE_WRITE_TOOLS = [
 
   defineTool({
     name: "correct_stock",
+    keywords: ["count", "counted", "correct", "correction", "adjust", "stock set", "ginti", "स्टॉक", "गिनती", "सुधार", "ठीक", "सही"],
     kind: "write",
     risk: TOOL_RISK.OWNER_PIN,
     description:

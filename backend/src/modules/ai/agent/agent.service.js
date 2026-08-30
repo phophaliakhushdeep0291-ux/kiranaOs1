@@ -28,8 +28,8 @@ import db from "../../../db.js";
 import { AppError } from "../../../shared/errors/index.js";
 import { getEffectivePlan, isSubscriptionActive } from "../../subscription/subscription.service.js";
 import { hasLegacyShopTypeFeatureAccess } from "../../subscription/planConfig.js";
-import { getTool, providerToolsFor, toolsFor } from "./tool-registry.js";
-import { assertToolAllowed, TOOL_RISK } from "./tool-contract.js";
+import { getTool, routeTools, toolsFor } from "./tool-registry.js";
+import { assertToolAllowed, toProviderTool, TOOL_RISK } from "./tool-contract.js";
 
 const MAX_STEPS = 6;
 const MAX_TOOL_CALLS = 12;
@@ -238,7 +238,13 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   const agentCtx = { ...ctx, features: { has: features.has }, labelFor: null };
 
   const available = toolsFor({ ...agentCtx, features: { has: features.has } });
-  const providerTools = providerToolsFor({ ...agentCtx, features: { has: features.has } });
+  // Only the tools this sentence plausibly needs. Every request re-sends every
+  // definition, so the full set is a fixed ~1,850-token tax on a free provider
+  // tier that allows 8,000 a minute. `available` is kept whole because a turn
+  // that routed badly is retried against it rather than left as a dead end.
+  const routed = routeTools(available, message);
+  let providerTools = routed.map(toProviderTool);
+  let widened = false;
 
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
@@ -297,6 +303,23 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
 
     const calls = Array.isArray(choice.tool_calls) ? choice.tool_calls : [];
     if (calls.length === 0) {
+      // Routing narrowed the offer and the model reached for nothing. It may
+      // simply have answered — but it may also have been denied the one tool it
+      // needed, and from the shopkeeper's side those look identical: a confident
+      // "I cannot do that" about something the app does perfectly well. So the
+      // full set goes back on the table once, and the model gets another look.
+      // This is the whole reason `available` is kept: a bad route costs a turn,
+      // never a capability.
+      if (routed.length < available.length && !widened) {
+        widened = true;
+        providerTools = available.map(toProviderTool);
+        stoppedBecause = "widened_after_empty_route";
+        messages.push({
+          role: "system",
+          content: "More tools are available to you now. If one of them answers the question, use it.",
+        });
+        continue;
+      }
       reply = String(choice.content ?? "").trim();
       break;
     }
@@ -447,7 +470,13 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     requiresOwnerPin: highestRisk === TOOL_RISK.OWNER_PIN && plan.length > 0,
     trace,
     stoppedBecause,
-    provider: { name: selected.provider, model: selected.model, toolsOffered: providerTools.length },
+    provider: {
+      name: selected.provider,
+      model: selected.model,
+      toolsOffered: providerTools.length,
+      toolsAvailable: available.length,
+      widened,
+    },
   };
 }
 

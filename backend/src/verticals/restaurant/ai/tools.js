@@ -28,6 +28,7 @@ const MAX_ROWS = 30;
 export const RESTAURANT_TOOLS = [
   defineTool({
     name: "restaurant_list_tables",
+    keywords: ["table", "tables", "floor", "seat", "seated", "free", "occupied", "guest", "टेबल", "मेज़", "मेज", "खाली", "बैठ"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -59,6 +60,7 @@ export const RESTAURANT_TOOLS = [
 
   defineTool({
     name: "restaurant_kitchen_tickets",
+    keywords: ["kitchen", "kot", "ticket", "order", "pending", "ready", "preparing", "cooking", "रसोई", "किचन", "ऑर्डर", "तैयार", "बन"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -95,6 +97,7 @@ export const RESTAURANT_TOOLS = [
 
   defineTool({
     name: "restaurant_menu_board",
+    keywords: ["menu", "dish", "dishes", "course", "starter", "main", "dessert", "available", "मेन्यू", "मेनू", "व्यंजन", "डिश", "खाना"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:

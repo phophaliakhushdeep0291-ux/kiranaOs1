@@ -11,7 +11,7 @@
  */
 import assert from "node:assert/strict";
 import { defineTool, toolAvailableTo, TOOL_RISK } from "../src/modules/ai/agent/tool-contract.js";
-import { registerTools, toolsFor, getTool, registrySnapshot, ownerOf } from "../src/modules/ai/agent/tool-registry.js";
+import { registerTools, toolsFor, routeTools, getTool, registrySnapshot, ownerOf } from "../src/modules/ai/agent/tool-registry.js";
 import { __agentInternals } from "../src/modules/ai/agent/agent.service.js";
 import { agentChatSchema } from "../src/modules/ai/ai.schema.js";
 import { CORE_READ_TOOLS } from "../src/modules/ai/agent/tools/core-read.js";
@@ -149,6 +149,7 @@ const rolebound = defineTool({
   risk: TOOL_RISK.SAFE,
   description: "A probe used only to prove role filtering actually filters.",
   roles: ["owner"],
+  always: true,
   handler: async () => ({}),
 });
 assert.equal(toolAvailableTo(rolebound, { role: "owner", features: { has: () => true } }), true);
@@ -265,6 +266,66 @@ assert.equal(bounded.approximateTotal, 126, "2 x 42 + 3 x 14");
 assert.equal(__agentInternals.sanitizeCart([]), null, "an empty bill is absent context, not an empty object");
 assert.equal(__agentInternals.sanitizeCart("not a cart"), null, "a cart that is not a list is ignored");
 ok("the open bill reaches the model bounded, or not at all");
+
+/* ---------------------------------------------------------------- routing */
+
+// Every request re-sends every tool definition — about 1,850 tokens for the
+// full set, against a free tier that allows 8,000 a minute. Routing pays for
+// itself, but only if it never withholds the tool the sentence needed.
+const owner = { businessType: "kirana", role: "owner", features: { has: () => true } };
+const allTools = toolsFor(owner);
+const routeNames = (message) => routeTools(allTools, message).map((tool) => tool.name);
+
+// THE regression test. Devanagari vowel signs are combining marks (\p{M}), not
+// letters, so a normaliser that keeps only \p{L}\p{N} turns बिल into "ब ल" and
+// every Hindi keyword silently stops matching. Nothing breaks — routing just
+// quietly falls back to the full set forever — which is why it needs a test
+// rather than a bug report.
+const hindiBill = routeNames("बिल में 1 लीटर तेल डाल दो");
+assert.ok(hindiBill.includes("add_items_to_bill"), "Hindi must route, not fall through to everything");
+assert.ok(hindiBill.length < allTools.length, "and it must actually narrow");
+ok("Devanagari survives normalisation and routes");
+
+assert.ok(routeNames("what is running out?").includes("get_inventory_health"));
+assert.ok(routeNames("चीनी कितनी बची है?").includes("get_inventory_health"), "Hindi inflection बची matches the stem बच");
+assert.ok(routeNames("Ramesh ka udhar kitna hai?").includes("get_customer_khata"), "roman Hinglish routes too");
+assert.ok(routeNames("chini ka rate 48 kar do").includes("update_product_price"));
+assert.ok(routeNames("how much did I sell this week?").includes("get_sales_summary"));
+ok("a task routes to the tool that does it, in all three scripts");
+
+// No signal is not a signal to narrow. Guessing here is how a shopkeeper ends
+// up being told the app cannot do something it does.
+assert.equal(routeNames("hello").length, allTools.length, "an unroutable message gets everything");
+assert.equal(routeNames("").length, allTools.length, "so does an empty one");
+ok("a message that points nowhere gets every tool");
+
+// The two universal resolvers: nearly every task begins by naming a product or
+// a person, so they are never routed away.
+for (const message of ["what is running out?", "आज कितना धंधा हुआ?", "who owes me the most?"]) {
+  const names = routeNames(message);
+  assert.ok(names.includes("search_products"), `search_products must survive routing for: ${message}`);
+  assert.ok(names.includes("find_customer"), `find_customer must survive routing for: ${message}`);
+}
+ok("the universal resolvers are in every turn");
+
+// Routing filters what the caller already has; it cannot widen past it.
+const cashier = { businessType: "kirana", role: "staff", features: { has: () => true } };
+assert.ok(
+  routeTools(toolsFor(cashier), "change sugar price to 45").every((tool) => toolsFor(cashier).includes(tool)),
+  "routing may only narrow the caller's own set",
+);
+ok("routing narrows, and never grants");
+
+// A tool with neither keywords nor always:true could never be offered. Caught
+// at definition time rather than by a capability quietly going missing.
+assert.throws(() => defineTool({
+  name: "unroutable_tool",
+  kind: "read",
+  risk: TOOL_RISK.SAFE,
+  description: "A tool that routing could never surface for any message at all.",
+  handler: async () => ({}),
+}), /needs keywords, or always:true/);
+ok("a tool that routing could never reach is a boot error");
 
 /* --------------------------------------------------------------- registry */
 
