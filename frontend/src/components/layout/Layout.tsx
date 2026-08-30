@@ -48,6 +48,7 @@ import { useAppLanguage, type Translate, type TranslationKey } from "@/features/
 import { useModuleVisibilityServerSync } from "@/features/core/settings/module-visibility-sync";
 import { useActiveVerticalPack, type VerticalNavEntry } from "@/features/verticals/registry";
 import { VoiceAssistant } from "@/features/core/voice/VoiceAssistant";
+import { AssistantLauncher } from "@/features/core/assistant/AssistantLauncher";
 import { ReportIssueButton } from "@/features/core/support";
 import { DemoModeBanner } from "@/features/core/demo/DemoModeBanner";
 import { SyncAlertBanner } from "@/features/core/sync/SyncAlertBanner";
@@ -397,6 +398,10 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   const { t } = useAppLanguage();
   const { user, logout, shop } = useAuth();
   const [loc] = useLocation();
+  // One source of truth for "keep the corners clear". The till is the one screen
+  // where a floating button can land on the keypad mid-sale, so every helper
+  // hides there rather than each deciding for itself.
+  const floatingHelpersAllowed = cleanPath(loc) !== "/billing";
   const resolvedPageTitle = pageTitle ?? getPageTitle(loc, t);
   const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
   const { snapshot } = useSubscriptionSnapshot();
@@ -927,9 +932,12 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
         />
       </div>
       <div className="hidden lg:contents">
-        {isModuleOn("voice_assistant") && cleanPath(loc) !== "/billing" && <VoiceAssistant />}
+        {isModuleOn("voice_assistant") && floatingHelpersAllowed && <VoiceAssistant />}
         {isModuleOn("report_issue") && <ReportIssueButton />}
       </div>
+      {/* Not inside the desktop-only block: the shopkeeper asking what is running
+          out is usually on the floor with a phone, not at the counter. */}
+      {isModuleOn("ask_artha") && floatingHelpersAllowed && <AssistantLauncher />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
