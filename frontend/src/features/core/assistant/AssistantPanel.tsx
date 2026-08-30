@@ -34,7 +34,7 @@ type PlanState =
   | { status: "done"; ok: boolean; message?: string };
 
 export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { t } = useAppLanguage();
+  const { t, language } = useAppLanguage();
   const [messages, setMessages] = useState<Bubble[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -74,7 +74,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
         setError(t("assistant.offline"));
         return;
       }
-      const turn = await sendAgentMessage(question, history);
+      const turn = await sendAgentMessage(question, history, { language });
       setMessages((current) => [...current, { role: "assistant", content: turn.reply, turn }]);
       if (turn.requiresConfirmation && turn.planId) setPending(turn);
     } catch (caught) {
@@ -87,7 +87,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     } finally {
       setBusy(false);
     }
-  }, [busy, messages, t]);
+  }, [busy, messages, t, language]);
 
   const applyPlan = useCallback(async (ownerPin?: string) => {
     if (!pending?.planId) return;

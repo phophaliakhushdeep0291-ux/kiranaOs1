@@ -35,6 +35,10 @@ export const agentChatSchema = z.object({
     role: z.enum(["user", "assistant"]),
     content: z.string().max(4_000),
   }).strict()).max(20).optional(),
+  // The shop's UI language. Optional, and absent means Hindi rather than
+  // English: that is this app's default, and a till that omits the field is far
+  // more likely to be a Hindi shop than an English one.
+  language: z.enum(["hi", "en"]).optional(),
 }).strict();
 
 /**

@@ -43,7 +43,11 @@ function sendProviderError(error, res) {
 export async function chat(req, res, next) {
   try {
     const ctx = await contextFor(req);
-    const data = await runAgentTurn(ctx, { message: req.body?.message, history: req.body?.history });
+    const data = await runAgentTurn(ctx, {
+      message: req.body?.message,
+      history: req.body?.history,
+      language: req.body?.language,
+    });
     res.json({ success: true, data });
   } catch (error) {
     if (sendProviderError(error, res)) return;
