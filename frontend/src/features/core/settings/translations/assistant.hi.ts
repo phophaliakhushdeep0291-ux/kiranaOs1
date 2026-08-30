@@ -35,6 +35,12 @@ export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.rejected": "रद्द कर दिया",
   "assistant.partialFailure": "कुछ बदलाव लागू नहीं हो सके",
   "assistant.openBill": "बिल खोलें ({count} चीज़ें जोड़ी गईं)",
+  "assistant.till.title": "सहायक",
+  "assistant.till.thinking": "देख रहे हैं…",
+  "assistant.till.apply": "इस बिल में जोड़ें",
+  "assistant.till.dismiss": "हटाएँ",
+  "assistant.till.applied": "बिल में जोड़ दिया",
+  "assistant.till.nothingToAdd": "इसमें जोड़ने लायक कुछ नहीं मिला।",
 
   "assistant.ownerPinTitle": "मालिक का PIN चाहिए",
   "assistant.ownerPinBody": "इसमें रेट या स्टॉक बदल रहा है, इसलिए मालिक का 4 अंकों का PIN ज़रूरी है।",

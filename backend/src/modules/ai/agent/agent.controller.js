@@ -47,6 +47,7 @@ export async function chat(req, res, next) {
       message: req.body?.message,
       history: req.body?.history,
       language: req.body?.language,
+      cart: req.body?.cart,
     });
     res.json({ success: true, data });
   } catch (error) {

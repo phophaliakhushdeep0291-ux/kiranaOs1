@@ -34,6 +34,12 @@ export const assistantEn = {
   "assistant.rejected": "Cancelled",
   "assistant.partialFailure": "Some changes could not be applied",
   "assistant.openBill": "Open the bill ({count} items added)",
+  "assistant.till.title": "Assistant",
+  "assistant.till.thinking": "Working it out…",
+  "assistant.till.apply": "Add to this bill",
+  "assistant.till.dismiss": "Dismiss",
+  "assistant.till.applied": "Added to the bill",
+  "assistant.till.nothingToAdd": "Nothing to add from that.",
 
   "assistant.ownerPinTitle": "Owner PIN needed",
   "assistant.ownerPinBody": "This changes prices or stock, so it needs the owner's 4-digit PIN.",

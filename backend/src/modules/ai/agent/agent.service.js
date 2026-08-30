@@ -204,11 +204,33 @@ function trimHistory(history) {
 /** What to call the shop's language when telling the model which one to use. */
 const LANGUAGE_NAMES = { hi: "Hindi", en: "English" };
 
-export async function runAgentTurn(ctx, { message, history = [], language } = {}) {
+/**
+ * The bill on the counter right now, as the model should see it.
+ *
+ * Bounded and re-shaped rather than passed through: this arrives from the till,
+ * which is a client, so its size and its field names are not something to trust.
+ * Without it "make it three kilo" and "what is this bill" have no referent and
+ * the model has to guess — which, at a counter, means guessing about money.
+ */
+function sanitizeCart(cart) {
+  if (!Array.isArray(cart) || cart.length === 0) return null;
+  const lines = cart.slice(0, 40).map((item) => ({
+    name: String(item?.name ?? "").slice(0, 120) || null,
+    quantity: Number.isFinite(Number(item?.quantity)) ? Number(item.quantity) : null,
+    unit: String(item?.unit ?? "").slice(0, 30) || null,
+    rate: Number.isFinite(Number(item?.rate)) ? Number(item.rate) : null,
+  })).filter((line) => line.name);
+  if (lines.length === 0) return null;
+  const total = lines.reduce((sum, line) => sum + (line.quantity ?? 0) * (line.rate ?? 0), 0);
+  return { lines, lineCount: lines.length, approximateTotal: Math.round(total * 100) / 100 };
+}
+
+export async function runAgentTurn(ctx, { message, history = [], language, cart } = {}) {
   if (typeof message !== "string" || !message.trim()) {
     throw new AppError("A message is required", 400, "AI_MESSAGE_REQUIRED");
   }
 
+  const billOnCounter = sanitizeCart(cart);
   const selected = getProvider();
   const features = await resolveFeatures(ctx.shopId);
   const agentCtx = { ...ctx, features: { has: features.has }, labelFor: null };
@@ -231,6 +253,14 @@ export async function runAgentTurn(ctx, { message, history = [], language } = {}
       ].join(" "),
     },
     ...trimHistory(history),
+    ...(billOnCounter
+      ? [{
+        role: "system",
+        // Given as data the model may read, not as an instruction to act on it.
+        // The till owns this bill; nothing here is changed by talking about it.
+        content: `The bill open on the counter right now (read-only context): ${JSON.stringify(billOnCounter)}`,
+      }]
+      : []),
     { role: "user", content: message.slice(0, 4_000) },
   ];
 

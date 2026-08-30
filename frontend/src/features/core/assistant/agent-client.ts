@@ -70,10 +70,18 @@ export interface AgentChatMessage {
  * the shop's UI language goes with it so the reply comes back in the language
  * the rest of the app is already speaking.
  */
+/** The bill on the counter, as the till reports it for context. */
+export interface AgentCartLine {
+  name: string;
+  quantity: number;
+  unit?: string;
+  rate?: number;
+}
+
 export async function sendAgentMessage(
   message: string,
   history: AgentChatMessage[],
-  init?: { signal?: AbortSignal; language?: "hi" | "en" },
+  init?: { signal?: AbortSignal; language?: "hi" | "en"; cart?: AgentCartLine[] },
 ): Promise<AgentTurn> {
   return apiRequest<AgentTurn>("/ai/agent/chat", {
     method: "POST",
@@ -81,6 +89,9 @@ export async function sendAgentMessage(
       message,
       history: history.slice(-12),
       ...(init?.language ? { language: init.language } : {}),
+      // Sent only from the till, and only as context — "make it three kilo" has
+      // no referent without it. The agent never writes back through this.
+      ...(init?.cart?.length ? { cart: init.cart.slice(0, 40) } : {}),
     }),
     signal: init?.signal,
   });
