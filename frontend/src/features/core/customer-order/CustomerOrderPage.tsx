@@ -4,44 +4,27 @@ import { useParams } from "wouter";
 import { guestWebsiteRedirect } from "./restaurant-website";
 import {
   ArrowLeft,
-  Bell,
   CheckCircle2,
   ChefHat,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
-  CreditCard,
-  Edit3,
-  Gift,
-  Heart,
   Home,
   LayoutGrid,
   List,
   Loader2,
-  Mail,
-  MapPin,
-  Menu,
-  MessageCircle,
   Minus,
-  MoreVertical,
   PackageCheck,
-  Phone,
   Plus,
-  QrCode,
   RefreshCw,
   Search,
   Send,
-  Settings,
   ShieldCheck,
   ShoppingBag,
-  ShoppingCart,
-  Star,
   Store,
   Trash2,
   Truck,
-  User,
-  WalletCards,
   WifiOff,
   X,
   XCircle,
@@ -49,7 +32,6 @@ import {
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildOrderQrPayloads } from "@/lib/qr/cart-codec";
 import { ACTIVITY_EVENTS, sessionAgeMs, trackEvent, useOnlineProductImpression, useOnlineSession } from "@/lib/activity";
-import { SUPPORT_EMAIL } from "@/features/core/settings/app-info";
 import {
   loadCustomerCatalog,
   readCachedCatalog,
@@ -1208,58 +1190,6 @@ function CustomerPortalPage({
   return <OrdersPortalPage products={products.slice(0, 6)} onView={onView} />;
 }
 
-function PortalHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
-  const { t } = useAppLanguage();
-  return (
-    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="font-display text-2xl font-black tracking-[-0.02em] text-[#071432]">{title}</h1>
-        <p className="mt-1 text-sm font-semibold text-[#66758f]">{subtitle}</p>
-      </div>
-      {action}
-    </div>
-  );
-}
-
-function PortalCard({ children, className = "" }: { children: ReactNode; className?: string }) {
-  const { t } = useAppLanguage();
-  return (
-    <section className={`rounded-[22px] border border-[#e3ebf7] bg-white p-4 shadow-[0_18px_60px_rgba(20,60,120,0.055)] ${className}`}>
-      {children}
-    </section>
-  );
-}
-
-function IconBubble({ icon: Icon, tone = "blue" }: { icon: typeof Home; tone?: "blue" | "green" | "orange" | "red" | "purple" | "slate" }) {
-  const { t } = useAppLanguage();
-  const styles = {
-    blue: "bg-[#eaf2ff] text-[var(--brand)]",
-    green: "bg-[#e9fbf0] text-[#0f9f4a]",
-    orange: "bg-[#fff4e5] text-[#f97316]",
-    red: "bg-[#fff1f2] text-[#ef4444]",
-    purple: "bg-[#f4eaff] text-[#7c3aed]",
-    slate: "bg-[#f1f5f9] text-[#405173]",
-  }[tone];
-  return (
-    <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${styles}`}>
-      <Icon size={21} />
-    </span>
-  );
-}
-
-function ProductThumb({ product, size = "h-12 w-12" }: { product?: CustomerCatalogProduct; size?: string }) {
-  const { t } = useAppLanguage();
-  return (
-    <div className={`grid ${size} shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[var(--brand-softer)] to-[var(--brand-soft)]`}>
-      {product?.imageUrl ? (
-        <img src={product.imageUrl} alt="" className="h-[82%] w-[82%] object-contain" />
-      ) : (
-        <PackageCheck size={20} className="text-[var(--brand)]" />
-      )}
-    </div>
-  );
-}
-
 function OrdersPortalPage({ onView }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void }) {
   const { t } = useAppLanguage();
   return (
@@ -1271,100 +1201,6 @@ function OrdersPortalPage({ onView }: { products: CustomerCatalogProduct[]; onVi
     </div>
   );
 }
-
-function SearchBox({ placeholder }: { placeholder: string }) {
-  const { t } = useAppLanguage();
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-[#dfe8f5] bg-white px-3">
-      <Search size={17} className="text-[#72819a]" />
-      <input placeholder={placeholder} className="min-w-0 flex-1 bg-transparent py-3 text-sm font-semibold outline-none placeholder:text-[#7d8ba4]" />
-    </div>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const { t } = useAppLanguage();
-  const tone = status.includes("Delivered") || status.includes("Paid") || status.includes("Resolved") || status.includes("Success")
-    ? "bg-[#e9fbf0] text-[#0f9f4a]"
-    : status.includes("Return") || status.includes("Pending") || status.includes("Progress")
-      ? "bg-[#fff8ed] text-[#f97316]"
-      : "bg-[#fff1f2] text-[#ef4444]";
-  return <span className={`rounded-lg px-2.5 py-1 text-xs font-black ${tone}`}>{status}</span>;
-}
-
-function PriceSummaryLine({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
-  const { t } = useAppLanguage();
-  return (
-    <div className="mt-3 flex items-center justify-between border-t border-[#edf2f8] pt-3 text-sm">
-      <span className="font-semibold text-[#66758f]">{label}</span>
-      <span className={strong ? "font-display text-lg font-black text-[var(--brand)]" : "font-black text-[#071432]"}>{value}</span>
-    </div>
-  );
-}
-
-function TransactionRow({ left, title, sub, amount, status }: { left: string; title: string; sub: string; amount: string; status: string }) {
-  const { t } = useAppLanguage();
-  return (
-    <div className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[120px_minmax(0,1fr)_110px_110px] sm:items-center sm:gap-3">
-      <p className="font-black text-[var(--brand)]">{left}</p>
-      <div className="min-w-0"><p className="truncate font-black">{title}</p><p className="truncate text-xs text-[#66758f]">{sub}</p></div>
-      <p className="font-black">{amount}</p>
-      <div className="sm:text-right"><StatusPill status={status} /></div>
-    </div>
-  );
-}
-
-function InfoLine({ text }: { text: string }) {
-  const { t } = useAppLanguage();
-  return (
-    <div className="mt-3 flex items-start gap-2 text-sm font-semibold text-[#52617a]">
-      <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#0f9f4a]" />
-      <span>{text}</span>
-    </div>
-  );
-}
-
-function SectionTitle({ icon, title, sub }: { icon: typeof Home; title: string; sub: string }) {
-  const { t } = useAppLanguage();
-  return (
-    <div className="mb-4 flex gap-3">
-      <IconBubble icon={icon} />
-      <div><h2 className="font-display text-lg font-black">{title}</h2><p className="text-xs font-semibold text-[#66758f]">{sub}</p></div>
-    </div>
-  );
-}
-
-function SettingsInput({ label, value, verified = false }: { label: string; value: string; verified?: boolean }) {
-  const { t } = useAppLanguage();
-  return (
-    <label className="mt-3 block">
-      <span className="text-xs font-black text-[#405173]">{label}</span>
-      <span className="mt-1 flex items-center justify-between rounded-xl border border-[#dfe8f5] bg-white px-3 py-2.5 text-sm font-semibold">
-        {value}
-        {verified ? <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[10px] font-black text-[#0f9f4a]">{t("storefront.verified")}</span> : null}
-      </span>
-    </label>
-  );
-}
-
-function ToggleRow({ label, checked, onClick }: { label: string; checked: boolean; onClick: () => void }) {
-  const { t } = useAppLanguage();
-  return (
-    <button type="button" onClick={onClick} className="flex w-full items-center justify-between border-t border-[#edf2f8] py-3 text-sm font-black">
-      <span>{label}</span>
-      <span className={`relative h-6 w-11 rounded-full transition ${checked ? "bg-[var(--brand)]" : "bg-[#cbd5e1]"}`}>
-        <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${checked ? "left-6" : "left-1"}`} />
-      </span>
-    </button>
-  );
-}
-
-function EmptyPortal({ label }: { label: string }) {
-  const { t } = useAppLanguage();
-  return <div className="py-14 text-center text-sm font-semibold text-[#70809a]">{label}</div>;
-}
-
-const UsersFallbackIcon = User;
 
 function OrderQrOverlay({ urls, count, amount, onClose }: { urls: string[]; count: number; amount: number; onClose: () => void }) {
   const { t } = useAppLanguage();

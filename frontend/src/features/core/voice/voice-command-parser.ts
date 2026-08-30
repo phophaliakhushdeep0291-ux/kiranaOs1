@@ -349,31 +349,6 @@ export function extractAliases(text: string) {
   return aliases.length ? aliases.slice(0, 12) : undefined;
 }
 
-function normalizeUnit(value: string | undefined) {
-  if (!value) return undefined;
-  const clean = value.toLowerCase().trim();
-  return UNIT_WORDS[clean] ?? clean;
-}
-
-function unitAfter(text: string) {
-  const afterLabel = extractNameAfter(text, ["unit"]);
-  if (afterLabel) return normalizeUnit(afterLabel.split(/\s+/)[0]);
-  const stockMatch = text.match(
-    /\b(?:stock|quantity|opening stock)\s*\d+(?:\.\d+)?\s*(kilo|kg|kilogram|gram|gm|litre|liter|ltr|ml|piece|pcs|packet|box)\b/i,
-  );
-  return normalizeUnit(stockMatch?.[1]);
-}
-
-function quantityAfterPriceFrom(text: string, label: "retail" | "wholesale") {
-  const match = text.match(
-    new RegExp(
-      `\\b${label}(?:\\s+price)?\\s*\\d+(?:\\.\\d+)?\\s*(?:from|above|after)\\s*(\\d+(?:\\.\\d+)?)`,
-      "i",
-    ),
-  );
-  return match ? Number(match[1]) : undefined;
-}
-
 /**
  * Hindi product vocabulary.
  *
