@@ -146,6 +146,8 @@ export interface BillingDraft {
   paidAmount?: number | "";
   splitCashAmount?: number | "";
   splitUpiAmount?: number | "";
+  /** Optional UTR/reference for a manually confirmed payment to the shop's own UPI QR. */
+  upiReference?: string;
   allowAdvancePayment?: boolean;
 }
 

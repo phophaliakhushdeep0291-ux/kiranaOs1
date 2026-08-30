@@ -39,15 +39,3 @@ export async function updateSetupStatus(req, res, next) {
   } catch (err) { next(err); }
 }
 
-/**
- * The shop's own UPI QR for one amount.
- *
- * Deliberately not a payment endpoint: it creates nothing, reserves nothing and
- * learns nothing. It hands back a link the guest's app can open, and says in the
- * payload that this software cannot confirm what happens next.
- */
-export async function upiCollect(req, res, next) {
-  try {
-    res.json({ success: true, data: await service.buildUpiCollection(req.shopId, req.body) });
-  } catch (err) { next(err); }
-}

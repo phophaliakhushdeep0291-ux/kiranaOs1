@@ -1054,4 +1054,5 @@ export const settingsPagesEn = {
   "settings.theme.orangeHelp": "Lively and cheerful",
   "settings.theme.slate": "Slate",
   "settings.theme.slateHelp": "Neutral and minimal",
+  "settings.store.upiIdInvalid": "That does not look like a UPI ID. It should read like name@bank.",
 } as const;

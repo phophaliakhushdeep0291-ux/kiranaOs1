@@ -725,9 +725,9 @@ export async function confirmBill(shopId, body, actor = {}) {
         // confirmation: the money moved between two banks and this software was
         // not told. It rides in providerReference so day close can match it
         // against the statement, while confirmationSource stays "manual" — a
-        // human said so — and is not promoted by having a reference attached.
+        // human said so — and is never promoted merely by carrying a reference.
         providerReference: intent?.providerPaymentId
-          ?? pickString(payment.upiReference, payment.upi_reference)
+          ?? (payment.mode === "upi" ? pickString(payment.upiReference, payment.upi_reference) : null)
           ?? null,
         confirmationSource: intent?.confirmationSource ?? "manual",
         confirmedAt: intent?.confirmedAt ?? new Date(),

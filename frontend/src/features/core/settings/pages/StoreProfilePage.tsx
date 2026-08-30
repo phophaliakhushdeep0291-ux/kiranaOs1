@@ -79,6 +79,10 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// The same shape buildUpiPaymentUri accepts, so Settings cannot quietly save an
+// ID the counter will then refuse to build a QR from.
+const UPI_ID_PATTERN = /^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9.-]{1,63}$/;
+
 export default function StoreProfilePage() {
   const { t } = useAppLanguage();
   const { toast } = useToast();
@@ -427,7 +431,14 @@ export default function StoreProfilePage() {
         <Card>
           <CardHead icon={<Landmark size={15} />} title={t("settings.store.bankTitle")} sub={t("settings.store.bankSub")} />
           <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
-            <div className="sm:col-span-2"><Fld label={t("settings.store.upiId")}><Input className="h-10" value={bank.upi ?? ""} placeholder="store@upi" onChange={(e) => setBank("upi", e.target.value)} /></Fld></div>
+            {/* Told here, where it can be fixed. A malformed UPI ID used to
+                surface only at the counter as "UPI not configured", with a guest
+                waiting and nothing saying which character was wrong. */}
+            <div className="sm:col-span-2"><Fld label={t("settings.store.upiId")}><Input className="h-10" value={bank.upi ?? ""} placeholder="store@upi" onChange={(e) => setBank("upi", e.target.value)} />
+              {(bank.upi ?? "").trim() && !UPI_ID_PATTERN.test((bank.upi ?? "").trim())
+                ? <p className="mt-1 text-[11px] font-semibold text-rose-600">{t("settings.store.upiIdInvalid")}</p>
+                : null}
+            </Fld></div>
             <Fld label={t("settings.store.bankName")}><Input className="h-10" value={bank.bankName ?? ""} onChange={(e) => setBank("bankName", e.target.value)} /></Fld>
             <Fld label={t("settings.store.accountHolder")}><Input className="h-10" value={bank.holder ?? ""} onChange={(e) => setBank("holder", e.target.value)} /></Fld>
             <Fld label={t("settings.store.accountNumber")}><Input className="h-10" value={bank.account ?? ""} onChange={(e) => setBank("account", e.target.value)} /></Fld>

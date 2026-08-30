@@ -35,10 +35,9 @@ interface BillingPaymentPanelProps {
   retailPaymentVerified: boolean;
   retailPaymentLoading: boolean;
   onVerifyRetailPayment: () => void;
-  /** Opens the shop's own UPI QR — the path for a counter with no gateway. */
-  onShowShopUpiQr: () => void;
-  /** A cashier has said the money arrived. Not a verified payment, and shown as such. */
-  shopUpiRecorded: boolean;
+  /** The UTR the cashier reads off their own bank alert, for day-close matching. */
+  upiReference: string;
+  setUpiReference: (value: string) => void;
   cardTerminalConfigured: boolean;
   cardTerminalApproved: boolean;
   cardTerminalLoading: boolean;
@@ -83,8 +82,8 @@ export function BillingPaymentPanel({
   retailPaymentVerified,
   retailPaymentLoading,
   onVerifyRetailPayment,
-  onShowShopUpiQr,
-  shopUpiRecorded,
+  upiReference,
+  setUpiReference,
   cardTerminalConfigured,
   cardTerminalApproved,
   cardTerminalLoading,
@@ -184,6 +183,28 @@ export function BillingPaymentPanel({
       {showPaymentMode && showUpiQr && !retailPaymentDynamicQr ? (
         <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-3">
           {upiUri ? <div className="flex flex-col items-center gap-3 sm:flex-row"><QrCodeView value={upiUri} size={128} className="shrink-0 rounded-lg border border-purple-100 bg-white p-1" title={t("billing.pay.upi.qrTitle", { amount: upiAmount.toFixed(2) })} /><div><p className="text-sm font-black text-purple-950">{t("billing.pay.upi.scanToPay", { amount: fmtRs(upiAmount) })}</p><p className="mt-1 break-all text-xs font-semibold text-purple-700">{paymentConfig.upiId}</p><p className="mt-2 text-[11px] leading-4 text-purple-700">{t("billing.pay.upi.qrHelp")}</p></div></div> : <div className="flex items-start gap-2 text-xs text-amber-800"><QrCode size={17} className="mt-0.5 shrink-0" /><p><strong>{t("billing.pay.upi.notConfigured")}</strong> {t("billing.pay.upi.notConfiguredHelp")}</p></div>}
+          {upiUri ? (
+            <div className="mt-3 border-t border-purple-200 pt-3">
+              <label htmlFor="upi-utr" className="block text-[11px] font-black uppercase tracking-wide text-purple-900">{t("billing.pay.upi.utrLabel")}</label>
+              <Input
+                id="upi-utr"
+                value={upiReference}
+                onChange={(event) => setUpiReference(event.target.value.replace(/[^A-Za-z0-9-]/g, "").slice(0, 35))}
+                placeholder={t("billing.pay.upi.utrPlaceholder")}
+                className="mt-1 h-10 bg-white font-mono text-xs"
+                inputMode="numeric"
+                minLength={6}
+                maxLength={35}
+                aria-invalid={upiReference.length > 0 && upiReference.length < 6}
+                autoComplete="off"
+              />
+              {/* The reason to type it: nothing in this flow can confirm the
+                  payment, so the UTR is what lets day close match this bill to a
+                  bank statement instead of taking the cashier's word forever. */}
+              <p className="mt-1 text-[11px] leading-4 text-purple-700">{t("billing.pay.upi.utrHelp")}</p>
+              {upiReference.length > 0 && upiReference.length < 6 ? <p className="mt-1 text-[11px] font-bold text-rose-700">{t("billing.pay.upi.utrInvalid")}</p> : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -194,11 +215,6 @@ export function BillingPaymentPanel({
             <p className="mt-0.5 text-[11px] text-slate-600">{retailPaymentVerified ? t("billing.pay.verify.verifiedHelp") : retailPaymentRequired ? t("billing.pay.verify.requiredHelp") : retailPaymentConfigured ? t("billing.pay.verify.optionalHelp") : t("billing.pay.verify.noProviderHelp")}</p>
           </div>
           {retailPaymentConfigured && !retailPaymentVerified ? <button type="button" onClick={onVerifyRetailPayment} disabled={retailPaymentLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0753df] disabled:opacity-60">{retailPaymentLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}{t("billing.pay.verify.action")}</button> : null}
-            {/* No gateway on this counter, so the shop's own QR is the way it
-                takes UPI. Offered instead of the verify button, never beside it:
-                two buttons that both say "UPI" is how a cashier picks the wrong
-                one, and only one of them can actually confirm anything. */}
-            {!retailPaymentConfigured ? <button type="button" onClick={onShowShopUpiQr} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-sm transition hover:bg-slate-50">{shopUpiRecorded ? <Check size={14} /> : <QrCode size={14} />}{shopUpiRecorded ? t("billing.pay.shopUpi.recorded") : t("billing.pay.shopUpi.action")}</button> : null}
         </div>
       ) : null}
 

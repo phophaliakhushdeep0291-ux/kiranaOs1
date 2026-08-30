@@ -3,7 +3,7 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { requireOwnerPinForFields, requireShop } from "../../middleware/permissions.js";
 import { validate } from "../../middleware/validate.js";
-import { businessTypeCompatibilitySchema, upiCollectSchema, setupStatusSchema, updateShopSchema } from "./shops.schema.js";
+import { businessTypeCompatibilitySchema, setupStatusSchema, updateShopSchema } from "./shops.schema.js";
 import * as ctrl from "./shops.controller.js";
 
 const router = Router();
@@ -19,9 +19,6 @@ const PIN_PROTECTED_SHOP_FIELDS = ["name", "ownerName", "city", "address", "gstN
 
 router.get("/", ctrl.getShop);
 router.get("/bootstrap", ctrl.getBootstrap);
-// Builds a QR for the shop's own UPI ID. Any till user may raise one — it is how
-// a counter takes money — but it creates nothing and confirms nothing.
-router.post("/upi-collect", validate(upiCollectSchema), ctrl.upiCollect);
 router.post("/business-type-change/compatibility", requireRole("owner"), validate(businessTypeCompatibilitySchema), ctrl.businessTypeCompatibility);
 router.patch("/setup-status", requireRole("owner", "admin"), validate(setupStatusSchema), ctrl.updateSetupStatus);
 router.patch("/", requireOwnerPinForFields(PIN_PROTECTED_SHOP_FIELDS), validate(updateShopSchema), ctrl.updateShop);

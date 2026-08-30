@@ -1,7 +1,6 @@
 import { database as db } from "../../infrastructure/database/index.js";
 import { AppError } from "../../shared/errors/index.js";
 import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
-import { upiCollectionForShop } from "../payment-provider/upiCollect.js";
 import { BUSINESS_PROFILES, assertBusinessTypeOffered, bootstrapForShop, businessTypeFromSettings, parseShopSettings, requestedBusinessTypeFromSettings, settingsForBusinessType } from "./businessProfiles.js";
 
 async function writeRequiredShopAudit(client, entry) {
@@ -166,17 +165,3 @@ function pickKeys(source, keys) {
   return picked;
 }
 
-/**
- * The shop's own UPI QR for one amount.
- *
- * No gateway sits behind this: the link addresses the shop's own VPA and the
- * money moves bank-to-bank. Whoever renders it must treat `verified: false` as
- * load-bearing — the bill is settled when the shop sees its own bank alert, not
- * when a guest turns their phone around.
- */
-export async function buildUpiCollection(shopId, { amountPaise, note, reference }) {
-  const shop = await db.shop.findUnique({ where: { id: shopId }, select: { name: true, settingsJson: true } });
-  if (!shop) throw new AppError("Shop not found", 404);
-  const settings = parseShopSettings(shop.settingsJson);
-  return upiCollectionForShop(settings, { amountPaise, note, reference, shopName: shop.name });
-}
