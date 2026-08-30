@@ -40,8 +40,8 @@ assert.deepEqual(
 
 /* ------------------------------------------------------------- the prices */
 
-assert.equal(counter.priceMonthlyPaise, 69900, "Counter is ₹699 a month");
-assert.equal(counter.priceYearlyPaise, 699000, "and ten months for a year");
+assert.equal(counter.priceMonthlyPaise, 79900, "Counter is ₹799 a month");
+assert.equal(counter.priceYearlyPaise, 799000, "and ten months for a year");
 assert.equal(dinein.priceMonthlyPaise, 149900, "Dine-in is ₹1,499 a month");
 assert.equal(dinein.priceYearlyPaise, 1499000, "and ten months for a year");
 
@@ -49,6 +49,18 @@ for (const [code, plan] of [["Counter", counter], ["Dine-in", dinein]]) {
   assert.equal(
     plan.priceYearlyPaise, plan.priceMonthlyPaise * 10,
     `${code}'s yearly price is exactly ten months — "two months free" has to be true`,
+  );
+}
+
+// Every price this business quotes ends in ₹49 or ₹99, across all eleven trades
+// and thirty-three plans. That is not decoration: a lone round number in a
+// price list is the one a customer reads as arbitrary, and the one that betrays
+// a value typed in a hurry. A pricing change that breaks the pattern should
+// have to argue for itself here rather than slip through.
+for (const [code, plan] of [["Counter", counter], ["Dine-in", dinein]]) {
+  assert.equal(
+    plan.priceMonthlyPaise % 10000, 9900,
+    `${code} is priced at a round number — every other plan ends in ₹49 or ₹99`,
   );
 }
 

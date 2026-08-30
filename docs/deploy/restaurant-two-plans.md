@@ -1,8 +1,16 @@
 # Shipping the restaurant two-plan change
 
-Restaurant is sold as two plans: **Counter** (₹699/mo, ₹6,990/yr) for a takeaway,
+Restaurant is sold as two plans: **Counter** (₹799/mo, ₹7,990/yr) for a takeaway,
 cloud kitchen, bakery or tea shop, and **Dine-in** (₹1,499/mo, ₹14,990/yr) for a
 floor with tables.
+
+Counter sits at ₹799 rather than ₹699 because the entry plan was underpriced
+against what it carries, not to manage the distance to Dine-in. The ₹700 gap is
+left alone deliberately: it is the price of tables, KOT, table QR and
+reservations, so it tracks something real, and a restaurant with a floor knows
+which side of it they are on. Narrowing a gap by raising the plan that has to
+win new business trades acquisition for an upgrade path nobody is standing on
+yet.
 
 The line is one question — *do guests sit down?* — because it is the one a
 shopkeeper answers before the sentence finishes, and because it is where the
@@ -89,19 +97,23 @@ and that is what checkout should render.
 
 | Today | Pays | Becomes | Will pay |
 | --- | --- | --- | --- |
-| starter | ₹599 | Counter | ₹699 |
+| starter | ₹599 | Counter | ₹799 |
 | growth | ₹1,499 | Dine-in | ₹1,499 |
 | pro | ₹1,999 | Dine-in | ₹1,499 |
 
-Every existing restaurant is price-locked by the freeze, so the ₹100 rise reaches
+Every existing restaurant is price-locked by the freeze, so the ₹200 rise reaches
 new sales only. Dine-in deliberately lands on today's growth price: that cohort
 is not re-priced, and the pro cohort gets cheaper while keeping everything.
+
+Run `freeze-subscription-entitlements --check` and confirm it exits zero before
+this ships, or a paying takeaway wakes up to a price it never agreed to.
 
 ## Tests
 
 - `tests/restaurant-two-plans.examples.js` — the split, both prices, yearly as
-  exactly ten months, Dine-in a superset of Counter, the registry agreeing with
-  the plans it gates, and no other trade moved.
+  exactly ten months, both plans ending in ₹49 or ₹99 like every other price
+  this business quotes, Dine-in a superset of Counter, the registry agreeing
+  with the plans it gates, and no other trade moved.
 - `tests/subscription-entitlement-freeze.examples.js` — `--check` fails while
   anything is loose and writes nothing, the freeze records features and price,
   and a second run does not re-photograph.

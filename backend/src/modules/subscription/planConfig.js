@@ -236,7 +236,7 @@ export const BUSINESS_TYPE_PLAN_PRICING = Object.freeze({
   // Restaurant is sold as two plans — Counter and Dine-in — so `pro` resolves
   // onto the Dine-in price rather than sitting above it. The code stays valid
   // because tills that have not synced in a fortnight still send it.
-  restaurant:  { starter: [69900, 699000], growth: [149900, 1499000], pro: [149900, 1499000] },
+  restaurant:  { starter: [79900, 799000], growth: [149900, 1499000], pro: [149900, 1499000] },
 });
 
 export function normalizeBusinessType(businessType) {
