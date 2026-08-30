@@ -161,14 +161,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       role="presentation"
     >
       <div
-        className="w-full max-w-xl overflow-hidden rounded-[14px] border border-[#e2e8f0] bg-white shadow-2xl"
+        className="w-full max-w-xl overflow-hidden rounded-[14px] border border-[#E4DED1] bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={t("billing.summary.shortcutSearch")}
       >
-        <div className="flex items-center gap-2 border-b border-[#eef2f8] px-4">
-          <Search size={17} className="text-[#64748b]" aria-hidden="true" />
+        <div className="flex items-center gap-2 border-b border-[#F1ECE2] px-4">
+          <Search size={17} className="text-[#7C7566]" aria-hidden="true" />
           <input
             ref={inputRef}
             value={query}
@@ -180,17 +180,17 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               else if (event.key === "Escape") { event.preventDefault(); onClose(); }
             }}
             placeholder={t("chrome.search.placeholder")}
-            className="h-12 flex-1 bg-transparent text-[14px] text-[var(--brand-ink)] outline-none placeholder:text-[#94a3b8]"
+            className="h-12 flex-1 bg-transparent text-[14px] text-[var(--brand-ink)] outline-none placeholder:text-[#A9A395]"
             aria-label={t("chrome.search.label")}
           />
-          <button onClick={onClose} className="rounded-md p-1 text-[#94a3b8] hover:bg-[#f1f4f8] hover:text-[var(--brand-ink)]" aria-label={t("chrome.search.close")}>
+          <button onClick={onClose} className="rounded-md p-1 text-[#A9A395] hover:bg-[#f1f4f8] hover:text-[var(--brand-ink)]" aria-label={t("chrome.search.close")}>
             <X size={16} />
           </button>
         </div>
 
         <div className="max-h-[52vh] overflow-y-auto py-2">
           {items.length === 0 ? (
-            <p className="px-4 py-8 text-center text-[13px] text-[#94a3b8]">
+            <p className="px-4 py-8 text-center text-[13px] text-[#A9A395]">
               {query.trim() ? "No matches in your local records." : "Type to search your shop’s products, customers, and bills."}
             </p>
           ) : (
@@ -216,10 +216,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-semibold text-[var(--brand-ink)]">{item.title}</span>
-                    {item.subtitle && <span className="block truncate text-[11px] text-[#64748b]">{item.subtitle}</span>}
+                    {item.subtitle && <span className="block truncate text-[11px] text-[#7C7566]">{item.subtitle}</span>}
                   </span>
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">{item.kind}</span>
-                  {index === active && <CornerDownLeft size={14} className="shrink-0 text-[#94a3b8]" aria-hidden="true" />}
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-[#A9A395]">{item.kind}</span>
+                  {index === active && <CornerDownLeft size={14} className="shrink-0 text-[#A9A395]" aria-hidden="true" />}
                 </button>
               );
             })
