@@ -38,3 +38,4 @@ export async function updateSetupStatus(req, res, next) {
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
+

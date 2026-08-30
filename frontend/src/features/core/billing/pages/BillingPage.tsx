@@ -892,6 +892,10 @@ export default function Billing() {
     setPaidAmount("");
     setSplitCashAmount("");
     setSplitUpiAmount("");
+    // The next sale must not inherit the last one's UTR. A reference that
+    // followed the bill it was typed for would match the wrong line on the
+    // bank statement at day close, which is worse than having none at all.
+    setUpiReference("");
     setCustomerName("");
     setCustomerMobile("");
     setSelectedCustomerId("walk_in");

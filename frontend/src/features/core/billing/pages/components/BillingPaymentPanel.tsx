@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount, computeChangeDue, suggestCashTenders } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
-import { ArrowLeftRight, Banknote, ChevronDown, CreditCard, Gift, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeftRight, Banknote, Check, ChevronDown, CreditCard, Gift, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildUpiPaymentUri, getPaymentConfigSync } from "@/features/core/settings/payment-config";
 import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
