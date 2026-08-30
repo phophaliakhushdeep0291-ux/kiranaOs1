@@ -17,10 +17,12 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { offlineDB } from "@/lib/offline/db";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { BillingSearch } from "./components/BillingSearch";
+import { BillingAssistantStrip } from "./components/BillingAssistantStrip";
 import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
 import { BillingOrderQrButton } from "@/features/core/customer-order/BillingOrderQrButton";
 import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills } from "./open-bills";
+import { takeStagedBillLines, type StagedBillLine } from "../assistant-staging";
 import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace } from "./billing-workspace";
 import { updateCustomerOrder } from "@/features/core/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
@@ -238,6 +240,8 @@ export default function Billing() {
   const [pendingSensitiveBillType, setPendingSensitiveBillType] = useState<BillTypeSelection | null>(null);
   const [voiceCommand, setVoiceCommand] = useState("");
   const [voiceDraft, setVoiceDraft] = useState<VoiceParsedDraft | null>(null);
+  // The command the local parser could not resolve, handed to the assistant.
+  const [assistantCommand, setAssistantCommand] = useState<string | null>(null);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceMicMessage, setVoiceMicMessage] = useState(t("billing.page.micDefaultHint"));
   const [voiceVisible, setVoiceVisible] = useState(false);
@@ -318,6 +322,18 @@ export default function Billing() {
   });
 
   const subtotal = useMemo(() => calculateCartSubtotal(cart), [cart]);
+  // The bill as the assistant should see it: names, quantities, rates. Context
+  // only — it is what makes "make it three kilo" and "what is this bill" mean
+  // something. Memoised so the strip is not re-asked on every cart keystroke.
+  const assistantCartContext = useMemo(
+    () => cart.map((item) => ({
+      name: item.product.name,
+      quantity: item.quantity,
+      unit: item.unit,
+      rate: cartItemUnitRate(item),
+    })),
+    [cart],
+  );
   const lineDiscountTotal = useMemo(() => calculateLineDiscountTotal(cart), [cart]);
   // GST: one engine for UI, local record and server. Inclusive (kirana MRP
   // default) extracts tax from the entered prices without changing the payable;
@@ -1084,10 +1100,21 @@ export default function Billing() {
     }
     const draft = parseBillingVoiceCommand(command, allProducts);
     setVoiceDraft(draft);
-    if (draft.lines.length === 0) {
+    setAssistantCommand(null);
+    if (draft.lines.length === 0 && draft.newProducts.length === 0) {
+      // The offline parser is the fast path and it just came up empty. Rather
+      // than a red toast and a dead end, hand the sentence to the assistant —
+      // it can search the catalogue properly, and it can answer a question,
+      // which the regexes were never going to do. Offline there is nothing to
+      // hand it to, so the toast stays the answer.
+      if (typeof navigator !== "undefined" && navigator.onLine !== false) {
+        setAssistantCommand(command);
+        return;
+      }
       toast({ title: t("billing.page.noProductMatched"), description: t("billing.page.noProductMatchedDetail"), variant: "destructive" });
       return;
     }
+    if (draft.lines.length === 0) return;
     toast({ title: t("billing.page.voiceDraftReady"), description: draft.lines.length === 1 ? t("billing.page.voiceDraftReadyDetail", { count: draft.lines.length }) : t("billing.page.voiceDraftReadyDetailPlural", { count: draft.lines.length }) });
   }
 
@@ -1137,6 +1164,76 @@ export default function Billing() {
     }
     return created.length;
   }
+
+
+  /**
+   * Merge lines the assistant resolved into the live cart.
+   *
+   * One copy, used by both the queue drained on mount and the inline strip,
+   * because this is the only place that knows how a line merges: which selling
+   * unit it belongs to, whether it collapses into a line already in the cart,
+   * and how the quantity rounds. A second copy would eventually mis-price a real
+   * bill. Returns how many actually landed, so a caller can say so honestly.
+   */
+  function mergeAssistantLines(lines: StagedBillLine[]): number {
+    const resolved = lines
+      .map((line) => ({ line, product: productById.get(line.productId) }))
+      .filter((entry): entry is { line: StagedBillLine; product: Product } => entry.product != null);
+    if (resolved.length === 0) return 0;
+
+    setCart((previous) => {
+      let next = [...previous];
+      for (const { line, product } of resolved) {
+        const sellingUnit = activeSellingUnits(product).find((unit) =>
+          [unit.name, unit.unitType, unit.packSizeUnit].filter(Boolean).some((value) => String(value).toLowerCase() === line.unit.toLowerCase()),
+        ) ?? defaultSellingUnit(product);
+        const candidate: CartItem = {
+          product,
+          quantity: line.quantity,
+          rate: line.rate,
+          unit: sellingUnit?.name ?? line.unit,
+          sellingUnit,
+          manualRate: true,
+        };
+        const candidateKey = cartItemKey(candidate);
+        const existing = next.find((item) => cartItemKey(item) === candidateKey);
+        if (existing) {
+          next = next.map((item) => cartItemKey(item) === candidateKey
+            ? { ...item, quantity: roundQuantity(item.quantity + line.quantity), rate: line.rate, unit: candidate.unit, sellingUnit, manualRate: true }
+            : item);
+        } else {
+          next.push(candidate);
+        }
+      }
+      return next;
+    });
+
+    for (const { product } of resolved) {
+      rememberRecentProduct(product.id);
+      trackEvent(ACTIVITY_EVENTS.PRODUCT_ADDED_TO_BILL, { productId: product.id, productName: product.name, via: "assistant" });
+    }
+    if (billingStartedAtRef.current === null) billingStartedAtRef.current = Date.now();
+    return resolved.length;
+  }
+
+  // Items the assistant resolved while the shopkeeper was on another screen.
+  //
+  // Waits for the catalogue, since a staged line is an id until there is a
+  // Product to hang it on, and takeStagedBillLines clears as it reads so a
+  // remount cannot bill the same items twice.
+  useEffect(() => {
+    if (allProducts.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const staged = await takeStagedBillLines();
+      if (cancelled || staged.length === 0) return;
+      if (mergeAssistantLines(staged) > 0) {
+        toast({ title: t("billing.page.addedToCart"), description: t("billing.page.addedToCartDetail") });
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allProducts.length, productById, t]);
 
   function addVoiceDraftToCart() {
     if (!voiceDraft) return;
@@ -2141,6 +2238,18 @@ export default function Billing() {
               onParseVoiceDraft={() => parseVoiceDraft()}
               onAddVoiceDraftToCart={addVoiceDraftToCart}
             />
+            {assistantCommand ? (
+              <BillingAssistantStrip
+                command={assistantCommand}
+                cart={assistantCartContext}
+                onApplyLines={(lines) => {
+                  const added = mergeAssistantLines(lines);
+                  if (added > 0) setVoiceCommand("");
+                  return added;
+                }}
+                onDismiss={() => setAssistantCommand(null)}
+              />
+            ) : null}
           </div>
         )}
       </div>

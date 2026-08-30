@@ -39,6 +39,15 @@ export const agentChatSchema = z.object({
   // English: that is this app's default, and a till that omits the field is far
   // more likely to be a Hindi shop than an English one.
   language: z.enum(["hi", "en"]).optional(),
+  // The bill open on the counter, sent only from the till. Read-only context:
+  // it lets "make it three kilo" and "what is this bill" mean something, and
+  // nothing the agent does writes back through it.
+  cart: z.array(z.object({
+    name: z.string().max(120),
+    quantity: z.number().finite().min(0).max(1_000_000),
+    unit: z.string().max(30).optional(),
+    rate: z.number().finite().min(0).max(10_000_000).optional(),
+  }).strict()).max(40).optional(),
 }).strict();
 
 /**

@@ -37,10 +37,27 @@ export interface AgentTurn {
   provider: { name: string; model: string; toolsOffered: number };
 }
 
+/**
+ * Something the till has to do itself, because it is where that state lives.
+ *
+ * Adding to a bill is the case: the cart is React state persisted offline so a
+ * shop can bill through a power cut, so the server resolves and prices the lines
+ * and the till merges them. The action has NOT happened when confirm returns.
+ */
+export interface AgentClientAction {
+  ref: string;
+  action: "add_bill_lines" | string;
+  payload: {
+    lines?: Array<{ productId: string; name: string; quantity: number; unit: string; rate: number }>;
+    problems?: Array<{ query: string; reason: string; candidates?: string[] }>;
+  };
+}
+
 export interface AgentExecutionResult {
   planId: string;
   allSucceeded: boolean;
   results: Array<{ ref: string; ok: boolean; summary?: string; error?: string }>;
+  clientActions?: AgentClientAction[];
 }
 
 export interface AgentChatMessage {
@@ -53,10 +70,18 @@ export interface AgentChatMessage {
  * the shop's UI language goes with it so the reply comes back in the language
  * the rest of the app is already speaking.
  */
+/** The bill on the counter, as the till reports it for context. */
+export interface AgentCartLine {
+  name: string;
+  quantity: number;
+  unit?: string;
+  rate?: number;
+}
+
 export async function sendAgentMessage(
   message: string,
   history: AgentChatMessage[],
-  init?: { signal?: AbortSignal; language?: "hi" | "en" },
+  init?: { signal?: AbortSignal; language?: "hi" | "en"; cart?: AgentCartLine[] },
 ): Promise<AgentTurn> {
   return apiRequest<AgentTurn>("/ai/agent/chat", {
     method: "POST",
@@ -64,6 +89,9 @@ export async function sendAgentMessage(
       message,
       history: history.slice(-12),
       ...(init?.language ? { language: init.language } : {}),
+      // Sent only from the till, and only as context — "make it three kilo" has
+      // no referent without it. The agent never writes back through this.
+      ...(init?.cart?.length ? { cart: init.cart.slice(0, 40) } : {}),
     }),
     signal: init?.signal,
   });

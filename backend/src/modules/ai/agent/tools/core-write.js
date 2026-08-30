@@ -17,7 +17,7 @@
  */
 import { defineTool, TOOL_RISK } from "../tool-contract.js";
 import { createCustomer, recordUdharPayment } from "../../../customers/customers.service.js";
-import { updateProduct, getProduct } from "../../../products/products.service.js";
+import { updateProduct, getProduct, listProducts } from "../../../products/products.service.js";
 import { correctStock } from "../../../inventory/inventory.service.js";
 
 /** Rupee formatting for a confirmation line the shopkeeper reads aloud. */
@@ -32,7 +32,107 @@ function actorOf(ctx) {
   return { actorUserId: ctx.userId ?? null, deviceId: ctx.deviceId ?? null };
 }
 
+/**
+ * Resolve one spoken item to a real catalogue row.
+ *
+ * Exact name first, then a prefix, then a contains match — a shopkeeper saying
+ * "sugar" in a shop that stocks "Sugar" and "Sugar Free" means the first, and
+ * ranking by length rather than taking whatever the database returned first is
+ * what makes that reliable. Ambiguity is reported rather than resolved: two
+ * plausible matches come back as a question, because putting the wrong item on
+ * a bill costs the shop a refund and an argument at the counter.
+ */
+async function resolveBillItem(shopId, { query, quantity, unit }) {
+  const matches = await listProducts(shopId, { search: query });
+  if (matches.length === 0) return { query, resolved: false, reason: "no_match" };
+
+  const wanted = String(query).trim().toLowerCase();
+  const exact = matches.filter((product) => String(product.name).toLowerCase() === wanted);
+  const prefix = matches.filter((product) => String(product.name).toLowerCase().startsWith(wanted));
+  const shortlist = exact.length ? exact : prefix.length ? prefix : matches;
+  const ranked = [...shortlist].sort((a, b) => String(a.name).length - String(b.name).length);
+
+  if (exact.length === 0 && ranked.length > 1) {
+    const [first, second] = ranked;
+    // Two candidates of the same length are genuinely indistinguishable from the
+    // word alone. A different length means one is the plain item and the other a
+    // variant, and the plain one is what was asked for.
+    if (String(first.name).length === String(second.name).length) {
+      return { query, resolved: false, reason: "ambiguous", candidates: ranked.slice(0, 5).map((p) => p.name) };
+    }
+  }
+
+  const product = ranked[0];
+  return {
+    query,
+    resolved: true,
+    productId: product.id,
+    name: product.name,
+    quantity,
+    unit: unit || product.rateUnit || product.baseUnit || "piece",
+    rate: product.defaultPricePerRateUnit ?? 0,
+    stock: product.stockBaseQty ?? null,
+    tracksStock: product.stockTrackingEnabled !== false,
+  };
+}
+
 export const CORE_WRITE_TOOLS = [
+  defineTool({
+    name: "add_items_to_bill",
+    kind: "write",
+    // The cart is React state on the till, persisted offline, because a shop
+    // bills through a power cut. So this resolves and prices here, where the
+    // catalogue and the tenant boundary are, and the till merges the lines into
+    // its own cart through the same path the voice parser already uses.
+    target: "client",
+    risk: TOOL_RISK.CONFIRM,
+    description:
+      "Put items on the current bill. Give each item as the shopkeeper said it, with a quantity. Products are matched against this shop's catalogue here — do not invent a price, and do not call search_products first, this does its own lookup.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        items: {
+          type: "array",
+          minItems: 1,
+          maxItems: 20,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              query: { type: "string", description: "Product as spoken, e.g. \"chini\" or \"Sugar\"." },
+              quantity: { type: "number", exclusiveMinimum: 0, description: "How many or how much." },
+              unit: { type: "string", description: "Unit if the shopkeeper said one, e.g. kg, packet. Omit otherwise." },
+            },
+            required: ["query", "quantity"],
+          },
+        },
+      },
+      required: ["items"],
+    },
+    summarize: ({ items }) => {
+      const parts = (items ?? []).map((item) => `${item.quantity}${item.unit ? ` ${item.unit}` : ""} ${item.query}`);
+      return `Add ${parts.join(", ")} to the bill`;
+    },
+    handler: async ({ items }, ctx) => {
+      const lines = [];
+      const problems = [];
+      for (const item of items ?? []) {
+        const resolved = await resolveBillItem(ctx.shopId, item);
+        if (resolved.resolved) lines.push(resolved);
+        else problems.push(resolved);
+      }
+      return {
+        // Named so the till knows what to do with it without matching on the
+        // tool name, which would couple the two sides by string.
+        clientAction: "add_bill_lines",
+        lines,
+        problems,
+        addedCount: lines.length,
+      };
+    },
+  }),
+
   defineTool({
     name: "create_customer",
     kind: "write",
