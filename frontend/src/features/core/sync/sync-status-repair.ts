@@ -71,14 +71,20 @@ function eventAttemptTime(event: PendingSyncEvent): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-async function repairStaleSyncingOutboxEvents(): Promise<number> {
+async function repairStaleSyncingOutboxEvents(
+  recoverAllSyncing = false,
+): Promise<number> {
   const nowMs = Date.now();
   const stale = filterRowsForCurrentScope(
     await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
   ).filter((event) => {
     if (!isSyncingOutbox(event)) return false;
     const attemptedAt = eventAttemptTime(event);
-    return attemptedAt === 0 || nowMs - attemptedAt > STALE_SYNCING_TIMEOUT_MS;
+    return (
+      recoverAllSyncing ||
+      attemptedAt === 0 ||
+      nowMs - attemptedAt > STALE_SYNCING_TIMEOUT_MS
+    );
   });
   if (stale.length === 0) return 0;
 
@@ -689,8 +695,18 @@ export async function clearRetryBackoffAfterReconnect(): Promise<number> {
   return cleared;
 }
 
-export async function repairResolvedSyncStatusNoise(): Promise<number> {
-  const staleSyncingRepaired = await repairStaleSyncingOutboxEvents().catch(() => 0);
+export async function repairResolvedSyncStatusNoise(options: {
+  /**
+   * The caller owns the origin-wide sync lock, so no live tab can still own a
+   * SYNCING row. Recover every such row immediately. This closes the crash /
+   * navigation window where the server accepted an idempotent operation but the
+   * old document disappeared before it could persist the acknowledgement.
+   */
+  recoverAbandonedSyncing?: boolean;
+} = {}): Promise<number> {
+  const staleSyncingRepaired = await repairStaleSyncingOutboxEvents(
+    options.recoverAbandonedSyncing === true,
+  ).catch(() => 0);
   const retryableValidationRepaired = await repairRetryableBillValidationConflicts().catch(() => 0);
   const retryablePurchaseAndLedgerRepaired = await repairRetryablePurchaseAndLedgerValidationConflicts().catch(() => 0);
   const cancellationRepaired = await repairRetryableBillCancellationConflicts().catch(() => 0);

@@ -206,6 +206,12 @@ async function localSnapshot(client, localBillId = null) {
       const source = row.source_id ?? row.sourceId ?? row.bill_id ?? row.billId;
       return billIds.has(source) && Math.abs(Number(row.amount ?? 0) - expectedAmount) < 0.005;
     });
+    const activeCustomers = customers.filter((row) =>
+      row.deleted_at == null &&
+      row.deletedAt == null &&
+      row.merged_into_id == null &&
+      row.mergedIntoId == null,
+    );
     return {
       billId,
       billEventId: billEvent?.clientEventId ?? billEvent?.op_id ?? null,
@@ -225,7 +231,14 @@ async function localSnapshot(client, localBillId = null) {
         sync_status: row.sync_status ?? null,
       })),
       pendingOperations: outbox.filter((row) => row.status === "PENDING" || row.status === "FAILED").map((row) => row.operation_type),
-      customerCount: customers.filter((row) => row.deleted_at == null && row.deletedAt == null).length,
+      customerCount: activeCustomers.length,
+      activeCustomers: activeCustomers.map((row) => ({
+        id: row.id,
+        local_id: row.local_id ?? null,
+        server_id: row.server_id ?? null,
+        name: row.name ?? null,
+        sync_status: row.sync_status ?? null,
+      })),
     };
   }, { localBillId, expectedAmount: TEST_AMOUNT });
 }
@@ -258,10 +271,9 @@ async function paymentSnapshot(client, customerName) {
       payment?.customer_id,
     ].filter(Boolean));
     const paymentLedger = ledger.filter((row) => {
-      const source = row.source_id ?? row.sourceId ?? row.payment_id ?? row.paymentId;
       const customerId = row.customer_id ?? row.customerId;
       return (
-        (source === paymentId || (paymentId == null && customerIds.has(customerId))) &&
+        customerIds.has(customerId) &&
         String(row.type ?? "").toUpperCase() === "PAYMENT" &&
         Math.abs(Number(row.amount ?? 0) - expectedAmount) < 0.005 &&
         row.deleted_at == null &&
@@ -477,6 +489,9 @@ async function main() {
     if (synced.activeLedgerCount !== 1 || synced.activeLedgerTotal !== TEST_AMOUNT) {
       throw new Error(`Synced local ledger was counted more than once: ${JSON.stringify(synced)}`);
     }
+    if (synced.activeCustomers.filter((row) => row.name === customerName).length !== 1) {
+      throw new Error(`Synced customer left a duplicate local echo: ${JSON.stringify(synced.activeCustomers)}`);
+    }
 
     const server = await client.evaluateFunction(async ({ apiUrl, customerName, amount }) => {
       const session = JSON.parse(localStorage.getItem("kiranaos.auth.session.v1") ?? "{}");
@@ -642,6 +657,7 @@ async function main() {
       };
     }, customerName);
     if (
+      offlineReloadUi.controlled !== true ||
       offlineReloadUi.outstanding !== EXPECTED_REMAINDER ||
       offlineReloadUi.rowBalance !== EXPECTED_REMAINDER ||
       offlineReloadUi.runtimeErrors.length > 0
@@ -731,7 +747,7 @@ async function main() {
     const report = {
       generatedAt: new Date().toISOString(),
       passed: true,
-      scenario: "offline udhar bill -> sync -> offline partial payment -> immediate repaint -> offline SPA return -> sync -> server reconciliation",
+      scenario: "offline udhar bill -> reconnect/navigation acknowledgement recovery -> offline partial payment -> immediate repaint -> offline SPA return -> offline document reload -> sync -> server reconciliation",
       creditAmount: TEST_AMOUNT,
       partialPaymentAmount: PARTIAL_PAYMENT_AMOUNT,
       expectedRemainder: EXPECTED_REMAINDER,
