@@ -14,6 +14,10 @@ export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.send": "भेजें",
   "assistant.thinking": "देख रहे हैं…",
   "assistant.clear": "फिर से शुरू करें",
+  "assistant.speak": "बोलें",
+  "assistant.listening": "सुन रहे हैं… रोकने के लिए दबाएँ",
+  "assistant.transcribing": "आपकी बात लिखी जा रही है…",
+  "assistant.micDenied": "माइक की अनुमति नहीं मिली। टाइप करके बताएँ।",
 
   "assistant.emptyTitle": "क्या जानना चाहते हैं?",
   "assistant.emptyBody": "यह आपका स्टॉक, बिक्री, ग्राहक और उधार पढ़ सकता है, और बदलाव तैयार करके आपसे पुष्टि माँगता है।",

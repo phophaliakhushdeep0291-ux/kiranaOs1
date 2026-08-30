@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { defineTool, toolAvailableTo, TOOL_RISK } from "../src/modules/ai/agent/tool-contract.js";
 import { registerTools, toolsFor, getTool, registrySnapshot, ownerOf } from "../src/modules/ai/agent/tool-registry.js";
 import { __agentInternals } from "../src/modules/ai/agent/agent.service.js";
+import { agentChatSchema } from "../src/modules/ai/ai.schema.js";
 import { CORE_READ_TOOLS } from "../src/modules/ai/agent/tools/core-read.js";
 import { CORE_WRITE_TOOLS } from "../src/modules/ai/agent/tools/core-write.js";
 import { RESTAURANT_TOOLS } from "../src/verticals/restaurant/ai/tools.js";
@@ -179,6 +180,18 @@ circular.self = circular;
 const safe = __agentInternals.toolResultMessage("call_2", "search_products", circular);
 assert.ok(JSON.parse(safe.content).error, "an unencodable result becomes a reported error, not a crash");
 ok("an unencodable result degrades instead of crashing the turn");
+
+/* --------------------------------------------------------------- language */
+
+// Hindi is this app's default language, so a request that omits the field must
+// not quietly mean English. The service treats undefined as Hindi; the schema's
+// job is only to keep the field optional and to refuse anything it cannot map.
+assert.equal(agentChatSchema.safeParse({ message: "चीनी कितनी है?" }).success, true, "language is optional");
+assert.equal(agentChatSchema.safeParse({ message: "hi", language: "hi" }).success, true);
+assert.equal(agentChatSchema.safeParse({ message: "hi", language: "en" }).success, true);
+assert.equal(agentChatSchema.safeParse({ message: "hi", language: "fr" }).success, false, "an unsupported language is refused, not guessed");
+assert.equal(agentChatSchema.safeParse({ message: "hi", planId: "x" }).success, false, "the chat body stays strict");
+ok("the chat schema carries the shop's language and refuses the rest");
 
 /* --------------------------------------------------------------- registry */
 

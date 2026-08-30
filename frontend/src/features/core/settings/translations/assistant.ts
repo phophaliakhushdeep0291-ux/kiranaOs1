@@ -13,6 +13,10 @@ export const assistantEn = {
   "assistant.send": "Send",
   "assistant.thinking": "Looking it up…",
   "assistant.clear": "Start over",
+  "assistant.speak": "Speak",
+  "assistant.listening": "Listening… tap to stop",
+  "assistant.transcribing": "Writing down what you said…",
+  "assistant.micDenied": "Microphone access was refused. Type instead.",
 
   "assistant.emptyTitle": "What would you like to know?",
   "assistant.emptyBody": "It can read your stock, sales, customers and udhar, and prepare changes for you to confirm.",
