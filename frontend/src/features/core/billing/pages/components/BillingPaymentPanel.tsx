@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount, computeChangeDue, suggestCashTenders } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
-import { ArrowLeftRight, Banknote, ChevronDown, CreditCard, Gift, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeftRight, Banknote, Check, ChevronDown, CreditCard, Gift, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildUpiPaymentUri, getPaymentConfigSync } from "@/features/core/settings/payment-config";
 import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
@@ -35,6 +35,10 @@ interface BillingPaymentPanelProps {
   retailPaymentVerified: boolean;
   retailPaymentLoading: boolean;
   onVerifyRetailPayment: () => void;
+  /** Opens the shop's own UPI QR — the path for a counter with no gateway. */
+  onShowShopUpiQr: () => void;
+  /** A cashier has said the money arrived. Not a verified payment, and shown as such. */
+  shopUpiRecorded: boolean;
   cardTerminalConfigured: boolean;
   cardTerminalApproved: boolean;
   cardTerminalLoading: boolean;
@@ -79,6 +83,8 @@ export function BillingPaymentPanel({
   retailPaymentVerified,
   retailPaymentLoading,
   onVerifyRetailPayment,
+  onShowShopUpiQr,
+  shopUpiRecorded,
   cardTerminalConfigured,
   cardTerminalApproved,
   cardTerminalLoading,
@@ -188,6 +194,11 @@ export function BillingPaymentPanel({
             <p className="mt-0.5 text-[11px] text-slate-600">{retailPaymentVerified ? t("billing.pay.verify.verifiedHelp") : retailPaymentRequired ? t("billing.pay.verify.requiredHelp") : retailPaymentConfigured ? t("billing.pay.verify.optionalHelp") : t("billing.pay.verify.noProviderHelp")}</p>
           </div>
           {retailPaymentConfigured && !retailPaymentVerified ? <button type="button" onClick={onVerifyRetailPayment} disabled={retailPaymentLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0753df] disabled:opacity-60">{retailPaymentLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}{t("billing.pay.verify.action")}</button> : null}
+            {/* No gateway on this counter, so the shop's own QR is the way it
+                takes UPI. Offered instead of the verify button, never beside it:
+                two buttons that both say "UPI" is how a cashier picks the wrong
+                one, and only one of them can actually confirm anything. */}
+            {!retailPaymentConfigured ? <button type="button" onClick={onShowShopUpiQr} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 shadow-sm transition hover:bg-slate-50">{shopUpiRecorded ? <Check size={14} /> : <QrCode size={14} />}{shopUpiRecorded ? t("billing.pay.shopUpi.recorded") : t("billing.pay.shopUpi.action")}</button> : null}
         </div>
       ) : null}
 

@@ -721,7 +721,14 @@ export async function confirmBill(shopId, body, actor = {}) {
         sourceDeviceId: billIdentity.sourceDeviceId,
         status: "confirmed",
         provider: payment.mode === "gift_card" ? "gift_card_ledger" : intent?.provider ?? "manual",
-        providerReference: intent?.providerPaymentId ?? null,
+        // A UTR typed at the counter is a reconciliation handle, never a
+        // confirmation: the money moved between two banks and this software was
+        // not told. It rides in providerReference so day close can match it
+        // against the statement, while confirmationSource stays "manual" — a
+        // human said so — and is not promoted by having a reference attached.
+        providerReference: intent?.providerPaymentId
+          ?? pickString(payment.upiReference, payment.upi_reference)
+          ?? null,
         confirmationSource: intent?.confirmationSource ?? "manual",
         confirmedAt: intent?.confirmedAt ?? new Date(),
         retailPaymentIntentId: intent?.id ?? null,

@@ -45,6 +45,7 @@ import { productConfiguratorFor, type ProductConfigurator } from "@/features/cor
 import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceNewProductLine, type VoiceParsedDraft } from "./billing-types";
 import { createRetailPaymentQr, getRetailPaymentReadiness, verifyRetailPayment, type RetailQrCheckout } from "../retail-payment";
 import { RetailDynamicQrDialog } from "./components/RetailDynamicQrDialog";
+import { ShopUpiQrDialog } from "./components/ShopUpiQrDialog";
 import { CardTerminalDialog } from "./components/CardTerminalDialog";
 import { getCardTerminalReadiness, newCardTerminalRequestId, startCardTerminalCharge, type CardTerminalCharge, type CardTerminalStatus } from "@/features/core/billing/card-terminal";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
@@ -374,6 +375,11 @@ export default function Billing() {
   const creditAmount = billType === BillInputBillType.udhar_entry ? grandTotal : roundMoney(Math.max(0, grandTotal - Math.min(effectivePaidAmount, grandTotal)));
   const upiTenderAmount = paymentMode === SPLIT_PAYMENT ? splitUpi : paymentMode === BillPaymentMode.upi ? Math.min(effectivePaidAmount, grandTotal) : 0;
   const upiTenderPaise = Math.round(upiTenderAmount * 100);
+  // The shop's own UPI QR, for a counter with no gateway. Nothing polls it and
+  // nothing confirms it: the cashier says the money arrived, and the UTR they
+  // read off their own bank alert is what makes that claim reconcilable later.
+  const [shopUpiOpen, setShopUpiOpen] = useState(false);
+  const [shopUpiReference, setShopUpiReference] = useState<string | null>(null);
   const retailPaymentVerified = Boolean(verifiedRetailPayment
     && verifiedRetailPayment.amountPaise === upiTenderPaise
     && verifiedRetailPayment.locationId === getActiveLocationId());
@@ -1661,7 +1667,7 @@ export default function Billing() {
     const payments = paymentMode === SPLIT_PAYMENT
       ? [
           ...(splitCash > 0 ? [{ mode: BillPaymentMode.cash, amount: splitCash }] : []),
-          ...(splitUpi > 0 ? [{ mode: BillPaymentMode.upi, amount: splitUpi, ...(retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : {}) }] : []),
+          ...(splitUpi > 0 ? [{ mode: BillPaymentMode.upi, amount: splitUpi, ...(retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : shopUpiReference ? { upiReference: shopUpiReference } : {}) }] : []),
           ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
         ]
       : paymentMode === BillPaymentMode.credit || isUdharEntry
@@ -1676,6 +1682,7 @@ export default function Billing() {
               mode: paymentMode,
               amount: paid,
               ...(paymentMode === BillPaymentMode.upi && retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : {}),
+              ...(paymentMode === BillPaymentMode.upi && !retailPaymentVerified && shopUpiReference ? { upiReference: shopUpiReference } : {}),
               ...(paymentMode === BillPaymentMode.bank && cardPaymentApproved ? { retailPaymentIntentId: approvedCardPayment?.intentId } : {}),
             }] : []),
             ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
@@ -2209,6 +2216,8 @@ export default function Billing() {
         retailPaymentVerified={retailPaymentVerified}
         retailPaymentLoading={retailPaymentLoading}
         onVerifyRetailPayment={() => void handleVerifyRetailPayment()}
+        onShowShopUpiQr={() => setShopUpiOpen(true)}
+        shopUpiRecorded={Boolean(shopUpiReference)}
         giftCardCode={giftCardCode}
         setGiftCardCode={setGiftCardCode}
         giftCardBalance={giftCardBalance}
@@ -2341,6 +2350,21 @@ export default function Billing() {
           // now that the draft has nothing left to create.
           setVoiceDraft((previous) => (previous ? { ...previous, newProducts: [] } : previous));
           window.setTimeout(() => addVoiceDraftToCart(), 0);
+        }}
+      />
+
+      <ShopUpiQrDialog
+        open={shopUpiOpen}
+        amountPaise={upiTenderPaise}
+        note={customerName || undefined}
+        reference={undefined}
+        onClose={() => setShopUpiOpen(false)}
+        onReceived={(upiReference) => {
+          // Records what the cashier said, and what they can prove it by. It
+          // does not mark the payment verified — nothing in this path can.
+          setShopUpiReference(upiReference ?? null);
+          setShopUpiOpen(false);
+          toast({ title: t("billing.upiQr.recorded"), description: t("billing.upiQr.recordedDetail") });
         }}
       />
 
