@@ -32,14 +32,19 @@ export function TradeFocusStrip({ titleKey, focusKey, links, className }: TradeF
     <section
       data-testid="trade-focus-strip"
       className={cn(
-        "flex flex-col gap-3 rounded-[12px] border border-[var(--brand-border)] bg-[linear-gradient(135deg,#f7faff_0%,#ffffff_62%)] px-4 py-3 lg:flex-row lg:items-center lg:justify-between",
+        // A solid surface is intentional here. This strip appears on six core
+        // routes and the old decorative gradient made the effective background
+        // of every small label indeterminate to contrast engines and assistive
+        // review tools. The flat near-white keeps the same visual hierarchy and
+        // gives every foreground colour one measurable background.
+        "flex flex-col gap-3 rounded-[12px] border border-[var(--brand-border)] bg-[#f7faff] px-4 py-3 lg:flex-row lg:items-center lg:justify-between",
         className,
       )}
     >
       <div className="min-w-0">
-        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand)]">{t(titleKey)}</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#174ea6]">{t(titleKey)}</p>
         <p className="mt-1 truncate text-[14px] font-bold text-[#13223f]">{def.emoji} {def.label}</p>
-        <p className="mt-0.5 text-[11px] leading-4 text-[#6d7c98]">{t(focusKey)}</p>
+        <p className="mt-0.5 text-[11px] leading-4 text-[#52617c]">{t(focusKey)}</p>
       </div>
       {/* `min-w-0` and wrapping: three chips plus the settings link overflow a
           375px screen, and the shell clips horizontal overflow rather than
@@ -58,7 +63,7 @@ export function TradeFocusStrip({ titleKey, focusKey, links, className }: TradeF
         ))}
         <Link
           href="/settings/store-profile"
-          className="inline-flex min-h-11 items-center px-1 text-[11px] font-semibold text-[var(--brand)] hover:underline"
+          className="inline-flex min-h-11 items-center px-1 text-[11px] font-semibold text-[#174ea6] hover:underline"
         >
           {t("inventory.trade.changeShopType")}
         </Link>

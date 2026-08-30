@@ -507,7 +507,7 @@ export default function ReportsPage() {
             <PopoverTrigger asChild>
               <Button variant="outline" className="col-span-3 h-11 min-w-0 justify-between rounded-xl border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f] sm:col-auto sm:mouse:h-9 sm:min-w-[220px] sm:rounded-[7px] sm:font-semibold">
                 <span className="inline-flex items-center gap-2"><CalendarDays size={14} className="text-[var(--brand)]" />{rangeLabel(range.from, range.to)}</span>
-                <span className="text-[#7e8ba3]">⌄</span>
+                <ChevronDown size={14} className="text-[#7e8ba3]" aria-hidden="true" />
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-[calc(100vw-2rem)] rounded-xl border-[#dfe7f2] p-3 sm:w-[320px] sm:rounded-[8px]">
@@ -840,24 +840,25 @@ function MobileReportsOverview({
 
   return (
     <section className="space-y-3 md:hidden" aria-label="Mobile report overview" data-testid="mobile-reports-overview">
-      <article className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[var(--brand-ink)] via-[var(--brand)] to-[var(--brand-strong)] p-5 text-white shadow-[0_18px_46px_var(--brand-shadow)]">
-        <span className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full border border-white/15 bg-white/[0.06]" aria-hidden="true" />
-        <span className="pointer-events-none absolute -bottom-20 -left-16 h-40 w-40 rounded-full bg-[#54c9ff]/20 blur-2xl" aria-hidden="true" />
-        <div className="relative">
+      {/* A fixed dark surface makes every financial value measurable. The old
+          gradient plus decorative overlays left small labels and totals in an
+          axe "background unknown" state even though they looked legible. */}
+      <article className="overflow-hidden rounded-[26px] bg-[#0b2f6b] p-5 text-white shadow-[0_18px_46px_rgba(11,47,107,0.24)]">
+        <div>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/65">{salesLabel}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#dceaff]">{salesLabel}</p>
               <p className="mt-2 break-words text-[36px] font-black leading-none tracking-[-0.04em] tabular-nums">{fmt(sales)}</p>
             </div>
-            <span className="max-w-[148px] rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-right text-[10px] font-bold leading-4 text-white/85 backdrop-blur-sm">{periodLabel}</span>
+            <span className="max-w-[148px] rounded-full border border-[#5275aa] bg-[#163f7f] px-3 py-1.5 text-right text-[10px] font-bold leading-4 text-white">{periodLabel}</span>
           </div>
           <div className="mt-3 flex items-center gap-2 text-[11px]">
-            <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-black", salesChange >= 0 ? "bg-emerald-300/20 text-emerald-100" : "bg-rose-300/20 text-rose-100")}>
+            <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-black text-white", salesChange >= 0 ? "bg-[#14532d]" : "bg-[#881337]")}>
               {salesChange >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(salesChange)}%
             </span>
-            <span className="font-semibold text-white/60">against the previous period</span>
+            <span className="font-semibold text-[#dce7fa]">against the previous period</span>
           </div>
-          <div className="mt-5 grid grid-cols-3 divide-x divide-white/15 rounded-2xl border border-white/10 bg-[#031331]/25 p-1 backdrop-blur-sm">
+          <div className="mt-5 grid grid-cols-3 divide-x divide-[#36527e] rounded-2xl border border-[#36527e] bg-[#071c42] p-1">
             <MobileTenderStat label="Cash" value={cash} />
             <MobileTenderStat label="UPI" value={upi} />
             <MobileTenderStat label="Bank" value={bank} />
@@ -878,7 +879,7 @@ function MobileReportsOverview({
 function MobileTenderStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="min-w-0 px-2.5 py-2.5">
-      <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-white/55">{label}</p>
+      <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#d4e2fa]">{label}</p>
       <p className="mt-1 truncate text-[13px] font-black tabular-nums text-white">{fmt(value)}</p>
     </div>
   );
@@ -886,16 +887,16 @@ function MobileTenderStat({ label, value }: { label: string; value: number }) {
 
 function MobilePulseTile({ label, value, detail, icon, tone }: { label: string; value: number; detail: string; icon: ReactNode; tone: "emerald" | "blue" | "amber" | "rose" }) {
   const tones = {
-    emerald: "border-emerald-100 bg-gradient-to-br from-white to-emerald-50/70 text-emerald-700",
-    blue: "border-blue-100 bg-gradient-to-br from-white to-blue-50/75 text-blue-700",
-    amber: "border-amber-100 bg-gradient-to-br from-white to-amber-50/75 text-amber-700",
-    rose: "border-rose-100 bg-gradient-to-br from-white to-rose-50/70 text-rose-700",
+    emerald: "border-emerald-100 bg-[#f0fdf4] text-emerald-700",
+    blue: "border-blue-100 bg-[#eff6ff] text-blue-700",
+    amber: "border-amber-100 bg-[#fffbeb] text-amber-700",
+    rose: "border-rose-100 bg-[#fff1f2] text-rose-700",
   }[tone];
   return (
     <article className={cn("min-w-0 rounded-[20px] border p-3.5 shadow-[0_10px_28px_rgba(15,23,42,0.055)]", tones)}>
       <div className="flex items-center gap-2 text-[11px] font-extrabold"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white shadow-sm">{icon}</span><span className="truncate text-[#304467]">{label}</span></div>
       <p className="mt-3 break-words text-[20px] font-black leading-none tracking-[-0.025em] text-[var(--brand-ink)] tabular-nums">{fmt(value)}</p>
-      <p className="mt-2 text-[10px] font-semibold text-[#77859d]">{detail}</p>
+      <p className="mt-2 text-[10px] font-semibold text-[#52617c]">{detail}</p>
     </article>
   );
 }

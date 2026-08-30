@@ -666,10 +666,9 @@ export function BillingSearch({
                 • the rail scrolls, and a shop with more than three categories
                   pushed the action hundreds of pixels past the right edge, so it
                   could not be found at all;
-                • `.scroll-rail` carries a `mask-image`, and a mask makes its
-                  element the containing block for `position: fixed` descendants —
-                  so the action's dialog stopped covering the viewport and
-                  collapsed into the 44px rail, clipped by the very same mask.
+                • the rail is deliberately only an overflow container; putting
+                  a fixed dialog launcher inside it used to collapse that dialog
+                  into the 44px strip in some browsers.
               Anything with a popover or dialog belongs on this side of the line. */}
           <div className="mt-3 flex items-stretch gap-2 lg:mt-[18px]">
             <div className="scroll-rail flex min-w-0 flex-1 items-center gap-2.5 overflow-x-auto pb-3 [-ms-overflow-style:none] [scrollbar-width:none] lg:pb-4">

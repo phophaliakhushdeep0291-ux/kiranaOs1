@@ -95,18 +95,20 @@ export default function SettingsPage() {
   return (
     <SettingsShell>
       <section className="space-y-4 lg:hidden" aria-label={t("settings.hub.shortcuts")}>
-        <div className="rounded-[20px] bg-[linear-gradient(135deg,var(--brand)_0%,var(--brand-strong)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(7,95,255,0.24)]">
+        {/* Keep this surface solid so its small status text has one definite,
+            testable background under every accent theme. */}
+        <div className="rounded-[20px] bg-[#0b2f6b] p-5 text-white shadow-[0_18px_40px_rgba(11,47,107,0.24)]">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-100">{t("settings.hub.eyebrow")}</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#dceaff]">{t("settings.hub.eyebrow")}</p>
               <h2 className="mt-1 font-display text-[24px] font-black tracking-tight">{t("settings.hub.title")}</h2>
-              <p className="mt-1 max-w-[260px] text-[12px] leading-5 text-blue-100">{t("settings.hub.subtitle")}</p>
+              <p className="mt-1 max-w-[260px] text-[12px] leading-5 text-[#dceaff]">{t("settings.hub.subtitle")}</p>
             </div>
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/20"><Settings2 size={22} /></span>
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#163f7f] ring-1 ring-[#5275aa]"><Settings2 size={22} /></span>
           </div>
-          <div className="mt-4 flex items-center justify-between rounded-xl bg-white/10 px-3 py-2.5 text-[11px] font-bold ring-1 ring-white/15">
+          <div className="mt-4 flex items-center justify-between rounded-xl bg-[#071c42] px-3 py-2.5 text-[11px] font-bold ring-1 ring-[#36527e]">
             <span>{shopName}</span>
-            <span className="inline-flex items-center gap-1.5 text-emerald-100"><span className="h-2 w-2 rounded-full bg-emerald-300" />{isOnline ? (isSyncing ? t("dashboard.health.syncing") : t("settings.hub.protected")) : t("settings.hub.offlineSafe")}</span>
+            <span className="inline-flex items-center gap-1.5 text-[#d1fae5]"><span className="h-2 w-2 rounded-full bg-emerald-300" />{isOnline ? (isSyncing ? t("dashboard.health.syncing") : t("settings.hub.protected")) : t("settings.hub.offlineSafe")}</span>
           </div>
         </div>
 
