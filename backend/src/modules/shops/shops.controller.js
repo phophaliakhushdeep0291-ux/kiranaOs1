@@ -48,6 +48,6 @@ export async function updateSetupStatus(req, res, next) {
  */
 export async function upiCollect(req, res, next) {
   try {
-    res.json({ success: true, data: await service.buildUpiCollection(req.shopId, req.body) });
+    res.json({ success: true, data: await shopService.buildUpiCollection(req.shopId, req.body) });
   } catch (err) { next(err); }
 }
