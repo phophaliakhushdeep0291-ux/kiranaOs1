@@ -26,7 +26,8 @@
         "qa:supplier-settlement": "node scripts/capture-supplier-settlement-ui.mjs",
         "qa:mobile-core-matrix": "node scripts/capture-mobile-core-matrix-v1.mjs",
         "qa:mobile-vertical-matrix": "node scripts/capture-mobile-vertical-matrix-v1.mjs",
-        "qa:offline-core-restart": "node scripts/verify-offline-core-restart.mjs"
+        "qa:offline-core-restart": "node scripts/verify-offline-core-restart.mjs",
+        "qa:udhar-ledger-cycle": "node scripts/live-udhar-sync-smoke.mjs"
     },
     "dependencies": {
         "@hookform/resolvers": "^3.10.0",

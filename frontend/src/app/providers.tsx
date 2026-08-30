@@ -3,8 +3,7 @@ import { Router as WouterRouter } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/features/core/auth/AuthContext";
-import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { ApiClientError } from "@/lib/api/http";
 import { initializeOfflineStorage } from "@/lib/offline/migrations";
 import { useToast } from "@/hooks/use-toast";
@@ -12,9 +11,6 @@ import { ToastAction } from "@/components/ui/toast";
 import { activateWaitingServiceWorker, isServiceWorkerUpdateReady } from "@/lib/pwa/registerServiceWorker";
 import { AppLanguageProvider } from "@/features/core/settings/i18n";
 import { AppThemeProvider } from "@/features/core/settings/theme";
-import { useRealtimeRefreshBridge } from "@/lib/realtime/useRealtimeRefreshBridge";
-import { CloudDataBootstrap } from "@/features/core/sync/CloudDataBootstrap";
-import { useMultiDeviceSync } from "@/lib/realtime/useMultiDeviceSync";
 import { startBackgroundLeadershipHeartbeat } from "@/lib/browser/multiTabCoordinator";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
 import { autoCleanupEnabled, getAppPreferences } from "@/features/core/settings/app-preferences";
@@ -61,11 +57,19 @@ function scheduleFinancialHardening(): () => void {
   const id = globalThis.setTimeout(run, 2_000);
   return () => { cancelled = true; globalThis.clearTimeout(id); };
 }
-function RealtimeRefreshBridge() {
-  useRealtimeRefreshBridge();
-  useMultiDeviceSync();
-  return null;
-}
+const BackgroundRuntime = lazy(async () => {
+  try {
+    return await import("@/features/core/sync/BackgroundRuntime");
+  } catch (error) {
+    // Background refresh is recoverable and must never replace Billing with an
+    // error screen. A navigation/reload retries the chunk; local reads and
+    // writes remain available in the current session.
+    window.dispatchEvent(new CustomEvent("kirana:background-runtime-load-failed", {
+      detail: { message: error instanceof Error ? error.message : String(error) },
+    }));
+    return { default: () => <></> };
+  }
+});
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const { toast } = useToast();
@@ -141,8 +145,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
           <AppThemeProvider>
           <AppLanguageProvider>
             <AuthProvider>
-              <RealtimeRefreshBridge />
-              <CloudDataBootstrap />
+              <Suspense fallback={null}>
+                <BackgroundRuntime />
+              </Suspense>
               {children}
             </AuthProvider>
             {/* Inside the language provider, not beside it. The toast close
