@@ -9,9 +9,10 @@ import { errorHandler } from "./shared/errors/index.js";
 import { aiLimiter, apiLimiter, authLimiter, requestId, requestLogger, securityHeaders } from "./middleware/security.js";
 import { getRedisClient, getRedisStatus } from "./lib/redis.js";
 import { checkStorageHealth } from "./lib/objectStorage.js";
-import { getMetricsSnapshot, renderPrometheusMetrics, recordReadinessStatus } from "./lib/metrics.js";
+import { getMetricsSnapshot, renderPrometheusMetrics, recordReadinessStatus, recordWorkerReadinessStatus } from "./lib/metrics.js";
 import { getErrorTrackingStatus } from "./lib/errorTracking.js";
 import { isAllowedCorsOrigin, parseAllowedOrigins } from "./lib/corsOrigins.js";
+import { getWorkerHeartbeats } from "./lib/workerHeartbeat.js";
 
 // Module routes
 import { authRoutes } from "./core/auth/index.js";
@@ -161,7 +162,7 @@ app.get("/health", (_req, res) => {
 
 app.get("/health/ready", async (req, res) => {
   const startedAt = Date.now();
-  const checks = { database: "unknown", redis: "disabled", storage: "unknown" };
+  const checks = { database: "unknown", redis: "disabled", storage: "unknown", worker: env.QUEUES_ENABLED ? "unknown" : "disabled" };
   let status = "ok";
 
   try {
@@ -181,6 +182,17 @@ app.get("/health/ready", async (req, res) => {
       checks.redis = "error";
       if (status === "ok") status = "degraded";
     }
+
+    try {
+      const workerHeartbeat = await getWorkerHeartbeats();
+      checks.worker = workerHeartbeat.healthy ? "ok" : "error";
+      recordWorkerReadinessStatus(workerHeartbeat);
+      if (!workerHeartbeat.healthy) status = "error";
+    } catch {
+      checks.worker = "error";
+      recordWorkerReadinessStatus({ healthy: false, workers: [] });
+      status = "error";
+    }
   }
 
   const storage = await checkStorageHealth();
@@ -188,7 +200,7 @@ app.get("/health/ready", async (req, res) => {
   if (storage.status === "error" && status === "ok") status = "degraded";
   recordReadinessStatus({ database: checks.database, redis: checks.redis, storage: checks.storage, storageProvider: storage.provider });
 
-  const code = checks.database === "error" ? 503 : 200;
+  const code = checks.database === "error" || checks.worker === "error" ? 503 : 200;
   res.status(code).json({
     ...healthPayload(),
     status,

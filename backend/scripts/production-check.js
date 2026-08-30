@@ -2091,6 +2091,8 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   const queue = read("src/lib/queue.js");
   const workerIndex = read("src/workers/index.js");
   const metrics = exists("src/lib/metrics.js") ? read("src/lib/metrics.js") : "";
+  const app = exists("src/app.js") ? read("src/app.js") : "";
+  const smokeTest = exists("scripts/smoke-test.js") ? read("scripts/smoke-test.js") : "";
   const jobsRoutes = exists("src/modules/jobs/jobs.routes.js") ? read("src/modules/jobs/jobs.routes.js") : "";
   const jobsController = exists("src/modules/jobs/jobs.controller.js") ? read("src/modules/jobs/jobs.controller.js") : "";
   const packageJson = exists("package.json") ? readJson("package.json") : { scripts: {} };
@@ -2117,6 +2119,12 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   }
   if (!packageJson.scripts?.["test:billing"]?.includes("phase23-worker-health-readiness.examples.js")) {
     errors.push("Phase 23 worker health tests must be wired into npm test");
+  }
+  for (const snippet of ["getWorkerHeartbeats", "recordWorkerReadinessStatus", "checks.worker", "503"]) {
+    if (!app.includes(snippet)) errors.push(`public readiness must enforce worker heartbeat health: ${snippet}`);
+  }
+  if (!smokeTest.includes('ready.checks.worker !== "ok"')) {
+    errors.push("production smoke must require a healthy worker heartbeat when expected");
   }
 }
 
