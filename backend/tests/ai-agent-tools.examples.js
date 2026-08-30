@@ -236,6 +236,36 @@ assert.equal(agentChatSchema.safeParse({ message: "hi", language: "fr" }).succes
 assert.equal(agentChatSchema.safeParse({ message: "hi", planId: "x" }).success, false, "the chat body stays strict");
 ok("the chat schema carries the shop's language and refuses the rest");
 
+/* ------------------------------------------------------- the bill as context */
+
+// The till sends the open bill so "make it three kilo" and "what is this bill"
+// have a referent. It is a client, so its size and its field names are input,
+// not fact.
+assert.equal(agentChatSchema.safeParse({
+  message: "make it 3 kg",
+  cart: [{ name: "Sugar", quantity: 2, unit: "kg", rate: 42 }],
+}).success, true);
+assert.equal(agentChatSchema.safeParse({
+  message: "x",
+  cart: Array.from({ length: 41 }, () => ({ name: "Sugar", quantity: 1 })),
+}).success, false, "an oversized cart is refused rather than truncated silently");
+assert.equal(agentChatSchema.safeParse({
+  message: "x",
+  cart: [{ name: "Sugar", quantity: 1, secret: "x" }],
+}).success, false, "a cart line cannot smuggle extra fields");
+
+const bounded = __agentInternals.sanitizeCart([
+  { name: "Sugar", quantity: 2, unit: "kg", rate: 42 },
+  { name: "Maggi", quantity: 3, unit: "packet", rate: 14 },
+  { name: "", quantity: 9 },
+  { quantity: 4 },
+]);
+assert.equal(bounded.lineCount, 2, "lines without a name are dropped, not sent as nulls");
+assert.equal(bounded.approximateTotal, 126, "2 x 42 + 3 x 14");
+assert.equal(__agentInternals.sanitizeCart([]), null, "an empty bill is absent context, not an empty object");
+assert.equal(__agentInternals.sanitizeCart("not a cart"), null, "a cart that is not a list is ignored");
+ok("the open bill reaches the model bounded, or not at all");
+
 /* --------------------------------------------------------------- registry */
 
 const snapshot = registrySnapshot();

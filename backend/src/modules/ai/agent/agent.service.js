@@ -556,7 +556,7 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
 }
 
 /** Test surface. Not used on a request path. */
-export const __agentInternals = { jsonSafe, toolResultMessage, validateArgs };
+export const __agentInternals = { jsonSafe, toolResultMessage, validateArgs, sanitizeCart };
 
 /** Decline a plan without running it, so the audit row records the refusal. */
 export async function rejectPlan(ctx, { planId }) {
