@@ -1259,7 +1259,17 @@ function unitCodeFor(unit, index) {
   return `${type}-${size}-${measure}`.toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
 }
 
-function legacySellingUnit(product) {
+/**
+ * The unit a product is already sold in, when it has no explicit rows.
+ *
+ * Exported because anything ADDING a selling unit to such a product has to send
+ * this one along with it. writeSellingUnits retires whatever it is not given,
+ * and applyDefaultSellingUnitToProduct copies the default unit's type and price
+ * onto the Product — so sending only a new pack silently rewrites rateUnit and
+ * defaultPricePerRateUnit to that pack's. Deriving it twice would be the same
+ * mistake in two places.
+ */
+export function legacySellingUnit(product) {
   const unitType = compactText(product.rateUnit) ?? compactText(product.displayUnit) ?? "piece";
   const baseUnit = compactText(product.baseUnit) ?? unitType;
   let conversionToBase = 1;

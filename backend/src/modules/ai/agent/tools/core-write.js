@@ -17,7 +17,7 @@
  */
 import { defineTool, TOOL_RISK } from "../tool-contract.js";
 import { createCustomer, recordUdharPayment } from "../../../customers/customers.service.js";
-import { updateProduct, getProduct, listProducts } from "../../../products/products.service.js";
+import { updateProduct, getProduct, listProducts, legacySellingUnit } from "../../../products/products.service.js";
 import { correctStock } from "../../../inventory/inventory.service.js";
 import { AppError } from "../../../../shared/errors/index.js";
 import {
@@ -179,7 +179,19 @@ export const CORE_WRITE_TOOLS = [
       // writeSellingUnits deactivates every unit NOT in the list it is given, so
       // the existing ones are carried back untouched. Sending only the new pack
       // would quietly retire every size the shop already sells.
-      const existing = Array.isArray(product.sellingUnits) ? product.sellingUnits : [];
+      //
+      // A product with NO explicit units is the dangerous case, and it is the
+      // common one: most of a kirana catalogue is sold loose by its rate unit
+      // with no ProductSellingUnit row at all. Send just the packet and
+      // normalizeSellingUnits makes it the default, then
+      // applyDefaultSellingUnitToProduct copies its type and price onto the
+      // product — Sugar at Rs45 a kg silently becomes Sugar at Rs24 a packet,
+      // and the shop can no longer weigh it out loose. So the loose unit is
+      // materialised first, from the same helper the product form uses.
+      const stored = Array.isArray(product.sellingUnits) ? product.sellingUnits : [];
+      const existing = stored.length > 0
+        ? stored
+        : [{ ...legacySellingUnit(product), isDefault: true, isActive: true }];
       const type = packType ?? "packet";
       const matches = (row) => String(row.unitType).toLowerCase() === type
         && Number(row.packSizeValue) === Number(packSize)
