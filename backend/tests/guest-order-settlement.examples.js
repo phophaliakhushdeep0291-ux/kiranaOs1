@@ -32,6 +32,8 @@ await setTicketStatus(shop.id, kot.ticket.id, "ready");
 assert.equal((await getPublicOrderStatus(shop.id, first.id)).status, "ready");
 await setTicketStatus(shop.id, kot.ticket.id, "served");
 assert.equal((await getPublicOrderStatus(shop.id, second.id)).status, "fulfilled");
+const secondServedAt = (await db.customerOrder.findUniqueOrThrow({ where: { id: second.id } })).fulfilledAt;
+assert.ok(secondServedAt, "the kitchen stamped it when the plate went out");
 await submitPublicOrderFeedback(shop.id, first.id, { rating: 5 });
 
 const billBody = { clientBillId: randomUUID(), billType: "normal_sale", gstMode: "none", customerName: "T1", discount: 0, locationId: location.id,
@@ -46,6 +48,22 @@ assert.ok(savedFirst.billId);
 assert.equal(savedFirst.billId, savedSecond.billId, "multiple rounds settle on one bill");
 assert.equal(savedFirst.paymentStatus, "paid");
 assert.equal((await getPublicOrderStatus(shop.id, first.id)).paymentStatus, "paid");
+
+// Settling the table ends the sitting. Progress through accepted -> ready ->
+// fulfilled belongs to the kitchen ticket while the food is being cooked, but
+// nothing downstream of the kitchen was closing the order afterwards: `first`
+// stayed at "ready" for good, so the guest's own tracking page showed the food
+// still coming AND "Payment received", and the order read as open to the shop.
+assert.equal(savedFirst.status, "fulfilled", "a settled table closes its orders");
+assert.equal(savedFirst.fulfillmentStatus, "fulfilled");
+assert.ok(savedFirst.fulfilledAt, "and stamps when the sitting ended");
+assert.equal((await getPublicOrderStatus(shop.id, first.id)).status, "fulfilled", "which is what the guest sees");
+// An order the kitchen already finished keeps the moment it was served; the
+// bill is not allowed to rewrite that to whenever somebody got round to paying.
+assert.equal(
+  savedSecond.fulfilledAt.getTime(), secondServedAt.getTime(),
+  "an already-served order keeps its own served time",
+);
 await settle(billBody); // durable bill retry must not double-charge
 await assert.rejects(settle({ ...billBody, clientBillId: randomUUID() }), { code: "GUEST_ORDER_BILL_MISMATCH" });
 

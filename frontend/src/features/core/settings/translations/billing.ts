@@ -462,6 +462,7 @@ export const billingEn = {
   "billing.page.clearBillConfirm": "Clear bill",
   "billing.page.printAfterSavingTitle": "Print this bill after saving?",
   "billing.page.printAfterSavingBody": "The bill will be saved either way. Choose print to open the configured receipt printer, or continue without printing.",
+  "billing.page.goBack": "Go back",
   "billing.page.savePrint": "Save & print",
   "billing.page.saveNoPrint": "Save without printing",
   "billing.page.checkout": "Checkout",

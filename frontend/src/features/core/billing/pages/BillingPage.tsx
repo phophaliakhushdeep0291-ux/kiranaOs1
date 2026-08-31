@@ -22,6 +22,7 @@ import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
 import { BillingOrderQrButton } from "@/features/core/customer-order/BillingOrderQrButton";
 import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills } from "./open-bills";
+import { firstSettleWarning, type SettleWarning } from "../settle-checks";
 import { takeStagedBillLines, type StagedBillLine } from "../assistant-staging";
 import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace } from "./billing-workspace";
 import { updateCustomerOrder } from "@/features/core/orders/api";
@@ -233,6 +234,17 @@ export default function Billing() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [printConfirmOpen, setPrintConfirmOpen] = useState(false);
   const [pendingPrintBillType, setPendingPrintBillType] = useState<BillTypeSelection | null>(null);
+  // A trade's own warning about this bill, and the bill type waiting behind it.
+  const [settleWarning, setSettleWarning] = useState<{
+    warning: SettleWarning;
+    billType: BillTypeSelection | undefined;
+    printDecision: boolean | undefined;
+    approval: NonNullable<typeof sensitiveApproval> | undefined;
+  } | null>(null);
+  // What the cashier has already been asked about. Keyed on the bill AND its line
+  // count, so a dish added after they said "settle anyway" asks again rather than
+  // riding on the answer to a different question.
+  const settleAckRef = useRef<{ billId: string; lines: number } | null>(null);
   const [mobileCheckoutOpen, setMobileCheckoutOpen] = useState(false);
 
   useEffect(() => {
@@ -673,6 +685,11 @@ export default function Billing() {
         if (!active) return;
         if (Object.keys(draft).length > 0) {
           if (draft.activeBillId) setActiveBillId(draft.activeBillId);
+          // The floor screen writes the draft straight to storage and navigates here,
+          // so this hydration is the only place billing learns the table: the state
+          // initialisers above read a module cache that is still empty on a fresh load,
+          // and the next draft save would then write the table back out as undefined.
+          setActiveTableId(draft.tableId);
           setSourceOrderId(draft.sourceOrderId);
           setSourceOrderFingerprint(draft.sourceOrderFingerprint);
           setCart(draft.cart ?? []);
@@ -938,6 +955,7 @@ export default function Billing() {
     // walk-in. Carrying the table over would hide that bill from the open-bills
     // strip and leave the floor screen pointing a free table at it.
     setActiveTableId(undefined);
+    settleAckRef.current = null;
     setSourceOrderId(undefined);
     setSourceOrderFingerprint(undefined);
     setCart([]);
@@ -1804,6 +1822,27 @@ export default function Billing() {
       });
     }
 
+    /**
+     * Anything this trade wants said before the money is taken.
+     *
+     * Deferred like the printer question below: the check is asynchronous, so
+     * the first pass starts it and returns, and the answer either re-enters
+     * this function or opens a dialog that does.
+     */
+    const acknowledged = settleAckRef.current?.billId === activeBillId
+      && settleAckRef.current.lines === cart.length;
+    if (!acknowledged) {
+      void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart }).then((warning) => {
+        if (warning) {
+          setSettleWarning({ warning, billType: overrideBillType, printDecision, approval: approvalOverride });
+          return;
+        }
+        settleAckRef.current = { billId: activeBillId, lines: cart.length };
+        handleConfirm(overrideBillType, printDecision, approvalOverride);
+      });
+      return;
+    }
+
     const sensitiveActions = requiredBillingSensitiveActions();
     const effectiveSensitiveApproval = approvalOverride ?? sensitiveApproval;
     if (sensitiveActions.length > 0 && !billingSensitiveApprovalCovers(sensitiveActions, effectiveSensitiveApproval)) {
@@ -2581,6 +2620,22 @@ export default function Billing() {
         destructive
         onConfirm={executeClearCart}
         onCancel={() => setClearConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={settleWarning !== null}
+        title={settleWarning ? t(settleWarning.warning.title.key, settleWarning.warning.title.vars) : ""}
+        description={settleWarning ? t(settleWarning.warning.body.key, settleWarning.warning.body.vars) : ""}
+        confirmLabel={settleWarning ? t(settleWarning.warning.confirm.key, settleWarning.warning.confirm.vars) : ""}
+        cancelLabel={t("billing.page.goBack")}
+        disabled={confirmBill.isPending}
+        onConfirm={() => {
+          const pending = settleWarning;
+          settleAckRef.current = { billId: activeBillId, lines: cart.length };
+          setSettleWarning(null);
+          window.setTimeout(() => handleConfirm(pending?.billType, pending?.printDecision, pending?.approval), 0);
+        }}
+        onCancel={() => setSettleWarning(null)}
       />
 
       <ConfirmDialog

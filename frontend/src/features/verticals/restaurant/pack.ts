@@ -88,7 +88,7 @@ export const restaurantPack: VerticalPack = {
   ],
   // Contributes the add-on dialog to shared billing, so core never imports
   // restaurant. Named rather than imported — see `VerticalSlotId`.
-  billingSlots: ["restaurant/addons"],
+  billingSlots: ["restaurant/addons", "restaurant/unfired-kot"],
   capabilities: [
     // Mirrors backend/src/verticals/restaurant/capabilities.js. The two lists
     // are read by DIFFERENT gates and must agree: this one drives

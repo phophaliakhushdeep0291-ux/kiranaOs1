@@ -126,13 +126,38 @@ registerSaleGuard(async ({ shopId, tx, items, location }) => {
     }
   }
   return { onConfirmed: async ({ tx: client, bill, actor }) => {
+    const settledAt = new Date();
     for (const order of orders) {
       const paymentStatus = Number(bill.creditAmount) > 0 ? (Number(bill.paidAmount) > 0 ? "partially_paid" : "unpaid") : "paid";
+      /**
+       * Settling the table ends the sitting, so the order closes here.
+       *
+       * Progress through accepted -> ready -> fulfilled is driven by the kitchen
+       * ticket (see kot.service setTicketStatus), which is right while the food
+       * is being cooked. But a table whose bill has been settled is a table the
+       * guests have paid for and left, and nothing downstream of the kitchen was
+       * closing it: the order sat at "accepted / preparing" for good, so the
+       * guest's own tracking page showed "Being cooked" and "Payment received"
+       * together, permanently, and the order still read as open to the shop.
+       *
+       * A bill is the terminal record of a sitting whatever the kitchen did with
+       * it — including an order that was never fired, which the till now makes
+       * staff acknowledge before they can take the money. paymentStatus stays a
+       * separate question: a table settled on udhar is fulfilled and unpaid.
+       */
       const claimed = await client.customerOrder.updateMany({ where: { id: order.id, shopId, billId: order.billId, status: { in: ["accepted", "ready", "fulfilled"] } },
-        data: { billId: bill.id, paymentStatus } });
+        data: {
+          billId: bill.id,
+          paymentStatus,
+          status: "fulfilled",
+          fulfillmentStatus: "fulfilled",
+          ...(order.fulfilledAt ? {} : { fulfilledAt: settledAt }),
+        } });
       if (claimed.count !== 1) throw new AppError("Guest order changed before settlement. Refresh and retry.", 409, "GUEST_ORDER_ALREADY_BILLED");
       const audit = await createAuditLog({ client, shopId, userId: actor?.userId ?? null, action: "GUEST_ORDER_BILLED", entityType: "CustomerOrder", entityId: order.id,
-        before: { billId: order.billId, paymentStatus: order.paymentStatus }, after: { billId: bill.id, paymentStatus }, metadata: { tableId: order.tableId, recoveredGuestLineLinks: recoveredLineCount } });
+        before: { billId: order.billId, paymentStatus: order.paymentStatus, status: order.status },
+        after: { billId: bill.id, paymentStatus, status: "fulfilled" },
+        metadata: { tableId: order.tableId, recoveredGuestLineLinks: recoveredLineCount } });
       if (!audit) throw new AppError("Guest settlement could not be audited", 503, "ORDER_AUDIT_UNAVAILABLE");
     }
   } };

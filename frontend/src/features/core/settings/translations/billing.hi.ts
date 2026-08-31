@@ -446,6 +446,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.clearBillConfirm": "बिल हटाएं",
   "billing.page.printAfterSavingTitle": "सेव करने के बाद बिल छापें?",
   "billing.page.printAfterSavingBody": "बिल दोनों तरह से सेव होगा। प्रिंट चुनने पर सेट किया हुआ प्रिंटर खुलेगा, या बिना छापे आगे बढ़ें।",
+  "billing.page.goBack": "वापस जाएँ",
   "billing.page.savePrint": "सेव करके छापें",
   "billing.page.saveNoPrint": "बिना छापे सेव करें",
   "billing.page.checkout": "पेमेंट",

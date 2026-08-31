@@ -89,7 +89,7 @@ export type VerticalPageId =
  * pack alone. `vertical-boundaries.test.ts` fails the build if a pack reaches
  * for its own screens again.
  */
-export type VerticalSlotId = "pharmacy/prescription" | "restaurant/addons";
+export type VerticalSlotId = "pharmacy/prescription" | "restaurant/addons" | "restaurant/unfired-kot";
 
 export interface VerticalRoute {
   /** Wouter pattern, e.g. "/rentals" or "/tables/:id". */
