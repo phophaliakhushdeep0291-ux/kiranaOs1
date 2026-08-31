@@ -123,6 +123,7 @@ export const RESTORABLE_CHILD_MODELS = Object.freeze({
   BillItem: { relation: "bill", where: { bill: { shopId: "__SHOP_ID__" } } },
   StockCountLine: { relation: "session", where: { session: { shopId: "__SHOP_ID__" } } },
   StockTransferItem: { relation: "transfer", where: { transfer: { shopId: "__SHOP_ID__" } } },
+  StockTransferLotAllocation: { relation: "transferItem", where: { transferItem: { transfer: { shopId: "__SHOP_ID__" } } } },
   PurchaseOrderItem: { relation: "purchaseOrder", where: { purchaseOrder: { shopId: "__SHOP_ID__" } } },
   PurchaseReceiptItem: { relation: "receipt", where: { receipt: { shopId: "__SHOP_ID__" } } },
   PurchaseReturnItem: { relation: "purchaseReturn", where: { purchaseReturn: { shopId: "__SHOP_ID__" } } },
