@@ -43,7 +43,13 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onU
   }
 
   return (
-    <div>
+    // A container, not the viewport, decides how a row lays itself out. The
+    // cart lives in a fixed ~330px panel on every desktop width, so keying the
+    // wide layout off `sm:` applied it inside a phone-width column: the five
+    // fixed columns and their gaps came to ~308px of a 328px row and the name
+    // cell — a minmax(0,1fr) that is allowed to vanish — resolved to 0px. Every
+    // line in the cart lost its item name at the counter.
+    <div className="@container">
       {cart.map((item) => (
         <CartRow
           key={cartItemKey(item)}
@@ -167,15 +173,15 @@ function CartRow({
   return (
     <div
       data-testid={`cart-item-${item.product.id}`}
-      className="grid grid-cols-[34px_minmax(0,1fr)_44px] items-start gap-x-2 gap-y-3 border-b border-[#edf1f6] px-2.5 py-3 last:border-b-0 sm:grid-cols-[34px_minmax(0,1fr)_134px_60px_44px] sm:items-center sm:gap-[9px]"
+      className="grid grid-cols-[34px_minmax(0,1fr)_44px] items-start gap-x-2 gap-y-3 border-b border-[#edf1f6] px-2.5 py-3 last:border-b-0 @[28rem]:grid-cols-[34px_minmax(0,1fr)_134px_60px_44px] @[28rem]:items-center @[28rem]:gap-[9px]"
     >
       {/* Thumbnail */}
-      <div className={`col-start-1 row-start-1 grid h-[34px] w-[34px] shrink-0 place-items-center overflow-hidden rounded-[7px] text-lg sm:col-auto sm:row-auto ${color}`}>
+      <div className={`col-start-1 row-start-1 grid h-[34px] w-[34px] shrink-0 place-items-center overflow-hidden rounded-[7px] text-lg @[28rem]:col-auto @[28rem]:row-auto ${color}`}>
         {item.product.imageUrl ? <img src={item.product.imageUrl} alt="" className="h-full w-full object-contain" /> : emoji}
       </div>
 
       {/* Name + editable rate */}
-      <div className="col-start-2 row-start-1 min-w-0 sm:col-auto sm:row-auto">
+      <div className="col-start-2 row-start-1 min-w-0 @[28rem]:col-auto @[28rem]:row-auto">
         <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#3D4354]">
           {item.product.name}
         </p>
@@ -335,7 +341,7 @@ function CartRow({
       </div>
 
       {/* Qty stepper — 84px, 3 columns */}
-      <div className="col-start-2 row-start-2 grid h-[46px] w-[134px] grid-cols-3 justify-self-start overflow-hidden rounded-[8px] border border-[#dfe8f5] sm:col-auto sm:row-auto">
+      <div className="col-start-2 row-start-2 grid h-[46px] w-[134px] grid-cols-3 justify-self-start overflow-hidden rounded-[8px] border border-[#dfe8f5] @[28rem]:col-auto @[28rem]:row-auto">
         <button
           data-testid={`button-dec-${item.product.id}`}
           disabled={guestLocked}
@@ -366,7 +372,7 @@ function CartRow({
       </div>
 
       {/* Line total (net of its own discount, with the gross struck through) */}
-      <span className="col-start-3 row-start-2 self-center text-right text-[12px] font-black text-[#3D4354] tabular-nums sm:col-auto sm:row-auto">
+      <span className="col-start-3 row-start-2 self-center text-right text-[12px] font-black text-[#3D4354] tabular-nums @[28rem]:col-auto @[28rem]:row-auto">
         {lineDiscount > 0 ? (
           <span className="mr-1 text-[10px] font-semibold text-[#9aa7bd] line-through">₹{lineGross.toLocaleString("en-IN")}</span>
         ) : null}
@@ -378,7 +384,7 @@ function CartRow({
         data-testid={`button-remove-${item.product.id}`}
         disabled={guestLocked}
         onClick={() => onRemoveItem(lineKey)}
-        className="col-start-3 row-start-1 grid h-11 w-11 place-items-center rounded text-[#6B6455] transition-colors hover:bg-red-50 hover:text-red-600 sm:col-auto sm:row-auto"
+        className="col-start-3 row-start-1 grid h-11 w-11 place-items-center rounded text-[#6B6455] transition-colors hover:bg-red-50 hover:text-red-600 @[28rem]:col-auto @[28rem]:row-auto"
         aria-label={t("billing.cart.remove", { name: item.product.name })}
       >
         <X size={15} />
