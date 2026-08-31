@@ -57,46 +57,81 @@ export async function requireOwnerPin(req, _res, next) {
   try {
     if (!req.user) throw new AppError("Not authenticated", 401);
     if (!req.shopId) throw new AppError("Shop context required", 400);
-
-    // Production default: every destructive/financial action must prove intent with
-    // the owner PIN, even when the current JWT belongs to the owner. Set
-    // OWNER_PIN_REQUIRED=false only for trusted development/admin migration flows.
-    if (!env.OWNER_PIN_REQUIRED && req.user.role === "owner") {
-      req.ownerPinVerified = true;
-      return next();
-    }
-
-    await assertOwnerPinAttemptAllowed(req, _res);
-
     const ownerPin = getOwnerPinFromRequest(req);
-    if (!ownerPin) {
-      throw new AppError("Owner PIN required", 403);
-    }
-    if (!/^\d{4}$/.test(ownerPin)) {
-      await logOwnerPinFailure(req, "INVALID_FORMAT");
-      await throwPinFailureOrLockout(req, _res, "Owner PIN must be exactly 4 digits", 400);
-    }
-
-    const owner = await db.user.findFirst({
-      where: { shopId: req.shopId, role: "owner" },
-      select: { pinHash: true },
+    await verifyOwnerPinProof({
+      shopId: req.shopId,
+      user: req.user,
+      ownerPin,
+      req,
+      res: _res,
     });
-
-    if (!owner) throw new AppError("Owner not found", 404);
-    if (!owner.pinHash) throw new AppError("Owner PIN not set yet", 400);
-
-    const ok = await bcrypt.compare(ownerPin, owner.pinHash);
-    if (!ok) {
-      await logOwnerPinFailure(req, "MISMATCH");
-      await throwPinFailureOrLockout(req, _res, "Wrong owner PIN", 403);
-    }
-
-    await logOwnerPinVerified(req);
     req.ownerPinVerified = true;
     return next();
   } catch (err) {
     return next(err);
   }
+}
+
+/**
+ * Verify an owner PIN for non-HTTP mutation paths such as offline sync.
+ *
+ * Keeping this beside the route middleware is intentional: every protected path
+ * shares the same durable per-user/shop failure counters, lockout and redacted
+ * security audit. Callers pass the PIN in memory; it is never added to the audit
+ * request facade or metadata.
+ */
+export async function verifyOwnerPinProof({
+  shopId,
+  user,
+  ownerPin,
+  req = null,
+  res = null,
+  route = "/internal/owner-pin",
+  method = "INTERNAL",
+  metadata = null,
+}) {
+  if (!shopId) throw new AppError("Shop context required", 400);
+  if (!user) throw new AppError("Not authenticated", 401);
+
+  // Production default: every destructive/financial action must prove intent with
+  // the owner PIN, even when the current JWT belongs to the owner. Set
+  // OWNER_PIN_REQUIRED=false only for trusted development/admin migration flows.
+  if (!env.OWNER_PIN_REQUIRED && user.role === "owner") return true;
+
+  const attempt = req ?? {
+    user,
+    shopId,
+    originalUrl: route,
+    url: route,
+    method,
+    headers: {},
+  };
+  attempt.user = attempt.user ?? user;
+  attempt.shopId = attempt.shopId ?? shopId;
+  if (metadata && typeof metadata === "object") attempt.securityAuditMetadata = metadata;
+
+  await assertOwnerPinAttemptAllowed(attempt, res);
+  if (!ownerPin) throw new AppError("Owner PIN required", 403);
+  if (!/^\d{4}$/.test(ownerPin)) {
+    await logOwnerPinFailure(attempt, "INVALID_FORMAT");
+    await throwPinFailureOrLockout(attempt, res, "Owner PIN must be exactly 4 digits", 400);
+  }
+
+  const owner = await db.user.findFirst({
+    where: { shopId, role: "owner" },
+    select: { pinHash: true },
+  });
+  if (!owner) throw new AppError("Owner not found", 404);
+  if (!owner.pinHash) throw new AppError("Owner PIN not set yet", 400);
+
+  const ok = await bcrypt.compare(ownerPin, owner.pinHash);
+  if (!ok) {
+    await logOwnerPinFailure(attempt, "MISMATCH");
+    await throwPinFailureOrLockout(attempt, res, "Wrong owner PIN", 403);
+  }
+
+  await logOwnerPinVerified(attempt);
+  return true;
 }
 
 const OWNER_PIN_FAILURE_ACTION = "OWNER_PIN_VERIFICATION_FAILED";
@@ -177,12 +212,14 @@ async function logOwnerPinFailure(req, reason) {
   await createAuditLog({
     shopId: req.shopId,
     userId: req.user?.userId ?? req.user?.id,
+    deviceId: req.user?.deviceId ?? null,
     action: OWNER_PIN_FAILURE_ACTION,
     entityType: "Security",
     metadata: {
       route: req.originalUrl ?? req.url,
       method: req.method,
       reason,
+      ...(req.securityAuditMetadata ?? {}),
     },
     req,
   });
@@ -214,12 +251,14 @@ async function logOwnerPinVerified(req) {
   try {
     await createAuditLog({
       shopId: req.shopId,
-      userId: req.user?.userId,
+      userId: req.user?.userId ?? req.user?.id,
+      deviceId: req.user?.deviceId ?? null,
       action: OWNER_PIN_SUCCESS_ACTION,
       entityType: "Security",
       metadata: {
         route: req.originalUrl ?? req.url,
         method: req.method,
+        ...(req.securityAuditMetadata ?? {}),
       },
       req,
     });
