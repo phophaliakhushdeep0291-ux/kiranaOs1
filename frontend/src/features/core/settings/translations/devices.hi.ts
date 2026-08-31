@@ -63,6 +63,8 @@ export const devicesHi: Record<keyof typeof devicesEn, string> = {
 
   "devices.idle.title": "रजिस्टर हैं, पर कोई लॉगिन नहीं",
   "devices.idle.body": "ये डिवाइस अभी इस्तेमाल में नहीं हैं, पर हटाने तक एक स्लॉट रोके रहते हैं।",
+  "devices.idle.show": "{count} दिखाएँ",
+  "devices.idle.hide": "छिपाएँ",
   "devices.idle.unnamed": "बिना नाम का डिवाइस",
   "devices.idle.lastSeen": "आख़िरी बार {when}",
   "devices.idle.lastUsedBy": "आख़िरी बार {name} ने चलाया",

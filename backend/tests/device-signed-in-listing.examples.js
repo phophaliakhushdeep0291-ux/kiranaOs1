@@ -14,7 +14,7 @@
  */
 import assert from "node:assert/strict";
 import db from "../src/db.js";
-import { getDeviceManagementSnapshot, deviceStatusOccupiesSlot } from "../src/modules/devices/devices.service.js";
+import { getDeviceManagementSnapshot, deviceStatusOccupiesSlot, listActiveDevices } from "../src/modules/devices/devices.service.js";
 
 const ok = (label) => console.log(`  ok ${label}`);
 
@@ -105,6 +105,65 @@ assert.ok(snapshot.devices.some((row) => row.deviceId === "removed-tab"), "a rem
 // active + logged_out + blocked occupy slots; revoked does not.
 assert.equal(snapshot.devicesUsed, 4, "slot maths is unchanged by the session filter");
 ok("devices nobody is on are still listed, and still counted against the plan");
+
+
+/* -------------------------------------------- live is not the same as in use */
+
+// The reason the screen still looked like a wall after the first fix. A refresh
+// token lives 30 days, so a browser opened once three weeks ago still holds a
+// live, unexpired, unrevoked session — and was listed as "signed in now"
+// alongside the counter tablet someone was billing on.
+const stale = await device("laptop-from-last-month", "active");
+await session(owner, "laptop-from-last-month", {
+  lastUsedAt: new Date(Date.now() - 21 * 24 * hour),
+  expiresAt: new Date(Date.now() + 9 * 24 * hour),
+});
+
+const banded = await getDeviceManagementSnapshot(shop.id, "counter-tablet");
+const laptop = banded.devices.find((row) => row.deviceId === "laptop-from-last-month");
+assert.equal(laptop.signedIn, true, "its session really is live — that is the trap");
+assert.equal(laptop.signedInRecently, false, "but nobody has touched it in three weeks");
+
+const tabletNow = banded.devices.find((row) => row.deviceId === "counter-tablet");
+assert.equal(tabletNow.signedInRecently, true, "the device in use today is in use today");
+assert.ok(
+  banded.signedInRecentlyCount < banded.signedInCount,
+  "the in-use list must be shorter than the has-a-live-session list, or the fix does nothing",
+);
+ok("a month-old login is live but not in use, and is not listed as in use");
+
+// A session created and never refreshed is a fresh login, not a stale one:
+// lastUsedAt is null there, and falling back to createdAt keeps it on the list.
+const justNow = await device("brand-new-phone", "active");
+await session(staff, "brand-new-phone");
+const withFresh = await getDeviceManagementSnapshot(shop.id, "counter-tablet");
+assert.equal(
+  withFresh.devices.find((row) => row.deviceId === "brand-new-phone").signedInRecently, true,
+  "a login that has not refreshed yet is still a login that just happened",
+);
+ok("a brand-new session counts as in use even before its first refresh");
+
+
+/* ------------------------------- the list shown when the limit stops a login */
+
+// Netflix's shape: staying logged in is fine, and when the limit bites you are
+// shown what is actually in use. The question here is "which slot do I free?",
+// and registration order answers it wrong — the counter tablet taking money and
+// a browser opened once last month look the same.
+const limitList = await listActiveDevices(shop.id, { currentDeviceId: "counter-tablet" });
+const names = limitList.map((row) => row.deviceId);
+
+assert.ok(names.includes("laptop-from-last-month"), "an idle device must stay listed, or its slot cannot be freed");
+assert.ok(names.includes("counter-tablet"), "and the one in use is still shown, so nobody removes it by accident");
+assert.ok(!names.includes("removed-tab"), "a removed device holds no slot, so it is not part of this question");
+
+// Idle first: those are the safe ones to remove.
+const idlePosition = names.indexOf("laptop-from-last-month");
+const inUsePosition = names.indexOf("counter-tablet");
+assert.ok(idlePosition < inUsePosition, "the device nobody is on sorts above the one being billed on");
+assert.equal(limitList.find((row) => row.deviceId === "laptop-from-last-month").signedInRecently, false);
+assert.equal(limitList.find((row) => row.deviceId === "counter-tablet").signedInRecently, true);
+ok("the device-limit list marks what is in use and offers the idle ones first");
 
 await db.$disconnect();
 console.log("device-signed-in-listing.examples.js OK");

@@ -14,6 +14,23 @@ import jwt from "jsonwebtoken";
 const DEVICE_LIMIT_TOKEN_PURPOSE = "DEVICE_REPLACEMENT";
 const DEVICE_LIMIT_TOKEN_TTL = "5m";
 const SLOT_OCCUPYING_STATUSES = ["active", "logged_out", "blocked"];
+
+/**
+ * How recently a session must have been used to count as "signed in now".
+ *
+ * A live session is not the same as a device in use. REFRESH_TOKEN_TTL_DAYS is
+ * 30, so every browser anyone signed into in the last month still holds an
+ * unexpired session — a laptop opened once, a phone used at a supplier, an
+ * incognito window. Listing all of those as signed in is technically true and
+ * tells a shopkeeper nothing.
+ *
+ * lastUsedAt moves on every token rotation, and the access token is fifteen
+ * minutes, so a device someone is actually working on refreshes several times an
+ * hour. A day is the window because the question being answered is "who is on
+ * the shop right now", and a counter tablet put down overnight should still be
+ * on that list in the morning.
+ */
+const SESSION_IN_USE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const shopDeviceLocks = new Map();
 
 async function writeRequiredDeviceAudit(client, entry) {
@@ -468,9 +485,13 @@ export async function getDeviceManagementSnapshot(shopId, currentDeviceId = null
 
   const devices = rows.map((device) => {
     const live = sessionsByDevice.get(device.deviceId);
+    const lastUsed = live?.lastUsedAt ? new Date(live.lastUsedAt).getTime() : null;
     return {
       ...device,
       signedIn: Boolean(live),
+      // Signed in AND actually used within the day. This is what the screen
+      // leads with; `signedIn` alone spans a month of abandoned browsers.
+      signedInRecently: Boolean(live) && lastUsed !== null && Date.now() - lastUsed <= SESSION_IN_USE_WINDOW_MS,
       signedInUsers: live?.users ?? [],
       signedInSessionCount: live?.sessionCount ?? 0,
       // The last time a live session on this device was actually used — a
@@ -489,6 +510,7 @@ export async function getDeviceManagementSnapshot(shopId, currentDeviceId = null
     remainingSlots: Math.max(0, deviceLimit - devicesUsed),
     overLimit: devicesUsed > deviceLimit,
     signedInCount: devices.filter((device) => device.signedIn).length,
+    signedInRecentlyCount: devices.filter((device) => device.signedInRecently).length,
     devices,
   };
 }
@@ -521,16 +543,47 @@ function serializeDevice(device, currentDeviceId = null) {
   };
 }
 
+/**
+ * The devices holding this shop's slots, in the order worth reading.
+ *
+ * This is what a shopkeeper is shown when the device limit stops a sign-in, and
+ * the question in front of them is "which one do I free?". Registration order
+ * answers nothing: a browser opened once last month and the counter tablet
+ * currently taking money look identical.
+ *
+ * So each row says whether anyone is actually on it, and the ones nobody has
+ * touched sort to the top — those are the safe ones to remove. Nothing is
+ * hidden: every slot-occupying device stays on the list, because a slot that
+ * cannot be seen cannot be freed.
+ */
 export async function listActiveDevices(shopId, { currentDeviceId = null, client = db } = {}) {
-  const devices = await listSafeDevices(shopId, { currentDeviceId, client });
+  const [devices, sessionsByDevice] = await Promise.all([
+    listSafeDevices(shopId, { currentDeviceId, client }),
+    signedInByDevice(shopId, client),
+  ]);
   return devices
     .filter((device) => deviceStatusOccupiesSlot(device.status))
-    .map((device) => ({
-      ...device,
-      userName: device.lastUserName,
-      userRole: device.lastUserRole,
-      current: device.isCurrentDevice,
-    }));
+    .map((device) => {
+      const live = sessionsByDevice.get(device.deviceId);
+      const lastUsed = live?.lastUsedAt ? new Date(live.lastUsedAt).getTime() : null;
+      return {
+        ...device,
+        userName: device.lastUserName,
+        userRole: device.lastUserRole,
+        current: device.isCurrentDevice,
+        signedIn: Boolean(live),
+        signedInRecently: Boolean(live) && lastUsed !== null && Date.now() - lastUsed <= SESSION_IN_USE_WINDOW_MS,
+        signedInUsers: live?.users ?? [],
+        sessionLastUsedAt: live?.lastUsedAt ?? null,
+      };
+    })
+    .sort((a, b) => {
+      // Idle first — they are the ones to remove. The device being used right
+      // now should never be the easiest thing to click.
+      if (a.signedInRecently !== b.signedInRecently) return a.signedInRecently ? 1 : -1;
+      if (a.current !== b.current) return a.current ? 1 : -1;
+      return new Date(a.lastSeenAt ?? 0) - new Date(b.lastSeenAt ?? 0);
+    });
 }
 
 export async function assertDeviceCanOwnLoginSession(shopId, user, deviceId, client = db) {

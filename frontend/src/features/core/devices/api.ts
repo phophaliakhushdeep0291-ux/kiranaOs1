@@ -33,6 +33,14 @@ export interface DeviceDto {
    * a licence slot — a device whose user logged out weeks ago is still "active".
    */
   signedIn?: boolean;
+  /**
+   * Signed in AND used within the day.
+   *
+   * `signedIn` alone spans a month: the refresh token lives 30 days, so every
+   * browser anyone opened in that time still holds a live session. This is the
+   * one the screen leads with.
+   */
+  signedInRecently?: boolean;
   signedInUsers?: SignedInUser[];
   signedInSessionCount?: number;
   sessionLastUsedAt?: string | null;
@@ -45,6 +53,7 @@ export interface DeviceManagementSnapshot {
   overLimit: boolean;
   /** Devices with a live login session right now. */
   signedInCount?: number;
+  signedInRecentlyCount?: number;
   devices: DeviceDto[];
 }
 
