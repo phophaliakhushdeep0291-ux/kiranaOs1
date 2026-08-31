@@ -22,7 +22,7 @@ assert.ok(
   runner.includes('PRISMA_CLIENT_VARIANT: "certification"'),
   "release certification must not contend with a live integration client's Windows query-engine DLL"
 );
-for (const id of ["backend-source-db", "backend-tests", "backend-warehouse", "backend-integration-sqlite"]) {
+for (const id of ["backend-source-db", "backend-tests", "backend-warehouse", "backend-integration-sqlite", "ai-safety"]) {
   const step = runner.match(new RegExp(`id: "${id}"[\\s\\S]*?\\n\\}\\);`))?.[0] ?? "";
   assert.match(step, /POSTGRES_TEST_DATABASE_URL: ""/, `${id} must not accidentally use the workflow PostgreSQL database`);
   assert.match(step, /DIRECT_DATABASE_URL: ""/, `${id} must not retain a direct PostgreSQL escape hatch while certifying SQLite`);

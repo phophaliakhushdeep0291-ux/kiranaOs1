@@ -1063,7 +1063,7 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
       </div>
       <p className="mt-2 min-h-[24px] truncate font-display text-[22px] font-black leading-none text-[var(--brand-ink)]">{loading ? "..." : value}</p>
       <div className="mt-2 flex h-4 items-center gap-1 text-[10px]">
-        <span className={cn("inline-flex items-center gap-0.5 font-black", delta === 0 ? "text-[#70809a]" : bad ? "text-[#ff334d]" : "text-[#10a948]")}>
+        <span className={cn("inline-flex items-center gap-0.5 font-black", delta === 0 ? "text-[#70809a]" : bad ? "text-[#ff334d]" : "text-[var(--success-ink)]")}>
           {DeltaIcon ? <DeltaIcon size={11} /> : null}{Math.abs(delta)}%
         </span>
         <span className="font-semibold text-[#7a879f]">{comparisonLabel ?? t("billing.bills.vsLastWeek")}</span>

@@ -616,7 +616,7 @@ export default function PurchaseBillsPage() {
             value={topSuppliers[0]?.name ?? "—"} sub={topSuppliers[0] ? `${fmt(topSuppliers[0].amount)} (${topSuppliers[0].share}%)` : "No purchases yet"} />
           <Insight icon={<Package size={15} />} iconBg="bg-[#fdf3e1] text-[#d97706]" label="Most Purchased Item"
             value={mostPurchased?.name ?? "—"} sub={mostPurchased ? `${mostPurchased.qty.toLocaleString("en-IN")} units` : "No item data yet"} />
-          <Insight icon={<ClipboardList size={15} />} iconBg="bg-[#e6f7ee] text-[#16a34a]" label="Avg. Bill Value"
+          <Insight icon={<ClipboardList size={15} />} iconBg="bg-[#e6f7ee] text-[var(--success-ink)]" label="Avg. Bill Value"
             value={monthStats.avg ? fmt(monthStats.avg) : "—"}
             sub={monthStats.avgDelta != null ? `${monthStats.avgDelta >= 0 ? "↗" : "↓"} ${Math.abs(monthStats.avgDelta)}% vs last month` : "this month"}
             subTone={monthStats.avgDelta != null ? (monthStats.avgDelta >= 0 ? "good" : "bad") : "muted"} />
@@ -849,7 +849,7 @@ export default function PurchaseBillsPage() {
             <div className="px-5 py-2">
               {recentRows.length === 0 ? <EmptyHint text="No purchases recorded yet." /> : recentRows.map((row, i) => (
                 <div key={`${row.source}:${row.id}`} className={cn("flex items-center gap-3 py-2.5", i < recentRows.length - 1 && "border-b border-[#eef2f8]")}>
-                  <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", row.due > 0 ? "bg-[#fdf3e1] text-[#d97706]" : "bg-[#e6f7ee] text-[#16a34a]")}><FileText size={14} /></span>
+                  <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", row.due > 0 ? "bg-[#fdf3e1] text-[#d97706]" : "bg-[#e6f7ee] text-[var(--success-ink)]")}><FileText size={14} /></span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12px] font-bold text-[var(--brand-ink)]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber} <span className="font-medium text-[#64748b]">from {row.supplierName}</span></p>
                     <p className="text-[10.5px] text-[#94a3b8]">{fmt(row.amount)} <span className="text-[#cbd5e1]">•</span> {STATUS_LABEL[effectiveStatus(row)]} <span className="text-[#cbd5e1]">•</span> {safeDate(row.date)}</p>

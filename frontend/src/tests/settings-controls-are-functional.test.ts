@@ -175,9 +175,14 @@ describe("accent picker repaints the app", () => {
     }
   });
 
-  it("never silently rewrites a saved accent to blue", () => {
+  it("never silently rewrites a saved accent to the default", () => {
     expect(theme).not.toContain('saved === "emerald"');
-    expect(theme).toContain("isAccent(saved) ? saved : \"blue\"");
+    // A saved accent round-trips; only an absent or unrecognised one falls back.
+    // The fallback is named rather than written as a literal so the shop-facing
+    // default can move — it is indigo now — without this guard quietly passing
+    // against a colour that is no longer the default.
+    expect(theme).toContain("isAccent(saved) ? saved : DEFAULT_ACCENT");
+    expect(theme).toContain('export const DEFAULT_ACCENT: AccentColor = "indigo"');
   });
 
   it("keeps the literal brand hexes out of the app so themes can take effect", () => {

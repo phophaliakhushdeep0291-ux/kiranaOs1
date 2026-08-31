@@ -30,8 +30,8 @@ export function OpenBillsBar({ bills, onSwitch, onNew, busy = false }: {
   const words = useShopBillingWords();
 
   return (
-    <div aria-busy={busy} className="app-scrollbar mb-2 flex shrink-0 items-center gap-2 overflow-x-auto rounded-[10px] border border-[#e6ecf4] bg-[#f7f9fd] px-2 py-1.5">
-      <span className="shrink-0 pl-1 pr-0.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{t("billing.openBills")}</span>
+    <div aria-busy={busy} className="app-scrollbar mb-2 flex shrink-0 items-center gap-2 overflow-x-auto rounded-[10px] border border-[#EAE4D8] bg-[#FAF7F0] px-2 py-1.5">
+      <span className="shrink-0 pl-1 pr-0.5 text-[11px] font-bold uppercase tracking-wide text-[#7C7566]">{t("billing.openBills")}</span>
       {bills.map((bill) => (
         <button
           key={bill.id}
@@ -53,12 +53,12 @@ export function OpenBillsBar({ bills, onSwitch, onNew, busy = false }: {
               ? "border-[var(--brand)] bg-white text-[var(--brand)] shadow-[0_2px_8px_rgba(0,87,255,0.15)]"
               : bill.stale
                 ? "border-amber-300 bg-amber-50 text-amber-700 hover:border-amber-400"
-                : "border-[#dbe3ef] bg-white text-[#475569] hover:border-[var(--brand)] hover:text-[var(--brand)]",
+                : "border-[#dbe3ef] bg-white text-[#5F5849] hover:border-[var(--brand)] hover:text-[var(--brand)]",
           )}
         >
           {bill.stale ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" /> : <ReceiptText size={13} />}
           <span className="max-w-[120px] truncate">{bill.name}</span>
-          <span className="rounded-full bg-[#eef2f8] px-1.5 text-[10px] font-bold text-[#64748b]">{bill.itemCount}</span>
+          <span className="rounded-full bg-[#F1ECE2] px-1.5 text-[10px] font-bold text-[#7C7566]">{bill.itemCount}</span>
         </button>
       ))}
       <button

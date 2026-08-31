@@ -73,7 +73,7 @@ assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("prisma:deploy:postgre
 assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("prisma:generate:postgres"), "Postgres deploy helper must generate the PostgreSQL client");
 assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("verify:product-schema"), "Postgres deploy helper must verify Product DB columns");
 
-assert.ok(dockerfile.includes("npm run deploy:migrate:postgres && npm start"), "Dockerfile must run the migration helper before startup");
+assert.ok(dockerfile.includes("npm run deploy:migrate:postgres") && dockerfile.includes("npm run start:runtime"), "Dockerfile must run the migration helper before the supervised runtime");
 assert.ok(deployDocs.includes("npm run deploy:migrate:postgres"), "DEPLOY.md must document the one-command migration helper");
 assert.ok(deployDocs.includes("npx prisma migrate deploy"), "DEPLOY.md must document migrate deploy");
 assert.ok(deployDocs.includes("npx prisma generate"), "DEPLOY.md must document prisma generate");

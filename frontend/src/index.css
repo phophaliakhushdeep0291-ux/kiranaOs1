@@ -87,13 +87,17 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 0 0% 100%;
-  --foreground: 222 47% 10%;
-  --border: 216 34% 90%;
+  /* Unbleached paper, not screen white. A phone at full brightness under a
+     shop's tube light is glare, and the shopkeeper is reading it through a
+     scratched protector at arm's length for nine hours. Cards stay pure white,
+     so a card still lifts off the page the way paper on a counter does. */
+  --background: 40 24% 97%;
+  --foreground: 228 14% 28%;
+  --border: 38 20% 87%;
 
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 10%;
-  --card-border: 216 34% 90%;
+  --card-foreground: 228 14% 28%;
+  --card-border: 38 20% 87%;
 
   --sidebar: 217 88% 9%;
   --sidebar-foreground: 0 0% 97%;
@@ -108,39 +112,68 @@
   --popover-foreground: 222 47% 11%;
   --popover-border: 220 13% 91%;
 
-  --primary: 221 83% 53%;
+  --primary: 230 34% 50%;
   --primary-foreground: 0 0% 100%;
 
   /* Brand accent — the colour the app is actually painted with.
      Pages reference these as var(--brand*) instead of a literal hex so the
      accent picker in Settings → Advanced repaints the whole UI, not just the
      handful of components wired to --primary. Each [data-accent] block below
-     re-declares the same five tokens on one hue. */
-  --brand: hsl(217 100% 51%);
-  --brand-strong: hsl(220 100% 45%);
+     re-declares the same five tokens on one hue.
+
+     Artha is indigo. The old default was hsl(217 100% 51%) — Tailwind blue-600,
+     the shade every shadcn project ships with, which is most of why the till
+     read as a template. Indigo sits deeper and slightly violet: it holds its
+     weight beside a rupee figure, and it survives a shop's tube light, where a
+     bright blue goes flat and cheap. */
+  --brand: hsl(230 34% 50%);
+  --brand-strong: hsl(230 36% 42%);
   --brand-ink: color-mix(in srgb, var(--brand) 30%, #07101f);
   --brand-ink-soft: color-mix(in srgb, var(--brand) 17%, #334155);
   --brand-shadow: color-mix(in srgb, var(--brand) 26%, transparent);
   --brand-shadow-soft: color-mix(in srgb, var(--brand) 13%, transparent);
+
+  /* The one warm note, and it is rationed on purpose: the mark, a selected
+     tab, a typed quantity. When everything is emphasised nothing is, which is
+     what blue-600 on every price and every button was doing. */
+  --brass: hsl(35 62% 41%);
+  --brass-soft: hsl(38 55% 92%);
+  --brass-ink: hsl(35 68% 27%);
+
   --surface-radius: 16px;
   --surface-padding: 1.25rem;
-  --surface-line: #e2e8f2;
+  --surface-line: #e6e0d4;
   --surface-shadow: 0 1px 2px rgba(0, 0, 0, 0.025), 0 12px 34px rgba(0, 0, 0, 0.055);
   --surface-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.035), 0 18px 42px rgba(0, 0, 0, 0.075);
-  --brand-soft: hsl(217 100% 96%);
-  --brand-softer: hsl(217 100% 98%);
-  --brand-border: hsl(217 100% 90%);
+  --brand-soft: hsl(230 34% 96%);
+  --brand-softer: hsl(230 34% 98%);
+  --brand-border: hsl(230 28% 89%);
 
-  --secondary: 215 45% 96%;
-  --secondary-foreground: 222 47% 11%;
+  /* The neutral ramp warms with the ground. A cool grey fill on a warm page
+     reads as a rendering fault rather than a choice, and these three are the
+     fills sitting directly on it. */
+  --secondary: 40 20% 95%;
+  --secondary-foreground: 228 14% 29%;
 
-  --muted: 216 44% 96%;
-  --muted-foreground: 221 18% 45%;
+  --muted: 40 20% 95%;
+  /* 44%, not 47%. At 47% the 14px subtitle measured 4.29:1 on paper — under
+     the 4.5 floor for normal text. Muted text has the least headroom of
+     anything here, so it is the first thing a lighter palette breaks. */
+  --muted-foreground: 35 8% 44%;
 
-  --accent: 216 100% 96%;
-  --accent-foreground: 222 47% 11%;
+  --accent: 230 28% 96%;
+  --accent-foreground: 228 14% 29%;
 
-  --destructive: 0 84% 60%;
+  /* Oxide, not emergency red. A cancelled bill is money moving backwards, not
+     a fire, and the counter sees this several times a day. */
+  /* Green that can actually be read.
+     The shop-facing greens were literals between #10a948 and #16a34a — 2.94:1
+     to 3.3:1 on white, against a 4.5 floor. They are fine as a fill or an icon,
+     where 3:1 is the bar, and they were being used for the stock figures a
+     shopkeeper reads at arm's length. This is #15803d, already in the codebase
+     for the same meaning, at 5.02:1. */
+  --success-ink: hsl(142 72% 29%);
+  --destructive: 8 62% 40%;
   --destructive-foreground: 0 0% 100%;
 
   --input: 220 13% 91%;
@@ -167,7 +200,17 @@
   --app-banner-height: 0px;
   --app-mobile-bottom-nav-clearance: calc(var(--app-mobile-nav-height) + 1.5rem + env(safe-area-inset-bottom));
   --app-mobile-fixed-action-height: 76px;
-  --app-mobile-content-bottom-clearance: calc(var(--app-mobile-fixed-action-height) + 1.25rem + env(safe-area-inset-bottom));
+  /**
+   * The assistant button, which nothing used to allow for.
+   *
+   * It is `fixed bottom-20 h-12`, so its top edge sits 128px above the viewport
+   * bottom — higher than the tab bar it is meant to clear. Measured on
+   * production at 375px it covered the last 46px of the scroll area, which put
+   * a 48px circle on top of the final row of cards on every page that scrolls
+   * to its end. The value is the part that intrudes, plus a gutter.
+   */
+  --app-mobile-assistant-clearance: 3.5rem;
+  --app-mobile-content-bottom-clearance: calc(var(--app-mobile-fixed-action-height) + var(--app-mobile-assistant-clearance) + 1.25rem + env(safe-area-inset-bottom));
   /* The mobile checkout panel is `fixed inset-0` — it covers the tab bar, and
      its actions scroll inline rather than sitting in a pinned footer. So it
      needs a breathing gutter and the home-indicator inset, NOT clearance for
@@ -799,7 +842,7 @@
   .purchase-totals { @apply grid grid-cols-2 gap-y-2 rounded-[10px] bg-[#f7f9fd] px-3.5 py-3 sm:grid-cols-4; }
   .purchase-totals p:first-child { @apply text-[10px] font-semibold text-[#64748b]; }
   .purchase-totals p:last-child { @apply text-[13px] font-black text-[var(--brand-ink)]; }
-  .purchase-totals > div:nth-child(3) p:last-child { @apply text-[#16a34a]; }
+  .purchase-totals > div:nth-child(3) p:last-child { color: var(--success-ink); }
   .purchase-totals > div:nth-child(4) p:last-child { @apply text-[#ef4444]; }
   .backup-grid { @apply grid gap-4 lg:grid-cols-[0.8fr_1.2fr]; }
   .backup-create { @apply min-h-11 gap-1.5 rounded-[8px] text-[12px] font-bold; }
@@ -1183,6 +1226,37 @@
   --sidebar-ring: 217 91% 60%;
 }
 
+/* Indigo (H 232) — Artha's own, and the default a new shop opens on. */
+[data-accent="indigo"] {
+  --brand: hsl(230 34% 50%);
+  --brand-strong: hsl(230 36% 42%);
+  --brand-soft: hsl(230 34% 96%);
+  --brand-softer: hsl(230 34% 98%);
+  --brand-border: hsl(230 28% 90%);
+  --primary: 230 34% 50%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 230 34% 50%;
+  --sidebar: 230 24% 20%;
+  --sidebar-border: 232 40% 9%;
+  --sidebar-primary: 230 34% 54%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 232 34% 20%;
+  --sidebar-accent-foreground: 0 0% 97%;
+  --sidebar-ring: 230 34% 54%;
+}
+
+/* Indigo at 36% lightness is too dark to read on a dark ground, so it lifts —
+   the same move every other accent makes below. */
+[data-accent="indigo"].dark {
+  --primary: 232 58% 66%;
+  --ring: 232 58% 66%;
+  --sidebar: 232 46% 9%;
+  --sidebar-border: 232 40% 7%;
+  --sidebar-primary: 232 58% 66%;
+  --sidebar-accent: 232 38% 17%;
+  --sidebar-ring: 232 58% 66%;
+}
+
 /* Violet (H 263) */
 [data-accent="violet"] {
   --brand: hsl(263 70% 47%);
@@ -1415,18 +1489,26 @@ html[data-density="compact"] {
     --app-mobile-nav-height: 76px;
     --app-mobile-bottom-nav-clearance: calc(var(--app-mobile-nav-height) + 1rem + env(safe-area-inset-bottom));
     --app-mobile-fixed-action-height: 74px;
-    --app-mobile-content-bottom-clearance: calc(var(--app-mobile-bottom-nav-clearance) + 1.15rem);
-    --kirana-mobile-bg: #ffffff;
-    --kirana-mobile-ink: #071333;
-    --kirana-mobile-muted: #4d5d7a;
-    --kirana-mobile-subtle: #7b8799;
-    --kirana-mobile-border: #e1e9f3;
-    --kirana-mobile-blue: #075cff;
+    /* Same allowance for the assistant button as the base block. This override
+       exists to swap the nav-height term, not to opt out of clearing the FAB. */
+    --app-mobile-content-bottom-clearance: calc(var(--app-mobile-bottom-nav-clearance) + var(--app-mobile-assistant-clearance) + 1.15rem);
+    /* The phone palette. Unbleached paper rather than screen white: a till is
+       read at arm's length under a shop's tube light, through a scratched
+       protector, for nine hours, and full-brightness white is glare. Cards stay
+       pure white below, so a card still lifts off the page the way a docket
+       lifts off a counter. */
+    --kirana-mobile-bg: #faf8f4;
+    --kirana-mobile-ink: #3d4354;
+    --kirana-mobile-muted: #7a7362;
+    --kirana-mobile-subtle: #8a8371;
+    --kirana-mobile-border: #e6e0d4;
+    --kirana-mobile-blue: #5463ab;
+    --kirana-mobile-brass: #a87227;
     --kirana-mobile-green: #11a34a;
     --kirana-mobile-violet: #7c3cff;
     --kirana-mobile-orange: #ff8a00;
-    --kirana-mobile-red: #ff2d3f;
-    --kirana-mobile-shadow: 0 14px 34px rgba(15, 35, 80, 0.06);
+    --kirana-mobile-red: #9c3f2a;
+    --kirana-mobile-shadow: 0 10px 26px rgba(47, 52, 70, 0.05);
   }
 
   html,
@@ -1434,7 +1516,7 @@ html[data-density="compact"] {
   #root,
   .app-shell,
   .app-main-scroll {
-    background: #ffffff !important;
+    background: var(--kirana-mobile-bg) !important;
   }
 
   body {

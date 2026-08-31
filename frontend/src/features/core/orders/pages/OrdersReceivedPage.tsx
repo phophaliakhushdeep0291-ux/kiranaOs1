@@ -48,7 +48,7 @@ const STATUS_STYLE: Record<CustomerOrder["status"], string> = {
   new: "bg-[#eaf2ff] text-[var(--brand)]",
   accepted: "bg-[#fff7ed] text-[#c2410c]",
   ready: "bg-[#f3efff] text-[#7c3aed]",
-  fulfilled: "bg-[#e9fbf0] text-[#16a34a]",
+  fulfilled: "bg-[#e9fbf0] text-[var(--success-ink)]",
   rejected: "bg-[#f1f5f9] text-[#64748b]",
   cancelled: "bg-[#fff1f2] text-[#be123c]",
 };
@@ -435,7 +435,7 @@ export default function OrdersReceivedPage() {
         />
         <StatCard
           icon={<PackageCheck size={18} />}
-          tint="bg-[#e9fbf0] text-[#16a34a]"
+          tint="bg-[#e9fbf0] text-[var(--success-ink)]"
           label={t("orders.stat.completedToday")}
           value={stats.doneToday}
           sub={todayDelta == null ? t("orders.stat.completedTodayHint") : t("orders.stat.receivedToday", { count: stats.ordersToday })}
@@ -573,7 +573,7 @@ export default function OrdersReceivedPage() {
                       <button
                         type="button"
                         onClick={(e: MouseEvent) => { e.stopPropagation(); messageCustomer(order, order.status === "accepted" ? "ready" : "received"); }}
-                        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-3 text-[12px] font-bold text-[#16a34a]"
+                        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-3 text-[12px] font-bold text-[var(--success-ink)]"
                       >
                         <MessageCircle size={14} /> {t("orders.row.message")}
                       </button>
@@ -648,7 +648,7 @@ const BANNER: Record<CustomerOrder["status"], { titleKey: TranslationKey; descKe
     titleKey: "orders.banner.new.title",
     descKey: "orders.banner.new.desc",
     icon: <CheckCircle2 size={30} />,
-    tint: "bg-[#e9fbf0] text-[#16a34a]",
+    tint: "bg-[#e9fbf0] text-[var(--success-ink)]",
   },
   accepted: {
     titleKey: "orders.banner.accepted.title",
@@ -666,7 +666,7 @@ const BANNER: Record<CustomerOrder["status"], { titleKey: TranslationKey; descKe
     titleKey: "orders.banner.fulfilled.title",
     descKey: "orders.banner.fulfilled.desc",
     icon: <PackageCheck size={30} />,
-    tint: "bg-[#e9fbf0] text-[#16a34a]",
+    tint: "bg-[#e9fbf0] text-[var(--success-ink)]",
   },
   rejected: {
     titleKey: "orders.banner.rejected.title",
@@ -833,7 +833,7 @@ function OrderDetail({
               <button type="button" onClick={onPrint} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-3 text-[12.5px] font-bold text-[#405273]">
                 <Printer size={15} /> {t("orders.detail.printSlip")}
               </button>
-              <button type="button" onClick={onMessage} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-3 text-[12.5px] font-bold text-[#16a34a]">
+              <button type="button" onClick={onMessage} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-3 text-[12.5px] font-bold text-[var(--success-ink)]">
                 <MessageCircle size={15} /> {t("orders.detail.whatsappCustomer")}
               </button>
               {order.status !== "new" ? (
@@ -867,7 +867,7 @@ function OrderDetail({
               <div className="min-w-0">
                 <p className="flex items-center gap-2 font-bold text-[var(--brand-ink)]">
                   <span className="truncate">{order.customerName}</span>
-                  {order.status === "new" && <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[9.5px] font-black uppercase text-[#16a34a]">{t("orders.detail.newBadge")}</span>}
+                  {order.status === "new" && <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[9.5px] font-black uppercase text-[var(--success-ink)]">{t("orders.detail.newBadge")}</span>}
                 </p>
                 <a href={`tel:${order.customerMobile}`} className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--brand)]">
                   <Phone size={12} /> +91 {order.customerMobile}

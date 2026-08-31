@@ -92,7 +92,7 @@ if (exists(".github/workflows/backend-ci.yml")) {
 
 if (exists("Dockerfile")) {
   const dockerfile = read("Dockerfile");
-  for (const snippet of ["HEALTHCHECK", "npm run prisma:deploy:postgres", "COPY contracts ./contracts"]){
+  for (const snippet of ["HEALTHCHECK", "npm run deploy:migrate:postgres", "npm run start:runtime", "COPY contracts ./contracts"]){
     if (!dockerfile.includes(snippet)) fail(`Dockerfile missing release-critical snippet: ${snippet}`);
   }
 }

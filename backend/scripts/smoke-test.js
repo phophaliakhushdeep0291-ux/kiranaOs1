@@ -67,6 +67,7 @@ async function main() {
     if (expectRedis && ready.checks.redis !== "ok") throw new Error(`redis not ok: ${ready.checks.redis}`);
     if (expectStorage && ready.checks.storage !== "ok") throw new Error(`storage not ok: ${ready.checks.storage}`);
     if (expectWorker && ready.workerRequired !== true) throw new Error("workerRequired flag was not true");
+    if (expectWorker && ready.checks.worker !== "ok") throw new Error(`worker not ok: ${ready.checks.worker}`);
   });
 
   if (metricsExpected) {

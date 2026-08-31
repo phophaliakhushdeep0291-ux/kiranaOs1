@@ -108,6 +108,12 @@ interface BillingSearchProps {
   allProducts: Product[];
   onAddProduct: (product: Product, sellingUnit?: ProductSellingUnit) => void;
   /**
+   * The multiplier the cashier typed (`3*rice`), or null. Display only — the
+   * page applies it when the item is added, so this component never has to
+   * know the difference between an untyped default and an explicit one.
+   */
+  typedQuantity?: number | null;
+  /**
    * Capture-on-first-scan: bind the scanned code to this product, then add it to the cart.
    * Rejects when the code is already owned; the sheet shows the reason and stays open.
    */
@@ -157,6 +163,7 @@ export function BillingSearch({
   filteredProducts,
   allProducts,
   onAddProduct,
+  typedQuantity = null,
   onBindBarcode,
   onCreateProductWithBarcode,
   categories,
@@ -539,7 +546,7 @@ export function BillingSearch({
                     if (handleScannedTerm(search, "usb")) e.preventDefault();
                   }}
                 />
-                <kbd className="ml-auto hidden shrink-0 items-center gap-1 rounded-[7px] border border-[#e1e8f2] bg-[#f4f7fb] px-2 py-1 text-[11px] font-bold text-[#45577a] sm:flex">
+                <kbd className="ml-auto hidden shrink-0 items-center gap-1 rounded-[7px] border border-[#E5DFD1] bg-[#f4f7fb] px-2 py-1 text-[11px] font-bold text-[#5E5748] sm:flex">
                   ⌘ K
                 </kbd>
                 {/* Scan and voice are how a counter enters a line without typing,
@@ -553,7 +560,7 @@ export function BillingSearch({
                     title={t("billing.search.scanBarcode")}
                     aria-label={t("billing.search.scanBarcode")}
                     onClick={openBarcodeScanner}
-                    className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] active:scale-95 lg:mouse:h-9 lg:mouse:w-9"
+                    className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#5E5748] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] active:scale-95 lg:mouse:h-9 lg:mouse:w-9"
                   >
                     <ScanLine size={17} aria-hidden="true" />
                   </button>
@@ -562,7 +569,7 @@ export function BillingSearch({
                     title={t("billing.search.voiceBilling")}
                     aria-label={t("billing.search.openVoiceBilling")}
                     onClick={onToggleVoice}
-                    className={`grid h-11 w-11 place-items-center rounded-full border transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] active:scale-95 lg:mouse:h-9 lg:mouse:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
+                    className={`grid h-11 w-11 place-items-center rounded-full border transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] active:scale-95 lg:mouse:h-9 lg:mouse:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e4ebf5] bg-white text-[#5E5748]"}`}
                   >
                     <Mic size={17} aria-hidden="true" />
                   </button>
@@ -573,7 +580,7 @@ export function BillingSearch({
             {/* Recent products — its own bordered box */}
             {recentProducts.length > 0 && !search && (
               <div className="hidden shrink-0 px-1 py-1 xl:block">
-                <p className="mb-1.5 text-[11px] font-semibold text-[#536383]">{t("billing.search.recentProducts")}</p>
+                <p className="mb-1.5 text-[11px] font-semibold text-[#6B6455]">{t("billing.search.recentProducts")}</p>
                 <div className="flex items-center gap-2.5">
                   {recentProducts.slice(0, 3).map((p) => {
                     const sellingUnit = (p.sellingUnits ?? []).filter((unit) => unit.isActive !== false).find((unit) => unit.isDefault)
@@ -590,17 +597,17 @@ export function BillingSearch({
                           {p.imageUrl ? <img src={p.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(p.name, p.category)}
                         </span>
                         <div className="min-w-0 text-left">
-                          <p className="max-w-[120px] truncate text-[11px] font-extrabold leading-[1.15] text-[#14284e]">
+                          <p className="max-w-[120px] truncate text-[11px] font-extrabold leading-[1.15] text-[#3D4354]">
                             {p.name}
                           </p>
-                          <p className="mt-0.5 text-[11px] font-black text-[#14284e]">₹{price}</p>
+                          <p className="mt-0.5 text-[11px] font-black text-[#3D4354]">₹{price}</p>
                         </div>
                       </button>
                     );
                   })}
                   {recentProducts.length > 3 && (
-                    <button onClick={() => setShowAll(true)} title={t("billing.search.showAllProducts")} className="tap-target flex h-8 w-8 items-center justify-center rounded-full border border-[#e7edf5] bg-white shadow-[0_5px_12px_rgba(15,23,42,0.05)] transition-colors hover:bg-[#f7f9fd]">
-                      <ChevronRight size={13} className="text-[#536383]" />
+                    <button onClick={() => setShowAll(true)} title={t("billing.search.showAllProducts")} className="tap-target flex h-8 w-8 items-center justify-center rounded-full border border-[#e7edf5] bg-white shadow-[0_5px_12px_rgba(15,23,42,0.05)] transition-colors hover:bg-[#FAF7F0]">
+                      <ChevronRight size={13} className="text-[#6B6455]" />
                     </button>
                   )}
                 </div>
@@ -612,7 +619,7 @@ export function BillingSearch({
               empty counter screen stays quiet. */}
           {search.trim().length > 0 && searchSuggestions.length > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] font-semibold text-[#8290a8]">{t("billing.search.searchedBefore")}</span>
+              <span className="text-[11px] font-semibold text-[#98917F]">{t("billing.search.searchedBefore")}</span>
               {searchSuggestions.map((suggestion) => (
                 <button
                   key={suggestion}
@@ -621,7 +628,7 @@ export function BillingSearch({
                     onSearchChange(suggestion);
                     searchInputRef.current?.focus();
                   }}
-                  className="rounded-full border border-[#e1e8f2] bg-white px-2.5 py-1 text-[11px] font-bold text-[#45577a] transition-colors hover:border-[var(--brand-border)] hover:text-[var(--brand)]"
+                  className="rounded-full border border-[#E5DFD1] bg-white px-2.5 py-1 text-[11px] font-bold text-[#5E5748] transition-colors hover:border-[var(--brand-border)] hover:text-[var(--brand)]"
                 >
                   {suggestion}
                 </button>
@@ -633,7 +640,7 @@ export function BillingSearch({
               products for this hour; a filled one gets what pairs with it. */}
           {!search && suggestedProducts.length > 0 && (
             <div className="mt-2.5">
-              <p className="mb-1.5 text-[11px] font-semibold text-[#536383]">
+              <p className="mb-1.5 text-[11px] font-semibold text-[#6B6455]">
                 {suggestionReason === "combo" ? "Often added together" : "You usually bill now"}
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -642,11 +649,11 @@ export function BillingSearch({
                     key={p.id}
                     type="button"
                     onClick={() => addProduct(p)}
-                    className="flex items-center gap-1.5 rounded-full border border-[#dce6f6] bg-[var(--brand-softer)] px-3 py-1.5 text-[11px] font-bold text-[#14284e] transition-colors hover:border-[var(--brand-border)] hover:bg-[var(--brand-soft)]"
+                    className="flex items-center gap-1.5 rounded-full border border-[#dce6f6] bg-[var(--brand-softer)] px-3 py-1.5 text-[11px] font-bold text-[#3D4354] transition-colors hover:border-[var(--brand-border)] hover:bg-[var(--brand-soft)]"
                   >
                     <span aria-hidden="true">{getProductEmoji(p.name, p.category)}</span>
                     <span className="max-w-[140px] truncate">{p.name}</span>
-                    <span className="text-[#536383]">+</span>
+                    <span className="text-[#6B6455]">+</span>
                   </button>
                 ))}
               </div>
@@ -679,7 +686,7 @@ export function BillingSearch({
                 />
               ))}
               {hasMoreCategories && (
-                <button onClick={() => setShowAllCategories((value) => !value)} className="h-11 shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] lg:mouse:h-9">
+                <button onClick={() => setShowAllCategories((value) => !value)} className="h-11 shrink-0 rounded-[8px] border border-[#EAE4D8] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#FAF7F0] lg:mouse:h-9">
                   {showAllCategories ? t("billing.search.categoriesLess") : t("billing.search.categoriesMore")} ▾
                 </button>
               )}
@@ -692,15 +699,15 @@ export function BillingSearch({
         {scannerOpen && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#06142c]/60 p-4 backdrop-blur-sm">
             <div className="w-full max-w-[460px] overflow-hidden rounded-[14px] border border-white/20 bg-white shadow-[0_24px_70px_rgba(3,12,30,0.32)]">
-              <div className="flex items-center justify-between border-b border-[#e6ecf4] px-4 py-3">
+              <div className="flex items-center justify-between border-b border-[#EAE4D8] px-4 py-3">
                 <div>
-                  <p className="text-[14px] font-black text-[#13274d]">{t("billing.search.scanBarcode")}</p>
-                  <p className="text-[12px] font-semibold text-[#6d7c98]">{scannerMessage}</p>
+                  <p className="text-[14px] font-black text-[#3D4354]">{t("billing.search.scanBarcode")}</p>
+                  <p className="text-[12px] font-semibold text-[#837C6D]">{scannerMessage}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setScannerOpen(false)}
-                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd] sm:mouse:h-9 sm:mouse:w-9"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] text-[#5E5748] hover:bg-[#FAF7F0] sm:mouse:h-9 sm:mouse:w-9"
                   aria-label={t("billing.search.closeScanner")}
                 >
                   <X size={16} />
@@ -712,7 +719,7 @@ export function BillingSearch({
                 <div className="pointer-events-none absolute inset-[12%] rounded-[14px] border-2 border-white/80 shadow-[0_0_0_999px_rgba(0,0,0,0.22)]" />
               </div>
               <div className="flex items-center justify-between gap-3 px-4 py-3">
-                <p className="text-[11px] font-semibold text-[#6d7c98]">
+                <p className="text-[11px] font-semibold text-[#837C6D]">
                   {t("billing.search.scannerTip")}
                 </p>
                 <button
@@ -749,14 +756,14 @@ export function BillingSearch({
               aria-modal="true"
               aria-label={t("billing.search.bindQuestion")}
               data-testid="barcode-bind-sheet"
-              className="max-h-[86%] overflow-y-auto rounded-t-[16px] border-t border-[#e6ecf4] bg-white shadow-[0_-18px_50px_rgba(3,12,30,0.28)]"
+              className="max-h-[86%] overflow-y-auto rounded-t-[16px] border-t border-[#EAE4D8] bg-white shadow-[0_-18px_50px_rgba(3,12,30,0.28)]"
             >
-              <div className="flex items-start justify-between gap-3 border-b border-[#eef2f8] px-4 pb-3 pt-4">
+              <div className="flex items-start justify-between gap-3 border-b border-[#F1ECE2] px-4 pb-3 pt-4">
                 <div className="min-w-0">
-                  <p className="text-[13px] font-black text-[#13274d]">
+                  <p className="text-[13px] font-black text-[#3D4354]">
                     {t("billing.search.bindTitle", { code: bindCode })}
                   </p>
-                  <p className="mt-0.5 text-[12px] font-semibold text-[#6d7c98]">
+                  <p className="mt-0.5 text-[12px] font-semibold text-[#837C6D]">
                     {knowledgeLookupCode === bindCode ? t("billing.search.knowledgeLooking") : skipBinding ? t("billing.search.bindSkipActive") : t("billing.search.bindQuestion")}
                   </p>
                 </div>
@@ -764,7 +771,7 @@ export function BillingSearch({
                   type="button"
                   onClick={dismissBindSheet}
                   aria-label={t("billing.search.bindDismiss")}
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd] sm:mouse:h-9 sm:mouse:w-9"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-[#e4ebf5] text-[#5E5748] hover:bg-[#FAF7F0] sm:mouse:h-9 sm:mouse:w-9"
                 >
                   <X size={16} />
                 </button>
@@ -798,7 +805,7 @@ export function BillingSearch({
                     <Search size={17} className="animate-pulse" /> {t("billing.search.knowledgeLoading")}
                   </div>
                 ) : bindCandidates.length === 0 ? (
-                  <p className="px-2 py-6 text-center text-[12px] font-semibold text-[#6d7c98]">
+                  <p className="px-2 py-6 text-center text-[12px] font-semibold text-[#837C6D]">
                     {t("billing.search.bindNoMatch")}
                   </p>
                 ) : (
@@ -817,8 +824,8 @@ export function BillingSearch({
                           : getProductEmoji(product.name, product.category)}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-extrabold text-[#14284e]">{product.name}</span>
-                        <span className="block truncate text-[11px] font-semibold text-[#6d7c98]">
+                        <span className="block truncate text-[13px] font-extrabold text-[#3D4354]">{product.name}</span>
+                        <span className="block truncate text-[11px] font-semibold text-[#837C6D]">
                           {product.barcode
                             ? t("billing.search.bindHasCode", { code: String(product.barcode) })
                             : product.category ?? ""}
@@ -832,7 +839,7 @@ export function BillingSearch({
                 )}
               </div>
 
-              <div className="flex items-center gap-2 border-t border-[#eef2f8] px-4 py-3">
+              <div className="flex items-center gap-2 border-t border-[#F1ECE2] px-4 py-3">
                 <button
                   type="button"
                   data-testid="barcode-bind-create"
@@ -857,7 +864,7 @@ export function BillingSearch({
                     setBindError(null);
                     bindSearchRef.current?.focus();
                   }}
-                  className="h-11 rounded-[8px] border border-[#e6ecf4] px-4 text-[12px] font-extrabold text-[#45577a] hover:bg-[#f7f9fd] sm:mouse:h-10"
+                  className="h-11 rounded-[8px] border border-[#EAE4D8] px-4 text-[12px] font-extrabold text-[#5E5748] hover:bg-[#FAF7F0] sm:mouse:h-10"
                 >
                   {t("billing.search.bindSkip")}
                 </button>
@@ -868,18 +875,18 @@ export function BillingSearch({
 
         <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1">
           {productsLoading && filteredProducts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#536383]">
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#6B6455]">
               <Search size={22} className="animate-pulse text-[var(--brand)]/60" />
               <p className="text-sm">{t("billing.search.loadingProducts")}</p>
             </div>
           ) : filteredProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-              <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[#f7f9fd] text-2xl text-[#536383]">?</span>
+              <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[#FAF7F0] text-2xl text-[#6B6455]">?</span>
               <div>
-                <p className="text-sm font-bold text-[#13274d]">
+                <p className="text-sm font-bold text-[#3D4354]">
                   {search ? t("billing.search.noResultsFor", { term: search }) : t("billing.search.noProductsYet")}
                 </p>
-                <p className="mt-1 text-xs text-[#536383]">
+                <p className="mt-1 text-xs text-[#6B6455]">
                   {search ? t("billing.search.noMatch") : t("billing.search.addFromProductsPage")}
                 </p>
               </div>
@@ -887,9 +894,22 @@ export function BillingSearch({
           ) : (
             <>
               {search && (
-                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#536383]">
-                  {filteredProducts.length === 1 ? t("billing.search.resultCount", { count: filteredProducts.length }) : t("billing.search.resultCountPlural", { count: filteredProducts.length })}
-                </p>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-bold uppercase tracking-wide text-[#6B6455]">
+                    {filteredProducts.length === 1 ? t("billing.search.resultCount", { count: filteredProducts.length }) : t("billing.search.resultCountPlural", { count: filteredProducts.length })}
+                  </p>
+                  {/* A typed multiplier changes what tapping a card does, so it
+                      has to be on screen. Silent quantity is how a cashier
+                      bills three of something and finds out at the total. */}
+                  {typedQuantity != null && (
+                    <span
+                      data-testid="typed-quantity-badge"
+                      className="rounded-full bg-[#E7E9F5] px-2.5 py-1 text-xs font-semibold tabular-nums text-[#5463AB]"
+                    >
+                      {t("billing.search.addingQuantity", { count: typedQuantity })}
+                    </span>
+                  )}
+                </div>
               )}
 
               {/* Keep cards comfortably scannable at counter-sized laptop widths. */}
@@ -938,7 +958,7 @@ export function BillingSearch({
 
       {/* ── 3. Order Summary Card ── */}
       {cartItemCount > 0 && (
-        <div className="flex shrink-0 flex-col gap-3 rounded-[13px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:px-[22px] lg:hidden">
+        <div className="flex shrink-0 flex-col gap-3 rounded-[13px] border border-[#EAE4D8] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:px-[22px] lg:hidden">
           <div className="min-w-0 flex-1">
             <p className="mb-2 text-[12px] font-bold text-[#5b6b89]">{t("billing.search.orderSummary")}</p>
             <div className="flex flex-wrap items-center gap-3 sm:gap-[30px]">
@@ -948,7 +968,7 @@ export function BillingSearch({
                   <ReceiptText size={14} className="text-[var(--brand)]" />
                 </span>
                 <div>
-                  <p className="text-[13px] font-black text-[#13274d]">
+                  <p className="text-[13px] font-black text-[#3D4354]">
                     {cartItemCount} {cartItemCount === 1 ? t("billing.search.itemSingular") : t("billing.search.items")}
                   </p>
                   <p className="text-[10px] text-[#7a89a3]">{t("billing.search.products")}</p>
@@ -960,7 +980,7 @@ export function BillingSearch({
                   ₹
                 </span>
                 <div>
-                  <p className="text-[13px] font-black text-[#13274d]">
+                  <p className="text-[13px] font-black text-[#3D4354]">
                     ₹{cartSubtotal.toLocaleString("en-IN")}
                   </p>
                   <p className="text-[10px] text-[#7a89a3]">{t("billing.search.subtotal")}</p>
@@ -973,7 +993,7 @@ export function BillingSearch({
                     %
                   </span>
                   <div>
-                    <p className="text-[13px] font-black text-[#13274d]">
+                    <p className="text-[13px] font-black text-[#3D4354]">
                       ₹{(Math.round(cartTax * 100) / 100).toLocaleString("en-IN")}
                     </p>
                     <p className="text-[10px] text-[#7a89a3]">{t("billing.search.gst")}</p>
@@ -1001,7 +1021,7 @@ export function BillingSearch({
             <p className="font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)]">
               ₹{cartGrandTotal.toLocaleString("en-IN")}
             </p>
-            <p className="mt-1 text-[12px] font-semibold text-[#536383]">{t("billing.search.grandTotal")}</p>
+            <p className="mt-1 text-[12px] font-semibold text-[#6B6455]">{t("billing.search.grandTotal")}</p>
           </div>
         </div>
       )}
@@ -1030,7 +1050,7 @@ function ProductCard({ product, onAdd, trending = false, t }: { product: Product
       className="group relative h-[176px] overflow-hidden rounded-[10px] border border-[#e3e9f2] bg-white p-3 pb-[44px] text-left transition-all duration-150 hover:-translate-y-px hover:border-[#bcd0ff] hover:shadow-[0_9px_22px_rgba(15,23,42,0.065)]"
     >
       {/* Image area — neutral photo placeholder */}
-      <div className="relative mb-2.5 flex h-[76px] items-center justify-center overflow-hidden rounded-[7px] bg-[#f8fafc]">
+      <div className="relative mb-2.5 flex h-[76px] items-center justify-center overflow-hidden rounded-[7px] bg-[#FAF8F2]">
         {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain p-1" /> : <span className="text-[40px] leading-none" aria-hidden="true">{emoji}</span>}
         {stock <= 0 ? (
           <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">{t("billing.search.stockOut")}</span>
@@ -1051,7 +1071,7 @@ function ProductCard({ product, onAdd, trending = false, t }: { product: Product
       </div>
 
       {/* Name + size/category */}
-      <p className="line-clamp-1 text-[13px] font-extrabold leading-[1.2] text-[#14284e]">
+      <p className="line-clamp-1 text-[13px] font-extrabold leading-[1.2] text-[#3D4354]">
         {product.name}
       </p>
       <p className="mt-1 truncate text-[12px] font-medium text-[#687895]">{subtitle}</p>
@@ -1077,7 +1097,7 @@ function CategoryChip({ label, active, onClick }: { label: string; active: boole
       className={`h-11 shrink-0 rounded-[8px] border px-5 text-[12px] font-semibold capitalize transition-all lg:mouse:h-9 ${
         active
           ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_8px_16px_rgba(0,87,255,0.2)]"
-          : "border-[#e6ecf4] bg-white text-[#3a4a6b] hover:bg-[#f7f9fd]"
+          : "border-[#EAE4D8] bg-white text-[#3a4a6b] hover:bg-[#FAF7F0]"
       }`}
     >
       {label}
@@ -1115,13 +1135,13 @@ function RecentBillsPanel() {
     if (label === "Udhar") return "bg-amber-50 text-amber-700";
     if (label === "Bank") return "bg-blue-50 text-blue-700";
     if (label === "Card") return "bg-[#f3e8ff] text-[#7c3aed]";
-    return "bg-[#e9fff0] text-[#16a34a]";
+    return "bg-[#e9fff0] text-[var(--success-ink)]";
   }
 
   return (
-    <div className="h-full overflow-hidden rounded-[13px] border border-[#e6ecf4] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+    <div className="h-full overflow-hidden rounded-[13px] border border-[#EAE4D8] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <div className="mb-[14px] flex items-center justify-between">
-        <h3 className="font-display text-[14px] font-black tracking-tight text-[#13274d]">{t("billing.search.recentBills")}</h3>
+        <h3 className="font-display text-[14px] font-black tracking-tight text-[#3D4354]">{t("billing.search.recentBills")}</h3>
         <Link
           to="/bills"
           className="flex items-center gap-0.5 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
@@ -1131,7 +1151,7 @@ function RecentBillsPanel() {
       </div>
 
       {bills.length === 0 ? (
-        <p className="py-4 text-center text-xs text-[#536383]">{t("billing.search.noBillsToday")}</p>
+        <p className="py-4 text-center text-xs text-[#6B6455]">{t("billing.search.noBillsToday")}</p>
       ) : (
         <div className="space-y-0">
           {bills.map((bill, i) => {
@@ -1157,10 +1177,10 @@ function RecentBillsPanel() {
                 key={bill.id ?? `${fullBillNo}-${i}`}
                 className="flex h-[38px] items-center gap-2 text-[11px]"
               >
-                <span className="w-[70px] shrink-0 truncate font-extrabold text-[#13274d]">{billNo}</span>
-                <span className="w-[60px] shrink-0 font-semibold text-[#6d7c98]">{time}</span>
-                <span className="min-w-0 flex-1 truncate font-semibold text-[#6d7c98]">{customer}</span>
-                <span className="shrink-0 text-right font-black text-[#13274d] tabular-nums">
+                <span className="w-[70px] shrink-0 truncate font-extrabold text-[#3D4354]">{billNo}</span>
+                <span className="w-[60px] shrink-0 font-semibold text-[#837C6D]">{time}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold text-[#837C6D]">{customer}</span>
+                <span className="shrink-0 text-right font-black text-[#3D4354] tabular-nums">
                   ₹{amount.toLocaleString("en-IN")}
                 </span>
                 <span className={`shrink-0 inline-flex h-[22px] items-center justify-center rounded-[7px] px-2 text-[10px] font-extrabold ${badgeClass(pmtLabel)}`}>
@@ -1181,7 +1201,7 @@ function QuickActionsPanel({ onHoldBill, onApplyDiscount, onApplyCoupon, onChoos
   const actions = [
     {
       iconEl: <Zap size={15} />,
-      iconBg: "bg-[#e9fff0] text-[#16a34a]",
+      iconBg: "bg-[#e9fff0] text-[var(--success-ink)]",
       title: t("billing.search.actionDiscount"),
       description: t("billing.search.actionDiscountHint"),
       hint: "F4",
@@ -1214,24 +1234,24 @@ function QuickActionsPanel({ onHoldBill, onApplyDiscount, onApplyCoupon, onChoos
   ];
 
   return (
-    <div className="h-full overflow-hidden rounded-[13px] border border-[#e6ecf4] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-      <h3 className="mb-[14px] font-display text-[14px] font-black tracking-tight text-[#13274d]">{t("billing.search.quickActions")}</h3>
+    <div className="h-full overflow-hidden rounded-[13px] border border-[#EAE4D8] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+      <h3 className="mb-[14px] font-display text-[14px] font-black tracking-tight text-[#3D4354]">{t("billing.search.quickActions")}</h3>
       <div className="space-y-0">
         {actions.map((action) => (
           <button
             key={action.title}
             onClick={action.onClick}
-            className="flex h-[48px] w-full items-center gap-3 rounded-lg px-1 text-left transition-colors hover:bg-[#f7f9fd]"
+            className="flex h-[48px] w-full items-center gap-3 rounded-lg px-1 text-left transition-colors hover:bg-[#FAF7F0]"
           >
             <span className={`grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] ${action.iconBg}`}>
               {action.iconEl}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-extrabold text-[#13274d]">{action.title}</p>
-              <p className="text-[10.5px] text-[#6d7c98]">{action.description}</p>
+              <p className="text-[12px] font-extrabold text-[#3D4354]">{action.title}</p>
+              <p className="text-[10.5px] text-[#837C6D]">{action.description}</p>
             </div>
             {action.hint && (
-              <kbd className="shrink-0 inline-flex h-[22px] min-w-[28px] items-center justify-center rounded-[7px] border border-[#e1e8f2] bg-[#f4f7fb] px-2 text-[10px] font-extrabold text-[#536383]">
+              <kbd className="shrink-0 inline-flex h-[22px] min-w-[28px] items-center justify-center rounded-[7px] border border-[#E5DFD1] bg-[#f4f7fb] px-2 text-[10px] font-extrabold text-[#6B6455]">
                 {action.hint}
               </kbd>
             )}
@@ -1254,15 +1274,15 @@ function BillingTipsPanel() {
   ];
 
   return (
-    <div className="h-full overflow-hidden rounded-[13px] border border-[#e6ecf4] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+    <div className="h-full overflow-hidden rounded-[13px] border border-[#EAE4D8] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <div className="mb-[14px] flex items-center gap-2">
-        <h3 className="font-display text-[14px] font-black tracking-tight text-[#13274d]">{t("billing.search.tipsTitle")}</h3>
-        <Clock size={13} className="text-[#536383]" />
+        <h3 className="font-display text-[14px] font-black tracking-tight text-[#3D4354]">{t("billing.search.tipsTitle")}</h3>
+        <Clock size={13} className="text-[#6B6455]" />
       </div>
       <div className="space-y-0">
         {tips.map((tip) => (
           <div key={tip.key} className="flex min-h-[32px] items-center gap-2 text-[11px] font-semibold text-[#5d6f8d]">
-            <span className="h-[13px] w-[13px] shrink-0 text-[#16a34a]">✓</span>
+            <span className="h-[13px] w-[13px] shrink-0 text-[var(--success-ink)]">✓</span>
             <span>
               {tip.action}{" "}
               <span className="inline-flex h-5 min-w-[26px] items-center justify-center rounded-[5px] bg-[var(--brand-soft)] px-1.5 text-[10px] font-black text-[var(--brand)]">

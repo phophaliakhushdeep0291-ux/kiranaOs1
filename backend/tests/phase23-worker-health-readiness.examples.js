@@ -14,6 +14,8 @@ const envExample = read(".env.example");
 const workerHealthScript = read("scripts/check-worker-health.js");
 const docs = read("docs/WORKER_OPERATIONS.md");
 const prodCheck = read("scripts/production-check.js");
+const app = read("src/app.js");
+const smokeTest = read("scripts/smoke-test.js");
 
 for (const snippet of [
   "recordWorkerHeartbeat",
@@ -61,6 +63,11 @@ for (const snippet of ["WORKER_HEARTBEAT_STALE_OR_MISSING", "worker_health_passe
 }
 assert.ok(packageJson.scripts["worker:health"].includes("scripts/check-worker-health.js"), "package.json missing worker:health script");
 assert.ok(packageJson.scripts["test:billing"].includes("phase23-worker-health-readiness.examples.js"), "Phase 23 test must be wired into npm test");
+
+for (const snippet of ["getWorkerHeartbeats", "recordWorkerReadinessStatus", 'checks.worker = workerHeartbeat.healthy ? "ok" : "error"', 'checks.worker === "error" ? 503 : 200']) {
+  assert.ok(app.includes(snippet), `public readiness must enforce worker heartbeat health: ${snippet}`);
+}
+assert.ok(smokeTest.includes('ready.checks.worker !== "ok"'), "production smoke must require a healthy worker heartbeat when expected");
 
 for (const snippet of ["GET /api/jobs/workers", "npm run worker:health", "worker_ready_status", "worker_heartbeat_age_ms", "core financial operations must never be moved to background jobs"]) {
   assert.ok(docs.includes(snippet), `WORKER_OPERATIONS.md missing ${snippet}`);

@@ -475,8 +475,8 @@ if (exists("Dockerfile")) {
   if (!dockerfile.includes("npm ci")) errors.push("Dockerfile must install with npm ci");
   if (!dockerfile.includes("npm run prisma:generate:postgres")) errors.push("Dockerfile must generate Prisma client with PostgreSQL schema");
   if (!dockerfile.includes("npm run deploy:migrate:postgres")) errors.push("Dockerfile must deploy PostgreSQL migrations before start");
-  if (!dockerfile.includes("npm run deploy:migrate:postgres && npm start")) {
-    errors.push("Dockerfile must run migration deploy, Prisma generate, and product schema verification before startup");
+  if (!dockerfile.includes("npm run deploy:migrate:postgres") || !dockerfile.includes("npm run start:runtime")) {
+    errors.push("Dockerfile must run migration deploy, Prisma generate, product schema verification, and the supervised runtime before startup");
   }
   if (!dockerfile.includes("HEALTHCHECK")) errors.push("Dockerfile must include HEALTHCHECK");
   if (!dockerfile.includes("COPY contracts ./contracts")) errors.push("Dockerfile must copy contracts so release/contract proof can run inside image");
@@ -1620,7 +1620,7 @@ if (exists(".github/workflows/backend-ci.yml")) {
 
 if (exists("Dockerfile")) {
   const dockerfile = read("Dockerfile");
-  for (const snippet of ["npm ci", "npm run prisma:generate:postgres", "/health/ready", "npm run deploy:migrate:postgres", "npm start"]) {
+  for (const snippet of ["npm ci", "npm run prisma:generate:postgres", "/health/ready", "npm run deploy:migrate:postgres", "npm run start:runtime"]) {
     if (!dockerfile.includes(snippet)) errors.push(`Dockerfile missing production reliability snippet: ${snippet}`);
   }
   if (dockerfile.includes("JWT_SECRET=") || dockerfile.includes("RAZORPAY_KEY_" + "SECRET=")) {
@@ -2091,6 +2091,8 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   const queue = read("src/lib/queue.js");
   const workerIndex = read("src/workers/index.js");
   const metrics = exists("src/lib/metrics.js") ? read("src/lib/metrics.js") : "";
+  const app = exists("src/app.js") ? read("src/app.js") : "";
+  const smokeTest = exists("scripts/smoke-test.js") ? read("scripts/smoke-test.js") : "";
   const jobsRoutes = exists("src/modules/jobs/jobs.routes.js") ? read("src/modules/jobs/jobs.routes.js") : "";
   const jobsController = exists("src/modules/jobs/jobs.controller.js") ? read("src/modules/jobs/jobs.controller.js") : "";
   const packageJson = exists("package.json") ? readJson("package.json") : { scripts: {} };
@@ -2117,6 +2119,12 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   }
   if (!packageJson.scripts?.["test:billing"]?.includes("phase23-worker-health-readiness.examples.js")) {
     errors.push("Phase 23 worker health tests must be wired into npm test");
+  }
+  for (const snippet of ["getWorkerHeartbeats", "recordWorkerReadinessStatus", "checks.worker", "503"]) {
+    if (!app.includes(snippet)) errors.push(`public readiness must enforce worker heartbeat health: ${snippet}`);
+  }
+  if (!smokeTest.includes('ready.checks.worker !== "ok"')) {
+    errors.push("production smoke must require a healthy worker heartbeat when expected");
   }
 }
 

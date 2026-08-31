@@ -27,6 +27,7 @@ import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorks
 import { updateCustomerOrder } from "@/features/core/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { applyRoundOff, billNeedsCustomer, billingDiscountApprovalSummary, billingSensitiveApprovalFingerprint, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, cartItemUnitRate, clampAmount, LARGE_DISCOUNT_MIN_AMOUNT, LARGE_DISCOUNT_MIN_PERCENT, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
+import { parseQuantityQuery } from "./billing-quantity-input";
 import { resolveLinePrice } from "@/features/core/pricing/resolve-line-price";
 import { sellingUnitMaxPrice } from "@/features/core/products/pages/product-pricing";
 import { useShopPricingRules } from "@/features/core/pricing/pricing-rules-cache";
@@ -641,14 +642,22 @@ export default function Billing() {
     }
   }
 
+  /**
+   * A typed multiplier is stripped before the catalogue is searched, so
+   * `3*rice` finds rice rather than nothing. Parsed from the deferred value the
+   * grid already reacts to, which keeps the count and the results on the same
+   * frame — a badge that led the list it belongs to would flicker on every key.
+   */
+  const typedQuantity = useMemo(() => parseQuantityQuery(deferredSearch), [deferredSearch]);
+
   const filteredProducts = useMemo(() => {
-    const q = normalizeSearchText(deferredSearch);
+    const q = normalizeSearchText(typedQuantity.term);
     const categoryFiltered = selectedCategory === "all" ? productSearchIndex : productSearchIndex.filter((entry) => entry.category === selectedCategory);
     if (!q) return categoryFiltered.slice(0, 30).map((entry) => entry.product);
     const starts = categoryFiltered.filter((entry) => entry.searchText.startsWith(q));
     const contains = categoryFiltered.filter((entry) => !entry.searchText.startsWith(q) && entry.searchText.includes(q));
     return [...starts, ...contains].slice(0, 30).map((entry) => entry.product);
-  }, [deferredSearch, productSearchIndex, selectedCategory]);
+  }, [typedQuantity.term, productSearchIndex, selectedCategory]);
 
 
   useEffect(() => {
@@ -970,12 +979,15 @@ export default function Billing() {
     };
   }
 
-  function commitAddToCart(product: Product, options?: { custom?: boolean; addons?: CartItem["addons"]; sellingUnit?: ProductSellingUnit }) {
+  function commitAddToCart(product: Product, options?: { custom?: boolean; addons?: CartItem["addons"]; sellingUnit?: ProductSellingUnit; quantity?: number }) {
+    // A quantity typed in the search box (`3*rice`) arrives here. Everything
+    // else adds one, which is what every existing caller expects.
+    const addedQuantity = options?.quantity && options.quantity > 0 ? options.quantity : 1;
     setCart((previous) => {
       const sellingUnit = options?.sellingUnit ?? defaultSellingUnit(product);
       const candidate: CartItem = {
         product,
-        quantity: 1,
+        quantity: addedQuantity,
         rate: product.defaultPricePerRateUnit,
         unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece",
         sellingUnit,
@@ -985,11 +997,15 @@ export default function Billing() {
       const candidateKey = cartItemKey(candidate);
       const existing = previous.find((item) => cartItemKey(item) === candidateKey);
       if (existing && !options?.custom) {
-        const quantity = roundQuantity(existing.quantity + 1);
+        // Adding the same item twice accumulates, so `3*rice` on a line that
+        // already holds two makes five rather than three. A cashier correcting
+        // themselves types the difference; one who scanned the packet again
+        // expects it to count.
+        const quantity = roundQuantity(existing.quantity + addedQuantity);
         const priced = resolveLine(product, quantity, existing.sellingUnit);
         return previous.map((item) => cartItemKey(item) === candidateKey ? { ...item, quantity, rate: item.manualRate ? item.rate : priced.rate, pricing: item.manualRate ? item.pricing : priced.pricing } : item);
       }
-      const quantity = 1;
+      const quantity = roundQuantity(addedQuantity);
       const priced = resolveLine(product, quantity, sellingUnit);
       return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priced.rate, unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece", sellingUnit, isCustom: options?.custom, manualRate: options?.custom, pricing: options?.custom ? undefined : priced.pricing, addons: options?.addons }];
     });
@@ -1001,22 +1017,26 @@ export default function Billing() {
     setSearch("");
   }
 
-  function addToCart(product: Product, sellingUnit?: ProductSellingUnit, options?: { custom?: boolean }) {
+  function addToCart(product: Product, sellingUnit?: ProductSellingUnit, options?: { custom?: boolean; quantity?: number }) {
     if (options?.custom) {
       commitAddToCart(product, { ...options, sellingUnit });
       return;
     }
     const configurator = productConfiguratorFor(product);
     if (!configurator) {
-      commitAddToCart(product, { sellingUnit });
+      commitAddToCart(product, { sellingUnit, quantity: options?.quantity });
       return;
     }
     if (configuringProductId) return;
     setConfiguringProductId(product.id);
     void configurator.load(product)
       .then((data) => {
+        // A configurable dish opens its sheet and the typed multiplier is
+        // dropped on purpose: the sheet collects portion and add-ons and has
+        // its own quantity, and silently carrying a count past a screen the
+        // cashier is about to fill in is how three of the wrong thing get billed.
         if (data) setPendingProductConfiguration({ product, sellingUnit, configurator, data });
-        else commitAddToCart(product, { sellingUnit });
+        else commitAddToCart(product, { sellingUnit, quantity: options?.quantity });
       })
       .catch((error: unknown) => {
         toast({
@@ -2182,7 +2202,8 @@ export default function Billing() {
           productsLoading={products.isLoading || products.isFetching}
           filteredProducts={filteredProducts}
           allProducts={allProducts}
-          onAddProduct={addToCart}
+          onAddProduct={(product, sellingUnit) => addToCart(product, sellingUnit, { quantity: typedQuantity.quantity ?? undefined })}
+          typedQuantity={typedQuantity.quantity}
           onBindBarcode={bindScannedBarcode}
           onCreateProductWithBarcode={createProductForScannedBarcode}
           categories={categories}
@@ -2236,15 +2257,15 @@ export default function Billing() {
       {/* ── RIGHT PANEL: cart + customer + payment ── */}
       <div
         className={mobileCheckoutOpen
-          ? "fixed inset-0 z-[70] flex min-h-0 flex-col bg-[#f7f9fd] lg:static lg:z-auto lg:flex lg:bg-transparent"
+          ? "fixed inset-0 z-[70] flex min-h-0 flex-col bg-[#FAF7F0] lg:static lg:z-auto lg:flex lg:bg-transparent"
           : "hidden lg:static lg:flex lg:min-h-0"}
         role={mobileCheckoutOpen ? "dialog" : undefined}
         aria-modal={mobileCheckoutOpen ? "true" : undefined}
         aria-label={mobileCheckoutOpen ? t("billing.page.reviewCollectPayment") : undefined}
       >
-        <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#e1e8f2] bg-white px-4 lg:hidden">
+        <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#E5DFD1] bg-white px-4 lg:hidden">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#64748b]">{t("billing.page.checkout")}</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7C7566]">{t("billing.page.checkout")}</p>
             <h2 className="font-display text-[19px] font-black text-[var(--brand-ink)]">{t("billing.page.reviewCollect", { amount: grandTotal.toLocaleString("en-IN") })}</h2>
           </div>
           <button
@@ -2383,12 +2404,12 @@ export default function Billing() {
           summary panel always, so this is mobile-only. Sits above the bottom nav. */}
       {cart.length > 0 && !mobileCheckoutOpen && (
         <div
-          className="fixed inset-x-0 z-40 border-t border-[#e6ecf4] bg-white px-3 py-2.5 shadow-[0_-6px_22px_rgba(15,35,80,0.10)] lg:hidden"
+          className="fixed inset-x-0 z-40 border-t border-[#EAE4D8] bg-white px-3 py-2.5 shadow-[0_-6px_22px_rgba(15,35,80,0.10)] lg:hidden"
           style={{ bottom: "var(--app-mobile-bottom-nav-clearance)" }}
         >
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-bold text-[#64748b]">
+              <div className="text-[11px] font-bold text-[#7C7566]">
                 {cart.length} item{cart.length === 1 ? "" : "s"}
                 {creditAmount > 0 ? " · udhar" : ""}
               </div>

@@ -47,9 +47,33 @@ export function isGoogleSignInConfigured(): boolean {
   return Boolean(CLIENT_ID);
 }
 
+/**
+ * Google renders its button inside an iframe at whatever pixel width it is
+ * given, and that width is not advisory — the iframe does not shrink to fit.
+ * A fixed 320 plus the card and page padding is wider than a 360px Android
+ * viewport, so the sign-in card was pushed past the right edge of the screen
+ * and "Forgot password" was clipped mid-word.
+ *
+ * It survived the four-width QA because the component returns null when
+ * `CLIENT_ID` is unset, which is every local and CI environment. The overflow
+ * only exists where Google actually loads: a real phone, in production.
+ *
+ * Google clamps this to 200–400 itself; passing something outside that range
+ * silently gets a default, so measure the space we have and clamp to what the
+ * API accepts.
+ */
+const GOOGLE_BUTTON_MIN_WIDTH = 200;
+const GOOGLE_BUTTON_MAX_WIDTH = 400;
+
+function googleButtonWidth(available: number): number {
+  if (!Number.isFinite(available) || available <= 0) return GOOGLE_BUTTON_MIN_WIDTH;
+  return Math.round(Math.min(GOOGLE_BUTTON_MAX_WIDTH, Math.max(GOOGLE_BUTTON_MIN_WIDTH, available)));
+}
+
 export function GoogleSignInButton({ onCredential }: { onCredential: (credential: string) => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onCredentialRef = useRef(onCredential);
+  const cleanupRef = useRef<(() => void) | null>(null);
   const [failed, setFailed] = useState(false);
   onCredentialRef.current = onCredential;
 
@@ -65,24 +89,43 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (credential
             if (response.credential) onCredentialRef.current(response.credential);
           },
         });
-        containerRef.current.innerHTML = "";
-        api.renderButton(containerRef.current, {
-          theme: "outline",
-          size: "large",
-          text: "continue_with",
-          shape: "pill",
-          width: 320,
-        });
+        const render = () => {
+          const host = containerRef.current;
+          if (!active || !host) return;
+          host.innerHTML = "";
+          api.renderButton(host, {
+            theme: "outline",
+            size: "large",
+            text: "continue_with",
+            shape: "pill",
+            width: googleButtonWidth(host.clientWidth),
+          });
+        };
+        render();
+        // A rotation changes the available width, and the iframe keeps the one
+        // it was built with. Re-rendering is the only way to resize it.
+        const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(render);
+        observer?.observe(containerRef.current);
+        cleanupRef.current = () => observer?.disconnect();
       })
       .catch(() => {
         if (active) setFailed(true); // offline / blocked — hide quietly, password login still works
       });
     return () => {
       active = false;
+      cleanupRef.current?.();
     };
   }, []);
 
   if (!CLIENT_ID || failed) return null;
 
-  return <div ref={containerRef} className="flex min-h-[44px] justify-center" data-testid="google-signin" />;
+  // `min-w-0` and the clip are the belt to the measurement's braces: whatever
+  // width Google decides on, it can no longer widen the page around it.
+  return (
+    <div
+      ref={containerRef}
+      className="flex min-h-[44px] w-full min-w-0 justify-center overflow-x-clip"
+      data-testid="google-signin"
+    />
+  );
 }

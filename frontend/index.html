@@ -7,7 +7,7 @@
          leaving action rows stranded underneath it. Chrome honours this;
          iOS Safari does not, which is what useKeyboardInset covers. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#075fff" />
+    <meta name="theme-color" content="#5463AB" />
     <meta name="color-scheme" content="light dark" />
     <meta name="application-name" content="Artha" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
@@ -32,10 +32,10 @@
   </head>
   <body>
     <div id="root">
-      <div id="artha-boot-wait" role="status" aria-live="polite" style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:24rem;margin:22vh auto 0;padding:0 1.25rem;text-align:center;color:#0f1e3d">
-        <div style="font-size:2rem;font-weight:900;letter-spacing:-0.06em;color:#075fff">Artha</div>
+      <div id="artha-boot-wait" role="status" aria-live="polite" style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:24rem;margin:22vh auto 0;padding:0 1.25rem;text-align:center;color:#3D4354">
+        <div style="font-size:2rem;font-weight:900;letter-spacing:-0.06em;color:#5463AB">Artha</div>
         <p style="font-size:0.95rem;font-weight:700;margin:0.65rem 0 0.2rem">Opening your counter&hellip;</p>
-        <p style="font-size:0.78rem;color:#64748b;margin:0">Your saved shop data stays available while the app starts.</p>
+        <p style="font-size:0.78rem;color:#7C7566;margin:0">Your saved shop data stays available while the app starts.</p>
       </div>
     </div>
     <script>
@@ -88,13 +88,13 @@
           var root = document.getElementById("root");
           if (!root) return;
           root.innerHTML =
-            '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:26rem;margin:18vh auto 0;padding:0 1.25rem;text-align:center;color:#0f1e3d">' +
+            '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:26rem;margin:18vh auto 0;padding:0 1.25rem;text-align:center;color:#3D4354">' +
             '<div style="font-size:44px;line-height:1">&#9888;&#65039;</div>' +
             '<h1 style="font-size:1.15rem;margin:0.75rem 0 0.35rem">Artha could not start</h1>' +
-            '<p style="font-size:0.85rem;color:#52627e;margin:0 0 1rem">Your browser may be outdated or holding a stale copy of the app. Try reloading; if it repeats, clear the cached copy below.</p>' +
-            '<button onclick="location.reload()" style="display:block;width:100%;padding:0.7rem;border-radius:10px;border:0;background:#005dff;color:#fff;font-weight:700;font-size:0.9rem;margin-bottom:0.5rem">Reload app</button>' +
-            '<button id="artha-boot-clear" style="display:block;width:100%;padding:0.7rem;border-radius:10px;border:1px solid #dbe6f7;background:#fff;color:#0f1e3d;font-weight:700;font-size:0.9rem">Clear cached app &amp; reload</button>' +
-            '<p style="font-size:0.7rem;color:#9aa6bb;margin-top:1rem;word-break:break-word">' + String(detail || "").slice(0, 200) + "</p>" +
+            '<p style="font-size:0.85rem;color:#7C7566;margin:0 0 1rem">Your browser may be outdated or holding a stale copy of the app. Try reloading; if it repeats, clear the cached copy below.</p>' +
+            '<button onclick="location.reload()" style="display:block;width:100%;padding:0.7rem;border-radius:10px;border:0;background:#5463AB;color:#fff;font-weight:700;font-size:0.9rem;margin-bottom:0.5rem">Reload app</button>' +
+            '<button id="artha-boot-clear" style="display:block;width:100%;padding:0.7rem;border-radius:10px;border:1px solid #E6E0D4;background:#FAF8F4;color:#3D4354;font-weight:700;font-size:0.9rem">Clear cached app &amp; reload</button>' +
+            '<p style="font-size:0.7rem;color:#A9A395;margin-top:1rem;word-break:break-word">' + String(detail || "").slice(0, 200) + "</p>" +
             "</div>";
           var clearBtn = document.getElementById("artha-boot-clear");
           if (clearBtn) {

@@ -1,13 +1,26 @@
 import { type Translate } from "@/features/core/settings/i18n";
 import { createContext, useContext, useLayoutEffect, useState, type ReactNode } from "react";
 
-export type AccentColor = "emerald" | "teal" | "blue" | "violet" | "rose" | "amber" | "orange" | "slate";
+export type AccentColor = "indigo" | "emerald" | "teal" | "blue" | "violet" | "rose" | "amber" | "orange" | "slate";
 
 export interface AccentDefinition {
   swatch: string;
 }
 
 export const ACCENT_COLORS: Record<AccentColor, AccentDefinition> = {
+  /**
+   * Artha's own colour, and the default a new shop opens on.
+   *
+   * The default used to be `blue` — #2563eb, Tailwind blue-600, the shade every
+   * shadcn project ships with, which is most of why the till looked like a
+   * template rather than a product. Indigo is deeper and slightly violet: it
+   * carries next to a rupee figure, and it survives a shop's tube light, where
+   * a bright blue goes flat.
+   *
+   * Blue stays in the picker. This changes what a shop is given, not what it
+   * is allowed to choose.
+   */
+  indigo: { swatch: "#5463AB" },
   emerald: { swatch: "#16a34a" },
   teal: { swatch: "#0d9488" },
   blue: { swatch: "#2563eb" },
@@ -17,6 +30,9 @@ export const ACCENT_COLORS: Record<AccentColor, AccentDefinition> = {
   orange: { swatch: "#ea580c" },
   slate: { swatch: "#475569" },
 };
+
+/** What a shop gets before anyone touches Settings → Advanced. */
+export const DEFAULT_ACCENT: AccentColor = "indigo";
 
 /**
  * Names kept apart from the swatches on purpose. `applyAccent` and `isAccent`
@@ -35,7 +51,7 @@ interface ThemeContextValue {
   setAccent: (c: AccentColor) => void;
 }
 
-const ThemeContext = createContext<ThemeContextValue>({ accent: "blue", setAccent: () => {} });
+const ThemeContext = createContext<ThemeContextValue>({ accent: DEFAULT_ACCENT, setAccent: () => {} });
 
 function isAccent(value: unknown): value is AccentColor {
   return typeof value === "string" && value in ACCENT_COLORS;
@@ -103,9 +119,9 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
       const saved = localStorage.getItem(THEME_KEY);
       // "emerald" used to be coerced to blue here because it had no CSS block;
       // it has one now, so every swatch in the picker round-trips.
-      return isAccent(saved) ? saved : "blue";
+      return isAccent(saved) ? saved : DEFAULT_ACCENT;
     } catch {
-      return "blue";
+      return DEFAULT_ACCENT;
     }
   });
 
