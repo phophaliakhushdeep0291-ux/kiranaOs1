@@ -93,6 +93,15 @@ async function main() {
 
     console.log("per-pack-stock-in.examples.js OK");
   } finally {
+    // A direct stock receipt now posts immutable financial-ledger and
+    // double-entry journal evidence in the same transaction. Remove that
+    // evidence in dependency order before deleting this test tenant; otherwise
+    // the ledger's intentional restrictive foreign keys make teardown fail
+    // even though the stock-in assertions succeeded.
+    await db.journalLine.deleteMany({ where: { shopId: shop.id } });
+    await db.journalEntry.deleteMany({ where: { shopId: shop.id } });
+    await db.financialLedger.deleteMany({ where: { shopId: shop.id } });
+    await db.chartOfAccount.deleteMany({ where: { shopId: shop.id } });
     await db.stockLedger.deleteMany({ where: { shopId: shop.id } });
     await db.purchaseHistory.deleteMany({ where: { shopId: shop.id } });
     await db.auditLog.deleteMany({ where: { shopId: shop.id } });

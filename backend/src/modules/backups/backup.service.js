@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
-import { Prisma } from "@prisma/client";
 import { Readable } from "node:stream";
 import { gzipSync, gunzipSync } from "node:zlib";
-import db from "../../db.js";
+// Both from db.js: restore order is computed from the schema, and it has to be
+// the schema of the client the rows are read and written through.
+import db, { Prisma } from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { addJob, isQueueEnabled } from "../../lib/queue.js";

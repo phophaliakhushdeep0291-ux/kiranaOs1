@@ -1115,11 +1115,82 @@ if (ctx.skip) {
       assert.equal(wrongPin.summary.failed, 1);
       assert.equal(wrongPin.results[0].code, "PERMISSION_DENIED");
 
+      const pinFailures = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, action: "OWNER_PIN_VERIFICATION_FAILED" },
+      });
+      assert.equal(pinFailures.length, 1, "a wrong PIN received through sync must enter the shared security counter");
+      assert.equal(pinFailures[0].userId, tenant.owner.id);
+      assert.equal(pinFailures[0].deviceId, deviceHeaders["x-device-id"]);
+      const pinFailureMetadata = JSON.parse(pinFailures[0].metadataJson);
+      assert.equal(pinFailureMetadata.route, "/api/sync/push");
+      assert.equal(pinFailureMetadata.channel, "offline_sync");
+      assert.equal(pinFailureMetadata.reason, "MISMATCH");
+      assert.equal(pinFailures[0].metadataJson.includes("0000"), false, "the rejected PIN must never enter audit metadata");
+
       assert.equal(await ctx.db.udharLedger.count({
         where: { shopId: tenant.shop.id, customerId: customer.id, mode: "adjustment" },
       }), 0);
       const unchanged = await ctx.db.customer.findUnique({ where: { id: customer.id } });
       assert.equal(unchanged.udharAmount, 0);
+    });
+
+    test("sensitive offline actions share the durable owner PIN lockout with HTTP routes", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id);
+      const postAdjustment = (eventId, ownerPin) => ctx.post("/api/sync/push", {
+        events: [{
+          type: "CREATE_LEDGER_ADJUSTMENT",
+          eventId,
+          payload: {
+            customerId: customer.id,
+            amount: 200,
+            note: "owner approved correction",
+            ownerPin,
+            idempotencyKey: `${eventId}:idempotency`,
+            clientLedgerId: `${eventId}:ledger`,
+          },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders });
+
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        const rejected = assertSuccess(await postAdjustment(`sync-pin-failure-${attempt}`, "0000"));
+        assert.equal(rejected.summary.failed, 1);
+        assert.equal(
+          rejected.results[0].code,
+          attempt === 5 ? "SERVER_ERROR" : "PERMISSION_DENIED",
+          "the threshold attempt must enter the temporary lockout",
+        );
+        if (attempt === 5) assert.equal(rejected.results[0].result.retryable, true);
+      }
+
+      const lockedCorrectPin = assertSuccess(await postAdjustment("sync-pin-locked-correct", "1234"));
+      assert.equal(lockedCorrectPin.summary.failed, 1);
+      assert.equal(lockedCorrectPin.results[0].code, "SERVER_ERROR");
+      assert.equal(lockedCorrectPin.results[0].result.retryable, true);
+      assert.equal(await ctx.db.udharLedger.count({
+        where: { shopId: tenant.shop.id, customerId: customer.id, mode: "adjustment" },
+      }), 0, "a correct PIN cannot bypass an active lockout");
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "OWNER_PIN_VERIFICATION_FAILED" },
+      }), 5, "the blocked correct PIN is not recorded as another failure");
+
+      await ctx.db.auditLog.updateMany({
+        where: { shopId: tenant.shop.id, action: "OWNER_PIN_VERIFICATION_FAILED" },
+        data: { createdAt: new Date(Date.now() - 16 * 60_000) },
+      });
+      const afterLockout = assertSuccess(await postAdjustment("sync-pin-after-lockout", "1234"));
+      assert.equal(afterLockout.summary.synced, 1);
+      assert.equal(await ctx.db.udharLedger.count({
+        where: { shopId: tenant.shop.id, customerId: customer.id, mode: "adjustment" },
+      }), 1, "the protected action may proceed after the lockout window expires");
+
+      const verified = await ctx.db.auditLog.findFirst({
+        where: { shopId: tenant.shop.id, action: "OWNER_PIN_VERIFIED" },
+        orderBy: { createdAt: "desc" },
+      });
+      assert.ok(verified);
+      assert.equal(JSON.parse(verified.metadataJson).channel, "offline_sync");
+      assert.equal(verified.metadataJson.includes("1234"), false, "the accepted PIN must never enter audit metadata");
     });
 
     test("CREATE_LEDGER_ADJUSTMENT rolls back when its required server audit cannot be stored", async () => {

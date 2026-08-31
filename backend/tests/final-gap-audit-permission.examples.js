@@ -46,7 +46,7 @@ assert.match(inventoryService, /productName: product\.name[\s\S]*oldStockBaseQty
 assert.ok(permissions.includes("OWNER_PIN_VERIFIED"), "successful owner PIN verification must be audited");
 const pinCompareAt = permissions.indexOf("const ok = await bcrypt.compare(ownerPin, owner.pinHash);");
 const pinFailureAt = permissions.indexOf("if (!ok)", pinCompareAt);
-const pinVerifiedAt = permissions.indexOf("await logOwnerPinVerified(req);", pinFailureAt);
+const pinVerifiedAt = permissions.indexOf("await logOwnerPinVerified(attempt);", pinFailureAt);
 assert.ok(
   pinCompareAt >= 0 && pinFailureAt > pinCompareAt && pinVerifiedAt > pinFailureAt,
   "owner PIN audit must happen only after successful bcrypt compare and failure handling"

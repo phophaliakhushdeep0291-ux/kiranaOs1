@@ -228,7 +228,7 @@ breakdown.
 | `UDHAR_AGEING_BEYOND_LIMIT` for shops carrying long khata | configurable ageing limit |
 | `EXPENSE_CATEGORY_INCONSISTENT` keyword heuristic | LOW severity, conservative table, shop's own naming wins |
 | Thin-history shops | baselines require minimum samples and are skipped otherwise |
-| Multi-location stock | whole-product reconciliation skipped when secondary balances exist |
+| Multi-location stock | Completed follow-on: transfer movements are append-only and each covered location reconciles independently, with open shipments held in an in-transit bucket |
 
 Every rule can be disabled or re-weighted per shop, which is the operational safety
 valve for a shop whose practices legitimately differ.
@@ -317,10 +317,11 @@ product can claim today:
 3. **No bank/UPI feed** — reference reuse is detectable, authenticity is not.
 4. **Legacy attribution gaps** remain; new stock movements and expenses carry authenticated actor ids and immutable snapshots.
 5. Scheduled runs are wired to BullMQ; execution still requires Redis and a production worker.
-6. **Transaction-triggered queue is in-process**, not a durable outbox; dropped
-   work is recovered by the next period run because evaluation is idempotent.
+6. **Transaction-triggered evaluation is durable when queues are enabled** with
+   BullMQ retry/backoff; local deployments retain the bounded in-process fallback.
 7. Investigation-case grouping and its owner-facing UI now exist.
-8. **Baseline recomputation is on demand**, not scheduled.
+8. Baseline recomputation is scheduled daily when the jobs worker is running and
+   remains available on demand.
 
 ## 12. Readiness assessment
 

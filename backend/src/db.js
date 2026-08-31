@@ -34,6 +34,22 @@ const prismaPackage = isolatedClientPackage
   : require("@prisma/client");
 const { PrismaClient } = prismaPackage;
 
+/**
+ * The schema metadata belonging to the client this process actually uses.
+ *
+ * Re-exported rather than imported from "@prisma/client" by callers, because
+ * that path is fixed while the client above is chosen at runtime: under the
+ * integration or certification variant a caller reading dmmf from the fixed path
+ * is describing a DIFFERENT schema from the one its queries run against.
+ *
+ * That is not hypothetical. A new model was added, registered for restore, and
+ * the backup service still refused it as "metadata missing" - it was reading the
+ * default client's dmmf, which had not been regenerated, while querying through
+ * the integration client that knew the model perfectly well. Disaster recovery
+ * was broken and the error pointed at the wrong thing.
+ */
+export const Prisma = prismaPackage.Prisma;
+
 // SQLite has exactly one writer, but Prisma still opens a pool of connections
 // against the file. When a second connection touches the database while an
 // interactive transaction is open, the 5.14 query engine panics

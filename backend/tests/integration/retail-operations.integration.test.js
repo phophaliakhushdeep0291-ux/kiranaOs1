@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { billPayload, createCustomer, createProduct, createTenant, login } from "./factories.js";
 import { ensurePrimaryLocation } from "../../src/modules/stores/stores.service.js";
+import { inventoryRules } from "../../src/modules/assurance/rules/inventory.rules.js";
 
 const ctx = await createIntegrationContext();
 
@@ -89,10 +90,20 @@ if (ctx.skip) {
       }
       assert.equal(assertFailure(failedStoreAction, 503).code, "STORE_AUDIT_WRITE_FAILED");
       assert.equal(await ctx.db.stockTransfer.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, sourceType: "stock_transfer" } }), 0, "failed transfer audit must roll back transfer ledger rows");
       assert.equal(await ctx.db.locationStock.count({ where: { shopId: tenant.shop.id, locationId: branch.id } }), 0, "failed transfer audit must roll back destination stock");
 
       const transfer = assertSuccess(await ctx.post("/api/stores/transfers", transferPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
       assert.equal(transfer.status, "completed");
+      const transferMovements = await ctx.db.stockLedger.findMany({
+        where: { shopId: tenant.shop.id, sourceType: "stock_transfer", sourceId: transfer.id },
+        orderBy: { createdAt: "asc" },
+      });
+      assert.deepEqual(transferMovements.map((row) => row.action), ["transfer_out", "transfer_in"]);
+      assert.deepEqual(transferMovements.map((row) => [row.locationId, row.oldStockBaseQty, row.changeBaseQty, row.newStockBaseQty]), [
+        [locations.locations[0].id, 20, -7, 13],
+        [branch.id, 0, 7, 7],
+      ]);
 
       const mainInventory = assertSuccess(await ctx.get(`/api/stores/${locations.locations[0].id}/inventory`, { token: auth.accessToken }));
       const branchInventory = assertSuccess(await ctx.get(`/api/stores/${branch.id}/inventory`, { token: auth.accessToken }));
@@ -104,6 +115,25 @@ if (ctx.skip) {
       assert.equal(branchCatalog.find((row) => row.id === product.id).stockBaseQty, 7, "branch catalog must show branch stock instead of company stock");
       assert.equal(branchCatalog.find((row) => row.id === product.id).inventoryLocationId, branch.id);
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 20, "a transfer must not change company-wide stock");
+
+      const balanceRule = inventoryRules.find((rule) => rule.ruleCode === "STOCK_BALANCE_LEDGER_MISMATCH");
+      const balancedVerdict = balanceRule.evaluate({
+        product: { stockBaseQty: 20, baseUnit: "piece" },
+        movements: transferMovements,
+        locationStocks: [{ locationId: branch.id, stockBaseQty: 7 }],
+        primaryLocationId: locations.locations[0].id,
+        inTransitBaseQty: 0,
+      });
+      assert.equal(balancedVerdict, null, "multi-location stock should reconcile by location");
+      const driftVerdict = balanceRule.evaluate({
+        product: { stockBaseQty: 20, baseUnit: "piece" },
+        movements: transferMovements,
+        locationStocks: [{ locationId: branch.id, stockBaseQty: 6 }],
+        primaryLocationId: locations.locations[0].id,
+        inTransitBaseQty: 0,
+      });
+      assert.equal(driftVerdict.triggered, true, "a branch cache drift must no longer be silently skipped");
+      assert.equal(driftVerdict.details.locationMismatches.length, 2);
 
       const overdraw = assertFailure(await ctx.post("/api/stores/transfers", {
         fromLocationId: branch.id,
@@ -183,6 +213,7 @@ if (ctx.skip) {
       assert.equal((await ctx.db.stockTransfer.findUniqueOrThrow({ where: { id: transfer.id } })).status, "in_transit");
       assert.equal((await ctx.db.stockTransferItem.findUniqueOrThrow({ where: { id: riceLine.id } })).receivedBaseQty, 0);
       assert.equal(await ctx.db.locationStock.count({ where: { shopId: tenant.shop.id, locationId: branch.id } }), 0);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, sourceId: transfer.id, action: "transfer_in" } }), 0, "failed receipt audit must roll back receipt ledger rows");
 
       const partial = assertSuccess(await ctx.post(`/api/stores/transfers/${transfer.id}/receive`, {
         ...partialReceiptPayload,
@@ -213,6 +244,13 @@ if (ctx.skip) {
       const finalBranch = assertSuccess(await ctx.get(`/api/stores/${branch.id}/inventory`, { token: auth.accessToken }));
       assert.equal(finalBranch.products.find((row) => row.id === rice.id).stockBaseQty, 7);
       assert.equal((await ctx.db.product.findUnique({ where: { id: rice.id } })).stockBaseQty, 20, "shipments never change company-wide stock");
+      const shipmentMovements = await ctx.db.stockLedger.findMany({
+        where: { shopId: tenant.shop.id, sourceType: "stock_transfer", sourceId: transfer.id },
+        orderBy: { createdAt: "asc" },
+      });
+      assert.equal(shipmentMovements.length, 5);
+      assert.deepEqual(shipmentMovements.map((row) => row.action), ["transfer_out", "transfer_out", "transfer_in", "transfer_in", "transfer_in"]);
+      assert.equal(shipmentMovements.every((row) => Math.abs((row.oldStockBaseQty + row.changeBaseQty) - row.newStockBaseQty) < 0.0001), true);
 
       const cancellable = assertSuccess(await ctx.post("/api/stores/transfers", {
         fromLocationId: primary.id,
@@ -239,6 +277,7 @@ if (ctx.skip) {
       }
       assert.equal(assertFailure(failedStoreAction, 503).code, "STORE_AUDIT_WRITE_FAILED");
       assert.equal((await ctx.db.stockTransfer.findUniqueOrThrow({ where: { id: cancellable.id } })).status, "in_transit");
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, sourceId: cancellable.id, action: "transfer_cancel_reversal" } }), 0, "failed cancellation audit must roll back reversal rows");
       const afterFailedCancel = assertSuccess(await ctx.get(`/api/stores/${primary.id}/inventory`, { token: auth.accessToken }));
       assert.equal(afterFailedCancel.products.find((row) => row.id === rice.id).stockBaseQty, 11, "failed cancellation audit must leave the reservation in transit");
 
@@ -247,6 +286,12 @@ if (ctx.skip) {
         ownerPin: tenant.ownerPin,
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       assert.equal(cancelled.status, "cancelled");
+      const cancellationMovements = await ctx.db.stockLedger.findMany({
+        where: { shopId: tenant.shop.id, sourceType: "stock_transfer", sourceId: cancellable.id },
+        orderBy: { createdAt: "asc" },
+      });
+      assert.deepEqual(cancellationMovements.map((row) => row.action), ["transfer_out", "transfer_cancel_reversal"]);
+      assert.deepEqual(cancellationMovements.map((row) => row.changeBaseQty), [-2, 2]);
       const afterCancelMain = assertSuccess(await ctx.get(`/api/stores/${primary.id}/inventory`, { token: auth.accessToken }));
       assert.equal(afterCancelMain.products.find((row) => row.id === rice.id).stockBaseQty, 13, "cancelling returns the unreceived reservation to source");
 

@@ -28,6 +28,7 @@ const guardedScripts = [
   "test:audit-timeline",
   "test:incident-report",
   "test:activity",
+  "test:ai-safety",
   "test:packaging-db",
   "test:remote-support",
 ];
@@ -54,7 +55,7 @@ assert.match(certificationSourceDbStep, /PRISMA_CLIENT_VARIANT: "certification"/
 assert.match(certification, /id: "backend-tests"[\s\S]*?PRISMA_CLIENT_VARIANT: "certification"[\s\S]*?SKIP_PRISMA_GENERATE: "true"/, "certification must reuse the dedicated client prepared by backend-source-db");
 
 for (const [name, command] of Object.entries(pkg.scripts)) {
-  if (/node tests\/(activity-personalization|audit-timeline|device-health|diagnostics-error-store|incident-report|packaging-mode-guard|per-pack-(?:low-stock|return|stock-in|stock-out|sync-stock)|remote-support(?:-http|-playbooks|-settings)?|sync-diagnostics)\.examples\.js/.test(command)) {
+  if (/node tests\/(activity-personalization|ai-agent-(?:bill-items|pack-sizes|tools)|audit-timeline|device-health|diagnostics-error-store|incident-report|packaging-mode-guard|per-pack-(?:low-stock|return|stock-in|stock-out|sync-stock)|remote-support(?:-http|-playbooks|-settings)?|sync-diagnostics)\.examples\.js/.test(command)) {
     assert.fail(`${name} bypasses the guarded DB example runner`);
   }
 }

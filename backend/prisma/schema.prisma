@@ -1287,9 +1287,39 @@ model StockTransferItem {
   transfer    StockTransfer       @relation(fields: [transferId], references: [id], onDelete: Cascade)
   product     Product             @relation(fields: [productId], references: [id])
   sellingUnit ProductSellingUnit? @relation(fields: [sellingUnitId], references: [id], onDelete: SetNull)
+  lotAllocations StockTransferLotAllocation[]
 
   @@unique([transferId, productId, sellingUnitId])
   @@index([productId])
+}
+
+// Exact batch/expiry quantities placed on a branch-transfer shipment. The source
+// lot is reduced at dispatch; receivedBaseQty advances with partial receipts, so
+// cancellation can return only the still-in-transit balance to the exact lot.
+model StockTransferLotAllocation {
+  id                   String   @id @default(cuid())
+  transferItemId       String
+  sourceInventoryLotId String
+  sellingUnitId        String?
+  batchNumber          String
+  manufacturedOn       DateTime?
+  expiresOn            DateTime
+  quantityBaseQty      Float
+  receivedBaseQty      Float    @default(0)
+  costPerRateUnit      Float
+  costPerRateUnitPaise BigInt?
+  mrp                  Float?
+  mrpPaise             BigInt?
+  sourceStatus         String   @default("active")
+  sourceNote           String?
+  createdAt            DateTime @default(now())
+
+  transferItem      StockTransferItem @relation(fields: [transferItemId], references: [id], onDelete: Cascade)
+  sourceInventoryLot InventoryLot      @relation(fields: [sourceInventoryLotId], references: [id], onDelete: Restrict)
+
+  @@unique([transferItemId, sourceInventoryLotId])
+  @@index([sourceInventoryLotId])
+  @@index([transferItemId, expiresOn])
 }
 
 model TransferDocumentCounter {
@@ -1898,6 +1928,7 @@ model InventoryLot {
   product             Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
   purchaseReceiptItem PurchaseReceiptItem?    @relation(fields: [purchaseReceiptItemId], references: [id], onDelete: SetNull)
   allocations         BillItemLotAllocation[]
+  transferAllocations StockTransferLotAllocation[]
 
   @@unique([shopId, locationId, productId, batchNumber, expiresOn])
   @@index([shopId, locationId, status, expiresOn])

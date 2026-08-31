@@ -1,8 +1,8 @@
-import bcrypt from "bcryptjs";
 import { z } from "zod";
 import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
+import { verifyOwnerPinProof } from "../../middleware/permissions.js";
 import { confirmBillSchema } from "../bills/bills.schema.js";
 import { assertSensitiveBillReason, deriveSensitiveBillActions } from "../bills/bill-sensitive-approval.js";
 import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
@@ -4219,25 +4219,14 @@ function structuredCloneSafe(value) {
 }
 
 async function assertOwnerPermission(shopId, user, ownerPin) {
-  if (!env.OWNER_PIN_REQUIRED && user?.role === "owner") return;
-
-  if (!ownerPin) {
-    throw new AppError("Owner PIN required for this synced action", 403);
-  }
-  if (!/^\d{4}$/.test(ownerPin)) {
-    throw new AppError("Owner PIN must be exactly 4 digits", 400);
-  }
-
-  const owner = await db.user.findFirst({
-    where: { shopId, role: "owner" },
-    select: { pinHash: true },
+  return verifyOwnerPinProof({
+    shopId,
+    user,
+    ownerPin,
+    route: "/api/sync/push",
+    method: "POST",
+    metadata: { channel: "offline_sync" },
   });
-
-  if (!owner) throw new AppError("Owner not found", 404);
-  if (!owner.pinHash) throw new AppError("Owner PIN not set yet", 400);
-
-  const ok = await bcrypt.compare(ownerPin, owner.pinHash);
-  if (!ok) throw new AppError("Wrong owner PIN", 403);
 }
 
 function assertProductManagementPermission(user) {
