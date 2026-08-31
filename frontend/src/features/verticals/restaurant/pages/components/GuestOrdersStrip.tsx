@@ -96,7 +96,7 @@ export function GuestOrdersStrip({ onAccepted, readOnly = false }: { onAccepted?
         title: `Added to ${table.name}`,
         description: result.skipped.length > 0
           ? `${result.added} item${result.added === 1 ? "" : "s"} added. Not in your catalogue: ${result.skipped.join(", ")}.`
-          : `${result.added} item${result.added === 1 ? "" : "s"} are on the table's bill. Fire them from the Tables screen.`,
+          : `${result.added} item${result.added === 1 ? " is" : "s are"} on the table's bill. Fire from the Tables screen.`,
       });
     } catch (err) {
       toast({

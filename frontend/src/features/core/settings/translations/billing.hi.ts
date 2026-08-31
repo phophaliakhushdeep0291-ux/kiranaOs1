@@ -11,6 +11,8 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.openBills.new": "नया {bill}",
 
   "billing.cart.empty": "कार्ट खाली है",
+  "billing.cart.itemCountOne": "{count} चीज़",
+  "billing.cart.itemCountMany": "{count} चीज़ें",
   "billing.cart.emptyHint": "बाईं तरफ से {items} चुनकर जोड़ें",
   "billing.cart.sellingUnitFor": "{name} की बिक्री यूनिट",
   "billing.cart.guestItemProtected": "स्वीकृत QR आइटम · मूल मात्रा और हिस्सा सुरक्षित है",

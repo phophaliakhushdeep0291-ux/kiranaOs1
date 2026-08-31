@@ -14,6 +14,8 @@ export const billingEn = {
 
   // Cart
   "billing.cart.empty": "Cart is empty",
+  "billing.cart.itemCountOne": "{count} item",
+  "billing.cart.itemCountMany": "{count} items",
   "billing.cart.emptyHint": "Click {items} on the left to add",
   "billing.cart.sellingUnitFor": "Selling unit for {name}",
   "billing.cart.guestItemProtected": "Accepted QR item · original quantity and portion protected",

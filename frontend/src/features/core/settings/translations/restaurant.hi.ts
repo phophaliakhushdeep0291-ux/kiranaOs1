@@ -200,6 +200,7 @@ export const restaurantHi: { [K in keyof typeof restaurantEn]: string } = {
   "restaurant.tables.kitchen": "किचन",
   "restaurant.tables.seats": "{count} सीटें",
   "restaurant.tables.toFire": "{count} भेजने बाकी",
+  "restaurant.tables.moreLines": "+{count} और",
   "restaurant.tables.kitchenHasIt": "किचन के पास है",
   "restaurant.tables.fire": "{count} भेजें",
   "restaurant.kitchen.loading": "पास लोड हो रहा है…",

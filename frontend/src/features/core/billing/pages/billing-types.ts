@@ -130,6 +130,17 @@ export interface AppliedOffer {
 export interface BillingDraft {
   /** Stable id of the bill currently in the workspace (for the open-bills switcher). */
   activeBillId?: string;
+  /**
+   * The table this bill is the running tab for, when it is one.
+   *
+   * A table's tab is not a bill standing at the counter: it belongs to the floor
+   * screen until somebody asks to settle it, so the open-bills strip leaves seated
+   * tables out. Billing itself never interprets this — it only has to carry it
+   * through parking, switching and restoring, because the floor screen reads it
+   * back. It lives on the draft rather than only on HeldBill because the workspace
+   * is rebuilt field by field on every save, which is where it used to be lost.
+   */
+  tableId?: string;
   /** When this bill was loaded from a customer QR order, its id — so finalizing marks it fulfilled. */
   sourceOrderId?: string;
   /** Canonical product/quantity signature of the online order imported into this draft. */

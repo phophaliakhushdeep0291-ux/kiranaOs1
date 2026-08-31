@@ -198,6 +198,7 @@ export const restaurantEn = {
   "restaurant.tables.kitchen": "Kitchen",
   "restaurant.tables.seats": "{count} seats",
   "restaurant.tables.toFire": "{count} to fire",
+  "restaurant.tables.moreLines": "+{count} more",
   "restaurant.tables.kitchenHasIt": "kitchen has it",
   "restaurant.tables.fire": "Fire {count}",
   "restaurant.kitchen.loading": "Loading the pass…",
