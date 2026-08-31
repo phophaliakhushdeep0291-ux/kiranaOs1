@@ -407,16 +407,88 @@ export async function listSafeDevices(shopId, { currentDeviceId = null, client =
   return rows.map((device) => serializeDevice(device, currentDeviceId));
 }
 
+/**
+ * Who is actually signed in, keyed by device.
+ *
+ * "Signed in" is a live Session row and nothing else: not revoked, not expired,
+ * and bound to a device. A device's `status` cannot answer this — "active" only
+ * means the device holds a licence slot, which a device whose user logged out
+ * hours ago still does.
+ *
+ * A device can carry more than one session (owner and staff sharing a counter
+ * tablet), so every signed-in user is named rather than just the newest.
+ */
+async function signedInByDevice(shopId, client = db) {
+  const sessions = await client.session.findMany({
+    where: { shopId, revokedAt: null, expiresAt: { gt: new Date() }, deviceId: { not: null } },
+    select: {
+      deviceId: true,
+      userId: true,
+      lastUsedAt: true,
+      createdAt: true,
+      user: { select: { id: true, name: true, role: true } },
+    },
+    orderBy: [{ lastUsedAt: "desc" }, { createdAt: "desc" }],
+  });
+
+  const byDevice = new Map();
+  for (const session of sessions) {
+    const entry = byDevice.get(session.deviceId) ?? { users: [], sessionCount: 0, lastUsedAt: null };
+    entry.sessionCount += 1;
+    if (!entry.users.some((user) => user.id === session.userId)) {
+      entry.users.push({ id: session.userId, name: session.user?.name ?? null, role: session.user?.role ?? null });
+    }
+    const seenAt = session.lastUsedAt ?? session.createdAt;
+    if (!entry.lastUsedAt || new Date(seenAt) > new Date(entry.lastUsedAt)) entry.lastUsedAt = seenAt;
+    byDevice.set(session.deviceId, entry);
+  }
+  return byDevice;
+}
+
+/**
+ * The devices screen.
+ *
+ * It previously listed every Device row this shop had ever created — removed
+ * ones, blocked ones, and ones whose user logged out weeks ago — all rendered
+ * identically to a device someone is using right now. `signedIn` is derived
+ * from live sessions so the screen can lead with what is actually in use.
+ *
+ * The rest are still returned, and that is deliberate. A logged-out device keeps
+ * occupying a paid slot until it is removed, so hiding it outright would leave a
+ * shop at its device limit with nothing on screen to remove. The screen shows
+ * them separately instead of pretending they are gone.
+ */
 export async function getDeviceManagementSnapshot(shopId, currentDeviceId = null) {
   const effective = await getEffectivePlan(shopId);
   const deviceLimit = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
-  const devices = await listSafeDevices(shopId, { currentDeviceId });
+  const [rows, sessionsByDevice] = await Promise.all([
+    listSafeDevices(shopId, { currentDeviceId }),
+    signedInByDevice(shopId),
+  ]);
+
+  const devices = rows.map((device) => {
+    const live = sessionsByDevice.get(device.deviceId);
+    return {
+      ...device,
+      signedIn: Boolean(live),
+      signedInUsers: live?.users ?? [],
+      signedInSessionCount: live?.sessionCount ?? 0,
+      // The last time a live session on this device was actually used — a
+      // truer "still in use" signal than a heartbeat the browser sends while
+      // nobody is logged in.
+      sessionLastUsedAt: live?.lastUsedAt ?? null,
+    };
+  });
+
+  // Slots are a licence question, not a session one: a logged-out device still
+  // costs a slot. Counted the way it always was so the plan maths is unchanged.
   const devicesUsed = devices.filter((device) => deviceStatusOccupiesSlot(device.status)).length;
   return {
     plan: { code: effective.planCode, name: effective.plan?.name ?? effective.planCode, deviceLimit },
     devicesUsed,
     remainingSlots: Math.max(0, deviceLimit - devicesUsed),
     overLimit: devicesUsed > deviceLimit,
+    signedInCount: devices.filter((device) => device.signedIn).length,
     devices,
   };
 }

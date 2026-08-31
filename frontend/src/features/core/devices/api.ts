@@ -26,6 +26,16 @@ export interface DeviceDto {
   isCurrentDevice?: boolean;
   isOnline?: boolean;
   activity?: "online" | "recent" | "offline";
+  /**
+   * Someone has a live login session on this device right now.
+   *
+   * Not the same as `status: "active"`, which only means the device still holds
+   * a licence slot — a device whose user logged out weeks ago is still "active".
+   */
+  signedIn?: boolean;
+  signedInUsers?: SignedInUser[];
+  signedInSessionCount?: number;
+  sessionLastUsedAt?: string | null;
 }
 
 export interface DeviceManagementSnapshot {
@@ -33,7 +43,16 @@ export interface DeviceManagementSnapshot {
   devicesUsed: number;
   remainingSlots: number;
   overLimit: boolean;
+  /** Devices with a live login session right now. */
+  signedInCount?: number;
   devices: DeviceDto[];
+}
+
+/** Who is signed in on a device, as the server derives it from live sessions. */
+export interface SignedInUser {
+  id: string;
+  name?: string | null;
+  role?: string | null;
 }
 
 export interface ActiveDeviceDto {

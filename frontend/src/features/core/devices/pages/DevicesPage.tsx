@@ -229,7 +229,26 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
     }
   }
 
-  const devices = data?.devices ?? [];
+  const allDevices = data?.devices ?? [];
+  /**
+   * Signed in right now, and everything else.
+   *
+   * The screen used to render every Device row this shop had ever created —
+   * removed, blocked, and logged-out devices sitting alongside the one in use,
+   * styled identically. `signedIn` comes from live sessions, so what is in use
+   * leads.
+   *
+   * The rest are not hidden: a logged-out device keeps occupying a paid slot
+   * until it is removed, so dropping it from the page would leave a shop at its
+   * device limit with nothing on screen to remove.
+   *
+   * An older server does not send `signedIn` at all. Treating undefined as
+   * "signed in" keeps the page behaving exactly as it does today against one,
+   * rather than showing an alarming empty list.
+   */
+  const isSignedIn = (device: DeviceDto) => device.signedIn !== false;
+  const devices = allDevices.filter(isSignedIn);
+  const notSignedIn = allDevices.filter((device) => !isSignedIn(device));
   const overLimitBy = Math.max(0, (data?.devicesUsed ?? 0) - (data?.plan.deviceLimit ?? 0));
   const actionIsCurrent = Boolean(actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId));
   const actionDeviceName = actionTarget ? deviceNameOf(actionTarget, actionIsCurrent) : "device";
@@ -308,17 +327,17 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
       <section className="overflow-hidden rounded-lg border border-[#e1e8f2] bg-white">
         <div className="flex flex-col gap-2 border-b border-[#e8edf4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-black text-[var(--brand-ink)]">Registered devices</h2>
-            <p className="text-sm text-[#60708e]">{canManageDevices ? "Logging out keeps a slot. Removing a device frees it and revokes access immediately." : "Only owners and authorized administrators can rename, block, or remove shop devices."}</p>
+            <h2 className="font-black text-[var(--brand-ink)]">Signed in now</h2>
+            <p className="text-sm text-[#60708e]">{canManageDevices ? "Devices with someone logged in right now. Logging out keeps a slot. Removing a device frees it and revokes access immediately." : "Only owners and authorized administrators can rename, block, or remove shop devices."}</p>
           </div>
-          <Badge variant="outline" className="w-fit">{devices.length} total</Badge>
+          <Badge variant="outline" className="w-fit">{devices.length} signed in</Badge>
         </div>
 
         <div className="divide-y divide-[#edf1f6]">
           {loading ? (
             <LoadingSkeleton variant="list" rows={3} className="p-4" />
           ) : devices.length === 0 ? (
-            <div className="p-8 text-center text-sm text-[#60708e]">No registered devices were returned by the shop account.</div>
+            <div className="p-8 text-center text-sm text-[#60708e]">Nobody is signed in on any device right now.</div>
           ) : devices.map((device) => {
             const id = deviceIdOf(device);
             const status = statusOf(device);
@@ -344,7 +363,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-xs xl:grid-cols-1">
-                  <div><p className="font-semibold text-[#8a97ab]">Last user</p><p className="mt-1 font-bold text-[var(--brand-ink)]">{device.lastUserName || "Not available"}</p></div>
+                  <div><p className="font-semibold text-[#8a97ab]">Signed in</p><p className="mt-1 font-bold text-[var(--brand-ink)]">{/* Who holds a live session, not who happened to log in last: on a shared counter tablet those differ. */}{device.signedInUsers?.length ? device.signedInUsers.map((user) => user.name || user.role || "Unknown").join(", ") : device.lastUserName || "Not available"}</p></div>
                   <div className="flex items-center gap-1.5 font-bold text-[var(--brand-ink)]">{device.activity === "online" ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5 text-[#94a3b8]" />}Last sync {relative(device.lastSyncAt)}</div>
                 </div>
 
@@ -364,6 +383,43 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
           })}
         </div>
       </section>
+
+      {notSignedIn.length > 0 ? (
+        <section className="overflow-hidden rounded-lg border border-[#e1e8f2] bg-white">
+          <div className="flex flex-col gap-2 border-b border-[#e8edf4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-black text-[var(--brand-ink)]">Registered, nobody signed in</h2>
+              {/* Kept on the page on purpose: these still cost slots, and this is
+                  the only place to remove one and free a slot. */}
+              <p className="text-sm text-[#60708e]">These devices are not in use, but still hold a device slot until removed.</p>
+            </div>
+            <Badge variant="outline" className="w-fit">{notSignedIn.length}</Badge>
+          </div>
+          <div className="divide-y divide-[#edf1f6]">
+            {notSignedIn.map((device) => {
+              const id = deviceIdOf(device);
+              const status = statusOf(device);
+              return (
+                <article key={device.id || id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                  <div className="flex min-w-0 gap-3">
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#f1f5f9] text-[#64748b]"><DeviceIcon device={device} /></div>
+                    <div className="min-w-0">
+                      <p className="truncate font-bold text-[var(--brand-ink)]">{device.deviceName || device.device_name || "Unnamed device"}</p>
+                      <p className="mt-0.5 truncate text-xs text-[#60708e]">Last seen {relative(device.lastSeenAt)}{device.lastUserName ? ` · last used by ${device.lastUserName}` : ""}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={statusStyle(status)}>{status === "revoked" ? "removed" : status}</Badge>
+                    {canManageDevices ? (
+                      <Button size="icon" variant="outline" title="Remove device" className="text-rose-600 hover:text-rose-700" onClick={() => openProtectedAction(device, "remove")} disabled={offlineFallback || status === "revoked"}><Trash2 className="h-4 w-4" /></Button>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <Alert className="border-emerald-200 bg-emerald-50 text-emerald-950">
         <ShieldCheck className="h-4 w-4" />
