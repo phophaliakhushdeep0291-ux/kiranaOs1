@@ -28,7 +28,7 @@ export function isScaleUnit(unit: string): boolean {
 
 const UNIT_TO_BASE_UNIT: Record<string, string> = {
   kg: "gram", gram: "gram", g: "gram",
-  litre: "ml", liter: "ml", ml: "ml",
+  litre: "ml", liter: "ml", ltr: "ml", l: "ml", ml: "ml",
   piece: "piece", packet: "piece", pack: "piece", pouch: "piece", box: "piece", carton: "piece",
   bottle: "piece", jar: "piece", can: "piece", sachet: "piece",
   dozen: "piece", bundle: "bundle", roll: "roll", sheet: "sheet",
@@ -41,7 +41,7 @@ const UNIT_TO_BASE_UNIT: Record<string, string> = {
 
 const UNIT_FACTOR_TO_BASE: Record<string, number> = {
   kg: 1000, gram: 1, g: 1,
-  litre: 1000, liter: 1000, ml: 1,
+  litre: 1000, liter: 1000, ltr: 1000, l: 1000, ml: 1,
   piece: 1, packet: 1, pack: 1, pouch: 1, box: 1, carton: 1,
   bottle: 1, jar: 1, can: 1, sachet: 1,
   dozen: 12, bundle: 1, roll: 1, sheet: 1,

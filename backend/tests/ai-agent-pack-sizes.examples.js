@@ -40,11 +40,24 @@ for (const [unit, factor] of Object.entries(frontendFactors)) {
     `pack factor for "${unit}" has drifted from the till: ${UNIT_FACTOR_TO_BASE[unit]} here, ${factor} there`,
   );
 }
+// Both directions. Checking only one let a measure this side knew and the till
+// did not slip through, which is the same divergence wearing the other hat.
+assert.deepEqual(
+  Object.keys(UNIT_FACTOR_TO_BASE).sort(), Object.keys(frontendFactors).sort(),
+  "the two pack tables must know exactly the same measures",
+);
 ok(`the pack factor table matches the till's, all ${Object.keys(frontendFactors).length} measures`);
 
 assert.equal(sellingUnitConversion(500, "gram"), 500);
 assert.equal(sellingUnitConversion(1, "kg"), 1000, "a 1 kg pack is 1000 base grams");
 assert.equal(sellingUnitConversion(1, "litre"), 1000);
+// "ltr" is what this app actually writes: the AI command schema enumerates it and
+// the voice parsers normalise to it. It was missing from both tables and from
+// legacySellingUnit, so an ltr/ml product's loose unit converted at 1 — selling
+// one litre took one millilitre off the shelf. Found by building a shop and
+// adding an oil to it.
+assert.equal(sellingUnitConversion(1, "ltr"), 1000, "a litre written as ltr is still 1000 ml");
+assert.equal(sellingUnitConversion(1, "l"), 1000);
 assert.equal(sellingUnitConversion(1, "dozen"), 12, "a dozen is twelve, not one");
 ok("pack conversions are computed, not guessed");
 
@@ -175,6 +188,25 @@ assert.equal(afterLoose.sellingUnits.find((u) => u.isDefault)?.unitCode, "kg", "
 assert.equal(afterLoose.sellingUnits.find((u) => u.unitCode === "kg").conversionToBase, 1000, "a kg of a gram-counted product is 1000");
 assert.equal(afterLoose.sellingUnits.find((u) => u.unitCode === "packet-5-kg").conversionToBase, 5000, "a 5 kg packet is 5000 grams");
 ok("adding a pack to a loose-sold product keeps it sellable loose, at its own price");
+
+
+/* ------------------------------------------- the app's own litre abbreviation */
+
+const oil = await db.product.create({
+  data: {
+    shopId: shop.id, name: "Sarson Tel", baseUnit: "ml", rateUnit: "ltr",
+    defaultPricePerRateUnit: 155, stockBaseQty: 20000,
+  },
+});
+await setPack.handler({ productId: oil.id, packSize: 1, packUnit: "litre", price: 158, packType: "bottle" }, ctx);
+const afterOil = await getProduct(shop.id, oil.id);
+
+const looseLitre = afterOil.sellingUnits.find((u) => u.unitCode === "ltr");
+assert.ok(looseLitre, "the loose litre unit is materialised alongside the bottle");
+assert.equal(looseLitre.conversionToBase, 1000, "one ltr of an ml-counted product is 1000, not 1");
+assert.equal(afterOil.sellingUnits.find((u) => u.unitCode === "bottle-1-litre").conversionToBase, 1000);
+assert.equal(afterOil.rateUnit, "ltr", "and the product is still priced per litre");
+ok("a product written in ltr converts at 1000, not 1");
 
 await db.$disconnect();
 console.log("ai-agent-pack-sizes.examples.js OK");
