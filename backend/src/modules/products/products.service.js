@@ -1274,7 +1274,11 @@ export function legacySellingUnit(product) {
   const baseUnit = compactText(product.baseUnit) ?? unitType;
   let conversionToBase = 1;
   if (["kg", "kilogram"].includes(unitType.toLowerCase()) && ["g", "gram"].includes(baseUnit.toLowerCase())) conversionToBase = 1000;
-  if (["litre", "liter", "l"].includes(unitType.toLowerCase()) && baseUnit.toLowerCase() === "ml") conversionToBase = 1000;
+  // "ltr" is what this app actually writes — the AI command schema enumerates it
+  // and the voice parsers normalise to it — so leaving it out gave an ltr/ml
+  // product a loose unit converting at 1, and selling one litre took 1 ml off
+  // the shelf.
+  if (["litre", "liter", "ltr", "l"].includes(unitType.toLowerCase()) && baseUnit.toLowerCase() === "ml") conversionToBase = 1000;
   if (unitType.toLowerCase() === "dozen" && baseUnit.toLowerCase() === "piece") conversionToBase = 12;
   return {
     name: unitType,
