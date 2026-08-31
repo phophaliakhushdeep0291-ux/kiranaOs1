@@ -528,16 +528,18 @@ function ExpensePanel({ open, editing, categories, saving, width, onResizeStart,
     onSubmit(data, editing ? ownerPin : undefined);
   }
 
+  const panelTitle = editing ? "Edit Expense" : "Add New Expense";
+
   return (
     <aside
       style={{ width }}
       className={`app-slide-panel fixed right-0 top-0 z-[80] flex h-[100dvh] w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
-      role="dialog" aria-label={editing ? "Edit expense" : "Add new expense"} aria-hidden={!open}
+      role="dialog" aria-label={panelTitle} aria-hidden={!open}
     >
       <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{editing ? "Edit Expense" : "Add New Expense"}</h2>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{panelTitle}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{editing ? "Update this business expense" : "Record a new business expense"}</p>
         </div>
         <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
