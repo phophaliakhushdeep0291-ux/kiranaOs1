@@ -46,6 +46,14 @@ assert.equal(getPlanConfigForBusinessType("starter", "restaurant").priceYearlyPa
 assert.equal(getPlanConfigForBusinessType("growth", "restaurant").priceYearlyPaise, 1499000);
 assert.equal(getPlanConfigForBusinessType("growth", "auto_parts").priceYearlyPaise, 899900);
 assert.equal(getPlanConfigForBusinessType("starter", "kirana").priceYearlyPaise, 99900);
+assert.equal(getPlanConfigForBusinessType("growth", "kirana").priceYearlyPaise, 299900);
+assert.equal(getPlanConfigForBusinessType("pro", "kirana").priceYearlyPaise, 599900);
+assert.equal(getPlanConfigForBusinessType("starter", "kirana").maxDevices, 1);
+assert.equal(getPlanConfigForBusinessType("growth", "kirana").maxDevices, 3);
+assert.ok(!getPlanConfigForBusinessType("starter", "kirana").features.includes("purchase_entry"));
+assert.ok(getPlanConfigForBusinessType("growth", "kirana").features.includes("purchase_entry"));
+assert.ok(!getPlanConfigForBusinessType("growth", "kirana").features.includes("dynamic_customer_pricing"));
+assert.ok(getPlanConfigForBusinessType("pro", "kirana").features.includes("dynamic_customer_pricing"));
 assert.equal(isOnboardingServiceAvailable("kirana"), false);
 assert.equal(isOnboardingServiceAvailable("restaurant"), true);
 

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const routes = readFileSync(new URL("../app/routes.tsx", import.meta.url), "utf8");
+const viteConfig = readFileSync(new URL("../../vite.config.ts", import.meta.url), "utf8");
+const criticalEntries = viteConfig.match(/const criticalEntries = \[([\s\S]*?)\n\s*\];/)?.[1] ?? "";
 
 describe("offline route capability contract", () => {
   it("keeps an offline operator on cloud-managed routes with an explicit explanation", () => {
@@ -21,6 +23,21 @@ describe("offline route capability contract", () => {
       "ActivityInsightsPage", "AssuranceDashboardPage", "AssuranceFindingDetailPage",
     ]) {
       expect(routes).toMatch(new RegExp(`ProtectedRoute component=\\{${page}\\}[^>]*onlineOnly`));
+    }
+  });
+
+  it("does not precache cloud-only page chunks that the offline route guard never mounts", () => {
+    for (const page of [
+      "LoyaltyPage.tsx", "GiftCardsPage.tsx", "ChannelSettlementsPage.tsx",
+      "DevicesSettingsPage.tsx", "NotificationsSettingsPage.tsx",
+      "IntegrationsSettingsPage.tsx", "PlansPage.tsx", "SubscriptionPage.tsx",
+      "DevicesPage.tsx", "PlatformAdminPage.tsx", "RemoteSupportConsolePage.tsx",
+      "AskArthaPage.tsx", "ActivityInsightsPage.tsx", "AssuranceDashboardPage.tsx",
+      "FindingsPage.tsx", "FindingDetailPage.tsx", "EvidenceRequestsPage.tsx",
+      "AuditRunsPage.tsx", "AuditRulesPage.tsx", "ReviewQueuePage.tsx",
+      "AssuranceReportPage.tsx", "CasesPage.tsx",
+    ]) {
+      expect(criticalEntries).not.toContain(page);
     }
   });
 

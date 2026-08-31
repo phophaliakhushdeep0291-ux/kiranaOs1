@@ -52,7 +52,7 @@ export default function PlansPage() {
       <div className="flex justify-center">
         <div className="inline-flex rounded-lg border bg-muted/40 p-1" aria-label="Billing cycle">
           <Button size="sm" variant={billingCycle === "monthly" ? "default" : "ghost"} onClick={() => setBillingCycle("monthly")}>Monthly</Button>
-          <Button size="sm" variant={billingCycle === "yearly" ? "default" : "ghost"} onClick={() => setBillingCycle("yearly")}>Annual · save up to 28%</Button>
+          <Button size="sm" variant={billingCycle === "yearly" ? "default" : "ghost"} onClick={() => setBillingCycle("yearly")}>Annual · save up to {businessType === "kirana" ? "17%" : "30%"}</Button>
         </div>
       </div>
 

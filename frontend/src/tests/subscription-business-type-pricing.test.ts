@@ -3,7 +3,7 @@ import { getPlanForBusinessType } from "@/features/core/subscription/plans";
 
 describe("shop-type subscription pricing", () => {
   it.each([
-    ["kirana", 99, 599, 999], ["stationery", 249, 599, 999], ["other", 249, 599, 999],
+    ["kirana", 99, 299, 599], ["stationery", 249, 599, 999], ["other", 249, 599, 999],
     ["clothing", 349, 699, 1099], ["footwear", 349, 699, 1099], ["cosmetics", 349, 699, 1099],
     ["auto_parts", 399, 999, 1199], ["electronics", 399, 799, 1199], ["furniture", 399, 799, 1199],
     ["pharmacy", 499, 899, 1299],
@@ -18,6 +18,8 @@ describe("shop-type subscription pricing", () => {
 
   it("uses the revenue-plan annual prices", () => {
     expect(getPlanForBusinessType("starter", "kirana").annualPrice).toBe(999);
+    expect(getPlanForBusinessType("growth", "kirana").annualPrice).toBe(2999);
+    expect(getPlanForBusinessType("pro", "kirana").annualPrice).toBe(5999);
     expect(getPlanForBusinessType("growth", "auto_parts").annualPrice).toBe(8999);
     expect(getPlanForBusinessType("starter", "restaurant").annualPrice).toBe(7990);
     expect(getPlanForBusinessType("growth", "restaurant").annualPrice).toBe(14990);

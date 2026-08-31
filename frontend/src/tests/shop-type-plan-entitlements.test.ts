@@ -18,7 +18,21 @@ describe("shop-type subscription entitlements", () => {
     expect(starter.features).toContain(SHOP_TYPE_ENTITLEMENTS_V1);
     expect(starter.features.every((feature) => growth.features.includes(feature))).toBe(true);
     expect(growth.features.every((feature) => business.features.includes(feature))).toBe(true);
-    expect(starter.bullets.length).toBeGreaterThan(PLAN_BASELINE_BULLET_COUNT);
+    expect(starter.bullets.length).toBeGreaterThanOrEqual(businessType === "kirana" ? 4 : PLAN_BASELINE_BULLET_COUNT + 1);
+  });
+
+  it("keeps the Kirana ladder aligned with its prices", () => {
+    const starter = getPlanForBusinessType("starter", "kirana");
+    const growth = getPlanForBusinessType("growth", "kirana");
+    const business = getPlanForBusinessType("pro", "kirana");
+
+    expect(starter).toMatchObject({ price: 99, annualPrice: 999, maxDevices: 1, maxStaff: 0 });
+    expect(growth).toMatchObject({ price: 299, annualPrice: 2999, maxDevices: 3, maxStaff: 3 });
+    expect(business).toMatchObject({ price: 599, annualPrice: 5999, maxStores: 3, maxDevices: 10, maxStaff: 10 });
+    expect(starter.features).not.toContain("purchase_entry");
+    expect(growth.features).toContain("purchase_entry");
+    expect(growth.features).not.toContain("dynamic_customer_pricing");
+    expect(business.features).toContain("dynamic_customer_pricing");
   });
 
   it("puts counter-critical workflows in Starter and operational extras in Growth", () => {

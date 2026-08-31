@@ -111,8 +111,8 @@ export function hasLegacyShopTypeFeatureAccess(features, featureName) {
 // Business inherits both and continues to carry multi-counter/multi-store scale.
 export const BUSINESS_TYPE_PLAN_FEATURES = Object.freeze({
   kirana: {
-    starter: ["batch_expiry"],
-    growth: ["advanced_inventory"],
+    starter: [],
+    growth: ["batch_expiry"],
   },
   clothing: {
     starter: ["product_variants"],
@@ -223,7 +223,7 @@ export const PLAN_CONFIGS = {
 // reviewed in the 2026-08-22 revenue plan. Existing subscriptions never read this matrix: their price and
 // feature snapshots remain authoritative until an explicit plan change.
 export const BUSINESS_TYPE_PLAN_PRICING = Object.freeze({
-  kirana:      { starter: [9900, 99900], growth: [59900, 499900], pro: [99900, 899900] },
+  kirana:      { starter: [9900, 99900], growth: [29900, 299900], pro: [59900, 599900] },
   stationery:  { starter: [24900, 249900], growth: [59900, 499900], pro: [99900, 899900] },
   other:       { starter: [24900, 249900], growth: [59900, 499900], pro: [99900, 899900] },
   clothing:    { starter: [34900, 349900], growth: [69900, 599900], pro: [109900, 999900] },
@@ -271,12 +271,31 @@ export function getPlanConfigForBusinessType(planCode = "starter", businessType 
   const vertical = BUSINESS_TYPE_PLAN_FEATURES[normalizedType];
   const starterEntitlements = vertical.starter;
   const growthEntitlements = planAtLeast(planCode, "growth") ? vertical.growth : [];
+  const kiranaStarter = [
+    "basic_billing", "rough_bill", "paid_udhar_bill", "customer_ledger", "record_payment",
+    "basic_products", "offline_billing", "seven_day_local_reports", "cloud_backup",
+    "basic_recycle_bin", "single_bill_whatsapp",
+  ];
+  const kiranaGrowth = [
+    ...kiranaStarter, "auto_two_way_sync", "supplier_entry", "purchase_entry", "stock_adjustment",
+    ...standardOnlyFeatures, "staff_login", "role_based_access", "batch_expiry",
+  ];
+  const kiranaFeatures = planCode === "starter"
+    ? kiranaStarter
+    : planCode === "growth"
+      ? kiranaGrowth
+      : [...kiranaGrowth, ...growthOnlyFeatures, ...proOnlyFeatures, "advanced_inventory"];
   return {
     ...base,
     name: BUSINESS_TYPE_PLAN_PRESENTATION[normalizedType]?.names?.[planCode] ?? base.name,
     priceMonthlyPaise: priceMonthlyPaise ?? base.priceMonthlyPaise,
     priceYearlyPaise: priceYearlyPaise ?? base.priceYearlyPaise,
-    features: [...new Set([...base.features, SHOP_TYPE_ENTITLEMENTS_V1, ...starterEntitlements, ...growthEntitlements])],
+    ...(normalizedType === "kirana" && planCode === "starter" ? { maxDevices: 1 } : {}),
+    ...(normalizedType === "kirana" && planCode === "growth" ? { maxDevices: 3, maxStaff: 3 } : {}),
+    ...(normalizedType === "kirana" && planCode === "pro" ? { maxStores: 3, maxDevices: 10, maxStaff: 10 } : {}),
+    features: [...new Set(normalizedType === "kirana"
+      ? [...kiranaFeatures, SHOP_TYPE_ENTITLEMENTS_V1]
+      : [...base.features, SHOP_TYPE_ENTITLEMENTS_V1, ...starterEntitlements, ...growthEntitlements])],
   };
 }
 

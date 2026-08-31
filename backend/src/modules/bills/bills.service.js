@@ -474,11 +474,17 @@ export async function confirmBill(shopId, body, actor = {}) {
           ? toBaseQty(item.quantity, item.enteredUnit, product.baseUnit)
         : item.quantity;
 
-      // Overselling is allowed (allowStockShortfall) for the live counter and offline sync alike:
-      // kirana stock counts drift, so a real sale must never be blocked for "0 stock" — the
-      // frontend warns, the sale goes through, and stock is driven negative to show the exact
-      // deficit for reconciliation (see decrementProductStockOrThrow). This hard rejection only
-      // fires for internal callers that opt out of shortfall (allowStockShortfall === false).
+      // Overselling is allowed for the live counter and offline sync alike: kirana
+      // stock counts drift, so a real sale must never be blocked for "0 stock" —
+      // the frontend warns, the sale goes through, and stock is driven negative to
+      // show the exact deficit for reconciliation (see decrementProductStockOrThrow).
+      //
+      // Note the direction: shortfall is opted INTO, not out of. Line 305 reads
+      // `actor?.allowStockShortfall === true`, so any caller that does not pass the
+      // flag gets this rejection. bills.controller.js and sync.service.js both pass
+      // it — removing it from either would start refusing ordinary counter sales of
+      // an under-counted item, which is the failure this comment previously implied
+      // was impossible.
       if (product && !allowStockShortfall) {
         const availableAtLocation = locationStockByProduct.get(product.id) ?? 0;
         if (availableAtLocation < qtyInBase) {

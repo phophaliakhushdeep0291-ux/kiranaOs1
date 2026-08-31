@@ -734,29 +734,35 @@ async function applyPerPackStockEditInTransaction(tx, {
 
   const previousByCode = new Map((product.sellingUnits ?? []).map((unit) => [unit.unitCode, unit]));
   const incomingByCode = new Map(normalizedUnits.map((unit) => [unit.unitCode, unit]));
-  for (const incoming of normalizedUnits) {
-    if (incoming.isActive === false && round2(Number(incoming.onHandQty ?? 0)) !== 0) {
-      throw new AppError(
-        `Count ${incoming.unitCode} to zero before disabling that pack.`,
-        409,
-        "PACKAGING_UNIT_HAS_STOCK",
-      );
-    }
-  }
-  for (const previous of product.sellingUnits ?? []) {
+
+  /**
+   * Removing a pack that still holds stock writes that stock off.
+   *
+   * This used to be refused outright (PACKAGING_UNIT_HAS_STOCK): the shopkeeper
+   * had to count the pack to zero, save, and only then remove it — two saves and
+   * a red error to stop selling a size. The refusal was protecting something
+   * real, though: perPackStockTotal is computed from the INCOMING units, so a
+   * removed pack silently lowers the product's stock, and without a ledger row
+   * that drop has no explanation and reconciliation fails.
+   *
+   * So the drop is recorded rather than forbidden. A removed or disabled pack
+   * becomes an explicit write-off to zero, with its own ledger row naming the
+   * pack and the amount, which is what "where did ten litres go?" needs six weeks
+   * later. An incoming row marked inactive is treated the same way, since
+   * perPackStockTotal already excludes it from the new total.
+   */
+  const isDroppedFromSale = (previous) => {
     const incoming = incomingByCode.get(previous.unitCode);
-    if ((!incoming || incoming.isActive === false) && round2(Number(previous.onHandQty ?? 0)) !== 0) {
-      throw new AppError(
-        `Count ${previous.unitCode} to zero before removing or disabling that pack.`,
-        409,
-        "PACKAGING_UNIT_HAS_STOCK",
-      );
-    }
-  }
+    return !incoming || incoming.isActive === false;
+  };
+
   const unitChanges = normalizedUnits.flatMap((unit) => {
     const previous = previousByCode.get(unit.unitCode);
     const oldQty = round2(Number(previous?.onHandQty ?? 0));
-    const newQty = round2(Number(unit.onHandQty ?? 0));
+    // A row saved as inactive sells nothing, so its new count is zero whatever
+    // the payload claims — otherwise it would be counted twice, once here and
+    // once as a write-off below.
+    const newQty = unit.isActive === false ? 0 : round2(Number(unit.onHandQty ?? 0));
     const deltaQty = round2(newQty - oldQty);
     const oldBaseQty = round2(
       oldQty * Number(previous?.conversionToBase ?? unit.conversionToBase ?? 0),
@@ -765,8 +771,27 @@ async function applyPerPackStockEditInTransaction(tx, {
     const baseDelta = round2(newBaseQty - oldBaseQty);
     return deltaQty === 0 && baseDelta === 0
       ? []
-      : [{ unit, oldQty, newQty, deltaQty, baseDelta }];
+      : [{ unit, oldQty, newQty, deltaQty, baseDelta, removed: unit.isActive === false }];
   });
+
+  // Packs the payload dropped entirely: they have no incoming row, so the loop
+  // above never sees them.
+  for (const previous of product.sellingUnits ?? []) {
+    if (previous.isActive === false) continue;
+    if (!isDroppedFromSale(previous)) continue;
+    if (incomingByCode.has(previous.unitCode)) continue; // handled above as an inactive row
+    const oldQty = round2(Number(previous.onHandQty ?? 0));
+    if (oldQty === 0) continue;
+    const oldBaseQty = round2(oldQty * Number(previous.conversionToBase ?? 0));
+    unitChanges.push({
+      unit: previous,
+      oldQty,
+      newQty: 0,
+      deltaQty: round2(-oldQty),
+      baseDelta: round2(-oldBaseQty),
+      removed: true,
+    });
+  }
   const globalDifference = round2(desiredTotal - Number(product.stockBaseQty ?? 0));
   if (!unitChanges.length && globalDifference === 0) return;
 
@@ -815,7 +840,9 @@ async function applyPerPackStockEditInTransaction(tx, {
         newStockBaseQty: nextTotal,
         sourceType: "product_per_pack_edit",
         sourceId: product.id,
-        note: `Pack count changed from ${change.oldQty} to ${change.newQty} for ${change.unit.unitCode}`,
+        note: change.removed
+          ? `Pack ${change.unit.unitCode} removed from sale; ${change.oldQty} written off`
+          : `Pack count changed from ${change.oldQty} to ${change.newQty} for ${change.unit.unitCode}`,
       },
     });
     runningTotal = nextTotal;
