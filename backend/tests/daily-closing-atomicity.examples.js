@@ -4,6 +4,7 @@ import {
   generateDailyClosingSnapshot,
   lockDailyClosingSnapshot,
   overrideRefreshDailyClosingSnapshot,
+  recordDailyClosingDrawerCount,
   unlockDailyClosingSnapshot,
 } from "../src/modules/reports/dailyClosingSnapshot.service.js";
 
@@ -26,6 +27,21 @@ try {
   const created = await generateDailyClosingSnapshot(shop.id, date, { storeId: location.id, source: "test" });
   assert.equal(created.snapshot.created, true);
   assert.equal(await db.auditLog.count({ where: { shopId: shop.id, action: "DAILY_CLOSING_SNAPSHOT_CREATED" } }), 1);
+
+  // Locking a day now requires the drawer to have been counted first, so that a
+  // sealed day always carries the shopkeeper's own declaration of the cash. Prove
+  // the gate, then satisfy it - the rest of this file is about whether the lock,
+  // override and unlock are atomic, which only starts once a lock is possible.
+  await expectFailure(
+    lockDailyClosingSnapshot(shop.id, date, null, location.id),
+    "DRAWER_COUNT_REQUIRED_BEFORE_LOCK",
+    "a day cannot be sealed before the cash in the drawer has been counted",
+  );
+  await recordDailyClosingDrawerCount(shop.id, date, {
+    storeId: location.id,
+    countedCashPaise: 0,
+    countedAt: new Date(`${date}T18:30:00.000Z`).toISOString(),
+  }, { userId: null });
 
   const locked = await lockDailyClosingSnapshot(shop.id, date, null, location.id);
   assert.ok(locked.snapshot.lockedAt);

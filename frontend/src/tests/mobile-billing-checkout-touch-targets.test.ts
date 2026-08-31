@@ -8,7 +8,13 @@ const payment = readFileSync("src/features/core/billing/pages/components/Billing
 describe("mobile billing checkout touch targets", () => {
   it("keeps portion, rate, discount, note, quantity and remove controls at least 44px", () => {
     expect(cart).toContain("grid-cols-[34px_minmax(0,1fr)_44px]");
-    expect(cart).toContain("sm:grid-cols-[34px_minmax(0,1fr)_134px_60px_44px]");
+    // A CONTAINER query, not `sm:`. The cart sits in a fixed ~330px panel at every
+    // desktop width, so the viewport breakpoint applied the wide five-column layout
+    // inside a phone-width column: 272px of fixed columns plus 36px of gaps left the
+    // name cell at 0px and every line in the cart lost its item name at the counter.
+    expect(cart).toContain("@container");
+    expect(cart).toContain("@[28rem]:grid-cols-[34px_minmax(0,1fr)_134px_60px_44px]");
+    expect(cart).not.toContain("sm:grid-cols-[34px_minmax(0,1fr)_134px_60px_44px]");
     expect(cart).toContain('className="mt-1 h-11 max-w-full');
     expect(cart).toContain("inline-flex min-h-11 items-center");
     expect(cart).toContain('className="mt-1 h-11 w-full');

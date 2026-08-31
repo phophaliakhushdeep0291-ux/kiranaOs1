@@ -41,6 +41,34 @@ describe("durable guest acceptance", () => {
     expect(bills()[0].cart).toHaveLength(1);
     expect(bills()[0].cart[0]).toMatchObject({ quantity: 2, guestOrderLineId: "o1-1" });
   });
+  // The case the fixture above cannot show, because it gives the table and the
+  // order the same id. Production never does: the till owns its floor-plan ids
+  // ("table-1") and the server owns the QR table row ("cmth5urvs..."), matched
+  // by name in GuestOrdersStrip. Comparing the two namespaces made every real QR
+  // order fail AFTER the server had been told "accepted" — the guest sat waiting,
+  // the till showed no bill, and the card stuck in the inbox forever.
+  it("accepts an order whose server table id differs from the till's floor-plan id", async () => {
+    const tillTable = { id: "table-1", name: "T1", section: "Dining", seats: 4 };
+    const qrOrder = { ...order, tableId: "cmth5urvs000h12f38j5whwc6" } as CustomerOrder;
+    state.update.mockResolvedValue({ ...qrOrder, status: "accepted" });
+    const result = await acceptGuestOrderToTable(qrOrder, tillTable, products);
+    expect(result.added).toBe(1); // one line, of quantity two
+    expect(bills()[0].cart[0]).toMatchObject({ quantity: 2, rate: 120 });
+    // The bill is keyed by the TILL's id, which is what the floor screen reads.
+    expect(state.rows.get(TABLE_BILLS_KEY)).toEqual({ "table-1": bills()[0].id });
+    expect(await loadPendingGuestOrders()).toEqual([]);
+  });
+
+  // Still refused when the server comes back bound to a DIFFERENT table than the
+  // one journalled — that is a real mismatch, not a namespace difference.
+  it("refuses when the server moved the order to another table", async () => {
+    const qrOrder = { ...order, tableId: "server-t1" } as CustomerOrder;
+    state.update.mockResolvedValue({ ...qrOrder, tableId: "server-t9", status: "accepted" });
+    await expect(acceptGuestOrderToTable(qrOrder, { id: "table-1", name: "T1", section: "Dining", seats: 4 }, products))
+      .rejects.toThrow("Could not confirm");
+    expect(bills()).toBeUndefined();
+  });
+
   it("does not import an old quote if server confirmation is incomplete", async () => {
     state.update.mockResolvedValue({ status: "accepted" });
     await expect(acceptGuestOrderToTable(order, table, products)).rejects.toThrow("Could not confirm");

@@ -1471,9 +1471,15 @@ async function writeSellingUnits(tx, shopId, productId, units) {
     select: { id: true, unitCode: true },
   });
   const incomingCodes = units.map((unit) => unit.unitCode);
+  // A pack that is no longer sold holds nothing. Its stock has just been written
+  // off to the product total and the ledger by applyPerPackStockEditInTransaction,
+  // so leaving the count on the row would double it: once on the shelf and once on
+  // a row nobody can sell from. Worse, re-enabling the pack later would resurrect
+  // stock that was already written off. The write-off arithmetic is unaffected
+  // because it reads the product snapshot taken before this call.
   await tx.productSellingUnit.updateMany({
     where: { shopId, productId, unitCode: { notIn: incomingCodes } },
-    data: { isDefault: false, isActive: false },
+    data: { isDefault: false, isActive: false, onHandQty: 0 },
   });
   await tx.productSellingUnit.updateMany({
     where: { shopId, productId, unitCode: { in: incomingCodes } },
@@ -1499,7 +1505,9 @@ async function writeSellingUnits(tx, shopId, productId, units) {
       minimumPrice: unit.minimumPrice,
       maximumPrice: unit.maximumPrice,
       costPrice: unit.costPrice,
-      onHandQty: unit.onHandQty,
+      // Same reasoning as the retirement above: a row saved inactive is emptied,
+      // whatever count the payload still carries for it.
+      onHandQty: unit.isActive === false ? 0 : unit.onHandQty,
       lowStockThreshold: unit.lowStockThreshold,
       reorderLevel: unit.reorderLevel,
       variantValue1: unit.variantValue1,

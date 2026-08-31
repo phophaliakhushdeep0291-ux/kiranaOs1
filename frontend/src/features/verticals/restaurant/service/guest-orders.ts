@@ -213,7 +213,18 @@ export async function acceptGuestOrderToTable(
   // A guest may cancel a dish between the inbox refresh and this acceptance.
   // The server's atomic claim freezes the final snapshot. Never import the
   // stale pre-claim journal, including on a retry after a lost response.
-  if (canonical.id !== operation.order.id || canonical.tableId !== operation.table.id
+  //
+  // The table is checked against what the SERVER said when we journalled, not
+  // against `operation.table.id`. Those are two different namespaces on purpose:
+  // the till owns its floor-plan ids (they key the table -> open-bill map, and
+  // rewriting them would drop every seating on the floor) while the server owns
+  // the QR code a guest's phone resolves — see syncFloorCodes in TablesPage.
+  // Comparing them meant every QR order failed here AFTER the server had already
+  // been told "accepted": no bill, nothing fired to the kitchen, and the card
+  // stuck in the inbox with a guest sitting at the table waiting. The tests did
+  // not catch it because their fixture gave the table and the order the same id,
+  // which production never does.
+  if (canonical.id !== operation.order.id || canonical.tableId !== operation.order.tableId
     || canonical.status !== "accepted" || !Array.isArray(canonical.items)) {
     throw new Error("Could not confirm the accepted order. Refresh and retry before adding food.");
   }

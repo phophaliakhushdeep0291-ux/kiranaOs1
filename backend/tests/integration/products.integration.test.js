@@ -262,13 +262,28 @@ if (ctx.skip) {
       assert.equal(afterRollback.sellingUnits.find((unit) => unit.unitCode === "small")?.onHandQty, 4);
       assert.equal(await ctx.db.stockLedger.count({ where: { productId: created.id } }), ledgerBeforeFailure);
 
+      // Dropping a size that still holds stock used to be refused outright
+      // (PACKAGING_UNIT_HAS_STOCK): count it to zero, save, then remove it. That is
+      // now a write-off instead, so it takes one save. But it must leave the trail a
+      // recount would leave, because three packs of ten going off the books with no
+      // explanation is what the refusal was protecting against.
       const disableUnits = converted.sellingUnits.map((unit) => editableUnit(unit, unit.unitCode === "large" ? { isActive: false } : {}));
-      const disabled = assertFailure(await ctx.patch(`/api/products/${created.id}`, {
+      const disabled = assertSuccess(await ctx.patch(`/api/products/${created.id}`, {
         stockBaseQty: 28,
         sellingUnits: disableUnits,
-      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 409);
-      assert.equal(disabled.code, "PACKAGING_UNIT_HAS_STOCK");
-      assert.equal((await ctx.db.productSellingUnit.findFirstOrThrow({ where: { productId: created.id, unitCode: "large" } })).isActive, true);
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(disabled.stockBaseQty, 28, "the retired size takes its own thirty base units with it");
+      const retired = await ctx.db.productSellingUnit.findFirstOrThrow({ where: { productId: created.id, unitCode: "large" } });
+      assert.equal(retired.isActive, false, "the row is retired, not deleted, so old bills still resolve through it");
+      assert.equal(retired.onHandQty, 0, "and it is emptied, not left holding stock nobody can sell");
+      const writeOff = await ctx.db.stockLedger.findFirst({
+        where: { productId: created.id, sourceType: "product_per_pack_edit", changeBaseQty: -30 },
+        orderBy: { createdAt: "desc" },
+      });
+      assert.ok(writeOff, "the thirty base units must have a ledger row of their own");
+      assert.equal(writeOff.sellingUnitQty, -3, "naming it as three packs, not thirty of something");
+      assert.match(writeOff.note, /large/, "and naming the size that went");
+      assert.equal(writeOff.newStockBaseQty, 28);
 
       const modeChange = assertFailure(await ctx.patch(`/api/products/${created.id}`, {
         packagingMode: "pooled",
