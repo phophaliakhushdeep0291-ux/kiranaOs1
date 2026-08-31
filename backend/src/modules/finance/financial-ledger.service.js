@@ -516,49 +516,92 @@ function purchaseRefundEntry(mode) {
   return { entryType: "supplier_credit_receivable", direction: "debit" };
 }
 
-export async function postPurchaseReceiptLedger(tx, { shopId, receipt, supplierId = null, businessDate }) {
-  const total = Number(receipt?.totalAmount ?? 0);
-  if (!receipt?.id || !(total > 0)) return;
-  const paid = Number(receipt.paidAmount ?? 0);
-  const due = Number(receipt.dueAmount ?? Math.max(0, total - paid));
-  const date = businessDate ?? receipt.createdAt ?? new Date();
-  const keyBase = `purchase-receipt:${receipt.id}`;
+async function postPurchasePayableEffect(tx, {
+  shopId,
+  purchaseId,
+  supplierId = null,
+  total,
+  paid,
+  due,
+  paymentMode,
+  businessDate,
+  sourceType,
+  keyBase,
+}) {
+  if (!purchaseId || !(Number(total) > 0)) return;
+  const normalizedTotal = Number(total);
+  const normalizedPaid = Number(paid ?? 0);
+  const normalizedDue = Number(due ?? Math.max(0, normalizedTotal - normalizedPaid));
   const common = {
     shopId,
     supplierId,
-    purchaseBillId: receipt.id,
-    sourceType: "purchase_receipt",
-    sourceId: receipt.id,
-    businessDate: date,
+    purchaseBillId: purchaseId,
+    sourceType,
+    sourceId: purchaseId,
+    businessDate: businessDate ?? new Date(),
   };
   const rows = [ledgerRow({
     ...common,
     entryType: "inventory_purchase",
     direction: "debit",
-    amount: total,
+    amount: normalizedTotal,
     idempotencyKey: `${keyBase}:inventory_purchase`,
   })];
-  if (paid > 0) {
-    const outflow = OUTFLOW_ENTRY[String(receipt.paymentMode ?? "other").toLowerCase()] ?? OUTFLOW_ENTRY.other;
+  if (normalizedPaid > 0) {
+    const outflow = OUTFLOW_ENTRY[String(paymentMode ?? "other").toLowerCase()] ?? OUTFLOW_ENTRY.other;
     rows.push(ledgerRow({
       ...common,
       entryType: outflow.entryType,
       direction: outflow.direction,
-      amount: paid,
-      paymentMode: String(receipt.paymentMode ?? "other").toLowerCase(),
+      amount: normalizedPaid,
+      paymentMode: String(paymentMode ?? "other").toLowerCase(),
       idempotencyKey: `${keyBase}:${outflow.entryType}`,
     }));
   }
-  if (due > 0) {
+  if (normalizedDue > 0) {
     rows.push(ledgerRow({
       ...common,
       entryType: "supplier_payable",
       direction: "credit",
-      amount: due,
+      amount: normalizedDue,
       idempotencyKey: `${keyBase}:supplier_payable`,
     }));
   }
   await postFinancialLedgerRows(tx, rows);
+}
+
+export async function postPurchaseReceiptLedger(tx, { shopId, receipt, supplierId = null, businessDate }) {
+  return postPurchasePayableEffect(tx, {
+    shopId,
+    purchaseId: receipt?.id,
+    supplierId,
+    total: receipt?.totalAmount,
+    paid: receipt?.paidAmount,
+    due: receipt?.dueAmount,
+    paymentMode: receipt?.paymentMode,
+    businessDate: businessDate ?? receipt?.createdAt,
+    sourceType: "purchase_receipt",
+    keyBase: `purchase-receipt:${receipt?.id}`,
+  });
+}
+
+// The direct stock-purchase screen is the primary offline-first receiving path.
+// It must post the same inventory/cash/payable effect as a purchase-order receipt;
+// otherwise the supplier due shown on the purchase row has no matching accounting
+// evidence and can never appear in a trustworthy supplier statement.
+export async function postPurchaseHistoryLedger(tx, { shopId, purchase, businessDate }) {
+  return postPurchasePayableEffect(tx, {
+    shopId,
+    purchaseId: purchase?.id,
+    supplierId: purchase?.supplierId ?? null,
+    total: purchase?.billAmount,
+    paid: purchase?.purchasePaidAmount,
+    due: purchase?.purchaseDueAmount,
+    paymentMode: purchase?.purchasePaymentMode,
+    businessDate: businessDate ?? purchase?.createdAt,
+    sourceType: "purchase",
+    keyBase: `purchase:${purchase?.id}`,
+  });
 }
 
 async function postPurchaseReturnEffectLedger(tx, {

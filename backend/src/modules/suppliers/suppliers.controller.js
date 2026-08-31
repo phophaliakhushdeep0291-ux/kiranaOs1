@@ -44,3 +44,13 @@ export async function bestPrice(req, res, next) {
   try { res.json({ success: true, data: await svc.getBestPrice(req.shopId, req.params.productId) }); }
   catch (err) { next(err); }
 }
+
+export async function statement(req, res, next) {
+  try { res.json({ success: true, data: await svc.getSupplierStatement(req.shopId, req.params.id, req.query) }); }
+  catch (err) { next(err); }
+}
+
+export async function rebuildStatement(req, res, next) {
+  try { res.json({ success: true, data: await svc.rebuildSupplierStatement(req.shopId, req.params.id, actor(req)) }); }
+  catch (err) { next(err); }
+}

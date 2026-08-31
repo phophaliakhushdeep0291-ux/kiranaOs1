@@ -549,8 +549,10 @@ Ranked by likelihood × blast radius:
    incomplete purchase coverage), with no reconciliation test.
 5. **Idempotency holes outside billing.** Billing is well protected; expenses,
    online inventory mutations and PO receipts are not.
-6. **Supplier ledger.** No computed outstanding, no payment endpoint, payable and
-   payment keyed to different entities.
+6. **Supplier ledger (resolved in a follow-on release).** Purchases, supplier
+   payments and return credits now share an append-only `FinancialLedger`
+   subledger keyed by `supplierId`, with statement reconciliation and explicit
+   audited repair for linked legacy direct purchases.
 
 ---
 

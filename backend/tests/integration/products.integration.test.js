@@ -469,9 +469,11 @@ if (ctx.skip) {
     test("stock purchase increases stock", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 5, costPerRateUnit: 10 });
+      const supplier = await ctx.db.supplier.create({ data: { shopId: tenant.shop.id, name: "Test Supplier" } });
       const purchaseRequest = {
         idempotencyKey: "products-purchase-proof-1",
         productId: product.id,
+        supplierId: supplier.id,
         supplierName: "Test Supplier",
         quantity: 3,
         enteredUnit: "piece",
@@ -500,6 +502,24 @@ if (ctx.skip) {
       assert.equal(history.purchaseDueAmount, 15);
       assert.equal(history.purchaseDueDate.toISOString().slice(0, 10), "2026-06-15");
 
+      const financialRows = await ctx.db.financialLedger.findMany({
+        where: { shopId: tenant.shop.id, supplierId: supplier.id, sourceType: "purchase", sourceId: history.id },
+        orderBy: { entryType: "asc" },
+      });
+      assert.deepEqual(financialRows.map((row) => row.entryType), ["cash_out", "inventory_purchase", "supplier_payable"]);
+      assert.equal(financialRows.reduce((sum, row) => sum + Number(row.amountPaise), 0), 9000);
+      const statement = assertSuccess(await ctx.get(`/api/suppliers/${supplier.id}/statement`, { token: ownerAuth.accessToken }));
+      assert.equal(statement.version, "supplier-statement-v1");
+      assert.equal(statement.currentBalancePaise, 1500);
+      assert.equal(statement.operationalDuePaise, 1500);
+      assert.equal(statement.differencePaise, 0);
+      assert.equal(statement.reconciliationStatus, "balanced");
+      assert.equal(statement.rows.length, 1);
+      assert.equal(statement.rows[0].purchasePaise, 4500);
+      assert.equal(statement.rows[0].immediatePaymentPaise, 3000);
+      assert.equal(statement.rows[0].payableChangePaise, 1500);
+      assert.equal(statement.rows[0].reference, "SUP-1001");
+
       const ledger = await ctx.db.stockLedger.findFirst({ where: { productId: product.id, shopId: tenant.shop.id, action: "purchase" } });
       assert.equal(ledger.invoiceNumber, "SUP-1001");
       assert.equal(ledger.purchasePaidAmount, 30);
@@ -513,6 +533,7 @@ if (ctx.skip) {
       assert.equal(replay.idempotentReplay, true);
       assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, idempotencyKey: purchaseRequest.idempotencyKey } }), 1);
       assert.equal(await ctx.db.purchaseHistory.count({ where: { shopId: tenant.shop.id, productId: product.id } }), 1);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, supplierId: supplier.id, sourceType: "purchase" } }), 3);
 
       const changedReplay = assertFailure(await ctx.post("/api/inventory/purchase", {
         ...purchaseRequest,
@@ -521,6 +542,79 @@ if (ctx.skip) {
       assert.equal(changedReplay.code, "IDEMPOTENCY_KEY_REUSED");
       assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, idempotencyKey: purchaseRequest.idempotencyKey } }), 1);
       assert.equal(await ctx.db.purchaseHistory.count({ where: { shopId: tenant.shop.id, productId: product.id } }), 1);
+
+      const device = await ctx.db.deviceLicense.findFirstOrThrow({
+        where: { shopId: tenant.shop.id, revokedAt: null },
+        orderBy: { issuedAt: "desc" },
+      });
+      const settlement = assertSuccess(await ctx.post("/api/sync/push", { events: [{
+        eventId: "products-supplier-settlement-proof-1",
+        type: "RECORD_SUPPLIER_PAYMENT",
+        payload: { purchaseHistoryId: history.id, paymentId: "products-supplier-payment-1", amount: 15, mode: "upi" },
+      }] }, { token: ownerAuth.accessToken, headers: { "x-device-id": device.deviceId } }));
+      assert.equal(settlement.summary.synced, 1);
+      const settledStatement = assertSuccess(await ctx.get(`/api/suppliers/${supplier.id}/statement`, { token: ownerAuth.accessToken }));
+      assert.equal(settledStatement.currentBalancePaise, 0);
+      assert.equal(settledStatement.operationalDuePaise, 0);
+      assert.equal(settledStatement.reconciliationStatus, "balanced");
+      assert.equal(settledStatement.rows.at(-1).settlementPaise, 1500);
+      assert.equal(settledStatement.rows.at(-1).balancePaise, 0);
+    });
+
+    test("supplier statement explicitly repairs legacy direct purchases and remains tenant scoped", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 5, costPerRateUnit: 20 });
+      const supplier = await ctx.db.supplier.create({ data: { shopId: tenant.shop.id, name: "Legacy Supplier" } });
+      const legacy = await ctx.db.purchaseHistory.create({
+        data: {
+          shopId: tenant.shop.id,
+          productId: product.id,
+          supplierId: supplier.id,
+          supplierName: supplier.name,
+          qtyBase: 2,
+          pricePerRateUnit: 50,
+          totalCost: 100,
+          billAmount: 100,
+          invoiceNumber: "LEGACY-001",
+          purchasePaymentStatus: "partial",
+          purchasePaymentMode: "cash",
+          purchasePaidAmount: 40,
+          purchaseDueAmount: 60,
+        },
+      });
+
+      const before = assertSuccess(await ctx.get(`/api/suppliers/${supplier.id}/statement`, { token: ownerAuth.accessToken }));
+      assert.equal(before.currentBalancePaise, 0);
+      assert.equal(before.operationalDuePaise, 6000);
+      assert.equal(before.differencePaise, -6000);
+      assert.equal(before.reconciliationStatus, "attention_required");
+
+      const repaired = assertSuccess(await ctx.post(
+        `/api/suppliers/${supplier.id}/statement/rebuild`,
+        {},
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      ));
+      assert.deepEqual(repaired.repairedPurchaseIds, [legacy.id]);
+      assert.equal(repaired.repairedPurchaseCount, 1);
+      const replay = assertSuccess(await ctx.post(
+        `/api/suppliers/${supplier.id}/statement/rebuild`,
+        {},
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      ));
+      assert.equal(replay.idempotentReplay, true);
+      assert.equal(await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, action: "SUPPLIER_STATEMENT_REBUILT", entityId: supplier.id },
+      }), 1);
+
+      const afterRepair = assertSuccess(await ctx.get(`/api/suppliers/${supplier.id}/statement`, { token: ownerAuth.accessToken }));
+      assert.equal(afterRepair.currentBalancePaise, 6000);
+      assert.equal(afterRepair.operationalDuePaise, 6000);
+      assert.equal(afterRepair.differencePaise, 0);
+      assert.equal(afterRepair.reconciliationStatus, "balanced");
+      assert.equal(afterRepair.rows[0].reference, "LEGACY-001");
+
+      const outsider = await ownerCtx();
+      assertFailure(await ctx.get(`/api/suppliers/${supplier.id}/statement`, { token: outsider.ownerAuth.accessToken }), 404);
     });
 
     test("stock damage decreases stock", async () => {
