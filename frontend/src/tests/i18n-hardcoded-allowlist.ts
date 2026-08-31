@@ -102,7 +102,6 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/core/dashboard/pages/DashboardPage.tsx": 21,
   "features/core/demo/DemoModeBanner.tsx": 6,
   "features/core/devices/pages/DeviceRemovedPage.tsx": 5,
-  "features/core/devices/pages/DevicesPage.tsx": 69,
   "features/core/expenses/pages/ExpensesPage.tsx": 82,
   "features/core/gift-cards/GiftCardsPage.tsx": 46,
   "features/core/innovation/components/OfflineConfidenceMeter.tsx": 16,

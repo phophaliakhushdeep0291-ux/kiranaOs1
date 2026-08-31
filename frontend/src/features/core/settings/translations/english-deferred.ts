@@ -23,6 +23,7 @@
 // the split and put the tables back into the startup download. The test in
 // i18n-english-split.test.ts fails the build if i18n.tsx imports it as a value.
 import { assistantEn } from "./assistant";
+import { devicesEn } from "./devices";
 import { assuranceEn } from "./assurance";
 import { customersEn } from "./customers";
 import { inventoryEn } from "./inventory";
@@ -40,6 +41,7 @@ import { workflowsEn } from "./workflows";
 export const englishDeferredTranslations = {
   ...productsEn,
   ...assistantEn,
+  ...devicesEn,
   ...assuranceEn,
   ...customersEn,
   ...restaurantEn,
@@ -58,6 +60,7 @@ export const englishDeferredTranslations = {
 export const EN_DEFERRED_MODULES = {
   products: productsEn,
   assistant: assistantEn,
+  devices: devicesEn,
   assurance: assuranceEn,
   customers: customersEn,
   restaurant: restaurantEn,

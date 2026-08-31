@@ -39,13 +39,15 @@ describe("device-bound frontend sessions", () => {
     expect(routes).toContain('path="/device-removed"');
   });
 
+  // Pinned on translation keys, not English: this page reads its copy from the
+  // dictionary now, so the literal strings are no longer in the source.
   it("keeps destructive device actions owner-verified and staff-safe", () => {
     expect(devicesPage).toContain('user?.role === "owner" || user?.role === "admin"');
     expect(devicesPage).toContain("visibleCached");
-    expect(devicesPage).toContain("4-digit PIN");
+    expect(devicesPage).toContain("devices.confirm.pinPlaceholder");
     expect(devicesPage).toContain("logoutDevice");
-    expect(devicesPage).toContain("Log out device");
-    expect(devicesPage).toContain("Log out & remove");
+    expect(devicesPage).toContain("devices.action.logout");
+    expect(devicesPage).toContain("devices.action.logoutAndRemove");
     expect(devicesPage).not.toContain("Add device");
   });
 
