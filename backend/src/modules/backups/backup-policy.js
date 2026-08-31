@@ -136,6 +136,17 @@ export const RESTORABLE_CHILD_MODELS = Object.freeze({
   // them through their bill item so a reprinted bill still shows exactly what
   // the guest selected and paid for.
   BillItemAddon: { relation: "billItem", where: { billItem: { bill: { shopId: "__SHOP_ID__" } } } },
+  // The same shape as RentalBookingItem above, for the three trades that were
+  // missed: line items with no shopId hanging off a restorable parent. Left out,
+  // the parent comes back and its contents do not — a pharmacy restores its
+  // prescriptions with no medicines on them, a bookshop its lists with no books,
+  // a furniture shop its orders with neither items nor the payments taken
+  // against them. The record survives and says nothing, which is worse than an
+  // obviously missing record because a shopkeeper cannot tell it is wrong.
+  PrescriptionItem: { relation: "prescription", where: { prescription: { shopId: "__SHOP_ID__" } } },
+  BookListItem: { relation: "list", where: { list: { shopId: "__SHOP_ID__" } } },
+  FurnitureOrderItem: { relation: "order", where: { order: { shopId: "__SHOP_ID__" } } },
+  FurnitureOrderPayment: { relation: "order", where: { order: { shopId: "__SHOP_ID__" } } },
 });
 
 export const CREDENTIAL_FIELDS_ALWAYS_PRESERVED = Object.freeze([
