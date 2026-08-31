@@ -9,6 +9,7 @@ import { initializeOfflineStorage } from "@/lib/offline/migrations";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { activateWaitingServiceWorker, isServiceWorkerUpdateReady } from "@/lib/pwa/registerServiceWorker";
+import { applyUpdateWhenIdle } from "@/lib/pwa/auto-update";
 import { AppLanguageProvider } from "@/features/core/settings/i18n";
 import { AppThemeProvider } from "@/features/core/settings/theme";
 import { startBackgroundLeadershipHeartbeat } from "@/lib/browser/multiTabCoordinator";
@@ -108,7 +109,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Applies itself once the counter is quiet — empty cart, off the till, no
+    // dialog open, nobody touching the screen. Without this the prompt below is
+    // the only path onto a new build, and a tab left open since before the
+    // deploy keeps serving the old one until somebody happens to notice a toast.
+    let stopAutoUpdate: (() => void) | null = null;
     const onUpdateReady = () => {
+      stopAutoUpdate?.();
+      stopAutoUpdate = applyUpdateWhenIdle();
       toast({
         title: "App update ready",
         description: "A fresh version is available. Finish the current bill, then refresh.",
@@ -135,6 +143,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener("kirana:pwa-update-ready", onUpdateReady);
       window.removeEventListener("kirana:pwa-registration-failed", onRegistrationFailed);
+      stopAutoUpdate?.();
     };
   }, [toast]);
 

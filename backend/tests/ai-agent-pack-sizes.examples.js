@@ -142,5 +142,39 @@ assert.equal(
 );
 ok("it sits behind the owner PIN and says what it will do");
 
+
+/* --------------------------------- a product with no explicit selling units */
+
+// The case every fixture above missed, and the common one: most of a kirana
+// catalogue is sold loose by its rate unit with no ProductSellingUnit row at
+// all. Found by running this against a real shop — adding a 500 g packet to
+// "Shakkar (Sugar)" left it sold ONLY in packets, with rateUnit rewritten from
+// kg to packet and the price from Rs45 to Rs24. The shop could no longer weigh
+// sugar out loose, and nothing errored.
+//
+// normalizeSellingUnits marks the first unit default when none is flagged, and
+// applyDefaultSellingUnitToProduct then copies that unit's type and price onto
+// the Product itself. So the loose unit has to be sent along with the new pack.
+const loose = await db.product.create({
+  data: {
+    shopId: shop.id, name: "Atta", baseUnit: "gram", rateUnit: "kg",
+    defaultPricePerRateUnit: 34, stockBaseQty: 80000,
+  },
+});
+assert.equal((await getProduct(shop.id, loose.id)).sellingUnits.length, 0, "starts with no explicit units");
+
+await setPack.handler({ productId: loose.id, packSize: 5, packUnit: "kg", price: 160, packType: "packet" }, ctx);
+const afterLoose = await getProduct(shop.id, loose.id);
+
+assert.equal(afterLoose.rateUnit, "kg", "the product must still be priced per kg");
+assert.equal(afterLoose.defaultPricePerRateUnit, 34, "and still at its own price, not the packet's");
+
+const codes = afterLoose.sellingUnits.filter((u) => u.isActive !== false).map((u) => u.unitCode).sort();
+assert.deepEqual(codes, ["kg", "packet-5-kg"], "loose kg survives alongside the new packet");
+assert.equal(afterLoose.sellingUnits.find((u) => u.isDefault)?.unitCode, "kg", "loose stays the default");
+assert.equal(afterLoose.sellingUnits.find((u) => u.unitCode === "kg").conversionToBase, 1000, "a kg of a gram-counted product is 1000");
+assert.equal(afterLoose.sellingUnits.find((u) => u.unitCode === "packet-5-kg").conversionToBase, 5000, "a 5 kg packet is 5000 grams");
+ok("adding a pack to a loose-sold product keeps it sellable loose, at its own price");
+
 await db.$disconnect();
 console.log("ai-agent-pack-sizes.examples.js OK");
