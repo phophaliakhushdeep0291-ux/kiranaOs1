@@ -697,16 +697,19 @@ export function ProductFormPanel({
   function removeAlternatePack(unitCode: string) {
     const saved = editing?.sellingUnits?.find((row) => row.unitCode === unitCode);
     const savedQty = Number(saved?.onHandQty ?? 0);
+    // Removing a pack that still holds stock writes that stock off, and the
+    // server records a ledger row naming the pack and the amount. It used to be
+    // refused until the shopkeeper counted the pack to zero and saved — two
+    // saves and a red error to stop selling a size. Saying what will happen is
+    // enough; the number is on screen and the movement is auditable afterwards.
     if (packagingMode === "per_pack" && savedQty !== 0) {
       toast({
-        title: t("products.form.packHasStock"),
-        description: t("products.form.packHasStockHint").replace(
+        title: t("products.form.packRemovedWithStock"),
+        description: t("products.form.packRemovedWithStockHint").replace(
           "{qty}",
           `${savedQty} x ${saved?.name ?? unitCode}`,
         ),
-        variant: "destructive",
       });
-      return;
     }
     form.setValue("sellingUnits", sellingUnits.filter((row) => row.unitCode !== unitCode), {
       shouldDirty: true,

@@ -8,41 +8,53 @@ const source = readFileSync("src/features/core/products/pages/components/Product
 /**
  * Removing a pack size that still holds stock.
  *
- * The server refuses it (PACKAGING_UNIT_HAS_STOCK) because the goods would be
- * left with nothing counting them, and it compares against the SAVED quantity —
- * so zeroing the row and removing it in the same save is refused too. The form
- * used to allow the removal anyway: the row vanished, the save reported
- * "Updated", the product's stock fell by that pack's worth, and the refusal only
- * surfaced later as a sync conflict, with the screen and the server disagreeing
- * about how much stock the shop owned.
+ * This used to be refused: the shopkeeper had to count the pack to zero, save,
+ * and only then remove it — two saves and a red error to stop selling a size.
+ * The refusal was guarding something real, because perPackStockTotal is computed
+ * from the incoming units, so a removed pack silently lowers the product's total
+ * and without a ledger row that drop has no explanation.
+ *
+ * It now writes the stock off instead of forbidding the removal: one save, and
+ * the server records a ledger row naming the pack and the amount. The screen
+ * says so first, because a delete that quietly takes ten litres off the books is
+ * not something to discover later.
  */
 describe("removing a pack that still has stock", () => {
-  it("checks the saved quantity, not the one being typed", () => {
+  it("removes it rather than refusing", () => {
     const at = source.indexOf("function removeAlternatePack");
     expect(at).toBeGreaterThan(-1);
     const body = source.slice(at, at + 1400);
-    // The server compares against what it already stored, so the form must too.
-    expect(body).toContain("editing?.sellingUnits?.find");
-    expect(body).toContain("savedQty");
-    expect(body).toContain("return;");
+    // The old guard returned early and left the row in place.
+    expect(body).not.toContain("packHasStock");
+    expect(body).toContain("form.setValue(\"sellingUnits\"");
   });
 
-  it("only guards per-pack products, where a pack carries its own count", () => {
+  it("still reads the SAVED quantity, which is what gets written off", () => {
     const at = source.indexOf("function removeAlternatePack");
     const body = source.slice(at, at + 1400);
-    // Pooled sizes all draw on one pool, so dropping one strands nothing.
+    // What the shopkeeper is typing has not happened yet; the write-off is of
+    // what the server currently holds.
+    expect(body).toContain("editing?.sellingUnits?.find");
+    expect(body).toContain("savedQty");
+  });
+
+  it("only warns for per-pack products, where a pack carries its own count", () => {
+    const at = source.indexOf("function removeAlternatePack");
+    const body = source.slice(at, at + 1400);
+    // Pooled sizes all draw on one pool, so dropping one strands nothing and
+    // there is no write-off to announce.
     expect(body).toContain('packagingMode === "per_pack"');
   });
 
-  it("tells the shopkeeper what to do about it, in both languages", () => {
+  it("says what will happen, with the amount, in both languages", () => {
     const at = source.indexOf("function removeAlternatePack");
     const body = source.slice(at, at + 1400);
-    expect(body).toContain('t("products.form.packHasStock")');
-    expect(body).toContain('t("products.form.packHasStockHint")');
-    expect(productsEnglish["products.form.packHasStock"]).toBe("Count this pack to zero first");
+    expect(body).toContain('t("products.form.packRemovedWithStock")');
+    expect(body).toContain('t("products.form.packRemovedWithStockHint")');
+    expect(productsEnglish["products.form.packRemovedWithStock"]).toBe("Pack removed, stock written off");
     // The hint names the amount, so the count and the pack are both on screen.
-    expect(productsEnglish["products.form.packHasStockHint"]).toContain("{qty}");
-    expect(productsHindi["products.form.packHasStock"]).toBeTruthy();
-    expect(productsHindi["products.form.packHasStockHint"]).toContain("{qty}");
+    expect(productsEnglish["products.form.packRemovedWithStockHint"]).toContain("{qty}");
+    expect(productsHindi["products.form.packRemovedWithStock"]).toBeTruthy();
+    expect(productsHindi["products.form.packRemovedWithStockHint"]).toContain("{qty}");
   });
 });

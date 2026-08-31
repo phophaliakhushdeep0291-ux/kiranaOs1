@@ -69,10 +69,7 @@ function stampServiceWorkerBuild() {
         "src/features/core/suppliers/pages/SuppliersPage.tsx",
         "src/features/core/expenses/pages/ExpensesPage.tsx",
         "src/features/core/offers/pages/OffersPage.tsx",
-        "src/features/core/loyalty/pages/LoyaltyPage.tsx",
-        "src/features/core/gift-cards/GiftCardsPage.tsx",
         "src/features/core/reports/pages/ReportsPage.tsx",
-        "src/features/core/reports/pages/ChannelSettlementsPage.tsx",
         "src/features/core/money-statement/pages/MoneyStatementPage.tsx",
         "src/features/core/reports/pages/DailyClosingPage.tsx",
         "src/features/core/settings/pages/SettingsPage.tsx",
@@ -82,36 +79,22 @@ function stampServiceWorkerBuild() {
         "src/features/core/settings/pages/PrinterSettingsPage.tsx",
         "src/features/core/settings/pages/BillingSettingsPage.tsx",
         "src/features/core/settings/pages/StaffSettingsPage.tsx",
-        "src/features/core/settings/pages/DevicesSettingsPage.tsx",
         "src/features/core/settings/pages/SyncSettingsPage.tsx",
         "src/features/core/settings/pages/TaxesSettingsPage.tsx",
         "src/features/core/settings/pages/SecuritySettingsPage.tsx",
-        "src/features/core/settings/pages/NotificationsSettingsPage.tsx",
-        "src/features/core/settings/pages/IntegrationsSettingsPage.tsx",
         "src/features/core/settings/pages/AdvancedSettingsPage.tsx",
         "src/features/core/sync/pages/SyncStatusPage.tsx",
-        "src/features/core/subscription/pages/PlansPage.tsx",
-        "src/features/core/subscription/pages/SubscriptionPage.tsx",
-        "src/features/core/devices/pages/DevicesPage.tsx",
-        "src/features/core/platform-admin/pages/PlatformAdminPage.tsx",
-        "src/features/core/remote-support/pages/RemoteSupportConsolePage.tsx",
-        "src/features/core/support/pages/AskArthaPage.tsx",
-        "src/features/core/activity/pages/ActivityInsightsPage.tsx",
         "src/features/core/staff/pages/StaffPage.tsx",
         "src/features/core/audit-logs/pages/AuditLogsPage.tsx",
-        "src/features/core/assurance/pages/AssuranceDashboardPage.tsx",
-        "src/features/core/assurance/pages/FindingsPage.tsx",
-        "src/features/core/assurance/pages/FindingDetailPage.tsx",
-        "src/features/core/assurance/pages/EvidenceRequestsPage.tsx",
-        "src/features/core/assurance/pages/AuditRunsPage.tsx",
-        "src/features/core/assurance/pages/AuditRulesPage.tsx",
-        "src/features/core/assurance/pages/ReviewQueuePage.tsx",
-        "src/features/core/assurance/pages/AssuranceReportPage.tsx",
-        "src/features/core/assurance/pages/CasesPage.tsx",
         "src/features/core/recycle-bin/pages/RecycleBinPage.tsx",
         "src/features/core/innovation/pages/SmartToolsPage.tsx",
         "src/features/core/recovery/pages/RecoveryModePage.tsx",
       ];
+      // Routes marked `onlineOnly` render the app-shell's explicit
+      // internet-required state before their lazy page component mounts. Caching
+      // those component chunks cannot make the feature work offline; it only
+      // makes every shop download cloud-only administration UI during install.
+      // Keep the shell cached, and fetch these pages on demand when online.
       const coreAssets = new Set<string>();
       const visited = new Set<string>();
       const resolveManifestKey = (requestedKey: string) => {

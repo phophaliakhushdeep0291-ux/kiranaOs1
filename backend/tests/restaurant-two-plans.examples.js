@@ -136,7 +136,7 @@ assert.equal(
 /* ----------------------------------- no other trade moved underneath us */
 
 assert.deepEqual(
-  BUSINESS_TYPE_PLAN_PRICING.kirana, { starter: [9900, 99900], growth: [59900, 499900], pro: [99900, 899900] },
+  BUSINESS_TYPE_PLAN_PRICING.kirana, { starter: [9900, 99900], growth: [29900, 299900], pro: [59900, 599900] },
   "kirana pricing is untouched by a restaurant change",
 );
 

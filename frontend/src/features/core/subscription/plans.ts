@@ -265,7 +265,7 @@ export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
 };
 
 const BUSINESS_TYPE_PRICES: Record<BusinessType, Record<Exclude<PlanCode, "standard">, [number, number]>> = {
-  kirana:      { starter: [99, 999], growth: [599, 4999], pro: [999, 8999] },
+  kirana:      { starter: [99, 999], growth: [299, 2999], pro: [599, 5999] },
   stationery:  { starter: [249, 2499], growth: [599, 4999], pro: [999, 8999] },
   other:       { starter: [249, 2499], growth: [599, 4999], pro: [999, 8999] },
   clothing:    { starter: [349, 3499], growth: [699, 5999], pro: [1099, 9999] },
@@ -292,10 +292,10 @@ interface BusinessTypePlanEntitlements {
 
 const BUSINESS_TYPE_PLAN_ENTITLEMENTS: Record<BusinessType, BusinessTypePlanEntitlements> = {
   kirana: {
-    starter: ["batch_expiry"],
-    growth: ["advanced_inventory"],
-    starterBullets: ["Loose-item and pack-size billing with udhar", "Batch, expiry, low-stock and daily closing"],
-    growthBullets: ["Advanced inventory control with staff roles", "Customer pricing, quantity pricing and monthly profit reports"],
+    starter: [],
+    growth: ["batch_expiry"],
+    starterBullets: ["Fast cash, UPI and udhar billing", "Products and simple stock—even when the internet is down"],
+    growthBullets: ["Purchases, suppliers, stock alerts and batch/expiry tracking", "Staff roles, automatic sync and 30-day business reports"],
   },
   clothing: {
     starter: ["product_variants"],
@@ -387,6 +387,21 @@ function uniqueFeatures(...groups: FeatureName[][]): FeatureName[] {
 function shopTypeFeatures(code: PlanCode, businessType: BusinessType): FeatureName[] {
   const base = PLAN_DEFINITIONS[code].features;
   if (code === "standard") return base;
+  if (businessType === "kirana") {
+    const starter: FeatureName[] = [
+      "view_old_data", "new_billing", "basic_billing", "rough_bill", "paid_udhar_bill",
+      "customer_ledger", "record_payment", "basic_products", "offline_billing",
+      "local_reports_7_day", "cloud_backup", "basic_recycle_bin", "basic_support",
+      "no_barcode_fast_billing", "offline_confidence_meter", "single_bill_whatsapp",
+      SHOP_TYPE_ENTITLEMENTS_V1,
+    ];
+    const growth: FeatureName[] = [
+      ...starter, "automatic_two_way_sync", "supplier_entry", "purchase_entry", "stock_adjustment",
+      ...standardExtra, "staff_login", "role_based_access", "smart_daily_closing", "recovery_mode",
+      "batch_expiry",
+    ];
+    return code === "starter" ? starter : code === "growth" ? uniqueFeatures(growth) : uniqueFeatures(growth, growthExtra, proExtra, ["advanced_inventory"]);
+  }
   const profile = BUSINESS_TYPE_PLAN_ENTITLEMENTS[businessType] ?? BUSINESS_TYPE_PLAN_ENTITLEMENTS.other;
   const growth = code === "growth" || code === "pro" ? profile.growth : [];
   return uniqueFeatures(base, [SHOP_TYPE_ENTITLEMENTS_V1], profile.starter, growth);
@@ -395,6 +410,30 @@ function shopTypeFeatures(code: PlanCode, businessType: BusinessType): FeatureNa
 function shopTypeBullets(code: PlanCode, businessType: BusinessType): string[] {
   const base = PLAN_DEFINITIONS[code].bullets;
   if (code === "standard") return base;
+  if (businessType === "kirana") {
+    if (code === "starter") return [
+      "1 store, 1 registered device and 1 billing counter",
+      "Fast cash, UPI, split and udhar billing—even offline",
+      "Products, simple stock and customer ledger",
+      "7-day sales view, cloud backup and bill sharing",
+    ];
+    if (code === "growth") return [
+      "Everything in Starter",
+      "1 store, 3 devices and up to 3 staff",
+      "Purchases, suppliers, stock adjustments and low-stock alerts",
+      "Batch/expiry tracking, automatic sync and recovery tools",
+      "Owner dashboard, daily summary and 30-day reports",
+      "Role-based staff access and PDF bill sharing",
+    ];
+    return [
+      "Everything in Growth",
+      "Up to 3 stores, 10 devices and 10 staff",
+      "Customer-specific prices, quantity discounts and loyalty",
+      "Advanced inventory, GST reports and Tally export",
+      "Monthly and yearly reports, audit logs and staff performance",
+      "Automated WhatsApp reminders, analytics and premium support",
+    ];
+  }
   const profile = BUSINESS_TYPE_PLAN_ENTITLEMENTS[businessType] ?? BUSINESS_TYPE_PLAN_ENTITLEMENTS.other;
   if (code === "starter") return [base[0], ...profile.starterBullets, ...base.slice(1)];
   if (code === "growth") return [base[0], ...profile.growthBullets, ...base.slice(1)];
@@ -439,9 +478,16 @@ export function getPlanForBusinessType(code: PlanCode, businessType: BusinessTyp
     name: planNameForBusinessType(code, businessType),
     price,
     annualPrice,
+    ...(businessType === "kirana" && code === "starter" ? { maxDevices: 1 } : {}),
+    ...(businessType === "kirana" && code === "growth" ? { maxDevices: 3, maxStaff: 3 } : {}),
+    ...(businessType === "kirana" && code === "pro" ? { maxStores: 3, maxDevices: 10, maxStaff: 10 } : {}),
     headline: businessType === "kirana" && code === "starter"
-      ? "Self-serve billing and stock control for an owner-run shop."
-      : base.headline,
+      ? "Essential billing for an owner-run kirana."
+      : businessType === "kirana" && code === "growth"
+        ? "Daily stock control, staff access and clearer reports."
+        : businessType === "kirana" && code === "pro"
+          ? "Advanced pricing, compliance and multi-store control."
+          : base.headline,
     features: shopTypeFeatures(code, businessType),
     bullets: shopTypeBullets(code, businessType),
   };
