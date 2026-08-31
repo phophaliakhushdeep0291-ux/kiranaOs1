@@ -336,8 +336,9 @@ product can claim today:
    persisted through the offline outbox.
 2. ~~Add `userId` to `Expense` and an actor column to `StockLedger`.~~ Completed for new online/offline records; legacy rows remain explicit.
 3. ~~Wire `SCHEDULED` runs and baseline recomputation into the existing jobs infrastructure.~~ Completed; production execution still depends on Redis/worker deployment.
-4. Move the transaction-triggered queue onto the durable jobs queue when
-   `QUEUES_ENABLED`.
+4. ~~Move the transaction-triggered queue onto the durable jobs queue when
+   `QUEUES_ENABLED`.~~ Completed with BullMQ retry/backoff and bounded local
+   fallback when Redis dispatch is unavailable.
 5. ~~Build the `AuditCase` grouping UI and its AI summary.~~ Completed.
 6. Add a supplier ledger for true supplier-statement reconciliation.
 

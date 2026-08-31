@@ -6,13 +6,13 @@
 //   * billing latency must not include audit work, so callers never await us;
 //   * work is bounded — a burst of bills cannot spawn unbounded concurrency.
 //
-// Implementation: a small in-process FIFO queue drained by a single worker.
-// This is deliberately modest: the durable retry path is the SCHEDULED run,
-// which re-evaluates a period and is idempotent, so anything dropped here (a
-// crash, a queue overflow) is picked up by the next scheduled run rather than
-// lost. When QUEUES_ENABLED is on, the same entry point can be moved onto the
-// jobs infrastructure without changing callers.
+// Implementation: production deployments with Redis enqueue a durable BullMQ
+// job with retry/backoff. Local/no-queue deployments retain a bounded in-process
+// FIFO and scheduled runs remain the recovery sweep. A Redis dispatch failure
+// falls back to that FIFO rather than silently dropping the evaluation.
 import { env } from "../../config/env.js";
+import { addJob, isQueueEnabled } from "../../lib/queue.js";
+import { JOB_NAMES, QUEUE_NAMES } from "../../workers/queueNames.js";
 import { RUN_TYPES } from "./assurance.constants.js";
 import { createRun, executeRun } from "./evaluation.service.js";
 
@@ -26,6 +26,10 @@ let timer = null;
 
 const stats = {
   enqueued: 0,
+  durableEnqueued: 0,
+  durableDispatchFailures: 0,
+  durableDispatching: 0,
+  inProcessEnqueued: 0,
   dropped: 0,
   evaluated: 0,
   runs: 0,
@@ -71,20 +75,50 @@ export function scheduleAuditEvaluation(shopId, entityType, entityId, actor = {}
     if (!isEnabled()) return false;
     if (!shopId || !entityType || !entityId) return false;
 
-    if (queue.length >= MAX_QUEUE_LENGTH) {
-      // Shed load rather than grow without bound; the scheduled run covers it.
-      stats.dropped += 1;
-      return false;
+    const item = { shopId, entityType: String(entityType).toUpperCase(), entityId, actorUserId: actor.userId ?? null };
+    stats.enqueued += 1;
+    if (isQueueEnabled()) {
+      stats.durableDispatching += 1;
+      void addJob(
+        QUEUE_NAMES.assuranceQueue,
+        JOB_NAMES.RUN_TRANSACTION_ASSURANCE,
+        item,
+      ).then((result) => {
+        if (result?.queued) {
+          stats.durableEnqueued += 1;
+          return;
+        }
+        stats.durableDispatchFailures += 1;
+        enqueueInProcess(item, false);
+      }).catch((error) => {
+        stats.durableDispatchFailures += 1;
+        stats.lastError = error?.message ?? String(error);
+        enqueueInProcess(item, false);
+      }).finally(() => {
+        stats.durableDispatching = Math.max(0, stats.durableDispatching - 1);
+      });
+      return true;
     }
 
-    queue.push({ shopId, entityType: String(entityType).toUpperCase(), entityId, actorUserId: actor.userId ?? null });
-    stats.enqueued += 1;
-    scheduleDrain();
-    return true;
+    return enqueueInProcess(item, false);
   } catch {
     // A hook can never be the reason a request fails.
     return false;
   }
+}
+
+function enqueueInProcess(item, countTotal = true) {
+  if (countTotal) stats.enqueued += 1;
+  if (queue.length >= MAX_QUEUE_LENGTH) {
+    // Shed load rather than grow without bound; the scheduled run covers it.
+    stats.dropped += 1;
+    return false;
+  }
+
+  queue.push(item);
+  stats.inProcessEnqueued += 1;
+  scheduleDrain();
+  return true;
 }
 
 function scheduleDrain() {
@@ -158,15 +192,21 @@ export async function flushAuditQueue({ timeoutMs = 30000 } = {}) {
   }
   const startedAt = Date.now();
   await drain();
-  while ((queue.length || draining) && Date.now() - startedAt < timeoutMs) {
+  while ((queue.length || draining || stats.durableDispatching) && Date.now() - startedAt < timeoutMs) {
     // eslint-disable-next-line no-await-in-loop
     await new Promise((resolve) => setTimeout(resolve, 25));
     // eslint-disable-next-line no-await-in-loop
     await drain();
   }
-  return { pending: queue.length, draining };
+  return { pending: queue.length, draining, durableDispatching: stats.durableDispatching };
 }
 
 export function auditQueueStats() {
-  return { ...stats, pending: queue.length, draining, enabled: isEnabled() };
+  return {
+    ...stats,
+    pending: queue.length,
+    draining,
+    enabled: isEnabled(),
+    mode: isQueueEnabled() ? "durable" : "in_process",
+  };
 }
