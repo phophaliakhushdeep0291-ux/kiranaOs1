@@ -327,12 +327,13 @@ product can claim today:
 | **Developer testing** | **Ready** | 206 integration tests pass, builds pass, MVP scenario passes, 45 live contract checks pass |
 | **Family-shop testing** | **Ready** | Read-only toward financial data, AI off by default, findings are advisory, every rule can be disabled. Recommend starting with manual runs and reviewing the first week's findings together to tune thresholds |
 | **Limited external pilot** | **Ready with conditions** | Needs: (a) the Postgres migration applied and smoke-tested on a real instance, (b) a scheduler for `SCHEDULED` runs, (c) baseline recomputation scheduled, (d) an operator watching false-positive rates per rule for the first weeks. AI should stay `disabled` unless a pilot shop explicitly consents |
-| **Paid usage** | **Not yet** | Blocking gaps: no durable outbox for transaction-triggered runs; no cash-count field, so the headline "is my cash right?" question cannot be answered; no supplier ledger; attribution gaps on stock and expenses; no investigation-case UI. These are product-data gaps, not code defects — closing them means adding fields to canonical models, which is deliberately out of scope for this phase |
+| **Paid usage (historical verdict at report date)** | **Not yet** | At the time of this report the blockers included no durable outbox, no server cash count, no supplier ledger, attribution gaps and no investigation-case UI. Later releases added the offline outbox, server-backed revisioned drawer counts, supplier-payment ledger evidence and investigation cases; use current competitive/release evidence rather than this historical verdict for launch decisions. |
 
 ### Recommended next steps, in order
 
-1. Add a counted-cash field to daily closing — it unlocks the most valuable rule
-   family (F1, F10) and is the question shopkeepers actually ask.
+1. ~~Add a counted-cash field to daily closing.~~ Completed: the physical count,
+   float, till movements, variance, user/device attribution and revision are now
+   persisted through the offline outbox.
 2. Add `userId` to `Expense` and an actor column to `StockLedger` — turns two
    advisory rules into reliable ones.
 3. Wire `SCHEDULED` runs and baseline recomputation into the existing jobs

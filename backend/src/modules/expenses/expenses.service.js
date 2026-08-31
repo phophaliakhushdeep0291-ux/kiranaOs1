@@ -111,6 +111,11 @@ export async function createExpense(shopId, data, identity = {}) {
         data: {
           ...payload,
           ...expenseIdentity,
+          // Never trust actor fields from request data. These snapshots come
+          // from the freshly authenticated request/sync user and stay immutable.
+          recordedBy: identity.userName ?? null,
+          recordedByUserId: identity.userId ?? null,
+          recordedByRole: identity.role ?? null,
           ...moneyShadows({ amount: payload.amount }),
           locationId: location.id,
           shopId,

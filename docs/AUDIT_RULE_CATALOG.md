@@ -134,7 +134,7 @@ where the legacy opening balance is itself a `legacy_opening_balance` debit row.
 | 2 | Missing expense receipt | `EXPENSE_MISSING_RECEIPT` |
 | 3 | Unusually high for category | `EXPENSE_UNUSUALLY_HIGH_FOR_CATEGORY` (per-category baseline, min 10 samples) |
 | 4 | Repeated rounded cash expenses | `EXPENSE_REPEATED_ROUNDED_CASH` (≥3 round-₹500 cash expenses / 30 days) |
-| 5 | Created outside staff permission | `EXPENSE_UNATTRIBUTED` (adapted — Expense has no userId, see §Deferred) |
+| 5 | Created outside staff permission | `EXPENSE_UNATTRIBUTED` checks legacy/missing authenticated identity; `EXPENSE_ACTOR_SCOPE_MISMATCH` verifies the stored actor belongs to the shop. New expenses also persist the creator's immutable role snapshot. |
 | 6 | Backdated expense | `EXPENSE_BACKDATED` (>2 days between `spentAt` and `createdAt`) |
 | 7 | Added after daily closing | `EXPENSE_ADDED_AFTER_CLOSING_LOCK` |
 | 8 | Edited without reason | `EXPENSE_EDITED_WITHOUT_REASON` |
@@ -147,7 +147,7 @@ where the legacy opening balance is itself a `legacy_opening_balance` debit row.
 
 | # | Requested | Implemented as |
 |---|---|---|
-| 1 | Expected cash differs from closing cash | `CLOSING_CASH_FIGURE_STALE` verifies recorded cash-in; physical counts remain device-local and unavailable to server assurance. |
+| 1 | Expected cash differs from closing cash | `CLOSING_CASH_FIGURE_STALE` verifies canonical cash-in and `CLOSING_PHYSICAL_CASH_VARIANCE` compares the server-backed physical count with expected drawer cash. |
 | 2 | Cash sales ≠ bill payments | `CLOSING_CASH_FIGURE_STALE` |
 | 3 | UPI sales ≠ recorded UPI payments | `CLOSING_UPI_FIGURE_STALE` |
 | 4 | Customer payments excluded from cash | `CLOSING_UDHAR_RECOVERY_STALE` |
@@ -156,10 +156,11 @@ where the legacy opening balance is itself a `legacy_opening_balance` debit row.
 | 7 | Daily closing changed after completion | `CLOSING_CHANGED_AFTER_LOCK` |
 | 8 | Late offline transaction affects closed day | `CLOSING_LATE_TRANSACTION_AFTER_LOCK` |
 | 9 | Large closing difference | `CLOSING_LARGE_DIFFERENCE` (threshold `audit.closingDifferenceAlertPaise`, default ₹200) |
-| 10 | Repeated shortages by staff/device | **DEFERRED on the server** - counted cash exists only in device-local storage and is not synced. |
+| 10 | Repeated shortages by staff/device | Individual variances are implemented and attributed by user/device; multi-day repeated-shortage trend detection remains deferred. |
 | 11 | UPI reference reused | `CLOSING_UPI_REFERENCE_REUSED` (reference masked in the finding) |
 | 12 | Split payment ≠ total paid | `CLOSING_SPLIT_PAYMENT_MISMATCH` |
 | — | Sales total stale vs bills | `CLOSING_SALES_FIGURE_STALE` (added) |
+| — | Locked without physical count | `CLOSING_PHYSICAL_COUNT_MISSING`; the lock service also blocks a new lock until a count exists. |
 
 ### G. Sync and data-integrity rules
 
@@ -205,10 +206,12 @@ exist yet. Each would produce guesses or false positives if forced.
    table; payments live on each purchase row. Per-purchase reconciliation is
    implemented; a true supplier statement needs a supplier ledger.
 5. **D14 — changed supplier bank details.** No bank-detail fields on `Supplier`.
-6. **E5 — expense outside staff permission.** `Expense.recordedBy` is free text,
-   not a `userId`, so role checks are impossible. `EXPENSE_UNATTRIBUTED` reports
-   missing attribution and marks `userIdAttributionAvailable: false`.
-7. **F1/F10 - counted vs expected cash, repeated shortages.** The Daily Closing UI records physical counts only in device-local storage. Because those counts are not synced to `DailyClosingSnapshot`, server assurance can verify expected cash but cannot compare it with the shopkeeper's count.
+6. **E5 — historical expense attribution.** New expenses are server-attributed
+   by user id, name and role. Legacy/imported rows can still have only free text;
+   those remain explicitly `EXPENSE_UNATTRIBUTED` rather than being guessed.
+7. **F10 - repeated shortages.** Counted-versus-expected cash is now persisted,
+   revisioned and attributed by location/user/device. The remaining gap is a
+   dedicated multi-day trend rule that groups repeated shortages by actor/device.
 8. **G12 — record overwritten by an older version.** Canonical financial tables
    carry no row version, only `updatedAt`.
 

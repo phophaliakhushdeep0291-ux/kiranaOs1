@@ -6,6 +6,7 @@ import { requireContinuityAction, requireFeature } from "../feature-gates/featur
 import { validate, validateQuery } from "../../middleware/validate.js";
 import {
   dailyClosingSchema,
+  dailyClosingDrawerCountsSchema,
   dailyClosingSnapshotSchema,
   exportListSchema,
   exportReportSchema,
@@ -29,6 +30,7 @@ router.use(requireLocationAccess("view"));
 // Shopkeeper operational dashboard reports. They are shop-scoped and exclude cancelled
 // bills; estimates (kacha bills) count as sales everywhere except the GST report.
 router.get("/daily-closing", validateQuery(dailyClosingSchema), ctrl.dailyClosing);
+router.get("/daily-closing/drawer-counts", validateQuery(dailyClosingDrawerCountsSchema), ctrl.listDailyClosingDrawerCounts);
 router.post("/daily-closing/snapshot", requireRole("owner", "admin"), validate(dailyClosingSnapshotSchema), ctrl.createDailyClosingSnapshot);
 router.post("/daily-closing/:date/lock", requireRole("owner", "admin"), ctrl.lockDailyClosingSnapshot);
 router.post(

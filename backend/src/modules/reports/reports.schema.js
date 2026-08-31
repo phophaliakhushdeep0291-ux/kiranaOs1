@@ -13,6 +13,11 @@ export const dailyClosingSnapshotSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+export const dailyClosingDrawerCountsSchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
 export const salesSummarySchema = z.object({
   range: z.enum(["today", "7d", "30d"]).optional(),
   from: dateLike,

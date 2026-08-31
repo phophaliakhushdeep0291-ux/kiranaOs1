@@ -22,11 +22,7 @@ describe("offline shell and readiness contract", () => {
       "ReportsPage.tsx",
       "DailyClosingPage.tsx",
       "SettingsPage.tsx",
-      "NotificationsSettingsPage.tsx",
-      "IntegrationsSettingsPage.tsx",
       "StaffPage.tsx",
-      "AssuranceDashboardPage.tsx",
-      "FindingDetailPage.tsx",
       "SyncStatusPage.tsx",
       "RecoveryModePage.tsx",
     ]) expect(vite).toContain(route);

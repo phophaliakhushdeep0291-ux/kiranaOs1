@@ -8,8 +8,8 @@
 //   * expectedCash  = cash received + supplier cash refunds - supplier cash paid - paid cash expenses
 //   * sales returns are stored as negative bills with negative payment rows,
 //     so refunds net out of the cash figure automatically
-// Physical drawer counts are currently device-local, so the server engine can
-// verify expected cash but cannot yet compare it with the shopkeeper's count.
+// Physical drawer counts and declared float/movements are persisted on the
+// snapshot, so the server can also test counted-versus-expected cash.
 import {
   ENTITY_TYPES,
   EVENT_TYPES,
@@ -251,6 +251,64 @@ export const cashClosingRules = [
   }),
 
   defineRule({
+    ruleCode: "CLOSING_PHYSICAL_COUNT_MISSING",
+    name: "Locked daily closing has no physical drawer count",
+    description: "A day was locked without recording what cash was physically present in the till.",
+    category: RULE_CATEGORIES.CASH_CLOSING,
+    severity: SEVERITY.HIGH,
+    defaultWeight: 28,
+    version: 1,
+    applicableEntityTypes: CLOSING,
+    applicableEventTypes: [EVENT_TYPES.DAILY_CLOSING_COMPLETED],
+    evidenceTypes: [EVIDENCE_TYPES.OWNER_APPROVAL, EVIDENCE_TYPES.STAFF_EXPLANATION],
+    remediation: "Re-open the day, record the physical cash count, investigate any variance, and lock it again.",
+    evaluate(ctx) {
+      if (!ctx.snapshot.lockedAt || ctx.snapshot.countedCashPaise != null) return passed;
+      return triggered({
+        lockedAt: new Date(ctx.snapshot.lockedAt).toISOString(),
+        expectedCashPaise: Number(ctx.snapshot.expectedCashPaise ?? 0),
+      });
+    },
+  }),
+
+  defineRule({
+    ruleCode: "CLOSING_PHYSICAL_CASH_VARIANCE",
+    name: "Physical drawer count differs from expected cash",
+    description: "The cash physically counted in the drawer does not match canonical cash activity plus the declared opening float and manual till movements.",
+    category: RULE_CATEGORIES.CASH_CLOSING,
+    severity: SEVERITY.HIGH,
+    defaultWeight: 32,
+    version: 1,
+    applicableEntityTypes: CLOSING,
+    applicableEventTypes: [EVENT_TYPES.DAILY_CLOSING_COMPLETED],
+    evidenceTypes: [EVIDENCE_TYPES.OWNER_APPROVAL, EVIDENCE_TYPES.STAFF_EXPLANATION, EVIDENCE_TYPES.EXPENSE_RECEIPT],
+    remediation: "Recount the drawer, verify the opening float and every cash-in/cash-out, then document the shortage or surplus before locking.",
+    evaluate(ctx) {
+      if (ctx.snapshot.countedCashPaise == null) return passed;
+      const expectedCashPaise = Number(
+        ctx.snapshot.drawerExpectedCashPaise
+          ?? (Number(ctx.snapshot.expectedCashPaise ?? 0)
+            + Number(ctx.snapshot.openingCashPaise ?? 0)
+            + Number(ctx.snapshot.manualCashInPaise ?? 0)
+            - Number(ctx.snapshot.manualCashOutPaise ?? 0)),
+      );
+      const countedCashPaise = Number(ctx.snapshot.countedCashPaise);
+      const variancePaise = countedCashPaise - expectedCashPaise;
+      if (variancePaise === 0) return passed;
+      return triggered({
+        expectedCashPaise,
+        countedCashPaise,
+        variancePaise,
+        varianceRupees: Number((variancePaise / 100).toFixed(2)),
+        openingCashPaise: Number(ctx.snapshot.openingCashPaise ?? 0),
+        manualCashInPaise: Number(ctx.snapshot.manualCashInPaise ?? 0),
+        manualCashOutPaise: Number(ctx.snapshot.manualCashOutPaise ?? 0),
+        countRevision: Number(ctx.snapshot.cashCountRevision ?? 0),
+      });
+    },
+  }),
+
+  defineRule({
     ruleCode: "CLOSING_CHANGED_AFTER_LOCK",
     name: "Closing snapshot regenerated after it was locked",
     description: "The closing snapshot's figures were regenerated after the lock timestamp, so the locked numbers are not the ones on record.",
@@ -324,13 +382,15 @@ export const cashClosingRules = [
       const salesDelta = Number(ctx.snapshot.totalSalesPaise ?? 0) - recomputedSalesPaise;
       const cashDelta = Number(ctx.snapshot.cashReceivedPaise ?? 0) - recomputedCashPaise;
       const expectedCashDelta = Number(ctx.snapshot.expectedCashPaise ?? 0) - recomputedExpectedCashPaise(ctx);
-      const worst = Math.max(Math.abs(salesDelta), Math.abs(cashDelta), Math.abs(expectedCashDelta));
+      const physicalVariance = ctx.snapshot.countedCashPaise == null ? 0 : Number(ctx.snapshot.cashVariancePaise ?? 0);
+      const worst = Math.max(Math.abs(salesDelta), Math.abs(cashDelta), Math.abs(expectedCashDelta), Math.abs(physicalVariance));
       if (worst < threshold) return passed;
       return triggered({
         materialityThresholdPaise: threshold,
         salesDifferencePaise: salesDelta,
         cashDifferencePaise: cashDelta,
         expectedCashDifferencePaise: expectedCashDelta,
+        physicalCashVariancePaise: physicalVariance,
         worstDifferenceRupees: Number((worst / 100).toFixed(2)),
       });
     },

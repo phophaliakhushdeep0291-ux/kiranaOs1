@@ -569,7 +569,7 @@ async function buildExpenseContext(shopId, expenseId, client) {
   if (!expense) throw new AuditContextError("Expense not found in this shop", "ENTITY_NOT_FOUND");
 
   const spentAt = new Date(expense.spentAt);
-  const [settings, baselines, duplicates, closingSnapshot, categoryExpenses, recentExpenses] = await Promise.all([
+  const [settings, baselines, duplicates, closingSnapshot, categoryExpenses, recentExpenses, expenseActor] = await Promise.all([
     loadShopSettings(shopId, client),
     getShopBaselines(shopId, { client }),
     client.expense.findMany({
@@ -607,6 +607,12 @@ async function buildExpenseContext(shopId, expenseId, client) {
       orderBy: { spentAt: "desc" },
       take: 500,
     }),
+    expense.recordedByUserId
+      ? client.user.findUnique({
+          where: { id: expense.recordedByUserId },
+          select: { id: true, shopId: true, name: true, role: true, disabledAt: true },
+        })
+      : null,
   ]);
 
   return {
@@ -621,7 +627,8 @@ async function buildExpenseContext(shopId, expenseId, client) {
     closingSnapshot,
     categoryExpenses,
     recentExpenses,
-    inputHash: computeInputHash({ expense, duplicateIds: duplicates.map((d) => d.id), closingLockedAt: closingSnapshot?.lockedAt ?? null }),
+    expenseActor,
+    inputHash: computeInputHash({ expense, expenseActor, duplicateIds: duplicates.map((d) => d.id), closingLockedAt: closingSnapshot?.lockedAt ?? null }),
   };
 }
 

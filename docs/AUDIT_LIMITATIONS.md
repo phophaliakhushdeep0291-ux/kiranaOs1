@@ -16,18 +16,18 @@ system cannot be detected. A sale made entirely off-book produces no finding —
 there is nothing inconsistent about a transaction that does not exist. This is the
 single most important limitation: **the module detects inconsistency, not absence.**
 
-## 2. Physical cash counts are device-local
+## 2. Physical cash counts depend on operator declarations
 
-The Daily Closing UI records counted cash and over/short history in local device
-storage. Those counts are not synced to `DailyClosingSnapshot`, so server assurance
-cannot compute a true counted-versus-expected variance. Consequences:
+The Daily Closing UI now writes counted cash, opening float, manual cash-in/out,
+the calculated variance, user, device, location and revision to
+`DailyClosingSnapshot` through the offline outbox. Another device can load that
+history, and the assurance engine evaluates `CLOSING_PHYSICAL_CASH_VARIANCE` and
+requires a physical count before a day can be locked.
 
-- Server cash rules verify that expected cash exactly matches canonical confirmed
-  collections, supplier cash refunds, supplier cash payments, and paid cash expenses.
-- A shortage visible on one counter device is not yet available to the server rule
-  engine or another device.
-- "Repeated shortages by the same staff/device" (requested rule F10) remains
-  deferred until drawer counts are synced with shop, location, user, and device scope.
+This is still not independent observation: the software cannot see cash that was
+never entered, or prove that the operator counted accurately. Repeated-shortage
+trend detection by staff/device remains future work; individual shortages and
+surpluses are server-visible now.
 
 ## 3. No bank or UPI feed
 There is no authorized bank/UPI provider integration. UPI references are
@@ -41,9 +41,10 @@ corresponds to a real transfer, or that a claimed amount matches the bank.
   not who changed it, so stock corrections cannot be attributed to a person.
   `STOCK_FREQUENT_CORRECTIONS` reports per-product frequency and marks
   `staffAttributionAvailable: false`, which reduces the finding's confidence.
-- **Expenses store a name, not a user id.** `Expense.recordedBy` is free text, so
-  role-based permission checks on expenses are impossible. `EXPENSE_UNATTRIBUTED`
-  reports missing attribution and marks `userIdAttributionAvailable: false`.
+- **Legacy/imported expenses may lack a user id.** New online and offline expenses
+  store a server-authenticated `recordedByUserId` plus immutable name and role
+  snapshots. `EXPENSE_UNATTRIBUTED` now identifies only rows without that trusted
+  identity, and `EXPENSE_ACTOR_SCOPE_MISMATCH` detects an invalid/cross-shop actor.
 - Bills, purchase receipts and audit-logged actions **do** carry server-assigned
   actor ids; attribution is reliable there.
 

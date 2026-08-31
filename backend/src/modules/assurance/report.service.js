@@ -31,9 +31,9 @@ const RESOLVED_STATUSES = [
 export const REPORT_LIMITATIONS = Object.freeze([
   "This is a continuous financial-control report produced by deterministic rules over KiranaOS records. It is not a statutory audit, carries no audit opinion, and does not replace a Chartered Accountant.",
   "Conclusions are limited to data recorded in KiranaOS. Cash, goods or credit that was never entered into the system cannot be detected.",
-  "Physical drawer counts are stored only on the counter device and are not synced to the server, so server assurance cannot compute counted-versus-expected variance; cash rules verify expected cash against canonical server records.",
+  "Physical drawer assurance depends on the operator entering an accurate count and declaring opening float and manual till movements; the system can detect variance but cannot independently observe cash outside the software.",
   "There is no bank or UPI provider feed. UPI references are operator-entered: reuse is detectable, authenticity is not.",
-  "Expenses store a payee name and an author name rather than a user id, so expense attribution and staff-permission checks are advisory.",
+  "New expenses store a server-authenticated creator id and immutable role/name snapshots. Legacy or imported expenses may still lack that identity and are reported as unattributed.",
   "Stock movements carry no actor column, so stock corrections cannot be attributed to an individual staff member.",
   "Records created before the shop's ledger coverage began cannot be reconciled to movements and are reported as insufficient data rather than as violations.",
   "Behavioural baselines require a minimum sample; where history is too thin the related rules are skipped instead of guessing.",

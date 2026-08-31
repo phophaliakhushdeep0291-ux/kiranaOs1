@@ -54,7 +54,7 @@
   },
   "udharPartialPaymentCycle": {
     "sourceArtifact": "frontend/qa-artifacts/udhar-ledger-cycle-20260831/report.json",
-    "sourceArtifactSha256": "6EBC369ABD5EF658EA26371CF36AC9599F129F042869C666ED96DD3A7D345FEA",
+    "sourceArtifactSha256": "DAFAD52CF4849A31DBADB2D31768C948F93DC4D33E9E7010AFC101142B7B3EC7",
     "productionPwa": true,
     "creditBillAmount": 200,
     "partialPaymentAmount": 75,
@@ -100,7 +100,7 @@
     "translationProblems": 0,
     "testFilesPassed": 310,
     "testFilesSkipped": 1,
-    "testsPassed": 2120,
+    "testsPassed": 2123,
     "testsSkipped": 1,
     "productionBuild": "passed",
     "bundleCheck": "passed",

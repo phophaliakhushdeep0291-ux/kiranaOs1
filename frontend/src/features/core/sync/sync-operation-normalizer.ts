@@ -40,6 +40,7 @@ const BACKEND_OPERATION_TYPE_MAP: Record<string, string> = {
   DELETE_PURCHASE_BILL: "DELETE_PURCHASE_BILL",
   RECORD_SUPPLIER_PAYMENT: "RECORD_SUPPLIER_PAYMENT",
   REVERSE_SUPPLIER_PAYMENT: "REVERSE_SUPPLIER_PAYMENT",
+  RECORD_DRAWER_COUNT: "RECORD_DRAWER_COUNT",
 };
 
 const BACKEND_ENTITY_TYPE_MAP: Record<string, string> = {
@@ -57,6 +58,7 @@ const BACKEND_ENTITY_TYPE_MAP: Record<string, string> = {
   DELETE_CUSTOMER: "customer",
   RESTORE_CUSTOMER: "customer",
   CREATE_EXPENSE: "expense",
+  RECORD_DRAWER_COUNT: "daily_closing",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

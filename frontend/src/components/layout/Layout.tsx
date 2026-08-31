@@ -408,9 +408,9 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   const { def: btDef } = useBusinessType();
   useBusinessTypeServerSync();
 
-  // Publish the height of the banner strip so full-height pages can subtract it.
+  // Publish the height of every banner strip so full-height pages can subtract it.
   // `--app-desktop-topbar-height` is a static 76px that matches the header
-  // exactly, but the trial/offline banners sit BELOW the header and were in
+  // exactly, but status, connectivity, sync and demo banners sit BELOW the header and were in
   // nobody's arithmetic. At 1280x800 that pushed Billing's workspace 45px past
   // the fold and a sibling block covered the cash / UPI / udhar tender buttons,
   // so a counter operator could not tender a sale by clicking at all. The
@@ -898,6 +898,13 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
           {backendStatus.browserOnline && !backendStatus.backendReachable && backendStatus.checkedAt && (
             <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
           )}
+          {/* Every strip that sits above page content belongs in this measured
+              wrapper. Full-height workspaces such as Billing subtract the
+              published height; rendering a banner inside <main> displaced the
+              workspace without shrinking it and produced a clipped second
+              layout whenever a sync warning or demo notice appeared. */}
+          {cleanPath(loc) !== "/sync-status" && <SyncAlertBanner />}
+          <DemoModeBanner />
         </div>
 
         <main
@@ -908,11 +915,6 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
             pageHasOwnTopbarActions ? "bg-[#ffffff]" : "bg-white",
           )}
         >
-          {/* The banner exists to point at this page — "open Sync Status to review", plus a
-              View link. On the page itself that is a loop, and on a phone it spends scarce
-              vertical space above the very failure the owner opened the page to read. */}
-          {cleanPath(loc) !== "/sync-status" && <SyncAlertBanner />}
-          <DemoModeBanner />
           {children}
         </main>
 

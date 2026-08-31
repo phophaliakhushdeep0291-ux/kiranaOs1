@@ -101,6 +101,24 @@ export function getPaymentSummary(params?: QueryParams) {
   return apiRequest<PaymentSummary>(`/reports/payment-summary${buildQuery(params)}`);
 }
 
+export interface ServerDrawerCount {
+  date: string;
+  openingCashPaise: number;
+  manualCashInPaise: number;
+  manualCashOutPaise: number;
+  expectedCashPaise: number;
+  countedCashPaise: number;
+  variancePaise: number;
+  countedAt: string;
+  countedByUserId: string | null;
+  countedByDeviceId: string | null;
+  revision: number;
+}
+
+export function getDailyClosingDrawerCounts(params?: { from?: string; to?: string }) {
+  return apiRequest<ServerDrawerCount[]>(`/reports/daily-closing/drawer-counts${buildQuery(params)}`, { background: true });
+}
+
 export interface AccountingMoneyEvidence {
   paise: number;
   amount: number;

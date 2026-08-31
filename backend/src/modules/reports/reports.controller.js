@@ -63,6 +63,18 @@ export async function createDailyClosingSnapshot(req, res, next) {
   catch (err) { next(err); }
 }
 
+export async function listDailyClosingDrawerCounts(req, res, next) {
+  try {
+    const data = await snapshotSvc.listDailyClosingDrawerCounts(req.shopId, {
+      from: req.query.from,
+      to: req.query.to,
+      storeId: requestLocationId(req),
+    });
+    res.json({ success: true, data });
+  }
+  catch (err) { next(err); }
+}
+
 export async function lockDailyClosingSnapshot(req, res, next) {
   try {
     const data = await snapshotSvc.lockDailyClosingSnapshot(req.shopId, req.params.date, req.user?.userId ?? null, requestLocationId(req));

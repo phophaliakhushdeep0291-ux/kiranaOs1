@@ -670,14 +670,29 @@ function runSuite() {
 
   test("expense rules: duplicate, missing receipt, missing payee, backdating", async () => {
     await resetDatabase(ctx.db);
-    const { shop } = await createTenant(ctx.db);
+    const { shop, owner } = await createTenant(ctx.db);
 
     // A clean expense with a payee and a note, below the receipt threshold.
     const clean = await ctx.db.expense.create({
-      data: { shopId: shop.id, title: "Tea for staff", amount: 120, category: "general", paymentMode: "cash", vendor: "Corner stall", notes: "daily", recordedBy: "Owner User" },
+      data: {
+        shopId: shop.id, title: "Tea for staff", amount: 120, category: "general", paymentMode: "cash",
+        vendor: "Corner stall", notes: "daily", recordedBy: owner.name,
+        recordedByUserId: owner.id, recordedByRole: owner.role,
+      },
     });
     const cleanResult = await evaluate(shop.id, ENTITY_TYPES.EXPENSE, clean.id);
     assert.equal(cleanResult.triggered, false, `clean expense flagged: ${ruleCodes(cleanResult).join(",")}`);
+
+    const invalidActor = await ctx.db.expense.create({
+      data: {
+        shopId: shop.id, title: "Office supplies", amount: 1500, category: "general", paymentMode: "cash",
+        vendor: "Stationery store", notes: "Receipt filed", recordedBy: "Unknown User",
+        recordedByUserId: "missing-or-cross-shop-user", recordedByRole: "owner",
+      },
+    });
+    const invalidActorCodes = ruleCodes(await evaluate(shop.id, ENTITY_TYPES.EXPENSE, invalidActor.id));
+    assert.ok(invalidActorCodes.includes("EXPENSE_ACTOR_SCOPE_MISMATCH"), invalidActorCodes.join(","));
+    assert.equal(invalidActorCodes.includes("EXPENSE_UNATTRIBUTED"), false, "an invalid actor is a scope-integrity issue, not missing attribution");
 
     // 10. Expense above threshold with no receipt reference and no payee.
     const noReceipt = await ctx.db.expense.create({

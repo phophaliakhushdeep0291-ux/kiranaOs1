@@ -17,6 +17,7 @@ import { createSupplierSchema, updateSupplierSchema } from "../suppliers/supplie
 import { createSupplier, restoreSupplier, softDeleteSupplier, updateSupplier } from "../suppliers/suppliers.service.js";
 import { createExpenseSchema, updateExpenseSchema } from "../expenses/expenses.schema.js";
 import { createExpense, softDeleteExpense, updateExpense } from "../expenses/expenses.service.js";
+import { recordDailyClosingDrawerCount } from "../reports/dailyClosingSnapshot.service.js";
 import { AUDIT_MODULES, AUDIT_RESULTS, createAuditLog } from "../audit/audit.service.js";
 import { recordBillLoyalty, reverseBillLoyalty } from "../loyalty/loyalty.service.js";
 import {
@@ -186,7 +187,8 @@ export function conflictEntityFromEvent(event) {
   // never be mislabelled as a mutable contact conflict because that would make
   // the UI offer destructive "keep local/cloud" resolution for ledger history.
   let entityType = "sync_event";
-  if (type.includes("UDHAR") || type.includes("LEDGER_ADJUSTMENT")) entityType = "udhar";
+  if (type.includes("DRAWER") || type.includes("DAILY_CLOSING")) entityType = "daily_closing";
+  else if (type.includes("UDHAR") || type.includes("LEDGER_ADJUSTMENT")) entityType = "udhar";
   else if (type.includes("PAYMENT")) entityType = "payment";
   else if (type.includes("PURCHASE")) entityType = "purchase";
   else if (type.includes("BILL")) entityType = "bill";
@@ -203,6 +205,7 @@ export function conflictEntityFromEvent(event) {
     payment: [payload.paymentId, payload.ledgerEntryId, payload.supplierId, payload.customerId],
     purchase: [payload.purchaseHistoryId, payload.localPurchaseHistoryId, payload.productId, payload.localProductId],
     stock_ledger: [payload.inventoryMovementId, payload.productId, payload.localProductId],
+    daily_closing: [payload.date],
   };
   const entityId = [
     ...(identityByEntity[entityType] ?? []),
@@ -690,6 +693,18 @@ const restoreBillPayloadSchema = z.object({
 
 const createProductPayloadSchema = z.object({
   product: createProductSchema.optional(),
+}).passthrough();
+
+const drawerCountPayloadSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  openingCashPaise: z.number().int().min(0).max(2_000_000_000).default(0),
+  manualCashInPaise: z.number().int().min(0).max(2_000_000_000).default(0),
+  manualCashOutPaise: z.number().int().min(0).max(2_000_000_000).default(0),
+  countedCashPaise: z.number().int().min(0).max(2_000_000_000),
+  clientExpectedCashPaise: z.number().int().min(-2_000_000_000).max(2_000_000_000).optional(),
+  baseRevision: z.number().int().min(0).max(2_000_000_000).default(0),
+  countedAt: z.string().datetime(),
+  storeId: z.string().min(1).optional(),
 }).passthrough();
 
 const productIdPayloadSchema = z.object({
@@ -1765,9 +1780,30 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.DELETE_EXPENSE:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyDeleteExpense(shopId, event, user, context);
+    case SYNC_EVENT_TYPES.RECORD_DRAWER_COUNT:
+      return applyRecordDrawerCount(shopId, event, user);
     default:
       throw new AppError(`Unsupported sync event type: ${event.type}`, 400);
   }
+}
+
+async function applyRecordDrawerCount(shopId, event, user) {
+  const payload = drawerCountPayloadSchema.parse(getEventPayload(event));
+  const closing = await recordDailyClosingDrawerCount(shopId, payload.date, {
+    ...payload,
+    // Legacy `event.store_id` is the shop id, not a StoreLocation id. Only the
+    // explicit location captured by modern clients is safe to resolve here.
+    storeId: payload.storeId ?? null,
+  }, {
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? event.device_id ?? null,
+  });
+  return {
+    type: event.type,
+    dailyClosingId: closing.snapshot?.id ?? null,
+    date: closing.date,
+    drawer: closing.drawer,
+  };
 }
 
 async function applyCreateBill(shopId, event, user, context) {
@@ -1992,6 +2028,8 @@ async function applyCreateExpense(shopId, event, user, context) {
     clientExpenseId: localExpenseId,
     sourceDeviceId: user?.deviceId ?? null,
     userId: user?.userId ?? user?.id ?? null,
+    userName: user?.userName ?? user?.name ?? null,
+    role: user?.role ?? null,
     syncEventId: getClientEventId(event),
   });
   return {

@@ -1162,8 +1162,8 @@ if (ctx.skip) {
       }, { token: auth.accessToken, headers }));
       assert.equal(updated.amount, 120);
       assert.equal(updated.paymentMode, "bank");
-      assertSuccess(await ctx.delete(`/api/expenses/${pending.id}`, { token: auth.accessToken, headers }));
-      assertSuccess(await ctx.post(`/api/expenses/${pending.id}/restore`, {}, { token: auth.accessToken, headers }));
+      assertSuccess(await ctx.delete(`/api/expenses/${pending.id}`, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers }));
+      assertSuccess(await ctx.post(`/api/expenses/${pending.id}/restore`, {}, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers }));
 
       const rows = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, sourceType: { in: ["expense", "expense_update", "expense_delete", "expense_restore"] } } });
       assert.equal(rows.length, 12, "two creates, one four-leg replacement, one delete reversal and one restore must all remain append-only");
@@ -1201,7 +1201,7 @@ if (ctx.skip) {
         paymentMode: "cash",
         status: "paid",
       }, { token: auth.accessToken, headers }), 201);
-      assertSuccess(await ctx.delete(`/api/expenses/${expense.id}`, { token: auth.accessToken, headers }));
+      assertSuccess(await ctx.delete(`/api/expenses/${expense.id}`, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers }));
 
       await ctx.db.$executeRawUnsafe(`
         CREATE TRIGGER force_expense_restore_audit_failure
@@ -1213,7 +1213,7 @@ if (ctx.skip) {
       `);
       let failedRestore;
       try {
-        failedRestore = await ctx.post(`/api/expenses/${expense.id}/restore`, {}, { token: auth.accessToken, headers });
+        failedRestore = await ctx.post(`/api/expenses/${expense.id}/restore`, {}, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers });
       } finally {
         await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_expense_restore_audit_failure");
       }

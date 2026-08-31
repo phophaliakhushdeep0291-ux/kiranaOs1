@@ -156,6 +156,7 @@ export function entityTypeFromOperation(operationType: string, fallback?: string
   if (operationType.includes("PURCHASE")) return "purchase_history";
   if (operationType.includes("SUPPLIER")) return "supplier";
   if (operationType.includes("EXPENSE")) return "expense";
+  if (operationType.includes("DRAWER") || operationType.includes("DAILY_CLOSING")) return "daily_closing";
   if (operationType.includes("SETTINGS")) return "settings";
   if (operationType.includes("SUBSCRIPTION")) return "subscription";
   if (operationType.includes("STAFF")) return "staff";
