@@ -1,0 +1,115 @@
+// Hindi half of the devices dictionary.
+//
+// "डिवाइस", "लॉगिन", "स्लॉट" and "प्लान" stay as they are: a shopkeeper says
+// those words in English inside a Hindi sentence, and the shuddh Hindi
+// equivalents ("युक्ति", "सत्र") would send them looking for a manual.
+import type { devicesEn } from "./devices";
+
+export const devicesHi: Record<keyof typeof devicesEn, string> = {
+  "devices.title": "डिवाइस",
+  "devices.subtitle.manage": "इस दुकान में चलने वाले फ़ोन, कंप्यूटर और काउंटर।",
+  "devices.subtitle.self": "अभी जिस डिवाइस से आप लॉगिन हैं, उसकी जानकारी।",
+  "devices.refresh": "फिर से देखें",
+
+  "devices.offline.title": "पिछली सेव की गई डिवाइस सूची दिख रही है",
+  "devices.offline.body": "नाम बदलने, ब्लॉक करने या हटाने से पहले इंटरनेट जोड़ें। दुकान का बाकी काम ऑफ़लाइन चलता रहेगा।",
+
+  "devices.stat.currentPlan": "मौजूदा प्लान",
+  "devices.stat.planUnknown": "पता नहीं",
+  "devices.stat.slotsOnPlan": "{count} डिवाइस स्लॉट",
+  "devices.stat.devicesUsed": "इस्तेमाल में",
+  "devices.stat.aboveLimit": "प्लान की सीमा से ज़्यादा",
+  "devices.stat.backendVerified": "सर्वर से जाँचा हुआ",
+  "devices.stat.slotsRemaining": "बचे हुए स्लॉट",
+  "devices.stat.readyForSignIn": "नया लॉगिन हो सकता है",
+  "devices.stat.allSlotsInUse": "सारे स्लॉट भरे हैं",
+  "devices.stat.thisDevice": "यह डिवाइस",
+  "devices.stat.currentInstallation": "अभी का ब्राउज़र",
+  "devices.stat.status": "स्थिति",
+  "devices.stat.verifiedByBackend": "सर्वर से जाँचा हुआ",
+  "devices.stat.lastActive": "आख़िरी बार चला",
+  "devices.stat.recentActivity": "हाल की लॉगिन गतिविधि",
+
+  "devices.limit.aboveTitle": "आपकी दुकान डिवाइस की सीमा से ऊपर है",
+  "devices.limit.fullTitle": "सारे डिवाइस स्लॉट भरे हुए हैं",
+  "devices.limit.aboveBody": "आपके प्लान में {limit} डिवाइस चलते हैं, पर {used} रजिस्टर हैं। आगे बढ़ने के लिए {excess} हटाएँ। अपने आप कुछ नहीं हटाया गया है।",
+  "devices.limit.fullBody": "नया लॉगिन करने से पहले कोई पुराना डिवाइस हटाएँ या प्लान बढ़ाएँ।",
+  "devices.limit.upgrade": "प्लान बढ़ाने के विकल्प देखें",
+
+  "devices.signedIn.title": "अभी लॉगिन हैं",
+  "devices.signedIn.manageHint": "जिन डिवाइस पर अभी कोई लॉगिन है। लॉग आउट करने पर स्लॉट बना रहता है; हटाने पर स्लॉट खाली हो जाता है और पहुँच तुरंत बंद।",
+  "devices.signedIn.readOnlyHint": "डिवाइस का नाम बदलना, ब्लॉक करना या हटाना सिर्फ़ मालिक और एडमिन कर सकते हैं।",
+  "devices.signedIn.badge": "{count} लॉगिन",
+  "devices.signedIn.empty": "अभी किसी भी डिवाइस पर कोई लॉगिन नहीं है।",
+
+  "devices.card.thisDevice": "यह डिवाइस",
+  "devices.card.webInstallation": "वेब पर",
+  "devices.card.registeredOn": "{date} को जोड़ा गया",
+  "devices.card.lastActive": "आख़िरी बार चला",
+  "devices.card.lastLogin": "आख़िरी लॉगिन",
+  "devices.card.signedIn": "लॉगिन हैं",
+  "devices.card.nobody": "कोई नहीं",
+  "devices.card.unknownUser": "पता नहीं",
+  "devices.card.lastSync": "आख़िरी सिंक {when}",
+
+  "devices.action.rename": "नाम बदलें",
+  "devices.action.logout": "लॉग आउट करें",
+  "devices.action.block": "ब्लॉक करें",
+  "devices.action.reactivate": "फिर चालू करें",
+  "devices.action.reactivateDevice": "डिवाइस फिर चालू करें",
+  "devices.action.remove": "डिवाइस हटाएँ",
+  "devices.action.logoutAndRemove": "लॉग आउट कर के हटाएँ",
+  "devices.action.logoutAndRemoveTitle": "इस डिवाइस को लॉग आउट कर के हटाएँ",
+
+  "devices.idle.title": "रजिस्टर हैं, पर कोई लॉगिन नहीं",
+  "devices.idle.body": "ये डिवाइस अभी इस्तेमाल में नहीं हैं, पर हटाने तक एक स्लॉट रोके रहते हैं।",
+  "devices.idle.unnamed": "बिना नाम का डिवाइस",
+  "devices.idle.lastSeen": "आख़िरी बार {when}",
+  "devices.idle.lastUsedBy": "आख़िरी बार {name} ने चलाया",
+  "devices.idle.removed": "हटाया गया",
+
+  "devices.security.title": "डिवाइस की पहुँच सर्वर से तय होती है",
+  "devices.security.manageBody": "लॉगिन टोकन बदलते रहते हैं और सुरक्षित रखे जाते हैं। डिवाइस हटाने या ब्लॉक करने पर उसके सारे लॉगिन तुरंत बंद हो जाते हैं; बिना सिंक हुआ डेटा अपने आप कभी नहीं मिटता।",
+  "devices.security.readOnlyBody": "डिवाइस संभालना सिर्फ़ मालिक और एडमिन के पास है। ऊपर आपकी अपनी डिवाइस की स्थिति दिख रही है।",
+
+  "devices.rename.title": "डिवाइस का नाम बदलें",
+  "devices.rename.description": "ऐसा नाम रखें जिससे काउंटर या स्टाफ़ पहचाना जाए।",
+  "devices.rename.label": "डिवाइस का नाम",
+  "devices.rename.save": "नाम सेव करें",
+
+  "devices.confirm.removeTitle": "\"{name}\" को हटाएँ?",
+  "devices.confirm.logoutRemoveTitle": "\"{name}\" को लॉग आउट कर के हटाएँ?",
+  "devices.confirm.removeBody": "इसकी पहुँच तुरंत बंद हो जाएगी और स्लॉट खाली हो जाएगा। उस पर बिना सिंक हुआ डेटा सुरक्षित रखा जाएगा।",
+  "devices.confirm.removeBodyCurrent": "आप इसी डिवाइस से लॉग आउट हो जाएँगे। इसकी पहुँच तुरंत बंद हो जाएगी और स्लॉट खाली हो जाएगा। बिना सिंक हुआ डेटा सुरक्षित रखा जाएगा।",
+  "devices.confirm.logoutTitle": "\"{name}\" को लॉग आउट करें?",
+  "devices.confirm.logoutBody": "इस डिवाइस के सारे लॉगिन तुरंत बंद हो जाएँगे। डिवाइस रजिस्टर रहेगा और उसका स्लॉट भी रोके रहेगा।",
+  "devices.confirm.blockTitle": "इस डिवाइस को ब्लॉक करें?",
+  "devices.confirm.blockBody": "सारे लॉगिन तुरंत बंद हो जाएँगे। ब्लॉक किया डिवाइस दोबारा चालू करने तक लॉगिन नहीं कर सकता।",
+  "devices.confirm.reactivateTitle": "इस डिवाइस को फिर से रजिस्टर होने दें?",
+  "devices.confirm.reactivateBody": "डिवाइस का स्लॉट बना रहेगा और यह दोबारा लॉगिन कर सकेगा।",
+  "devices.confirm.ownerPin": "मालिक का PIN",
+  "devices.confirm.pinPlaceholder": "4 अंकों का PIN",
+
+  "devices.common.cancel": "रद्द करें",
+  "devices.common.saving": "सेव हो रहा है…",
+  "devices.common.working": "हो रहा है…",
+
+  "devices.toast.removed": "डिवाइस हटा दिया",
+  "devices.toast.loggedOut": "डिवाइस लॉग आउट हो गया",
+  "devices.toast.blocked": "डिवाइस ब्लॉक कर दिया",
+  "devices.toast.canSignInAgain": "डिवाइस दोबारा लॉगिन कर सकता है",
+  "devices.toast.actionFailed": "यह काम पूरा नहीं हो सका",
+  "devices.toast.tryAgain": "फिर से कोशिश करें।",
+  "devices.toast.renamed": "डिवाइस का नाम बदल दिया",
+  "devices.toast.renameFailed": "नाम नहीं बदल सका",
+
+  "devices.health.printer": "प्रिंटर",
+  "devices.health.network": "नेटवर्क",
+  "devices.health.storageUsed": "स्टोरेज इस्तेमाल",
+  "devices.health.battery": "बैटरी",
+  "devices.health.memoryUsed": "मेमोरी इस्तेमाल",
+  "devices.health.checkedAt": "जाँच {when}",
+  "devices.health.offline": "ऑफ़लाइन",
+  "devices.health.online": "ऑनलाइन",
+  "devices.health.charging": "चार्ज हो रहा है",
+};
