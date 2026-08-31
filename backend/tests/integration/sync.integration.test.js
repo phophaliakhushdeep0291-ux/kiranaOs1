@@ -2362,7 +2362,7 @@ if (ctx.skip) {
 
     test("keeping the cloud version resolves a refusal that carried no server snapshot", async () => {
       // A validation refusal answers with a message, not a record (for example
-      // PACKAGING_UNIT_HAS_STOCK), so the conflict is stored with no server snapshot.
+      // PACKAGING_MODE_STOCK_MIGRATION_REQUIRED), so the conflict is stored with no server snapshot.
       // "Keep cloud" means leave the server record as it stands - there is nothing to
       // restore and nothing that needs restoring - but it used to dead-end on
       // SYNC_CONFLICT_SNAPSHOT_MISSING, leaving a review the shop could never clear.
@@ -2373,7 +2373,7 @@ if (ctx.skip) {
         entity_type: "product",
         entity_id: product.id,
         reason_code: "OWNER_REVIEW",
-        message: "Count packet-10-kg to zero before removing or disabling that pack.",
+        message: "Move the per-pack counts into one pool before switching packaging mode.",
         local_snapshot: { productId: product.id, product: { name: "no server snapshot" } },
         server_snapshot: null,
       }, { token: ownerAuth.accessToken, headers: deviceHeaders })).conflict;

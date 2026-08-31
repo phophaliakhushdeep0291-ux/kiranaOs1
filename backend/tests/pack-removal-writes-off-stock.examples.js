@@ -67,7 +67,11 @@ assert.deepEqual(live, ["piece-100-ml", "piece-200-ml"], "the other two sizes ar
 const removed = after.sellingUnits.find((u) => u.unitCode === "piece-500-ml");
 assert.ok(removed, "the row is kept, not deleted — old bills still resolve through it");
 assert.equal(removed.isActive, false);
-ok("the other packs survive and the removed one is retired, not deleted");
+// The count has to go with it. The stock was just written off to the product and
+// the ledger, so a retired row still claiming twenty packs would have it counted
+// twice - and switching the pack back on would resurrect stock already written off.
+assert.equal(Number(removed.onHandQty), 0, "a pack that is no longer sold holds nothing");
+ok("the other packs survive and the removed one is retired, emptied, not deleted");
 
 /* ------------------------------------------------------------- the ledger */
 
