@@ -41,6 +41,13 @@ export async function openTableInBilling(table: RestaurantTable): Promise<HeldBi
   const map = reconcileTableBills(mapRaw, held, draft?.activeBillId);
   const existingId = map[table.id];
   let bill = held.find((entry) => entry.id === existingId) ?? null;
+  // A tab parked before bills knew their table carries no stamp. The map already
+  // says which table it is, so adopt it here rather than leaving it to read as a
+  // counter bill for the rest of its life.
+  if (bill && bill.tableId !== table.id) {
+    bill = { ...bill, tableId: table.id };
+    held = upsertOpenBill(held, bill);
+  }
 
   if (!bill) {
     bill = {
@@ -50,6 +57,7 @@ export async function openTableInBilling(table: RestaurantTable): Promise<HeldBi
       cart: [],
       selectedCustomerId: "walk_in",
       customerName: table.name,
+      tableId: table.id,
     };
     /**
      * Refuse rather than evict.

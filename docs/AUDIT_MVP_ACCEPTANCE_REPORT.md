@@ -43,14 +43,16 @@ in-code rule versions + per-finding `ruleVersion` snapshots (documented deviatio
 CUSTOMER_CREDIT 12, SYNC_INTEGRITY 11, RECONCILIATION 9, EXPENSE 9, BILLING 7,
 AUTHORIZATION 4. Full request-to-rule mapping in `AUDIT_RULE_CATALOG.md`.
 
-**8 deferred**, each because the data cannot support it honestly:
+**Original 8 deferred requests**, retained as historical context; completed
+follow-on work is marked in the table rather than silently rewriting the original
+acceptance result:
 
 | Requested | Why deferred |
 |---|---|
 | A2 duplicate idempotency key | `sourceDeviceId` is set for every sale; offline origin is not distinguishable. An early version fired on nearly every bill and was removed. DB unique constraints already prevent double-application. |
 | B10 backdated ledger adjustment | `UdharLedger` has no business-date column separate from `createdAt` |
 | C6 stock corrections per staff member | `StockLedger` has no actor column |
-| D8 supplier-level payable reconciliation | no supplier ledger / supplier-payment table |
+| D8 supplier-level payable reconciliation | Completed after the original MVP: append-only `FinancialLedger` supplier subledger, operational-due comparison, owner-approved legacy repair and supplier statement UI |
 | D14 changed supplier bank details | no bank-detail fields on `Supplier` |
 | E5 expense staff-permission check | `Expense.recordedBy` is free text, not a userId |
 | F1/F10 counted-cash variance, repeated shortages | Historical at report date. Later completed with revisioned drawer counts plus `CLOSING_PHYSICAL_CASH_VARIANCE` and `CLOSING_REPEATED_CASH_SHORTAGE`. |
@@ -327,7 +329,7 @@ product can claim today:
 | **Developer testing** | **Ready** | 206 integration tests pass, builds pass, MVP scenario passes, 45 live contract checks pass |
 | **Family-shop testing** | **Ready** | Read-only toward financial data, AI off by default, findings are advisory, every rule can be disabled. Recommend starting with manual runs and reviewing the first week's findings together to tune thresholds |
 | **Limited external pilot** | **Ready with conditions** | Needs: (a) the Postgres migration applied and smoke-tested on a real instance, (b) a scheduler for `SCHEDULED` runs, (c) baseline recomputation scheduled, (d) an operator watching false-positive rates per rule for the first weeks. AI should stay `disabled` unless a pilot shop explicitly consents |
-| **Paid usage (historical verdict at report date)** | **Not yet** | At the time of this report the blockers included no durable outbox, no server cash count, no supplier ledger, attribution gaps and no investigation-case UI. Later releases added the offline outbox, server-backed revisioned drawer counts, supplier-payment ledger evidence and investigation cases; use current competitive/release evidence rather than this historical verdict for launch decisions. |
+| **Paid usage (historical verdict at report date)** | **Not yet** | At the time of this report the blockers included no durable outbox, no server cash count, no supplier ledger, attribution gaps and no investigation-case UI. Later releases added the offline outbox, server-backed revisioned drawer counts, reconciled supplier statements, immutable actor attribution and investigation cases; use current competitive/release evidence rather than this historical verdict for launch decisions. |
 
 ### Recommended next steps, in order
 
@@ -336,10 +338,14 @@ product can claim today:
    persisted through the offline outbox.
 2. ~~Add `userId` to `Expense` and an actor column to `StockLedger`.~~ Completed for new online/offline records; legacy rows remain explicit.
 3. ~~Wire `SCHEDULED` runs and baseline recomputation into the existing jobs infrastructure.~~ Completed; production execution still depends on Redis/worker deployment.
-4. Move the transaction-triggered queue onto the durable jobs queue when
-   `QUEUES_ENABLED`.
+4. ~~Move the transaction-triggered queue onto the durable jobs queue when
+   `QUEUES_ENABLED`.~~ Completed with BullMQ retry/backoff and bounded local
+   fallback when Redis dispatch is unavailable.
 5. ~~Build the `AuditCase` grouping UI and its AI summary.~~ Completed.
-6. Add a supplier ledger for true supplier-statement reconciliation.
+6. ~~Add a supplier ledger for true supplier-statement reconciliation.~~ Completed:
+   direct purchases, receipts, payments and return credits now feed an append-only
+   supplier subledger; the supplier screen shows the reconciled statement and an
+   audited repair for explicitly linked legacy purchases.
 
 ---
 

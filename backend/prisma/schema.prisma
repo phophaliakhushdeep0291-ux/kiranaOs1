@@ -2212,40 +2212,40 @@ model AuditLog {
 // DAILY CLOSING SNAPSHOT — persisted report snapshot per shop/day
 // ─────────────────────────────────────────────
 model DailyClosingSnapshot {
-  id                     String    @id @default(cuid())
-  shopId                 String
-  storeId                String?
-  date                   DateTime
-  totalSalesPaise        Int       @default(0)
-  cashReceivedPaise      Int       @default(0)
-  upiReceivedPaise       Int       @default(0)
-  bankReceivedPaise      Int       @default(0)
-  udharGivenPaise        Int       @default(0)
-  oldUdharRecoveredPaise Int       @default(0)
-  expectedCashPaise      Int       @default(0)
-  openingCashPaise       Int       @default(0)
-  manualCashInPaise      Int       @default(0)
-  manualCashOutPaise     Int       @default(0)
+  id                      String    @id @default(cuid())
+  shopId                  String
+  storeId                 String?
+  date                    DateTime
+  totalSalesPaise         Int       @default(0)
+  cashReceivedPaise       Int       @default(0)
+  upiReceivedPaise        Int       @default(0)
+  bankReceivedPaise       Int       @default(0)
+  udharGivenPaise         Int       @default(0)
+  oldUdharRecoveredPaise  Int       @default(0)
+  expectedCashPaise       Int       @default(0)
+  openingCashPaise        Int       @default(0)
+  manualCashInPaise       Int       @default(0)
+  manualCashOutPaise      Int       @default(0)
   drawerExpectedCashPaise Int?
-  countedCashPaise       Int?
-  cashVariancePaise      Int?
-  cashCountedAt          DateTime?
-  cashCountedByUserId    String?
-  cashCountedByDeviceId  String?
-  cashCountRevision      Int       @default(0)
-  totalBills             Int       @default(0)
-  cancelledBills         Int       @default(0)
-  roughBills             Int       @default(0)
-  pendingSyncCount       Int       @default(0)
-  topProductsJson        String    @default("[]")
-  lowStockJson           String    @default("[]")
-  generatedByUserId      String?
-  generatedAt            DateTime  @default(now())
-  lockedAt               DateTime?
-  lockedByUserId         String?
-  source                 String    @default("live") // live | worker | manual
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  countedCashPaise        Int?
+  cashVariancePaise       Int?
+  cashCountedAt           DateTime?
+  cashCountedByUserId     String?
+  cashCountedByDeviceId   String?
+  cashCountRevision       Int       @default(0)
+  totalBills              Int       @default(0)
+  cancelledBills          Int       @default(0)
+  roughBills              Int       @default(0)
+  pendingSyncCount        Int       @default(0)
+  topProductsJson         String    @default("[]")
+  lowStockJson            String    @default("[]")
+  generatedByUserId       String?
+  generatedAt             DateTime  @default(now())
+  lockedAt                DateTime?
+  lockedByUserId          String?
+  source                  String    @default("live") // live | worker | manual
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   shop  Shop           @relation(fields: [shopId], references: [id])
   store StoreLocation? @relation(fields: [storeId], references: [id], onDelete: SetNull)
@@ -2515,6 +2515,7 @@ model FinancialLedger {
   @@unique([shopId, idempotencyKey])
   @@index([shopId, businessDate])
   @@index([shopId, customerId])
+  @@index([shopId, supplierId, businessDate])
   @@index([shopId, billId])
   @@index([shopId, sourceType, sourceId])
 }

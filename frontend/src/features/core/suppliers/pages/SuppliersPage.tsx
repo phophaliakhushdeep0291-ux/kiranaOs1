@@ -3,7 +3,7 @@ import {
   useListSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier,
   getListSuppliersQueryKey, type Supplier
 } from "@/lib/api/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,13 +12,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Pencil, Loader2, Phone, MapPin, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Loader2, Phone, MapPin, Trash2, FileText, AlertTriangle, CheckCircle2, RefreshCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { TradeFocusStrip } from "@/components/shared";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 import { getShopSuppliersProfile } from "@/features/core/settings/shop-suppliers";
+import { getSupplierStatement, rebuildSupplierStatement } from "@/features/core/suppliers/api";
+import { formatMoney } from "@/lib/money";
 
 // Validation messages are dictionary keys rather than sentences: the schema is
 // built inside the component so it can resolve them, since a module-level schema
@@ -48,8 +50,34 @@ export default function Suppliers() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null);
+  const [statementTarget, setStatementTarget] = useState<Supplier | null>(null);
+  const [repairStatement, setRepairStatement] = useState(false);
+  const [statementFrom, setStatementFrom] = useState("");
+  const [statementTo, setStatementTo] = useState("");
 
   const suppliers = useListSuppliers();
+  const statementQuery = useQuery({
+    queryKey: ["supplier-statement", statementTarget?.id, statementFrom, statementTo],
+    queryFn: () => getSupplierStatement(statementTarget!.id, { from: statementFrom || undefined, to: statementTo || undefined }),
+    enabled: Boolean(statementTarget),
+    staleTime: 2_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const repairMutation = useMutation({
+    mutationFn: (ownerPin: string) => rebuildSupplierStatement(statementTarget!.id, ownerPin),
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["supplier-statement", statementTarget?.id] });
+      setRepairStatement(false);
+      toast({
+        title: result.repairIncomplete
+          ? t("suppliers.statement.repairMore", { count: result.repairedPurchaseCount })
+          : result.repairedPurchaseCount
+          ? t("suppliers.statement.repaired", { count: result.repairedPurchaseCount })
+          : t("suppliers.statement.noRepairNeeded"),
+      });
+    },
+  });
 
   const schema = useMemo(
     () => supplierSchema((key) => t(key === "nameRequired" ? "suppliers.form.nameRequired" : "suppliers.form.gstinInvalid")),
@@ -187,6 +215,15 @@ export default function Suppliers() {
               <div className="ml-2 flex shrink-0 items-center gap-2">
                 <button
                   type="button"
+                  data-testid={`button-statement-${s.id}`}
+                  onClick={() => setStatementTarget(s)}
+                  aria-label={t("suppliers.row.statement", { name: s.name })}
+                  className="grid h-11 w-11 place-items-center rounded-xl border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground active:scale-95"
+                >
+                  <FileText size={17} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
                   data-testid={`button-edit-${s.id}`}
                   onClick={() => openEdit(s)}
                   aria-label={t("suppliers.row.edit", { name: s.name })}
@@ -243,6 +280,139 @@ export default function Suppliers() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={Boolean(statementTarget)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !repairMutation.isPending) {
+            setStatementTarget(null);
+            setRepairStatement(false);
+            setStatementFrom("");
+            setStatementTo("");
+          }
+        }}
+      >
+        <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("suppliers.statement.title", { name: statementTarget?.name ?? "" })}</DialogTitle>
+          </DialogHeader>
+
+          {statementQuery.isPending ? (
+            <div className="space-y-3 py-3" aria-label={t("suppliers.statement.loading")}>
+              <Skeleton className="h-24 w-full rounded-xl" />
+              <Skeleton className="h-48 w-full rounded-xl" />
+            </div>
+          ) : statementQuery.isError ? (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950" role="alert">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <div>
+                  <p className="font-bold">{t("suppliers.statement.unavailable")}</p>
+                  <p className="mt-1">{t("suppliers.statement.onlineRequired")}</p>
+                  <Button className="mt-3" size="sm" variant="outline" onClick={() => void statementQuery.refetch()}>
+                    <RefreshCcw size={14} className="mr-1.5" />{t("suppliers.statement.retry")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : statementQuery.data ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 rounded-xl border bg-muted/20 p-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="supplier-statement-from">{t("suppliers.statement.from")}</Label>
+                  <Input id="supplier-statement-from" type="date" className="mt-1" value={statementFrom} max={statementTo || undefined} onChange={(event) => setStatementFrom(event.target.value)} />
+                </div>
+                <div>
+                  <Label htmlFor="supplier-statement-to">{t("suppliers.statement.to")}</Label>
+                  <Input id="supplier-statement-to" type="date" className="mt-1" value={statementTo} min={statementFrom || undefined} onChange={(event) => setStatementTo(event.target.value)} />
+                </div>
+              </div>
+              <div className={`rounded-xl border p-4 ${statementQuery.data.reconciliationStatus === "balanced" ? "border-emerald-200 bg-emerald-50" : "border-amber-300 bg-amber-50"}`}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-2">
+                    {statementQuery.data.reconciliationStatus === "balanced"
+                      ? <CheckCircle2 size={20} className="mt-0.5 text-emerald-700" aria-hidden="true" />
+                      : <AlertTriangle size={20} className="mt-0.5 text-amber-700" aria-hidden="true" />}
+                    <div>
+                      <p className="font-bold">
+                        {statementQuery.data.reconciliationStatus === "balanced"
+                          ? t("suppliers.statement.balanced")
+                          : t("suppliers.statement.attention")}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t("suppliers.statement.coverage", {
+                          linked: statementQuery.data.coverage.linkedPurchaseCount,
+                          unlinked: statementQuery.data.coverage.unlinkedPurchaseCount,
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  {statementQuery.data.reconciliationStatus !== "balanced" ? (
+                    <Button size="sm" variant="outline" onClick={() => setRepairStatement(true)}>
+                      <RefreshCcw size={14} className="mr-1.5" />{t("suppliers.statement.repair")}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[
+                  [t("suppliers.statement.currentDue"), statementQuery.data.currentBalancePaise],
+                  [t("suppliers.statement.purchaseDue"), statementQuery.data.operationalDuePaise],
+                  [t("suppliers.statement.opening"), statementQuery.data.openingBalancePaise],
+                  [t("suppliers.statement.difference"), statementQuery.data.differencePaise],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="rounded-xl border bg-card p-3">
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="mt-1 text-lg font-black">{formatMoney(Number(value) / 100)}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2">{t("suppliers.statement.date")}</th>
+                      <th className="px-3 py-2">{t("suppliers.statement.reference")}</th>
+                      <th className="px-3 py-2 text-right">{t("suppliers.statement.purchase")}</th>
+                      <th className="px-3 py-2 text-right">{t("suppliers.statement.paid")}</th>
+                      <th className="px-3 py-2 text-right">{t("suppliers.statement.change")}</th>
+                      <th className="px-3 py-2 text-right">{t("suppliers.statement.balance")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statementQuery.data.rows.length ? statementQuery.data.rows.map((row) => (
+                      <tr key={row.id} className="border-t">
+                        <td className="whitespace-nowrap px-3 py-2">{new Date(row.businessDate).toLocaleDateString()}</td>
+                        <td className="max-w-[220px] truncate px-3 py-2 font-medium">{row.reference}</td>
+                        <td className="px-3 py-2 text-right">{formatMoney(row.purchasePaise / 100)}</td>
+                        <td className="px-3 py-2 text-right">{formatMoney((row.immediatePaymentPaise + row.settlementPaise + row.creditPaise) / 100)}</td>
+                        <td className="px-3 py-2 text-right">{formatMoney(row.payableChangePaise / 100)}</td>
+                        <td className="px-3 py-2 text-right font-bold">{formatMoney(row.balancePaise / 100)}</td>
+                      </tr>
+                    )) : (
+                      <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">{t("suppliers.statement.empty")}</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {statementQuery.data.hasMore ? <p className="text-xs text-muted-foreground">{t("suppliers.statement.more")}</p> : null}
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <OwnerPinModal
+        open={repairStatement}
+        title={t("suppliers.statement.repairTitle")}
+        description={t("suppliers.statement.repairDescription")}
+        confirmLabel={t("suppliers.statement.repairConfirm")}
+        loading={repairMutation.isPending}
+        error={repairMutation.isError ? failed(repairMutation.error) : null}
+        onCancel={() => { if (!repairMutation.isPending) setRepairStatement(false); }}
+        onConfirm={({ ownerPin }) => repairMutation.mutateAsync(ownerPin)}
+      />
 
       <OwnerPinModal
         open={Boolean(deleteTarget)}

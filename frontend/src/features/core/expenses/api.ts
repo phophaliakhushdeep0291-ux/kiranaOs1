@@ -32,8 +32,8 @@ export function createExpense(data: ExpenseInput) {
   });
 }
 
-export function updateExpense(id: string, data: Partial<ExpenseInput>) {
-  return apiRequest<Expense>(`/expenses/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+export function updateExpense(id: string, data: Partial<ExpenseInput>, ownerPin: string) {
+  return apiRequest<Expense>(`/expenses/${id}`, { method: "PATCH", body: JSON.stringify(data), ownerPin });
 }
 
 export function deleteExpense(id: string, ownerPin: string) {

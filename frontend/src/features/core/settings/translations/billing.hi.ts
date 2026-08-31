@@ -11,6 +11,8 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.openBills.new": "नया {bill}",
 
   "billing.cart.empty": "कार्ट खाली है",
+  "billing.cart.itemCountOne": "{count} चीज़",
+  "billing.cart.itemCountMany": "{count} चीज़ें",
   "billing.cart.emptyHint": "बाईं तरफ से {items} चुनकर जोड़ें",
   "billing.cart.sellingUnitFor": "{name} की बिक्री यूनिट",
   "billing.cart.guestItemProtected": "स्वीकृत QR आइटम · मूल मात्रा और हिस्सा सुरक्षित है",
@@ -444,6 +446,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.clearBillConfirm": "बिल हटाएं",
   "billing.page.printAfterSavingTitle": "सेव करने के बाद बिल छापें?",
   "billing.page.printAfterSavingBody": "बिल दोनों तरह से सेव होगा। प्रिंट चुनने पर सेट किया हुआ प्रिंटर खुलेगा, या बिना छापे आगे बढ़ें।",
+  "billing.page.goBack": "वापस जाएँ",
   "billing.page.savePrint": "सेव करके छापें",
   "billing.page.saveNoPrint": "बिना छापे सेव करें",
   "billing.page.checkout": "पेमेंट",

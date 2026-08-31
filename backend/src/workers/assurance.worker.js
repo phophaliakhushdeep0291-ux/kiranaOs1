@@ -10,7 +10,7 @@
 // canonical financial tables, and one shop's failure never stops the sweep.
 import db from "../db.js";
 import { JOB_NAMES } from "./queueNames.js";
-import { RUN_TYPES } from "../modules/assurance/assurance.constants.js";
+import { ENTITY_TYPES, RUN_TYPES } from "../modules/assurance/assurance.constants.js";
 import { collectEntitiesForPeriod, createRun, executeRun } from "../modules/assurance/evaluation.service.js";
 import { recomputeShopBaselines } from "../modules/assurance/baseline.service.js";
 
@@ -19,6 +19,8 @@ const MAX_SHOPS_PER_JOB = 200;
 
 export async function handleAssuranceJob(job) {
   switch (job.name) {
+    case JOB_NAMES.RUN_TRANSACTION_ASSURANCE:
+      return runTransactionTriggeredAssurance(job.data ?? {});
     case JOB_NAMES.RUN_SCHEDULED_ASSURANCE:
       return runScheduledAssurance(job.data ?? {});
     case JOB_NAMES.RECOMPUTE_ASSURANCE_BASELINES:
@@ -31,6 +33,52 @@ export async function handleAssuranceJob(job) {
       throw error;
     }
   }
+}
+
+const SUPPORTED_ENTITY_TYPES = new Set(Object.values(ENTITY_TYPES));
+
+function requiredText(value, code) {
+  const normalized = String(value ?? "").trim();
+  if (normalized) return normalized;
+  const error = new Error(code === "ASSURANCE_JOB_SHOP_REQUIRED" ? "Assurance job shop scope is required" : "Assurance job entity identity is required");
+  error.code = code;
+  throw error;
+}
+
+/**
+ * Durable post-commit evaluation. Canonical money has already committed; this
+ * worker only writes assurance runs/findings and is safe to retry.
+ */
+export async function runTransactionTriggeredAssurance(payload = {}) {
+  const shopId = requiredText(payload.shopId, "ASSURANCE_JOB_SHOP_REQUIRED");
+  const entityId = requiredText(payload.entityId, "ASSURANCE_JOB_ENTITY_REQUIRED");
+  const entityType = requiredText(payload.entityType, "ASSURANCE_JOB_ENTITY_REQUIRED").toUpperCase();
+  if (!SUPPORTED_ENTITY_TYPES.has(entityType)) {
+    const error = new Error(`Unsupported assurance entity type: ${entityType}`);
+    error.code = "ASSURANCE_JOB_ENTITY_UNSUPPORTED";
+    throw error;
+  }
+  const actorUserId = payload.actorUserId ? String(payload.actorUserId) : null;
+  const run = await createRun(shopId, {
+    runType: RUN_TYPES.TRANSACTION_TRIGGERED,
+    scope: { entityCount: 1, trigger: "durable_post_commit_job" },
+    triggeredByUserId: actorUserId,
+  });
+  const outcome = await executeRun(
+    shopId,
+    run,
+    [{ entityType, entityId }],
+    { actorUserId },
+  );
+  return {
+    jobName: JOB_NAMES.RUN_TRANSACTION_ASSURANCE,
+    runId: outcome.runId,
+    status: outcome.status,
+    evaluated: outcome.evaluated,
+    findingsCreated: outcome.findingsCreated,
+    findingsUpdated: outcome.findingsUpdated,
+    failureCount: outcome.failures.length,
+  };
 }
 
 function boundedInteger(value, fallback, min, max) {

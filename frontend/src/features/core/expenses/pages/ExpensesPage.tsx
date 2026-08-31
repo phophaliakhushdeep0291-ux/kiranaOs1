@@ -118,7 +118,7 @@ export default function ExpensesPage() {
   const invalidate = () => { void queryClient.invalidateQueries({ queryKey: ["expenses"] }); void queryClient.invalidateQueries({ queryKey: ["expense-overview"] }); };
 
   const saveMut = useMutation({
-    mutationFn: (vars: { id?: string; data: ExpenseInput }) => (vars.id ? updateExpenseLocalFirst(vars.id, vars.data) : createExpenseLocalFirst(vars.data)),
+    mutationFn: (vars: { id?: string; data: ExpenseInput; ownerPin?: string }) => (vars.id ? updateExpenseLocalFirst(vars.id, vars.data, vars.ownerPin ?? "") : createExpenseLocalFirst(vars.data)),
     onSuccess: () => { refreshLocalExpenses(); invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Expense updated" : "Expense saved on this device", description: editing ? undefined : "Cloud backup will run automatically." }); },
     onError: (err: unknown) => {
       toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
@@ -431,7 +431,7 @@ export default function ExpensesPage() {
         width={panelWidth}
         onResizeStart={onResizeStart}
         onClose={() => { setPanelOpen(false); setEditing(null); }}
-        onSubmit={(data) => saveMut.mutate({ id: editing?.id, data })}
+        onSubmit={(data, ownerPin) => saveMut.mutate({ id: editing?.id, data, ownerPin })}
       />
 
       <Dialog open={deleting !== null} onOpenChange={(o) => { if (!o) { setDeleting(null); setDeleteOwnerPin(""); } }}>
@@ -485,8 +485,9 @@ function PageBtn({ children, active, disabled, ariaLabel, onClick }: { children:
 /* ── Add / Edit docked panel ── */
 function ExpensePanel({ open, editing, categories, saving, width, onResizeStart, onClose, onSubmit }: {
   open: boolean; editing: Expense | null; categories: string[]; saving: boolean; width: number;
-  onResizeStart: (e: React.MouseEvent) => void; onClose: () => void; onSubmit: (data: ExpenseInput) => void;
+  onResizeStart: (e: React.MouseEvent) => void; onClose: () => void; onSubmit: (data: ExpenseInput, ownerPin?: string) => void;
 }) {
+  const [ownerPin, setOwnerPin] = useState("");
   const form = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseFormSchema),
     values: {
@@ -507,9 +508,12 @@ function ExpensePanel({ open, editing, categories, saving, width, onResizeStart,
     },
   });
   const recurring = form.watch("recurring");
+  useEffect(() => {
+    setOwnerPin("");
+  }, [editing?.id, open]);
 
   function submit(v: ExpenseFormData) {
-    onSubmit({
+    const data: ExpenseInput = {
       title: v.title,
       amount: v.amount,
       category: v.category,
@@ -520,19 +524,22 @@ function ExpensePanel({ open, editing, categories, saving, width, onResizeStart,
       notes: v.notes?.trim() || undefined,
       recurringInterval: v.recurring ? v.recurringInterval : "none",
       nextDueOn: v.recurring && v.nextDueOn ? new Date(v.nextDueOn).toISOString() : undefined,
-    });
+    };
+    onSubmit(data, editing ? ownerPin : undefined);
   }
+
+  const panelTitle = editing ? "Edit Expense" : "Add New Expense";
 
   return (
     <aside
       style={{ width }}
       className={`app-slide-panel fixed right-0 top-0 z-[80] flex h-[100dvh] w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
-      role="dialog" aria-label={editing ? "Edit expense" : "Add new expense"} aria-hidden={!open}
+      role="dialog" aria-label={panelTitle} aria-hidden={!open}
     >
       <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{editing ? "Edit Expense" : "Add New Expense"}</h2>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{panelTitle}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{editing ? "Update this business expense" : "Record a new business expense"}</p>
         </div>
         <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
@@ -571,6 +578,21 @@ function ExpensePanel({ open, editing, categories, saving, width, onResizeStart,
           </Fld>
           <Fld label="Notes (Optional)"><Input className="h-10" placeholder="Payment for shop rent – May 2024" {...form.register("notes")} /></Fld>
 
+          {editing && (
+            <Fld label="Owner PIN *">
+              <Input
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                value={ownerPin}
+                onChange={(event) => setOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="4-digit PIN to approve this edit"
+                className="h-10"
+              />
+            </Fld>
+          )}
+
           <div className="flex items-center justify-between rounded-[10px] border border-[#e7edf7] px-3.5 py-2.5">
             <div>
               <p className="text-[13px] font-bold text-[var(--brand-ink)]">Recurring Expense</p>
@@ -594,7 +616,7 @@ function ExpensePanel({ open, editing, categories, saving, width, onResizeStart,
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           <div className="grid grid-cols-2 gap-2.5">
             <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+            <Button type="submit" disabled={saving || Boolean(editing && ownerPin.length !== 4)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
               {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><Receipt size={15} /> Save Expense</>}
             </Button>
           </div>

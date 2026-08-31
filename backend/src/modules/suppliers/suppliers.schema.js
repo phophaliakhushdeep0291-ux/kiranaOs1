@@ -21,3 +21,18 @@ export const createSupplierSchema = z.object({
 });
 
 export const updateSupplierSchema = createSupplierSchema.partial();
+
+const statementDate = z.string().trim().refine(
+  (value) => !Number.isNaN(new Date(value).getTime()),
+  "Enter a valid statement date",
+);
+
+export const supplierStatementQuerySchema = z.object({
+  from: statementDate.optional(),
+  to: statementDate.optional(),
+  limit: z.coerce.number().int().min(1).max(1000).default(500),
+}).superRefine((value, ctx) => {
+  if (value.from && value.to && new Date(value.from) > new Date(value.to)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "Statement end date must be on or after the start date" });
+  }
+});

@@ -2515,6 +2515,7 @@ model FinancialLedger {
   @@unique([shopId, idempotencyKey])
   @@index([shopId, businessDate])
   @@index([shopId, customerId])
+  @@index([shopId, supplierId, businessDate])
   @@index([shopId, billId])
   @@index([shopId, sourceType, sourceId])
 }

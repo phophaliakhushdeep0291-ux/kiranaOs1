@@ -60,6 +60,38 @@ describe("seating a table twice", () => {
     expect(held.every((bill) => pointedAt.has(bill.id))).toBe(true);
   });
 
+  // A table's tab belongs to the floor screen, not to the counter's open-bills
+  // strip: the strip filters on this tag, so if it is missing every seated table
+  // shows up beside the walk-ins waiting to pay.
+  it("marks the bill as the table's tab", async () => {
+    const bill = await openTableInBilling(TABLE);
+    expect(bill.tableId).toBe(TABLE.id);
+    expect((settings.get(HELD_BILLS_KEY) as HeldBill[])[0].tableId).toBe(TABLE.id);
+    expect((settings.get(BILLING_DRAFT_KEY) as BillingDraft).tableId).toBe(TABLE.id);
+  });
+
+  // Tabs parked by an older build carry no tag. Left alone they would read as
+  // counter bills for the rest of their life, which is the whole problem again
+  // for every table already seated when the till updates.
+  it("adopts a tab parked before bills knew their table", async () => {
+    const legacy: HeldBill = {
+      id: "bill-legacy", label: `${TABLE.name} • table`, createdAt: new Date().toISOString(),
+      cart: [{ product: { id: "p-naan", name: "Butter Naan" }, quantity: 1, rate: 45, unit: "piece" }],
+      selectedCustomerId: "walk_in", customerName: TABLE.name,
+    } as HeldBill;
+    settings.set(HELD_BILLS_KEY, [legacy]);
+    settings.set(TABLE_BILLS_KEY, { [TABLE.id]: legacy.id });
+
+    const reopened = await openTableInBilling(TABLE);
+
+    expect(reopened.id).toBe(legacy.id);
+    expect(reopened.tableId).toBe(TABLE.id);
+    expect((settings.get(HELD_BILLS_KEY) as HeldBill[])).toHaveLength(1);
+    expect((settings.get(HELD_BILLS_KEY) as HeldBill[])[0].tableId).toBe(TABLE.id);
+    // And the food it was holding is still on it.
+    expect(reopened.cart).toHaveLength(1);
+  });
+
   it("still parks the cart of whatever table was open before", async () => {
     const other = await openTableInBilling({ ...TABLE, id: "table-7", name: "T7" });
     // The counter keys a dish into T7; the workspace holds it, the parked set

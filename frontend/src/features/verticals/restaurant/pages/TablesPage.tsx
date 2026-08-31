@@ -14,7 +14,8 @@ import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { offlineDB } from "@/lib/offline/db";
 import { BILLING_DRAFT_KEY, HELD_BILLS_KEY } from "@/features/core/billing/pages/open-bills";
-import type { BillingDraft, HeldBill } from "@/features/core/billing/pages/billing-types";
+import { cartItemKey, type BillingDraft, type HeldBill } from "@/features/core/billing/pages/billing-types";
+import { cartItemNet } from "@/features/core/billing/pages/billing-calculations";
 import {
   buildKotTicket, buildOccupancy, loadFloorPlan, loadTableBills,
   newTableId, reconcileTableBills, saveFloorPlan, saveTableBills,
@@ -462,6 +463,12 @@ function TableCard({
   const { t } = useAppLanguage();
   const occupied = Boolean(row.bill);
   const pending = row.pendingKotLines.length;
+  const orderedLines = (row.bill?.cart ?? []).map((item) => ({
+    key: cartItemKey(item),
+    name: item.product.name,
+    qty: item.quantity,
+    amount: cartItemNet(item),
+  }));
   return (
     <div
       data-testid={`table-card-${row.table.id}`}
@@ -500,6 +507,29 @@ function TableCard({
             <span className="flex items-center gap-1"><Receipt size={12} /> {row.items === 1 ? t("restaurant.tables.itemsOne") : t("restaurant.tables.itemsMany", { count: row.items })}</span>
             <span className="font-black text-[var(--brand-ink)]">{inr(row.runningTotal)}</span>
           </div>
+          {/*
+            What the party has ordered so far, on the floor screen where the
+            waiter is standing. A running tab is answered at the table far more
+            often than at the till ("have the naan come?", "what did we order?"),
+            and reading it used to mean opening the bill in the billing workspace
+            — which is the one place it should not have to be before checkout.
+            Four lines, because a card in a grid is glanced at, not studied.
+          */}
+          {orderedLines.length > 0 ? (
+            <ul className="flex flex-col gap-0.5 border-t border-[var(--brand)]/15 pt-1.5 text-[11.5px] text-[#52627e]">
+              {orderedLines.slice(0, 4).map((line) => (
+                <li key={line.key} className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0 truncate"><span className="font-bold tabular-nums">{`${line.qty}×`}</span> {line.name}</span>
+                  <span className="shrink-0 tabular-nums text-[#64748b]">{inr(line.amount)}</span>
+                </li>
+              ))}
+              {orderedLines.length > 4 ? (
+                <li className="text-[11px] font-semibold text-[#64748b]">
+                  {t("restaurant.tables.moreLines", { count: orderedLines.length - 4 })}
+                </li>
+              ) : null}
+            </ul>
+          ) : null}
           <div className="flex items-center gap-1 text-[11px]">
             <Clock size={11} /> {sinceLabel(row.openedAt)}
             {pending > 0 ? (

@@ -91,13 +91,21 @@ traded for a while. Baselines are recomputed on demand
 for single-location shops; `STOCK_BALANCE_LEDGER_MISMATCH` deliberately skips
 products with non-zero secondary balances rather than report a false mismatch.
 
-## 9. Supplier-level accounting is per-purchase only
+## 9. Supplier statements require explicit supplier links
 
-There is no supplier ledger or supplier-payment table; payments are recorded on each
-purchase row. Reconciliation is therefore per purchase
-(`PURCHASE_DUE_AMOUNT_MISMATCH`). A supplier's overall statement cannot be
-reconciled, and "recently changed supplier bank details" is deferred because no
-bank-detail fields exist.
+Supplier payables are now reconstructed from the append-only `FinancialLedger`:
+direct purchases and purchase-order receipts create payable entries, settlements
+create supplier-payment entries, and purchase returns create payable reductions.
+`GET /api/suppliers/:id/statement` compares that subledger with operational
+`PurchaseHistory` dues and reports any difference. An owner-approved, audited,
+idempotent rebuild can post missing legacy *direct purchases* that already carry a
+real `supplierId`.
+
+The repair never guesses identity from a name. Legacy purchases with only a matching
+`supplierName` remain listed as unlinked coverage gaps and require a human to link
+them. Recently changed supplier bank details also remain deferred because no
+bank-detail fields exist. External statement authenticity is still human evidence,
+not something the ledger can prove on its own.
 
 ## 10. Evidence proves integrity, not authenticity
 
@@ -149,10 +157,13 @@ than guessed.
   Without a worker, runs are transaction-triggered or manual only. The sweep
   covers shops with activity in the window rather than every shop that ever
   existed, and caps at 200 shops per tick.
-- **Transaction-triggered evaluation uses an in-process queue.** It is bounded
-  (500 items) and sheds load rather than growing; anything dropped is picked up by
-  the next manual/scheduled run over that period, because evaluation is
-  idempotent. It is not a durable outbox, and it does not survive a restart.
+- **Transaction-triggered evaluation is durable when queues are enabled.** A
+  production deployment with Redis sends each post-commit entity to BullMQ with
+  retry/backoff; the assurance worker evaluates it idempotently. If Redis dispatch
+  fails, or queues are disabled for a local deployment, the hook falls back to a
+  bounded 500-item in-process queue. A process crash inside that fallback window
+  can still lose immediate evaluation, so the overlapping scheduled/manual period
+  run remains the recovery sweep.
 - **The automatic hook is off in the test environment** and can be paused at
   runtime via `setTransactionTriggeredEnabled(false)`. Its writes are a separate
   transaction that can start while other work is in flight; on SQLite (which

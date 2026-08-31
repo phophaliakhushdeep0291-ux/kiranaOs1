@@ -17,6 +17,7 @@ import { computeRobustStats, recomputeShopBaselines } from "../../src/modules/as
 import { redactForExternalAi, containsLikelyPii } from "../../src/modules/assurance/ai/redaction.js";
 import { explainFinding } from "../../src/modules/assurance/ai/audit-ai.service.js";
 import { MockAuditAIProvider } from "../../src/modules/assurance/ai/providers.js";
+import { runTransactionTriggeredAssurance } from "../../src/workers/assurance.worker.js";
 import { moneyShadows } from "../../src/utils/money.js";
 
 const ctx = await createIntegrationContext();
@@ -918,6 +919,34 @@ function runSuite() {
     assert.equal(trend.details.patterns.find((pattern) => pattern.identityField === "cashCountedByDeviceId").identityValue, "counter-device-1");
     assert.equal(trend.details.patterns.every((pattern) => pattern.shortageDayCount === 3), true);
     assert.equal(trend.details.patterns.every((pattern) => pattern.totalShortagePaise === 303), true);
+  });
+
+  test("durable transaction assurance worker evaluates one tenant-scoped entity and is retry-safe", async () => {
+    await resetDatabase(ctx.db);
+    const { shop, owner } = await createTenant(ctx.db);
+    const product = await createProduct(ctx.db, shop.id, { defaultPricePerRateUnit: 100, costPerRateUnit: 60 });
+    const bill = await makeBill(ctx.db, shop.id, {
+      grandTotal: 100,
+      paidAmount: 100.01,
+      createdByUserId: owner.id,
+      items: [billItem(product)],
+      payments: [{ shopId: shop.id, mode: "cash", amount: 100.01, ...moneyShadows({ amount: 100.01 }) }],
+    });
+    const payload = { shopId: shop.id, entityType: ENTITY_TYPES.BILL, entityId: bill.id, actorUserId: owner.id };
+    const first = await runTransactionTriggeredAssurance(payload);
+    const retry = await runTransactionTriggeredAssurance(payload);
+    assert.equal(first.jobName, "RUN_TRANSACTION_ASSURANCE");
+    assert.equal(first.status, "COMPLETED");
+    assert.equal(first.evaluated, 1);
+    assert.equal(retry.status, "COMPLETED");
+    assert.equal(await ctx.db.auditEvaluation.count({
+      where: { shopId: shop.id, sourceEntityType: ENTITY_TYPES.BILL, sourceEntityId: bill.id },
+    }), 2, "a job retry is recorded as a second evaluation, not mistaken for an unprocessed event");
+    assert.equal(await ctx.db.auditFinding.count({ where: { shopId: shop.id, sourceEntityId: bill.id } }), 1, "a durable job retry must update the same finding instead of duplicating it");
+    await assert.rejects(
+      () => runTransactionTriggeredAssurance({ ...payload, entityType: "UNKNOWN" }),
+      (error) => error?.code === "ASSURANCE_JOB_ENTITY_UNSUPPORTED",
+    );
   });
 
   test("offline sync duplicate and success-with-error are detected", async () => {

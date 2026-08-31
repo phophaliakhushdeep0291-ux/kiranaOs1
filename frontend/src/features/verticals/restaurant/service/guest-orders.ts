@@ -243,9 +243,9 @@ export async function acceptGuestOrderToTable(
     await assertTableImportSafe(target.id);
     const existing = held.find((entry) => entry.id === map[target.id]);
     const bill: HeldBill = existing
-      ? { ...existing, cart: mergeCartLines(existing.cart ?? [], confirmed.lines) }
+      ? { ...existing, tableId: target.id, cart: mergeCartLines(existing.cart ?? [], confirmed.lines) }
       : { id: newBillId(), label: `${target.name} • table`, createdAt: new Date().toISOString(),
-          cart: confirmed.lines, selectedCustomerId: "walk_in", customerName: target.name };
+          cart: confirmed.lines, selectedCustomerId: "walk_in", customerName: target.name, tableId: target.id };
     delete pending[order.id];
     await tx.setSetting(HELD_BILLS_KEY, upsertOpenBill(held, bill));
     await tx.setSetting(TABLE_BILLS_KEY, { ...map, [target.id]: bill.id });

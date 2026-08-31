@@ -115,7 +115,7 @@ where the legacy opening balance is itself a `legacy_opening_balance` debit row.
 | 5 | Stock receipt ≠ purchase quantity | `PURCHASE_STOCK_QUANTITY_MISMATCH` |
 | 6 | Purchase amount ≠ item totals | `PURCHASE_AMOUNT_ITEM_TOTAL_MISMATCH` |
 | 7 | Price unusually above historical range | `PURCHASE_PRICE_ABOVE_HISTORICAL_RANGE` (median + 3×IQR, min 5 samples) |
-| 8 | Supplier payable does not reconcile | `PURCHASE_DUE_AMOUNT_MISMATCH` (per-purchase form — see §Deferred for supplier-level) |
+| 8 | Supplier payable does not reconcile | `PURCHASE_DUE_AMOUNT_MISMATCH` per purchase, plus supplier statement reconciliation between the append-only financial subledger and operational purchase dues |
 | 9 | Marked paid without matching payment | `PURCHASE_MARKED_PAID_WITHOUT_PAYMENT` |
 | 10 | Payment exceeds supplier balance | `PURCHASE_PAYMENT_EXCEEDS_TOTAL` |
 | 11 | Return not reflected in supplier balance | `PURCHASE_RETURN_NOT_CREDITED` |
@@ -204,9 +204,11 @@ still have legacy-data limits. The engine does not invent evidence to fill gaps.
    per-product rule reports those actors. Legacy/system movements can still lack a
    person; a future cross-product staff trend must exclude those rows rather than
    guess their author.
-4. **D8 — supplier-level payable reconciliation.** There is no supplier-payment
-   table; payments live on each purchase row. Per-purchase reconciliation is
-   implemented; a true supplier statement needs a supplier ledger.
+4. **D8 — supplier-level payable reconciliation (completed follow-on).** Supplier
+   purchases, payments and return credits now post append-only `FinancialLedger`
+   entries keyed by `supplierId`; the statement API/UI compares that reconstructed
+   balance with operational purchase dues. Legacy rows without an explicit
+   `supplierId` remain a disclosed coverage gap and are never matched by name.
 5. **D14 — changed supplier bank details.** No bank-detail fields on `Supplier`.
 6. **E5 — historical expense attribution.** New expenses are server-attributed
    by user id, name and role. Legacy/imported rows can still have only free text;

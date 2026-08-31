@@ -12,6 +12,7 @@ import {
 } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
+import { postPurchaseHistoryLedger } from "../finance/financial-ledger.service.js";
 import { stockLedgerProvenance } from "./stock-ledger-provenance.js";
 
 async function writeRequiredInventoryAudit(entry, client) {
@@ -390,6 +391,12 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
         sourceType: "purchase",
         sourceId: purchaseHistory.id,
       },
+    });
+
+    await postPurchaseHistoryLedger(tx, {
+      shopId,
+      purchase: purchaseHistory,
+      businessDate: purchaseHistory.createdAt,
     });
 
     // The lot in hand, for stock that carries one.

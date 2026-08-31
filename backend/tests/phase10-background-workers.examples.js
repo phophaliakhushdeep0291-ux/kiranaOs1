@@ -14,6 +14,8 @@ const workerUtils = read("src/workers/workerUtils.js");
 const reportsWorker = read("src/workers/reports.worker.js");
 const reminderWorker = read("src/workers/reminder.worker.js");
 const syncCleanupWorker = read("src/workers/syncCleanup.worker.js");
+const assuranceWorker = read("src/workers/assurance.worker.js");
+const assuranceHooks = read("src/modules/assurance/assurance.hooks.js");
 const backupWorker = read("src/workers/backup.worker.js");
 const schedulers = read("src/workers/schedulers.js");
 const backupService = read("src/modules/backups/backup.service.js");
@@ -53,7 +55,7 @@ for (const snippet of ["addJob", "getQueueStatus", "isQueueEnabled", "closeQueue
   assert(queueSource.includes(snippet), `queue.js missing ${snippet}`);
 }
 
-for (const snippet of ["reminderQueue", "reportsQueue", "exportsQueue", "backupQueue", "syncCleanupQueue", "GENERATE_DAILY_CLOSING", "GENERATE_CSV_EXPORT", "GENERATE_REPORT_PDF", "SEND_WHATSAPP_REMINDER", "CLEANUP_SYNC_EVENTS", "ARCHIVE_OLD_SYNC_EVENTS"]) {
+for (const snippet of ["reminderQueue", "reportsQueue", "exportsQueue", "backupQueue", "syncCleanupQueue", "GENERATE_DAILY_CLOSING", "GENERATE_CSV_EXPORT", "GENERATE_REPORT_PDF", "SEND_WHATSAPP_REMINDER", "CLEANUP_SYNC_EVENTS", "ARCHIVE_OLD_SYNC_EVENTS", "RUN_TRANSACTION_ASSURANCE"]) {
   assert(queueNames.includes(snippet), `queueNames.js missing ${snippet}`);
 }
 
@@ -89,6 +91,12 @@ assert(syncCleanupWorker.includes('status: { in: ["resolved", "dismissed"] }'), 
 assert(syncCleanupWorker.includes("Failed, processing, and conflict rows remain recoverable indefinitely"), "sync cleanup must preserve recoverable events");
 assert(syncCleanupWorker.includes("Open conflict snapshots are never removed by retention"), "sync cleanup must preserve open conflicts");
 assert(syncCleanupWorker.includes("take: limit"), "sync cleanup must use bounded batches");
+for (const snippet of ["RUN_TRANSACTION_ASSURANCE", "runTransactionTriggeredAssurance", "durable_post_commit_job"]) {
+  assert(assuranceWorker.includes(snippet), `assurance worker missing durable transaction handling: ${snippet}`);
+}
+for (const snippet of ["isQueueEnabled()", "addJob(", "RUN_TRANSACTION_ASSURANCE", "durableDispatchFailures", "enqueueInProcess(item, false)"]) {
+  assert(assuranceHooks.includes(snippet), `assurance hook missing durable queue/fallback behavior: ${snippet}`);
+}
 assert(backupWorker.includes("processShopBackupArtifact") && backupWorker.includes("cleanupExpiredShopBackups"), "backup jobs must execute the real encrypted artifact lifecycle");
 for (const snippet of ["aes-256-gcm", "sha256", "Serializable", "credentialsExcluded", "MAX_UNCOMPRESSED_BYTES", "BACKUP_IN_PROGRESS"]) {
   assert(backupService.includes(snippet), `backup service missing production safety invariant: ${snippet}`);

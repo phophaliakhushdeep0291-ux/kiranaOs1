@@ -14,6 +14,8 @@ export const billingEn = {
 
   // Cart
   "billing.cart.empty": "Cart is empty",
+  "billing.cart.itemCountOne": "{count} item",
+  "billing.cart.itemCountMany": "{count} items",
   "billing.cart.emptyHint": "Click {items} on the left to add",
   "billing.cart.sellingUnitFor": "Selling unit for {name}",
   "billing.cart.guestItemProtected": "Accepted QR item · original quantity and portion protected",
@@ -460,6 +462,7 @@ export const billingEn = {
   "billing.page.clearBillConfirm": "Clear bill",
   "billing.page.printAfterSavingTitle": "Print this bill after saving?",
   "billing.page.printAfterSavingBody": "The bill will be saved either way. Choose print to open the configured receipt printer, or continue without printing.",
+  "billing.page.goBack": "Go back",
   "billing.page.savePrint": "Save & print",
   "billing.page.saveNoPrint": "Save without printing",
   "billing.page.checkout": "Checkout",

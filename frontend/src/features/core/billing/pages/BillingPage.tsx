@@ -22,6 +22,7 @@ import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
 import { BillingOrderQrButton } from "@/features/core/customer-order/BillingOrderQrButton";
 import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills } from "./open-bills";
+import { firstSettleWarning, type SettleWarning } from "../settle-checks";
 import { takeStagedBillLines, type StagedBillLine } from "../assistant-staging";
 import { commitBillingWorkspace, prepareNewBillWorkspace, prepareResumeBillWorkspace } from "./billing-workspace";
 import { updateCustomerOrder } from "@/features/core/orders/api";
@@ -214,6 +215,12 @@ export default function Billing() {
   // If the workspace bill came from a customer QR order, its id — so finalizing marks that order
   // fulfilled + links the bill. Mirrored into a ref so the save-success callback reads it live.
   const [sourceOrderId, setSourceOrderId] = useState<string | undefined>(() => readBillingDraft().sourceOrderId);
+  // Which table this bill is the tab for, when it is one. Billing does not need
+  // to know what a table is — only that the tag survives being parked, switched
+  // and restored, because the floor screen is what reads it back. Rebuilding the
+  // bill field by field below dropped it on the first save, which put every
+  // seated table back into the counter's open-bills strip.
+  const [activeTableId, setActiveTableId] = useState<string | undefined>(() => readBillingDraft().tableId);
   const [sourceOrderFingerprint, setSourceOrderFingerprint] = useState<string | undefined>(() => readBillingDraft().sourceOrderFingerprint);
   const sourceOrderIdRef = useRef<string | undefined>(sourceOrderId);
   useEffect(() => { sourceOrderIdRef.current = sourceOrderId; }, [sourceOrderId]);
@@ -227,6 +234,17 @@ export default function Billing() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [printConfirmOpen, setPrintConfirmOpen] = useState(false);
   const [pendingPrintBillType, setPendingPrintBillType] = useState<BillTypeSelection | null>(null);
+  // A trade's own warning about this bill, and the bill type waiting behind it.
+  const [settleWarning, setSettleWarning] = useState<{
+    warning: SettleWarning;
+    billType: BillTypeSelection | undefined;
+    printDecision: boolean | undefined;
+    approval: NonNullable<typeof sensitiveApproval> | undefined;
+  } | null>(null);
+  // What the cashier has already been asked about. Keyed on the bill AND its line
+  // count, so a dish added after they said "settle anyway" asks again rather than
+  // riding on the answer to a different question.
+  const settleAckRef = useRef<{ billId: string; lines: number } | null>(null);
   const [mobileCheckoutOpen, setMobileCheckoutOpen] = useState(false);
 
   useEffect(() => {
@@ -667,6 +685,11 @@ export default function Billing() {
         if (!active) return;
         if (Object.keys(draft).length > 0) {
           if (draft.activeBillId) setActiveBillId(draft.activeBillId);
+          // The floor screen writes the draft straight to storage and navigates here,
+          // so this hydration is the only place billing learns the table: the state
+          // initialisers above read a module cache that is still empty on a fresh load,
+          // and the next draft save would then write the table back out as undefined.
+          setActiveTableId(draft.tableId);
           setSourceOrderId(draft.sourceOrderId);
           setSourceOrderFingerprint(draft.sourceOrderFingerprint);
           setCart(draft.cart ?? []);
@@ -875,6 +898,27 @@ export default function Billing() {
         }
         setSensitiveApproval(null);
         setMobileCheckoutOpen(false);
+        /**
+         * A bill that has been paid is not an open bill any more.
+         *
+         * Settling used to clear only the workspace draft. That is enough for a
+         * counter bill, which is never in the parked set while it is being rung
+         * up — but a table's tab is: the floor screen reads it from there, so
+         * `openTableInBilling` loads it into the workspace AND leaves it parked.
+         * The paid copy therefore survived, the table -> bill map still pointed
+         * at it, and the table stayed "seated, Rs330" after the guests had paid
+         * and left. It could only be cleared by hand, and the next party was
+         * seated onto the last party's food.
+         *
+         * Dropping it here is what frees the table: reconcileTableBills keeps a
+         * table only while its bill is still open, so the floor screen shows it
+         * free on the next read without billing needing to know what a table is.
+         */
+        const remainingOpenBills = heldBills.filter((entry) => entry.id !== activeBillId);
+        if (remainingOpenBills.length !== heldBills.length) {
+          setHeldBills(remainingOpenBills);
+          saveSettingList(HELD_BILLS_KEY, remainingOpenBills);
+        }
         resetCurrentBill();
         setActiveBillId(newBillId());
         clearBillingDraft();
@@ -907,6 +951,11 @@ export default function Billing() {
   });
 
   function resetCurrentBill() {
+    // The settled table's tab is finished; the next bill at this counter is a
+    // walk-in. Carrying the table over would hide that bill from the open-bills
+    // strip and leave the floor screen pointing a free table at it.
+    setActiveTableId(undefined);
+    settleAckRef.current = null;
     setSourceOrderId(undefined);
     setSourceOrderFingerprint(undefined);
     setCart([]);
@@ -1773,6 +1822,27 @@ export default function Billing() {
       });
     }
 
+    /**
+     * Anything this trade wants said before the money is taken.
+     *
+     * Deferred like the printer question below: the check is asynchronous, so
+     * the first pass starts it and returns, and the answer either re-enters
+     * this function or opens a dialog that does.
+     */
+    const acknowledged = settleAckRef.current?.billId === activeBillId
+      && settleAckRef.current.lines === cart.length;
+    if (!acknowledged) {
+      void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart }).then((warning) => {
+        if (warning) {
+          setSettleWarning({ warning, billType: overrideBillType, printDecision, approval: approvalOverride });
+          return;
+        }
+        settleAckRef.current = { billId: activeBillId, lines: cart.length };
+        handleConfirm(overrideBillType, printDecision, approvalOverride);
+      });
+      return;
+    }
+
     const sensitiveActions = requiredBillingSensitiveActions();
     const effectiveSensitiveApproval = approvalOverride ?? sensitiveApproval;
     if (sensitiveActions.length > 0 && !billingSensitiveApprovalCovers(sensitiveActions, effectiveSensitiveApproval)) {
@@ -1908,9 +1978,10 @@ export default function Billing() {
   function serializeActiveBill(): HeldBill {
     return {
       id: activeBillId,
+      tableId: activeTableId,
       sourceOrderId,
       sourceOrderFingerprint,
-      label: `${resolvedCustomerName || t("billing.page.walkIn")} • ₹${grandTotal.toLocaleString("en-IN")} • ${cart.length === 1 ? t("billing.search.resultCount", { count: cart.length }) : t("billing.search.resultCountPlural", { count: cart.length })}`,
+      label: `${resolvedCustomerName || t("billing.page.walkIn")} • ₹${grandTotal.toLocaleString("en-IN")} • ${cart.length === 1 ? t("billing.cart.itemCountOne", { count: cart.length }) : t("billing.cart.itemCountMany", { count: cart.length })}`,
       createdAt: new Date().toISOString(),
       cart,
       discount: safeDiscount,
@@ -1931,6 +2002,7 @@ export default function Billing() {
 
   function loadBillIntoActive(bill: HeldBill) {
     setActiveBillId(bill.id);
+    setActiveTableId(bill.tableId);
     setSourceOrderId(bill.sourceOrderId);
     setSourceOrderFingerprint(bill.sourceOrderFingerprint);
     setCart(bill.cart ?? []);
@@ -2174,16 +2246,32 @@ export default function Billing() {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  /**
+   * What actually belongs in the counter's open-bills strip.
+   *
+   * Two things were being shown that are not separate bills. The active bill was
+   * prepended AND listed again from `heldBills` — `openTableInBilling` leaves a
+   * table's tab in the held set on purpose (the floor screen reads it from there),
+   * unlike `resumeHeldBill`, which lifts it out. One table, two identical chips.
+   *
+   * And a seated table's tab is not a bill standing at the counter. It belongs to
+   * the floor screen until somebody asks to settle it, which is what "Open order"
+   * is for: that makes the tab active, and an active bill is a chip again. Leaving
+   * every seated table in the strip meant a guest ordering a second round silently
+   * changed a total the cashier might be reading at that moment.
+   */
+  const counterBills = heldBills.filter((entry) => entry.id !== activeBillId && !entry.tableId);
+
   return (
     <fieldset disabled={confirmBill.isPending} aria-busy={confirmBill.isPending} className="min-w-0 min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))] border-0 bg-white p-0 lg:h-[calc(100dvh-var(--app-desktop-topbar-height)-var(--app-banner-height))] lg:min-h-0 lg:overflow-hidden">
       <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 pb-[calc(var(--app-mobile-fixed-action-height)+2rem)] sm:px-3 sm:py-3 sm:pb-[calc(var(--app-mobile-fixed-action-height)+2rem)] lg:h-full lg:flex-row lg:gap-4 lg:px-4 lg:pb-3">
       {/* ── LEFT PANEL: product search + grid ── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-visible lg:min-h-0 lg:overflow-hidden">
-        {(heldBills.length > 0 || cart.length > 0) && (
+        {(counterBills.length > 0 || cart.length > 0) && (
           <OpenBillsBar
             bills={[
               { id: activeBillId, name: resolvedCustomerName || t("billing.page.walkIn"), itemCount: cart.length, active: true },
-              ...heldBills.map((entry): OpenBillChip => ({ id: entry.id, name: entry.customerName?.trim() || t("billing.page.walkIn"), itemCount: entry.cart?.length ?? 0, active: false, stale: isHeldBillStale(entry), ageLabel: formatHeldBillAge(entry) })),
+              ...counterBills.map((entry): OpenBillChip => ({ id: entry.id, name: entry.customerName?.trim() || t("billing.page.walkIn"), itemCount: entry.cart?.length ?? 0, active: false, stale: isHeldBillStale(entry), ageLabel: formatHeldBillAge(entry) })),
             ]}
             onSwitch={resumeHeldBill}
             onNew={newBill}
@@ -2532,6 +2620,22 @@ export default function Billing() {
         destructive
         onConfirm={executeClearCart}
         onCancel={() => setClearConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={settleWarning !== null}
+        title={settleWarning ? t(settleWarning.warning.title.key, settleWarning.warning.title.vars) : ""}
+        description={settleWarning ? t(settleWarning.warning.body.key, settleWarning.warning.body.vars) : ""}
+        confirmLabel={settleWarning ? t(settleWarning.warning.confirm.key, settleWarning.warning.confirm.vars) : ""}
+        cancelLabel={t("billing.page.goBack")}
+        disabled={confirmBill.isPending}
+        onConfirm={() => {
+          const pending = settleWarning;
+          settleAckRef.current = { billId: activeBillId, lines: cart.length };
+          setSettleWarning(null);
+          window.setTimeout(() => handleConfirm(pending?.billType, pending?.printDecision, pending?.approval), 0);
+        }}
+        onCancel={() => setSettleWarning(null)}
       />
 
       <ConfirmDialog
