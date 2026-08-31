@@ -1,44 +1,75 @@
 {
-  "generatedAt": "2026-08-31T00:30:00+05:30",
+  "generatedAt": "2026-08-31T14:22:00+05:30",
   "status": "passed-automated-browser-and-production-gates",
-  "scope": "Frontend startup deferral, responsive core routes, Udhar navigation and production offline cold restart",
+  "scope": "Frontend startup deferral, responsive core routes, Udhar partial-payment consistency, interrupted-sync recovery and production offline cold restart",
   "change": {
-    "description": "Moved authenticated cloud hydration, realtime refresh and multi-device synchronization behind a recoverable lazy background boundary; heavy sync and reconciliation modules now load only when background work starts.",
+    "description": "Moved authenticated cloud hydration, realtime refresh and multi-device synchronization behind a recoverable lazy background boundary; added origin-wide sync locking and immediate replay of acknowledgements abandoned by navigation; stopped precaching cloud-only page chunks that the offline guard never mounts.",
     "initialJavaScriptBefore": {
       "rawKb": 911.4,
       "gzipKb": 270.7
     },
     "initialJavaScriptAfter": {
-      "rawKb": 834.4,
-      "gzipKb": 251.7,
+      "rawKb": 837.3,
+      "gzipKb": 252.4,
       "files": 5
     },
     "reduction": {
-      "rawKb": 77.0,
-      "rawPercent": 8.45,
-      "gzipKb": 19.0,
-      "gzipPercent": 7.02
+      "rawKb": 74.1,
+      "rawPercent": 8.13,
+      "gzipKb": 18.3,
+      "gzipPercent": 6.76
     },
     "startupBundle": {
       "assets": 6,
-      "rawBytes": 1231321,
-      "gzipBytes": 315023,
+      "rawBytes": 1235749,
+      "gzipBytes": 316166,
       "verticalPageChunksPresent": false
+    },
+    "largestOfflineShopPackage": {
+      "shopType": "restaurant",
+      "beforeRawKb": 3586.2,
+      "afterRawKb": 3355.7,
+      "rawReductionKb": 230.5,
+      "beforeGzipKb": 1066.2,
+      "afterGzipKb": 995.2,
+      "gzipReductionKb": 71.0,
+      "cachedFilesBefore": 196,
+      "cachedFilesAfter": 172,
+      "budgetRawKb": 3584
     }
   },
   "offlineColdRestart": {
-    "sourceArtifact": "frontend/qa-artifacts/offline-performance-20260831/report.json",
-    "sourceArtifactSha256": "A489A966AFE0AAA93551DE7BB6C280C662AB06C2EC76396D53FA2BED42E18371",
+    "sourceArtifact": "frontend/qa-artifacts/offline-performance-20260831-final/report.json",
+    "sourceArtifactSha256": "6985AA6DFA3B525AA05DE10C378D5AA81D628C63F99D691FF3E7325D7DB6BD0D",
     "browserWasRestarted": true,
     "networkWasDisabled": true,
     "passedRoutes": 52,
     "totalRoutes": 52,
-    "averageReadyMs": 546,
-    "maximumReadyMs": 969,
+    "averageReadyMs": 256,
+    "maximumReadyMs": 681,
     "routeBounces": 0,
     "stuckLoaders": 0,
     "runtimeErrors": 0,
-    "cachedShellEntries": 206
+    "cachedShellEntries": 182
+  },
+  "udharPartialPaymentCycle": {
+    "sourceArtifact": "frontend/qa-artifacts/udhar-ledger-cycle-20260831/report.json",
+    "sourceArtifactSha256": "6EBC369ABD5EF658EA26371CF36AC9599F129F042869C666ED96DD3A7D345FEA",
+    "productionPwa": true,
+    "creditBillAmount": 200,
+    "partialPaymentAmount": 75,
+    "expectedRemainder": 125,
+    "immediateOutstanding": 125,
+    "immediateCustomerRowBalance": 125,
+    "offlineSpaReturnBalance": 125,
+    "offlineDocumentReloadBalance": 125,
+    "offlineDocumentReloadServiceWorkerControlled": true,
+    "runtimeErrors": 0,
+    "activeCustomerEchoesAfterSync": 1,
+    "serverDebitEntries": 1,
+    "serverPaymentEntries": 1,
+    "serverFinalBalance": 125,
+    "pendingOperationsAfterFinalSync": 0
   },
   "responsiveCoreMatrix": {
     "sourceArtifact": "frontend/qa-artifacts/mobile-performance-20260831/report.json",
@@ -64,12 +95,12 @@
   },
   "productionGate": {
     "typecheck": "passed",
-    "translationKeysCompared": 5518,
-    "translationModules": 16,
+    "translationKeysCompared": 5616,
+    "translationModules": 17,
     "translationProblems": 0,
-    "testFilesPassed": 304,
+    "testFilesPassed": 310,
     "testFilesSkipped": 1,
-    "testsPassed": 2072,
+    "testsPassed": 2120,
     "testsSkipped": 1,
     "productionBuild": "passed",
     "bundleCheck": "passed",
