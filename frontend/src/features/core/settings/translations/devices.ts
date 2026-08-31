@@ -62,6 +62,8 @@ export const devicesEn = {
 
   "devices.idle.title": "Registered, nobody signed in",
   "devices.idle.body": "These devices are not in use, but still hold a device slot until removed.",
+  "devices.idle.show": "Show {count}",
+  "devices.idle.hide": "Hide",
   "devices.idle.unnamed": "Unnamed device",
   "devices.idle.lastSeen": "Last seen {when}",
   "devices.idle.lastUsedBy": "last used by {name}",

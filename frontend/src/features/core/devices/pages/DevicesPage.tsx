@@ -122,6 +122,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
   const [actionTarget, setActionTarget] = useState<DeviceDto | null>(null);
   const [actionKind, setActionKind] = useState<ProtectedAction | null>(null);
   const [ownerPin, setOwnerPin] = useState("");
+  const [showIdle, setShowIdle] = useState(false);
   const [renaming, setRenaming] = useState<DeviceDto | null>(null);
   const [deviceName, setDeviceName] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -249,9 +250,16 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
    * "signed in" keeps the page behaving exactly as it does today against one,
    * rather than showing an alarming empty list.
    */
-  const isSignedIn = (device: DeviceDto) => device.signedIn !== false;
-  const devices = allDevices.filter(isSignedIn);
-  const notSignedIn = allDevices.filter((device) => !isSignedIn(device));
+  // "In use" means a live session that has actually been used today — not merely
+  // one that has not expired. The refresh token lives 30 days, so filtering on
+  // `signedIn` alone still listed every browser anyone opened in the last month,
+  // which is why this page still looked like a wall of devices.
+  //
+  // An older server sends neither field; treating both as true keeps the page
+  // behaving as it did rather than rendering an empty list.
+  const isInUse = (device: DeviceDto) => device.signedInRecently ?? device.signedIn ?? true;
+  const devices = allDevices.filter(isInUse);
+  const notSignedIn = allDevices.filter((device) => !isInUse(device));
   const overLimitBy = Math.max(0, (data?.devicesUsed ?? 0) - (data?.plan.deviceLimit ?? 0));
   const actionIsCurrent = Boolean(actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId));
   const actionDeviceName = actionTarget ? deviceNameOf(actionTarget, actionIsCurrent) : "device";
@@ -393,12 +401,16 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
             <div>
               <h2 className="font-black text-[var(--brand-ink)]">{t("devices.idle.title")}</h2>
               {/* Kept on the page on purpose: these still cost slots, and this is
-                  the only place to remove one and free a slot. */}
+                  the only place to remove one and free a slot. Collapsed by
+                  default, because a shop with a month of stale browsers behind it
+                  should not have to scroll past all of them to reach anything. */}
               <p className="text-sm text-[#60708e]">{t("devices.idle.body")}</p>
             </div>
-            <Badge variant="outline" className="w-fit">{notSignedIn.length}</Badge>
+            <Button variant="outline" size="sm" className="w-fit" onClick={() => setShowIdle((open) => !open)} aria-expanded={showIdle}>
+              {t(showIdle ? "devices.idle.hide" : "devices.idle.show", { count: notSignedIn.length })}
+            </Button>
           </div>
-          <div className="divide-y divide-[#edf1f6]">
+          <div className={showIdle ? "divide-y divide-[#edf1f6]" : "hidden"}>
             {notSignedIn.map((device) => {
               const id = deviceIdOf(device);
               const status = statusOf(device);
