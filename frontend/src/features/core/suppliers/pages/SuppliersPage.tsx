@@ -411,7 +411,11 @@ export default function Suppliers() {
         loading={repairMutation.isPending}
         error={repairMutation.isError ? failed(repairMutation.error) : null}
         onCancel={() => { if (!repairMutation.isPending) setRepairStatement(false); }}
-        onConfirm={({ ownerPin }) => repairMutation.mutateAsync(ownerPin)}
+        // Awaited, not fired and forgotten: OwnerPinModal keys its own close on the
+        // returned promise. The repair RESULT is not part of that contract, and
+        // returning it made the handler Promise<{...}> where the modal wants
+        // Promise<void> — which failed the typecheck and the release gate with it.
+        onConfirm={async ({ ownerPin }) => { await repairMutation.mutateAsync(ownerPin); }}
       />
 
       <OwnerPinModal

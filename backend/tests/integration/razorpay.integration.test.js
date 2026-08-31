@@ -4,6 +4,22 @@ import test from "node:test";
 import { createIntegrationContext, resetDatabase, assertSuccess, assertFailure } from "./setup.js";
 import { createTenant, login } from "./factories.js";
 
+/**
+ * What a kirana shop pays for Growth, monthly, in paise.
+ *
+ * Named once because the five places below have to agree: Razorpay is told this
+ * amount when the order is created, echoes it back on the order and payment, and
+ * signs it into the webhook. A mock that disagrees with the server is not a
+ * payment test, it is a mismatch test.
+ *
+ * It is written out rather than read from planConfig on purpose. Deriving it
+ * would make this pass whatever the price became, and the point of asserting a
+ * price is to notice when it moves. It moved in 23a8ec1e - Growth went from Rs599
+ * to Rs299 - and this file kept the old number, so the release gate failed on a
+ * price nobody charges any more.
+ */
+const GROWTH_MONTHLY_PAISE = 29900;
+
 const RAZORPAY_SECRET = "test_razorpay_secret_12345";
 const RAZORPAY_WEBHOOK_SECRET = "test_razorpay_webhook_secret_12345";
 
@@ -51,7 +67,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
         id: paymentId,
         entity: "payment",
         order_id: paymentOrderIds.get(paymentId) || "order_test_1",
-        amount: 59900,
+        amount: GROWTH_MONTHLY_PAISE,
         currency: "INR",
         status: "captured",
         captured: true,
@@ -60,7 +76,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
     }
     if (target.includes("https://api.razorpay.com/v1/orders/")) {
       const orderId = target.split("/").pop();
-      return jsonResponse({ id: orderId, entity: "order", status: "paid", amount: 59900, currency: "INR" });
+      return jsonResponse({ id: orderId, entity: "order", status: "paid", amount: GROWTH_MONTHLY_PAISE, currency: "INR" });
     }
     return originalFetch(url, options);
   };
@@ -82,7 +98,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
     const checkout = assertSuccess(checkoutRes);
     assert.equal(checkout.provider, "razorpay");
     assert.equal(checkout.razorpayKeyId, "rzp_test_kiranaos");
-    assert.equal(checkout.amountPaise, 59900);
+    assert.equal(checkout.amountPaise, GROWTH_MONTHLY_PAISE);
     assert.ok(checkout.orderId);
     assert.ok(checkout.transactionId);
     assert.equal(JSON.stringify(checkout).includes(RAZORPAY_SECRET), false);
@@ -175,7 +191,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
           entity: {
             id: "pay_webhook_1",
             order_id: checkout.orderId,
-            amount: 59900,
+            amount: GROWTH_MONTHLY_PAISE,
             currency: "INR",
             status: "captured",
             created_at: Math.floor(Date.now() / 1000),
@@ -222,7 +238,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
           entity: {
             id: paymentId,
             order_id: secondCheckout.orderId,
-            amount: 59900,
+            amount: GROWTH_MONTHLY_PAISE,
             currency: "INR",
             status: "captured",
             notes: { shopId: tenant.shop.id, planCode: "growth", billingCycle: "monthly", transactionId: secondCheckout.transactionId },
