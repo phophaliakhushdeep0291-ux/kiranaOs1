@@ -2505,10 +2505,18 @@ if (ctx.skip) {
       assert.equal(expense.recordedByUserId, tenant.owner.id);
       assert.equal(expense.recordedByRole, "owner");
       assert.equal(expense.recordedBy, tenant.owner.name);
+      const missingPinUpdate = assertSuccess(await ctx.post("/api/sync/push", { events: [{
+        eventId: "expense-update-offline-missing-pin",
+        type: "UPDATE_EXPENSE",
+        payload: { expenseId: expense.id, localExpenseId: "expense_local_1", changes: { amount: 875 } },
+      }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(missingPinUpdate.summary.failed, 1);
+      assert.equal(missingPinUpdate.results[0].code, "PERMISSION_DENIED");
+      assert.equal((await ctx.db.expense.findUniqueOrThrow({ where: { id: expense.id } })).amount, 850);
       const updateEvent = {
         eventId: "expense-update-offline-1",
         type: "UPDATE_EXPENSE",
-        payload: { expenseId: expense.id, localExpenseId: "expense_local_1", changes: { ...event.payload.expense, amount: 900 } },
+        payload: { expenseId: expense.id, localExpenseId: "expense_local_1", changes: { ...event.payload.expense, amount: 900 }, ownerPin: "1234" },
       };
       assert.equal(assertSuccess(await ctx.post("/api/sync/push", { events: [updateEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders })).summary.synced, 1);
       assert.equal(assertSuccess(await ctx.post("/api/sync/push", { events: [updateEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders })).summary.duplicates, 1);
@@ -2605,7 +2613,7 @@ if (ctx.skip) {
         failedUpdate = assertSuccess(await postEvent({
           eventId: "expense-audit-rollback-update",
           type: "UPDATE_EXPENSE",
-          payload: { expenseId: expense.id, changes: { amount: 1450 } },
+          payload: { expenseId: expense.id, changes: { amount: 1450 }, ownerPin: "1234" },
         }));
       } finally {
         await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_expense_update_audit_failure");

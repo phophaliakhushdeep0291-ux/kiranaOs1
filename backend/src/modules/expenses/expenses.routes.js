@@ -13,7 +13,10 @@ router.get("/", ctrl.list);
 router.get("/summary", ctrl.summary);
 router.get("/overview", ctrl.overview);
 router.post("/", validate(createExpenseSchema), ctrl.create);
-router.patch("/:id", validate(updateExpenseSchema), ctrl.update);
+// An edit replaces the accounting effect with reversing + replacement ledger
+// entries. Protect it exactly like delete/restore so a staff session cannot
+// rewrite historical cash without explicit owner approval.
+router.patch("/:id", requireOwnerPin, validate(updateExpenseSchema), ctrl.update);
 router.delete("/:id", requireOwnerPin, ctrl.remove);
 router.post("/:id/restore", requireOwnerPin, ctrl.restore);
 

@@ -64,7 +64,8 @@ export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expen
   return expense;
 }
 
-export async function updateExpenseLocalFirst(id: string, data: ExpenseInput): Promise<Expense> {
+export async function updateExpenseLocalFirst(id: string, data: ExpenseInput, ownerPin: string): Promise<Expense> {
+  if (!/^\d{4}$/.test(ownerPin)) throw new Error("Enter the 4-digit owner PIN");
   const existing = await offlineDB.getAll<LocalExpense>("expenses")
     .then((rows) => rows.find((row) => row.id === id || row.server_id === id));
   if (!existing) throw new Error("Expense is not cached on this device");
@@ -94,6 +95,7 @@ export async function updateExpenseLocalFirst(id: string, data: ExpenseInput): P
       expenseId: existing.server_id || existing.id,
       localExpenseId: existing.local_id || existing.id,
       changes: data,
+      ownerPin,
     },
   });
   await offlineDB.transaction(["expenses", "sync_outbox"], async (tx) => {

@@ -1156,10 +1156,19 @@ if (ctx.skip) {
         status: "pending",
       }, { token: auth.accessToken, headers }), 201);
 
+      const unapprovedUpdate = assertFailure(await ctx.patch(`/api/expenses/${paid.id}`, {
+        amount: 999,
+      }, { token: auth.accessToken, headers }), 403);
+      assert.match(unapprovedUpdate.error, /owner pin required/i);
+      assert.equal((await ctx.db.expense.findUniqueOrThrow({ where: { id: paid.id } })).amount, 100);
+      assert.equal(await ctx.db.financialLedger.count({
+        where: { shopId: tenant.shop.id, sourceType: "expense_update", sourceId: { startsWith: `${paid.id}:` } },
+      }), 0, "an unapproved edit must not write either side of the replacement ledger");
+
       const updated = assertSuccess(await ctx.patch(`/api/expenses/${paid.id}`, {
         amount: 120,
         paymentMode: "bank",
-      }, { token: auth.accessToken, headers }));
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers }));
       assert.equal(updated.amount, 120);
       assert.equal(updated.paymentMode, "bank");
       assertSuccess(await ctx.delete(`/api/expenses/${pending.id}`, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers }));

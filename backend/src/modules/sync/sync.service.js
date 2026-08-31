@@ -1776,6 +1776,7 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.CREATE_EXPENSE:
       return applyCreateExpense(shopId, event, user, context);
     case SYNC_EVENT_TYPES.UPDATE_EXPENSE:
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyUpdateExpense(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_EXPENSE:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
