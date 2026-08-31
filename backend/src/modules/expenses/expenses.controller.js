@@ -1,4 +1,3 @@
-import db from "../../db.js";
 import * as svc from "./expenses.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
@@ -21,17 +20,17 @@ export async function overview(req, res, next) {
 
 export async function create(req, res, next) {
   try {
-    // Stamp who recorded it (display-only) without trusting client input.
-    const user = req.user?.userId ? await db.user.findUnique({ where: { id: req.user.userId }, select: { name: true } }) : null;
     const deviceHeader = req.headers?.["x-device-id"];
     const expense = await svc.createExpense(
       req.shopId,
-      { ...req.body, locationId: requestLocationId(req), recordedBy: user?.name ?? null },
+      { ...req.body, locationId: requestLocationId(req) },
       {
         idempotencyKey: req.body.idempotencyKey,
         clientExpenseId: req.body.clientExpenseId ?? req.body.idempotencyKey,
         sourceDeviceId: Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader ?? null,
         userId: req.user?.userId ?? null,
+        userName: req.user?.userName ?? null,
+        role: req.user?.role ?? null,
         req,
       },
     );

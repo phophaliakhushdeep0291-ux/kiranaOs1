@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { buildDailyClosingReport, toDateInputValue, type DailyClosingReport } from "@/features/core/reports/local-reporting";
-import { buildDrawerCount, loadDrawerCounts, saveDrawerCount, type DrawerCount } from "@/features/core/reports/drawer-counts";
+import { buildDrawerCount, loadDrawerCounts, refreshDrawerCountsFromCloud, saveDrawerCount, type DrawerCount } from "@/features/core/reports/drawer-counts";
 import {
   buildCashMovement,
   buildOpeningFloat,
@@ -106,6 +106,7 @@ export default function DailyClosingPage() {
   const [cashExpenses, setCashExpenses] = useState(0);
   const reportRef = useRef<DailyClosingReport | null>(null);
   const refreshTimer = useRef<number | null>(null);
+  const countedDraftDirty = useRef(false);
 
   useEffect(() => {
     reportRef.current = report;
@@ -134,6 +135,7 @@ export default function DailyClosingPage() {
       refreshTimer.current = window.setTimeout(() => {
         refreshTimer.current = null;
         void load({ showLoader: false });
+        if (navigator.onLine) void refreshDrawerCountsFromCloud().then(setDrawerCounts).catch(() => undefined);
       }, 220);
     };
     window.addEventListener("kirana:local-data-changed", refresh);
@@ -150,6 +152,7 @@ export default function DailyClosingPage() {
 
   useEffect(() => {
     void loadDrawerCounts().then(setDrawerCounts);
+    if (navigator.onLine) void refreshDrawerCountsFromCloud().then(setDrawerCounts).catch(() => undefined);
     void loadOpeningFloats().then(setOpeningFloats);
     void loadCashMovements().then(setCashMovements);
   }, []);
@@ -187,11 +190,18 @@ export default function DailyClosingPage() {
 
   // Prefill the count input when switching to a date that was already counted.
   useEffect(() => {
+    countedDraftDirty.current = false;
     const existing = drawerCounts.find((row) => row.date === date);
     setCountedDraft(existing ? String(existing.countedCash) : "");
-    // Only re-prime when the date changes — typing must not be overwritten.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
+
+  // Cloud history arrives after the instant local render. Prime the field from
+  // that result only while the operator has not started typing.
+  useEffect(() => {
+    if (countedDraftDirty.current) return;
+    const existing = drawerCounts.find((row) => row.date === date);
+    setCountedDraft(existing ? String(existing.countedCash) : "");
+  }, [date, drawerCounts]);
 
   const savedCountForDate = drawerCounts.find((row) => row.date === date);
   const countedValue = Number(countedDraft);
@@ -203,7 +213,12 @@ export default function DailyClosingPage() {
     if (!report || countedDraft.trim() === "" || !Number.isFinite(countedValue) || countedValue < 0) return;
     setSavingCount(true);
     try {
-      setDrawerCounts(await saveDrawerCount(buildDrawerCount(date, report.expectedCashInDrawer, countedValue)));
+      const adjustments = await loadDrawerAdjustments(date);
+      setDrawerCounts(await saveDrawerCount(
+        buildDrawerCount(date, report.expectedCashInDrawer, countedValue),
+        adjustments,
+      ));
+      countedDraftDirty.current = false;
     } finally {
       setSavingCount(false);
     }
@@ -241,7 +256,7 @@ export default function DailyClosingPage() {
           </Button>
           <Button variant="outline" className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm" onClick={() => report && printClosing(report)} disabled={!report}><Printer size={15} className="mr-1 sm:mr-1.5" />Print</Button>
           <Button variant="outline" className="h-11 min-w-0 rounded-xl border-emerald-200 px-1.5 text-xs text-emerald-700 hover:bg-emerald-50 sm:px-4 sm:text-sm" onClick={() => report && shareDailyClosingOnWhatsapp({ report, shopName: shop?.name, include: summaryInclude })} disabled={!report}><MessageCircle size={15} className="mr-1 sm:mr-1.5" />Share</Button>
-          <Button onClick={() => void load({ showLoader: !reportRef.current })} disabled={loading && !report} className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm"><RefreshCw size={15} className="mr-1 sm:mr-1.5" />Refresh</Button>
+          <Button onClick={() => { void load({ showLoader: !reportRef.current }); if (navigator.onLine) void refreshDrawerCountsFromCloud().then(setDrawerCounts).catch(() => undefined); }} disabled={loading && !report} className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm"><RefreshCw size={15} className="mr-1 sm:mr-1.5" />Refresh</Button>
         </div>
       </div>
 
@@ -462,7 +477,7 @@ export default function DailyClosingPage() {
                 min={0}
                 placeholder="Cash counted in drawer"
                 value={countedDraft}
-                onChange={(event) => setCountedDraft(event.target.value)}
+                onChange={(event) => { countedDraftDirty.current = true; setCountedDraft(event.target.value); }}
                 className="h-11 rounded-xl"
               />
               <Button data-testid="button-save-drawer-count" onClick={() => void saveDrawerCountForDate()} disabled={savingCount || !report || countedDraft.trim() === ""} className="h-11 rounded-xl">

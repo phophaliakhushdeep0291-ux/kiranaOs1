@@ -414,7 +414,7 @@ function shopTypeBullets(code: PlanCode, businessType: BusinessType): string[] {
     if (code === "starter") return [
       "1 store, 1 registered device and 1 billing counter",
       "Fast cash, UPI, split and udhar billing—even offline",
-      "Products, simple stock and customer ledger",
+      "Product catalogue and customer ledger",
       "7-day sales view, cloud backup and bill sharing",
     ];
     if (code === "growth") return [

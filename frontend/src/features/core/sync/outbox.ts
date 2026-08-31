@@ -46,7 +46,8 @@ export type SyncOutboxOperationType =
   | "RESTORE_SUPPLIER_PENDING"
   | "CREATE_EXPENSE"
   | "UPDATE_EXPENSE"
-  | "DELETE_EXPENSE";
+  | "DELETE_EXPENSE"
+  | "RECORD_DRAWER_COUNT";
 
 export type SyncOutboxEntityType =
   | "customer"
@@ -62,7 +63,8 @@ export type SyncOutboxEntityType =
   | "subscription"
   | "device_license"
   | "audit_log"
-  | "expense";
+  | "expense"
+  | "daily_closing";
 
 export interface EnqueueOutboxOperationInput {
   entity_type: SyncOutboxEntityType;

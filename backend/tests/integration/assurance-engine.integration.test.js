@@ -541,7 +541,7 @@ function runSuite() {
 
   test("inventory reconciliation: ledger drift, unsourced movement, unauthorized correction", async () => {
     await resetDatabase(ctx.db);
-    const { shop } = await createTenant(ctx.db);
+    const { shop, owner } = await createTenant(ctx.db);
 
     // A product whose movements reconcile exactly produces no finding.
     const clean = await createProduct(ctx.db, shop.id, { stockBaseQty: 18 });
@@ -582,6 +582,37 @@ function runSuite() {
 
     const correction = messyResult.triggeredRules.find((r) => r.ruleCode === "STOCK_LARGE_MANUAL_CORRECTION");
     assert.equal(correction.details.corrections[0].hasReason, false);
+
+    const frequent = await createProduct(ctx.db, shop.id, { stockBaseQty: 0 });
+    const correctionAt = Date.now() - 4 * 24 * 60 * 60 * 1000;
+    for (let index = 0; index < 4; index += 1) {
+      await ctx.db.stockLedger.create({
+        data: {
+          shopId: shop.id, productId: frequent.id, productName: frequent.name, action: "correction",
+          changeBaseQty: 0, oldStockBaseQty: 0, newStockBaseQty: 0, note: "Count checked",
+          actorUserId: owner.id, actorName: owner.name, createdAt: new Date(correctionAt + index * 60 * 60 * 1000),
+        },
+      });
+    }
+    const frequentResult = await evaluate(shop.id, ENTITY_TYPES.PRODUCT, frequent.id);
+    const frequentRule = frequentResult.triggeredRules.find((candidate) => candidate.ruleCode === "STOCK_FREQUENT_CORRECTIONS");
+    assert.ok(frequentRule, ruleCodes(frequentResult).join(","));
+    assert.equal(frequentRule.details.correctionGroups.length, 1);
+    assert.equal(frequentRule.details.correctionGroups[0].actorUserId, owner.id);
+    assert.equal(frequentRule.details.correctionGroups[0].correctionsLast30Days, 4);
+
+    const distributed = await createProduct(ctx.db, shop.id, { stockBaseQty: 0 });
+    for (let index = 0; index < 4; index += 1) {
+      await ctx.db.stockLedger.create({
+        data: {
+          shopId: shop.id, productId: distributed.id, productName: distributed.name, action: "correction",
+          changeBaseQty: 0, oldStockBaseQty: 0, newStockBaseQty: 0, note: "Separate shift check",
+          actorUserId: `staff-${index}`, actorName: `Staff ${index}`, createdAt: new Date(correctionAt + index * 60 * 60 * 1000),
+        },
+      });
+    }
+    const distributedCodes = ruleCodes(await evaluate(shop.id, ENTITY_TYPES.PRODUCT, distributed.id));
+    assert.equal(distributedCodes.includes("STOCK_FREQUENT_CORRECTIONS"), false, "four different people must not be reported as one frequent corrector");
 
     // Negative stock is reported but treated as a MEDIUM operational signal,
     // because KiranaOS deliberately allows overselling.
@@ -670,14 +701,29 @@ function runSuite() {
 
   test("expense rules: duplicate, missing receipt, missing payee, backdating", async () => {
     await resetDatabase(ctx.db);
-    const { shop } = await createTenant(ctx.db);
+    const { shop, owner } = await createTenant(ctx.db);
 
     // A clean expense with a payee and a note, below the receipt threshold.
     const clean = await ctx.db.expense.create({
-      data: { shopId: shop.id, title: "Tea for staff", amount: 120, category: "general", paymentMode: "cash", vendor: "Corner stall", notes: "daily", recordedBy: "Owner User" },
+      data: {
+        shopId: shop.id, title: "Tea for staff", amount: 120, category: "general", paymentMode: "cash",
+        vendor: "Corner stall", notes: "daily", recordedBy: owner.name,
+        recordedByUserId: owner.id, recordedByRole: owner.role,
+      },
     });
     const cleanResult = await evaluate(shop.id, ENTITY_TYPES.EXPENSE, clean.id);
     assert.equal(cleanResult.triggered, false, `clean expense flagged: ${ruleCodes(cleanResult).join(",")}`);
+
+    const invalidActor = await ctx.db.expense.create({
+      data: {
+        shopId: shop.id, title: "Office supplies", amount: 1500, category: "general", paymentMode: "cash",
+        vendor: "Stationery store", notes: "Receipt filed", recordedBy: "Unknown User",
+        recordedByUserId: "missing-or-cross-shop-user", recordedByRole: "owner",
+      },
+    });
+    const invalidActorCodes = ruleCodes(await evaluate(shop.id, ENTITY_TYPES.EXPENSE, invalidActor.id));
+    assert.ok(invalidActorCodes.includes("EXPENSE_ACTOR_SCOPE_MISMATCH"), invalidActorCodes.join(","));
+    assert.equal(invalidActorCodes.includes("EXPENSE_UNATTRIBUTED"), false, "an invalid actor is a scope-integrity issue, not missing attribution");
 
     // 10. Expense above threshold with no receipt reference and no payee.
     const noReceipt = await ctx.db.expense.create({
@@ -831,6 +877,47 @@ function runSuite() {
     const split = result.triggeredRules.find((r) => r.ruleCode === "CLOSING_SPLIT_PAYMENT_MISMATCH");
     assert.equal(split.details.mismatchedBills[0].declaredPaidRupees, 300);
     assert.equal(split.details.mismatchedBills[0].paymentRowSumRupees, 120);
+  });
+
+  test("three distinct drawer shortages by the same user and device form one explained trend", async () => {
+    await resetDatabase(ctx.db);
+    const { shop, owner } = await createTenant(ctx.db);
+    const firstDay = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+    firstDay.setHours(10, 0, 0, 0);
+    const snapshots = [];
+    for (let index = 0; index < 3; index += 1) {
+      const date = new Date(firstDay.getTime() + index * 24 * 60 * 60 * 1000);
+      snapshots.push(await ctx.db.dailyClosingSnapshot.create({
+        data: {
+          shopId: shop.id,
+          date,
+          totalSalesPaise: 0,
+          cashReceivedPaise: 0,
+          expectedCashPaise: 0,
+          openingCashPaise: 10000,
+          drawerExpectedCashPaise: 10000,
+          countedCashPaise: 9900 - index,
+          cashVariancePaise: -100 - index,
+          cashCountedAt: new Date(date.getTime() + 12 * 60 * 60 * 1000),
+          cashCountedByUserId: owner.id,
+          cashCountedByDeviceId: "counter-device-1",
+          cashCountRevision: 1,
+          totalBills: 0,
+          source: "manual",
+        },
+      }));
+    }
+
+    const result = await evaluate(shop.id, ENTITY_TYPES.DAILY_CLOSING, snapshots[2].id);
+    const codes = ruleCodes(result);
+    assert.ok(codes.includes("CLOSING_REPEATED_CASH_SHORTAGE"), codes.join(","));
+    const trend = result.triggeredRules.find((candidate) => candidate.ruleCode === "CLOSING_REPEATED_CASH_SHORTAGE");
+    assert.equal(trend.details.minimumDistinctShortageDays, 3);
+    assert.equal(trend.details.patterns.length, 2);
+    assert.equal(trend.details.patterns.find((pattern) => pattern.identityField === "cashCountedByUserId").identityValue, owner.id);
+    assert.equal(trend.details.patterns.find((pattern) => pattern.identityField === "cashCountedByDeviceId").identityValue, "counter-device-1");
+    assert.equal(trend.details.patterns.every((pattern) => pattern.shortageDayCount === 3), true);
+    assert.equal(trend.details.patterns.every((pattern) => pattern.totalShortagePaise === 303), true);
   });
 
   test("offline sync duplicate and success-with-error are detected", async () => {

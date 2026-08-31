@@ -1,6 +1,6 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
-import { createIntegrationContext, resetDatabase, assertSuccess } from "./setup.js";
+import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { activateDeviceViaApi, billPayload, createCustomer, createProduct, createStaff, createTenant, login, productPayload, unique } from "./factories.js";
 import { runSyncRetentionCleanup } from "../../src/workers/syncCleanup.worker.js";
 
@@ -21,6 +21,61 @@ if (ctx.skip) {
   }
 
   describe("sync integration", () => {
+    test("offline drawer count is exact-once, attributed, and version-conflict safe", async () => {
+      const { tenant, ownerAuth, device, deviceHeaders } = await ownerCtx();
+      const date = "2026-08-30";
+      const event = {
+        eventId: "drawer-count-exact-once-1",
+        type: "RECORD_DRAWER_COUNT",
+        device_id: device.deviceId,
+        payload: {
+          date,
+          openingCashPaise: 10_000,
+          manualCashInPaise: 3_000,
+          manualCashOutPaise: 1_000,
+          countedCashPaise: 11_900,
+          clientExpectedCashPaise: 12_000,
+          baseRevision: 0,
+          countedAt: "2026-08-30T16:30:00.000Z",
+        },
+      };
+
+      const prematureLock = assertFailure(await ctx.post(`/api/reports/daily-closing/${date}/lock`, {}, { token: ownerAuth.accessToken, headers: deviceHeaders }), 409);
+      assert.equal(prematureLock.code, "DRAWER_COUNT_REQUIRED_BEFORE_LOCK");
+
+      const first = assertSuccess(await ctx.post("/api/sync/push", { events: [event] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(first.summary.synced, 1);
+      assert.equal(first.results[0].drawer.revision, 1);
+      assert.equal(first.results[0].drawer.variancePaise, -100);
+
+      const replay = assertSuccess(await ctx.post("/api/sync/push", { events: [event] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(replay.summary.duplicates, 1);
+      const stored = await ctx.db.dailyClosingSnapshot.findFirstOrThrow({ where: { shopId: tenant.shop.id, date: new Date(`${date}T00:00:00.000Z`) } });
+      assert.equal(stored.cashCountRevision, 1, "lost acknowledgements must not apply the same count twice");
+      assert.equal(stored.cashCountedByDeviceId, device.deviceId);
+      assert.equal(stored.countedCashPaise, 11_900);
+      const countAudits = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, entityId: stored.id, action: "DAILY_CLOSING_DRAWER_COUNT_RECORDED" },
+      });
+      assert.equal(countAudits.length, 1);
+      assert.equal(countAudits[0].deviceId, device.deviceId);
+
+      const stale = assertSuccess(await ctx.post("/api/sync/push", { events: [{
+        ...event,
+        eventId: "drawer-count-stale-device-2",
+        payload: { ...event.payload, countedCashPaise: 12_500, baseRevision: 0 },
+      }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(stale.summary.conflicts, 1);
+      assert.equal(stale.results[0].code, "DRAWER_COUNT_VERSION_CONFLICT");
+
+      const history = assertSuccess(await ctx.get("/api/reports/daily-closing/drawer-counts", { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(history.length, 1);
+      assert.equal(history[0].countedCashPaise, 11_900);
+      assert.equal(history[0].revision, 1);
+      const locked = assertSuccess(await ctx.post(`/api/reports/daily-closing/${date}/lock`, {}, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.ok(locked.snapshot.lockedAt);
+    });
+
     test("sync push CREATE_PRODUCT works", async () => {
       const { ownerAuth, deviceHeaders } = await ownerCtx();
       const response = await ctx.post("/api/sync/push", {
@@ -2447,6 +2502,9 @@ if (ctx.skip) {
       assert.equal(pulled.changes.some((change) => change.entity_type === "expense" && change.entity?.title === "Generator diesel"), true);
 
       const expense = await ctx.db.expense.findFirstOrThrow({ where: { shopId: tenant.shop.id, idempotencyKey: "create-expense:expense_local_1" } });
+      assert.equal(expense.recordedByUserId, tenant.owner.id);
+      assert.equal(expense.recordedByRole, "owner");
+      assert.equal(expense.recordedBy, tenant.owner.name);
       const updateEvent = {
         eventId: "expense-update-offline-1",
         type: "UPDATE_EXPENSE",

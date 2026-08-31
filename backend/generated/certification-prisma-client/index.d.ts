@@ -63921,6 +63921,8 @@ export namespace Prisma {
     recurringInterval: string | null
     nextDueOn: Date | null
     recordedBy: string | null
+    recordedByUserId: string | null
+    recordedByRole: string | null
     notes: string | null
     spentAt: Date | null
     deletedAt: Date | null
@@ -63945,6 +63947,8 @@ export namespace Prisma {
     recurringInterval: string | null
     nextDueOn: Date | null
     recordedBy: string | null
+    recordedByUserId: string | null
+    recordedByRole: string | null
     notes: string | null
     spentAt: Date | null
     deletedAt: Date | null
@@ -63969,6 +63973,8 @@ export namespace Prisma {
     recurringInterval: number
     nextDueOn: number
     recordedBy: number
+    recordedByUserId: number
+    recordedByRole: number
     notes: number
     spentAt: number
     deletedAt: number
@@ -64005,6 +64011,8 @@ export namespace Prisma {
     recurringInterval?: true
     nextDueOn?: true
     recordedBy?: true
+    recordedByUserId?: true
+    recordedByRole?: true
     notes?: true
     spentAt?: true
     deletedAt?: true
@@ -64029,6 +64037,8 @@ export namespace Prisma {
     recurringInterval?: true
     nextDueOn?: true
     recordedBy?: true
+    recordedByUserId?: true
+    recordedByRole?: true
     notes?: true
     spentAt?: true
     deletedAt?: true
@@ -64053,6 +64063,8 @@ export namespace Prisma {
     recurringInterval?: true
     nextDueOn?: true
     recordedBy?: true
+    recordedByUserId?: true
+    recordedByRole?: true
     notes?: true
     spentAt?: true
     deletedAt?: true
@@ -64164,6 +64176,8 @@ export namespace Prisma {
     recurringInterval: string
     nextDueOn: Date | null
     recordedBy: string | null
+    recordedByUserId: string | null
+    recordedByRole: string | null
     notes: string | null
     spentAt: Date
     deletedAt: Date | null
@@ -64207,6 +64221,8 @@ export namespace Prisma {
     recurringInterval?: boolean
     nextDueOn?: boolean
     recordedBy?: boolean
+    recordedByUserId?: boolean
+    recordedByRole?: boolean
     notes?: boolean
     spentAt?: boolean
     deletedAt?: boolean
@@ -64233,6 +64249,8 @@ export namespace Prisma {
     recurringInterval?: boolean
     nextDueOn?: boolean
     recordedBy?: boolean
+    recordedByUserId?: boolean
+    recordedByRole?: boolean
     notes?: boolean
     spentAt?: boolean
     deletedAt?: boolean
@@ -64270,6 +64288,8 @@ export namespace Prisma {
       recurringInterval: string
       nextDueOn: Date | null
       recordedBy: string | null
+      recordedByUserId: string | null
+      recordedByRole: string | null
       notes: string | null
       spentAt: Date
       deletedAt: Date | null
@@ -64714,6 +64734,8 @@ export namespace Prisma {
     readonly recurringInterval: FieldRef<"Expense", 'String'>
     readonly nextDueOn: FieldRef<"Expense", 'DateTime'>
     readonly recordedBy: FieldRef<"Expense", 'String'>
+    readonly recordedByUserId: FieldRef<"Expense", 'String'>
+    readonly recordedByRole: FieldRef<"Expense", 'String'>
     readonly notes: FieldRef<"Expense", 'String'>
     readonly spentAt: FieldRef<"Expense", 'DateTime'>
     readonly deletedAt: FieldRef<"Expense", 'DateTime'>
@@ -90305,6 +90327,13 @@ export namespace Prisma {
     udharGivenPaise: number | null
     oldUdharRecoveredPaise: number | null
     expectedCashPaise: number | null
+    openingCashPaise: number | null
+    manualCashInPaise: number | null
+    manualCashOutPaise: number | null
+    drawerExpectedCashPaise: number | null
+    countedCashPaise: number | null
+    cashVariancePaise: number | null
+    cashCountRevision: number | null
     totalBills: number | null
     cancelledBills: number | null
     roughBills: number | null
@@ -90319,6 +90348,13 @@ export namespace Prisma {
     udharGivenPaise: number | null
     oldUdharRecoveredPaise: number | null
     expectedCashPaise: number | null
+    openingCashPaise: number | null
+    manualCashInPaise: number | null
+    manualCashOutPaise: number | null
+    drawerExpectedCashPaise: number | null
+    countedCashPaise: number | null
+    cashVariancePaise: number | null
+    cashCountRevision: number | null
     totalBills: number | null
     cancelledBills: number | null
     roughBills: number | null
@@ -90337,6 +90373,16 @@ export namespace Prisma {
     udharGivenPaise: number | null
     oldUdharRecoveredPaise: number | null
     expectedCashPaise: number | null
+    openingCashPaise: number | null
+    manualCashInPaise: number | null
+    manualCashOutPaise: number | null
+    drawerExpectedCashPaise: number | null
+    countedCashPaise: number | null
+    cashVariancePaise: number | null
+    cashCountedAt: Date | null
+    cashCountedByUserId: string | null
+    cashCountedByDeviceId: string | null
+    cashCountRevision: number | null
     totalBills: number | null
     cancelledBills: number | null
     roughBills: number | null
@@ -90364,6 +90410,16 @@ export namespace Prisma {
     udharGivenPaise: number | null
     oldUdharRecoveredPaise: number | null
     expectedCashPaise: number | null
+    openingCashPaise: number | null
+    manualCashInPaise: number | null
+    manualCashOutPaise: number | null
+    drawerExpectedCashPaise: number | null
+    countedCashPaise: number | null
+    cashVariancePaise: number | null
+    cashCountedAt: Date | null
+    cashCountedByUserId: string | null
+    cashCountedByDeviceId: string | null
+    cashCountRevision: number | null
     totalBills: number | null
     cancelledBills: number | null
     roughBills: number | null
@@ -90391,6 +90447,16 @@ export namespace Prisma {
     udharGivenPaise: number
     oldUdharRecoveredPaise: number
     expectedCashPaise: number
+    openingCashPaise: number
+    manualCashInPaise: number
+    manualCashOutPaise: number
+    drawerExpectedCashPaise: number
+    countedCashPaise: number
+    cashVariancePaise: number
+    cashCountedAt: number
+    cashCountedByUserId: number
+    cashCountedByDeviceId: number
+    cashCountRevision: number
     totalBills: number
     cancelledBills: number
     roughBills: number
@@ -90416,6 +90482,13 @@ export namespace Prisma {
     udharGivenPaise?: true
     oldUdharRecoveredPaise?: true
     expectedCashPaise?: true
+    openingCashPaise?: true
+    manualCashInPaise?: true
+    manualCashOutPaise?: true
+    drawerExpectedCashPaise?: true
+    countedCashPaise?: true
+    cashVariancePaise?: true
+    cashCountRevision?: true
     totalBills?: true
     cancelledBills?: true
     roughBills?: true
@@ -90430,6 +90503,13 @@ export namespace Prisma {
     udharGivenPaise?: true
     oldUdharRecoveredPaise?: true
     expectedCashPaise?: true
+    openingCashPaise?: true
+    manualCashInPaise?: true
+    manualCashOutPaise?: true
+    drawerExpectedCashPaise?: true
+    countedCashPaise?: true
+    cashVariancePaise?: true
+    cashCountRevision?: true
     totalBills?: true
     cancelledBills?: true
     roughBills?: true
@@ -90448,6 +90528,16 @@ export namespace Prisma {
     udharGivenPaise?: true
     oldUdharRecoveredPaise?: true
     expectedCashPaise?: true
+    openingCashPaise?: true
+    manualCashInPaise?: true
+    manualCashOutPaise?: true
+    drawerExpectedCashPaise?: true
+    countedCashPaise?: true
+    cashVariancePaise?: true
+    cashCountedAt?: true
+    cashCountedByUserId?: true
+    cashCountedByDeviceId?: true
+    cashCountRevision?: true
     totalBills?: true
     cancelledBills?: true
     roughBills?: true
@@ -90475,6 +90565,16 @@ export namespace Prisma {
     udharGivenPaise?: true
     oldUdharRecoveredPaise?: true
     expectedCashPaise?: true
+    openingCashPaise?: true
+    manualCashInPaise?: true
+    manualCashOutPaise?: true
+    drawerExpectedCashPaise?: true
+    countedCashPaise?: true
+    cashVariancePaise?: true
+    cashCountedAt?: true
+    cashCountedByUserId?: true
+    cashCountedByDeviceId?: true
+    cashCountRevision?: true
     totalBills?: true
     cancelledBills?: true
     roughBills?: true
@@ -90502,6 +90602,16 @@ export namespace Prisma {
     udharGivenPaise?: true
     oldUdharRecoveredPaise?: true
     expectedCashPaise?: true
+    openingCashPaise?: true
+    manualCashInPaise?: true
+    manualCashOutPaise?: true
+    drawerExpectedCashPaise?: true
+    countedCashPaise?: true
+    cashVariancePaise?: true
+    cashCountedAt?: true
+    cashCountedByUserId?: true
+    cashCountedByDeviceId?: true
+    cashCountRevision?: true
     totalBills?: true
     cancelledBills?: true
     roughBills?: true
@@ -90616,6 +90726,16 @@ export namespace Prisma {
     udharGivenPaise: number
     oldUdharRecoveredPaise: number
     expectedCashPaise: number
+    openingCashPaise: number
+    manualCashInPaise: number
+    manualCashOutPaise: number
+    drawerExpectedCashPaise: number | null
+    countedCashPaise: number | null
+    cashVariancePaise: number | null
+    cashCountedAt: Date | null
+    cashCountedByUserId: string | null
+    cashCountedByDeviceId: string | null
+    cashCountRevision: number
     totalBills: number
     cancelledBills: number
     roughBills: number
@@ -90662,6 +90782,16 @@ export namespace Prisma {
     udharGivenPaise?: boolean
     oldUdharRecoveredPaise?: boolean
     expectedCashPaise?: boolean
+    openingCashPaise?: boolean
+    manualCashInPaise?: boolean
+    manualCashOutPaise?: boolean
+    drawerExpectedCashPaise?: boolean
+    countedCashPaise?: boolean
+    cashVariancePaise?: boolean
+    cashCountedAt?: boolean
+    cashCountedByUserId?: boolean
+    cashCountedByDeviceId?: boolean
+    cashCountRevision?: boolean
     totalBills?: boolean
     cancelledBills?: boolean
     roughBills?: boolean
@@ -90691,6 +90821,16 @@ export namespace Prisma {
     udharGivenPaise?: boolean
     oldUdharRecoveredPaise?: boolean
     expectedCashPaise?: boolean
+    openingCashPaise?: boolean
+    manualCashInPaise?: boolean
+    manualCashOutPaise?: boolean
+    drawerExpectedCashPaise?: boolean
+    countedCashPaise?: boolean
+    cashVariancePaise?: boolean
+    cashCountedAt?: boolean
+    cashCountedByUserId?: boolean
+    cashCountedByDeviceId?: boolean
+    cashCountRevision?: boolean
     totalBills?: boolean
     cancelledBills?: boolean
     roughBills?: boolean
@@ -90731,6 +90871,16 @@ export namespace Prisma {
       udharGivenPaise: number
       oldUdharRecoveredPaise: number
       expectedCashPaise: number
+      openingCashPaise: number
+      manualCashInPaise: number
+      manualCashOutPaise: number
+      drawerExpectedCashPaise: number | null
+      countedCashPaise: number | null
+      cashVariancePaise: number | null
+      cashCountedAt: Date | null
+      cashCountedByUserId: string | null
+      cashCountedByDeviceId: string | null
+      cashCountRevision: number
       totalBills: number
       cancelledBills: number
       roughBills: number
@@ -91178,6 +91328,16 @@ export namespace Prisma {
     readonly udharGivenPaise: FieldRef<"DailyClosingSnapshot", 'Int'>
     readonly oldUdharRecoveredPaise: FieldRef<"DailyClosingSnapshot", 'Int'>
     readonly expectedCashPaise: FieldRef<"DailyClosingSnapshot", 'Int'>
+    readonly openingCashPaise: FieldRef<"DailyClosingSnapshot", 'Int'>
+    readonly manualCashInPaise: FieldRef<"DailyClosingSnapshot", 'Int'>
+    readonly manualCashOutPaise: FieldRef<"DailyClosingSnapshot", 'Int'>
+    readonly drawerExpectedCashPaise: FieldRef<"DailyClosingSnapshot", 'Int'>
+    readonly countedCashPaise: FieldRef<"DailyClosingSnapshot", 'Int'>
+    readonly cashVariancePaise: FieldRef<"DailyClosingSnapshot", 'Int'>
+    readonly cashCountedAt: FieldRef<"DailyClosingSnapshot", 'DateTime'>
+    readonly cashCountedByUserId: FieldRef<"DailyClosingSnapshot", 'String'>
+    readonly cashCountedByDeviceId: FieldRef<"DailyClosingSnapshot", 'String'>
+    readonly cashCountRevision: FieldRef<"DailyClosingSnapshot", 'Int'>
     readonly totalBills: FieldRef<"DailyClosingSnapshot", 'Int'>
     readonly cancelledBills: FieldRef<"DailyClosingSnapshot", 'Int'>
     readonly roughBills: FieldRef<"DailyClosingSnapshot", 'Int'>
@@ -179852,6 +180012,8 @@ export namespace Prisma {
     recurringInterval: 'recurringInterval',
     nextDueOn: 'nextDueOn',
     recordedBy: 'recordedBy',
+    recordedByUserId: 'recordedByUserId',
+    recordedByRole: 'recordedByRole',
     notes: 'notes',
     spentAt: 'spentAt',
     deletedAt: 'deletedAt',
@@ -180355,6 +180517,16 @@ export namespace Prisma {
     udharGivenPaise: 'udharGivenPaise',
     oldUdharRecoveredPaise: 'oldUdharRecoveredPaise',
     expectedCashPaise: 'expectedCashPaise',
+    openingCashPaise: 'openingCashPaise',
+    manualCashInPaise: 'manualCashInPaise',
+    manualCashOutPaise: 'manualCashOutPaise',
+    drawerExpectedCashPaise: 'drawerExpectedCashPaise',
+    countedCashPaise: 'countedCashPaise',
+    cashVariancePaise: 'cashVariancePaise',
+    cashCountedAt: 'cashCountedAt',
+    cashCountedByUserId: 'cashCountedByUserId',
+    cashCountedByDeviceId: 'cashCountedByDeviceId',
+    cashCountRevision: 'cashCountRevision',
     totalBills: 'totalBills',
     cancelledBills: 'cancelledBills',
     roughBills: 'roughBills',
@@ -187537,6 +187709,8 @@ export namespace Prisma {
     recurringInterval?: StringFilter<"Expense"> | string
     nextDueOn?: DateTimeNullableFilter<"Expense"> | Date | string | null
     recordedBy?: StringNullableFilter<"Expense"> | string | null
+    recordedByUserId?: StringNullableFilter<"Expense"> | string | null
+    recordedByRole?: StringNullableFilter<"Expense"> | string | null
     notes?: StringNullableFilter<"Expense"> | string | null
     spentAt?: DateTimeFilter<"Expense"> | Date | string
     deletedAt?: DateTimeNullableFilter<"Expense"> | Date | string | null
@@ -187563,6 +187737,8 @@ export namespace Prisma {
     recurringInterval?: SortOrder
     nextDueOn?: SortOrderInput | SortOrder
     recordedBy?: SortOrderInput | SortOrder
+    recordedByUserId?: SortOrderInput | SortOrder
+    recordedByRole?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
     spentAt?: SortOrder
     deletedAt?: SortOrderInput | SortOrder
@@ -187594,6 +187770,8 @@ export namespace Prisma {
     recurringInterval?: StringFilter<"Expense"> | string
     nextDueOn?: DateTimeNullableFilter<"Expense"> | Date | string | null
     recordedBy?: StringNullableFilter<"Expense"> | string | null
+    recordedByUserId?: StringNullableFilter<"Expense"> | string | null
+    recordedByRole?: StringNullableFilter<"Expense"> | string | null
     notes?: StringNullableFilter<"Expense"> | string | null
     spentAt?: DateTimeFilter<"Expense"> | Date | string
     deletedAt?: DateTimeNullableFilter<"Expense"> | Date | string | null
@@ -187620,6 +187798,8 @@ export namespace Prisma {
     recurringInterval?: SortOrder
     nextDueOn?: SortOrderInput | SortOrder
     recordedBy?: SortOrderInput | SortOrder
+    recordedByUserId?: SortOrderInput | SortOrder
+    recordedByRole?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
     spentAt?: SortOrder
     deletedAt?: SortOrderInput | SortOrder
@@ -187652,6 +187832,8 @@ export namespace Prisma {
     recurringInterval?: StringWithAggregatesFilter<"Expense"> | string
     nextDueOn?: DateTimeNullableWithAggregatesFilter<"Expense"> | Date | string | null
     recordedBy?: StringNullableWithAggregatesFilter<"Expense"> | string | null
+    recordedByUserId?: StringNullableWithAggregatesFilter<"Expense"> | string | null
+    recordedByRole?: StringNullableWithAggregatesFilter<"Expense"> | string | null
     notes?: StringNullableWithAggregatesFilter<"Expense"> | string | null
     spentAt?: DateTimeWithAggregatesFilter<"Expense"> | Date | string
     deletedAt?: DateTimeNullableWithAggregatesFilter<"Expense"> | Date | string | null
@@ -190268,6 +190450,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFilter<"DailyClosingSnapshot"> | number
     oldUdharRecoveredPaise?: IntFilter<"DailyClosingSnapshot"> | number
     expectedCashPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    openingCashPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    manualCashInPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    manualCashOutPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    drawerExpectedCashPaise?: IntNullableFilter<"DailyClosingSnapshot"> | number | null
+    countedCashPaise?: IntNullableFilter<"DailyClosingSnapshot"> | number | null
+    cashVariancePaise?: IntNullableFilter<"DailyClosingSnapshot"> | number | null
+    cashCountedAt?: DateTimeNullableFilter<"DailyClosingSnapshot"> | Date | string | null
+    cashCountedByUserId?: StringNullableFilter<"DailyClosingSnapshot"> | string | null
+    cashCountedByDeviceId?: StringNullableFilter<"DailyClosingSnapshot"> | string | null
+    cashCountRevision?: IntFilter<"DailyClosingSnapshot"> | number
     totalBills?: IntFilter<"DailyClosingSnapshot"> | number
     cancelledBills?: IntFilter<"DailyClosingSnapshot"> | number
     roughBills?: IntFilter<"DailyClosingSnapshot"> | number
@@ -190297,6 +190489,16 @@ export namespace Prisma {
     udharGivenPaise?: SortOrder
     oldUdharRecoveredPaise?: SortOrder
     expectedCashPaise?: SortOrder
+    openingCashPaise?: SortOrder
+    manualCashInPaise?: SortOrder
+    manualCashOutPaise?: SortOrder
+    drawerExpectedCashPaise?: SortOrderInput | SortOrder
+    countedCashPaise?: SortOrderInput | SortOrder
+    cashVariancePaise?: SortOrderInput | SortOrder
+    cashCountedAt?: SortOrderInput | SortOrder
+    cashCountedByUserId?: SortOrderInput | SortOrder
+    cashCountedByDeviceId?: SortOrderInput | SortOrder
+    cashCountRevision?: SortOrder
     totalBills?: SortOrder
     cancelledBills?: SortOrder
     roughBills?: SortOrder
@@ -190330,6 +190532,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFilter<"DailyClosingSnapshot"> | number
     oldUdharRecoveredPaise?: IntFilter<"DailyClosingSnapshot"> | number
     expectedCashPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    openingCashPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    manualCashInPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    manualCashOutPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    drawerExpectedCashPaise?: IntNullableFilter<"DailyClosingSnapshot"> | number | null
+    countedCashPaise?: IntNullableFilter<"DailyClosingSnapshot"> | number | null
+    cashVariancePaise?: IntNullableFilter<"DailyClosingSnapshot"> | number | null
+    cashCountedAt?: DateTimeNullableFilter<"DailyClosingSnapshot"> | Date | string | null
+    cashCountedByUserId?: StringNullableFilter<"DailyClosingSnapshot"> | string | null
+    cashCountedByDeviceId?: StringNullableFilter<"DailyClosingSnapshot"> | string | null
+    cashCountRevision?: IntFilter<"DailyClosingSnapshot"> | number
     totalBills?: IntFilter<"DailyClosingSnapshot"> | number
     cancelledBills?: IntFilter<"DailyClosingSnapshot"> | number
     roughBills?: IntFilter<"DailyClosingSnapshot"> | number
@@ -190359,6 +190571,16 @@ export namespace Prisma {
     udharGivenPaise?: SortOrder
     oldUdharRecoveredPaise?: SortOrder
     expectedCashPaise?: SortOrder
+    openingCashPaise?: SortOrder
+    manualCashInPaise?: SortOrder
+    manualCashOutPaise?: SortOrder
+    drawerExpectedCashPaise?: SortOrderInput | SortOrder
+    countedCashPaise?: SortOrderInput | SortOrder
+    cashVariancePaise?: SortOrderInput | SortOrder
+    cashCountedAt?: SortOrderInput | SortOrder
+    cashCountedByUserId?: SortOrderInput | SortOrder
+    cashCountedByDeviceId?: SortOrderInput | SortOrder
+    cashCountRevision?: SortOrder
     totalBills?: SortOrder
     cancelledBills?: SortOrder
     roughBills?: SortOrder
@@ -190394,6 +190616,16 @@ export namespace Prisma {
     udharGivenPaise?: IntWithAggregatesFilter<"DailyClosingSnapshot"> | number
     oldUdharRecoveredPaise?: IntWithAggregatesFilter<"DailyClosingSnapshot"> | number
     expectedCashPaise?: IntWithAggregatesFilter<"DailyClosingSnapshot"> | number
+    openingCashPaise?: IntWithAggregatesFilter<"DailyClosingSnapshot"> | number
+    manualCashInPaise?: IntWithAggregatesFilter<"DailyClosingSnapshot"> | number
+    manualCashOutPaise?: IntWithAggregatesFilter<"DailyClosingSnapshot"> | number
+    drawerExpectedCashPaise?: IntNullableWithAggregatesFilter<"DailyClosingSnapshot"> | number | null
+    countedCashPaise?: IntNullableWithAggregatesFilter<"DailyClosingSnapshot"> | number | null
+    cashVariancePaise?: IntNullableWithAggregatesFilter<"DailyClosingSnapshot"> | number | null
+    cashCountedAt?: DateTimeNullableWithAggregatesFilter<"DailyClosingSnapshot"> | Date | string | null
+    cashCountedByUserId?: StringNullableWithAggregatesFilter<"DailyClosingSnapshot"> | string | null
+    cashCountedByDeviceId?: StringNullableWithAggregatesFilter<"DailyClosingSnapshot"> | string | null
+    cashCountRevision?: IntWithAggregatesFilter<"DailyClosingSnapshot"> | number
     totalBills?: IntWithAggregatesFilter<"DailyClosingSnapshot"> | number
     cancelledBills?: IntWithAggregatesFilter<"DailyClosingSnapshot"> | number
     roughBills?: IntWithAggregatesFilter<"DailyClosingSnapshot"> | number
@@ -205351,6 +205583,8 @@ export namespace Prisma {
     recurringInterval?: string
     nextDueOn?: Date | string | null
     recordedBy?: string | null
+    recordedByUserId?: string | null
+    recordedByRole?: string | null
     notes?: string | null
     spentAt?: Date | string
     deletedAt?: Date | string | null
@@ -205377,6 +205611,8 @@ export namespace Prisma {
     recurringInterval?: string
     nextDueOn?: Date | string | null
     recordedBy?: string | null
+    recordedByUserId?: string | null
+    recordedByRole?: string | null
     notes?: string | null
     spentAt?: Date | string
     deletedAt?: Date | string | null
@@ -205399,6 +205635,8 @@ export namespace Prisma {
     recurringInterval?: StringFieldUpdateOperationsInput | string
     nextDueOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     recordedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByRole?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     spentAt?: DateTimeFieldUpdateOperationsInput | Date | string
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -205425,6 +205663,8 @@ export namespace Prisma {
     recurringInterval?: StringFieldUpdateOperationsInput | string
     nextDueOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     recordedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByRole?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     spentAt?: DateTimeFieldUpdateOperationsInput | Date | string
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -205449,6 +205689,8 @@ export namespace Prisma {
     recurringInterval?: string
     nextDueOn?: Date | string | null
     recordedBy?: string | null
+    recordedByUserId?: string | null
+    recordedByRole?: string | null
     notes?: string | null
     spentAt?: Date | string
     deletedAt?: Date | string | null
@@ -205471,6 +205713,8 @@ export namespace Prisma {
     recurringInterval?: StringFieldUpdateOperationsInput | string
     nextDueOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     recordedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByRole?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     spentAt?: DateTimeFieldUpdateOperationsInput | Date | string
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -205495,6 +205739,8 @@ export namespace Prisma {
     recurringInterval?: StringFieldUpdateOperationsInput | string
     nextDueOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     recordedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByRole?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     spentAt?: DateTimeFieldUpdateOperationsInput | Date | string
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -208446,6 +208692,16 @@ export namespace Prisma {
     udharGivenPaise?: number
     oldUdharRecoveredPaise?: number
     expectedCashPaise?: number
+    openingCashPaise?: number
+    manualCashInPaise?: number
+    manualCashOutPaise?: number
+    drawerExpectedCashPaise?: number | null
+    countedCashPaise?: number | null
+    cashVariancePaise?: number | null
+    cashCountedAt?: Date | string | null
+    cashCountedByUserId?: string | null
+    cashCountedByDeviceId?: string | null
+    cashCountRevision?: number
     totalBills?: number
     cancelledBills?: number
     roughBills?: number
@@ -208475,6 +208731,16 @@ export namespace Prisma {
     udharGivenPaise?: number
     oldUdharRecoveredPaise?: number
     expectedCashPaise?: number
+    openingCashPaise?: number
+    manualCashInPaise?: number
+    manualCashOutPaise?: number
+    drawerExpectedCashPaise?: number | null
+    countedCashPaise?: number | null
+    cashVariancePaise?: number | null
+    cashCountedAt?: Date | string | null
+    cashCountedByUserId?: string | null
+    cashCountedByDeviceId?: string | null
+    cashCountRevision?: number
     totalBills?: number
     cancelledBills?: number
     roughBills?: number
@@ -208500,6 +208766,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFieldUpdateOperationsInput | number
     oldUdharRecoveredPaise?: IntFieldUpdateOperationsInput | number
     expectedCashPaise?: IntFieldUpdateOperationsInput | number
+    openingCashPaise?: IntFieldUpdateOperationsInput | number
+    manualCashInPaise?: IntFieldUpdateOperationsInput | number
+    manualCashOutPaise?: IntFieldUpdateOperationsInput | number
+    drawerExpectedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    countedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashVariancePaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashCountedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cashCountedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountedByDeviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountRevision?: IntFieldUpdateOperationsInput | number
     totalBills?: IntFieldUpdateOperationsInput | number
     cancelledBills?: IntFieldUpdateOperationsInput | number
     roughBills?: IntFieldUpdateOperationsInput | number
@@ -208529,6 +208805,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFieldUpdateOperationsInput | number
     oldUdharRecoveredPaise?: IntFieldUpdateOperationsInput | number
     expectedCashPaise?: IntFieldUpdateOperationsInput | number
+    openingCashPaise?: IntFieldUpdateOperationsInput | number
+    manualCashInPaise?: IntFieldUpdateOperationsInput | number
+    manualCashOutPaise?: IntFieldUpdateOperationsInput | number
+    drawerExpectedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    countedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashVariancePaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashCountedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cashCountedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountedByDeviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountRevision?: IntFieldUpdateOperationsInput | number
     totalBills?: IntFieldUpdateOperationsInput | number
     cancelledBills?: IntFieldUpdateOperationsInput | number
     roughBills?: IntFieldUpdateOperationsInput | number
@@ -208556,6 +208842,16 @@ export namespace Prisma {
     udharGivenPaise?: number
     oldUdharRecoveredPaise?: number
     expectedCashPaise?: number
+    openingCashPaise?: number
+    manualCashInPaise?: number
+    manualCashOutPaise?: number
+    drawerExpectedCashPaise?: number | null
+    countedCashPaise?: number | null
+    cashVariancePaise?: number | null
+    cashCountedAt?: Date | string | null
+    cashCountedByUserId?: string | null
+    cashCountedByDeviceId?: string | null
+    cashCountRevision?: number
     totalBills?: number
     cancelledBills?: number
     roughBills?: number
@@ -208581,6 +208877,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFieldUpdateOperationsInput | number
     oldUdharRecoveredPaise?: IntFieldUpdateOperationsInput | number
     expectedCashPaise?: IntFieldUpdateOperationsInput | number
+    openingCashPaise?: IntFieldUpdateOperationsInput | number
+    manualCashInPaise?: IntFieldUpdateOperationsInput | number
+    manualCashOutPaise?: IntFieldUpdateOperationsInput | number
+    drawerExpectedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    countedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashVariancePaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashCountedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cashCountedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountedByDeviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountRevision?: IntFieldUpdateOperationsInput | number
     totalBills?: IntFieldUpdateOperationsInput | number
     cancelledBills?: IntFieldUpdateOperationsInput | number
     roughBills?: IntFieldUpdateOperationsInput | number
@@ -208608,6 +208914,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFieldUpdateOperationsInput | number
     oldUdharRecoveredPaise?: IntFieldUpdateOperationsInput | number
     expectedCashPaise?: IntFieldUpdateOperationsInput | number
+    openingCashPaise?: IntFieldUpdateOperationsInput | number
+    manualCashInPaise?: IntFieldUpdateOperationsInput | number
+    manualCashOutPaise?: IntFieldUpdateOperationsInput | number
+    drawerExpectedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    countedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashVariancePaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashCountedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cashCountedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountedByDeviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountRevision?: IntFieldUpdateOperationsInput | number
     totalBills?: IntFieldUpdateOperationsInput | number
     cancelledBills?: IntFieldUpdateOperationsInput | number
     roughBills?: IntFieldUpdateOperationsInput | number
@@ -223079,6 +223395,8 @@ export namespace Prisma {
     recurringInterval?: SortOrder
     nextDueOn?: SortOrder
     recordedBy?: SortOrder
+    recordedByUserId?: SortOrder
+    recordedByRole?: SortOrder
     notes?: SortOrder
     spentAt?: SortOrder
     deletedAt?: SortOrder
@@ -223108,6 +223426,8 @@ export namespace Prisma {
     recurringInterval?: SortOrder
     nextDueOn?: SortOrder
     recordedBy?: SortOrder
+    recordedByUserId?: SortOrder
+    recordedByRole?: SortOrder
     notes?: SortOrder
     spentAt?: SortOrder
     deletedAt?: SortOrder
@@ -223132,6 +223452,8 @@ export namespace Prisma {
     recurringInterval?: SortOrder
     nextDueOn?: SortOrder
     recordedBy?: SortOrder
+    recordedByUserId?: SortOrder
+    recordedByRole?: SortOrder
     notes?: SortOrder
     spentAt?: SortOrder
     deletedAt?: SortOrder
@@ -224944,6 +225266,16 @@ export namespace Prisma {
     udharGivenPaise?: SortOrder
     oldUdharRecoveredPaise?: SortOrder
     expectedCashPaise?: SortOrder
+    openingCashPaise?: SortOrder
+    manualCashInPaise?: SortOrder
+    manualCashOutPaise?: SortOrder
+    drawerExpectedCashPaise?: SortOrder
+    countedCashPaise?: SortOrder
+    cashVariancePaise?: SortOrder
+    cashCountedAt?: SortOrder
+    cashCountedByUserId?: SortOrder
+    cashCountedByDeviceId?: SortOrder
+    cashCountRevision?: SortOrder
     totalBills?: SortOrder
     cancelledBills?: SortOrder
     roughBills?: SortOrder
@@ -224967,6 +225299,13 @@ export namespace Prisma {
     udharGivenPaise?: SortOrder
     oldUdharRecoveredPaise?: SortOrder
     expectedCashPaise?: SortOrder
+    openingCashPaise?: SortOrder
+    manualCashInPaise?: SortOrder
+    manualCashOutPaise?: SortOrder
+    drawerExpectedCashPaise?: SortOrder
+    countedCashPaise?: SortOrder
+    cashVariancePaise?: SortOrder
+    cashCountRevision?: SortOrder
     totalBills?: SortOrder
     cancelledBills?: SortOrder
     roughBills?: SortOrder
@@ -224985,6 +225324,16 @@ export namespace Prisma {
     udharGivenPaise?: SortOrder
     oldUdharRecoveredPaise?: SortOrder
     expectedCashPaise?: SortOrder
+    openingCashPaise?: SortOrder
+    manualCashInPaise?: SortOrder
+    manualCashOutPaise?: SortOrder
+    drawerExpectedCashPaise?: SortOrder
+    countedCashPaise?: SortOrder
+    cashVariancePaise?: SortOrder
+    cashCountedAt?: SortOrder
+    cashCountedByUserId?: SortOrder
+    cashCountedByDeviceId?: SortOrder
+    cashCountRevision?: SortOrder
     totalBills?: SortOrder
     cancelledBills?: SortOrder
     roughBills?: SortOrder
@@ -225012,6 +225361,16 @@ export namespace Prisma {
     udharGivenPaise?: SortOrder
     oldUdharRecoveredPaise?: SortOrder
     expectedCashPaise?: SortOrder
+    openingCashPaise?: SortOrder
+    manualCashInPaise?: SortOrder
+    manualCashOutPaise?: SortOrder
+    drawerExpectedCashPaise?: SortOrder
+    countedCashPaise?: SortOrder
+    cashVariancePaise?: SortOrder
+    cashCountedAt?: SortOrder
+    cashCountedByUserId?: SortOrder
+    cashCountedByDeviceId?: SortOrder
+    cashCountRevision?: SortOrder
     totalBills?: SortOrder
     cancelledBills?: SortOrder
     roughBills?: SortOrder
@@ -225035,6 +225394,13 @@ export namespace Prisma {
     udharGivenPaise?: SortOrder
     oldUdharRecoveredPaise?: SortOrder
     expectedCashPaise?: SortOrder
+    openingCashPaise?: SortOrder
+    manualCashInPaise?: SortOrder
+    manualCashOutPaise?: SortOrder
+    drawerExpectedCashPaise?: SortOrder
+    countedCashPaise?: SortOrder
+    cashVariancePaise?: SortOrder
+    cashCountRevision?: SortOrder
     totalBills?: SortOrder
     cancelledBills?: SortOrder
     roughBills?: SortOrder
@@ -246460,6 +246826,16 @@ export namespace Prisma {
     udharGivenPaise?: number
     oldUdharRecoveredPaise?: number
     expectedCashPaise?: number
+    openingCashPaise?: number
+    manualCashInPaise?: number
+    manualCashOutPaise?: number
+    drawerExpectedCashPaise?: number | null
+    countedCashPaise?: number | null
+    cashVariancePaise?: number | null
+    cashCountedAt?: Date | string | null
+    cashCountedByUserId?: string | null
+    cashCountedByDeviceId?: string | null
+    cashCountRevision?: number
     totalBills?: number
     cancelledBills?: number
     roughBills?: number
@@ -246487,6 +246863,16 @@ export namespace Prisma {
     udharGivenPaise?: number
     oldUdharRecoveredPaise?: number
     expectedCashPaise?: number
+    openingCashPaise?: number
+    manualCashInPaise?: number
+    manualCashOutPaise?: number
+    drawerExpectedCashPaise?: number | null
+    countedCashPaise?: number | null
+    cashVariancePaise?: number | null
+    cashCountedAt?: Date | string | null
+    cashCountedByUserId?: string | null
+    cashCountedByDeviceId?: string | null
+    cashCountRevision?: number
     totalBills?: number
     cancelledBills?: number
     roughBills?: number
@@ -246526,6 +246912,8 @@ export namespace Prisma {
     recurringInterval?: string
     nextDueOn?: Date | string | null
     recordedBy?: string | null
+    recordedByUserId?: string | null
+    recordedByRole?: string | null
     notes?: string | null
     spentAt?: Date | string
     deletedAt?: Date | string | null
@@ -246550,6 +246938,8 @@ export namespace Prisma {
     recurringInterval?: string
     nextDueOn?: Date | string | null
     recordedBy?: string | null
+    recordedByUserId?: string | null
+    recordedByRole?: string | null
     notes?: string | null
     spentAt?: Date | string
     deletedAt?: Date | string | null
@@ -251546,6 +251936,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFilter<"DailyClosingSnapshot"> | number
     oldUdharRecoveredPaise?: IntFilter<"DailyClosingSnapshot"> | number
     expectedCashPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    openingCashPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    manualCashInPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    manualCashOutPaise?: IntFilter<"DailyClosingSnapshot"> | number
+    drawerExpectedCashPaise?: IntNullableFilter<"DailyClosingSnapshot"> | number | null
+    countedCashPaise?: IntNullableFilter<"DailyClosingSnapshot"> | number | null
+    cashVariancePaise?: IntNullableFilter<"DailyClosingSnapshot"> | number | null
+    cashCountedAt?: DateTimeNullableFilter<"DailyClosingSnapshot"> | Date | string | null
+    cashCountedByUserId?: StringNullableFilter<"DailyClosingSnapshot"> | string | null
+    cashCountedByDeviceId?: StringNullableFilter<"DailyClosingSnapshot"> | string | null
+    cashCountRevision?: IntFilter<"DailyClosingSnapshot"> | number
     totalBills?: IntFilter<"DailyClosingSnapshot"> | number
     cancelledBills?: IntFilter<"DailyClosingSnapshot"> | number
     roughBills?: IntFilter<"DailyClosingSnapshot"> | number
@@ -251597,6 +251997,8 @@ export namespace Prisma {
     recurringInterval?: StringFilter<"Expense"> | string
     nextDueOn?: DateTimeNullableFilter<"Expense"> | Date | string | null
     recordedBy?: StringNullableFilter<"Expense"> | string | null
+    recordedByUserId?: StringNullableFilter<"Expense"> | string | null
+    recordedByRole?: StringNullableFilter<"Expense"> | string | null
     notes?: StringNullableFilter<"Expense"> | string | null
     spentAt?: DateTimeFilter<"Expense"> | Date | string
     deletedAt?: DateTimeNullableFilter<"Expense"> | Date | string | null
@@ -269604,6 +270006,8 @@ export namespace Prisma {
     recurringInterval?: string
     nextDueOn?: Date | string | null
     recordedBy?: string | null
+    recordedByUserId?: string | null
+    recordedByRole?: string | null
     notes?: string | null
     spentAt?: Date | string
     deletedAt?: Date | string | null
@@ -269628,6 +270032,8 @@ export namespace Prisma {
     recurringInterval?: string
     nextDueOn?: Date | string | null
     recordedBy?: string | null
+    recordedByUserId?: string | null
+    recordedByRole?: string | null
     notes?: string | null
     spentAt?: Date | string
     deletedAt?: Date | string | null
@@ -269654,6 +270060,16 @@ export namespace Prisma {
     udharGivenPaise?: number
     oldUdharRecoveredPaise?: number
     expectedCashPaise?: number
+    openingCashPaise?: number
+    manualCashInPaise?: number
+    manualCashOutPaise?: number
+    drawerExpectedCashPaise?: number | null
+    countedCashPaise?: number | null
+    cashVariancePaise?: number | null
+    cashCountedAt?: Date | string | null
+    cashCountedByUserId?: string | null
+    cashCountedByDeviceId?: string | null
+    cashCountRevision?: number
     totalBills?: number
     cancelledBills?: number
     roughBills?: number
@@ -269681,6 +270097,16 @@ export namespace Prisma {
     udharGivenPaise?: number
     oldUdharRecoveredPaise?: number
     expectedCashPaise?: number
+    openingCashPaise?: number
+    manualCashInPaise?: number
+    manualCashOutPaise?: number
+    drawerExpectedCashPaise?: number | null
+    countedCashPaise?: number | null
+    cashVariancePaise?: number | null
+    cashCountedAt?: Date | string | null
+    cashCountedByUserId?: string | null
+    cashCountedByDeviceId?: string | null
+    cashCountRevision?: number
     totalBills?: number
     cancelledBills?: number
     roughBills?: number
@@ -345365,6 +345791,16 @@ export namespace Prisma {
     udharGivenPaise?: number
     oldUdharRecoveredPaise?: number
     expectedCashPaise?: number
+    openingCashPaise?: number
+    manualCashInPaise?: number
+    manualCashOutPaise?: number
+    drawerExpectedCashPaise?: number | null
+    countedCashPaise?: number | null
+    cashVariancePaise?: number | null
+    cashCountedAt?: Date | string | null
+    cashCountedByUserId?: string | null
+    cashCountedByDeviceId?: string | null
+    cashCountRevision?: number
     totalBills?: number
     cancelledBills?: number
     roughBills?: number
@@ -345396,6 +345832,8 @@ export namespace Prisma {
     recurringInterval?: string
     nextDueOn?: Date | string | null
     recordedBy?: string | null
+    recordedByUserId?: string | null
+    recordedByRole?: string | null
     notes?: string | null
     spentAt?: Date | string
     deletedAt?: Date | string | null
@@ -349184,6 +349622,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFieldUpdateOperationsInput | number
     oldUdharRecoveredPaise?: IntFieldUpdateOperationsInput | number
     expectedCashPaise?: IntFieldUpdateOperationsInput | number
+    openingCashPaise?: IntFieldUpdateOperationsInput | number
+    manualCashInPaise?: IntFieldUpdateOperationsInput | number
+    manualCashOutPaise?: IntFieldUpdateOperationsInput | number
+    drawerExpectedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    countedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashVariancePaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashCountedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cashCountedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountedByDeviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountRevision?: IntFieldUpdateOperationsInput | number
     totalBills?: IntFieldUpdateOperationsInput | number
     cancelledBills?: IntFieldUpdateOperationsInput | number
     roughBills?: IntFieldUpdateOperationsInput | number
@@ -349211,6 +349659,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFieldUpdateOperationsInput | number
     oldUdharRecoveredPaise?: IntFieldUpdateOperationsInput | number
     expectedCashPaise?: IntFieldUpdateOperationsInput | number
+    openingCashPaise?: IntFieldUpdateOperationsInput | number
+    manualCashInPaise?: IntFieldUpdateOperationsInput | number
+    manualCashOutPaise?: IntFieldUpdateOperationsInput | number
+    drawerExpectedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    countedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashVariancePaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashCountedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cashCountedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountedByDeviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountRevision?: IntFieldUpdateOperationsInput | number
     totalBills?: IntFieldUpdateOperationsInput | number
     cancelledBills?: IntFieldUpdateOperationsInput | number
     roughBills?: IntFieldUpdateOperationsInput | number
@@ -349237,6 +349695,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFieldUpdateOperationsInput | number
     oldUdharRecoveredPaise?: IntFieldUpdateOperationsInput | number
     expectedCashPaise?: IntFieldUpdateOperationsInput | number
+    openingCashPaise?: IntFieldUpdateOperationsInput | number
+    manualCashInPaise?: IntFieldUpdateOperationsInput | number
+    manualCashOutPaise?: IntFieldUpdateOperationsInput | number
+    drawerExpectedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    countedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashVariancePaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashCountedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cashCountedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountedByDeviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountRevision?: IntFieldUpdateOperationsInput | number
     totalBills?: IntFieldUpdateOperationsInput | number
     cancelledBills?: IntFieldUpdateOperationsInput | number
     roughBills?: IntFieldUpdateOperationsInput | number
@@ -349267,6 +349735,8 @@ export namespace Prisma {
     recurringInterval?: StringFieldUpdateOperationsInput | string
     nextDueOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     recordedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByRole?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     spentAt?: DateTimeFieldUpdateOperationsInput | Date | string
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -349291,6 +349761,8 @@ export namespace Prisma {
     recurringInterval?: StringFieldUpdateOperationsInput | string
     nextDueOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     recordedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByRole?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     spentAt?: DateTimeFieldUpdateOperationsInput | Date | string
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -349314,6 +349786,8 @@ export namespace Prisma {
     recurringInterval?: StringFieldUpdateOperationsInput | string
     nextDueOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     recordedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByRole?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     spentAt?: DateTimeFieldUpdateOperationsInput | Date | string
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -356971,6 +357445,8 @@ export namespace Prisma {
     recurringInterval?: string
     nextDueOn?: Date | string | null
     recordedBy?: string | null
+    recordedByUserId?: string | null
+    recordedByRole?: string | null
     notes?: string | null
     spentAt?: Date | string
     deletedAt?: Date | string | null
@@ -356989,6 +357465,16 @@ export namespace Prisma {
     udharGivenPaise?: number
     oldUdharRecoveredPaise?: number
     expectedCashPaise?: number
+    openingCashPaise?: number
+    manualCashInPaise?: number
+    manualCashOutPaise?: number
+    drawerExpectedCashPaise?: number | null
+    countedCashPaise?: number | null
+    cashVariancePaise?: number | null
+    cashCountedAt?: Date | string | null
+    cashCountedByUserId?: string | null
+    cashCountedByDeviceId?: string | null
+    cashCountRevision?: number
     totalBills?: number
     cancelledBills?: number
     roughBills?: number
@@ -358264,6 +358750,8 @@ export namespace Prisma {
     recurringInterval?: StringFieldUpdateOperationsInput | string
     nextDueOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     recordedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByRole?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     spentAt?: DateTimeFieldUpdateOperationsInput | Date | string
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -358288,6 +358776,8 @@ export namespace Prisma {
     recurringInterval?: StringFieldUpdateOperationsInput | string
     nextDueOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     recordedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByRole?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     spentAt?: DateTimeFieldUpdateOperationsInput | Date | string
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -358311,6 +358801,8 @@ export namespace Prisma {
     recurringInterval?: StringFieldUpdateOperationsInput | string
     nextDueOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     recordedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    recordedByRole?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     spentAt?: DateTimeFieldUpdateOperationsInput | Date | string
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -358328,6 +358820,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFieldUpdateOperationsInput | number
     oldUdharRecoveredPaise?: IntFieldUpdateOperationsInput | number
     expectedCashPaise?: IntFieldUpdateOperationsInput | number
+    openingCashPaise?: IntFieldUpdateOperationsInput | number
+    manualCashInPaise?: IntFieldUpdateOperationsInput | number
+    manualCashOutPaise?: IntFieldUpdateOperationsInput | number
+    drawerExpectedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    countedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashVariancePaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashCountedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cashCountedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountedByDeviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountRevision?: IntFieldUpdateOperationsInput | number
     totalBills?: IntFieldUpdateOperationsInput | number
     cancelledBills?: IntFieldUpdateOperationsInput | number
     roughBills?: IntFieldUpdateOperationsInput | number
@@ -358355,6 +358857,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFieldUpdateOperationsInput | number
     oldUdharRecoveredPaise?: IntFieldUpdateOperationsInput | number
     expectedCashPaise?: IntFieldUpdateOperationsInput | number
+    openingCashPaise?: IntFieldUpdateOperationsInput | number
+    manualCashInPaise?: IntFieldUpdateOperationsInput | number
+    manualCashOutPaise?: IntFieldUpdateOperationsInput | number
+    drawerExpectedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    countedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashVariancePaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashCountedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cashCountedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountedByDeviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountRevision?: IntFieldUpdateOperationsInput | number
     totalBills?: IntFieldUpdateOperationsInput | number
     cancelledBills?: IntFieldUpdateOperationsInput | number
     roughBills?: IntFieldUpdateOperationsInput | number
@@ -358381,6 +358893,16 @@ export namespace Prisma {
     udharGivenPaise?: IntFieldUpdateOperationsInput | number
     oldUdharRecoveredPaise?: IntFieldUpdateOperationsInput | number
     expectedCashPaise?: IntFieldUpdateOperationsInput | number
+    openingCashPaise?: IntFieldUpdateOperationsInput | number
+    manualCashInPaise?: IntFieldUpdateOperationsInput | number
+    manualCashOutPaise?: IntFieldUpdateOperationsInput | number
+    drawerExpectedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    countedCashPaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashVariancePaise?: NullableIntFieldUpdateOperationsInput | number | null
+    cashCountedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cashCountedByUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountedByDeviceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cashCountRevision?: IntFieldUpdateOperationsInput | number
     totalBills?: IntFieldUpdateOperationsInput | number
     cancelledBills?: IntFieldUpdateOperationsInput | number
     roughBills?: IntFieldUpdateOperationsInput | number

@@ -364,7 +364,16 @@ async function buildProductContext(shopId, productId, client) {
     referencedBills: new Map(referencedBills.map((b) => [b.id, b])),
     inputHash: computeInputHash({
       product: { id: product.id, stockBaseQty: product.stockBaseQty, deletedAt: product.deletedAt },
-      movements: movements.map((m) => ({ id: m.id, action: m.action, changeBaseQty: m.changeBaseQty, billId: m.billId, sourceType: m.sourceType, sourceId: m.sourceId })),
+      movements: movements.map((m) => ({
+        id: m.id,
+        action: m.action,
+        changeBaseQty: m.changeBaseQty,
+        billId: m.billId,
+        sourceType: m.sourceType,
+        sourceId: m.sourceId,
+        actorUserId: m.actorUserId,
+        actorName: m.actorName,
+      })),
       locationStocks,
     }),
   };
@@ -569,7 +578,7 @@ async function buildExpenseContext(shopId, expenseId, client) {
   if (!expense) throw new AuditContextError("Expense not found in this shop", "ENTITY_NOT_FOUND");
 
   const spentAt = new Date(expense.spentAt);
-  const [settings, baselines, duplicates, closingSnapshot, categoryExpenses, recentExpenses] = await Promise.all([
+  const [settings, baselines, duplicates, closingSnapshot, categoryExpenses, recentExpenses, expenseActor] = await Promise.all([
     loadShopSettings(shopId, client),
     getShopBaselines(shopId, { client }),
     client.expense.findMany({
@@ -607,6 +616,12 @@ async function buildExpenseContext(shopId, expenseId, client) {
       orderBy: { spentAt: "desc" },
       take: 500,
     }),
+    expense.recordedByUserId
+      ? client.user.findUnique({
+          where: { id: expense.recordedByUserId },
+          select: { id: true, shopId: true, name: true, role: true, disabledAt: true },
+        })
+      : null,
   ]);
 
   return {
@@ -621,7 +636,8 @@ async function buildExpenseContext(shopId, expenseId, client) {
     closingSnapshot,
     categoryExpenses,
     recentExpenses,
-    inputHash: computeInputHash({ expense, duplicateIds: duplicates.map((d) => d.id), closingLockedAt: closingSnapshot?.lockedAt ?? null }),
+    expenseActor,
+    inputHash: computeInputHash({ expense, expenseActor, duplicateIds: duplicates.map((d) => d.id), closingLockedAt: closingSnapshot?.lockedAt ?? null }),
   };
 }
 
@@ -632,6 +648,7 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
 
   const dayStart = startOfDay(snapshot.date);
   const dayEnd = endOfDay(snapshot.date);
+  const drawerHistoryStart = new Date(new Date(snapshot.date).getTime() - 30 * 24 * 60 * 60 * 1000);
   const locationScope = snapshot.storeId ? { locationId: snapshot.storeId } : {};
 
   // Use the same shop-timezone businessDate window as getDailyClosing. Offline
@@ -643,7 +660,7 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
   });
   const dayBillIds = bills.map((bill) => bill.id);
 
-  const [settings, baselines, payments, udharPayments, expenses, purchaseReceipts, quickPurchases, purchaseReturns, lateSyncEvents] = await Promise.all([
+  const [settings, baselines, payments, udharPayments, expenses, purchaseReceipts, quickPurchases, purchaseReturns, lateSyncEvents, recentDrawerCounts] = await Promise.all([
     loadShopSettings(shopId, client),
     getShopBaselines(shopId, { client }),
     dayBillIds.length
@@ -679,6 +696,32 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
           take: 25,
         })
       : Promise.resolve([]),
+    client.dailyClosingSnapshot.findMany({
+      where: {
+        shopId,
+        id: { not: snapshot.id },
+        countedCashPaise: { not: null },
+        cashVariancePaise: { lt: 0 },
+        date: { gte: drawerHistoryStart, lt: snapshot.date },
+      },
+      select: {
+        id: true,
+        storeId: true,
+        date: true,
+        expectedCashPaise: true,
+        openingCashPaise: true,
+        manualCashInPaise: true,
+        manualCashOutPaise: true,
+        drawerExpectedCashPaise: true,
+        countedCashPaise: true,
+        cashVariancePaise: true,
+        cashCountedAt: true,
+        cashCountedByUserId: true,
+        cashCountedByDeviceId: true,
+      },
+      orderBy: { date: "desc" },
+      take: 200,
+    }),
   ]);
 
   return {
@@ -697,6 +740,7 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
     quickPurchases,
     purchaseReturns,
     lateSyncEvents,
+    recentDrawerCounts,
     inputHash: computeInputHash({
       settings,
       baselines,
@@ -709,6 +753,7 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
       quickPurchases,
       purchaseReturns,
       lateSyncEvents,
+      recentDrawerCounts,
     }),
   };
 }

@@ -242,12 +242,12 @@ export const inventoryRules = [
 
   defineRule({
     ruleCode: "STOCK_FREQUENT_CORRECTIONS",
-    name: "Frequent stock corrections for this product",
-    description: "This product was manually corrected many times in the last 30 days, which usually means the recorded stock is not trusted.",
+    name: "Frequent stock corrections by the same person",
+    description: "The same authenticated person manually corrected this product at least four times in the last 30 days.",
     category: RULE_CATEGORIES.INVENTORY,
     severity: SEVERITY.MEDIUM,
     defaultWeight: 16,
-    version: 1,
+    version: 2,
     applicableEntityTypes: PRODUCT,
     applicableEventTypes: [EVENT_TYPES.STOCK_CORRECTED],
     evidenceTypes: [EVIDENCE_TYPES.STOCK_COUNT_CONFIRMATION, EVIDENCE_TYPES.STAFF_EXPLANATION],
@@ -261,18 +261,39 @@ export const inventoryRules = [
       const corrections = movements.filter(
         (row) => row.action === "correction" && new Date(row.createdAt).getTime() >= windowStart
       );
-      if (corrections.length < ALERT_COUNT) return passed;
+      const byActor = new Map();
+      for (const row of corrections) {
+        // actorName is only a historical display snapshot and is not unique.
+        // Group only by the authenticated immutable id; legacy/system rows stay
+        // visible in the count but can never implicate a person by guesswork.
+        if (!row.actorUserId) continue;
+        const group = byActor.get(row.actorUserId) ?? {
+          actorUserId: row.actorUserId,
+          actorName: row.actorName ?? null,
+          rows: [],
+        };
+        group.rows.push(row);
+        byActor.set(row.actorUserId, group);
+      }
+      const correctionGroups = [...byActor.values()]
+        .filter((group) => group.rows.length >= ALERT_COUNT)
+        .sort((left, right) => right.rows.length - left.rows.length || left.actorUserId.localeCompare(right.actorUserId))
+        .map((group) => ({
+          actorUserId: group.actorUserId,
+          actorName: group.actorName,
+          correctionsLast30Days: group.rows.length,
+          movementIds: group.rows.slice(0, 20).map((row) => row.id),
+          firstCorrectionAt: new Date(group.rows[0].createdAt).toISOString(),
+          lastCorrectionAt: new Date(group.rows[group.rows.length - 1].createdAt).toISOString(),
+        }));
+      if (!correctionGroups.length) return passed;
       return triggered({
         correctionsLast30Days: corrections.length,
         alertThreshold: ALERT_COUNT,
-        movementIds: corrections.slice(0, 20).map((row) => row.id),
-        staffAttributionAvailable: corrections.every((row) => Boolean(row.actorName)),
-        actors: [...new Map(corrections
-          .filter((row) => row.actorName)
-          .map((row) => [row.actorUserId ?? `system:${row.actorName}`, {
-            actorUserId: row.actorUserId ?? null,
-            actorName: row.actorName,
-          }])).values()].slice(0, 20),
+        attributedCorrectionCount: corrections.filter((row) => Boolean(row.actorUserId)).length,
+        unattributedCorrectionCount: corrections.filter((row) => !row.actorUserId).length,
+        staffAttributionAvailable: true,
+        correctionGroups,
       });
     },
   }),

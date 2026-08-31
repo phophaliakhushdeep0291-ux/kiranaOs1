@@ -38,8 +38,8 @@ if (ctx.skip) {
       assert.equal(first.active, true);
       assert.equal(first.intendedPaidPlanCode, "starter");
       assert.equal(first.plan.maxDevices, 10);
-      assert.equal(first.plan.maxStores, 10);
-      assert.equal(first.plan.maxStaff, 20);
+      assert.equal(first.plan.maxStores, 3);
+      assert.equal(first.plan.maxStaff, 10);
       assert.ok(first.plan.features.includes("premium_support"));
       assert.ok(first.plan.features.includes("advanced_inventory"));
       assert.equal(new Date(first.currentPeriodStart).getTime(), trialStartedAt.getTime());

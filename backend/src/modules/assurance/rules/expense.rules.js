@@ -1,9 +1,8 @@
 // E. EXPENSE RULES.
 //
-// Expense records carry no attachment and no actor userId (`recordedBy` is a
-// free-text name), so receipt-presence and staff-permission checks work off
-// thresholds and the evidence engine rather than off a stored document. See
-// docs/AUDIT_LIMITATIONS.md.
+// New expense records carry a server-authenticated actor id plus immutable name
+// and role snapshots. Legacy/imported rows can still lack that attribution.
+// Receipt-presence checks continue to use the evidence engine.
 import {
   ENTITY_TYPES,
   EVENT_TYPES,
@@ -154,28 +153,27 @@ export const expenseRules = [
 
   defineRule({
     ruleCode: "EXPENSE_UNATTRIBUTED",
-    name: "Material expense with no recorded author",
-    description: "A material expense carries no `recordedBy` value, so it cannot be attributed to anyone.",
+    name: "Material expense with no authenticated author",
+    description: "A material expense has no server-authenticated creator id, so its free-text author cannot prove who recorded it.",
     category: RULE_CATEGORIES.AUTHORIZATION,
     severity: SEVERITY.MEDIUM,
     defaultWeight: 18,
-    version: 1,
+    version: 2,
     applicableEntityTypes: EXPENSE,
     applicableEventTypes: [EVENT_TYPES.EXPENSE_CREATED],
     evidenceTypes: [EVIDENCE_TYPES.STAFF_EXPLANATION, EVIDENCE_TYPES.OWNER_APPROVAL],
-    remediation: "Record who entered each expense. Note that expenses store a name, not a user id, so attribution is advisory only.",
+    remediation: "Recreate or document this legacy/imported expense through an authenticated account. New app and offline entries are attributed automatically.",
     evaluate(ctx) {
       const amountPaise = toPaiseInt(ctx.expense.amount);
       if (amountPaise <= ctx.settings.expenseReceiptRequiredAbovePaise) return passed;
-      const recordedBy = ctx.expense.recordedBy && String(ctx.expense.recordedBy).trim();
-      if (recordedBy) return passed;
+      const recordedByUserId = ctx.expense.recordedByUserId && String(ctx.expense.recordedByUserId).trim();
+      if (recordedByUserId) return passed;
       return triggered({
         amountRupees: money(ctx.expense.amount),
         thresholdRupees: ctx.settings.expenseReceiptRequiredAbovePaise / 100,
-        recordedBy: null,
-        // Expense has no userId column, so role-based permission checks are not
-        // possible for expenses yet.
-        userIdAttributionAvailable: false,
+        legacyRecordedBy: ctx.expense.recordedBy ?? null,
+        recordedByUserId: null,
+        userIdAttributionAvailable: true,
       });
     },
   }),
@@ -204,6 +202,30 @@ export const expenseRules = [
         backdatedByDays: Math.round(days),
         allowedDays: BACKDATE_DAYS,
         amountRupees: money(ctx.expense.amount),
+      });
+    },
+  }),
+
+  defineRule({
+    ruleCode: "EXPENSE_ACTOR_SCOPE_MISMATCH",
+    name: "Expense creator identity is invalid for this shop",
+    description: "The expense names an authenticated creator id that does not resolve to a user in the same shop.",
+    category: RULE_CATEGORIES.AUTHORIZATION,
+    severity: SEVERITY.HIGH,
+    defaultWeight: 30,
+    version: 1,
+    applicableEntityTypes: EXPENSE,
+    applicableEventTypes: [EVENT_TYPES.EXPENSE_CREATED],
+    evidenceTypes: [EVIDENCE_TYPES.OWNER_APPROVAL, EVIDENCE_TYPES.STAFF_EXPLANATION],
+    remediation: "Treat this as an integrity incident. Verify the expense audit trail and creator account; do not replace the stored identity by hand.",
+    evaluate(ctx) {
+      if (!ctx.expense.recordedByUserId) return passed;
+      if (ctx.expenseActor?.id === ctx.expense.recordedByUserId && ctx.expenseActor?.shopId === ctx.shopId) return passed;
+      return triggered({
+        recordedByUserId: ctx.expense.recordedByUserId,
+        actorExists: Boolean(ctx.expenseActor),
+        actorShopMatches: ctx.expenseActor?.shopId === ctx.shopId,
+        recordedRoleSnapshot: ctx.expense.recordedByRole ?? null,
       });
     },
   }),

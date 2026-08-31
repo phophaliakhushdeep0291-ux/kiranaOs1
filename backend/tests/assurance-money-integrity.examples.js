@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { billingRules } from "../src/modules/assurance/rules/billing.rules.js";
 import { cashClosingRules } from "../src/modules/assurance/rules/cash-closing.rules.js";
 import { computeOutstanding, customerCreditRules } from "../src/modules/assurance/rules/customer-credit.rules.js";
+import { expenseRules } from "../src/modules/assurance/rules/expense.rules.js";
 import { purchaseRules } from "../src/modules/assurance/rules/purchase.rules.js";
 import { syncIntegrityRules } from "../src/modules/assurance/rules/sync-integrity.rules.js";
 import { moneyDiffers, sum } from "../src/modules/assurance/rule.interface.js";
@@ -115,6 +116,55 @@ triggered(rule(cashClosingRules, "CLOSING_SPLIT_PAYMENT_MISMATCH").evaluate({
   ...closingContext,
   bills: [{ ...closingContext.bills[0], paidAmount: 199.99 }],
 }), "one-paisa tender split mismatch must be detected");
+const physicalVariance = triggered(rule(cashClosingRules, "CLOSING_PHYSICAL_CASH_VARIANCE").evaluate({
+  ...closingContext,
+  snapshot: {
+    ...closingContext.snapshot,
+    openingCashPaise: 1000,
+    manualCashInPaise: 500,
+    manualCashOutPaise: 200,
+    drawerExpectedCashPaise: 15300,
+    countedCashPaise: 15299,
+    cashVariancePaise: -1,
+    cashCountRevision: 1,
+  },
+}), "a one-paisa physical drawer shortage must be detected");
+assert.equal(physicalVariance.details.variancePaise, -1);
+assert.equal(rule(cashClosingRules, "CLOSING_PHYSICAL_COUNT_MISSING").evaluate({
+  ...closingContext,
+  snapshot: { ...closingContext.snapshot, lockedAt: "2026-08-30T18:00:00.000Z", countedCashPaise: null },
+})?.triggered, true, "a locked close must not omit its physical drawer count");
+const repeatedShortageRule = rule(cashClosingRules, "CLOSING_REPEATED_CASH_SHORTAGE");
+const shortageSnapshot = (id, date, userId = "owner-1", deviceId = "device-1") => ({
+  id,
+  date,
+  expectedCashPaise: 0,
+  openingCashPaise: 10000,
+  manualCashInPaise: 0,
+  manualCashOutPaise: 0,
+  drawerExpectedCashPaise: 10000,
+  countedCashPaise: 9900,
+  cashVariancePaise: -100,
+  cashCountedByUserId: userId,
+  cashCountedByDeviceId: deviceId,
+});
+const repeatedShortage = triggered(repeatedShortageRule.evaluate({
+  snapshot: shortageSnapshot("closing-3", "2026-08-30T00:00:00.000Z"),
+  recentDrawerCounts: [
+    shortageSnapshot("closing-2", "2026-08-29T00:00:00.000Z"),
+    shortageSnapshot("closing-1", "2026-08-28T00:00:00.000Z"),
+  ],
+}), "three distinct shortage days by the same counter must be detected");
+assert.equal(repeatedShortage.details.patterns.length, 2, "matching user and device patterns must both remain visible");
+assert.equal(repeatedShortage.details.patterns[0].shortageDayCount, 3);
+assert.equal(repeatedShortage.details.patterns[0].totalShortagePaise, 300);
+assert.equal(repeatedShortageRule.evaluate({
+  snapshot: shortageSnapshot("closing-3", "2026-08-30T00:00:00.000Z"),
+  recentDrawerCounts: [
+    shortageSnapshot("closing-2a", "2026-08-29T00:00:00.000Z"),
+    shortageSnapshot("closing-2b", "2026-08-29T00:00:00.000Z"),
+  ],
+}), null, "multiple tills on one date must not masquerade as a multi-day shortage trend");
 
 triggered(rule(purchaseRules, "PURCHASE_PAYMENT_EXCEEDS_TOTAL").evaluate({
   purchaseKind: "history",
@@ -132,6 +182,26 @@ triggered(rule(purchaseRules, "PURCHASE_AMOUNT_ITEM_TOTAL_MISMATCH").evaluate({
 triggered(rule(syncIntegrityRules, "BILL_MISSING_CHILD_ROWS").evaluate({
   bill: { grandTotal: 0.01, items: [], payments: [] },
 }), "a one-paisa bill without items is still a partial financial record");
+
+const materialExpenseSettings = { expenseReceiptRequiredAbovePaise: 100000 };
+assert.equal(rule(expenseRules, "EXPENSE_UNATTRIBUTED").evaluate({
+  settings: materialExpenseSettings,
+  expense: { amount: 5000, recordedBy: "Owner User", recordedByUserId: "owner-1" },
+}), null, "a material expense with a trusted creator id must pass attribution");
+triggered(rule(expenseRules, "EXPENSE_UNATTRIBUTED").evaluate({
+  settings: materialExpenseSettings,
+  expense: { amount: 5000, recordedBy: "Owner User", recordedByUserId: null },
+}), "a legacy free-text name must not be mistaken for authenticated attribution");
+assert.equal(rule(expenseRules, "EXPENSE_ACTOR_SCOPE_MISMATCH").evaluate({
+  shopId: "shop-1",
+  expense: { recordedByUserId: "owner-1", recordedByRole: "owner" },
+  expenseActor: { id: "owner-1", shopId: "shop-1" },
+}), null, "a creator who belongs to the expense shop must pass scope validation");
+triggered(rule(expenseRules, "EXPENSE_ACTOR_SCOPE_MISMATCH").evaluate({
+  shopId: "shop-1",
+  expense: { recordedByUserId: "owner-2", recordedByRole: "owner" },
+  expenseActor: { id: "owner-2", shopId: "shop-2" },
+}), "a creator id from another shop must be treated as an integrity incident");
 
 const contextSource = fs.readFileSync("src/modules/assurance/context.service.js", "utf8");
 assert.match(contextSource, /businessDate: \{ gte: dayStart, lte: dayEnd \}/, "closing assurance must use economic business date");

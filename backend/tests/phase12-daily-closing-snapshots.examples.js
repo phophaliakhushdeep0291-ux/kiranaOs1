@@ -8,6 +8,7 @@ for (const file of [
   "prisma/schema.prisma",
   "prisma-postgres/schema.prisma",
   "prisma-postgres/migrations/000004_daily_closing_snapshots/migration.sql",
+  "prisma-postgres/migrations/000127_daily_closing_drawer_evidence/migration.sql",
   "src/modules/bills/bills.controller.js",
   "src/modules/bills/bills.service.js",
   "src/modules/sync/sync.service.js",
@@ -44,6 +45,9 @@ for (const schema of [sqliteSchema, pgSchema]) {
   assert(schema.includes("@@unique([shopId, storeId, date])"), "Snapshot must be idempotent per shop/location/date");
   assert(schema.includes("lockedAt") && schema.includes("lockedByUserId"), "Snapshot must support locking");
   assert(schema.includes("bankReceivedPaise"), "Snapshot must persist bank tender (bank is a first-class payment mode)");
+  for (const field of ["drawerExpectedCashPaise", "countedCashPaise", "cashVariancePaise", "cashCountedAt", "cashCountedByUserId", "cashCountedByDeviceId", "cashCountRevision"]) {
+    assert(schema.includes(field), `Snapshot must persist drawer evidence field ${field}`);
+  }
 }
 
 assert(migration.includes('ALTER TABLE "Bill" ADD COLUMN IF NOT EXISTS "createdByUserId"'), "Migration must add Bill.createdByUserId safely");
@@ -79,6 +83,7 @@ assert(reportService.includes("createdByUserId") && reportService.includes("Unkn
 assert(!reportService.includes("Bill schema does not currently store createdByUserId"), "staff-sales should no longer be limitation-only");
 assert(reportRoutes.includes('"/daily-closing/snapshot"'), "Snapshot create route must exist");
 assert(reportRoutes.includes('"/daily-closing/:date/lock"'), "Snapshot lock route must exist");
+assert(reportRoutes.includes('"/daily-closing/drawer-counts"'), "Cross-device drawer-count history route must exist");
 assert(reportRoutes.includes('requireRole("owner", "admin")'), "Snapshot mutation routes must be owner/admin protected");
 assert(reportSchema.includes("dailyClosingSnapshotSchema"), "Snapshot body schema must exist");
 assert(reportSchema.includes('"live"') && reportSchema.includes('"snapshot"'), "Daily closing source query must support live/snapshot");
@@ -108,6 +113,11 @@ assert(
   "production-check must inspect the transactional snapshot service for Phase 12 audit actions",
 );
 assert(packageJson.scripts["test:billing"].includes("phase12-daily-closing-snapshots.examples.js"), "Phase 12 test must be wired into npm test");
+
+assert(snapshotService.includes("recordDailyClosingDrawerCount"), "Physical drawer count must be persisted server-side");
+assert(snapshotService.includes("DRAWER_COUNT_VERSION_CONFLICT"), "Concurrent offline drawer counts must use optimistic conflict detection");
+assert(snapshotService.includes("DAILY_CLOSING_DRAWER_COUNT_RECORDED"), "Drawer count must write required audit evidence");
+assert(syncService.includes("SYNC_EVENT_TYPES.RECORD_DRAWER_COUNT"), "Offline drawer count must be handled by sync push");
 
 // Regression guard (CODE_REVIEW_LOGIC_FLAWS.md #2): the snapshot staleness check must use the
 // shop-timezone day window — the same window getDailyClosing uses to generate the snapshot — not

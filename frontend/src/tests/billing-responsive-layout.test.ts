@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const billingPage = readFileSync("src/features/core/billing/pages/BillingPage.tsx", "utf8");
 const billingSummary = readFileSync("src/features/core/billing/pages/components/BillingSummary.tsx", "utf8");
+const layout = readFileSync("src/components/layout/Layout.tsx", "utf8");
 
 describe("billing responsive layout", () => {
   it("allows the billing page to scroll naturally on mobile while keeping desktop POS split-screen", () => {
@@ -20,5 +21,19 @@ describe("billing responsive layout", () => {
     expect(billingSummary).toContain("lg:w-[var(--bill-summary-width)]");
     expect(billingSummary).toContain("--bill-summary-width");
     expect(billingSummary).not.toContain("style={{ width: summaryWidth");
+  });
+
+  it("measures every top banner before rendering the full-height billing workspace", () => {
+    const measuredBannerStart = layout.indexOf('<div ref={bannerRef}>');
+    const mainStart = layout.indexOf('<main\n          id="main-content"', measuredBannerStart);
+    const measuredBanner = layout.slice(measuredBannerStart, mainStart);
+    const mainBody = layout.slice(mainStart, layout.indexOf('</main>', mainStart));
+
+    expect(measuredBanner).toContain("<SubscriptionStatusBanner />");
+    expect(measuredBanner).toContain("<BackendUnreachableBanner");
+    expect(measuredBanner).toContain("<SyncAlertBanner />");
+    expect(measuredBanner).toContain("<DemoModeBanner />");
+    expect(mainBody).not.toContain("<SyncAlertBanner />");
+    expect(mainBody).not.toContain("<DemoModeBanner />");
   });
 });

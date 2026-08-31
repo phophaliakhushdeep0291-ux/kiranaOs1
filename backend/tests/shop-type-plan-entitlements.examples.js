@@ -54,6 +54,15 @@ assert.ok(!getPlanConfigForBusinessType("starter", "kirana").features.includes("
 assert.ok(getPlanConfigForBusinessType("growth", "kirana").features.includes("purchase_entry"));
 assert.ok(!getPlanConfigForBusinessType("growth", "kirana").features.includes("dynamic_customer_pricing"));
 assert.ok(getPlanConfigForBusinessType("pro", "kirana").features.includes("dynamic_customer_pricing"));
+const kiranaPromises = {
+  starter: ["basic_billing", "paid_udhar_bill", "offline_billing", "basic_products", "customer_ledger", "seven_day_local_reports", "cloud_backup", "single_bill_whatsapp"],
+  growth: ["purchase_entry", "supplier_entry", "stock_adjustment", "low_stock_alerts", "batch_expiry", "auto_two_way_sync", "thirty_day_reports", "basic_owner_dashboard", "staff_login", "role_based_access", "pdf_bill_share"],
+  pro: ["dynamic_customer_pricing", "quantity_based_pricing", "loyalty_program", "advanced_inventory", "gst_reports", "tally_export", "monthly_reports", "yearly_reports", "audit_logs", "staff_performance_report", "whatsapp_reminders", "advanced_analytics", "premium_support", "multi_store"],
+};
+for (const [code, promisedFeatures] of Object.entries(kiranaPromises)) {
+  const actualFeatures = getPlanConfigForBusinessType(code, "kirana").features;
+  assert.deepEqual(promisedFeatures.filter((feature) => !actualFeatures.includes(feature)), [], `${code} includes every advertised Kirana feature`);
+}
 assert.equal(isOnboardingServiceAvailable("kirana"), false);
 assert.equal(isOnboardingServiceAvailable("restaurant"), true);
 

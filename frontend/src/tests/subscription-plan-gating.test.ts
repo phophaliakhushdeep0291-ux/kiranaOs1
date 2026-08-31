@@ -43,10 +43,10 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { decideFeature, getCurrentSubscriptionSnapshot, type SubscriptionSnapshot } from "@/features/core/subscription/access";
-import { getPlan, PLAN_DEFINITIONS, PUBLIC_PLAN_ORDER } from "@/features/core/subscription/plans";
+import { getPlanForBusinessType, PLAN_DEFINITIONS, PUBLIC_PLAN_ORDER } from "@/features/core/subscription/plans";
 
 function snapshot(planCode: PlanCode, overrides: Partial<SubscriptionSnapshot> = {}): SubscriptionSnapshot {
-  const plan = getPlan(planCode);
+  const plan = getPlanForBusinessType(planCode, "kirana");
   return {
     plan,
     planCode: plan.code,
@@ -121,12 +121,12 @@ describe("subscription and plan gating", () => {
     expect(PLAN_DEFINITIONS.standard.legacy).toBe(true);
   });
 
-  it("Starter unlocks visible core inventory workflows", () => {
-    const decision = decideFeature(snapshot("starter"), "stock_adjustment");
+  it("Kirana Growth unlocks operational inventory workflows", () => {
+    const decision = decideFeature(snapshot("growth"), "stock_adjustment");
 
     expect(decision.allowed).toBe(true);
     expect(decision.upgradeRequired).toBe(false);
-    expect(decision.requiredPlan.code).toBe("starter");
+    expect(decision.requiredPlan.code).toBe("growth");
   });
 
   it("Starter does not unlock Business features", () => {

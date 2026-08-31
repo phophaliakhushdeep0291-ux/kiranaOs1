@@ -36,6 +36,10 @@ export function updateExpense(id: string, data: Partial<ExpenseInput>) {
   return apiRequest<Expense>(`/expenses/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 }
 
-export function deleteExpense(id: string) {
-  return apiRequest<Expense>(`/expenses/${id}`, { method: "DELETE" });
+export function deleteExpense(id: string, ownerPin: string) {
+  return apiRequest<Expense>(`/expenses/${id}`, { method: "DELETE", ownerPin });
+}
+
+export function restoreExpense(id: string, ownerPin: string) {
+  return apiRequest<Expense>(`/expenses/${id}/restore`, { method: "POST", ownerPin });
 }

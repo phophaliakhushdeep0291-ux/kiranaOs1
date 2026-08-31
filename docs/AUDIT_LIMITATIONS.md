@@ -16,18 +16,19 @@ system cannot be detected. A sale made entirely off-book produces no finding —
 there is nothing inconsistent about a transaction that does not exist. This is the
 single most important limitation: **the module detects inconsistency, not absence.**
 
-## 2. Physical cash counts are device-local
+## 2. Physical cash counts depend on operator declarations
 
-The Daily Closing UI records counted cash and over/short history in local device
-storage. Those counts are not synced to `DailyClosingSnapshot`, so server assurance
-cannot compute a true counted-versus-expected variance. Consequences:
+The Daily Closing UI now writes counted cash, opening float, manual cash-in/out,
+the calculated variance, user, device, location and revision to
+`DailyClosingSnapshot` through the offline outbox. Another device can load that
+history, and the assurance engine evaluates `CLOSING_PHYSICAL_CASH_VARIANCE` and
+requires a physical count before a day can be locked.
 
-- Server cash rules verify that expected cash exactly matches canonical confirmed
-  collections, supplier cash refunds, supplier cash payments, and paid cash expenses.
-- A shortage visible on one counter device is not yet available to the server rule
-  engine or another device.
-- "Repeated shortages by the same staff/device" (requested rule F10) remains
-  deferred until drawer counts are synced with shop, location, user, and device scope.
+This is still not independent observation: the software cannot see cash that was
+never entered, or prove that the operator counted accurately. The engine now
+detects shortages recorded by the same authenticated user or device on at least
+three distinct business days in a rolling 30-day window. That pattern is an
+investigation prompt, not proof that the named person caused the shortage.
 
 ## 3. No bank or UPI feed
 There is no authorized bank/UPI provider integration. UPI references are
@@ -37,27 +38,31 @@ corresponds to a real transfer, or that a claimed amount matches the bank.
 
 ## 4. Attribution gaps
 
-- **Stock movements have no actor column.** `StockLedger` records what changed but
-  not who changed it, so stock corrections cannot be attributed to a person.
-  `STOCK_FREQUENT_CORRECTIONS` reports per-product frequency and marks
-  `staffAttributionAvailable: false`, which reduces the finding's confidence.
-- **Expenses store a name, not a user id.** `Expense.recordedBy` is free text, so
-  role-based permission checks on expenses are impossible. `EXPENSE_UNATTRIBUTED`
-  reports missing attribution and marks `userIdAttributionAvailable: false`.
+- **Legacy stock movements may lack actor attribution.** New movements persist an
+  immutable `actorUserId` and `actorName` snapshot. `STOCK_FREQUENT_CORRECTIONS`
+  includes the authenticated actors it can prove, while retaining an explicit
+  attribution-availability flag when older/system rows have no person attached.
+- **Legacy/imported expenses may lack a user id.** New online and offline expenses
+  store a server-authenticated `recordedByUserId` plus immutable name and role
+  snapshots. `EXPENSE_UNATTRIBUTED` now identifies only rows without that trusted
+  identity, and `EXPENSE_ACTOR_SCOPE_MISMATCH` detects an invalid/cross-shop actor.
 - Bills, purchase receipts and audit-logged actions **do** carry server-assigned
   actor ids; attribution is reliable there.
 
 ## 5. Timestamps and offline clock skew
 
-Bill and ledger timestamps are server-assigned, which is good, but it also means
-KiranaOS has no separate "business date" for bills: `createdAt` is both when the
-sale happened and when it was written. Consequences:
+Bill and ledger rows now separate the economic `businessDate` from the
+server-assigned `createdAt`. Online actions use server time; offline sync retains
+the original client operation time as business date while the durable sync/audit
+trail records when the server accepted it. Consequences:
 
 - A bill cannot be backdated through the online path, so
   `BILL_BACKDATED_INTO_LOCKED_DAY` fires only when a sync-event trail proves the
   record arrived after a day was locked. Without that trail the rule stays silent
   rather than guessing.
-- Client-supplied timestamps in offline payloads are not trusted anywhere.
+- Client operation timestamps can be wrong when a device clock is wrong. They are
+  bounded and remain paired with server receipt/audit timestamps so late or
+  implausible activity can be reviewed rather than silently rewriting history.
 - Records that originated offline reduce a finding's confidence by 0.05.
 
 ## 6. Pre-ledger history
@@ -127,12 +132,13 @@ market).
 
 ## 14. Deferred rules
 
-Not implemented because the data cannot support them honestly (details and
-reasoning in `AUDIT_RULE_CATALOG.md` §Deferred): duplicate idempotency key (A2),
-backdated ledger adjustment (B10), per-staff stock corrections (C6),
-supplier-level payable reconciliation (D8), changed supplier bank details (D14),
-expense staff-permission checks (E5), server-side counted-cash variance and repeated shortages
-(F1/F10), record overwritten by an older version (G12).
+Still deferred because the canonical data cannot support them honestly (details
+in `AUDIT_RULE_CATALOG.md` §Deferred): supplier-level payable reconciliation
+(D8), changed supplier bank details (D14), and detection of an older record
+overwriting a newer canonical version (G12). Idempotency, late ledger activity,
+stock/expense attribution and physical/repeated drawer shortages are now covered
+by preventive controls or deterministic rules, with legacy rows called out rather
+than guessed.
 
 ## 15. Operational limitations of this phase
 

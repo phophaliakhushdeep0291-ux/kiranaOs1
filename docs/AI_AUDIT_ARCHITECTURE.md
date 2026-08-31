@@ -287,12 +287,14 @@ entity later trips a *different* rule set is reopened with full history.
 
 ## 5. Areas where audit conclusions cannot yet be reliable
 
-1. **Cash on hand** — no cash-drawer counts except daily closing; between
-   closings the "expected cash" is inference only.
+1. **Cash on hand between closings** — daily closing now persists a physical
+   count with user/device attribution and counted-versus-expected variance, but
+   between physical counts the "expected cash" remains an inference.
 2. **UPI truth** — no bank/UPI provider feed; UPI reference values are
    operator-entered. Reuse detection works; authenticity checks do not.
-3. **Expense attribution** — `recordedBy` free text; staff-permission rules
-   for expenses are heuristic until expenses carry a real `userId`.
+3. **Historical expense attribution** — new online/offline expenses carry a
+   server-authenticated user id and immutable role/name snapshots; legacy/imported
+   rows with only `recordedBy` free text remain explicitly unattributed.
 4. **Pre-ledger history** — rows created before FinancialLedger/StockLedger
    coverage cannot be reconciled to movements (flagged as INSUFFICIENT_DATA,
    not as violations).

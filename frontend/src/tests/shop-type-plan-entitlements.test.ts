@@ -35,6 +35,18 @@ describe("shop-type subscription entitlements", () => {
     expect(business.features).toContain("dynamic_customer_pricing");
   });
 
+  it("backs every Kirana plan promise with its entitlement", () => {
+    const promisedFeatures = {
+      starter: ["basic_billing", "paid_udhar_bill", "offline_billing", "basic_products", "customer_ledger", "local_reports_7_day", "cloud_backup", "single_bill_whatsapp"],
+      growth: ["purchase_entry", "supplier_entry", "stock_adjustment", "low_stock_alerts", "batch_expiry", "automatic_two_way_sync", "reports_30_day", "owner_dashboard", "staff_login", "role_based_access", "pdf_bill_share", "recovery_mode"],
+      pro: ["dynamic_customer_pricing", "quantity_based_pricing", "loyalty_program", "advanced_inventory", "gst_reports", "tally_export", "monthly_reports", "yearly_reports", "audit_logs", "staff_performance_report", "whatsapp_reminders", "advanced_analytics", "premium_support", "multi_store"],
+    } as const;
+
+    for (const [code, features] of Object.entries(promisedFeatures)) {
+      expect(getPlanForBusinessType(code as "starter" | "growth" | "pro", "kirana").features).toEqual(expect.arrayContaining(features));
+    }
+  });
+
   it("puts counter-critical workflows in Starter and operational extras in Growth", () => {
     expect(getPlanForBusinessType("starter", "pharmacy").features).toEqual(expect.arrayContaining(["prescription_tracking", "batch_expiry"]));
     expect(getPlanForBusinessType("starter", "electronics").features).toContain("serial_imei_tracking");

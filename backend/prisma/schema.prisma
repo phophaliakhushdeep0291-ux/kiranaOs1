@@ -1568,6 +1568,8 @@ model Expense {
   recurringInterval String    @default("none") // none | daily | weekly | monthly
   nextDueOn         DateTime?
   recordedBy        String?
+  recordedByUserId  String? // server-authenticated creator; null only for legacy/system imports
+  recordedByRole    String? // immutable role snapshot at creation
   notes             String?
   spentAt           DateTime  @default(now())
   deletedAt         DateTime?
@@ -1583,6 +1585,7 @@ model Expense {
   @@index([shopId, deletedAt])
   @@index([shopId, spentAt])
   @@index([shopId, locationId, spentAt])
+  @@index([shopId, recordedByUserId, spentAt])
   @@index([shopId, updatedAt, id])
 }
 
@@ -2220,6 +2223,16 @@ model DailyClosingSnapshot {
   udharGivenPaise        Int       @default(0)
   oldUdharRecoveredPaise Int       @default(0)
   expectedCashPaise      Int       @default(0)
+  openingCashPaise       Int       @default(0)
+  manualCashInPaise      Int       @default(0)
+  manualCashOutPaise     Int       @default(0)
+  drawerExpectedCashPaise Int?
+  countedCashPaise       Int?
+  cashVariancePaise      Int?
+  cashCountedAt          DateTime?
+  cashCountedByUserId    String?
+  cashCountedByDeviceId  String?
+  cashCountRevision      Int       @default(0)
   totalBills             Int       @default(0)
   cancelledBills         Int       @default(0)
   roughBills             Int       @default(0)

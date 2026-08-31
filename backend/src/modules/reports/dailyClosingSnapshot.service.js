@@ -1,7 +1,7 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { getDailyClosing } from "./reports.service.js";
-import { dateRangeForDateOnly } from "../../utils/dates.js";
+import { dateRangeForDateOnly, formatDateInTimeZone } from "../../utils/dates.js";
 import { env } from "../../config/env.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -46,6 +46,41 @@ function parseJsonArray(raw) {
   }
 }
 
+const MAX_DRAWER_PAISE = 2_000_000_000;
+
+function normalizeDrawerPaise(value, field, { optional = false } = {}) {
+  if (optional && (value === undefined || value === null || value === "")) return null;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > MAX_DRAWER_PAISE) {
+    throw new AppError(`${field} must be a non-negative whole-paisa amount`, 400, "INVALID_DRAWER_AMOUNT");
+  }
+  return parsed;
+}
+
+function normalizeCountedAt(value) {
+  const parsed = new Date(value);
+  if (!value || Number.isNaN(parsed.getTime())) {
+    throw new AppError("countedAt must be a valid timestamp", 400, "INVALID_DRAWER_COUNT_TIME");
+  }
+  return parsed;
+}
+
+function drawerEvidence(snapshot) {
+  if (!snapshot || snapshot.countedCashPaise == null) return null;
+  return {
+    openingCashPaise: snapshot.openingCashPaise ?? 0,
+    manualCashInPaise: snapshot.manualCashInPaise ?? 0,
+    manualCashOutPaise: snapshot.manualCashOutPaise ?? 0,
+    expectedCashPaise: snapshot.drawerExpectedCashPaise ?? snapshot.expectedCashPaise ?? 0,
+    countedCashPaise: snapshot.countedCashPaise,
+    variancePaise: snapshot.cashVariancePaise ?? 0,
+    countedAt: snapshot.cashCountedAt?.toISOString?.() ?? null,
+    countedByUserId: snapshot.cashCountedByUserId ?? null,
+    countedByDeviceId: snapshot.cashCountedByDeviceId ?? null,
+    revision: snapshot.cashCountRevision ?? 0,
+  };
+}
+
 function snapshotToDailyClosing(snapshot, extra = {}) {
   if (!snapshot) return null;
   return {
@@ -65,6 +100,7 @@ function snapshotToDailyClosing(snapshot, extra = {}) {
     pendingSyncCount: snapshot.pendingSyncCount,
     localEstimate: false,
     generatedAt: snapshot.generatedAt.toISOString(),
+    drawer: drawerEvidence(snapshot),
     snapshot: {
       id: snapshot.id,
       source: snapshot.source,
@@ -178,11 +214,24 @@ export async function generateDailyClosingSnapshot(shopId, date, options = {}) {
       return { snapshot: current, created: false, skipped: true };
     }
 
+    const preservedDrawer = current?.countedCashPaise == null
+      ? {}
+      : (() => {
+          const drawerExpectedCashPaise = data.expectedCashPaise
+            + Number(current.openingCashPaise ?? 0)
+            + Number(current.manualCashInPaise ?? 0)
+            - Number(current.manualCashOutPaise ?? 0);
+          return {
+            drawerExpectedCashPaise,
+            cashVariancePaise: Number(current.countedCashPaise) - drawerExpectedCashPaise,
+          };
+        })();
     const snapshot = await tx.dailyClosingSnapshot.upsert({
       where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
       create: data,
       update: {
         ...data,
+        ...preservedDrawer,
         lockedAt: current?.lockedAt ?? null,
         lockedByUserId: current?.lockedByUserId ?? null,
       },
@@ -213,6 +262,110 @@ export async function generateDailyClosingSnapshot(shopId, date, options = {}) {
   return snapshotToDailyClosing(outcome.snapshot, { created: outcome.created, refreshed: !outcome.created });
 }
 
+/**
+ * Persist the shopkeeper's physical count and till adjustments as financial
+ * evidence. `baseRevision` is optimistic concurrency control: two offline
+ * counters can never silently replace one another's declaration.
+ */
+export async function recordDailyClosingDrawerCount(shopId, date, input, actor = {}) {
+  const day = normalizeDateInput(date);
+  const location = await resolveOperationalLocation(shopId, input.storeId ?? null, db, { allowInactive: true });
+  const openingCashPaise = normalizeDrawerPaise(input.openingCashPaise ?? 0, "openingCashPaise");
+  const manualCashInPaise = normalizeDrawerPaise(input.manualCashInPaise ?? 0, "manualCashInPaise");
+  const manualCashOutPaise = normalizeDrawerPaise(input.manualCashOutPaise ?? 0, "manualCashOutPaise");
+  const countedCashPaise = normalizeDrawerPaise(input.countedCashPaise, "countedCashPaise");
+  const baseRevision = normalizeDrawerPaise(input.baseRevision ?? 0, "baseRevision");
+  const countedAt = normalizeCountedAt(input.countedAt);
+
+  let existing = await db.dailyClosingSnapshot.findUnique({
+    where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
+  });
+  if (!existing) {
+    await generateDailyClosingSnapshot(shopId, dateKey(day), {
+      source: "manual",
+      userId: actor.userId ?? null,
+      storeId: location.id,
+    });
+  }
+
+  const snapshot = await db.$transaction(async (tx) => {
+    const current = await tx.dailyClosingSnapshot.findUnique({
+      where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
+    });
+    if (!current) throw new AppError("Daily closing snapshot not found", 404, "DAILY_CLOSING_SNAPSHOT_NOT_FOUND");
+    if (current.lockedAt) {
+      const error = new AppError("This day is locked. Re-open it before changing the physical cash count.", 409, "DRAWER_COUNT_DAY_LOCKED");
+      error.serverSnapshot = snapshotToDailyClosing(current);
+      throw error;
+    }
+    if (Number(current.cashCountRevision ?? 0) !== baseRevision) {
+      const error = new AppError("The drawer count changed on another device. Refresh and review both counts before saving again.", 409, "DRAWER_COUNT_VERSION_CONFLICT");
+      error.serverSnapshot = snapshotToDailyClosing(current);
+      throw error;
+    }
+
+    const drawerExpectedCashPaise = Number(current.expectedCashPaise ?? 0)
+      + openingCashPaise
+      + manualCashInPaise
+      - manualCashOutPaise;
+    const updated = await tx.dailyClosingSnapshot.update({
+      where: { id: current.id },
+      data: {
+        openingCashPaise,
+        manualCashInPaise,
+        manualCashOutPaise,
+        drawerExpectedCashPaise,
+        countedCashPaise,
+        cashVariancePaise: countedCashPaise - drawerExpectedCashPaise,
+        cashCountedAt: countedAt,
+        cashCountedByUserId: actor.userId ?? null,
+        cashCountedByDeviceId: actor.deviceId ?? null,
+        cashCountRevision: { increment: 1 },
+      },
+    });
+    await writeRequiredDailyClosingAudit({
+      shopId,
+      userId: actor.userId ?? null,
+      deviceId: actor.deviceId ?? null,
+      action: "DAILY_CLOSING_DRAWER_COUNT_RECORDED",
+      entityType: "DailyClosingSnapshot",
+      entityId: updated.id,
+      before: drawerEvidence(current),
+      after: drawerEvidence(updated),
+      metadata: {
+        date: dateKey(day),
+        storeId: location.id,
+        baseRevision,
+        clientExpectedCashPaise: input.clientExpectedCashPaise ?? null,
+      },
+    }, tx);
+    return updated;
+  }, { isolationLevel: "Serializable" });
+
+  return snapshotToDailyClosing(snapshot);
+}
+
+export async function listDailyClosingDrawerCounts(shopId, options = {}) {
+  const location = await resolveOperationalLocation(shopId, options.storeId ?? null, db, { allowInactive: true });
+  const todayKey = formatDateInTimeZone(new Date(), env.DAILY_CLOSING_TIMEZONE);
+  const defaultFromDate = new Date(`${todayKey}T00:00:00.000Z`);
+  defaultFromDate.setUTCDate(defaultFromDate.getUTCDate() - 89);
+  const from = options.from ? normalizeDateInput(options.from) : defaultFromDate;
+  const to = options.to ? normalizeDateInput(options.to) : normalizeDateInput(todayKey);
+  if (from > to) throw new AppError("from must not be after to", 400, "INVALID_REPORT_RANGE");
+  const rows = await db.dailyClosingSnapshot.findMany({
+    where: {
+      shopId,
+      storeId: location.id,
+      date: { gte: from, lte: to },
+      countedCashPaise: { not: null },
+    },
+    orderBy: { date: "desc" },
+    take: 90,
+  });
+  return rows.map((row) => ({ date: dateKey(row.date), ...drawerEvidence(row) }));
+}
+
 export async function refreshDailyClosingSnapshot(shopId, date, options = {}) {
   return generateDailyClosingSnapshot(shopId, date, { ...options, source: options.source ?? "manual" });
 }
@@ -238,6 +391,13 @@ export async function lockDailyClosingSnapshot(shopId, date, userId, requestedSt
     });
     if (!current) throw new AppError("Daily closing snapshot not found", 404, "DAILY_CLOSING_SNAPSHOT_NOT_FOUND");
     if (current.lockedAt) return current;
+    if (current.countedCashPaise == null) {
+      throw new AppError(
+        "Record the physical cash in the drawer before locking this day.",
+        409,
+        "DRAWER_COUNT_REQUIRED_BEFORE_LOCK",
+      );
+    }
     const locked = await tx.dailyClosingSnapshot.update({
       where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
       data: { lockedAt: new Date(), lockedByUserId: userId ?? null },
@@ -310,4 +470,5 @@ export const __dailyClosingSnapshotInternals = {
   normalizeDateInput,
   snapshotToDailyClosing,
   getSnapshotStaleness,
+  drawerEvidence,
 };
