@@ -24,19 +24,11 @@ const PRODUCT = [ENTITY_TYPES.PRODUCT];
 const BILL = [ENTITY_TYPES.BILL];
 
 const DECREASE_ACTIONS = new Set(["sale", "damage", "correction", "transfer_out", "purchase_return"]);
-const INCREASE_ACTIONS = new Set(["purchase", "correction", "cancel_reversal", "transfer_in", "sales_return"]);
+const INCREASE_ACTIONS = new Set(["purchase", "correction", "cancel_reversal", "transfer_in", "transfer_cancel_reversal", "sales_return"]);
 
 function qty(value) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-// Product.stockBaseQty holds only the primary location's residual once
-// secondary LocationStock rows exist, so whole-product reconciliation is only
-// reliable for single-location shops. Multi-location products report
-// INSUFFICIENT rather than a false mismatch (documented limitation).
-function hasSecondaryLocationStock(ctx) {
-  return (ctx.locationStocks ?? []).some((row) => qty(row.stockBaseQty) !== 0);
 }
 
 export const inventoryRules = [
@@ -71,11 +63,11 @@ export const inventoryRules = [
   defineRule({
     ruleCode: "STOCK_BALANCE_LEDGER_MISMATCH",
     name: "Current stock differs from the movement history",
-    description: "The product's stored stock does not match the closing quantity of its latest stock movement.",
+    description: "A location's stored stock does not match the closing quantity of its latest stock movement.",
     category: RULE_CATEGORIES.INVENTORY,
     severity: SEVERITY.HIGH,
     defaultWeight: 30,
-    version: 1,
+    version: 2,
     applicableEntityTypes: PRODUCT,
     applicableEventTypes: [EVENT_TYPES.STOCK_INCREASED, EVENT_TYPES.STOCK_DECREASED, EVENT_TYPES.STOCK_CORRECTED],
     evidenceTypes: [EVIDENCE_TYPES.STOCK_COUNT_CONFIRMATION, EVIDENCE_TYPES.CORRECTION_REASON],
@@ -83,19 +75,47 @@ export const inventoryRules = [
     evaluate(ctx) {
       const movements = ctx.movements ?? [];
       if (!movements.length) return passed; // no movement coverage — nothing to reconcile against
-      if (hasSecondaryLocationStock(ctx)) {
-        return passed; // multi-location residual split: not reliably reconcilable yet
+      const explicitByLocation = new Map((ctx.locationStocks ?? [])
+        .filter((row) => row.locationId !== ctx.primaryLocationId)
+        .map((row) => [row.locationId, qty(row.stockBaseQty)]));
+      const secondaryTotal = sum([...explicitByLocation.values()]);
+      const primaryStored = qty(ctx.product.stockBaseQty) - secondaryTotal - qty(ctx.inTransitBaseQty);
+      const lastByLocation = new Map();
+      for (const movement of movements) {
+        const locationId = movement.locationId ?? ctx.primaryLocationId ?? "legacy-primary";
+        lastByLocation.set(locationId, movement);
       }
-      const last = movements[movements.length - 1];
-      const expected = qty(last.newStockBaseQty);
-      const stored = qty(ctx.product.stockBaseQty);
-      if (!quantityDiffers(expected, stored, 0.001)) return passed;
+      const mismatches = [];
+      for (const [locationId, last] of lastByLocation) {
+        const isPrimary = locationId === ctx.primaryLocationId || locationId === "legacy-primary";
+        const stored = isPrimary ? primaryStored : (explicitByLocation.get(locationId) ?? 0);
+        const expected = qty(last.newStockBaseQty);
+        if (!quantityDiffers(expected, stored, 0.001)) continue;
+        mismatches.push({
+          locationId: isPrimary ? (ctx.primaryLocationId ?? null) : locationId,
+          storedStockBaseQty: Number(stored.toFixed(4)),
+          ledgerClosingBaseQty: expected,
+          differenceBaseQty: Number((stored - expected).toFixed(4)),
+          lastMovementId: last.id,
+        });
+      }
+      if (!mismatches.length) return passed;
+      const representative = mismatches.reduce((largest, row) => (
+        Math.abs(row.differenceBaseQty) > Math.abs(largest.differenceBaseQty) ? row : largest
+      ));
       return triggered({
-        storedStockBaseQty: stored,
-        ledgerClosingBaseQty: expected,
-        differenceBaseQty: Number((stored - expected).toFixed(4)),
+        // Retain the original summary contract for finding valuation and older
+        // clients. In a multi-location allocation drift, summing both sides
+        // would count the same shifted unit twice; the largest location gap is
+        // the conservative quantity at risk.
+        storedStockBaseQty: representative.storedStockBaseQty,
+        ledgerClosingBaseQty: representative.ledgerClosingBaseQty,
+        differenceBaseQty: representative.differenceBaseQty,
+        locationId: representative.locationId,
+        locationMismatches: mismatches.slice(0, 20),
+        mismatchCount: mismatches.length,
+        inTransitBaseQty: qty(ctx.inTransitBaseQty),
         baseUnit: ctx.product.baseUnit,
-        lastMovementId: last.id,
         movementCount: movements.length,
       });
     },

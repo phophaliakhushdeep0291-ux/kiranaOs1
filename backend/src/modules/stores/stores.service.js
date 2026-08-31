@@ -11,6 +11,7 @@ import { accessibleLocationIds, assertLocationCapability } from "./location-acce
 // primary-share rule must have exactly one implementation, or the two drift.
 import { getVariantLocationQuantity, writeLocationStockRow } from "./location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { stockLedgerProvenance } from "../inventory/stock-ledger-provenance.js";
 
 async function writeRequiredStoreAudit(entry, client) {
   const audit = await createAuditLog({ ...entry, client });
@@ -69,6 +70,44 @@ function transferAuditMetadata(transfer) {
 function transferRef() {
   const day = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   return `TRF-${day}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+}
+
+async function writeTransferStockMovement(tx, {
+  shopId,
+  transferId,
+  transferItemId,
+  locationId,
+  productId,
+  productName,
+  sellingUnitId = null,
+  sellingUnitQty = null,
+  action,
+  changeBaseQty,
+  oldStockBaseQty,
+  newStockBaseQty,
+  actor,
+  phase,
+  note,
+}) {
+  return tx.stockLedger.create({
+    data: {
+      shopId,
+      locationId,
+      productId,
+      productName,
+      sellingUnitId,
+      sellingUnitQty,
+      action,
+      changeBaseQty,
+      oldStockBaseQty,
+      newStockBaseQty,
+      ...stockLedgerProvenance({ userId: actor?.userId }),
+      idempotencyKey: `stock-transfer:${transferId}:${phase}:${transferItemId}`,
+      sourceType: "stock_transfer",
+      sourceId: transferId,
+      note,
+    },
+  });
 }
 
 function owns(object, key) {
@@ -559,8 +598,13 @@ export async function createTransfer(shopId, data, userId, userRole = "staff", r
       const from = locations.find((row) => row.id === data.fromLocationId);
       const to = locations.find((row) => row.id === data.toLocationId);
       const classification = classifyTransfer(from, to);
-      const sourceSnapshot = await inventorySnapshot(tx, shopId, from);
+      const [sourceSnapshot, destinationSnapshot] = await Promise.all([
+        inventorySnapshot(tx, shopId, from),
+        inventorySnapshot(tx, shopId, to),
+      ]);
       const sourceById = new Map(sourceSnapshot.map((row) => [row.id, row]));
+      const sourceBalances = new Map(sourceSnapshot.map((row) => [row.id, Number(row.stockBaseQty)]));
+      const destinationBalances = new Map(destinationSnapshot.map((row) => [row.id, Number(row.stockBaseQty)]));
 
       // A product that holds stock per size cannot move as an untyped lump: the
       // product-level allocation would shift while the per-size rows stood still,
@@ -748,6 +792,50 @@ export async function createTransfer(shopId, data, userId, userRole = "staff", r
         },
         include: { fromLocation: true, toLocation: true, items: true },
       });
+      for (const item of created.items) {
+        const sourceOld = sourceBalances.get(item.productId) ?? 0;
+        const sourceNew = round2(sourceOld - Number(item.quantityBaseQty));
+        sourceBalances.set(item.productId, sourceNew);
+        await writeTransferStockMovement(tx, {
+          shopId,
+          transferId: created.id,
+          transferItemId: item.id,
+          locationId: from.id,
+          productId: item.productId,
+          productName: item.productName,
+          sellingUnitId: item.sellingUnitId,
+          sellingUnitQty: item.sellingUnitQty == null ? null : -Number(item.sellingUnitQty),
+          action: "transfer_out",
+          changeBaseQty: -Number(item.quantityBaseQty),
+          oldStockBaseQty: sourceOld,
+          newStockBaseQty: sourceNew,
+          actor: { userId },
+          phase: "dispatch",
+          note: `Transfer ${created.referenceNo} dispatched to ${to.name}`,
+        });
+        if (completesImmediately) {
+          const destinationOld = destinationBalances.get(item.productId) ?? 0;
+          const destinationNew = round2(destinationOld + Number(item.quantityBaseQty));
+          destinationBalances.set(item.productId, destinationNew);
+          await writeTransferStockMovement(tx, {
+            shopId,
+            transferId: created.id,
+            transferItemId: item.id,
+            locationId: to.id,
+            productId: item.productId,
+            productName: item.productName,
+            sellingUnitId: item.sellingUnitId,
+            sellingUnitQty: item.sellingUnitQty,
+            action: "transfer_in",
+            changeBaseQty: Number(item.quantityBaseQty),
+            oldStockBaseQty: destinationOld,
+            newStockBaseQty: destinationNew,
+            actor: { userId },
+            phase: "instant-receipt",
+            note: `Transfer ${created.referenceNo} received from ${from.name}`,
+          });
+        }
+      }
       await writeRequiredStoreAudit({
         shopId,
         userId,
@@ -791,6 +879,9 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
       throw new AppError("Only an open shipment can receive stock", 409, "TRANSFER_NOT_RECEIVABLE");
     }
 
+    const destinationSnapshot = await inventorySnapshot(tx, shopId, current.toLocation);
+    const destinationBalances = new Map(destinationSnapshot.map((row) => [row.id, Number(row.stockBaseQty)]));
+
     const itemById = new Map(current.items.map((item) => [item.id, item]));
     const receivedLines = [];
     for (const input of receiptItems) {
@@ -817,6 +908,26 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
       await moveVariantAtLocation(tx, {
         shopId, location: current.toLocation, productId: item.productId,
         sellingUnitId: item.sellingUnitId, qty: variantShareOf(item, input.quantityBaseQty),
+      });
+      const destinationOld = destinationBalances.get(item.productId) ?? 0;
+      const destinationNew = round2(destinationOld + Number(input.quantityBaseQty));
+      destinationBalances.set(item.productId, destinationNew);
+      await writeTransferStockMovement(tx, {
+        shopId,
+        transferId: current.id,
+        transferItemId: item.id,
+        locationId: current.toLocationId,
+        productId: item.productId,
+        productName: item.productName,
+        sellingUnitId: item.sellingUnitId,
+        sellingUnitQty: item.sellingUnitId ? variantShareOf(item, input.quantityBaseQty) : null,
+        action: "transfer_in",
+        changeBaseQty: Number(input.quantityBaseQty),
+        oldStockBaseQty: destinationOld,
+        newStockBaseQty: destinationNew,
+        actor: { userId },
+        phase: `receipt-${receivedBefore}-${round2(receivedBefore + Number(input.quantityBaseQty))}`,
+        note: `Transfer ${current.referenceNo} received from ${current.fromLocation.name}`,
       });
       receivedLines.push({
         transferItemId: item.id,
@@ -876,6 +987,10 @@ export async function cancelTransfer(shopId, transferId, data, userId, userRole 
       throw new AppError("Only an open shipment can be cancelled", 409, "TRANSFER_NOT_CANCELLABLE");
     }
 
+
+    const sourceSnapshot = await inventorySnapshot(tx, shopId, current.fromLocation);
+    const sourceBalances = new Map(sourceSnapshot.map((row) => [row.id, Number(row.stockBaseQty)]));
+
     const returnedLines = [];
     for (const item of current.items) {
       const remaining = round2(Math.max(0, Number(item.quantityBaseQty) - Number(item.receivedBaseQty)));
@@ -887,6 +1002,26 @@ export async function cancelTransfer(shopId, transferId, data, userId, userRole 
       await moveVariantAtLocation(tx, {
         shopId, location: current.fromLocation, productId: item.productId,
         sellingUnitId: item.sellingUnitId, qty: variantShareOf(item, remaining),
+      });
+      const sourceOld = sourceBalances.get(item.productId) ?? 0;
+      const sourceNew = round2(sourceOld + remaining);
+      sourceBalances.set(item.productId, sourceNew);
+      await writeTransferStockMovement(tx, {
+        shopId,
+        transferId: current.id,
+        transferItemId: item.id,
+        locationId: current.fromLocationId,
+        productId: item.productId,
+        productName: item.productName,
+        sellingUnitId: item.sellingUnitId,
+        sellingUnitQty: item.sellingUnitId ? variantShareOf(item, remaining) : null,
+        action: "transfer_cancel_reversal",
+        changeBaseQty: remaining,
+        oldStockBaseQty: sourceOld,
+        newStockBaseQty: sourceNew,
+        actor: { userId },
+        phase: "cancel-return",
+        note: `Cancelled transfer ${current.referenceNo}: ${data.reason}`,
       });
       returnedLines.push({ productId: item.productId, productName: item.productName, returnedBaseQty: remaining });
     }

@@ -174,6 +174,11 @@ const DISCREPANCY_PAISE_KEYS = ["differencePaise", "cashDifferencePaise", "sales
 // spend had vanished. Those rules deliberately stay unquantified — the evidence
 // queue already counts them.
 const DISCREPANCY_BY_RULE = {
+  STOCK_BALANCE_LEDGER_MISMATCH: (d) => ({
+    baseQty: Array.isArray(d.locationMismatches) && d.locationMismatches.length
+      ? Math.max(...d.locationMismatches.map((row) => Math.abs(Number(row?.differenceBaseQty) || 0)))
+      : d.differenceBaseQty,
+  }),
   // Unexplained stock movement: the goods that moved without a reason, at cost.
   STOCK_DECREASE_WITHOUT_SOURCE: (d) => ({ baseQty: d.totalUnexplainedBaseQty }),
   STOCK_INCREASE_WITHOUT_SOURCE: (d) => ({ baseQty: sumBaseQty(d.unexplainedIncreases) }),

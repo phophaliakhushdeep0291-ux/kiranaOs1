@@ -84,12 +84,19 @@ arithmetic and control checks immediately, but outlier detection only after it h
 traded for a while. Baselines are recomputed on demand
 (`POST /api/audit/baselines/recompute`) and, when the worker is running, daily.
 
-## 8. Multi-location stock is only partly reconcilable
+## 8. Multi-location stock is reconciled per location
 
-`Product.stockBaseQty` holds the primary location's residual once secondary
-`LocationStock` rows exist. Whole-product reconciliation is therefore reliable only
-for single-location shops; `STOCK_BALANCE_LEDGER_MISMATCH` deliberately skips
-products with non-zero secondary balances rather than report a false mismatch.
+`Product.stockBaseQty` is the company total; secondary branches use explicit
+`LocationStock` rows, the primary balance is the residual after those allocations,
+and open shipment quantities form a separate in-transit bucket. Transfers now write
+atomic `transfer_out`, `transfer_in`, and `transfer_cancel_reversal` stock-ledger
+movements. `STOCK_BALANCE_LEDGER_MISMATCH` compares the latest covered movement at
+each location with that location's current balance instead of comparing a branch
+closing to the company total or skipping multi-location products.
+
+The pre-ledger limitation still applies: a location with no movement history is not
+claimed as reconciled, and older transfers made before transfer-ledger coverage may
+need a physical count to establish a trustworthy closing balance.
 
 ## 9. Supplier statements require explicit supplier links
 
@@ -141,9 +148,9 @@ market).
 ## 14. Deferred rules
 
 Still deferred because the canonical data cannot support them honestly (details
-in `AUDIT_RULE_CATALOG.md` §Deferred): supplier-level payable reconciliation
-(D8), changed supplier bank details (D14), and detection of an older record
-overwriting a newer canonical version (G12). Idempotency, late ledger activity,
+in `AUDIT_RULE_CATALOG.md` §Deferred): changed supplier bank details (D14), and
+detection of an older record overwriting a newer canonical version (G12).
+Supplier payable reconciliation, idempotency, late ledger activity,
 stock/expense attribution and physical/repeated drawer shortages are now covered
 by preventive controls or deterministic rules, with legacy rows called out rather
 than guessed.

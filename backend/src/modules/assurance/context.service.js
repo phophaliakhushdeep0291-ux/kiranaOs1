@@ -324,7 +324,7 @@ async function buildProductContext(shopId, productId, client) {
   const product = await client.product.findFirst({ where: { id: productId, shopId } });
   if (!product) throw new AuditContextError("Product not found in this shop", "ENTITY_NOT_FOUND");
 
-  const [settings, baselines, movements, locationStocks, lockedClosings] = await Promise.all([
+  const [settings, baselines, movements, locationStocks, primaryLocation, openTransferItems, lockedClosings] = await Promise.all([
     loadShopSettings(shopId, client),
     getShopBaselines(shopId, { client }),
     client.stockLedger.findMany({
@@ -334,6 +334,11 @@ async function buildProductContext(shopId, productId, client) {
     // Product-level rows only: the audit rules reconcile base-unit stock against
     // the ledger, and variant rows count in their own unit.
     client.locationStock.findMany({ where: { shopId, productId, sellingUnitId: null } }),
+    client.storeLocation.findFirst({ where: { shopId, isPrimary: true }, select: { id: true } }),
+    client.stockTransferItem.findMany({
+      where: { productId, transfer: { shopId, status: { in: ["in_transit", "partially_received"] } } },
+      select: { quantityBaseQty: true, receivedBaseQty: true },
+    }),
     client.dailyClosingSnapshot.findMany({
       where: { shopId, lockedAt: { not: null } },
       select: { id: true, date: true, lockedAt: true },
@@ -350,6 +355,11 @@ async function buildProductContext(shopId, productId, client) {
       })
     : [];
 
+  const inTransitBaseQty = openTransferItems.reduce(
+    (sum, item) => sum + Math.max(0, Number(item.quantityBaseQty) - Number(item.receivedBaseQty)),
+    0,
+  );
+
   return {
     shopId,
     entityType: ENTITY_TYPES.PRODUCT,
@@ -360,6 +370,8 @@ async function buildProductContext(shopId, productId, client) {
     product,
     movements,
     locationStocks,
+    primaryLocationId: primaryLocation?.id ?? null,
+    inTransitBaseQty,
     lockedClosings,
     referencedBills: new Map(referencedBills.map((b) => [b.id, b])),
     inputHash: computeInputHash({
@@ -375,6 +387,8 @@ async function buildProductContext(shopId, productId, client) {
         actorName: m.actorName,
       })),
       locationStocks,
+      primaryLocationId: primaryLocation?.id ?? null,
+      inTransitBaseQty,
     }),
   };
 }
