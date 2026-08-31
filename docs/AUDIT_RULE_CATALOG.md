@@ -92,7 +92,7 @@ where the legacy opening balance is itself a `legacy_opening_balance` debit row.
 | 3 | Increase without a valid source | `STOCK_INCREASE_WITHOUT_SOURCE` |
 | 4 | Negative stock | `STOCK_NEGATIVE_BALANCE` (MEDIUM — KiranaOS deliberately allows overselling) |
 | 5 | Excessive manual correction | `STOCK_LARGE_MANUAL_CORRECTION` (>25% of stock, or no reason at all) |
-| 6 | Frequent corrections by one staff member | `STOCK_FREQUENT_CORRECTIONS` (per product; staff attribution unavailable — see §Deferred) |
+| 6 | Frequent corrections by one staff member | `STOCK_FREQUENT_CORRECTIONS` groups by immutable `actorUserId` and triggers only when the same authenticated person corrected the product at least four times in 30 days; legacy/system rows never get guessed onto a person. |
 | 7 | Sale quantity exceeds available stock | `STOCK_SALE_EXCEEDED_AVAILABLE` |
 | 8 | Purchase stock ≠ purchase items | `PURCHASE_STOCK_QUANTITY_MISMATCH` (purchase scope) |
 | 9 | Cancelled sale not restoring stock | `STOCK_CANCELLED_SALE_NOT_RESTORED` |
@@ -156,7 +156,7 @@ where the legacy opening balance is itself a `legacy_opening_balance` debit row.
 | 7 | Daily closing changed after completion | `CLOSING_CHANGED_AFTER_LOCK` |
 | 8 | Late offline transaction affects closed day | `CLOSING_LATE_TRANSACTION_AFTER_LOCK` |
 | 9 | Large closing difference | `CLOSING_LARGE_DIFFERENCE` (threshold `audit.closingDifferenceAlertPaise`, default ₹200) |
-| 10 | Repeated shortages by staff/device | Individual variances are implemented and attributed by user/device; multi-day repeated-shortage trend detection remains deferred. |
+| 10 | Repeated shortages by staff/device | `CLOSING_REPEATED_CASH_SHORTAGE` groups negative physical variances by authenticated user/device and triggers on three distinct business days in the previous 30 days. |
 | 11 | UPI reference reused | `CLOSING_UPI_REFERENCE_REUSED` (reference masked in the finding) |
 | 12 | Split payment ≠ total paid | `CLOSING_SPLIT_PAYMENT_MISMATCH` |
 | — | Sales total stale vs bills | `CLOSING_SALES_FIGURE_STALE` (added) |
@@ -187,8 +187,8 @@ where the legacy opening balance is itself a `legacy_opening_balance` debit row.
 
 ## Deferred rules and why
 
-These are **not** implemented because the data to evaluate them honestly does not
-exist yet. Each would produce guesses or false positives if forced.
+These entries explain controls that remain deferred, are handled preventively, or
+still have legacy-data limits. The engine does not invent evidence to fill gaps.
 
 1. **A2 — duplicate idempotency key.** `Bill.sourceDeviceId` is populated from
    the request's device header for *every* sale, and no column marks offline
@@ -199,9 +199,11 @@ exist yet. Each would produce guesses or false positives if forced.
 2. **B10 — backdated ledger adjustment.** `UdharLedger` has no business-date
    column separate from `createdAt`, so a ledger row cannot be backdated.
    Implemented instead as `UDHAR_LATE_REVERSAL` (reversal >30 days later).
-3. **C6 — frequent corrections *by one staff member*.** `StockLedger` has no
-   actor column. The rule reports per-product correction frequency and marks
-   `staffAttributionAvailable: false`, which lowers the finding's confidence.
+3. **C6 — frequent corrections *by one staff member*.** New `StockLedger` rows
+   carry immutable `actorUserId`/`actorName` attribution and the current
+   per-product rule reports those actors. Legacy/system movements can still lack a
+   person; a future cross-product staff trend must exclude those rows rather than
+   guess their author.
 4. **D8 — supplier-level payable reconciliation.** There is no supplier-payment
    table; payments live on each purchase row. Per-purchase reconciliation is
    implemented; a true supplier statement needs a supplier ledger.
@@ -209,9 +211,9 @@ exist yet. Each would produce guesses or false positives if forced.
 6. **E5 — historical expense attribution.** New expenses are server-attributed
    by user id, name and role. Legacy/imported rows can still have only free text;
    those remain explicitly `EXPENSE_UNATTRIBUTED` rather than being guessed.
-7. **F10 - repeated shortages.** Counted-versus-expected cash is now persisted,
-   revisioned and attributed by location/user/device. The remaining gap is a
-   dedicated multi-day trend rule that groups repeated shortages by actor/device.
+7. **F10 — repeated shortages.** Implemented as
+   `CLOSING_REPEATED_CASH_SHORTAGE`: a rolling 30-day, three-distinct-day pattern
+   by authenticated user or device, with exact shortage figures and snapshot ids.
 8. **G12 — record overwritten by an older version.** Canonical financial tables
    carry no row version, only `updatedAt`.
 

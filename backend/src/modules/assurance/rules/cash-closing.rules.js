@@ -69,6 +69,47 @@ function recomputedExpectedCashPaise(ctx) {
   return cashReceivedPaise + cashPurchaseRefundPaise(ctx) - supplierCashPaidPaise(ctx) - paidCashExpensePaise(ctx);
 }
 
+function physicalCashVariancePaise(snapshot) {
+  if (snapshot?.countedCashPaise == null) return null;
+  const expectedCashPaise = Number(
+    snapshot.drawerExpectedCashPaise
+      ?? (Number(snapshot.expectedCashPaise ?? 0)
+        + Number(snapshot.openingCashPaise ?? 0)
+        + Number(snapshot.manualCashInPaise ?? 0)
+        - Number(snapshot.manualCashOutPaise ?? 0)),
+  );
+  return Number(snapshot.countedCashPaise) - expectedCashPaise;
+}
+
+function repeatedShortagePattern(rows, identityField, identityValue) {
+  if (!identityValue) return null;
+  const matching = rows.filter((row) => (
+    row?.[identityField] === identityValue
+    && physicalCashVariancePaise(row) < 0
+  ));
+  const byDay = new Map();
+  for (const row of matching) {
+    const businessDate = new Date(row.date).toISOString();
+    const day = byDay.get(businessDate) ?? { businessDate, snapshotIds: [], shortagePaise: 0 };
+    const variancePaise = physicalCashVariancePaise(row);
+    day.snapshotIds.push(row.id);
+    day.shortagePaise += Math.abs(variancePaise);
+    byDay.set(businessDate, day);
+  }
+  const days = [...byDay.values()].sort((left, right) => left.businessDate.localeCompare(right.businessDate));
+  if (days.length < 3) return null;
+  const totalShortagePaise = days.reduce((total, day) => total + day.shortagePaise, 0);
+  return {
+    identityField,
+    identityValue,
+    shortageDayCount: days.length,
+    totalShortagePaise,
+    totalShortageRupees: Number((totalShortagePaise / 100).toFixed(2)),
+    largestDailyShortagePaise: Math.max(...days.map((day) => day.shortagePaise)),
+    days,
+  };
+}
+
 export const cashClosingRules = [
   defineRule({
     ruleCode: "CLOSING_CASH_FIGURE_STALE",
@@ -293,7 +334,7 @@ export const cashClosingRules = [
             - Number(ctx.snapshot.manualCashOutPaise ?? 0)),
       );
       const countedCashPaise = Number(ctx.snapshot.countedCashPaise);
-      const variancePaise = countedCashPaise - expectedCashPaise;
+      const variancePaise = physicalCashVariancePaise(ctx.snapshot);
       if (variancePaise === 0) return passed;
       return triggered({
         expectedCashPaise,
@@ -304,6 +345,35 @@ export const cashClosingRules = [
         manualCashInPaise: Number(ctx.snapshot.manualCashInPaise ?? 0),
         manualCashOutPaise: Number(ctx.snapshot.manualCashOutPaise ?? 0),
         countRevision: Number(ctx.snapshot.cashCountRevision ?? 0),
+      });
+    },
+  }),
+
+  defineRule({
+    ruleCode: "CLOSING_REPEATED_CASH_SHORTAGE",
+    name: "Repeated physical cash shortages by the same user or device",
+    description: "The same authenticated counter or counting device recorded a physical drawer shortage on at least three distinct business days within the last 30 days.",
+    category: RULE_CATEGORIES.CASH_CLOSING,
+    severity: SEVERITY.HIGH,
+    defaultWeight: 30,
+    version: 1,
+    applicableEntityTypes: CLOSING,
+    applicableEventTypes: [EVENT_TYPES.DAILY_CLOSING_COMPLETED],
+    evidenceTypes: [EVIDENCE_TYPES.OWNER_APPROVAL, EVIDENCE_TYPES.STAFF_EXPLANATION, EVIDENCE_TYPES.DEVICE_TIMESTAMP_METADATA],
+    remediation: "Review the physical counts, shift handovers and till movements for the listed days. Confirm the counting user and device before drawing any conclusion.",
+    evaluate(ctx) {
+      if (physicalCashVariancePaise(ctx.snapshot) >= 0) return passed;
+      const rows = [ctx.snapshot, ...(ctx.recentDrawerCounts ?? [])];
+      const userPattern = repeatedShortagePattern(rows, "cashCountedByUserId", ctx.snapshot.cashCountedByUserId);
+      const devicePattern = repeatedShortagePattern(rows, "cashCountedByDeviceId", ctx.snapshot.cashCountedByDeviceId);
+      const patterns = [userPattern, devicePattern].filter(Boolean);
+      if (!patterns.length) return passed;
+      return triggered({
+        lookbackDays: 30,
+        minimumDistinctShortageDays: 3,
+        currentSnapshotId: ctx.snapshot.id,
+        currentVariancePaise: physicalCashVariancePaise(ctx.snapshot),
+        patterns,
       });
     },
   }),
