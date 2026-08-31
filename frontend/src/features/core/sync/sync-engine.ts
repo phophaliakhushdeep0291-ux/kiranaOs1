@@ -33,6 +33,30 @@ async function emptySyncResult(cursor?: string | number | null): Promise<SyncRun
 
 let inFlightCycle: Promise<SyncRunResult> | null = null;
 let queuedCycle: Promise<SyncRunResult> | null = null;
+const CROSS_TAB_SYNC_LOCK = "kirana-os:sync-cycle:v1";
+
+function hasWebLocks(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    typeof navigator.locks?.request === "function"
+  );
+}
+
+async function runWithCrossTabSyncLock(
+  work: (ownsCrossTabLock: boolean) => Promise<SyncRunResult>,
+): Promise<SyncRunResult> {
+  if (!hasWebLocks()) return work(false);
+
+  // The lock is released automatically if a tab reloads, navigates away, or
+  // crashes. The next document can therefore distinguish an abandoned SYNCING
+  // marker from work that another live tab still owns and safely replay it using
+  // the operation's stable idempotency key.
+  return navigator.locks.request(
+    CROSS_TAB_SYNC_LOCK,
+    { mode: "exclusive" },
+    () => work(true),
+  );
+}
 
 /**
  * Only one sync cycle runs at a time in a tab, whoever asks.
@@ -67,7 +91,7 @@ export function runSyncCycle(): Promise<SyncRunResult> {
 
 async function runExclusiveSyncCycle(): Promise<SyncRunResult> {
   try {
-    return await runSyncCycleBody();
+    return await runWithCrossTabSyncLock(runSyncCycleBody);
   } finally {
     // Cleared before this promise settles, so a queued follow-up always finds the
     // slot free and starts a genuinely fresh cycle.
@@ -75,7 +99,7 @@ async function runExclusiveSyncCycle(): Promise<SyncRunResult> {
   }
 }
 
-async function runSyncCycleBody(): Promise<SyncRunResult> {
+async function runSyncCycleBody(ownsCrossTabLock = false): Promise<SyncRunResult> {
   await offlineDB.init();
   if (typeof window !== "undefined" && !getStoredAccessToken() && !getStoredRefreshToken()) return emptySyncResult();
 
@@ -109,7 +133,9 @@ async function runSyncCycleBody(): Promise<SyncRunResult> {
     return emptySyncResult(statusCursor);
   }
 
-  await repairResolvedSyncStatusNoise().catch(() => 0);
+  await repairResolvedSyncStatusNoise({
+    recoverAbandonedSyncing: ownsCrossTabLock,
+  }).catch(() => 0);
   await repairRetryableBillValidationConflicts().catch(() => 0);
 
   // §13 sync activity. A POS pushes on a timer, so emitting a start/finish pair

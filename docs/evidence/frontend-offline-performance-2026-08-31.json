@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-08-31T00:30:00+05:30",
+  "status": "passed-automated-browser-and-production-gates",
+  "scope": "Frontend startup deferral, responsive core routes, Udhar navigation and production offline cold restart",
+  "change": {
+    "description": "Moved authenticated cloud hydration, realtime refresh and multi-device synchronization behind a recoverable lazy background boundary; heavy sync and reconciliation modules now load only when background work starts.",
+    "initialJavaScriptBefore": {
+      "rawKb": 911.4,
+      "gzipKb": 270.7
+    },
+    "initialJavaScriptAfter": {
+      "rawKb": 834.4,
+      "gzipKb": 251.7,
+      "files": 5
+    },
+    "reduction": {
+      "rawKb": 77.0,
+      "rawPercent": 8.45,
+      "gzipKb": 19.0,
+      "gzipPercent": 7.02
+    },
+    "startupBundle": {
+      "assets": 6,
+      "rawBytes": 1231321,
+      "gzipBytes": 315023,
+      "verticalPageChunksPresent": false
+    }
+  },
+  "offlineColdRestart": {
+    "sourceArtifact": "frontend/qa-artifacts/offline-performance-20260831/report.json",
+    "sourceArtifactSha256": "A489A966AFE0AAA93551DE7BB6C280C662AB06C2EC76396D53FA2BED42E18371",
+    "browserWasRestarted": true,
+    "networkWasDisabled": true,
+    "passedRoutes": 52,
+    "totalRoutes": 52,
+    "averageReadyMs": 546,
+    "maximumReadyMs": 969,
+    "routeBounces": 0,
+    "stuckLoaders": 0,
+    "runtimeErrors": 0,
+    "cachedShellEntries": 206
+  },
+  "responsiveCoreMatrix": {
+    "sourceArtifact": "frontend/qa-artifacts/mobile-performance-20260831/report.json",
+    "sourceArtifactSha256": "5B51BD395B88F1113CF6120F9516ED104E8251A0598E540A12ABB5F38D203858",
+    "passedCaptures": 36,
+    "totalCaptures": 36,
+    "passedKeyboardRoutes": 9,
+    "totalKeyboardRoutes": 9,
+    "viewports": ["375x667", "390x844", "430x932", "768x1024"],
+    "runtimeErrors": 0,
+    "stuckLoaders": 0,
+    "horizontalOverflowFindings": 0,
+    "undersizedTargetFindings": 0,
+    "axeViolations": 0,
+    "axeIncompleteResults": 0,
+    "axePassedNodes": 7778,
+    "udharSpaTransition": {
+      "requestedPath": "/udhar",
+      "settledPath": "/customers",
+      "settledSearch": "?filter=udhar",
+      "activeFilter": "udhar"
+    }
+  },
+  "productionGate": {
+    "typecheck": "passed",
+    "translationKeysCompared": 5518,
+    "translationModules": 16,
+    "translationProblems": 0,
+    "testFilesPassed": 304,
+    "testFilesSkipped": 1,
+    "testsPassed": 2072,
+    "testsSkipped": 1,
+    "productionBuild": "passed",
+    "bundleCheck": "passed",
+    "productionAppCheck": "passed"
+  },
+  "limitations": [
+    "This is local first-party automated evidence; deployed-network telemetry and real low-end shop hardware still require field measurement.",
+    "External payment, GST, messaging and marketplace providers require live credentials or physical devices and are not certified by this run."
+  ]
+}

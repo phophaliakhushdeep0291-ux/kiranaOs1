@@ -62,6 +62,8 @@ const RANGE = {
 export const CORE_READ_TOOLS = [
   defineTool({
     name: "search_products",
+    // The universal resolver: almost every task starts by naming a thing.
+    always: true,
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -90,6 +92,7 @@ export const CORE_READ_TOOLS = [
 
   defineTool({
     name: "get_product_detail",
+    keywords: ["detail", "details", "cost", "gst", "hsn", "batch", "expiry", "mrp", "रेट", "भाव", "जानकारी", "kitne ka", "kitna", "price"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -109,6 +112,8 @@ export const CORE_READ_TOOLS = [
 
   defineTool({
     name: "find_customer",
+    // The universal resolver: almost every task starts by naming a thing.
+    always: true,
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -136,6 +141,7 @@ export const CORE_READ_TOOLS = [
 
   defineTool({
     name: "get_customer_khata",
+    keywords: ["khata", "udhar", "udhaar", "owes", "owe", "balance", "due", "credit", "खाता", "उधार", "बकाया", "बाकी"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -155,7 +161,10 @@ export const CORE_READ_TOOLS = [
         const entries = Array.isArray(khata?.entries) ? khata.entries : khata?.ledger ?? [];
         return { found: true, ...khata, entries: entries.slice(0, MAX_ROWS) };
       } catch (error) {
-        if (error?.status === 404 || /not found/i.test(String(error?.message))) {
+        // AppError carries `statusCode`, not `status`. Matching only on the
+        // message worked by luck; a reworded string would have silently turned
+        // this back into a hard failure mid-turn.
+        if (error?.statusCode === 404 || error?.status === 404 || /not found/i.test(String(error?.message))) {
           return { found: false, hint: "No customer has that id. Call find_customer and use the id it returns." };
         }
         throw error;
@@ -165,6 +174,7 @@ export const CORE_READ_TOOLS = [
 
   defineTool({
     name: "get_udhar_summary",
+    keywords: ["udhar", "udhaar", "khata", "owes", "owe", "outstanding", "due", "credit", "market", "उधार", "बकाया", "खाता", "बाज़ार", "बाजार"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -174,6 +184,7 @@ export const CORE_READ_TOOLS = [
 
   defineTool({
     name: "get_sales_summary",
+    keywords: ["sale", "sales", "sold", "revenue", "profit", "income", "turnover", "today", "yesterday", "week", "month", "year", "kitna hua", "dhanda", "बिक्री", "बेच", "कमा", "मुनाफ़ा", "मुनाफा", "आज", "कल", "हफ़्त", "हफ्त", "महीन", "धंधा", "कितना हुआ"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -201,6 +212,7 @@ export const CORE_READ_TOOLS = [
 
   defineTool({
     name: "get_top_products",
+    keywords: ["top", "best", "most", "selling", "fastest", "popular", "reorder", "सबसे", "ज़्यादा", "ज्यादा", "बिक", "चल", "लोकप्रिय"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -224,6 +236,7 @@ export const CORE_READ_TOOLS = [
 
   defineTool({
     name: "get_inventory_health",
+    keywords: ["stock", "running out", "running low", "low", "finish", "khatam", "khatm", "reorder", "order", "mangwana", "mangana", "dead", "slow", "oversold", "negative", "स्टॉक", "ख़त्म", "खत्म", "कम", "मंगवा", "मंगा", "भर", "बच"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:
@@ -318,6 +331,7 @@ export const CORE_READ_TOOLS = [
 
   defineTool({
     name: "get_daily_closing",
+    keywords: ["today", "closing", "close", "day", "cash", "collected", "din", "aaj", "आज", "बंद", "हिसाब", "दिन", "नगद", "कैश"],
     kind: "read",
     risk: TOOL_RISK.SAFE,
     description:

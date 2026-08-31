@@ -5,6 +5,7 @@ const deferred = readFileSync("src/features/core/sync/deferred-runtime.ts", "utf
 const bootstrap = readFileSync("src/features/core/sync/CloudDataBootstrap.tsx", "utf8");
 const status = readFileSync("src/features/core/sync/useOfflineStatus.ts", "utf8");
 const multiDevice = readFileSync("src/lib/realtime/useMultiDeviceSync.tsx", "utf8");
+const providers = readFileSync("src/app/providers.tsx", "utf8");
 
 describe("deferred sync runtime", () => {
   it("keeps reconciliation code out of the first application bundle", () => {
@@ -16,5 +17,7 @@ describe("deferred sync runtime", () => {
       expect(source).toContain("@/features/core/sync/deferred-runtime");
       expect(source).not.toMatch(/^import .*from "@\/features\/core\/sync\/(?:engine|sync-engine|manual-sync|cloud-hydration)";/m);
     }
+    expect(providers).toContain('import("@/features/core/sync/BackgroundRuntime")');
+    expect(providers).not.toMatch(/^import .*from "@\/features\/core\/sync\/(?:CloudDataBootstrap|BackgroundRuntime)";/m);
   });
 });

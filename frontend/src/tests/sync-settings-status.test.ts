@@ -16,5 +16,6 @@ describe("sync settings status display", () => {
     expect(repairSource).toContain("repairStaleSyncingOutboxEvents");
     expect(repairSource).toContain("status: \"PENDING\"");
     expect(repairSource).toContain("sync_status: \"pending_sync\"");
+    expect(repairSource).toContain("recoverAbandonedSyncing");
   });
 });

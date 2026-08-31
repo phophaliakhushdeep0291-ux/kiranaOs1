@@ -25,7 +25,7 @@ export function AssistantLauncher() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t("assistant.open")}
-        className="fixed bottom-20 right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-[var(--brand)] text-white shadow-lg transition hover:scale-105 lg:bottom-6"
+        className="fixed bottom-[var(--app-mobile-bottom-nav-clearance)] right-4 z-40 grid h-12 w-12 place-items-center rounded-full bg-[var(--brand)] text-white shadow-lg transition hover:scale-105 lg:bottom-6"
       >
         <Sparkles size={20} />
       </button>

@@ -94,6 +94,21 @@ export function defineTool(definition) {
     kind,
     risk,
     target = "server",
+    /**
+     * Words that mean "this tool might be wanted", in every language a shop
+     * actually speaks it: English, Hindi, and the roman Hinglish a shopkeeper
+     * types. Used to decide which tools are worth their weight on a given turn.
+     *
+     * Recall matters far more than precision here. A tool wrongly offered costs
+     * a few hundred tokens; a tool wrongly withheld makes the assistant say it
+     * cannot do something it can, which is worse than being slow. So these lists
+     * are deliberately generous, and a message that matches nothing gets every
+     * tool rather than a guess.
+     *
+     * `always: true` keeps a tool in every turn regardless.
+     */
+    keywords = [],
+    always = false,
     description,
     parameters = { type: "object", properties: {}, additionalProperties: false },
     roles = null,
@@ -123,8 +138,15 @@ export function defineTool(definition) {
   assertRiskMatchesKind(name, kind, risk);
   assertNoTenantParameters(name, parameters);
 
+  if (!Array.isArray(keywords)) throw new Error(`Tool ${name}: keywords must be an array`);
+  if (!always && keywords.length === 0) {
+    throw new Error(`Tool ${name}: needs keywords, or always:true — otherwise routing can never offer it`);
+  }
+
   return Object.freeze({
     name, kind, risk, target, description, parameters, roles, feature, summarize, handler,
+    keywords: Object.freeze(keywords.map((word) => String(word).toLowerCase())),
+    always,
   });
 }
 

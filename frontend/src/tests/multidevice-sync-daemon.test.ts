@@ -3,6 +3,7 @@ import fs from "node:fs";
 
 const daemon = fs.readFileSync("src/lib/realtime/useMultiDeviceSync.tsx", "utf8");
 const providers = fs.readFileSync("src/app/providers.tsx", "utf8");
+const background = fs.readFileSync("src/features/core/sync/BackgroundRuntime.tsx", "utf8");
 
 describe("multi-device sync daemon", () => {
   it("runs a controlled sync loop for visible devices", () => {
@@ -25,6 +26,7 @@ describe("multi-device sync daemon", () => {
   });
 
   it("is wired into app providers", () => {
-    expect(providers).toContain("useMultiDeviceSync");
+    expect(background).toContain("useMultiDeviceSync");
+    expect(providers).toContain("BackgroundRuntime");
   });
 });

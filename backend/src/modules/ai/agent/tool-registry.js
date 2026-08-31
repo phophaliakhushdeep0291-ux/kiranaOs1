@@ -67,8 +67,58 @@ export function toolsFor(ctx) {
   return available;
 }
 
-export function providerToolsFor(ctx) {
-  return toolsFor(ctx).map(toProviderTool);
+/**
+ * Normalise a shopkeeper's sentence for matching.
+ *
+ * Devanagari has no case and its own punctuation, and roman Hinglish arrives
+ * with whatever the keyboard produced, so everything is lowercased and stripped
+ * to spaces. Substring matching then works for both scripts without needing
+ * word boundaries that Devanagari does not have.
+ */
+function normalise(text) {
+  // \p{M} is load-bearing. Devanagari vowel signs are combining marks, not
+  // letters, so stripping to \p{L}\p{N} alone turns बिल into "ब ल" and every
+  // Hindi keyword stops matching. The failure is silent — routing just falls
+  // back to the full set — so it costs tokens rather than correctness, which is
+  // exactly the kind of bug that survives for months.
+  return ` ${String(text ?? "").toLowerCase().replace(/[^\p{L}\p{N}\p{M}]+/gu, " ").trim()} `;
+}
+
+/**
+ * Which of this caller's tools are worth their weight on this turn.
+ *
+ * Every request re-sends every tool definition, and fourteen of them is roughly
+ * 1,850 tokens before the shopkeeper has said anything. On a free provider tier
+ * that is the difference between a counter that answers and one that is rate
+ * limited mid-shift.
+ *
+ * The bias is deliberately toward offering too much rather than too little. A
+ * tool wrongly included costs a few hundred tokens; a tool wrongly withheld
+ * makes the assistant claim it cannot do something it can, and the shopkeeper
+ * has no way to tell the difference from a real limitation. So:
+ *
+ *   - a message matching nothing gets EVERY tool, because no signal is not the
+ *     same as a signal to narrow;
+ *   - `always` tools are in every turn, since resolving a product or a customer
+ *     is the first step of most things;
+ *   - and the caller keeps the full set to retry with, so a bad route is
+ *     recoverable rather than a dead end.
+ */
+export function routeTools(available, message) {
+  const haystack = normalise(message);
+  if (haystack.trim().length === 0) return available;
+
+  const matched = available.filter((tool) => tool.always || tool.keywords.some((word) => haystack.includes(word)));
+  const routed = matched.filter((tool) => !tool.always);
+
+  // Nothing in the sentence pointed anywhere. Narrowing here would be guessing.
+  if (routed.length === 0) return available;
+  return matched;
+}
+
+export function providerToolsFor(ctx, message) {
+  const available = toolsFor(ctx);
+  return routeTools(available, message).map(toProviderTool);
 }
 
 /** Test and diagnostic surface. Not used on a request path. */

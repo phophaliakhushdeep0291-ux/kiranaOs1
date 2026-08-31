@@ -341,6 +341,7 @@ import {
   retryFailedSyncOperations,
   runSyncCycle,
 } from "@/features/core/sync/engine";
+import { repairResolvedSyncStatusNoise } from "@/features/core/sync/sync-status-repair";
 
 const mockedSyncPush = vi.mocked(syncPushMock);
 
@@ -914,6 +915,30 @@ describe("sync engine reliability", () => {
         clientEventId: "op_after_reload",
         status: "SYNCED",
         idempotency_key: "idem-after-reload",
+      }),
+    );
+  });
+
+  it("immediately recovers a SYNCING row abandoned by a previous document", async () => {
+    seedOutbox({
+      status: "SYNCING",
+      sync_status: "syncing",
+      // Deliberately fresh: the ordinary two-minute stale sweep must not be what
+      // makes this pass. Owning the cross-tab lock proves the old document is gone.
+      last_attempt_at: new Date().toISOString(),
+    });
+
+    const repaired = await repairResolvedSyncStatusNoise({
+      recoverAbandonedSyncing: true,
+    });
+
+    expect(repaired).toBeGreaterThan(0);
+    expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({
+        status: "PENDING",
+        sync_status: "pending_sync",
+        error_message: null,
+        next_retry_at: null,
       }),
     );
   });

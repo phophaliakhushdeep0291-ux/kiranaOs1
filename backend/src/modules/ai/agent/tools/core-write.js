@@ -19,6 +19,14 @@ import { defineTool, TOOL_RISK } from "../tool-contract.js";
 import { createCustomer, recordUdharPayment } from "../../../customers/customers.service.js";
 import { updateProduct, getProduct, listProducts } from "../../../products/products.service.js";
 import { correctStock } from "../../../inventory/inventory.service.js";
+import { AppError } from "../../../../shared/errors/index.js";
+import {
+  baseUnitFor,
+  isKnownPackUnit,
+  knownPackUnits,
+  normalisePackUnit,
+  sellingUnitConversion,
+} from "../../../products/pack-units.js";
 
 /** Rupee formatting for a confirmation line the shopkeeper reads aloud. */
 function rs(paiseOrRupees) {
@@ -76,9 +84,141 @@ async function resolveBillItem(shopId, { query, quantity, unit }) {
   };
 }
 
+/** A stored selling unit, carried back verbatim so nothing about it is lost. */
+function carryUnit(unit) {
+  return {
+    id: unit.id,
+    name: unit.name,
+    unitType: unit.unitType,
+    unitCode: unit.unitCode,
+    packSizeValue: unit.packSizeValue,
+    packSizeUnit: unit.packSizeUnit,
+    conversionToBase: unit.conversionToBase,
+    barcode: unit.barcode,
+    sku: unit.sku,
+    defaultPrice: unit.defaultPrice,
+    minimumPrice: unit.minimumPrice,
+    maximumPrice: unit.maximumPrice,
+    costPrice: unit.costPrice,
+    onHandQty: unit.onHandQty,
+    lowStockThreshold: unit.lowStockThreshold,
+    reorderLevel: unit.reorderLevel,
+    variantValue1: unit.variantValue1,
+    variantValue2: unit.variantValue2,
+    isDefault: unit.isDefault,
+    isActive: unit.isActive,
+  };
+}
+
 export const CORE_WRITE_TOOLS = [
   defineTool({
+    name: "set_pack_size",
+    keywords: [
+      "packet", "pack", "size", "pouch", "bottle", "box", "sachet", "tin",
+      "500", "250", "100", "1kg", "half kg", "loose",
+      "पैकेट", "पैक", "साइज", "साइज़", "पाउच", "डिब्बा", "बोतल", "खुला",
+    ],
+    kind: "write",
+    risk: TOOL_RISK.OWNER_PIN,
+    description:
+      "Add a new pack size to a product, or change the price of a pack size it already sells — a 500 gram packet, a 1 litre bottle. Read the product first so the proposal states what it already sells. Use the exact measure the shopkeeper said.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        productId: { type: "string", description: "Product id from search_products." },
+        packSize: { type: "number", exclusiveMinimum: 0, description: "How much is in one pack, e.g. 500." },
+        packUnit: {
+          type: "string",
+          description: "The measure of the pack size, exactly as the shopkeeper said it: gram, kg, ml, litre, piece, dozen. Do not convert it yourself.",
+        },
+        price: { type: "number", minimum: 0, description: "Selling price for ONE pack, in rupees." },
+        packType: {
+          type: "string",
+          enum: ["packet", "pouch", "box", "bottle", "jar", "can", "sachet", "piece"],
+          description: "What the pack is. Defaults to packet.",
+        },
+      },
+      required: ["productId", "packSize", "packUnit", "price"],
+    },
+    summarize: ({ productId, packSize, packUnit, price, packType }, ctx) =>
+      `Sell ${ctx.labelFor?.(productId) ?? "this product"} in a ${packSize} ${packUnit} ${packType ?? "packet"} at ${rs(price)}`,
+    handler: async ({ productId, packSize, packUnit, price, packType }, ctx) => {
+      const product = await getProduct(ctx.shopId, productId);
+      if (!product) throw new AppError("That product was not found", 404, "PRODUCT_NOT_FOUND");
+
+      // The conversion falls back to a factor of 1 on a measure it does not
+      // know, which for free text is how "500 gm" becomes a 500-PIECE pack that
+      // takes 500 off the shelf per sale. So an unknown measure is refused
+      // rather than guessed, and the refusal says what is accepted.
+      const unit = normalisePackUnit(packUnit);
+      if (!isKnownPackUnit(unit)) {
+        throw new AppError(
+          `"${packUnit}" is not a pack measure this shop can price. Use one of: ${knownPackUnits().join(", ")}.`,
+          400,
+          "PACK_UNIT_UNKNOWN",
+        );
+      }
+
+      // A pack must be counted in the same measure the product's stock is. A
+      // gram pack on a product counted in pieces would depress stock by 500 per
+      // sale and read as a plausible number the whole way down.
+      const productBase = baseUnitFor(product.baseUnit ?? "piece");
+      const packBase = baseUnitFor(unit);
+      if (productBase !== packBase) {
+        throw new AppError(
+          `This product's stock is counted in ${product.baseUnit ?? "piece"}, so it cannot be sold in a ${packUnit} pack.`,
+          400,
+          "PACK_UNIT_MISMATCH",
+        );
+      }
+
+      const conversionToBase = sellingUnitConversion(packSize, unit);
+      if (!(conversionToBase > 0)) throw new AppError("That pack size works out to nothing", 400, "PACK_SIZE_INVALID");
+
+      // writeSellingUnits deactivates every unit NOT in the list it is given, so
+      // the existing ones are carried back untouched. Sending only the new pack
+      // would quietly retire every size the shop already sells.
+      const existing = Array.isArray(product.sellingUnits) ? product.sellingUnits : [];
+      const type = packType ?? "packet";
+      const matches = (row) => String(row.unitType).toLowerCase() === type
+        && Number(row.packSizeValue) === Number(packSize)
+        && normalisePackUnit(row.packSizeUnit) === unit;
+
+      const updating = existing.find(matches) ?? null;
+      const units = existing.map((row) => (matches(row)
+        ? { ...carryUnit(row), defaultPrice: price, conversionToBase, isActive: true }
+        : carryUnit(row)));
+
+      if (!updating) {
+        units.push({
+          name: `${type} ${packSize} ${unit}`,
+          unitType: type,
+          packSizeValue: packSize,
+          packSizeUnit: unit,
+          conversionToBase,
+          defaultPrice: price,
+          // A new pack never seizes default: the till's existing default is what
+          // the counter reaches for, and moving it is a separate decision.
+          isDefault: false,
+          isActive: true,
+        });
+      }
+
+      const saved = await updateProduct(ctx.shopId, productId, { sellingUnits: units }, { actor: actorOf(ctx) });
+      return {
+        productId,
+        name: saved?.name ?? product.name,
+        action: updating ? "updated" : "added",
+        pack: { size: packSize, unit, type, price, conversionToBase },
+        packsNowSold: (saved?.sellingUnits ?? []).filter((row) => row.isActive !== false).length,
+      };
+    },
+  }),
+
+  defineTool({
     name: "add_items_to_bill",
+    keywords: ["bill", "cart", "add", "put", "daal", "dal do", "dalo", "jod", "chahiye", "le lo", "बिल", "जोड़", "डाल", "चाहिए", "लगा"],
     kind: "write",
     // The cart is React state on the till, persisted offline, because a shop
     // bills through a power cut. So this resolves and prices here, where the
@@ -135,6 +275,7 @@ export const CORE_WRITE_TOOLS = [
 
   defineTool({
     name: "create_customer",
+    keywords: ["add customer", "new customer", "customer add", "register", "naya grahak", "grahak", "customer", "ग्राहक", "जोड़", "नया"],
     kind: "write",
     risk: TOOL_RISK.CONFIRM,
     description:
@@ -161,6 +302,7 @@ export const CORE_WRITE_TOOLS = [
 
   defineTool({
     name: "record_udhar_payment",
+    keywords: ["paid", "payment", "repaid", "received", "settle", "chukaya", "diya", "jama", "भुगतान", "चुका", "दिया", "जमा", "वापस"],
     kind: "write",
     risk: TOOL_RISK.CONFIRM,
     description:
@@ -193,6 +335,7 @@ export const CORE_WRITE_TOOLS = [
 
   defineTool({
     name: "update_product_price",
+    keywords: ["price", "rate", "cost", "charge", "mrp", "daam", "rate kar", "भाव", "रेट", "दाम", "कीमत", "बदल"],
     kind: "write",
     risk: TOOL_RISK.OWNER_PIN,
     description:
@@ -227,6 +370,7 @@ export const CORE_WRITE_TOOLS = [
 
   defineTool({
     name: "correct_stock",
+    keywords: ["count", "counted", "correct", "correction", "adjust", "stock set", "ginti", "स्टॉक", "गिनती", "सुधार", "ठीक", "सही"],
     kind: "write",
     risk: TOOL_RISK.OWNER_PIN,
     description:

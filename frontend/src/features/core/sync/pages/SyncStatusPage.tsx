@@ -1402,7 +1402,7 @@ export default function SyncStatusPage() {
               {snapshot.isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
               {t("sync.action.retryFailed")}
             </Button>
-            <Button onClick={() => void handleForceSync()} disabled={snapshot.isSyncing}>
+            <Button data-testid="button-force-sync" onClick={() => void handleForceSync()} disabled={snapshot.isSyncing}>
               {snapshot.isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
               {t("sync.action.forceSync")}
             </Button>

@@ -198,7 +198,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/30 p-0 sm:p-4" role="dialog" aria-modal="true" aria-label={t("assistant.title")}>
-      <div className="flex h-full w-full flex-col rounded-none bg-white shadow-2xl sm:h-[min(680px,90vh)] sm:w-[min(440px,95vw)] sm:rounded-2xl">
+      <div className="flex h-[100dvh] w-full flex-col rounded-none bg-white shadow-2xl sm:h-[min(680px,90vh)] sm:w-[min(440px,95vw)] sm:rounded-2xl">
         <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--brand-softer)] text-[var(--brand)]">
             <Sparkles size={18} />
@@ -373,7 +373,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
 
         <form
           onSubmit={(event) => { event.preventDefault(); ask(draft); }}
-          className="flex items-center gap-2 border-t border-slate-200 px-3 py-3"
+          className="flex items-center gap-2 border-t border-slate-200 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
         >
           <button
             type="button"
