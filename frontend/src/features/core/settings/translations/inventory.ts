@@ -549,6 +549,8 @@ export const inventoryEn = {
   "inventory.status.acrossCatalogue": "Across catalogue",
   "inventory.movement.tryAgain": "Try again.",
   "inventory.lots.search": "Search product, batch, or branch",
+  "inventory.lots.offlineReadOnly": "Offline · showing the last saved batch and expiry data",
+  "inventory.lots.offlineReadOnlyHelp": "Cached batches remain available for shelf checks. Reconnect before quarantine, recall, or release so every counter receives the control immediately.",
   "inventory.lots.saleabilityHelp": "This changes saleability across every counter in the selected branch.",
   "inventory.lots.confirmControl": "Confirm batch control",
   "inventory.register.itemsTouched": "Items Touched",

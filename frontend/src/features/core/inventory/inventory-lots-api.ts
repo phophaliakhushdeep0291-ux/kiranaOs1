@@ -1,4 +1,5 @@
-import { apiRequest, buildQuery } from "@/lib/api/http";
+import { ApiClientError, apiRequest, buildQuery, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
+import { instantCacheUpdatedAt, readIndexedRecentCache, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 
 export interface InventoryLot {
   id: string;
@@ -51,7 +52,46 @@ export interface ExpiryAlerts {
   batches: ExpiringBatch[];
 }
 
-export const listInventoryLots = (params: { status?: string; expiringWithinDays?: number } = {}) => apiRequest<InventoryLot[]>(`/inventory-lots${buildQuery({ status: params.status ?? "all", expiringWithinDays: params.expiringWithinDays, limit: 500 })}`);
-export const getExpiryAlerts = (params: { criticalDays?: number; warningDays?: number } = {}) => apiRequest<ExpiryAlerts>(`/inventory-lots/expiry-alerts${buildQuery({ criticalDays: params.criticalDays, warningDays: params.warningDays })}`);
+export const INVENTORY_LOT_CACHE_KEYS = {
+  list: (status = "all", expiringWithinDays?: number) => `inventory-lots:list:v1:${status}:${expiringWithinDays ?? "all"}`,
+  alerts: "inventory-lots:expiry-alerts:v1",
+} as const;
+
+async function readCachedLotResource<T>(path: string, cacheKey: string): Promise<T> {
+  if (!isBrowserOnline()) {
+    const cached = await readIndexedRecentCache<T | undefined>(cacheKey, undefined);
+    if (cached !== undefined) return cached;
+    throw new ApiClientError("Batch and expiry data has not been cached on this device yet.", 0, { code: "INVENTORY_LOT_CACHE_MISSING" });
+  }
+  try {
+    const current = await apiRequest<T>(path, { background: true });
+    writeInstantCache(cacheKey, current);
+    return current;
+  } catch (error) {
+    if (!isRecoverableNetworkError(error)) throw error;
+    const cached = await readIndexedRecentCache<T | undefined>(cacheKey, undefined);
+    if (cached !== undefined) return cached;
+    throw error;
+  }
+}
+
+export function readInventoryLotMemoryCache<T>(cacheKey: string): T | undefined {
+  return readInstantCache<T | undefined>(cacheKey, undefined);
+}
+
+export function inventoryLotCacheUpdatedAt(cacheKey: string) {
+  return instantCacheUpdatedAt(cacheKey);
+}
+
+export function cacheInventoryLotResource<T>(cacheKey: string, value: T): T {
+  writeInstantCache(cacheKey, value);
+  return value;
+}
+
+export const listInventoryLots = (params: { status?: string; expiringWithinDays?: number } = {}) => {
+  const status = params.status ?? "all";
+  return readCachedLotResource<InventoryLot[]>(`/inventory-lots${buildQuery({ status, expiringWithinDays: params.expiringWithinDays, limit: 500 })}`, INVENTORY_LOT_CACHE_KEYS.list(status, params.expiringWithinDays));
+};
+export const getExpiryAlerts = (params: { criticalDays?: number; warningDays?: number } = {}) => readCachedLotResource<ExpiryAlerts>(`/inventory-lots/expiry-alerts${buildQuery({ criticalDays: params.criticalDays, warningDays: params.warningDays })}`, INVENTORY_LOT_CACHE_KEYS.alerts);
 export const listSellableBatches = (productId: string) => apiRequest<SellableBatch[]>(`/inventory-lots/sellable/${productId}`);
 export const changeInventoryLotStatus = (id: string, status: "active" | "quarantined" | "recalled", note: string, ownerPin: string) => apiRequest<InventoryLot>(`/inventory-lots/${id}/status`, { method: "POST", ownerPin, body: JSON.stringify({ status, note }) });

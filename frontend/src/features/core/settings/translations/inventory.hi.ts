@@ -515,6 +515,8 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.status.acrossCatalogue": "पूरी सूची में",
   "inventory.movement.tryAgain": "दोबारा कोशिश करें।",
   "inventory.lots.search": "सामान, बैच या ब्रांच खोजें",
+  "inventory.lots.offlineReadOnly": "ऑफलाइन · पिछला सेव किया गया बैच और एक्सपायरी डेटा दिख रहा है",
+  "inventory.lots.offlineReadOnlyHelp": "शेल्फ जांच के लिए सेव किए बैच उपलब्ध हैं। क्वारंटीन, रिकॉल या रिलीज़ से पहले इंटरनेट जोड़ें ताकि हर काउंटर पर नियंत्रण तुरंत लागू हो।",
   "inventory.lots.saleabilityHelp": "इससे चुनी हुई ब्रांच के हर काउंटर पर यह बैच बिकने लायक है या नहीं, यह बदल जाएगा।",
   "inventory.lots.confirmControl": "बैच नियंत्रण पक्का करें",
   "inventory.register.itemsTouched": "जिन सामानों में बदलाव हुआ",
