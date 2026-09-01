@@ -1,4 +1,7 @@
-CREATE TABLE "StockTransferLotAllocation" (
+-- @replay-safe: the table and indexes are guarded, while each foreign key is
+-- added inside a duplicate-object handler because PostgreSQL has no
+-- ADD CONSTRAINT IF NOT EXISTS.
+CREATE TABLE IF NOT EXISTS "StockTransferLotAllocation" (
     "id" TEXT NOT NULL,
     "transferItemId" TEXT NOT NULL,
     "sourceInventoryLotId" TEXT NOT NULL,
@@ -19,19 +22,29 @@ CREATE TABLE "StockTransferLotAllocation" (
     CONSTRAINT "StockTransferLotAllocation_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "StockTransferLotAllocation_transferItemId_sourceInventoryLotId_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "StockTransferLotAllocation_transferItemId_sourceInventoryLotId_key"
 ON "StockTransferLotAllocation"("transferItemId", "sourceInventoryLotId");
 
-CREATE INDEX "StockTransferLotAllocation_sourceInventoryLotId_idx"
+CREATE INDEX IF NOT EXISTS "StockTransferLotAllocation_sourceInventoryLotId_idx"
 ON "StockTransferLotAllocation"("sourceInventoryLotId");
 
-CREATE INDEX "StockTransferLotAllocation_transferItemId_expiresOn_idx"
+CREATE INDEX IF NOT EXISTS "StockTransferLotAllocation_transferItemId_expiresOn_idx"
 ON "StockTransferLotAllocation"("transferItemId", "expiresOn");
 
-ALTER TABLE "StockTransferLotAllocation"
-ADD CONSTRAINT "StockTransferLotAllocation_transferItemId_fkey"
-FOREIGN KEY ("transferItemId") REFERENCES "StockTransferItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    ALTER TABLE "StockTransferLotAllocation"
+    ADD CONSTRAINT "StockTransferLotAllocation_transferItemId_fkey"
+    FOREIGN KEY ("transferItemId") REFERENCES "StockTransferItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
-ALTER TABLE "StockTransferLotAllocation"
-ADD CONSTRAINT "StockTransferLotAllocation_sourceInventoryLotId_fkey"
-FOREIGN KEY ("sourceInventoryLotId") REFERENCES "InventoryLot"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+    ALTER TABLE "StockTransferLotAllocation"
+    ADD CONSTRAINT "StockTransferLotAllocation_sourceInventoryLotId_fkey"
+    FOREIGN KEY ("sourceInventoryLotId") REFERENCES "InventoryLot"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;

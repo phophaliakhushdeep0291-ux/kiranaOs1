@@ -259,6 +259,7 @@ export async function resetDatabase(db) {
     db.pricingDecisionEvent.deleteMany(),
     db.billItemAddon.deleteMany(),
     db.billItemLotAllocation.deleteMany(),
+    db.stockTransferLotAllocation.deleteMany(),
     db.inventoryLot.deleteMany(),
     db.purchaseReturnItem.deleteMany(),
     db.purchaseReturn.deleteMany(),
