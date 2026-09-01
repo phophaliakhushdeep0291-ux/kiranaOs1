@@ -114,6 +114,8 @@ export const inventoryEn = {
   "inventory.counts.emptyHelp": "Start a count to reconcile this branch",
   "inventory.counts.snapshotHelp": "A frozen snapshot keeps every variance explainable.",
   "inventory.counts.blind": "Blind",
+  "inventory.counts.offlineReadOnly": "Offline · showing the last saved stock count",
+  "inventory.counts.offlineReadOnlyHelp": "You can review cached sessions, but starting, entering quantities, submitting, applying, or cancelling requires a live backend so the count cannot diverge across devices.",
   "inventory.counts.apply": "Apply inventory",
   "inventory.counts.expected": "Expected",
   "inventory.counts.counted": "Counted",

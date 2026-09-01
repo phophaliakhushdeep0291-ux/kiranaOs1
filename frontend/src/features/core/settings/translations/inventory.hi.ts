@@ -105,6 +105,8 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.counts.emptyHelp": "इस ब्रांच का मिलान करने के लिए गिनती शुरू करें",
   "inventory.counts.snapshotHelp": "शुरू में लिया गया स्नैपशॉट हर अंतर को समझाने लायक रखता है।",
   "inventory.counts.blind": "बिना देखे",
+  "inventory.counts.offlineReadOnly": "ऑफलाइन · पिछली सेव की गई स्टॉक गिनती दिखाई जा रही है",
+  "inventory.counts.offlineReadOnlyHelp": "सेव किए गए सत्र देख सकते हैं, लेकिन अलग-अलग डिवाइस की गिनती बिगड़ने से बचाने के लिए नई गिनती, मात्रा भरना, जमा करना, लागू करना या रद्द करना लाइव बैकएंड पर ही होगा।",
   "inventory.counts.apply": "स्टॉक में लागू करें",
   "inventory.counts.expected": "अपेक्षित",
   "inventory.counts.counted": "गिना गया",
