@@ -154,6 +154,11 @@ export type StockTransfer = $Result.DefaultSelection<Prisma.$StockTransferPayloa
  */
 export type StockTransferItem = $Result.DefaultSelection<Prisma.$StockTransferItemPayload>
 /**
+ * Model StockTransferLotAllocation
+ * 
+ */
+export type StockTransferLotAllocation = $Result.DefaultSelection<Prisma.$StockTransferLotAllocationPayload>
+/**
  * Model TransferDocumentCounter
  * 
  */
@@ -1125,6 +1130,16 @@ export class PrismaClient<
     * ```
     */
   get stockTransferItem(): Prisma.StockTransferItemDelegate<ExtArgs>;
+
+  /**
+   * `prisma.stockTransferLotAllocation`: Exposes CRUD operations for the **StockTransferLotAllocation** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more StockTransferLotAllocations
+    * const stockTransferLotAllocations = await prisma.stockTransferLotAllocation.findMany()
+    * ```
+    */
+  get stockTransferLotAllocation(): Prisma.StockTransferLotAllocationDelegate<ExtArgs>;
 
   /**
    * `prisma.transferDocumentCounter`: Exposes CRUD operations for the **TransferDocumentCounter** model.
@@ -2760,6 +2775,7 @@ export namespace Prisma {
     GiftCardTransaction: 'GiftCardTransaction',
     StockTransfer: 'StockTransfer',
     StockTransferItem: 'StockTransferItem',
+    StockTransferLotAllocation: 'StockTransferLotAllocation',
     TransferDocumentCounter: 'TransferDocumentCounter',
     LoyaltyProgram: 'LoyaltyProgram',
     LoyaltyAccount: 'LoyaltyAccount',
@@ -2889,7 +2905,7 @@ export namespace Prisma {
 
   export type TypeMap<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     meta: {
-      modelProps: 'shop' | 'shopMaintenanceLock' | 'pricingRule' | 'productSellingUnit' | 'pricingDecisionEvent' | 'customerOrder' | 'restaurantGuestRequest' | 'billCounter' | 'user' | 'authToken' | 'session' | 'product' | 'customer' | 'bill' | 'billItem' | 'payment' | 'retailPaymentIntent' | 'paymentProviderConnection' | 'storeLocation' | 'locationStock' | 'storageBin' | 'binPlacement' | 'stockCountSession' | 'stockCountLine' | 'giftCard' | 'giftCardTransaction' | 'stockTransfer' | 'stockTransferItem' | 'transferDocumentCounter' | 'loyaltyProgram' | 'loyaltyAccount' | 'loyaltyTransaction' | 'complianceDocument' | 'stockLedger' | 'udharLedger' | 'tallyPost' | 'supplier' | 'expense' | 'offer' | 'purchaseHistory' | 'purchaseOrder' | 'purchaseOrderItem' | 'purchaseReceipt' | 'purchaseReceiptItem' | 'purchaseReturn' | 'purchaseReturnItem' | 'inventoryLot' | 'manufacturingBom' | 'manufacturingBomItem' | 'productionRun' | 'productionConsumption' | 'productionOutput' | 'tradeOrder' | 'tradeOrderItem' | 'tradeOrderAllocation' | 'tradeDispatch' | 'billItemLotAllocation' | 'userLocationAccess' | 'aiActionLog' | 'auditLog' | 'dailyClosingSnapshot' | 'reportExportJob' | 'backupArtifact' | 'reminderTemplate' | 'reminderLog' | 'reminderDeliveryEvent' | 'offlineSyncEvent' | 'syncConflict' | 'syncCommand' | 'changeLog' | 'financialLedger' | 'chartOfAccount' | 'journalEntry' | 'journalLine' | 'accountingPeriod' | 'accountingDocument' | 'accountingDocumentEvent' | 'bankStatementImport' | 'bankStatementTransaction' | 'bankReconciliationAllocation' | 'bankReconciliationEvent' | 'syncIdMapping' | 'errorGroup' | 'errorEvent' | 'supportRequest' | 'deviceHealthSnapshot' | 'supportSession' | 'deviceCommand' | 'plan' | 'subscription' | 'onboardingPurchase' | 'paymentTransaction' | 'paymentProviderEvent' | 'integrationApiKey' | 'webhookEndpoint' | 'webhookDelivery' | 'device' | 'deviceReplacementChallenge' | 'deviceLicense' | 'auditRule' | 'auditRun' | 'auditEvaluation' | 'auditFinding' | 'auditFindingRule' | 'auditEvidenceRequirement' | 'auditEvidence' | 'auditFindingStatusHistory' | 'auditReview' | 'auditCase' | 'auditCaseFinding' | 'auditBaseline' | 'activityEvent' | 'activityAggregate' | 'rentalBooking' | 'rentalBookingItem' | 'prescription' | 'prescriptionItem' | 'productUnit' | 'partFitment' | 'partCrossReference' | 'footwearSizeProfile' | 'bookList' | 'bookListItem' | 'furnitureOrder' | 'furnitureOrderItem' | 'furnitureOrderPayment' | 'testerUnit' | 'restaurantTable' | 'tableReservation' | 'staffShift' | 'kioskTerminal' | 'dishRecipeComponent' | 'kitchenTicket' | 'menuAddonGroup' | 'menuAddonOption' | 'productAddonGroup' | 'billItemAddon' | 'channelSettlementImport' | 'channelSettlementRow' | 'channelSettlementEvent' | 'menuComboComponent'
+      modelProps: 'shop' | 'shopMaintenanceLock' | 'pricingRule' | 'productSellingUnit' | 'pricingDecisionEvent' | 'customerOrder' | 'restaurantGuestRequest' | 'billCounter' | 'user' | 'authToken' | 'session' | 'product' | 'customer' | 'bill' | 'billItem' | 'payment' | 'retailPaymentIntent' | 'paymentProviderConnection' | 'storeLocation' | 'locationStock' | 'storageBin' | 'binPlacement' | 'stockCountSession' | 'stockCountLine' | 'giftCard' | 'giftCardTransaction' | 'stockTransfer' | 'stockTransferItem' | 'stockTransferLotAllocation' | 'transferDocumentCounter' | 'loyaltyProgram' | 'loyaltyAccount' | 'loyaltyTransaction' | 'complianceDocument' | 'stockLedger' | 'udharLedger' | 'tallyPost' | 'supplier' | 'expense' | 'offer' | 'purchaseHistory' | 'purchaseOrder' | 'purchaseOrderItem' | 'purchaseReceipt' | 'purchaseReceiptItem' | 'purchaseReturn' | 'purchaseReturnItem' | 'inventoryLot' | 'manufacturingBom' | 'manufacturingBomItem' | 'productionRun' | 'productionConsumption' | 'productionOutput' | 'tradeOrder' | 'tradeOrderItem' | 'tradeOrderAllocation' | 'tradeDispatch' | 'billItemLotAllocation' | 'userLocationAccess' | 'aiActionLog' | 'auditLog' | 'dailyClosingSnapshot' | 'reportExportJob' | 'backupArtifact' | 'reminderTemplate' | 'reminderLog' | 'reminderDeliveryEvent' | 'offlineSyncEvent' | 'syncConflict' | 'syncCommand' | 'changeLog' | 'financialLedger' | 'chartOfAccount' | 'journalEntry' | 'journalLine' | 'accountingPeriod' | 'accountingDocument' | 'accountingDocumentEvent' | 'bankStatementImport' | 'bankStatementTransaction' | 'bankReconciliationAllocation' | 'bankReconciliationEvent' | 'syncIdMapping' | 'errorGroup' | 'errorEvent' | 'supportRequest' | 'deviceHealthSnapshot' | 'supportSession' | 'deviceCommand' | 'plan' | 'subscription' | 'onboardingPurchase' | 'paymentTransaction' | 'paymentProviderEvent' | 'integrationApiKey' | 'webhookEndpoint' | 'webhookDelivery' | 'device' | 'deviceReplacementChallenge' | 'deviceLicense' | 'auditRule' | 'auditRun' | 'auditEvaluation' | 'auditFinding' | 'auditFindingRule' | 'auditEvidenceRequirement' | 'auditEvidence' | 'auditFindingStatusHistory' | 'auditReview' | 'auditCase' | 'auditCaseFinding' | 'auditBaseline' | 'activityEvent' | 'activityAggregate' | 'rentalBooking' | 'rentalBookingItem' | 'prescription' | 'prescriptionItem' | 'productUnit' | 'partFitment' | 'partCrossReference' | 'footwearSizeProfile' | 'bookList' | 'bookListItem' | 'furnitureOrder' | 'furnitureOrderItem' | 'furnitureOrderPayment' | 'testerUnit' | 'restaurantTable' | 'tableReservation' | 'staffShift' | 'kioskTerminal' | 'dishRecipeComponent' | 'kitchenTicket' | 'menuAddonGroup' | 'menuAddonOption' | 'productAddonGroup' | 'billItemAddon' | 'channelSettlementImport' | 'channelSettlementRow' | 'channelSettlementEvent' | 'menuComboComponent'
       txIsolationLevel: Prisma.TransactionIsolationLevel
     },
     model: {
@@ -4850,6 +4866,76 @@ export namespace Prisma {
           count: {
             args: Prisma.StockTransferItemCountArgs<ExtArgs>,
             result: $Utils.Optional<StockTransferItemCountAggregateOutputType> | number
+          }
+        }
+      }
+      StockTransferLotAllocation: {
+        payload: Prisma.$StockTransferLotAllocationPayload<ExtArgs>
+        fields: Prisma.StockTransferLotAllocationFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.StockTransferLotAllocationFindUniqueArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StockTransferLotAllocationPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.StockTransferLotAllocationFindUniqueOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StockTransferLotAllocationPayload>
+          }
+          findFirst: {
+            args: Prisma.StockTransferLotAllocationFindFirstArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StockTransferLotAllocationPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.StockTransferLotAllocationFindFirstOrThrowArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StockTransferLotAllocationPayload>
+          }
+          findMany: {
+            args: Prisma.StockTransferLotAllocationFindManyArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StockTransferLotAllocationPayload>[]
+          }
+          create: {
+            args: Prisma.StockTransferLotAllocationCreateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StockTransferLotAllocationPayload>
+          }
+          createMany: {
+            args: Prisma.StockTransferLotAllocationCreateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.StockTransferLotAllocationCreateManyAndReturnArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StockTransferLotAllocationPayload>[]
+          }
+          delete: {
+            args: Prisma.StockTransferLotAllocationDeleteArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StockTransferLotAllocationPayload>
+          }
+          update: {
+            args: Prisma.StockTransferLotAllocationUpdateArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StockTransferLotAllocationPayload>
+          }
+          deleteMany: {
+            args: Prisma.StockTransferLotAllocationDeleteManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          updateMany: {
+            args: Prisma.StockTransferLotAllocationUpdateManyArgs<ExtArgs>,
+            result: Prisma.BatchPayload
+          }
+          upsert: {
+            args: Prisma.StockTransferLotAllocationUpsertArgs<ExtArgs>,
+            result: $Utils.PayloadToResult<Prisma.$StockTransferLotAllocationPayload>
+          }
+          aggregate: {
+            args: Prisma.StockTransferLotAllocationAggregateArgs<ExtArgs>,
+            result: $Utils.Optional<AggregateStockTransferLotAllocation>
+          }
+          groupBy: {
+            args: Prisma.StockTransferLotAllocationGroupByArgs<ExtArgs>,
+            result: $Utils.Optional<StockTransferLotAllocationGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.StockTransferLotAllocationCountArgs<ExtArgs>,
+            result: $Utils.Optional<StockTransferLotAllocationCountAggregateOutputType> | number
           }
         }
       }
@@ -14839,6 +14925,37 @@ export namespace Prisma {
 
 
   /**
+   * Count Type StockTransferItemCountOutputType
+   */
+
+  export type StockTransferItemCountOutputType = {
+    lotAllocations: number
+  }
+
+  export type StockTransferItemCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    lotAllocations?: boolean | StockTransferItemCountOutputTypeCountLotAllocationsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * StockTransferItemCountOutputType without action
+   */
+  export type StockTransferItemCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferItemCountOutputType
+     */
+    select?: StockTransferItemCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * StockTransferItemCountOutputType without action
+   */
+  export type StockTransferItemCountOutputTypeCountLotAllocationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: StockTransferLotAllocationWhereInput
+  }
+
+
+  /**
    * Count Type LoyaltyAccountCountOutputType
    */
 
@@ -15142,10 +15259,12 @@ export namespace Prisma {
 
   export type InventoryLotCountOutputType = {
     allocations: number
+    transferAllocations: number
   }
 
   export type InventoryLotCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     allocations?: boolean | InventoryLotCountOutputTypeCountAllocationsArgs
+    transferAllocations?: boolean | InventoryLotCountOutputTypeCountTransferAllocationsArgs
   }
 
   // Custom InputTypes
@@ -15164,6 +15283,13 @@ export namespace Prisma {
    */
   export type InventoryLotCountOutputTypeCountAllocationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: BillItemLotAllocationWhereInput
+  }
+
+  /**
+   * InventoryLotCountOutputType without action
+   */
+  export type InventoryLotCountOutputTypeCountTransferAllocationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: StockTransferLotAllocationWhereInput
   }
 
 
@@ -53019,6 +53145,8 @@ export namespace Prisma {
     transfer?: boolean | StockTransferDefaultArgs<ExtArgs>
     product?: boolean | ProductDefaultArgs<ExtArgs>
     sellingUnit?: boolean | StockTransferItem$sellingUnitArgs<ExtArgs>
+    lotAllocations?: boolean | StockTransferItem$lotAllocationsArgs<ExtArgs>
+    _count?: boolean | StockTransferItemCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["stockTransferItem"]>
 
   export type StockTransferItemSelectScalar = {
@@ -53052,6 +53180,8 @@ export namespace Prisma {
     transfer?: boolean | StockTransferDefaultArgs<ExtArgs>
     product?: boolean | ProductDefaultArgs<ExtArgs>
     sellingUnit?: boolean | StockTransferItem$sellingUnitArgs<ExtArgs>
+    lotAllocations?: boolean | StockTransferItem$lotAllocationsArgs<ExtArgs>
+    _count?: boolean | StockTransferItemCountOutputTypeDefaultArgs<ExtArgs>
   }
 
 
@@ -53061,6 +53191,7 @@ export namespace Prisma {
       transfer: Prisma.$StockTransferPayload<ExtArgs>
       product: Prisma.$ProductPayload<ExtArgs>
       sellingUnit: Prisma.$ProductSellingUnitPayload<ExtArgs> | null
+      lotAllocations: Prisma.$StockTransferLotAllocationPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -53483,6 +53614,8 @@ export namespace Prisma {
 
     sellingUnit<T extends StockTransferItem$sellingUnitArgs<ExtArgs> = {}>(args?: Subset<T, StockTransferItem$sellingUnitArgs<ExtArgs>>): Prisma__ProductSellingUnitClient<$Result.GetResult<Prisma.$ProductSellingUnitPayload<ExtArgs>, T, 'findUniqueOrThrow'> | null, null, ExtArgs>;
 
+    lotAllocations<T extends StockTransferItem$lotAllocationsArgs<ExtArgs> = {}>(args?: Subset<T, StockTransferItem$lotAllocationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'findMany'> | Null>;
+
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -53865,6 +53998,26 @@ export namespace Prisma {
   }
 
   /**
+   * StockTransferItem.lotAllocations
+   */
+  export type StockTransferItem$lotAllocationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    where?: StockTransferLotAllocationWhereInput
+    orderBy?: StockTransferLotAllocationOrderByWithRelationInput | StockTransferLotAllocationOrderByWithRelationInput[]
+    cursor?: StockTransferLotAllocationWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: StockTransferLotAllocationScalarFieldEnum | StockTransferLotAllocationScalarFieldEnum[]
+  }
+
+  /**
    * StockTransferItem without action
    */
   export type StockTransferItemDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -53876,6 +54029,1134 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: StockTransferItemInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model StockTransferLotAllocation
+   */
+
+  export type AggregateStockTransferLotAllocation = {
+    _count: StockTransferLotAllocationCountAggregateOutputType | null
+    _avg: StockTransferLotAllocationAvgAggregateOutputType | null
+    _sum: StockTransferLotAllocationSumAggregateOutputType | null
+    _min: StockTransferLotAllocationMinAggregateOutputType | null
+    _max: StockTransferLotAllocationMaxAggregateOutputType | null
+  }
+
+  export type StockTransferLotAllocationAvgAggregateOutputType = {
+    quantityBaseQty: number | null
+    receivedBaseQty: number | null
+    costPerRateUnit: number | null
+    costPerRateUnitPaise: number | null
+    mrp: number | null
+    mrpPaise: number | null
+  }
+
+  export type StockTransferLotAllocationSumAggregateOutputType = {
+    quantityBaseQty: number | null
+    receivedBaseQty: number | null
+    costPerRateUnit: number | null
+    costPerRateUnitPaise: bigint | null
+    mrp: number | null
+    mrpPaise: bigint | null
+  }
+
+  export type StockTransferLotAllocationMinAggregateOutputType = {
+    id: string | null
+    transferItemId: string | null
+    sourceInventoryLotId: string | null
+    sellingUnitId: string | null
+    batchNumber: string | null
+    manufacturedOn: Date | null
+    expiresOn: Date | null
+    quantityBaseQty: number | null
+    receivedBaseQty: number | null
+    costPerRateUnit: number | null
+    costPerRateUnitPaise: bigint | null
+    mrp: number | null
+    mrpPaise: bigint | null
+    sourceStatus: string | null
+    sourceNote: string | null
+    createdAt: Date | null
+  }
+
+  export type StockTransferLotAllocationMaxAggregateOutputType = {
+    id: string | null
+    transferItemId: string | null
+    sourceInventoryLotId: string | null
+    sellingUnitId: string | null
+    batchNumber: string | null
+    manufacturedOn: Date | null
+    expiresOn: Date | null
+    quantityBaseQty: number | null
+    receivedBaseQty: number | null
+    costPerRateUnit: number | null
+    costPerRateUnitPaise: bigint | null
+    mrp: number | null
+    mrpPaise: bigint | null
+    sourceStatus: string | null
+    sourceNote: string | null
+    createdAt: Date | null
+  }
+
+  export type StockTransferLotAllocationCountAggregateOutputType = {
+    id: number
+    transferItemId: number
+    sourceInventoryLotId: number
+    sellingUnitId: number
+    batchNumber: number
+    manufacturedOn: number
+    expiresOn: number
+    quantityBaseQty: number
+    receivedBaseQty: number
+    costPerRateUnit: number
+    costPerRateUnitPaise: number
+    mrp: number
+    mrpPaise: number
+    sourceStatus: number
+    sourceNote: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type StockTransferLotAllocationAvgAggregateInputType = {
+    quantityBaseQty?: true
+    receivedBaseQty?: true
+    costPerRateUnit?: true
+    costPerRateUnitPaise?: true
+    mrp?: true
+    mrpPaise?: true
+  }
+
+  export type StockTransferLotAllocationSumAggregateInputType = {
+    quantityBaseQty?: true
+    receivedBaseQty?: true
+    costPerRateUnit?: true
+    costPerRateUnitPaise?: true
+    mrp?: true
+    mrpPaise?: true
+  }
+
+  export type StockTransferLotAllocationMinAggregateInputType = {
+    id?: true
+    transferItemId?: true
+    sourceInventoryLotId?: true
+    sellingUnitId?: true
+    batchNumber?: true
+    manufacturedOn?: true
+    expiresOn?: true
+    quantityBaseQty?: true
+    receivedBaseQty?: true
+    costPerRateUnit?: true
+    costPerRateUnitPaise?: true
+    mrp?: true
+    mrpPaise?: true
+    sourceStatus?: true
+    sourceNote?: true
+    createdAt?: true
+  }
+
+  export type StockTransferLotAllocationMaxAggregateInputType = {
+    id?: true
+    transferItemId?: true
+    sourceInventoryLotId?: true
+    sellingUnitId?: true
+    batchNumber?: true
+    manufacturedOn?: true
+    expiresOn?: true
+    quantityBaseQty?: true
+    receivedBaseQty?: true
+    costPerRateUnit?: true
+    costPerRateUnitPaise?: true
+    mrp?: true
+    mrpPaise?: true
+    sourceStatus?: true
+    sourceNote?: true
+    createdAt?: true
+  }
+
+  export type StockTransferLotAllocationCountAggregateInputType = {
+    id?: true
+    transferItemId?: true
+    sourceInventoryLotId?: true
+    sellingUnitId?: true
+    batchNumber?: true
+    manufacturedOn?: true
+    expiresOn?: true
+    quantityBaseQty?: true
+    receivedBaseQty?: true
+    costPerRateUnit?: true
+    costPerRateUnitPaise?: true
+    mrp?: true
+    mrpPaise?: true
+    sourceStatus?: true
+    sourceNote?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type StockTransferLotAllocationAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which StockTransferLotAllocation to aggregate.
+     */
+    where?: StockTransferLotAllocationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of StockTransferLotAllocations to fetch.
+     */
+    orderBy?: StockTransferLotAllocationOrderByWithRelationInput | StockTransferLotAllocationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: StockTransferLotAllocationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` StockTransferLotAllocations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` StockTransferLotAllocations.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned StockTransferLotAllocations
+    **/
+    _count?: true | StockTransferLotAllocationCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: StockTransferLotAllocationAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: StockTransferLotAllocationSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: StockTransferLotAllocationMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: StockTransferLotAllocationMaxAggregateInputType
+  }
+
+  export type GetStockTransferLotAllocationAggregateType<T extends StockTransferLotAllocationAggregateArgs> = {
+        [P in keyof T & keyof AggregateStockTransferLotAllocation]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateStockTransferLotAllocation[P]>
+      : GetScalarType<T[P], AggregateStockTransferLotAllocation[P]>
+  }
+
+
+
+
+  export type StockTransferLotAllocationGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: StockTransferLotAllocationWhereInput
+    orderBy?: StockTransferLotAllocationOrderByWithAggregationInput | StockTransferLotAllocationOrderByWithAggregationInput[]
+    by: StockTransferLotAllocationScalarFieldEnum[] | StockTransferLotAllocationScalarFieldEnum
+    having?: StockTransferLotAllocationScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: StockTransferLotAllocationCountAggregateInputType | true
+    _avg?: StockTransferLotAllocationAvgAggregateInputType
+    _sum?: StockTransferLotAllocationSumAggregateInputType
+    _min?: StockTransferLotAllocationMinAggregateInputType
+    _max?: StockTransferLotAllocationMaxAggregateInputType
+  }
+
+  export type StockTransferLotAllocationGroupByOutputType = {
+    id: string
+    transferItemId: string
+    sourceInventoryLotId: string
+    sellingUnitId: string | null
+    batchNumber: string
+    manufacturedOn: Date | null
+    expiresOn: Date
+    quantityBaseQty: number
+    receivedBaseQty: number
+    costPerRateUnit: number
+    costPerRateUnitPaise: bigint | null
+    mrp: number | null
+    mrpPaise: bigint | null
+    sourceStatus: string
+    sourceNote: string | null
+    createdAt: Date
+    _count: StockTransferLotAllocationCountAggregateOutputType | null
+    _avg: StockTransferLotAllocationAvgAggregateOutputType | null
+    _sum: StockTransferLotAllocationSumAggregateOutputType | null
+    _min: StockTransferLotAllocationMinAggregateOutputType | null
+    _max: StockTransferLotAllocationMaxAggregateOutputType | null
+  }
+
+  type GetStockTransferLotAllocationGroupByPayload<T extends StockTransferLotAllocationGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<StockTransferLotAllocationGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof StockTransferLotAllocationGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], StockTransferLotAllocationGroupByOutputType[P]>
+            : GetScalarType<T[P], StockTransferLotAllocationGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type StockTransferLotAllocationSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    transferItemId?: boolean
+    sourceInventoryLotId?: boolean
+    sellingUnitId?: boolean
+    batchNumber?: boolean
+    manufacturedOn?: boolean
+    expiresOn?: boolean
+    quantityBaseQty?: boolean
+    receivedBaseQty?: boolean
+    costPerRateUnit?: boolean
+    costPerRateUnitPaise?: boolean
+    mrp?: boolean
+    mrpPaise?: boolean
+    sourceStatus?: boolean
+    sourceNote?: boolean
+    createdAt?: boolean
+    transferItem?: boolean | StockTransferItemDefaultArgs<ExtArgs>
+    sourceInventoryLot?: boolean | InventoryLotDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["stockTransferLotAllocation"]>
+
+  export type StockTransferLotAllocationSelectScalar = {
+    id?: boolean
+    transferItemId?: boolean
+    sourceInventoryLotId?: boolean
+    sellingUnitId?: boolean
+    batchNumber?: boolean
+    manufacturedOn?: boolean
+    expiresOn?: boolean
+    quantityBaseQty?: boolean
+    receivedBaseQty?: boolean
+    costPerRateUnit?: boolean
+    costPerRateUnitPaise?: boolean
+    mrp?: boolean
+    mrpPaise?: boolean
+    sourceStatus?: boolean
+    sourceNote?: boolean
+    createdAt?: boolean
+  }
+
+
+  export type StockTransferLotAllocationInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    transferItem?: boolean | StockTransferItemDefaultArgs<ExtArgs>
+    sourceInventoryLot?: boolean | InventoryLotDefaultArgs<ExtArgs>
+  }
+
+
+  export type $StockTransferLotAllocationPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "StockTransferLotAllocation"
+    objects: {
+      transferItem: Prisma.$StockTransferItemPayload<ExtArgs>
+      sourceInventoryLot: Prisma.$InventoryLotPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      transferItemId: string
+      sourceInventoryLotId: string
+      sellingUnitId: string | null
+      batchNumber: string
+      manufacturedOn: Date | null
+      expiresOn: Date
+      quantityBaseQty: number
+      receivedBaseQty: number
+      costPerRateUnit: number
+      costPerRateUnitPaise: bigint | null
+      mrp: number | null
+      mrpPaise: bigint | null
+      sourceStatus: string
+      sourceNote: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["stockTransferLotAllocation"]>
+    composites: {}
+  }
+
+
+  type StockTransferLotAllocationGetPayload<S extends boolean | null | undefined | StockTransferLotAllocationDefaultArgs> = $Result.GetResult<Prisma.$StockTransferLotAllocationPayload, S>
+
+  type StockTransferLotAllocationCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = 
+    Omit<StockTransferLotAllocationFindManyArgs, 'select' | 'include' | 'distinct'> & {
+      select?: StockTransferLotAllocationCountAggregateInputType | true
+    }
+
+  export interface StockTransferLotAllocationDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['StockTransferLotAllocation'], meta: { name: 'StockTransferLotAllocation' } }
+    /**
+     * Find zero or one StockTransferLotAllocation that matches the filter.
+     * @param {StockTransferLotAllocationFindUniqueArgs} args - Arguments to find a StockTransferLotAllocation
+     * @example
+     * // Get one StockTransferLotAllocation
+     * const stockTransferLotAllocation = await prisma.stockTransferLotAllocation.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUnique<T extends StockTransferLotAllocationFindUniqueArgs<ExtArgs>>(
+      args: SelectSubset<T, StockTransferLotAllocationFindUniqueArgs<ExtArgs>>
+    ): Prisma__StockTransferLotAllocationClient<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'findUnique'> | null, null, ExtArgs>
+
+    /**
+     * Find one StockTransferLotAllocation that matches the filter or throw an error with `error.code='P2025'` 
+     * if no matches were found.
+     * @param {StockTransferLotAllocationFindUniqueOrThrowArgs} args - Arguments to find a StockTransferLotAllocation
+     * @example
+     * // Get one StockTransferLotAllocation
+     * const stockTransferLotAllocation = await prisma.stockTransferLotAllocation.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findUniqueOrThrow<T extends StockTransferLotAllocationFindUniqueOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, StockTransferLotAllocationFindUniqueOrThrowArgs<ExtArgs>>
+    ): Prisma__StockTransferLotAllocationClient<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'findUniqueOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find the first StockTransferLotAllocation that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StockTransferLotAllocationFindFirstArgs} args - Arguments to find a StockTransferLotAllocation
+     * @example
+     * // Get one StockTransferLotAllocation
+     * const stockTransferLotAllocation = await prisma.stockTransferLotAllocation.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirst<T extends StockTransferLotAllocationFindFirstArgs<ExtArgs>>(
+      args?: SelectSubset<T, StockTransferLotAllocationFindFirstArgs<ExtArgs>>
+    ): Prisma__StockTransferLotAllocationClient<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'findFirst'> | null, null, ExtArgs>
+
+    /**
+     * Find the first StockTransferLotAllocation that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StockTransferLotAllocationFindFirstOrThrowArgs} args - Arguments to find a StockTransferLotAllocation
+     * @example
+     * // Get one StockTransferLotAllocation
+     * const stockTransferLotAllocation = await prisma.stockTransferLotAllocation.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+    **/
+    findFirstOrThrow<T extends StockTransferLotAllocationFindFirstOrThrowArgs<ExtArgs>>(
+      args?: SelectSubset<T, StockTransferLotAllocationFindFirstOrThrowArgs<ExtArgs>>
+    ): Prisma__StockTransferLotAllocationClient<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'findFirstOrThrow'>, never, ExtArgs>
+
+    /**
+     * Find zero or more StockTransferLotAllocations that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StockTransferLotAllocationFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all StockTransferLotAllocations
+     * const stockTransferLotAllocations = await prisma.stockTransferLotAllocation.findMany()
+     * 
+     * // Get first 10 StockTransferLotAllocations
+     * const stockTransferLotAllocations = await prisma.stockTransferLotAllocation.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const stockTransferLotAllocationWithIdOnly = await prisma.stockTransferLotAllocation.findMany({ select: { id: true } })
+     * 
+    **/
+    findMany<T extends StockTransferLotAllocationFindManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, StockTransferLotAllocationFindManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'findMany'>>
+
+    /**
+     * Create a StockTransferLotAllocation.
+     * @param {StockTransferLotAllocationCreateArgs} args - Arguments to create a StockTransferLotAllocation.
+     * @example
+     * // Create one StockTransferLotAllocation
+     * const StockTransferLotAllocation = await prisma.stockTransferLotAllocation.create({
+     *   data: {
+     *     // ... data to create a StockTransferLotAllocation
+     *   }
+     * })
+     * 
+    **/
+    create<T extends StockTransferLotAllocationCreateArgs<ExtArgs>>(
+      args: SelectSubset<T, StockTransferLotAllocationCreateArgs<ExtArgs>>
+    ): Prisma__StockTransferLotAllocationClient<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'create'>, never, ExtArgs>
+
+    /**
+     * Create many StockTransferLotAllocations.
+     * @param {StockTransferLotAllocationCreateManyArgs} args - Arguments to create many StockTransferLotAllocations.
+     * @example
+     * // Create many StockTransferLotAllocations
+     * const stockTransferLotAllocation = await prisma.stockTransferLotAllocation.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+    **/
+    createMany<T extends StockTransferLotAllocationCreateManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, StockTransferLotAllocationCreateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many StockTransferLotAllocations and returns the data saved in the database.
+     * @param {StockTransferLotAllocationCreateManyAndReturnArgs} args - Arguments to create many StockTransferLotAllocations.
+     * @example
+     * // Create many StockTransferLotAllocations
+     * const stockTransferLotAllocation = await prisma.stockTransferLotAllocation.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many StockTransferLotAllocations and only return the `id`
+     * const stockTransferLotAllocationWithIdOnly = await prisma.stockTransferLotAllocation.createManyAndReturn({ 
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+    **/
+    createManyAndReturn<T extends StockTransferLotAllocationCreateManyAndReturnArgs<ExtArgs>>(
+      args?: SelectSubset<T, StockTransferLotAllocationCreateManyAndReturnArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'createManyAndReturn'>>
+
+    /**
+     * Delete a StockTransferLotAllocation.
+     * @param {StockTransferLotAllocationDeleteArgs} args - Arguments to delete one StockTransferLotAllocation.
+     * @example
+     * // Delete one StockTransferLotAllocation
+     * const StockTransferLotAllocation = await prisma.stockTransferLotAllocation.delete({
+     *   where: {
+     *     // ... filter to delete one StockTransferLotAllocation
+     *   }
+     * })
+     * 
+    **/
+    delete<T extends StockTransferLotAllocationDeleteArgs<ExtArgs>>(
+      args: SelectSubset<T, StockTransferLotAllocationDeleteArgs<ExtArgs>>
+    ): Prisma__StockTransferLotAllocationClient<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'delete'>, never, ExtArgs>
+
+    /**
+     * Update one StockTransferLotAllocation.
+     * @param {StockTransferLotAllocationUpdateArgs} args - Arguments to update one StockTransferLotAllocation.
+     * @example
+     * // Update one StockTransferLotAllocation
+     * const stockTransferLotAllocation = await prisma.stockTransferLotAllocation.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    update<T extends StockTransferLotAllocationUpdateArgs<ExtArgs>>(
+      args: SelectSubset<T, StockTransferLotAllocationUpdateArgs<ExtArgs>>
+    ): Prisma__StockTransferLotAllocationClient<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'update'>, never, ExtArgs>
+
+    /**
+     * Delete zero or more StockTransferLotAllocations.
+     * @param {StockTransferLotAllocationDeleteManyArgs} args - Arguments to filter StockTransferLotAllocations to delete.
+     * @example
+     * // Delete a few StockTransferLotAllocations
+     * const { count } = await prisma.stockTransferLotAllocation.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+    **/
+    deleteMany<T extends StockTransferLotAllocationDeleteManyArgs<ExtArgs>>(
+      args?: SelectSubset<T, StockTransferLotAllocationDeleteManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more StockTransferLotAllocations.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StockTransferLotAllocationUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many StockTransferLotAllocations
+     * const stockTransferLotAllocation = await prisma.stockTransferLotAllocation.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+    **/
+    updateMany<T extends StockTransferLotAllocationUpdateManyArgs<ExtArgs>>(
+      args: SelectSubset<T, StockTransferLotAllocationUpdateManyArgs<ExtArgs>>
+    ): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one StockTransferLotAllocation.
+     * @param {StockTransferLotAllocationUpsertArgs} args - Arguments to update or create a StockTransferLotAllocation.
+     * @example
+     * // Update or create a StockTransferLotAllocation
+     * const stockTransferLotAllocation = await prisma.stockTransferLotAllocation.upsert({
+     *   create: {
+     *     // ... data to create a StockTransferLotAllocation
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the StockTransferLotAllocation we want to update
+     *   }
+     * })
+    **/
+    upsert<T extends StockTransferLotAllocationUpsertArgs<ExtArgs>>(
+      args: SelectSubset<T, StockTransferLotAllocationUpsertArgs<ExtArgs>>
+    ): Prisma__StockTransferLotAllocationClient<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'upsert'>, never, ExtArgs>
+
+    /**
+     * Count the number of StockTransferLotAllocations.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StockTransferLotAllocationCountArgs} args - Arguments to filter StockTransferLotAllocations to count.
+     * @example
+     * // Count the number of StockTransferLotAllocations
+     * const count = await prisma.stockTransferLotAllocation.count({
+     *   where: {
+     *     // ... the filter for the StockTransferLotAllocations we want to count
+     *   }
+     * })
+    **/
+    count<T extends StockTransferLotAllocationCountArgs>(
+      args?: Subset<T, StockTransferLotAllocationCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], StockTransferLotAllocationCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a StockTransferLotAllocation.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StockTransferLotAllocationAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends StockTransferLotAllocationAggregateArgs>(args: Subset<T, StockTransferLotAllocationAggregateArgs>): Prisma.PrismaPromise<GetStockTransferLotAllocationAggregateType<T>>
+
+    /**
+     * Group by StockTransferLotAllocation.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {StockTransferLotAllocationGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends StockTransferLotAllocationGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: StockTransferLotAllocationGroupByArgs['orderBy'] }
+        : { orderBy?: StockTransferLotAllocationGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, StockTransferLotAllocationGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetStockTransferLotAllocationGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the StockTransferLotAllocation model
+   */
+  readonly fields: StockTransferLotAllocationFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for StockTransferLotAllocation.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__StockTransferLotAllocationClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: 'PrismaPromise';
+
+    transferItem<T extends StockTransferItemDefaultArgs<ExtArgs> = {}>(args?: Subset<T, StockTransferItemDefaultArgs<ExtArgs>>): Prisma__StockTransferItemClient<$Result.GetResult<Prisma.$StockTransferItemPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    sourceInventoryLot<T extends InventoryLotDefaultArgs<ExtArgs> = {}>(args?: Subset<T, InventoryLotDefaultArgs<ExtArgs>>): Prisma__InventoryLotClient<$Result.GetResult<Prisma.$InventoryLotPayload<ExtArgs>, T, 'findUniqueOrThrow'> | Null, Null, ExtArgs>;
+
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>;
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>;
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>;
+  }
+
+
+
+  /**
+   * Fields of the StockTransferLotAllocation model
+   */ 
+  interface StockTransferLotAllocationFieldRefs {
+    readonly id: FieldRef<"StockTransferLotAllocation", 'String'>
+    readonly transferItemId: FieldRef<"StockTransferLotAllocation", 'String'>
+    readonly sourceInventoryLotId: FieldRef<"StockTransferLotAllocation", 'String'>
+    readonly sellingUnitId: FieldRef<"StockTransferLotAllocation", 'String'>
+    readonly batchNumber: FieldRef<"StockTransferLotAllocation", 'String'>
+    readonly manufacturedOn: FieldRef<"StockTransferLotAllocation", 'DateTime'>
+    readonly expiresOn: FieldRef<"StockTransferLotAllocation", 'DateTime'>
+    readonly quantityBaseQty: FieldRef<"StockTransferLotAllocation", 'Float'>
+    readonly receivedBaseQty: FieldRef<"StockTransferLotAllocation", 'Float'>
+    readonly costPerRateUnit: FieldRef<"StockTransferLotAllocation", 'Float'>
+    readonly costPerRateUnitPaise: FieldRef<"StockTransferLotAllocation", 'BigInt'>
+    readonly mrp: FieldRef<"StockTransferLotAllocation", 'Float'>
+    readonly mrpPaise: FieldRef<"StockTransferLotAllocation", 'BigInt'>
+    readonly sourceStatus: FieldRef<"StockTransferLotAllocation", 'String'>
+    readonly sourceNote: FieldRef<"StockTransferLotAllocation", 'String'>
+    readonly createdAt: FieldRef<"StockTransferLotAllocation", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * StockTransferLotAllocation findUnique
+   */
+  export type StockTransferLotAllocationFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    /**
+     * Filter, which StockTransferLotAllocation to fetch.
+     */
+    where: StockTransferLotAllocationWhereUniqueInput
+  }
+
+  /**
+   * StockTransferLotAllocation findUniqueOrThrow
+   */
+  export type StockTransferLotAllocationFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    /**
+     * Filter, which StockTransferLotAllocation to fetch.
+     */
+    where: StockTransferLotAllocationWhereUniqueInput
+  }
+
+  /**
+   * StockTransferLotAllocation findFirst
+   */
+  export type StockTransferLotAllocationFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    /**
+     * Filter, which StockTransferLotAllocation to fetch.
+     */
+    where?: StockTransferLotAllocationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of StockTransferLotAllocations to fetch.
+     */
+    orderBy?: StockTransferLotAllocationOrderByWithRelationInput | StockTransferLotAllocationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for StockTransferLotAllocations.
+     */
+    cursor?: StockTransferLotAllocationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` StockTransferLotAllocations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` StockTransferLotAllocations.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of StockTransferLotAllocations.
+     */
+    distinct?: StockTransferLotAllocationScalarFieldEnum | StockTransferLotAllocationScalarFieldEnum[]
+  }
+
+  /**
+   * StockTransferLotAllocation findFirstOrThrow
+   */
+  export type StockTransferLotAllocationFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    /**
+     * Filter, which StockTransferLotAllocation to fetch.
+     */
+    where?: StockTransferLotAllocationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of StockTransferLotAllocations to fetch.
+     */
+    orderBy?: StockTransferLotAllocationOrderByWithRelationInput | StockTransferLotAllocationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for StockTransferLotAllocations.
+     */
+    cursor?: StockTransferLotAllocationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` StockTransferLotAllocations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` StockTransferLotAllocations.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of StockTransferLotAllocations.
+     */
+    distinct?: StockTransferLotAllocationScalarFieldEnum | StockTransferLotAllocationScalarFieldEnum[]
+  }
+
+  /**
+   * StockTransferLotAllocation findMany
+   */
+  export type StockTransferLotAllocationFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    /**
+     * Filter, which StockTransferLotAllocations to fetch.
+     */
+    where?: StockTransferLotAllocationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of StockTransferLotAllocations to fetch.
+     */
+    orderBy?: StockTransferLotAllocationOrderByWithRelationInput | StockTransferLotAllocationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing StockTransferLotAllocations.
+     */
+    cursor?: StockTransferLotAllocationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` StockTransferLotAllocations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` StockTransferLotAllocations.
+     */
+    skip?: number
+    distinct?: StockTransferLotAllocationScalarFieldEnum | StockTransferLotAllocationScalarFieldEnum[]
+  }
+
+  /**
+   * StockTransferLotAllocation create
+   */
+  export type StockTransferLotAllocationCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    /**
+     * The data needed to create a StockTransferLotAllocation.
+     */
+    data: XOR<StockTransferLotAllocationCreateInput, StockTransferLotAllocationUncheckedCreateInput>
+  }
+
+  /**
+   * StockTransferLotAllocation createMany
+   */
+  export type StockTransferLotAllocationCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many StockTransferLotAllocations.
+     */
+    data: StockTransferLotAllocationCreateManyInput | StockTransferLotAllocationCreateManyInput[]
+  }
+
+  /**
+   * StockTransferLotAllocation createManyAndReturn
+   */
+  export type StockTransferLotAllocationCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    /**
+     * The data used to create many StockTransferLotAllocations.
+     */
+    data: StockTransferLotAllocationCreateManyInput | StockTransferLotAllocationCreateManyInput[]
+  }
+
+  /**
+   * StockTransferLotAllocation update
+   */
+  export type StockTransferLotAllocationUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    /**
+     * The data needed to update a StockTransferLotAllocation.
+     */
+    data: XOR<StockTransferLotAllocationUpdateInput, StockTransferLotAllocationUncheckedUpdateInput>
+    /**
+     * Choose, which StockTransferLotAllocation to update.
+     */
+    where: StockTransferLotAllocationWhereUniqueInput
+  }
+
+  /**
+   * StockTransferLotAllocation updateMany
+   */
+  export type StockTransferLotAllocationUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update StockTransferLotAllocations.
+     */
+    data: XOR<StockTransferLotAllocationUpdateManyMutationInput, StockTransferLotAllocationUncheckedUpdateManyInput>
+    /**
+     * Filter which StockTransferLotAllocations to update
+     */
+    where?: StockTransferLotAllocationWhereInput
+  }
+
+  /**
+   * StockTransferLotAllocation upsert
+   */
+  export type StockTransferLotAllocationUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    /**
+     * The filter to search for the StockTransferLotAllocation to update in case it exists.
+     */
+    where: StockTransferLotAllocationWhereUniqueInput
+    /**
+     * In case the StockTransferLotAllocation found by the `where` argument doesn't exist, create a new StockTransferLotAllocation with this data.
+     */
+    create: XOR<StockTransferLotAllocationCreateInput, StockTransferLotAllocationUncheckedCreateInput>
+    /**
+     * In case the StockTransferLotAllocation was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<StockTransferLotAllocationUpdateInput, StockTransferLotAllocationUncheckedUpdateInput>
+  }
+
+  /**
+   * StockTransferLotAllocation delete
+   */
+  export type StockTransferLotAllocationDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    /**
+     * Filter which StockTransferLotAllocation to delete.
+     */
+    where: StockTransferLotAllocationWhereUniqueInput
+  }
+
+  /**
+   * StockTransferLotAllocation deleteMany
+   */
+  export type StockTransferLotAllocationDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which StockTransferLotAllocations to delete
+     */
+    where?: StockTransferLotAllocationWhereInput
+  }
+
+  /**
+   * StockTransferLotAllocation without action
+   */
+  export type StockTransferLotAllocationDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
   }
 
 
@@ -75276,6 +76557,7 @@ export namespace Prisma {
     product?: boolean | ProductDefaultArgs<ExtArgs>
     purchaseReceiptItem?: boolean | InventoryLot$purchaseReceiptItemArgs<ExtArgs>
     allocations?: boolean | InventoryLot$allocationsArgs<ExtArgs>
+    transferAllocations?: boolean | InventoryLot$transferAllocationsArgs<ExtArgs>
     _count?: boolean | InventoryLotCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["inventoryLot"]>
 
@@ -75309,6 +76591,7 @@ export namespace Prisma {
     product?: boolean | ProductDefaultArgs<ExtArgs>
     purchaseReceiptItem?: boolean | InventoryLot$purchaseReceiptItemArgs<ExtArgs>
     allocations?: boolean | InventoryLot$allocationsArgs<ExtArgs>
+    transferAllocations?: boolean | InventoryLot$transferAllocationsArgs<ExtArgs>
     _count?: boolean | InventoryLotCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -75321,6 +76604,7 @@ export namespace Prisma {
       product: Prisma.$ProductPayload<ExtArgs>
       purchaseReceiptItem: Prisma.$PurchaseReceiptItemPayload<ExtArgs> | null
       allocations: Prisma.$BillItemLotAllocationPayload<ExtArgs>[]
+      transferAllocations: Prisma.$StockTransferLotAllocationPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -75744,6 +77028,8 @@ export namespace Prisma {
 
     allocations<T extends InventoryLot$allocationsArgs<ExtArgs> = {}>(args?: Subset<T, InventoryLot$allocationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BillItemLotAllocationPayload<ExtArgs>, T, 'findMany'> | Null>;
 
+    transferAllocations<T extends InventoryLot$transferAllocationsArgs<ExtArgs> = {}>(args?: Subset<T, InventoryLot$transferAllocationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$StockTransferLotAllocationPayload<ExtArgs>, T, 'findMany'> | Null>;
+
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -76140,6 +77426,26 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: BillItemLotAllocationScalarFieldEnum | BillItemLotAllocationScalarFieldEnum[]
+  }
+
+  /**
+   * InventoryLot.transferAllocations
+   */
+  export type InventoryLot$transferAllocationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the StockTransferLotAllocation
+     */
+    select?: StockTransferLotAllocationSelect<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: StockTransferLotAllocationInclude<ExtArgs> | null
+    where?: StockTransferLotAllocationWhereInput
+    orderBy?: StockTransferLotAllocationOrderByWithRelationInput | StockTransferLotAllocationOrderByWithRelationInput[]
+    cursor?: StockTransferLotAllocationWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: StockTransferLotAllocationScalarFieldEnum | StockTransferLotAllocationScalarFieldEnum[]
   }
 
   /**
@@ -179813,6 +181119,28 @@ export namespace Prisma {
   export type StockTransferItemScalarFieldEnum = (typeof StockTransferItemScalarFieldEnum)[keyof typeof StockTransferItemScalarFieldEnum]
 
 
+  export const StockTransferLotAllocationScalarFieldEnum: {
+    id: 'id',
+    transferItemId: 'transferItemId',
+    sourceInventoryLotId: 'sourceInventoryLotId',
+    sellingUnitId: 'sellingUnitId',
+    batchNumber: 'batchNumber',
+    manufacturedOn: 'manufacturedOn',
+    expiresOn: 'expiresOn',
+    quantityBaseQty: 'quantityBaseQty',
+    receivedBaseQty: 'receivedBaseQty',
+    costPerRateUnit: 'costPerRateUnit',
+    costPerRateUnitPaise: 'costPerRateUnitPaise',
+    mrp: 'mrp',
+    mrpPaise: 'mrpPaise',
+    sourceStatus: 'sourceStatus',
+    sourceNote: 'sourceNote',
+    createdAt: 'createdAt'
+  };
+
+  export type StockTransferLotAllocationScalarFieldEnum = (typeof StockTransferLotAllocationScalarFieldEnum)[keyof typeof StockTransferLotAllocationScalarFieldEnum]
+
+
   export const TransferDocumentCounterScalarFieldEnum: {
     id: 'id',
     shopId: 'shopId',
@@ -186589,6 +187917,7 @@ export namespace Prisma {
     transfer?: XOR<StockTransferRelationFilter, StockTransferWhereInput>
     product?: XOR<ProductRelationFilter, ProductWhereInput>
     sellingUnit?: XOR<ProductSellingUnitNullableRelationFilter, ProductSellingUnitWhereInput> | null
+    lotAllocations?: StockTransferLotAllocationListRelationFilter
   }
 
   export type StockTransferItemOrderByWithRelationInput = {
@@ -186618,6 +187947,7 @@ export namespace Prisma {
     transfer?: StockTransferOrderByWithRelationInput
     product?: ProductOrderByWithRelationInput
     sellingUnit?: ProductSellingUnitOrderByWithRelationInput
+    lotAllocations?: StockTransferLotAllocationOrderByRelationAggregateInput
   }
 
   export type StockTransferItemWhereUniqueInput = Prisma.AtLeast<{
@@ -186651,6 +187981,7 @@ export namespace Prisma {
     transfer?: XOR<StockTransferRelationFilter, StockTransferWhereInput>
     product?: XOR<ProductRelationFilter, ProductWhereInput>
     sellingUnit?: XOR<ProductSellingUnitNullableRelationFilter, ProductSellingUnitWhereInput> | null
+    lotAllocations?: StockTransferLotAllocationListRelationFilter
   }, "id" | "transferId_productId_sellingUnitId">
 
   export type StockTransferItemOrderByWithAggregationInput = {
@@ -186711,6 +188042,122 @@ export namespace Prisma {
     taxTotalPaise?: BigIntNullableWithAggregatesFilter<"StockTransferItem"> | bigint | number | null
     totalValue?: FloatWithAggregatesFilter<"StockTransferItem"> | number
     totalValuePaise?: BigIntNullableWithAggregatesFilter<"StockTransferItem"> | bigint | number | null
+  }
+
+  export type StockTransferLotAllocationWhereInput = {
+    AND?: StockTransferLotAllocationWhereInput | StockTransferLotAllocationWhereInput[]
+    OR?: StockTransferLotAllocationWhereInput[]
+    NOT?: StockTransferLotAllocationWhereInput | StockTransferLotAllocationWhereInput[]
+    id?: StringFilter<"StockTransferLotAllocation"> | string
+    transferItemId?: StringFilter<"StockTransferLotAllocation"> | string
+    sourceInventoryLotId?: StringFilter<"StockTransferLotAllocation"> | string
+    sellingUnitId?: StringNullableFilter<"StockTransferLotAllocation"> | string | null
+    batchNumber?: StringFilter<"StockTransferLotAllocation"> | string
+    manufacturedOn?: DateTimeNullableFilter<"StockTransferLotAllocation"> | Date | string | null
+    expiresOn?: DateTimeFilter<"StockTransferLotAllocation"> | Date | string
+    quantityBaseQty?: FloatFilter<"StockTransferLotAllocation"> | number
+    receivedBaseQty?: FloatFilter<"StockTransferLotAllocation"> | number
+    costPerRateUnit?: FloatFilter<"StockTransferLotAllocation"> | number
+    costPerRateUnitPaise?: BigIntNullableFilter<"StockTransferLotAllocation"> | bigint | number | null
+    mrp?: FloatNullableFilter<"StockTransferLotAllocation"> | number | null
+    mrpPaise?: BigIntNullableFilter<"StockTransferLotAllocation"> | bigint | number | null
+    sourceStatus?: StringFilter<"StockTransferLotAllocation"> | string
+    sourceNote?: StringNullableFilter<"StockTransferLotAllocation"> | string | null
+    createdAt?: DateTimeFilter<"StockTransferLotAllocation"> | Date | string
+    transferItem?: XOR<StockTransferItemRelationFilter, StockTransferItemWhereInput>
+    sourceInventoryLot?: XOR<InventoryLotRelationFilter, InventoryLotWhereInput>
+  }
+
+  export type StockTransferLotAllocationOrderByWithRelationInput = {
+    id?: SortOrder
+    transferItemId?: SortOrder
+    sourceInventoryLotId?: SortOrder
+    sellingUnitId?: SortOrderInput | SortOrder
+    batchNumber?: SortOrder
+    manufacturedOn?: SortOrderInput | SortOrder
+    expiresOn?: SortOrder
+    quantityBaseQty?: SortOrder
+    receivedBaseQty?: SortOrder
+    costPerRateUnit?: SortOrder
+    costPerRateUnitPaise?: SortOrderInput | SortOrder
+    mrp?: SortOrderInput | SortOrder
+    mrpPaise?: SortOrderInput | SortOrder
+    sourceStatus?: SortOrder
+    sourceNote?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    transferItem?: StockTransferItemOrderByWithRelationInput
+    sourceInventoryLot?: InventoryLotOrderByWithRelationInput
+  }
+
+  export type StockTransferLotAllocationWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    transferItemId_sourceInventoryLotId?: StockTransferLotAllocationTransferItemIdSourceInventoryLotIdCompoundUniqueInput
+    AND?: StockTransferLotAllocationWhereInput | StockTransferLotAllocationWhereInput[]
+    OR?: StockTransferLotAllocationWhereInput[]
+    NOT?: StockTransferLotAllocationWhereInput | StockTransferLotAllocationWhereInput[]
+    transferItemId?: StringFilter<"StockTransferLotAllocation"> | string
+    sourceInventoryLotId?: StringFilter<"StockTransferLotAllocation"> | string
+    sellingUnitId?: StringNullableFilter<"StockTransferLotAllocation"> | string | null
+    batchNumber?: StringFilter<"StockTransferLotAllocation"> | string
+    manufacturedOn?: DateTimeNullableFilter<"StockTransferLotAllocation"> | Date | string | null
+    expiresOn?: DateTimeFilter<"StockTransferLotAllocation"> | Date | string
+    quantityBaseQty?: FloatFilter<"StockTransferLotAllocation"> | number
+    receivedBaseQty?: FloatFilter<"StockTransferLotAllocation"> | number
+    costPerRateUnit?: FloatFilter<"StockTransferLotAllocation"> | number
+    costPerRateUnitPaise?: BigIntNullableFilter<"StockTransferLotAllocation"> | bigint | number | null
+    mrp?: FloatNullableFilter<"StockTransferLotAllocation"> | number | null
+    mrpPaise?: BigIntNullableFilter<"StockTransferLotAllocation"> | bigint | number | null
+    sourceStatus?: StringFilter<"StockTransferLotAllocation"> | string
+    sourceNote?: StringNullableFilter<"StockTransferLotAllocation"> | string | null
+    createdAt?: DateTimeFilter<"StockTransferLotAllocation"> | Date | string
+    transferItem?: XOR<StockTransferItemRelationFilter, StockTransferItemWhereInput>
+    sourceInventoryLot?: XOR<InventoryLotRelationFilter, InventoryLotWhereInput>
+  }, "id" | "transferItemId_sourceInventoryLotId">
+
+  export type StockTransferLotAllocationOrderByWithAggregationInput = {
+    id?: SortOrder
+    transferItemId?: SortOrder
+    sourceInventoryLotId?: SortOrder
+    sellingUnitId?: SortOrderInput | SortOrder
+    batchNumber?: SortOrder
+    manufacturedOn?: SortOrderInput | SortOrder
+    expiresOn?: SortOrder
+    quantityBaseQty?: SortOrder
+    receivedBaseQty?: SortOrder
+    costPerRateUnit?: SortOrder
+    costPerRateUnitPaise?: SortOrderInput | SortOrder
+    mrp?: SortOrderInput | SortOrder
+    mrpPaise?: SortOrderInput | SortOrder
+    sourceStatus?: SortOrder
+    sourceNote?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: StockTransferLotAllocationCountOrderByAggregateInput
+    _avg?: StockTransferLotAllocationAvgOrderByAggregateInput
+    _max?: StockTransferLotAllocationMaxOrderByAggregateInput
+    _min?: StockTransferLotAllocationMinOrderByAggregateInput
+    _sum?: StockTransferLotAllocationSumOrderByAggregateInput
+  }
+
+  export type StockTransferLotAllocationScalarWhereWithAggregatesInput = {
+    AND?: StockTransferLotAllocationScalarWhereWithAggregatesInput | StockTransferLotAllocationScalarWhereWithAggregatesInput[]
+    OR?: StockTransferLotAllocationScalarWhereWithAggregatesInput[]
+    NOT?: StockTransferLotAllocationScalarWhereWithAggregatesInput | StockTransferLotAllocationScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"StockTransferLotAllocation"> | string
+    transferItemId?: StringWithAggregatesFilter<"StockTransferLotAllocation"> | string
+    sourceInventoryLotId?: StringWithAggregatesFilter<"StockTransferLotAllocation"> | string
+    sellingUnitId?: StringNullableWithAggregatesFilter<"StockTransferLotAllocation"> | string | null
+    batchNumber?: StringWithAggregatesFilter<"StockTransferLotAllocation"> | string
+    manufacturedOn?: DateTimeNullableWithAggregatesFilter<"StockTransferLotAllocation"> | Date | string | null
+    expiresOn?: DateTimeWithAggregatesFilter<"StockTransferLotAllocation"> | Date | string
+    quantityBaseQty?: FloatWithAggregatesFilter<"StockTransferLotAllocation"> | number
+    receivedBaseQty?: FloatWithAggregatesFilter<"StockTransferLotAllocation"> | number
+    costPerRateUnit?: FloatWithAggregatesFilter<"StockTransferLotAllocation"> | number
+    costPerRateUnitPaise?: BigIntNullableWithAggregatesFilter<"StockTransferLotAllocation"> | bigint | number | null
+    mrp?: FloatNullableWithAggregatesFilter<"StockTransferLotAllocation"> | number | null
+    mrpPaise?: BigIntNullableWithAggregatesFilter<"StockTransferLotAllocation"> | bigint | number | null
+    sourceStatus?: StringWithAggregatesFilter<"StockTransferLotAllocation"> | string
+    sourceNote?: StringNullableWithAggregatesFilter<"StockTransferLotAllocation"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"StockTransferLotAllocation"> | Date | string
   }
 
   export type TransferDocumentCounterWhereInput = {
@@ -189009,6 +190456,7 @@ export namespace Prisma {
     product?: XOR<ProductRelationFilter, ProductWhereInput>
     purchaseReceiptItem?: XOR<PurchaseReceiptItemNullableRelationFilter, PurchaseReceiptItemWhereInput> | null
     allocations?: BillItemLotAllocationListRelationFilter
+    transferAllocations?: StockTransferLotAllocationListRelationFilter
   }
 
   export type InventoryLotOrderByWithRelationInput = {
@@ -189037,6 +190485,7 @@ export namespace Prisma {
     product?: ProductOrderByWithRelationInput
     purchaseReceiptItem?: PurchaseReceiptItemOrderByWithRelationInput
     allocations?: BillItemLotAllocationOrderByRelationAggregateInput
+    transferAllocations?: StockTransferLotAllocationOrderByRelationAggregateInput
   }
 
   export type InventoryLotWhereUniqueInput = Prisma.AtLeast<{
@@ -189069,6 +190518,7 @@ export namespace Prisma {
     product?: XOR<ProductRelationFilter, ProductWhereInput>
     purchaseReceiptItem?: XOR<PurchaseReceiptItemNullableRelationFilter, PurchaseReceiptItemWhereInput> | null
     allocations?: BillItemLotAllocationListRelationFilter
+    transferAllocations?: StockTransferLotAllocationListRelationFilter
   }, "id" | "shopId_locationId_productId_batchNumber_expiresOn">
 
   export type InventoryLotOrderByWithAggregationInput = {
@@ -204328,6 +205778,7 @@ export namespace Prisma {
     transfer: StockTransferCreateNestedOneWithoutItemsInput
     product: ProductCreateNestedOneWithoutTransferItemsInput
     sellingUnit?: ProductSellingUnitCreateNestedOneWithoutTransferItemsInput
+    lotAllocations?: StockTransferLotAllocationCreateNestedManyWithoutTransferItemInput
   }
 
   export type StockTransferItemUncheckedCreateInput = {
@@ -204354,6 +205805,7 @@ export namespace Prisma {
     taxTotalPaise?: bigint | number | null
     totalValue?: number
     totalValuePaise?: bigint | number | null
+    lotAllocations?: StockTransferLotAllocationUncheckedCreateNestedManyWithoutTransferItemInput
   }
 
   export type StockTransferItemUpdateInput = {
@@ -204380,6 +205832,7 @@ export namespace Prisma {
     transfer?: StockTransferUpdateOneRequiredWithoutItemsNestedInput
     product?: ProductUpdateOneRequiredWithoutTransferItemsNestedInput
     sellingUnit?: ProductSellingUnitUpdateOneWithoutTransferItemsNestedInput
+    lotAllocations?: StockTransferLotAllocationUpdateManyWithoutTransferItemNestedInput
   }
 
   export type StockTransferItemUncheckedUpdateInput = {
@@ -204406,6 +205859,7 @@ export namespace Prisma {
     taxTotalPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
     totalValue?: FloatFieldUpdateOperationsInput | number
     totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    lotAllocations?: StockTransferLotAllocationUncheckedUpdateManyWithoutTransferItemNestedInput
   }
 
   export type StockTransferItemCreateManyInput = {
@@ -204481,6 +205935,137 @@ export namespace Prisma {
     taxTotalPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
     totalValue?: FloatFieldUpdateOperationsInput | number
     totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+  }
+
+  export type StockTransferLotAllocationCreateInput = {
+    id?: string
+    sellingUnitId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    sourceStatus?: string
+    sourceNote?: string | null
+    createdAt?: Date | string
+    transferItem: StockTransferItemCreateNestedOneWithoutLotAllocationsInput
+    sourceInventoryLot: InventoryLotCreateNestedOneWithoutTransferAllocationsInput
+  }
+
+  export type StockTransferLotAllocationUncheckedCreateInput = {
+    id?: string
+    transferItemId: string
+    sourceInventoryLotId: string
+    sellingUnitId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    sourceStatus?: string
+    sourceNote?: string | null
+    createdAt?: Date | string
+  }
+
+  export type StockTransferLotAllocationUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sourceStatus?: StringFieldUpdateOperationsInput | string
+    sourceNote?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    transferItem?: StockTransferItemUpdateOneRequiredWithoutLotAllocationsNestedInput
+    sourceInventoryLot?: InventoryLotUpdateOneRequiredWithoutTransferAllocationsNestedInput
+  }
+
+  export type StockTransferLotAllocationUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    transferItemId?: StringFieldUpdateOperationsInput | string
+    sourceInventoryLotId?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sourceStatus?: StringFieldUpdateOperationsInput | string
+    sourceNote?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type StockTransferLotAllocationCreateManyInput = {
+    id?: string
+    transferItemId: string
+    sourceInventoryLotId: string
+    sellingUnitId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    sourceStatus?: string
+    sourceNote?: string | null
+    createdAt?: Date | string
+  }
+
+  export type StockTransferLotAllocationUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sourceStatus?: StringFieldUpdateOperationsInput | string
+    sourceNote?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type StockTransferLotAllocationUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    transferItemId?: StringFieldUpdateOperationsInput | string
+    sourceInventoryLotId?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sourceStatus?: StringFieldUpdateOperationsInput | string
+    sourceNote?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type TransferDocumentCounterCreateInput = {
@@ -207054,6 +208639,7 @@ export namespace Prisma {
     product: ProductCreateNestedOneWithoutInventoryLotsInput
     purchaseReceiptItem?: PurchaseReceiptItemCreateNestedOneWithoutInventoryLotsInput
     allocations?: BillItemLotAllocationCreateNestedManyWithoutInventoryLotInput
+    transferAllocations?: StockTransferLotAllocationCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotUncheckedCreateInput = {
@@ -207078,6 +208664,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     allocations?: BillItemLotAllocationUncheckedCreateNestedManyWithoutInventoryLotInput
+    transferAllocations?: StockTransferLotAllocationUncheckedCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotUpdateInput = {
@@ -207102,6 +208689,7 @@ export namespace Prisma {
     product?: ProductUpdateOneRequiredWithoutInventoryLotsNestedInput
     purchaseReceiptItem?: PurchaseReceiptItemUpdateOneWithoutInventoryLotsNestedInput
     allocations?: BillItemLotAllocationUpdateManyWithoutInventoryLotNestedInput
+    transferAllocations?: StockTransferLotAllocationUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotUncheckedUpdateInput = {
@@ -207126,6 +208714,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     allocations?: BillItemLotAllocationUncheckedUpdateManyWithoutInventoryLotNestedInput
+    transferAllocations?: StockTransferLotAllocationUncheckedUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotCreateManyInput = {
@@ -222649,6 +224238,16 @@ export namespace Prisma {
     isNot?: StockTransferWhereInput
   }
 
+  export type StockTransferLotAllocationListRelationFilter = {
+    every?: StockTransferLotAllocationWhereInput
+    some?: StockTransferLotAllocationWhereInput
+    none?: StockTransferLotAllocationWhereInput
+  }
+
+  export type StockTransferLotAllocationOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type StockTransferItemTransferIdProductIdSellingUnitIdCompoundUniqueInput = {
     transferId: string
     productId: string
@@ -222769,6 +224368,96 @@ export namespace Prisma {
     taxTotalPaise?: SortOrder
     totalValue?: SortOrder
     totalValuePaise?: SortOrder
+  }
+
+  export type StockTransferItemRelationFilter = {
+    is?: StockTransferItemWhereInput
+    isNot?: StockTransferItemWhereInput
+  }
+
+  export type InventoryLotRelationFilter = {
+    is?: InventoryLotWhereInput
+    isNot?: InventoryLotWhereInput
+  }
+
+  export type StockTransferLotAllocationTransferItemIdSourceInventoryLotIdCompoundUniqueInput = {
+    transferItemId: string
+    sourceInventoryLotId: string
+  }
+
+  export type StockTransferLotAllocationCountOrderByAggregateInput = {
+    id?: SortOrder
+    transferItemId?: SortOrder
+    sourceInventoryLotId?: SortOrder
+    sellingUnitId?: SortOrder
+    batchNumber?: SortOrder
+    manufacturedOn?: SortOrder
+    expiresOn?: SortOrder
+    quantityBaseQty?: SortOrder
+    receivedBaseQty?: SortOrder
+    costPerRateUnit?: SortOrder
+    costPerRateUnitPaise?: SortOrder
+    mrp?: SortOrder
+    mrpPaise?: SortOrder
+    sourceStatus?: SortOrder
+    sourceNote?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type StockTransferLotAllocationAvgOrderByAggregateInput = {
+    quantityBaseQty?: SortOrder
+    receivedBaseQty?: SortOrder
+    costPerRateUnit?: SortOrder
+    costPerRateUnitPaise?: SortOrder
+    mrp?: SortOrder
+    mrpPaise?: SortOrder
+  }
+
+  export type StockTransferLotAllocationMaxOrderByAggregateInput = {
+    id?: SortOrder
+    transferItemId?: SortOrder
+    sourceInventoryLotId?: SortOrder
+    sellingUnitId?: SortOrder
+    batchNumber?: SortOrder
+    manufacturedOn?: SortOrder
+    expiresOn?: SortOrder
+    quantityBaseQty?: SortOrder
+    receivedBaseQty?: SortOrder
+    costPerRateUnit?: SortOrder
+    costPerRateUnitPaise?: SortOrder
+    mrp?: SortOrder
+    mrpPaise?: SortOrder
+    sourceStatus?: SortOrder
+    sourceNote?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type StockTransferLotAllocationMinOrderByAggregateInput = {
+    id?: SortOrder
+    transferItemId?: SortOrder
+    sourceInventoryLotId?: SortOrder
+    sellingUnitId?: SortOrder
+    batchNumber?: SortOrder
+    manufacturedOn?: SortOrder
+    expiresOn?: SortOrder
+    quantityBaseQty?: SortOrder
+    receivedBaseQty?: SortOrder
+    costPerRateUnit?: SortOrder
+    costPerRateUnitPaise?: SortOrder
+    mrp?: SortOrder
+    mrpPaise?: SortOrder
+    sourceStatus?: SortOrder
+    sourceNote?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type StockTransferLotAllocationSumOrderByAggregateInput = {
+    quantityBaseQty?: SortOrder
+    receivedBaseQty?: SortOrder
+    costPerRateUnit?: SortOrder
+    costPerRateUnitPaise?: SortOrder
+    mrp?: SortOrder
+    mrpPaise?: SortOrder
   }
 
   export type TransferDocumentCounterShopIdFiscalYearDocumentTypeCompoundUniqueInput = {
@@ -225051,11 +226740,6 @@ export namespace Prisma {
   export type BillItemRelationFilter = {
     is?: BillItemWhereInput
     isNot?: BillItemWhereInput
-  }
-
-  export type InventoryLotRelationFilter = {
-    is?: InventoryLotWhereInput
-    isNot?: InventoryLotWhereInput
   }
 
   export type BillItemLotAllocationBillItemIdInventoryLotIdCompoundUniqueInput = {
@@ -239312,6 +240996,20 @@ export namespace Prisma {
     connect?: ProductSellingUnitWhereUniqueInput
   }
 
+  export type StockTransferLotAllocationCreateNestedManyWithoutTransferItemInput = {
+    create?: XOR<StockTransferLotAllocationCreateWithoutTransferItemInput, StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput> | StockTransferLotAllocationCreateWithoutTransferItemInput[] | StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput[]
+    connectOrCreate?: StockTransferLotAllocationCreateOrConnectWithoutTransferItemInput | StockTransferLotAllocationCreateOrConnectWithoutTransferItemInput[]
+    createMany?: StockTransferLotAllocationCreateManyTransferItemInputEnvelope
+    connect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+  }
+
+  export type StockTransferLotAllocationUncheckedCreateNestedManyWithoutTransferItemInput = {
+    create?: XOR<StockTransferLotAllocationCreateWithoutTransferItemInput, StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput> | StockTransferLotAllocationCreateWithoutTransferItemInput[] | StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput[]
+    connectOrCreate?: StockTransferLotAllocationCreateOrConnectWithoutTransferItemInput | StockTransferLotAllocationCreateOrConnectWithoutTransferItemInput[]
+    createMany?: StockTransferLotAllocationCreateManyTransferItemInputEnvelope
+    connect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+  }
+
   export type StockTransferUpdateOneRequiredWithoutItemsNestedInput = {
     create?: XOR<StockTransferCreateWithoutItemsInput, StockTransferUncheckedCreateWithoutItemsInput>
     connectOrCreate?: StockTransferCreateOrConnectWithoutItemsInput
@@ -239336,6 +241034,62 @@ export namespace Prisma {
     delete?: ProductSellingUnitWhereInput | boolean
     connect?: ProductSellingUnitWhereUniqueInput
     update?: XOR<XOR<ProductSellingUnitUpdateToOneWithWhereWithoutTransferItemsInput, ProductSellingUnitUpdateWithoutTransferItemsInput>, ProductSellingUnitUncheckedUpdateWithoutTransferItemsInput>
+  }
+
+  export type StockTransferLotAllocationUpdateManyWithoutTransferItemNestedInput = {
+    create?: XOR<StockTransferLotAllocationCreateWithoutTransferItemInput, StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput> | StockTransferLotAllocationCreateWithoutTransferItemInput[] | StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput[]
+    connectOrCreate?: StockTransferLotAllocationCreateOrConnectWithoutTransferItemInput | StockTransferLotAllocationCreateOrConnectWithoutTransferItemInput[]
+    upsert?: StockTransferLotAllocationUpsertWithWhereUniqueWithoutTransferItemInput | StockTransferLotAllocationUpsertWithWhereUniqueWithoutTransferItemInput[]
+    createMany?: StockTransferLotAllocationCreateManyTransferItemInputEnvelope
+    set?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    disconnect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    delete?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    connect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    update?: StockTransferLotAllocationUpdateWithWhereUniqueWithoutTransferItemInput | StockTransferLotAllocationUpdateWithWhereUniqueWithoutTransferItemInput[]
+    updateMany?: StockTransferLotAllocationUpdateManyWithWhereWithoutTransferItemInput | StockTransferLotAllocationUpdateManyWithWhereWithoutTransferItemInput[]
+    deleteMany?: StockTransferLotAllocationScalarWhereInput | StockTransferLotAllocationScalarWhereInput[]
+  }
+
+  export type StockTransferLotAllocationUncheckedUpdateManyWithoutTransferItemNestedInput = {
+    create?: XOR<StockTransferLotAllocationCreateWithoutTransferItemInput, StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput> | StockTransferLotAllocationCreateWithoutTransferItemInput[] | StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput[]
+    connectOrCreate?: StockTransferLotAllocationCreateOrConnectWithoutTransferItemInput | StockTransferLotAllocationCreateOrConnectWithoutTransferItemInput[]
+    upsert?: StockTransferLotAllocationUpsertWithWhereUniqueWithoutTransferItemInput | StockTransferLotAllocationUpsertWithWhereUniqueWithoutTransferItemInput[]
+    createMany?: StockTransferLotAllocationCreateManyTransferItemInputEnvelope
+    set?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    disconnect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    delete?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    connect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    update?: StockTransferLotAllocationUpdateWithWhereUniqueWithoutTransferItemInput | StockTransferLotAllocationUpdateWithWhereUniqueWithoutTransferItemInput[]
+    updateMany?: StockTransferLotAllocationUpdateManyWithWhereWithoutTransferItemInput | StockTransferLotAllocationUpdateManyWithWhereWithoutTransferItemInput[]
+    deleteMany?: StockTransferLotAllocationScalarWhereInput | StockTransferLotAllocationScalarWhereInput[]
+  }
+
+  export type StockTransferItemCreateNestedOneWithoutLotAllocationsInput = {
+    create?: XOR<StockTransferItemCreateWithoutLotAllocationsInput, StockTransferItemUncheckedCreateWithoutLotAllocationsInput>
+    connectOrCreate?: StockTransferItemCreateOrConnectWithoutLotAllocationsInput
+    connect?: StockTransferItemWhereUniqueInput
+  }
+
+  export type InventoryLotCreateNestedOneWithoutTransferAllocationsInput = {
+    create?: XOR<InventoryLotCreateWithoutTransferAllocationsInput, InventoryLotUncheckedCreateWithoutTransferAllocationsInput>
+    connectOrCreate?: InventoryLotCreateOrConnectWithoutTransferAllocationsInput
+    connect?: InventoryLotWhereUniqueInput
+  }
+
+  export type StockTransferItemUpdateOneRequiredWithoutLotAllocationsNestedInput = {
+    create?: XOR<StockTransferItemCreateWithoutLotAllocationsInput, StockTransferItemUncheckedCreateWithoutLotAllocationsInput>
+    connectOrCreate?: StockTransferItemCreateOrConnectWithoutLotAllocationsInput
+    upsert?: StockTransferItemUpsertWithoutLotAllocationsInput
+    connect?: StockTransferItemWhereUniqueInput
+    update?: XOR<XOR<StockTransferItemUpdateToOneWithWhereWithoutLotAllocationsInput, StockTransferItemUpdateWithoutLotAllocationsInput>, StockTransferItemUncheckedUpdateWithoutLotAllocationsInput>
+  }
+
+  export type InventoryLotUpdateOneRequiredWithoutTransferAllocationsNestedInput = {
+    create?: XOR<InventoryLotCreateWithoutTransferAllocationsInput, InventoryLotUncheckedCreateWithoutTransferAllocationsInput>
+    connectOrCreate?: InventoryLotCreateOrConnectWithoutTransferAllocationsInput
+    upsert?: InventoryLotUpsertWithoutTransferAllocationsInput
+    connect?: InventoryLotWhereUniqueInput
+    update?: XOR<XOR<InventoryLotUpdateToOneWithWhereWithoutTransferAllocationsInput, InventoryLotUpdateWithoutTransferAllocationsInput>, InventoryLotUncheckedUpdateWithoutTransferAllocationsInput>
   }
 
   export type ShopCreateNestedOneWithoutTransferDocumentCountersInput = {
@@ -240757,11 +242511,25 @@ export namespace Prisma {
     connect?: BillItemLotAllocationWhereUniqueInput | BillItemLotAllocationWhereUniqueInput[]
   }
 
+  export type StockTransferLotAllocationCreateNestedManyWithoutSourceInventoryLotInput = {
+    create?: XOR<StockTransferLotAllocationCreateWithoutSourceInventoryLotInput, StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput> | StockTransferLotAllocationCreateWithoutSourceInventoryLotInput[] | StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput[]
+    connectOrCreate?: StockTransferLotAllocationCreateOrConnectWithoutSourceInventoryLotInput | StockTransferLotAllocationCreateOrConnectWithoutSourceInventoryLotInput[]
+    createMany?: StockTransferLotAllocationCreateManySourceInventoryLotInputEnvelope
+    connect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+  }
+
   export type BillItemLotAllocationUncheckedCreateNestedManyWithoutInventoryLotInput = {
     create?: XOR<BillItemLotAllocationCreateWithoutInventoryLotInput, BillItemLotAllocationUncheckedCreateWithoutInventoryLotInput> | BillItemLotAllocationCreateWithoutInventoryLotInput[] | BillItemLotAllocationUncheckedCreateWithoutInventoryLotInput[]
     connectOrCreate?: BillItemLotAllocationCreateOrConnectWithoutInventoryLotInput | BillItemLotAllocationCreateOrConnectWithoutInventoryLotInput[]
     createMany?: BillItemLotAllocationCreateManyInventoryLotInputEnvelope
     connect?: BillItemLotAllocationWhereUniqueInput | BillItemLotAllocationWhereUniqueInput[]
+  }
+
+  export type StockTransferLotAllocationUncheckedCreateNestedManyWithoutSourceInventoryLotInput = {
+    create?: XOR<StockTransferLotAllocationCreateWithoutSourceInventoryLotInput, StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput> | StockTransferLotAllocationCreateWithoutSourceInventoryLotInput[] | StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput[]
+    connectOrCreate?: StockTransferLotAllocationCreateOrConnectWithoutSourceInventoryLotInput | StockTransferLotAllocationCreateOrConnectWithoutSourceInventoryLotInput[]
+    createMany?: StockTransferLotAllocationCreateManySourceInventoryLotInputEnvelope
+    connect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
   }
 
   export type ShopUpdateOneRequiredWithoutInventoryLotsNestedInput = {
@@ -240812,6 +242580,20 @@ export namespace Prisma {
     deleteMany?: BillItemLotAllocationScalarWhereInput | BillItemLotAllocationScalarWhereInput[]
   }
 
+  export type StockTransferLotAllocationUpdateManyWithoutSourceInventoryLotNestedInput = {
+    create?: XOR<StockTransferLotAllocationCreateWithoutSourceInventoryLotInput, StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput> | StockTransferLotAllocationCreateWithoutSourceInventoryLotInput[] | StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput[]
+    connectOrCreate?: StockTransferLotAllocationCreateOrConnectWithoutSourceInventoryLotInput | StockTransferLotAllocationCreateOrConnectWithoutSourceInventoryLotInput[]
+    upsert?: StockTransferLotAllocationUpsertWithWhereUniqueWithoutSourceInventoryLotInput | StockTransferLotAllocationUpsertWithWhereUniqueWithoutSourceInventoryLotInput[]
+    createMany?: StockTransferLotAllocationCreateManySourceInventoryLotInputEnvelope
+    set?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    disconnect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    delete?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    connect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    update?: StockTransferLotAllocationUpdateWithWhereUniqueWithoutSourceInventoryLotInput | StockTransferLotAllocationUpdateWithWhereUniqueWithoutSourceInventoryLotInput[]
+    updateMany?: StockTransferLotAllocationUpdateManyWithWhereWithoutSourceInventoryLotInput | StockTransferLotAllocationUpdateManyWithWhereWithoutSourceInventoryLotInput[]
+    deleteMany?: StockTransferLotAllocationScalarWhereInput | StockTransferLotAllocationScalarWhereInput[]
+  }
+
   export type BillItemLotAllocationUncheckedUpdateManyWithoutInventoryLotNestedInput = {
     create?: XOR<BillItemLotAllocationCreateWithoutInventoryLotInput, BillItemLotAllocationUncheckedCreateWithoutInventoryLotInput> | BillItemLotAllocationCreateWithoutInventoryLotInput[] | BillItemLotAllocationUncheckedCreateWithoutInventoryLotInput[]
     connectOrCreate?: BillItemLotAllocationCreateOrConnectWithoutInventoryLotInput | BillItemLotAllocationCreateOrConnectWithoutInventoryLotInput[]
@@ -240824,6 +242606,20 @@ export namespace Prisma {
     update?: BillItemLotAllocationUpdateWithWhereUniqueWithoutInventoryLotInput | BillItemLotAllocationUpdateWithWhereUniqueWithoutInventoryLotInput[]
     updateMany?: BillItemLotAllocationUpdateManyWithWhereWithoutInventoryLotInput | BillItemLotAllocationUpdateManyWithWhereWithoutInventoryLotInput[]
     deleteMany?: BillItemLotAllocationScalarWhereInput | BillItemLotAllocationScalarWhereInput[]
+  }
+
+  export type StockTransferLotAllocationUncheckedUpdateManyWithoutSourceInventoryLotNestedInput = {
+    create?: XOR<StockTransferLotAllocationCreateWithoutSourceInventoryLotInput, StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput> | StockTransferLotAllocationCreateWithoutSourceInventoryLotInput[] | StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput[]
+    connectOrCreate?: StockTransferLotAllocationCreateOrConnectWithoutSourceInventoryLotInput | StockTransferLotAllocationCreateOrConnectWithoutSourceInventoryLotInput[]
+    upsert?: StockTransferLotAllocationUpsertWithWhereUniqueWithoutSourceInventoryLotInput | StockTransferLotAllocationUpsertWithWhereUniqueWithoutSourceInventoryLotInput[]
+    createMany?: StockTransferLotAllocationCreateManySourceInventoryLotInputEnvelope
+    set?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    disconnect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    delete?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    connect?: StockTransferLotAllocationWhereUniqueInput | StockTransferLotAllocationWhereUniqueInput[]
+    update?: StockTransferLotAllocationUpdateWithWhereUniqueWithoutSourceInventoryLotInput | StockTransferLotAllocationUpdateWithWhereUniqueWithoutSourceInventoryLotInput[]
+    updateMany?: StockTransferLotAllocationUpdateManyWithWhereWithoutSourceInventoryLotInput | StockTransferLotAllocationUpdateManyWithWhereWithoutSourceInventoryLotInput[]
+    deleteMany?: StockTransferLotAllocationScalarWhereInput | StockTransferLotAllocationScalarWhereInput[]
   }
 
   export type ManufacturingBomItemCreateNestedManyWithoutBomInput = {
@@ -247253,6 +249049,7 @@ export namespace Prisma {
     product: ProductCreateNestedOneWithoutInventoryLotsInput
     purchaseReceiptItem?: PurchaseReceiptItemCreateNestedOneWithoutInventoryLotsInput
     allocations?: BillItemLotAllocationCreateNestedManyWithoutInventoryLotInput
+    transferAllocations?: StockTransferLotAllocationCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotUncheckedCreateWithoutShopInput = {
@@ -247276,6 +249073,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     allocations?: BillItemLotAllocationUncheckedCreateNestedManyWithoutInventoryLotInput
+    transferAllocations?: StockTransferLotAllocationUncheckedCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotCreateOrConnectWithoutShopInput = {
@@ -256766,6 +258564,7 @@ export namespace Prisma {
     totalValuePaise?: bigint | number | null
     transfer: StockTransferCreateNestedOneWithoutItemsInput
     product: ProductCreateNestedOneWithoutTransferItemsInput
+    lotAllocations?: StockTransferLotAllocationCreateNestedManyWithoutTransferItemInput
   }
 
   export type StockTransferItemUncheckedCreateWithoutSellingUnitInput = {
@@ -256791,6 +258590,7 @@ export namespace Prisma {
     taxTotalPaise?: bigint | number | null
     totalValue?: number
     totalValuePaise?: bigint | number | null
+    lotAllocations?: StockTransferLotAllocationUncheckedCreateNestedManyWithoutTransferItemInput
   }
 
   export type StockTransferItemCreateOrConnectWithoutSellingUnitInput = {
@@ -262786,6 +264586,7 @@ export namespace Prisma {
     totalValuePaise?: bigint | number | null
     transfer: StockTransferCreateNestedOneWithoutItemsInput
     sellingUnit?: ProductSellingUnitCreateNestedOneWithoutTransferItemsInput
+    lotAllocations?: StockTransferLotAllocationCreateNestedManyWithoutTransferItemInput
   }
 
   export type StockTransferItemUncheckedCreateWithoutProductInput = {
@@ -262811,6 +264612,7 @@ export namespace Prisma {
     taxTotalPaise?: bigint | number | null
     totalValue?: number
     totalValuePaise?: bigint | number | null
+    lotAllocations?: StockTransferLotAllocationUncheckedCreateNestedManyWithoutTransferItemInput
   }
 
   export type StockTransferItemCreateOrConnectWithoutProductInput = {
@@ -262995,6 +264797,7 @@ export namespace Prisma {
     location: StoreLocationCreateNestedOneWithoutInventoryLotsInput
     purchaseReceiptItem?: PurchaseReceiptItemCreateNestedOneWithoutInventoryLotsInput
     allocations?: BillItemLotAllocationCreateNestedManyWithoutInventoryLotInput
+    transferAllocations?: StockTransferLotAllocationCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotUncheckedCreateWithoutProductInput = {
@@ -263018,6 +264821,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     allocations?: BillItemLotAllocationUncheckedCreateNestedManyWithoutInventoryLotInput
+    transferAllocations?: StockTransferLotAllocationUncheckedCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotCreateOrConnectWithoutProductInput = {
@@ -270712,6 +272516,7 @@ export namespace Prisma {
     product: ProductCreateNestedOneWithoutInventoryLotsInput
     purchaseReceiptItem?: PurchaseReceiptItemCreateNestedOneWithoutInventoryLotsInput
     allocations?: BillItemLotAllocationCreateNestedManyWithoutInventoryLotInput
+    transferAllocations?: StockTransferLotAllocationCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotUncheckedCreateWithoutLocationInput = {
@@ -270735,6 +272540,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     allocations?: BillItemLotAllocationUncheckedCreateNestedManyWithoutInventoryLotInput
+    transferAllocations?: StockTransferLotAllocationUncheckedCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotCreateOrConnectWithoutLocationInput = {
@@ -277955,6 +279761,7 @@ export namespace Prisma {
     totalValuePaise?: bigint | number | null
     product: ProductCreateNestedOneWithoutTransferItemsInput
     sellingUnit?: ProductSellingUnitCreateNestedOneWithoutTransferItemsInput
+    lotAllocations?: StockTransferLotAllocationCreateNestedManyWithoutTransferItemInput
   }
 
   export type StockTransferItemUncheckedCreateWithoutTransferInput = {
@@ -277980,6 +279787,7 @@ export namespace Prisma {
     taxTotalPaise?: bigint | number | null
     totalValue?: number
     totalValuePaise?: bigint | number | null
+    lotAllocations?: StockTransferLotAllocationUncheckedCreateNestedManyWithoutTransferItemInput
   }
 
   export type StockTransferItemCreateOrConnectWithoutTransferInput = {
@@ -278801,6 +280609,51 @@ export namespace Prisma {
     create: XOR<ProductSellingUnitCreateWithoutTransferItemsInput, ProductSellingUnitUncheckedCreateWithoutTransferItemsInput>
   }
 
+  export type StockTransferLotAllocationCreateWithoutTransferItemInput = {
+    id?: string
+    sellingUnitId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    sourceStatus?: string
+    sourceNote?: string | null
+    createdAt?: Date | string
+    sourceInventoryLot: InventoryLotCreateNestedOneWithoutTransferAllocationsInput
+  }
+
+  export type StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput = {
+    id?: string
+    sourceInventoryLotId: string
+    sellingUnitId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    sourceStatus?: string
+    sourceNote?: string | null
+    createdAt?: Date | string
+  }
+
+  export type StockTransferLotAllocationCreateOrConnectWithoutTransferItemInput = {
+    where: StockTransferLotAllocationWhereUniqueInput
+    create: XOR<StockTransferLotAllocationCreateWithoutTransferItemInput, StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput>
+  }
+
+  export type StockTransferLotAllocationCreateManyTransferItemInputEnvelope = {
+    data: StockTransferLotAllocationCreateManyTransferItemInput | StockTransferLotAllocationCreateManyTransferItemInput[]
+  }
+
   export type StockTransferUpsertWithoutItemsInput = {
     update: XOR<StockTransferUpdateWithoutItemsInput, StockTransferUncheckedUpdateWithoutItemsInput>
     create: XOR<StockTransferCreateWithoutItemsInput, StockTransferUncheckedCreateWithoutItemsInput>
@@ -279142,6 +280995,276 @@ export namespace Prisma {
     billItems?: BillItemUncheckedUpdateManyWithoutSellingUnitNestedInput
     locationStocks?: LocationStockUncheckedUpdateManyWithoutSellingUnitNestedInput
     binPlacements?: BinPlacementUncheckedUpdateManyWithoutSellingUnitNestedInput
+  }
+
+  export type StockTransferLotAllocationUpsertWithWhereUniqueWithoutTransferItemInput = {
+    where: StockTransferLotAllocationWhereUniqueInput
+    update: XOR<StockTransferLotAllocationUpdateWithoutTransferItemInput, StockTransferLotAllocationUncheckedUpdateWithoutTransferItemInput>
+    create: XOR<StockTransferLotAllocationCreateWithoutTransferItemInput, StockTransferLotAllocationUncheckedCreateWithoutTransferItemInput>
+  }
+
+  export type StockTransferLotAllocationUpdateWithWhereUniqueWithoutTransferItemInput = {
+    where: StockTransferLotAllocationWhereUniqueInput
+    data: XOR<StockTransferLotAllocationUpdateWithoutTransferItemInput, StockTransferLotAllocationUncheckedUpdateWithoutTransferItemInput>
+  }
+
+  export type StockTransferLotAllocationUpdateManyWithWhereWithoutTransferItemInput = {
+    where: StockTransferLotAllocationScalarWhereInput
+    data: XOR<StockTransferLotAllocationUpdateManyMutationInput, StockTransferLotAllocationUncheckedUpdateManyWithoutTransferItemInput>
+  }
+
+  export type StockTransferLotAllocationScalarWhereInput = {
+    AND?: StockTransferLotAllocationScalarWhereInput | StockTransferLotAllocationScalarWhereInput[]
+    OR?: StockTransferLotAllocationScalarWhereInput[]
+    NOT?: StockTransferLotAllocationScalarWhereInput | StockTransferLotAllocationScalarWhereInput[]
+    id?: StringFilter<"StockTransferLotAllocation"> | string
+    transferItemId?: StringFilter<"StockTransferLotAllocation"> | string
+    sourceInventoryLotId?: StringFilter<"StockTransferLotAllocation"> | string
+    sellingUnitId?: StringNullableFilter<"StockTransferLotAllocation"> | string | null
+    batchNumber?: StringFilter<"StockTransferLotAllocation"> | string
+    manufacturedOn?: DateTimeNullableFilter<"StockTransferLotAllocation"> | Date | string | null
+    expiresOn?: DateTimeFilter<"StockTransferLotAllocation"> | Date | string
+    quantityBaseQty?: FloatFilter<"StockTransferLotAllocation"> | number
+    receivedBaseQty?: FloatFilter<"StockTransferLotAllocation"> | number
+    costPerRateUnit?: FloatFilter<"StockTransferLotAllocation"> | number
+    costPerRateUnitPaise?: BigIntNullableFilter<"StockTransferLotAllocation"> | bigint | number | null
+    mrp?: FloatNullableFilter<"StockTransferLotAllocation"> | number | null
+    mrpPaise?: BigIntNullableFilter<"StockTransferLotAllocation"> | bigint | number | null
+    sourceStatus?: StringFilter<"StockTransferLotAllocation"> | string
+    sourceNote?: StringNullableFilter<"StockTransferLotAllocation"> | string | null
+    createdAt?: DateTimeFilter<"StockTransferLotAllocation"> | Date | string
+  }
+
+  export type StockTransferItemCreateWithoutLotAllocationsInput = {
+    id?: string
+    productName: string
+    sellingUnitQty?: number | null
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    baseUnit: string
+    hsn?: string | null
+    gstRate?: number
+    taxableValue?: number
+    taxableValuePaise?: bigint | number | null
+    cgst?: number
+    cgstPaise?: bigint | number | null
+    sgst?: number
+    sgstPaise?: bigint | number | null
+    igst?: number
+    igstPaise?: bigint | number | null
+    taxTotal?: number
+    taxTotalPaise?: bigint | number | null
+    totalValue?: number
+    totalValuePaise?: bigint | number | null
+    transfer: StockTransferCreateNestedOneWithoutItemsInput
+    product: ProductCreateNestedOneWithoutTransferItemsInput
+    sellingUnit?: ProductSellingUnitCreateNestedOneWithoutTransferItemsInput
+  }
+
+  export type StockTransferItemUncheckedCreateWithoutLotAllocationsInput = {
+    id?: string
+    transferId: string
+    productId: string
+    productName: string
+    sellingUnitId?: string | null
+    sellingUnitQty?: number | null
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    baseUnit: string
+    hsn?: string | null
+    gstRate?: number
+    taxableValue?: number
+    taxableValuePaise?: bigint | number | null
+    cgst?: number
+    cgstPaise?: bigint | number | null
+    sgst?: number
+    sgstPaise?: bigint | number | null
+    igst?: number
+    igstPaise?: bigint | number | null
+    taxTotal?: number
+    taxTotalPaise?: bigint | number | null
+    totalValue?: number
+    totalValuePaise?: bigint | number | null
+  }
+
+  export type StockTransferItemCreateOrConnectWithoutLotAllocationsInput = {
+    where: StockTransferItemWhereUniqueInput
+    create: XOR<StockTransferItemCreateWithoutLotAllocationsInput, StockTransferItemUncheckedCreateWithoutLotAllocationsInput>
+  }
+
+  export type InventoryLotCreateWithoutTransferAllocationsInput = {
+    id?: string
+    sellingUnitId?: string | null
+    producedByRunId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    receivedBaseQty: number
+    availableBaseQty: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    status?: string
+    note?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    shop: ShopCreateNestedOneWithoutInventoryLotsInput
+    location: StoreLocationCreateNestedOneWithoutInventoryLotsInput
+    product: ProductCreateNestedOneWithoutInventoryLotsInput
+    purchaseReceiptItem?: PurchaseReceiptItemCreateNestedOneWithoutInventoryLotsInput
+    allocations?: BillItemLotAllocationCreateNestedManyWithoutInventoryLotInput
+  }
+
+  export type InventoryLotUncheckedCreateWithoutTransferAllocationsInput = {
+    id?: string
+    shopId: string
+    locationId: string
+    productId: string
+    purchaseReceiptItemId?: string | null
+    sellingUnitId?: string | null
+    producedByRunId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    receivedBaseQty: number
+    availableBaseQty: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    status?: string
+    note?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    allocations?: BillItemLotAllocationUncheckedCreateNestedManyWithoutInventoryLotInput
+  }
+
+  export type InventoryLotCreateOrConnectWithoutTransferAllocationsInput = {
+    where: InventoryLotWhereUniqueInput
+    create: XOR<InventoryLotCreateWithoutTransferAllocationsInput, InventoryLotUncheckedCreateWithoutTransferAllocationsInput>
+  }
+
+  export type StockTransferItemUpsertWithoutLotAllocationsInput = {
+    update: XOR<StockTransferItemUpdateWithoutLotAllocationsInput, StockTransferItemUncheckedUpdateWithoutLotAllocationsInput>
+    create: XOR<StockTransferItemCreateWithoutLotAllocationsInput, StockTransferItemUncheckedCreateWithoutLotAllocationsInput>
+    where?: StockTransferItemWhereInput
+  }
+
+  export type StockTransferItemUpdateToOneWithWhereWithoutLotAllocationsInput = {
+    where?: StockTransferItemWhereInput
+    data: XOR<StockTransferItemUpdateWithoutLotAllocationsInput, StockTransferItemUncheckedUpdateWithoutLotAllocationsInput>
+  }
+
+  export type StockTransferItemUpdateWithoutLotAllocationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    productName?: StringFieldUpdateOperationsInput | string
+    sellingUnitQty?: NullableFloatFieldUpdateOperationsInput | number | null
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    baseUnit?: StringFieldUpdateOperationsInput | string
+    hsn?: NullableStringFieldUpdateOperationsInput | string | null
+    gstRate?: FloatFieldUpdateOperationsInput | number
+    taxableValue?: FloatFieldUpdateOperationsInput | number
+    taxableValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    cgst?: FloatFieldUpdateOperationsInput | number
+    cgstPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sgst?: FloatFieldUpdateOperationsInput | number
+    sgstPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    igst?: FloatFieldUpdateOperationsInput | number
+    igstPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    taxTotal?: FloatFieldUpdateOperationsInput | number
+    taxTotalPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    totalValue?: FloatFieldUpdateOperationsInput | number
+    totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    transfer?: StockTransferUpdateOneRequiredWithoutItemsNestedInput
+    product?: ProductUpdateOneRequiredWithoutTransferItemsNestedInput
+    sellingUnit?: ProductSellingUnitUpdateOneWithoutTransferItemsNestedInput
+  }
+
+  export type StockTransferItemUncheckedUpdateWithoutLotAllocationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    transferId?: StringFieldUpdateOperationsInput | string
+    productId?: StringFieldUpdateOperationsInput | string
+    productName?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    sellingUnitQty?: NullableFloatFieldUpdateOperationsInput | number | null
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    baseUnit?: StringFieldUpdateOperationsInput | string
+    hsn?: NullableStringFieldUpdateOperationsInput | string | null
+    gstRate?: FloatFieldUpdateOperationsInput | number
+    taxableValue?: FloatFieldUpdateOperationsInput | number
+    taxableValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    cgst?: FloatFieldUpdateOperationsInput | number
+    cgstPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sgst?: FloatFieldUpdateOperationsInput | number
+    sgstPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    igst?: FloatFieldUpdateOperationsInput | number
+    igstPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    taxTotal?: FloatFieldUpdateOperationsInput | number
+    taxTotalPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    totalValue?: FloatFieldUpdateOperationsInput | number
+    totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+  }
+
+  export type InventoryLotUpsertWithoutTransferAllocationsInput = {
+    update: XOR<InventoryLotUpdateWithoutTransferAllocationsInput, InventoryLotUncheckedUpdateWithoutTransferAllocationsInput>
+    create: XOR<InventoryLotCreateWithoutTransferAllocationsInput, InventoryLotUncheckedCreateWithoutTransferAllocationsInput>
+    where?: InventoryLotWhereInput
+  }
+
+  export type InventoryLotUpdateToOneWithWhereWithoutTransferAllocationsInput = {
+    where?: InventoryLotWhereInput
+    data: XOR<InventoryLotUpdateWithoutTransferAllocationsInput, InventoryLotUncheckedUpdateWithoutTransferAllocationsInput>
+  }
+
+  export type InventoryLotUpdateWithoutTransferAllocationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    producedByRunId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    availableBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    shop?: ShopUpdateOneRequiredWithoutInventoryLotsNestedInput
+    location?: StoreLocationUpdateOneRequiredWithoutInventoryLotsNestedInput
+    product?: ProductUpdateOneRequiredWithoutInventoryLotsNestedInput
+    purchaseReceiptItem?: PurchaseReceiptItemUpdateOneWithoutInventoryLotsNestedInput
+    allocations?: BillItemLotAllocationUpdateManyWithoutInventoryLotNestedInput
+  }
+
+  export type InventoryLotUncheckedUpdateWithoutTransferAllocationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    shopId?: StringFieldUpdateOperationsInput | string
+    locationId?: StringFieldUpdateOperationsInput | string
+    productId?: StringFieldUpdateOperationsInput | string
+    purchaseReceiptItemId?: NullableStringFieldUpdateOperationsInput | string | null
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    producedByRunId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    availableBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    status?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    allocations?: BillItemLotAllocationUncheckedUpdateManyWithoutInventoryLotNestedInput
   }
 
   export type ShopCreateWithoutTransferDocumentCountersInput = {
@@ -292355,6 +294478,7 @@ export namespace Prisma {
     location: StoreLocationCreateNestedOneWithoutInventoryLotsInput
     product: ProductCreateNestedOneWithoutInventoryLotsInput
     allocations?: BillItemLotAllocationCreateNestedManyWithoutInventoryLotInput
+    transferAllocations?: StockTransferLotAllocationCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotUncheckedCreateWithoutPurchaseReceiptItemInput = {
@@ -292378,6 +294502,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     allocations?: BillItemLotAllocationUncheckedCreateNestedManyWithoutInventoryLotInput
+    transferAllocations?: StockTransferLotAllocationUncheckedCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotCreateOrConnectWithoutPurchaseReceiptItemInput = {
@@ -294759,6 +296884,51 @@ export namespace Prisma {
     data: BillItemLotAllocationCreateManyInventoryLotInput | BillItemLotAllocationCreateManyInventoryLotInput[]
   }
 
+  export type StockTransferLotAllocationCreateWithoutSourceInventoryLotInput = {
+    id?: string
+    sellingUnitId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    sourceStatus?: string
+    sourceNote?: string | null
+    createdAt?: Date | string
+    transferItem: StockTransferItemCreateNestedOneWithoutLotAllocationsInput
+  }
+
+  export type StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput = {
+    id?: string
+    transferItemId: string
+    sellingUnitId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    sourceStatus?: string
+    sourceNote?: string | null
+    createdAt?: Date | string
+  }
+
+  export type StockTransferLotAllocationCreateOrConnectWithoutSourceInventoryLotInput = {
+    where: StockTransferLotAllocationWhereUniqueInput
+    create: XOR<StockTransferLotAllocationCreateWithoutSourceInventoryLotInput, StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput>
+  }
+
+  export type StockTransferLotAllocationCreateManySourceInventoryLotInputEnvelope = {
+    data: StockTransferLotAllocationCreateManySourceInventoryLotInput | StockTransferLotAllocationCreateManySourceInventoryLotInput[]
+  }
+
   export type ShopUpsertWithoutInventoryLotsInput = {
     update: XOR<ShopUpdateWithoutInventoryLotsInput, ShopUncheckedUpdateWithoutInventoryLotsInput>
     create: XOR<ShopCreateWithoutInventoryLotsInput, ShopUncheckedCreateWithoutInventoryLotsInput>
@@ -295321,6 +297491,22 @@ export namespace Prisma {
   export type BillItemLotAllocationUpdateManyWithWhereWithoutInventoryLotInput = {
     where: BillItemLotAllocationScalarWhereInput
     data: XOR<BillItemLotAllocationUpdateManyMutationInput, BillItemLotAllocationUncheckedUpdateManyWithoutInventoryLotInput>
+  }
+
+  export type StockTransferLotAllocationUpsertWithWhereUniqueWithoutSourceInventoryLotInput = {
+    where: StockTransferLotAllocationWhereUniqueInput
+    update: XOR<StockTransferLotAllocationUpdateWithoutSourceInventoryLotInput, StockTransferLotAllocationUncheckedUpdateWithoutSourceInventoryLotInput>
+    create: XOR<StockTransferLotAllocationCreateWithoutSourceInventoryLotInput, StockTransferLotAllocationUncheckedCreateWithoutSourceInventoryLotInput>
+  }
+
+  export type StockTransferLotAllocationUpdateWithWhereUniqueWithoutSourceInventoryLotInput = {
+    where: StockTransferLotAllocationWhereUniqueInput
+    data: XOR<StockTransferLotAllocationUpdateWithoutSourceInventoryLotInput, StockTransferLotAllocationUncheckedUpdateWithoutSourceInventoryLotInput>
+  }
+
+  export type StockTransferLotAllocationUpdateManyWithWhereWithoutSourceInventoryLotInput = {
+    where: StockTransferLotAllocationScalarWhereInput
+    data: XOR<StockTransferLotAllocationUpdateManyMutationInput, StockTransferLotAllocationUncheckedUpdateManyWithoutSourceInventoryLotInput>
   }
 
   export type ManufacturingBomItemCreateWithoutBomInput = {
@@ -296727,6 +298913,7 @@ export namespace Prisma {
     location: StoreLocationCreateNestedOneWithoutInventoryLotsInput
     product: ProductCreateNestedOneWithoutInventoryLotsInput
     purchaseReceiptItem?: PurchaseReceiptItemCreateNestedOneWithoutInventoryLotsInput
+    transferAllocations?: StockTransferLotAllocationCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotUncheckedCreateWithoutAllocationsInput = {
@@ -296750,6 +298937,7 @@ export namespace Prisma {
     note?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
+    transferAllocations?: StockTransferLotAllocationUncheckedCreateNestedManyWithoutSourceInventoryLotInput
   }
 
   export type InventoryLotCreateOrConnectWithoutAllocationsInput = {
@@ -296886,6 +299074,7 @@ export namespace Prisma {
     location?: StoreLocationUpdateOneRequiredWithoutInventoryLotsNestedInput
     product?: ProductUpdateOneRequiredWithoutInventoryLotsNestedInput
     purchaseReceiptItem?: PurchaseReceiptItemUpdateOneWithoutInventoryLotsNestedInput
+    transferAllocations?: StockTransferLotAllocationUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotUncheckedUpdateWithoutAllocationsInput = {
@@ -296909,6 +299098,7 @@ export namespace Prisma {
     note?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    transferAllocations?: StockTransferLotAllocationUncheckedUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type ShopCreateWithoutUserLocationAccessInput = {
@@ -350171,6 +352361,7 @@ export namespace Prisma {
     product?: ProductUpdateOneRequiredWithoutInventoryLotsNestedInput
     purchaseReceiptItem?: PurchaseReceiptItemUpdateOneWithoutInventoryLotsNestedInput
     allocations?: BillItemLotAllocationUpdateManyWithoutInventoryLotNestedInput
+    transferAllocations?: StockTransferLotAllocationUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotUncheckedUpdateWithoutShopInput = {
@@ -350194,6 +352385,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     allocations?: BillItemLotAllocationUncheckedUpdateManyWithoutInventoryLotNestedInput
+    transferAllocations?: StockTransferLotAllocationUncheckedUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotUncheckedUpdateManyWithoutShopInput = {
@@ -354133,6 +356325,7 @@ export namespace Prisma {
     totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
     transfer?: StockTransferUpdateOneRequiredWithoutItemsNestedInput
     product?: ProductUpdateOneRequiredWithoutTransferItemsNestedInput
+    lotAllocations?: StockTransferLotAllocationUpdateManyWithoutTransferItemNestedInput
   }
 
   export type StockTransferItemUncheckedUpdateWithoutSellingUnitInput = {
@@ -354158,6 +356351,7 @@ export namespace Prisma {
     taxTotalPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
     totalValue?: FloatFieldUpdateOperationsInput | number
     totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    lotAllocations?: StockTransferLotAllocationUncheckedUpdateManyWithoutTransferItemNestedInput
   }
 
   export type StockTransferItemUncheckedUpdateManyWithoutSellingUnitInput = {
@@ -355522,6 +357716,7 @@ export namespace Prisma {
     totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
     transfer?: StockTransferUpdateOneRequiredWithoutItemsNestedInput
     sellingUnit?: ProductSellingUnitUpdateOneWithoutTransferItemsNestedInput
+    lotAllocations?: StockTransferLotAllocationUpdateManyWithoutTransferItemNestedInput
   }
 
   export type StockTransferItemUncheckedUpdateWithoutProductInput = {
@@ -355547,6 +357742,7 @@ export namespace Prisma {
     taxTotalPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
     totalValue?: FloatFieldUpdateOperationsInput | number
     totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    lotAllocations?: StockTransferLotAllocationUncheckedUpdateManyWithoutTransferItemNestedInput
   }
 
   export type StockTransferItemUncheckedUpdateManyWithoutProductInput = {
@@ -355765,6 +357961,7 @@ export namespace Prisma {
     location?: StoreLocationUpdateOneRequiredWithoutInventoryLotsNestedInput
     purchaseReceiptItem?: PurchaseReceiptItemUpdateOneWithoutInventoryLotsNestedInput
     allocations?: BillItemLotAllocationUpdateManyWithoutInventoryLotNestedInput
+    transferAllocations?: StockTransferLotAllocationUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotUncheckedUpdateWithoutProductInput = {
@@ -355788,6 +357985,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     allocations?: BillItemLotAllocationUncheckedUpdateManyWithoutInventoryLotNestedInput
+    transferAllocations?: StockTransferLotAllocationUncheckedUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotUncheckedUpdateManyWithoutProductInput = {
@@ -359634,6 +361832,7 @@ export namespace Prisma {
     product?: ProductUpdateOneRequiredWithoutInventoryLotsNestedInput
     purchaseReceiptItem?: PurchaseReceiptItemUpdateOneWithoutInventoryLotsNestedInput
     allocations?: BillItemLotAllocationUpdateManyWithoutInventoryLotNestedInput
+    transferAllocations?: StockTransferLotAllocationUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotUncheckedUpdateWithoutLocationInput = {
@@ -359657,6 +361856,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     allocations?: BillItemLotAllocationUncheckedUpdateManyWithoutInventoryLotNestedInput
+    transferAllocations?: StockTransferLotAllocationUncheckedUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotUncheckedUpdateManyWithoutLocationInput = {
@@ -360289,6 +362489,7 @@ export namespace Prisma {
     totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
     product?: ProductUpdateOneRequiredWithoutTransferItemsNestedInput
     sellingUnit?: ProductSellingUnitUpdateOneWithoutTransferItemsNestedInput
+    lotAllocations?: StockTransferLotAllocationUpdateManyWithoutTransferItemNestedInput
   }
 
   export type StockTransferItemUncheckedUpdateWithoutTransferInput = {
@@ -360314,6 +362515,7 @@ export namespace Prisma {
     taxTotalPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
     totalValue?: FloatFieldUpdateOperationsInput | number
     totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    lotAllocations?: StockTransferLotAllocationUncheckedUpdateManyWithoutTransferItemNestedInput
   }
 
   export type StockTransferItemUncheckedUpdateManyWithoutTransferInput = {
@@ -360339,6 +362541,78 @@ export namespace Prisma {
     taxTotalPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
     totalValue?: FloatFieldUpdateOperationsInput | number
     totalValuePaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+  }
+
+  export type StockTransferLotAllocationCreateManyTransferItemInput = {
+    id?: string
+    sourceInventoryLotId: string
+    sellingUnitId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    sourceStatus?: string
+    sourceNote?: string | null
+    createdAt?: Date | string
+  }
+
+  export type StockTransferLotAllocationUpdateWithoutTransferItemInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sourceStatus?: StringFieldUpdateOperationsInput | string
+    sourceNote?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    sourceInventoryLot?: InventoryLotUpdateOneRequiredWithoutTransferAllocationsNestedInput
+  }
+
+  export type StockTransferLotAllocationUncheckedUpdateWithoutTransferItemInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sourceInventoryLotId?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sourceStatus?: StringFieldUpdateOperationsInput | string
+    sourceNote?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type StockTransferLotAllocationUncheckedUpdateManyWithoutTransferItemInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sourceInventoryLotId?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sourceStatus?: StringFieldUpdateOperationsInput | string
+    sourceNote?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type LoyaltyTransactionCreateManyAccountInput = {
@@ -361686,6 +363960,7 @@ export namespace Prisma {
     location?: StoreLocationUpdateOneRequiredWithoutInventoryLotsNestedInput
     product?: ProductUpdateOneRequiredWithoutInventoryLotsNestedInput
     allocations?: BillItemLotAllocationUpdateManyWithoutInventoryLotNestedInput
+    transferAllocations?: StockTransferLotAllocationUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotUncheckedUpdateWithoutPurchaseReceiptItemInput = {
@@ -361709,6 +363984,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     allocations?: BillItemLotAllocationUncheckedUpdateManyWithoutInventoryLotNestedInput
+    transferAllocations?: StockTransferLotAllocationUncheckedUpdateManyWithoutSourceInventoryLotNestedInput
   }
 
   export type InventoryLotUncheckedUpdateManyWithoutPurchaseReceiptItemInput = {
@@ -361824,6 +364100,24 @@ export namespace Prisma {
     createdAt?: Date | string
   }
 
+  export type StockTransferLotAllocationCreateManySourceInventoryLotInput = {
+    id?: string
+    transferItemId: string
+    sellingUnitId?: string | null
+    batchNumber: string
+    manufacturedOn?: Date | string | null
+    expiresOn: Date | string
+    quantityBaseQty: number
+    receivedBaseQty?: number
+    costPerRateUnit: number
+    costPerRateUnitPaise?: bigint | number | null
+    mrp?: number | null
+    mrpPaise?: bigint | number | null
+    sourceStatus?: string
+    sourceNote?: string | null
+    createdAt?: Date | string
+  }
+
   export type BillItemLotAllocationUpdateWithoutInventoryLotInput = {
     id?: StringFieldUpdateOperationsInput | string
     quantityBaseQty?: FloatFieldUpdateOperationsInput | number
@@ -361842,6 +364136,60 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     billItemId?: StringFieldUpdateOperationsInput | string
     quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type StockTransferLotAllocationUpdateWithoutSourceInventoryLotInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sourceStatus?: StringFieldUpdateOperationsInput | string
+    sourceNote?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    transferItem?: StockTransferItemUpdateOneRequiredWithoutLotAllocationsNestedInput
+  }
+
+  export type StockTransferLotAllocationUncheckedUpdateWithoutSourceInventoryLotInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    transferItemId?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sourceStatus?: StringFieldUpdateOperationsInput | string
+    sourceNote?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type StockTransferLotAllocationUncheckedUpdateManyWithoutSourceInventoryLotInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    transferItemId?: StringFieldUpdateOperationsInput | string
+    sellingUnitId?: NullableStringFieldUpdateOperationsInput | string | null
+    batchNumber?: StringFieldUpdateOperationsInput | string
+    manufacturedOn?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresOn?: DateTimeFieldUpdateOperationsInput | Date | string
+    quantityBaseQty?: FloatFieldUpdateOperationsInput | number
+    receivedBaseQty?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnit?: FloatFieldUpdateOperationsInput | number
+    costPerRateUnitPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    mrp?: NullableFloatFieldUpdateOperationsInput | number | null
+    mrpPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    sourceStatus?: StringFieldUpdateOperationsInput | string
+    sourceNote?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -364187,6 +366535,10 @@ export namespace Prisma {
      */
     export type StockTransferCountOutputTypeArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = StockTransferCountOutputTypeDefaultArgs<ExtArgs>
     /**
+     * @deprecated Use StockTransferItemCountOutputTypeDefaultArgs instead
+     */
+    export type StockTransferItemCountOutputTypeArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = StockTransferItemCountOutputTypeDefaultArgs<ExtArgs>
+    /**
      * @deprecated Use LoyaltyAccountCountOutputTypeDefaultArgs instead
      */
     export type LoyaltyAccountCountOutputTypeArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = LoyaltyAccountCountOutputTypeDefaultArgs<ExtArgs>
@@ -364442,6 +366794,10 @@ export namespace Prisma {
      * @deprecated Use StockTransferItemDefaultArgs instead
      */
     export type StockTransferItemArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = StockTransferItemDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use StockTransferLotAllocationDefaultArgs instead
+     */
+    export type StockTransferLotAllocationArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = StockTransferLotAllocationDefaultArgs<ExtArgs>
     /**
      * @deprecated Use TransferDocumentCounterDefaultArgs instead
      */

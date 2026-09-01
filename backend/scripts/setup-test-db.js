@@ -8,6 +8,7 @@ import {
   isKnownPrismaRuntimeUnavailable,
   isPostgresTestDatabaseUrl,
   maskDatabaseUrl,
+  prismaSchemasEquivalent,
   shouldGracefullySkipPrismaRuntime,
 } from "./test-db-utils.js";
 
@@ -47,7 +48,7 @@ function assertCompatibleGeneratedClient() {
   if (useIsolatedClient) {
     const sourceSchemaPath = path.join(process.cwd(), "prisma", "schema.prisma");
     const sourceSchema = fs.readFileSync(sourceSchemaPath, "utf8");
-    if (generatedSchema !== sourceSchema) {
+    if (!prismaSchemasEquivalent(generatedSchema, sourceSchema)) {
       throw new Error(
         `SKIP_PRISMA_GENERATE=true found a stale ${process.env.PRISMA_CLIENT_VARIANT} Prisma client. Regenerate it from prisma/schema.prisma first.`
       );
@@ -108,7 +109,13 @@ if (isPostgres) {
   if (!skipGenerate) runPrisma(["generate", ...schemaArgs]);
 } else {
   ensureSqliteDatabaseFile();
-  if (!skipGenerate) runPrisma(["generate", ...(useIsolatedClient ? ["--generator", isolatedClient.generator] : [])]);
+  if (!skipGenerate) {
+    // Generate only the client this caller will use. An unqualified `generate`
+    // rewrites integration + certification clients too; another live suite can
+    // require one while Prisma is midway through replacing it and observe an
+    // incomplete module (`PrismaClient is not a constructor`).
+    runPrisma(["generate", "--generator", useIsolatedClient ? isolatedClient.generator : "client"]);
+  }
   // Generation is handled explicitly above. Never let db push regenerate every
   // declared client, because a live Windows dev server can hold the canonical
   // engine DLL open while the isolated integration client remains available.

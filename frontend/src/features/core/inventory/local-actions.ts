@@ -244,6 +244,20 @@ async function stockMovementLocalFirst(
   if (movementType === "purchase" && (!purchaseBillAmount || purchaseBillAmount <= 0)) {
     throw new Error("Enter purchase cost or bill amount before adding stock.");
   }
+  if (movementType === "purchase" && product.batchTrackingEnabled) {
+    const batchNumber = typeof data.batchNumber === "string" ? data.batchNumber.trim() : "";
+    const expiresOn = typeof data.expiresOn === "string" ? data.expiresOn : "";
+    if (!batchNumber || !expiresOn) {
+      throw new Error(`${product.name} requires a batch number and expiry date before stock can be added.`);
+    }
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (new Date(`${expiresOn}T00:00:00`) < today) {
+      throw new Error("Expired stock cannot be received into saleable inventory.");
+    }
+    if (typeof data.manufacturedOn === "string" && data.manufacturedOn && data.manufacturedOn >= expiresOn) {
+      throw new Error("Expiry date must be after manufacturing date.");
+    }
+  }
 
   const movementId = createLocalId(`stock_${movementType}`);
   const now = new Date().toISOString();
@@ -325,6 +339,14 @@ async function stockMovementLocalFirst(
     supplier_name: data.supplierName,
     costPerRateUnit: data.costPerRateUnit,
     cost_per_rate_unit: data.costPerRateUnit,
+    batchNumber: data.batchNumber,
+    batch_number: data.batchNumber,
+    manufacturedOn: data.manufacturedOn,
+    manufactured_on: data.manufacturedOn,
+    expiresOn: data.expiresOn,
+    expires_on: data.expiresOn,
+    batchMrp: data.batchMrp,
+    batch_mrp: data.batchMrp,
     note: data.note ?? data.reason ?? warning,
     reason: data.reason ?? data.note ?? warning,
     warning,
