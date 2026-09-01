@@ -38,9 +38,10 @@ interface Location {
 }
 
 interface LocationsResponse { locations: Location[]; usage: { current: number; maximum: number } }
-interface LocationProduct { id: string; name: string; barcode?: string | null; sku?: string | null; baseUnit: string; displayUnit: string; stockBaseQty: number; allocationWarning: boolean; hsn?: string | null; gstRate?: number }
+interface LocationProduct { id: string; name: string; barcode?: string | null; sku?: string | null; baseUnit: string; displayUnit: string; stockBaseQty: number; allocationWarning: boolean; hsn?: string | null; gstRate?: number; batchTrackingEnabled?: boolean }
 interface LocationInventory { location: Location; products: LocationProduct[] }
-interface TransferItem { id: string; productId: string; productName: string; quantityBaseQty: number; receivedBaseQty: number; remainingBaseQty: number; baseUnit: string; hsn?: string | null; gstRate: number; taxableValue: number; taxTotal: number; totalValue: number }
+interface TransferLotAllocation { id: string; batchNumber: string; expiresOn: string; quantityBaseQty: number; receivedBaseQty: number; remainingBaseQty: number }
+interface TransferItem { id: string; productId: string; productName: string; quantityBaseQty: number; receivedBaseQty: number; remainingBaseQty: number; baseUnit: string; hsn?: string | null; gstRate: number; taxableValue: number; taxTotal: number; totalValue: number; lotAllocations?: TransferLotAllocation[] }
 interface Transfer {
   id: string;
   referenceNo: string;
@@ -486,6 +487,7 @@ export default function StockTransfersPage() {
                   <div key={item.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                     <div className="flex items-center justify-between gap-3"><p className="truncate text-xs font-black text-slate-800">{item.productName}</p><span className="shrink-0 text-[10px] font-bold text-slate-500">{item.baseUnit}</span></div>
                     <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] text-slate-500"><span>{t("inventory.transfers.ordered")}<br /><b className="text-slate-800">{item.quantityBaseQty}</b></span><span>{t("inventory.transfers.received")}<br /><b className="text-emerald-700">{item.receivedBaseQty}</b></span><span>{transfer.status === "cancelled" ? t("inventory.transfers.returned") : t("inventory.transfers.remaining")}<br /><b className={item.remainingBaseQty > 0 ? (transfer.status === "cancelled" ? "text-slate-700" : "text-amber-700") : "text-slate-700"}>{item.remainingBaseQty}</b></span></div>
+                    {Boolean(item.lotAllocations?.length) && <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">{item.lotAllocations?.map((allocation) => <div key={allocation.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-md bg-slate-50 px-2 py-1 text-[10px] text-slate-600"><span className="font-mono font-bold text-slate-800">{t("inventory.transfers.batchLabel", { number: allocation.batchNumber })}</span><span>{t("inventory.transfers.batchProgress", { received: allocation.receivedBaseQty, total: allocation.quantityBaseQty })}</span><span className="basis-full text-[9px] text-slate-500">{t("inventory.transfers.expiryLabel", { date: new Date(allocation.expiresOn).toLocaleDateString("en-IN") })}</span></div>)}</div>}
                   </div>
                 ))}
               </div>
@@ -558,7 +560,7 @@ export default function StockTransfersPage() {
 
             <div className="rounded-xl border border-slate-200 p-4">
               <div className="mb-3 flex items-center justify-between"><div><p className="text-sm font-black text-slate-900">{t("inventory.transfers.products")}</p><p className="text-xs text-slate-500">{t("inventory.transfers.productsHelp")}</p></div><Package size={18} className="text-blue-600" /></div>
-              <div className="space-y-2"><Label htmlFor="transfer-product">{t("inventory.col.product")}</Label><Select value={productId} onValueChange={(value) => { setProductId(value); setQuantity(""); setDeclaredTaxableValue(""); }} disabled={!fromId}><SelectTrigger id="transfer-product"><SelectValue placeholder={fromId ? t("inventory.transfers.chooseProduct") : t("inventory.transfers.chooseSourceFirst")} /></SelectTrigger><SelectContent>{(sourceQ.data?.products ?? []).filter((row) => row.stockBaseQty > 0).map((row) => <SelectItem key={row.id} value={row.id}>{row.name} · {row.stockBaseQty} {row.baseUnit}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="transfer-product">{t("inventory.col.product")}</Label><Select value={productId} onValueChange={(value) => { setProductId(value); setQuantity(""); setDeclaredTaxableValue(""); }} disabled={!fromId}><SelectTrigger id="transfer-product"><SelectValue placeholder={fromId ? t("inventory.transfers.chooseProduct") : t("inventory.transfers.chooseSourceFirst")} /></SelectTrigger><SelectContent>{(sourceQ.data?.products ?? []).filter((row) => row.stockBaseQty > 0).map((row) => <SelectItem key={row.id} value={row.id}>{row.name} · {row.stockBaseQty} {row.baseUnit}{row.batchTrackingEnabled ? ` · ${t("inventory.transfers.fefoBatch")}` : ""}</SelectItem>)}</SelectContent></Select></div>
 
               <div className={`mt-3 grid gap-3 ${registeredTransfer ? "sm:grid-cols-[1fr_1fr_auto]" : "sm:grid-cols-[1fr_auto]"} sm:items-end`}>
                 <div className="space-y-2"><Label htmlFor="transfer-quantity">{t("inventory.transfers.quantityIn", { unit: selectedProduct?.baseUnit || t("inventory.transfers.baseUnitFallback") })}</Label><Input id="transfer-quantity" type="number" min="0" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></div>

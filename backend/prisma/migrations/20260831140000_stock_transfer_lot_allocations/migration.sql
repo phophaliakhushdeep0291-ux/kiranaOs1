@@ -1,4 +1,6 @@
-CREATE TABLE "StockTransferLotAllocation" (
+-- @replay-safe: SQLite supports guarded table and index creation; the foreign
+-- keys are part of the guarded table declaration.
+CREATE TABLE IF NOT EXISTS "StockTransferLotAllocation" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "transferItemId" TEXT NOT NULL,
     "sourceInventoryLotId" TEXT NOT NULL,
@@ -19,11 +21,11 @@ CREATE TABLE "StockTransferLotAllocation" (
     CONSTRAINT "StockTransferLotAllocation_sourceInventoryLotId_fkey" FOREIGN KEY ("sourceInventoryLotId") REFERENCES "InventoryLot" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
-CREATE UNIQUE INDEX "StockTransferLotAllocation_transferItemId_sourceInventoryLotId_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "StockTransferLotAllocation_transferItemId_sourceInventoryLotId_key"
 ON "StockTransferLotAllocation"("transferItemId", "sourceInventoryLotId");
 
-CREATE INDEX "StockTransferLotAllocation_sourceInventoryLotId_idx"
+CREATE INDEX IF NOT EXISTS "StockTransferLotAllocation_sourceInventoryLotId_idx"
 ON "StockTransferLotAllocation"("sourceInventoryLotId");
 
-CREATE INDEX "StockTransferLotAllocation_transferItemId_expiresOn_idx"
+CREATE INDEX IF NOT EXISTS "StockTransferLotAllocation_transferItemId_expiresOn_idx"
 ON "StockTransferLotAllocation"("transferItemId", "expiresOn");

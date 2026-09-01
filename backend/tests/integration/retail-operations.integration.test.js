@@ -301,6 +301,175 @@ if (ctx.skip) {
       assert.equal(audits.some((row) => row.action === "STOCK_TRANSFER_RECEIVED"), true);
     });
 
+    test("moves exact FEFO batches through partial branch receipt and cancellation", async () => {
+      const { tenant, auth } = await ownerContext();
+      const product = await createProduct(ctx.db, tenant.shop.id, {
+        name: "Batch Transfer Medicine",
+        stockBaseQty: 10,
+        gstRate: 5,
+        hsn: "3004",
+      });
+      await ctx.db.product.update({ where: { id: product.id }, data: { batchTrackingEnabled: true } });
+      const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
+      const branch = assertSuccess(await ctx.post("/api/stores", {
+        name: "Batch Destination",
+        code: "BATCH02",
+        city: "Pune",
+      }, { token: auth.accessToken }), 201);
+      const earlyExpiry = new Date(`${isoDaysFromNow(30)}T00:00:00.000Z`);
+      const lateExpiry = new Date(`${isoDaysFromNow(90)}T00:00:00.000Z`);
+      const earlyLot = await ctx.db.inventoryLot.create({
+        data: {
+          shopId: tenant.shop.id,
+          locationId: primary.id,
+          productId: product.id,
+          batchNumber: "MED-EARLY",
+          expiresOn: earlyExpiry,
+          receivedBaseQty: 4,
+          availableBaseQty: 4,
+          costPerRateUnit: 12,
+          mrp: 20,
+        },
+      });
+      const lateLot = await ctx.db.inventoryLot.create({
+        data: {
+          shopId: tenant.shop.id,
+          locationId: primary.id,
+          productId: product.id,
+          batchNumber: "MED-LATE",
+          expiresOn: lateExpiry,
+          receivedBaseQty: 6,
+          availableBaseQty: 6,
+          costPerRateUnit: 13,
+          mrp: 21,
+        },
+      });
+      const transferPayload = {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        fulfillmentMode: "shipment",
+        items: [{ productId: product.id, quantityBaseQty: 7, declaredTaxableValue: 91 }],
+        note: "Move exact expiry batches",
+        ownerPin: tenant.ownerPin,
+      };
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_batch_transfer_dispatch_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_TRANSFER_DISPATCHED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced batch transfer dispatch audit failure');
+        END
+      `);
+      let failed;
+      try {
+        failed = await ctx.post("/api/stores/transfers", transferPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_batch_transfer_dispatch_audit_failure");
+      }
+      assert.equal(assertFailure(failed, 503).code, "STORE_AUDIT_WRITE_FAILED");
+      assert.deepEqual(
+        (await ctx.db.inventoryLot.findMany({ where: { productId: product.id }, orderBy: { expiresOn: "asc" } })).map((lot) => lot.availableBaseQty),
+        [4, 6],
+        "failed dispatch audit must roll exact source batches back",
+      );
+      assert.equal(await ctx.db.stockTransferLotAllocation.count(), 0);
+
+      const transfer = assertSuccess(await ctx.post("/api/stores/transfers", transferPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(transfer.status, "in_transit");
+      assert.deepEqual(
+        transfer.items[0].lotAllocations.map((allocation) => [allocation.batchNumber, allocation.quantityBaseQty, allocation.receivedBaseQty]),
+        [["MED-EARLY", 4, 0], ["MED-LATE", 3, 0]],
+        "dispatch must reserve earliest-expiring stock first",
+      );
+      assert.deepEqual(
+        (await ctx.db.inventoryLot.findMany({ where: { id: { in: [earlyLot.id, lateLot.id] } }, orderBy: { expiresOn: "asc" } })).map((lot) => [lot.availableBaseQty, lot.status]),
+        [[0, "depleted"], [3, "active"]],
+      );
+      const line = transfer.items[0];
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_batch_transfer_receipt_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_TRANSFER_PARTIALLY_RECEIVED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced batch transfer receipt audit failure');
+        END
+      `);
+      try {
+        failed = await ctx.post(`/api/stores/transfers/${transfer.id}/receive`, {
+          items: [{ transferItemId: line.id, quantityBaseQty: 5 }],
+          ownerPin: tenant.ownerPin,
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_batch_transfer_receipt_audit_failure");
+      }
+      assert.equal(assertFailure(failed, 503).code, "STORE_AUDIT_WRITE_FAILED");
+      assert.equal(await ctx.db.inventoryLot.count({ where: { productId: product.id, locationId: branch.id } }), 0);
+      assert.equal(await ctx.db.stockTransferLotAllocation.count({ where: { transferItemId: line.id, receivedBaseQty: { gt: 0 } } }), 0);
+
+      const partial = assertSuccess(await ctx.post(`/api/stores/transfers/${transfer.id}/receive`, {
+        items: [{ transferItemId: line.id, quantityBaseQty: 5 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(partial.status, "partially_received");
+      assert.deepEqual(
+        partial.items[0].lotAllocations.map((allocation) => [allocation.batchNumber, allocation.receivedBaseQty, allocation.remainingBaseQty]),
+        [["MED-EARLY", 4, 0], ["MED-LATE", 1, 2]],
+      );
+      assert.deepEqual(
+        (await ctx.db.inventoryLot.findMany({ where: { productId: product.id, locationId: branch.id }, orderBy: { expiresOn: "asc" } })).map((lot) => [lot.batchNumber, lot.availableBaseQty, lot.costPerRateUnit, lot.mrp]),
+        [["MED-EARLY", 4, 12, 20], ["MED-LATE", 1, 13, 21]],
+        "destination must receive the same batch identity, cost, expiry and MRP",
+      );
+
+      await ctx.db.$executeRawUnsafe(`
+        CREATE TRIGGER force_batch_transfer_cancel_audit_failure
+        BEFORE INSERT ON AuditLog
+        WHEN NEW.action = 'STOCK_TRANSFER_CANCELLED'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced batch transfer cancel audit failure');
+        END
+      `);
+      try {
+        failed = await ctx.post(`/api/stores/transfers/${transfer.id}/cancel`, {
+          reason: "Remaining batch stayed on the dispatch vehicle",
+          ownerPin: tenant.ownerPin,
+        }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      } finally {
+        await ctx.db.$executeRawUnsafe("DROP TRIGGER IF EXISTS force_batch_transfer_cancel_audit_failure");
+      }
+      assert.equal(assertFailure(failed, 503).code, "STORE_AUDIT_WRITE_FAILED");
+      assert.equal((await ctx.db.inventoryLot.findUniqueOrThrow({ where: { id: lateLot.id } })).availableBaseQty, 3);
+
+      const cancelled = assertSuccess(await ctx.post(`/api/stores/transfers/${transfer.id}/cancel`, {
+        reason: "Remaining batch stayed on the dispatch vehicle",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(cancelled.status, "cancelled");
+      assert.equal((await ctx.db.inventoryLot.findUniqueOrThrow({ where: { id: lateLot.id } })).availableBaseQty, 5);
+
+      const instant = assertSuccess(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        fulfillmentMode: "instant",
+        items: [{ productId: product.id, quantityBaseQty: 2, declaredTaxableValue: 26 }],
+        note: "Counter-to-counter batch handoff",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(instant.status, "completed");
+      assert.deepEqual(
+        instant.items[0].lotAllocations.map((allocation) => [allocation.batchNumber, allocation.quantityBaseQty, allocation.receivedBaseQty]),
+        [["MED-LATE", 2, 2]],
+        "instant movement must reserve and receive the same batch atomically",
+      );
+      assert.equal((await ctx.db.inventoryLot.findUniqueOrThrow({ where: { id: lateLot.id } })).availableBaseQty, 3);
+      assert.equal((await ctx.db.inventoryLot.findFirstOrThrow({ where: { productId: product.id, locationId: branch.id, batchNumber: "MED-LATE" } })).availableBaseQty, 3);
+      const allLots = await ctx.db.inventoryLot.findMany({ where: { productId: product.id } });
+      assert.equal(allLots.reduce((sum, lot) => sum + Number(lot.availableBaseQty), 0), 10, "source, destination and cancelled remainder must conserve batch stock");
+      assert.equal((await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })).stockBaseQty, 10, "batch transfer must not change company stock");
+    });
+
     test("validates location GSTINs, documents distinct-registration transfers, and preserves bill seller snapshots", async () => {
       const { tenant, auth } = await ownerContext();
       const product = await createProduct(ctx.db, tenant.shop.id, {

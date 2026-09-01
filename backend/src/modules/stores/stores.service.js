@@ -318,7 +318,7 @@ async function inventorySnapshot(client, shopId, location) {
     client.product.findMany({
       where: { shopId, deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, barcode: true, sku: true, baseUnit: true, displayUnit: true, stockBaseQty: true, lowStockThreshold: true, reorderLevel: true, hsn: true, gstRate: true },
+      select: { id: true, name: true, barcode: true, sku: true, baseUnit: true, displayUnit: true, stockBaseQty: true, lowStockThreshold: true, reorderLevel: true, hsn: true, gstRate: true, batchTrackingEnabled: true },
     }),
     // Product-level rows only. This is keyed by `${locationId}:${productId}`, so
     // variant rows would collide on that key and the last one read would win.
@@ -505,6 +505,203 @@ function variantShareOf(item, baseQty) {
   return round2(lineUnits * (Number(baseQty || 0) / lineBase));
 }
 
+const transferInclude = {
+  fromLocation: true,
+  toLocation: true,
+  items: {
+    include: {
+      lotAllocations: { orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }] },
+    },
+  },
+};
+
+function transferLotSnapshot(lot, quantityBaseQty) {
+  return {
+    sourceInventoryLotId: lot.id,
+    sellingUnitId: lot.sellingUnitId ?? null,
+    batchNumber: lot.batchNumber,
+    manufacturedOn: lot.manufacturedOn,
+    expiresOn: lot.expiresOn,
+    quantityBaseQty,
+    receivedBaseQty: 0,
+    costPerRateUnit: Number(lot.costPerRateUnit),
+    costPerRateUnitPaise: lot.costPerRateUnitPaise ?? null,
+    mrp: lot.mrp == null ? null : Number(lot.mrp),
+    mrpPaise: lot.mrpPaise ?? null,
+    sourceStatus: lot.status,
+    sourceNote: lot.note ?? null,
+  };
+}
+
+/** Reserve exact FEFO batches at dispatch, in the same transaction as location stock. */
+async function reserveTransferLots(tx, { shopId, locationId, product, item }) {
+  if (!product.batchTrackingEnabled) return [];
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const lots = await tx.inventoryLot.findMany({
+    where: {
+      shopId,
+      locationId,
+      productId: product.id,
+      status: "active",
+      availableBaseQty: { gt: 0 },
+      expiresOn: { gte: today },
+      // Modern per-pack receipts carry a size. Legacy pooled lots are still
+      // eligible because refusing them would strand valid pre-migration stock.
+      ...(item.sellingUnitId
+        ? { OR: [{ sellingUnitId: item.sellingUnitId }, { sellingUnitId: null }] }
+        : {}),
+    },
+    orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }],
+  });
+  const available = round2(lots.reduce((sum, lot) => sum + Number(lot.availableBaseQty), 0));
+  if (available + 0.0001 < Number(item.quantityBaseQty)) {
+    const error = new AppError(
+      `${product.name} has only ${available} ${product.baseUnit} in saleable batches at this branch`,
+      409,
+      "TRANSFER_BATCH_STOCK_INSUFFICIENT",
+    );
+    error.publicData = {
+      productId: product.id,
+      requestedBaseQty: Number(item.quantityBaseQty),
+      availableBatchBaseQty: available,
+      locationId,
+    };
+    throw error;
+  }
+
+  let remaining = round2(Number(item.quantityBaseQty));
+  const allocations = [];
+  for (const lot of lots) {
+    if (remaining <= 0.0001) break;
+    const quantity = round2(Math.min(remaining, Number(lot.availableBaseQty)));
+    if (quantity <= 0) continue;
+    const depletesLot = Number(lot.availableBaseQty) - quantity <= 0.0001;
+    const claimed = await tx.inventoryLot.updateMany({
+      where: { id: lot.id, shopId, locationId, status: "active", availableBaseQty: { gte: quantity } },
+      data: {
+        availableBaseQty: { decrement: quantity },
+        ...(depletesLot ? { status: "depleted" } : {}),
+      },
+    });
+    if (claimed.count !== 1) {
+      throw new AppError("Batch stock changed during transfer dispatch; refresh and retry", 409, "CONCURRENT_TRANSFER_BATCH_CHANGE");
+    }
+    allocations.push(transferLotSnapshot(lot, quantity));
+    remaining = round2(remaining - quantity);
+  }
+  if (remaining > 0.0001) {
+    throw new AppError("Transfer batch allocation did not cover the dispatched quantity", 409, "TRANSFER_BATCH_ALLOCATION_DRIFT");
+  }
+  return allocations;
+}
+
+async function receiveTransferLots(tx, { shopId, transfer, item, quantityBaseQty }) {
+  const allocations = item.lotAllocations ?? [];
+  if (allocations.length === 0) return [];
+  let remaining = round2(Number(quantityBaseQty));
+  const received = [];
+  for (const allocation of allocations) {
+    if (remaining <= 0.0001) break;
+    const allocationRemaining = round2(Number(allocation.quantityBaseQty) - Number(allocation.receivedBaseQty));
+    if (allocationRemaining <= 0) continue;
+    const quantity = round2(Math.min(remaining, allocationRemaining));
+    const claimed = await tx.stockTransferLotAllocation.updateMany({
+      where: {
+        id: allocation.id,
+        transferItemId: item.id,
+        receivedBaseQty: Number(allocation.receivedBaseQty),
+      },
+      data: { receivedBaseQty: { increment: quantity } },
+    });
+    if (claimed.count !== 1) {
+      throw new AppError("Batch receipt quantities changed; refresh and retry", 409, "CONCURRENT_TRANSFER_BATCH_RECEIPT");
+    }
+
+    const destinationLot = await tx.inventoryLot.upsert({
+      where: {
+        shopId_locationId_productId_batchNumber_expiresOn: {
+          shopId,
+          locationId: transfer.toLocationId,
+          productId: item.productId,
+          batchNumber: allocation.batchNumber,
+          expiresOn: allocation.expiresOn,
+        },
+      },
+      create: {
+        shopId,
+        locationId: transfer.toLocationId,
+        productId: item.productId,
+        purchaseReceiptItemId: null,
+        sellingUnitId: allocation.sellingUnitId ?? item.sellingUnitId ?? null,
+        batchNumber: allocation.batchNumber,
+        manufacturedOn: allocation.manufacturedOn,
+        expiresOn: allocation.expiresOn,
+        receivedBaseQty: quantity,
+        availableBaseQty: quantity,
+        costPerRateUnit: Number(allocation.costPerRateUnit),
+        costPerRateUnitPaise: allocation.costPerRateUnitPaise ?? null,
+        mrp: allocation.mrp == null ? null : Number(allocation.mrp),
+        mrpPaise: allocation.mrpPaise ?? null,
+        status: allocation.sourceStatus || "active",
+        note: `Received by transfer ${transfer.referenceNo} from ${transfer.fromLocation.name}`,
+      },
+      update: {
+        receivedBaseQty: { increment: quantity },
+        availableBaseQty: { increment: quantity },
+      },
+    });
+    // Receiving stock may reopen a depleted batch, but must never silently
+    // release a batch the destination has quarantined or recalled.
+    await tx.inventoryLot.updateMany({
+      where: { id: destinationLot.id, status: "depleted", availableBaseQty: { gt: 0 } },
+      data: { status: allocation.sourceStatus === "depleted" ? "active" : allocation.sourceStatus || "active" },
+    });
+    received.push({
+      allocationId: allocation.id,
+      destinationInventoryLotId: destinationLot.id,
+      batchNumber: allocation.batchNumber,
+      expiresOn: allocation.expiresOn,
+      quantityBaseQty: quantity,
+    });
+    remaining = round2(remaining - quantity);
+  }
+  if (remaining > 0.0001) {
+    throw new AppError("Transfer receipt exceeded its recorded batch allocation", 409, "TRANSFER_BATCH_ALLOCATION_DRIFT");
+  }
+  return received;
+}
+
+async function restoreUnreceivedTransferLots(tx, { shopId, item }) {
+  const restored = [];
+  for (const allocation of item.lotAllocations ?? []) {
+    const quantity = round2(Math.max(0, Number(allocation.quantityBaseQty) - Number(allocation.receivedBaseQty)));
+    if (quantity <= 0) continue;
+    const sourceLot = await tx.inventoryLot.findFirst({
+      where: { id: allocation.sourceInventoryLotId, shopId },
+      select: { id: true, status: true },
+    });
+    if (!sourceLot) throw new AppError("The source batch for this transfer no longer exists", 409, "TRANSFER_SOURCE_BATCH_MISSING");
+    await tx.inventoryLot.update({
+      where: { id: sourceLot.id },
+      data: { availableBaseQty: { increment: quantity } },
+    });
+    if (sourceLot.status === "depleted") {
+      await tx.inventoryLot.update({
+        where: { id: sourceLot.id },
+        data: { status: allocation.sourceStatus === "depleted" ? "active" : allocation.sourceStatus || "active" },
+      });
+    }
+    restored.push({
+      allocationId: allocation.id,
+      sourceInventoryLotId: sourceLot.id,
+      batchNumber: allocation.batchNumber,
+      quantityBaseQty: quantity,
+    });
+  }
+  return restored;
+}
+
 function classifyTransfer(from, to) {
   const source = registrationSnapshot(from);
   const destination = registrationSnapshot(to);
@@ -567,6 +764,10 @@ function decorateTransfer(transfer) {
   const items = (transfer.items ?? []).map((item) => ({
     ...item,
     remainingBaseQty: round2(Math.max(0, Number(item.quantityBaseQty) - Number(item.receivedBaseQty))),
+    lotAllocations: (item.lotAllocations ?? []).map((allocation) => ({
+      ...allocation,
+      remainingBaseQty: round2(Math.max(0, Number(allocation.quantityBaseQty) - Number(allocation.receivedBaseQty))),
+    })),
   }));
   return {
     ...transfer,
@@ -710,6 +911,15 @@ export async function createTransfer(shopId, data, userId, userRole = "staff", r
           ...moneyShadows({ taxableValue, cgst, sgst, igst, taxTotal, totalValue }),
         };
       });
+      for (const transferItem of transferItems) {
+        const lotAllocations = await reserveTransferLots(tx, {
+          shopId,
+          locationId: from.id,
+          product: sourceById.get(transferItem.productId),
+          item: transferItem,
+        });
+        if (lotAllocations.length > 0) transferItem.lotAllocations = { create: lotAllocations };
+      }
       const taxableValue = sumMoney(transferItems.map((item) => item.taxableValue));
       const cgst = sumMoney(transferItems.map((item) => item.cgst));
       const sgst = sumMoney(transferItems.map((item) => item.sgst));
@@ -790,7 +1000,7 @@ export async function createTransfer(shopId, data, userId, userRole = "staff", r
           completedAt: completesImmediately ? now : null,
           items: { create: transferItems.map((item) => ({ ...item, receivedBaseQty: completesImmediately ? item.quantityBaseQty : 0 })) },
         },
-        include: { fromLocation: true, toLocation: true, items: true },
+        include: transferInclude,
       });
       for (const item of created.items) {
         const sourceOld = sourceBalances.get(item.productId) ?? 0;
@@ -814,6 +1024,12 @@ export async function createTransfer(shopId, data, userId, userRole = "staff", r
           note: `Transfer ${created.referenceNo} dispatched to ${to.name}`,
         });
         if (completesImmediately) {
+          await receiveTransferLots(tx, {
+            shopId,
+            transfer: created,
+            item,
+            quantityBaseQty: Number(item.quantityBaseQty),
+          });
           const destinationOld = destinationBalances.get(item.productId) ?? 0;
           const destinationNew = round2(destinationOld + Number(item.quantityBaseQty));
           destinationBalances.set(item.productId, destinationNew);
@@ -845,7 +1061,7 @@ export async function createTransfer(shopId, data, userId, userRole = "staff", r
         entityId: created.id,
         metadata: transferAuditMetadata(created),
       }, tx);
-      return created;
+      return tx.stockTransfer.findUniqueOrThrow({ where: { id: created.id }, include: transferInclude });
     });
     return decorateTransfer(transfer);
   } catch (error) {
@@ -870,7 +1086,7 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
   return db.$transaction(async (tx) => {
     const current = await tx.stockTransfer.findFirst({
       where: { id: transferId, shopId },
-      include: { fromLocation: true, toLocation: true, items: true },
+      include: transferInclude,
     });
     if (!current) throw new AppError("Stock transfer not found", 404, "STOCK_TRANSFER_NOT_FOUND");
     await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.fromLocationId, capability: "transfer", client: tx });
@@ -909,6 +1125,12 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
         shopId, location: current.toLocation, productId: item.productId,
         sellingUnitId: item.sellingUnitId, qty: variantShareOf(item, input.quantityBaseQty),
       });
+      const receivedLots = await receiveTransferLots(tx, {
+        shopId,
+        transfer: current,
+        item,
+        quantityBaseQty: input.quantityBaseQty,
+      });
       const destinationOld = destinationBalances.get(item.productId) ?? 0;
       const destinationNew = round2(destinationOld + Number(input.quantityBaseQty));
       destinationBalances.set(item.productId, destinationNew);
@@ -936,6 +1158,11 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
         quantityBaseQty: input.quantityBaseQty,
         receivedBefore,
         receivedAfter: round2(receivedBefore + input.quantityBaseQty),
+        batches: receivedLots.map((lot) => ({
+          batchNumber: lot.batchNumber,
+          expiresOn: lot.expiresOn,
+          quantityBaseQty: lot.quantityBaseQty,
+        })),
       });
     }
 
@@ -968,7 +1195,7 @@ export async function receiveTransfer(shopId, transferId, data, userId, userRole
 
     const transfer = await tx.stockTransfer.findUnique({
       where: { id: current.id },
-      include: { fromLocation: true, toLocation: true, items: true },
+      include: transferInclude,
     });
     return decorateTransfer(transfer);
   });
@@ -978,7 +1205,7 @@ export async function cancelTransfer(shopId, transferId, data, userId, userRole 
   return db.$transaction(async (tx) => {
     const current = await tx.stockTransfer.findFirst({
       where: { id: transferId, shopId },
-      include: { fromLocation: true, toLocation: true, items: true },
+      include: transferInclude,
     });
     if (!current) throw new AppError("Stock transfer not found", 404, "STOCK_TRANSFER_NOT_FOUND");
     await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.fromLocationId, capability: "transfer", client: tx });
@@ -1003,6 +1230,7 @@ export async function cancelTransfer(shopId, transferId, data, userId, userRole 
         shopId, location: current.fromLocation, productId: item.productId,
         sellingUnitId: item.sellingUnitId, qty: variantShareOf(item, remaining),
       });
+      const restoredLots = await restoreUnreceivedTransferLots(tx, { shopId, item });
       const sourceOld = sourceBalances.get(item.productId) ?? 0;
       const sourceNew = round2(sourceOld + remaining);
       sourceBalances.set(item.productId, sourceNew);
@@ -1023,7 +1251,12 @@ export async function cancelTransfer(shopId, transferId, data, userId, userRole 
         phase: "cancel-return",
         note: `Cancelled transfer ${current.referenceNo}: ${data.reason}`,
       });
-      returnedLines.push({ productId: item.productId, productName: item.productName, returnedBaseQty: remaining });
+      returnedLines.push({
+        productId: item.productId,
+        productName: item.productName,
+        returnedBaseQty: remaining,
+        batches: restoredLots.map((lot) => ({ batchNumber: lot.batchNumber, quantityBaseQty: lot.quantityBaseQty })),
+      });
     }
 
     const cancelledAt = new Date();
@@ -1054,7 +1287,7 @@ export async function cancelTransfer(shopId, transferId, data, userId, userRole 
 
     const transfer = await tx.stockTransfer.findUnique({
       where: { id: current.id },
-      include: { fromLocation: true, toLocation: true, items: true },
+      include: transferInclude,
     });
     return decorateTransfer(transfer);
   });
@@ -1065,7 +1298,7 @@ export async function reviewTransferCompliance(shopId, transferId, data, userId,
     return await db.$transaction(async (tx) => {
       const current = await tx.stockTransfer.findFirst({
         where: { id: transferId, shopId },
-        include: { fromLocation: true, toLocation: true, items: true },
+        include: transferInclude,
       });
       if (!current) throw new AppError("Stock transfer not found", 404, "STOCK_TRANSFER_NOT_FOUND");
       await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.fromLocationId, capability: "transfer", client: tx });
@@ -1092,7 +1325,7 @@ export async function reviewTransferCompliance(shopId, transferId, data, userId,
       if (updated.count !== 1) throw new AppError("The transfer review changed; refresh and retry", 409, "CONCURRENT_TRANSFER_REVIEW");
       const reviewed = await tx.stockTransfer.findUnique({
         where: { id: current.id },
-        include: { fromLocation: true, toLocation: true, items: true },
+        include: transferInclude,
       });
       await writeRequiredStoreAudit({
         shopId,
@@ -1129,7 +1362,7 @@ export async function listTransfers(shopId, { limit = 50 } = {}, user = null) {
     },
     orderBy: { createdAt: "desc" },
     take: Math.min(Math.max(Number(limit) || 50, 1), 100),
-    include: { fromLocation: true, toLocation: true, items: true },
+    include: transferInclude,
   });
   return transfers.map(decorateTransfer);
 }
