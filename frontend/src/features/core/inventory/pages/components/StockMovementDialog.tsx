@@ -48,6 +48,10 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
   const [qty, setQty] = useState<number | "">("");
   const [cost, setCost] = useState<number | "">("");
   const [supplier, setSupplier] = useState("");
+  const [batchNumber, setBatchNumber] = useState("");
+  const [manufacturedOn, setManufacturedOn] = useState("");
+  const [expiresOn, setExpiresOn] = useState("");
+  const [batchMrp, setBatchMrp] = useState<number | "">("");
   const [reason, setReason] = useState(OUT_REASONS[0]);
   const [note, setNote] = useState("");
 
@@ -78,7 +82,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
   const pending = recordPurchase.isPending || recordSale.isPending;
 
   function reset() {
-    setProductId(""); setUnitCode(""); setSearch(""); setQty(""); setCost(""); setSupplier(""); setReason(OUT_REASONS[0]); setNote("");
+    setProductId(""); setUnitCode(""); setSearch(""); setQty(""); setCost(""); setSupplier(""); setBatchNumber(""); setManufacturedOn(""); setExpiresOn(""); setBatchMrp(""); setReason(OUT_REASONS[0]); setNote("");
   }
   function close() { reset(); onOpenChange(false); }
 
@@ -103,6 +107,21 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
       toast({ title: t("inventory.movement.enterCost"), description: t("inventory.movement.enterCostHelp"), variant: "destructive" });
       return;
     }
+    if (mode === "in" && selected.batchTrackingEnabled) {
+      if (!batchNumber.trim() || !expiresOn) {
+        toast({ title: t("purchases.batch.required"), description: t("purchases.batch.requiredDetail", { names: selected.name }), variant: "destructive" });
+        return;
+      }
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      if (new Date(`${expiresOn}T00:00:00`) < today) {
+        toast({ title: t("purchases.batch.expired"), description: t("purchases.batch.expiredDetail", { names: selected.name }), variant: "destructive" });
+        return;
+      }
+      if (manufacturedOn && manufacturedOn >= expiresOn) {
+        toast({ title: t("purchases.batch.datesInvalid"), description: t("purchases.batch.datesInvalidDetail"), variant: "destructive" });
+        return;
+      }
+    }
     // The chosen packaging IS the unit of this movement: "12" means 12 of that
     // pack, and its own conversion turns that into base units on both sides.
     const enteredUnit = selectedPack?.unitCode ?? productDisplayUnit(selected);
@@ -124,7 +143,22 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
     };
     if (mode === "in") {
       recordPurchase.mutate(
-        { data: { productId, quantity, enteredUnit, sellingUnitId: selectedPack?.id, costPerRateUnit: cost === "" ? undefined : Number(cost), supplierName: supplier.trim() || undefined, note: note.trim() || undefined } },
+        { data: {
+          productId,
+          quantity,
+          enteredUnit,
+          sellingUnitId: selectedPack?.id,
+          costPerRateUnit: cost === "" ? undefined : Number(cost),
+          supplierName: supplier.trim() || undefined,
+          note: note.trim() || undefined,
+          ...(selected.batchTrackingEnabled ? {
+            batchCaptureSupported: true,
+            batchNumber: batchNumber.trim(),
+            expiresOn,
+            ...(manufacturedOn ? { manufacturedOn } : {}),
+            ...(batchMrp !== "" && Number(batchMrp) > 0 ? { batchMrp: Number(batchMrp) } : {}),
+          } : {}),
+        } },
         { onSuccess: () => onDone(`Added ${quantity} ${unitLabelForToast} to ${selected.name}`), onError: (e) => toast({ title: t("inventory.movement.addFailed"), description: e instanceof Error ? e.message : t("inventory.movement.tryAgain"), variant: "destructive" }) },
       );
     } else {
@@ -171,7 +205,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
                 <p className="truncate text-[13px] font-extrabold text-[#14284e]">{selected.name}</p>
                 <p className="text-[11px] text-[#6d7c98]">{t("inventory.movement.inStockLabel", { qty: currentStock(selected) })}</p>
               </div>
-              <button onClick={() => { setProductId(""); setSearch(""); }} className="grid h-7 w-7 place-items-center rounded-lg text-[#536383] hover:bg-[#eef1f6]" aria-label={t("inventory.movement.changeProduct")}><X size={15} /></button>
+              <button onClick={() => { setProductId(""); setSearch(""); setBatchNumber(""); setManufacturedOn(""); setExpiresOn(""); setBatchMrp(""); }} className="grid h-7 w-7 place-items-center rounded-lg text-[#536383] hover:bg-[#eef1f6]" aria-label={t("inventory.movement.changeProduct")}><X size={15} /></button>
             </div>
           ) : (
             <div className="relative">
@@ -242,6 +276,28 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
               </div>
             </div>
             <p className="text-[11px] text-[#9aa6bb]">{t("inventory.movement.costHelp")}</p>
+            {selected?.batchTrackingEnabled ? (
+              <div className="space-y-3 rounded-xl border border-dashed border-[#cddcf0] bg-[#f7fbff] p-3" data-testid="stock-movement-batch-fields">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("purchases.batch.number")}</Label>
+                    <Input className="h-10" value={batchNumber} placeholder={t("purchases.batch.numberPlaceholder")} onChange={(event) => setBatchNumber(event.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("purchases.batch.expiry")}</Label>
+                    <Input className="h-10" type="date" value={expiresOn} onChange={(event) => setExpiresOn(event.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("purchases.batch.manufactured")}</Label>
+                    <Input className="h-10" type="date" value={manufacturedOn} onChange={(event) => setManufacturedOn(event.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{t("purchases.batch.mrp")}</Label>
+                    <Input className="h-10" type="number" min={0} step="0.01" inputMode="decimal" value={batchMrp} placeholder={t("purchases.batch.mrpPlaceholder")} onChange={(event) => setBatchMrp(event.target.value === "" ? "" : Number(event.target.value))} />
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </>
         ) : (
           <div>

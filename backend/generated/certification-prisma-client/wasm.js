@@ -785,6 +785,25 @@ exports.Prisma.StockTransferItemScalarFieldEnum = {
   totalValuePaise: 'totalValuePaise'
 };
 
+exports.Prisma.StockTransferLotAllocationScalarFieldEnum = {
+  id: 'id',
+  transferItemId: 'transferItemId',
+  sourceInventoryLotId: 'sourceInventoryLotId',
+  sellingUnitId: 'sellingUnitId',
+  batchNumber: 'batchNumber',
+  manufacturedOn: 'manufacturedOn',
+  expiresOn: 'expiresOn',
+  quantityBaseQty: 'quantityBaseQty',
+  receivedBaseQty: 'receivedBaseQty',
+  costPerRateUnit: 'costPerRateUnit',
+  costPerRateUnitPaise: 'costPerRateUnitPaise',
+  mrp: 'mrp',
+  mrpPaise: 'mrpPaise',
+  sourceStatus: 'sourceStatus',
+  sourceNote: 'sourceNote',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.TransferDocumentCounterScalarFieldEnum = {
   id: 'id',
   shopId: 'shopId',
@@ -2838,6 +2857,7 @@ exports.Prisma.ModelName = {
   GiftCardTransaction: 'GiftCardTransaction',
   StockTransfer: 'StockTransfer',
   StockTransferItem: 'StockTransferItem',
+  StockTransferLotAllocation: 'StockTransferLotAllocation',
   TransferDocumentCounter: 'TransferDocumentCounter',
   LoyaltyProgram: 'LoyaltyProgram',
   LoyaltyAccount: 'LoyaltyAccount',

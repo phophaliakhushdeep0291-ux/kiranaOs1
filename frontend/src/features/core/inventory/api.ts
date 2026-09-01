@@ -1,4 +1,5 @@
-import { apiRequest, buildQuery } from "@/lib/api/http";
+import { ApiClientError, apiRequest, buildQuery, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
+import { instantCacheUpdatedAt, readIndexedRecentCache, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { safeRandomUUID } from "@/lib/safe-uuid";
 import type { InventoryItem, LedgerResult, QueryParams, StockMovementInput } from "@/types/api";
 
@@ -96,30 +97,72 @@ export interface StockCountSession {
   };
 }
 
+export const STOCK_COUNT_CACHE_KEYS = {
+  list: (status: StockCountStatus | "all" = "all", limit = 30) => `stock-counts:list:v1:${status}:${limit}`,
+  detail: (id: string) => `stock-counts:detail:v1:${id}`,
+} as const;
+
+async function readCachedStockCountResource<T>(path: string, cacheKey: string): Promise<T> {
+  if (!isBrowserOnline()) {
+    const cached = await readIndexedRecentCache<T | undefined>(cacheKey, undefined);
+    if (cached !== undefined) return cached;
+    throw new ApiClientError("This stock count has not been cached on this device yet.", 0, { code: "STOCK_COUNT_CACHE_MISSING" });
+  }
+  try {
+    const current = await apiRequest<T>(path, { background: true });
+    writeInstantCache(cacheKey, current);
+    return current;
+  } catch (error) {
+    if (!isRecoverableNetworkError(error)) throw error;
+    const cached = await readIndexedRecentCache<T | undefined>(cacheKey, undefined);
+    if (cached !== undefined) return cached;
+    throw error;
+  }
+}
+
+function cacheStockCountSession(session: StockCountSession) {
+  writeInstantCache(STOCK_COUNT_CACHE_KEYS.detail(session.id), session);
+  const listKey = STOCK_COUNT_CACHE_KEYS.list("all", 30);
+  const current = readInstantCache<StockCountSession[]>(listKey, []);
+  const next = [session, ...current.filter((row) => row.id !== session.id)]
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .slice(0, 30);
+  writeInstantCache(listKey, next);
+  return session;
+}
+
+export function readStockCountMemoryCache<T>(cacheKey: string): T | undefined {
+  return readInstantCache<T | undefined>(cacheKey, undefined);
+}
+
+export function stockCountCacheUpdatedAt(cacheKey: string) {
+  return instantCacheUpdatedAt(cacheKey);
+}
+
 export function getStockCounts(status: StockCountStatus | "all" = "all", limit = 30) {
-  return apiRequest<StockCountSession[]>(`/inventory/counts${buildQuery({ status, limit })}`);
+  return readCachedStockCountResource<StockCountSession[]>(`/inventory/counts${buildQuery({ status, limit })}`, STOCK_COUNT_CACHE_KEYS.list(status, limit));
 }
 
 export function getStockCount(id: string) {
-  return apiRequest<StockCountSession>(`/inventory/counts/${id}`);
+  return readCachedStockCountResource<StockCountSession>(`/inventory/counts/${id}`, STOCK_COUNT_CACHE_KEYS.detail(id));
 }
 
-export function createStockCount(data: { name: string; blindCount: boolean; productIds?: string[] }) {
-  return apiRequest<StockCountSession>("/inventory/counts", { method: "POST", body: JSON.stringify(data) });
+export async function createStockCount(data: { name: string; blindCount: boolean; productIds?: string[] }) {
+  return cacheStockCountSession(await apiRequest<StockCountSession>("/inventory/counts", { method: "POST", body: JSON.stringify(data) }));
 }
 
-export function updateStockCountLines(id: string, lines: Array<{ productId: string; countedBaseQty: number; reason?: string }>) {
-  return apiRequest<StockCountSession>(`/inventory/counts/${id}/lines`, { method: "PATCH", body: JSON.stringify({ lines }) });
+export async function updateStockCountLines(id: string, lines: Array<{ productId: string; countedBaseQty: number; reason?: string }>) {
+  return cacheStockCountSession(await apiRequest<StockCountSession>(`/inventory/counts/${id}/lines`, { method: "PATCH", body: JSON.stringify({ lines }) }));
 }
 
-export function submitStockCount(id: string) {
-  return apiRequest<StockCountSession>(`/inventory/counts/${id}/submit`, { method: "POST" });
+export async function submitStockCount(id: string) {
+  return cacheStockCountSession(await apiRequest<StockCountSession>(`/inventory/counts/${id}/submit`, { method: "POST" }));
 }
 
-export function decideStockCount(id: string, action: "apply" | "cancel", data: { ownerPin: string; note: string }) {
-  return apiRequest<StockCountSession>(`/inventory/counts/${id}/${action}`, {
+export async function decideStockCount(id: string, action: "apply" | "cancel", data: { ownerPin: string; note: string }) {
+  return cacheStockCountSession(await apiRequest<StockCountSession>(`/inventory/counts/${id}/${action}`, {
     method: "POST",
     ownerPin: data.ownerPin,
     body: JSON.stringify({ ownerPin: data.ownerPin, note: data.note }),
-  });
+  }));
 }

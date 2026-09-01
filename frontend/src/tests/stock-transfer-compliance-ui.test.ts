@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const transfers = readFileSync("src/features/core/inventory/pages/StockTransfersPage.tsx", "utf8");
+const transferApi = readFileSync("src/features/core/inventory/stock-transfers-api.ts", "utf8");
 const taxes = readFileSync("src/features/core/settings/pages/TaxesSettingsPage.tsx", "utf8");
 
 /**
@@ -77,8 +78,9 @@ describe("multi-GSTIN transfer and reporting UI", () => {
       "remainingBaseQty",
       "/cancel",
       "inventory.transfers.cancelNote",
-      "/stores/replenishment-suggestions",
     ]) expect(transfers).toContain(contract);
+    expect(transfers).toContain("getBranchReplenishment");
+    expect(transferApi).toContain('readCachedTransferResource<T>("/stores/replenishment-suggestions"');
     expect(stockEn).toContain("only unreceived quantities return to source availability");
     for (const wording of [
       "Dispatch and receive",

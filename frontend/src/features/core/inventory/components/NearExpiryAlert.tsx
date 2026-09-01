@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AlertTriangle, CalendarClock, IndianRupee } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getExpiryAlerts, type ExpiringBatch, type ExpirySeverity } from "@/features/core/inventory/inventory-lots-api";
+import { getExpiryAlerts, INVENTORY_LOT_CACHE_KEYS, inventoryLotCacheUpdatedAt, readInventoryLotMemoryCache, type ExpiringBatch, type ExpiryAlerts, type ExpirySeverity } from "@/features/core/inventory/inventory-lots-api";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 
 export const NEAR_EXPIRY_QUERY_KEY = ["inventory-lots", "expiry-alerts"] as const;
@@ -61,6 +61,8 @@ export function NearExpiryAlert({ limit = 5, className }: { limit?: number; clas
   const query = useQuery({
     queryKey: NEAR_EXPIRY_QUERY_KEY,
     queryFn: () => getExpiryAlerts(),
+    initialData: () => readInventoryLotMemoryCache<ExpiryAlerts>(INVENTORY_LOT_CACHE_KEYS.alerts),
+    initialDataUpdatedAt: () => inventoryLotCacheUpdatedAt(INVENTORY_LOT_CACHE_KEYS.alerts),
     staleTime: 5 * 60_000,
     // Batch tracking is off for most trades, and the endpoint is capability-gated;
     // a shop without it should see no error, just nothing.

@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { buildTestEnv, maskDatabaseUrl } from "./test-db-utils.js";
+import { buildTestEnv, maskDatabaseUrl, prismaSchemasEquivalent } from "./test-db-utils.js";
 
 const backendRoot = path.resolve(process.cwd());
 const databasePath = path.join(backendRoot, "prisma", `full-suite-${process.pid}-${Date.now()}.db`);
@@ -13,7 +13,10 @@ const sourceSchemaPath = path.join(backendRoot, "prisma", "schema.prisma");
 const generatedSchemaPath = path.join(backendRoot, "generated", "integration-prisma-client", "schema.prisma");
 const generatedClientMatchesSource = fs.existsSync(sourceSchemaPath)
   && fs.existsSync(generatedSchemaPath)
-  && fs.readFileSync(sourceSchemaPath, "utf8") === fs.readFileSync(generatedSchemaPath, "utf8");
+  && prismaSchemasEquivalent(
+    fs.readFileSync(sourceSchemaPath, "utf8"),
+    fs.readFileSync(generatedSchemaPath, "utf8"),
+  );
 
 const env = buildTestEnv({
   TEST_DATABASE_URL: databaseUrl,
@@ -23,7 +26,7 @@ const env = buildTestEnv({
   // Individual tests may opt into manual activation, but leaking the generic
   // DB-test default into production boot probes masks the guard under test.
   ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION: "false",
-  ...(generatedClientMatchesSource ? { SKIP_PRISMA_GENERATE: "true" } : {}),
+  SKIP_PRISMA_GENERATE: generatedClientMatchesSource ? "true" : "false",
 });
 
 function run(command, args, label) {

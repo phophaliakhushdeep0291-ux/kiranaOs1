@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { buildTestEnv, maskDatabaseUrl } from "./test-db-utils.js";
+import { buildTestEnv, maskDatabaseUrl, prismaSchemasEquivalent } from "./test-db-utils.js";
 
 const files = process.argv.slice(2);
 if (files.length === 0) {
@@ -33,7 +33,10 @@ const isolatedDatabasePath = explicitDatabaseUrl
   : path.join(backendRoot, "prisma", `db-example-${process.pid}-${Date.now()}.db`);
 const generatedClientMatchesSource = fs.existsSync(sourceSchemaPath)
   && fs.existsSync(generatedSchemaPath)
-  && fs.readFileSync(generatedSchemaPath, "utf8") === fs.readFileSync(sourceSchemaPath, "utf8");
+  && prismaSchemasEquivalent(
+    fs.readFileSync(generatedSchemaPath, "utf8"),
+    fs.readFileSync(sourceSchemaPath, "utf8"),
+  );
 
 const env = buildTestEnv({
   NODE_ENV: "test",
@@ -45,7 +48,7 @@ const env = buildTestEnv({
   } : {}),
   // A loaded query-engine DLL cannot be replaced on Windows. Reuse is safe
   // only when Prisma's generated schema exactly matches the authoritative one.
-  ...(generatedClientMatchesSource ? { SKIP_PRISMA_GENERATE: "true" } : {}),
+  SKIP_PRISMA_GENERATE: generatedClientMatchesSource ? "true" : "false",
 });
 
 function runNode(args, label) {

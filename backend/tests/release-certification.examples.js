@@ -22,6 +22,37 @@ assert.ok(
   runner.includes('PRISMA_CLIENT_VARIANT: "certification"'),
   "release certification must not contend with a live integration client's Windows query-engine DLL"
 );
+assert.match(
+  runner,
+  /release-certification-\$\{process\.pid\}-\$\{Date\.now\(\)\}\.db/,
+  "parallel certification runs must own distinct SQLite databases"
+);
+assert.ok(
+  !runner.includes('const sqliteTestUrl = "file:.\/release-certification.db"'),
+  "certification must never return to one shared SQLite database"
+);
+for (const ownershipGuard of [".release-certification.lock", "processIsRunning", "acquireCertificationLock", "releaseCertificationLock"]) {
+  assert.ok(runner.includes(ownershipGuard), `certification must retain its ${ownershipGuard} concurrency guard`);
+}
+assert.ok(
+  runner.indexOf("acquireCertificationLock();") < runner.indexOf('id: "prisma-sqlite-validate"'),
+  "certification must acquire exclusive ownership before its first mutable test step",
+);
+for (const snapshotGuard of [
+  "repositoryFingerprint",
+  'gitBuffer(["diff", "--binary", "HEAD"])',
+  'gitBuffer(["ls-files", "--others", "--exclude-standard", "-z"])',
+  "source-snapshot-stability",
+]) {
+  assert.ok(runner.includes(snapshotGuard), `certification must retain its ${snapshotGuard} source-stability guard`);
+}
+assert.ok(
+  !runner.includes('|| commandAvailable("docker", ["--version"])'),
+  "a Docker CLI without a running engine must not be reported as build-capable",
+);
+for (const suffix of ['""', '"-journal"', '"-wal"', '"-shm"']) {
+  assert.ok(runner.includes(suffix), `certification cleanup must remove SQLite ${suffix || "main"} artifacts`);
+}
 for (const id of ["backend-source-db", "backend-tests", "backend-warehouse", "backend-integration-sqlite", "ai-safety"]) {
   const step = runner.match(new RegExp(`id: "${id}"[\\s\\S]*?\\n\\}\\);`))?.[0] ?? "";
   assert.match(step, /POSTGRES_TEST_DATABASE_URL: ""/, `${id} must not accidentally use the workflow PostgreSQL database`);

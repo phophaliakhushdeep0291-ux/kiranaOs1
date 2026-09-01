@@ -5,6 +5,8 @@ import { englishTranslations } from "@/features/core/settings/translations/engli
 
 const purchasesPage = readFileSync(join(process.cwd(), "src/features/core/purchases/pages/PurchaseBillsPage.tsx"), "utf8");
 const inventoryPage = readFileSync(join(process.cwd(), "src/features/core/inventory/pages/InventoryPage.tsx"), "utf8");
+const stockMovementDialog = readFileSync(join(process.cwd(), "src/features/core/inventory/pages/components/StockMovementDialog.tsx"), "utf8");
+const localActions = readFileSync(join(process.cwd(), "src/features/core/inventory/local-actions.ts"), "utf8");
 const apiTypes = readFileSync(join(process.cwd(), "src/types/api.ts"), "utf8");
 const css = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
 
@@ -81,12 +83,31 @@ describe("purchase form lot capture", () => {
     }
   });
 
+  it("also protects the dedicated Stock In drawer", () => {
+    expect(stockMovementDialog).toContain("selected?.batchTrackingEnabled");
+    expect(stockMovementDialog).toContain('data-testid="stock-movement-batch-fields"');
+    expect(stockMovementDialog).toContain('t("purchases.batch.required")');
+    expect(stockMovementDialog).toContain('t("purchases.batch.expired")');
+    expect(stockMovementDialog).toContain('t("purchases.batch.datesInvalid")');
+    expect(stockMovementDialog).toContain("batchCaptureSupported: true");
+    expect(stockMovementDialog).toContain("batchNumber: batchNumber.trim()");
+    expect(stockMovementDialog).toContain("expiresOn,");
+  });
+
+  it("rejects an incomplete batch receipt below the UI boundary", () => {
+    expect(localActions).toContain('movementType === "purchase" && product.batchTrackingEnabled');
+    expect(localActions).toContain("requires a batch number and expiry date before stock can be added");
+    expect(localActions).toContain("Expired stock cannot be received into saleable inventory");
+    expect(localActions).toContain("Expiry date must be after manufacturing date");
+  });
+
   it("tells the server it collected the lot, from every path that does", () => {
     // The server refuses a batch-tracked receipt with no lot ONLY when the client
     // claimed to ask for one. A path that captures the lot but forgets this flag
     // would quietly keep the old lenient behaviour.
     expect(purchasesPage).toContain("batchCaptureSupported: true");
     expect(inventoryPage).toContain("batchCaptureSupported: true");
+    expect(stockMovementDialog).toContain("batchCaptureSupported: true");
   });
 
   it("translates every string it added, in both languages", () => {

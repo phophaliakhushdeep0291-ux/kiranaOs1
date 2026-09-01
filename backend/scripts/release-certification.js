@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -9,6 +10,7 @@ const repoRoot = path.resolve(backendDir, "..");
 const frontendDir = path.join(repoRoot, "frontend");
 const hardwareBridgeDir = path.join(repoRoot, "hardware-bridge");
 const artifactDir = path.join(backendDir, "release-artifacts");
+const certificationLockDir = path.join(artifactDir, ".release-certification.lock");
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const modeArg = process.argv.find((arg) => arg.startsWith("--mode="));
 const mode = (modeArg?.split("=")[1] || process.env.RELEASE_CERT_MODE || "strict").toLowerCase();
@@ -23,10 +25,16 @@ const runId = new Date().toISOString().replace(/[:.]/g, "-");
 const logDir = path.join(artifactDir, "logs", runId);
 fs.mkdirSync(logDir, { recursive: true });
 
-const sqliteTestPath = path.join(backendDir, "prisma", "release-certification.db");
-const sqliteTestUrl = "file:./release-certification.db";
-const sqliteTestExisted = fs.existsSync(sqliteTestPath);
+// A certification run must own its database. The old fixed
+// `release-certification.db` let two perfectly valid runs reset each other's
+// shops mid-test, which surfaced as random User/Session/AuditLog foreign-key
+// failures across otherwise unrelated suites. PID + start time also keeps a
+// stale file from an interrupted run from becoming the next run's input.
+const sqliteTestName = `release-certification-${process.pid}-${Date.now()}.db`;
+const sqliteTestPath = path.join(backendDir, "prisma", sqliteTestName);
+const sqliteTestUrl = `file:${sqliteTestPath.replace(/\\/g, "/")}`;
 const results = [];
+let certificationLockHeld = false;
 
 function boolEnv(name) {
   return String(process.env[name] || "").toLowerCase() === "true";
@@ -39,6 +47,44 @@ function commandText(command, args = []) {
 function safeGit(args) {
   const result = spawnSync("git", args, { cwd: repoRoot, encoding: "utf8", shell: false });
   return result.status === 0 ? result.stdout.trim() : null;
+}
+
+function gitBuffer(args) {
+  const result = spawnSync("git", args, {
+    cwd: repoRoot,
+    encoding: null,
+    shell: false,
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  return result.status === 0 ? result.stdout : null;
+}
+
+function repositoryFingerprint() {
+  const trackedState = gitBuffer(["diff", "--binary", "HEAD"]);
+  const untrackedList = gitBuffer(["ls-files", "--others", "--exclude-standard", "-z"]);
+  const commit = gitBuffer(["rev-parse", "HEAD"]);
+  if (!trackedState || !untrackedList || !commit) return null;
+
+  const hash = createHash("sha256");
+  hash.update(commit);
+  hash.update(trackedState);
+
+  const untrackedFiles = untrackedList.toString("utf8").split("\0").filter(Boolean).sort();
+  for (const relativePath of untrackedFiles) {
+    const absolutePath = path.resolve(repoRoot, relativePath);
+    const relativeToRoot = path.relative(repoRoot, absolutePath);
+    if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) return null;
+    try {
+      hash.update(relativePath);
+      hash.update("\0");
+      hash.update(fs.readFileSync(absolutePath));
+      hash.update("\0");
+    } catch {
+      // A disappearing file means the source is changing while it is sampled.
+      return null;
+    }
+  }
+  return hash.digest("hex");
 }
 
 function commandAvailable(command, args = ["--version"]) {
@@ -57,7 +103,7 @@ function tail(value, lines = 30) {
 function addSyntheticResult({ id, label, status, reason, requiredFor }) {
   const required = isRequired(requiredFor);
   results.push({ id, label, status, required, reason, durationMs: 0 });
-  const marker = status === "passed" ? "PASS" : status === "blocked" ? "BLOCKED" : "SKIP";
+  const marker = status === "passed" ? "PASS" : status === "failed" ? "FAIL" : status === "blocked" ? "BLOCKED" : "SKIP";
   console.log(`[${marker}] ${label}${reason ? ` - ${reason}` : ""}`);
 }
 
@@ -197,6 +243,7 @@ const repository = {
   branch: safeGit(["branch", "--show-current"]),
   dirty: Boolean(gitStatus),
 };
+const startingRepositoryFingerprint = repositoryFingerprint();
 
 const liveBaseUrl = process.env.PROOF_BASE_URL || process.env.CONTRACT_SMOKE_BASE_URL || process.env.SMOKE_BASE_URL || "";
 const postgresUrl = process.env.POSTGRES_TEST_DATABASE_URL || process.env.TEST_DATABASE_URL || "";
@@ -206,7 +253,10 @@ const hasRedis = queuesEnabled && Boolean(process.env.REDIS_URL);
 const storageProvider = String(process.env.STORAGE_PROVIDER || "local").toLowerCase();
 const hasCloudStorage = storageProvider !== "local" && Boolean(process.env.STORAGE_BUCKET && process.env.STORAGE_ACCESS_KEY_ID && process.env.STORAGE_SECRET_ACCESS_KEY);
 const hasRestore = Boolean(process.env.RESTORE_TEST_DATABASE_URL) && boolEnv("ALLOW_RESTORE_TEST_DB");
-const hasDocker = commandAvailable("docker", ["version", "--format", "{{.Server.Version}}"]) || commandAvailable("docker", ["--version"]);
+// `docker --version` proves only that the CLI is installed. Image proof needs a
+// reachable engine; treating a client-only install as configured produced a
+// misleading failed build instead of an explicit unavailable/blocked result.
+const hasDocker = commandAvailable("docker", ["version", "--format", "{{.Server.Version}}"]) ;
 const releaseMetadataReady = boolEnv("RELEASE_APPROVED") && Boolean(process.env.RELEASE_VERSION && process.env.RELEASE_APPROVER && process.env.RELEASE_ROLLBACK_IMAGE);
 
 const metadata = {
@@ -224,6 +274,12 @@ const metadata = {
     releaseMetadataConfigured: releaseMetadataReady,
   },
 };
+
+// Own the mutable generated Prisma client and the certification database for
+// the whole run, not merely while the final report is written.
+acquireCertificationLock();
+certificationLockHeld = true;
+process.once("exit", releaseCertificationLock);
 
 console.log(`KiranaOS release certification (${mode})`);
 console.log(`Commit: ${repository.commit || "unknown"}${repository.dirty ? " (dirty)" : ""}`);
@@ -459,12 +515,70 @@ runStep({
     : "Docker engine is unavailable",
 });
 
-if (!sqliteTestExisted) {
-  for (const file of [sqliteTestPath, `${sqliteTestPath}-journal`]) {
-    try {
-      fs.rmSync(file, { force: true });
-    } catch {}
+for (const suffix of ["", "-journal", "-wal", "-shm"]) {
+  try {
+    fs.rmSync(`${sqliteTestPath}${suffix}`, { force: true });
+  } catch {}
+}
+
+const endingRepositoryFingerprint = repositoryFingerprint();
+const sourceSnapshotStable = Boolean(
+  startingRepositoryFingerprint
+  && endingRepositoryFingerprint
+  && startingRepositoryFingerprint === endingRepositoryFingerprint
+);
+addSyntheticResult({
+  id: "source-snapshot-stability",
+  label: "Source snapshot remained stable throughout certification",
+  status: sourceSnapshotStable ? "passed" : "failed",
+  reason: sourceSnapshotStable
+    ? ""
+    : "repository content changed during certification; rerun against one stable source snapshot",
+});
+
+function processIsRunning(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
   }
+}
+
+function acquireCertificationLock() {
+  fs.mkdirSync(artifactDir, { recursive: true });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      fs.mkdirSync(certificationLockDir);
+      fs.writeFileSync(path.join(certificationLockDir, "owner.json"), `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`, "utf8");
+      return;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      let owner = null;
+      try { owner = JSON.parse(fs.readFileSync(path.join(certificationLockDir, "owner.json"), "utf8")); } catch {}
+      if (processIsRunning(Number(owner?.pid))) {
+        console.error(`Another release certification is already running (PID ${owner.pid}).`);
+        process.exit(2);
+      }
+      // An interrupted process can leave only this small ownership directory.
+      // Remove it after proving its PID is no longer alive, then retry mkdir.
+      fs.rmSync(certificationLockDir, { recursive: true, force: true });
+    }
+  }
+  throw new Error("Could not acquire the release certification lock");
+}
+
+function releaseCertificationLock() {
+  if (!certificationLockHeld) return;
+  try {
+    const owner = JSON.parse(fs.readFileSync(path.join(certificationLockDir, "owner.json"), "utf8"));
+    if (Number(owner?.pid) !== process.pid) return;
+  } catch {
+    return;
+  }
+  certificationLockHeld = false;
+  fs.rmSync(certificationLockDir, { recursive: true, force: true });
 }
 
 const { report, exitCode } = writeReports(metadata);

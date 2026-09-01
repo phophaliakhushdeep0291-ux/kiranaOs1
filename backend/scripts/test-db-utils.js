@@ -1,6 +1,69 @@
 import path from "node:path";
 import process from "node:process";
 
+/**
+ * Compare Prisma schemas by meaningful tokens rather than generated formatting.
+ *
+ * `prisma generate` writes a normalized copy of schema.prisma into the client.
+ * Hand-aligned source fields therefore differ byte-for-byte even when the
+ * generated client is current. Whitespace and comments outside quoted strings
+ * do not affect Prisma's data model; whitespace inside strings still does.
+ */
+export function normalizePrismaSchemaForComparison(schema = "") {
+  let normalized = "";
+  let quote = null;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let index = 0; index < String(schema).length; index += 1) {
+    const character = schema[index];
+    const next = schema[index + 1];
+
+    if (lineComment) {
+      if (character === "\n" || character === "\r") lineComment = false;
+      continue;
+    }
+    if (blockComment) {
+      if (character === "*" && next === "/") {
+        blockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+    if (quote) {
+      normalized += character;
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === "/" && next === "/") {
+      lineComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      blockComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      normalized += character;
+      continue;
+    }
+    if (/\s/.test(character)) continue;
+    normalized += character;
+  }
+
+  return normalized;
+}
+
+export function prismaSchemasEquivalent(left, right) {
+  return normalizePrismaSchemaForComparison(left) === normalizePrismaSchemaForComparison(right);
+}
+
 export function defaultTestDatabaseUrl() {
   return `file:${path.resolve(process.cwd(), "prisma", "test.db")}`;
 }
