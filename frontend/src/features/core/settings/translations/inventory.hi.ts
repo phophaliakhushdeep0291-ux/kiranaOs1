@@ -171,6 +171,8 @@ export const inventoryHi: Record<keyof typeof inventoryEn, string> = {
   "inventory.transfers.batchProgress": "{received}/{total} मिला",
   "inventory.transfers.expiryLabel": "एक्सपायरी {date}",
   "inventory.transfers.fefoBatch": "FEFO बैच",
+  "inventory.transfers.offlineReadOnly": "ऑफलाइन · पिछली सेव की गई मल्टी-स्टोर जानकारी दिखाई जा रही है",
+  "inventory.transfers.offlineReadOnlyHelp": "इतिहास और ब्रांच स्टॉक देखने के लिए उपलब्ध हैं। माल भेजने, पाने, रद्द करने, अनुपालन जांचने या नई जगह जोड़ने से पहले इंटरनेट जोड़ें।",
   "inventory.transfers.shipmentDetails": "खेप की जानकारी",
   "inventory.transfers.shipment": "खेप",
   "inventory.transfers.tracking": "ट्रैकिंग",

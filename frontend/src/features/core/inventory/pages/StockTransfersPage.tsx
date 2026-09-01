@@ -11,6 +11,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/shared";
+import { useOfflineStatus } from "@/features/core/sync/useOfflineStatus";
+import {
+  cacheStockTransferResource,
+  getBranchReplenishment,
+  getLocationInventory,
+  getStoreLocations,
+  listStockTransfers,
+  readStockTransferMemoryCache,
+  STOCK_TRANSFER_CACHE_KEYS,
+  stockTransferCacheUpdatedAt,
+} from "@/features/core/inventory/stock-transfers-api";
 
 interface TaxRegistration {
   status: "format_valid" | "invalid" | "unregistered";
@@ -153,6 +164,7 @@ export default function StockTransfersPage() {
   const { t } = useAppLanguage();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { isOnline } = useOfflineStatus();
   const [transferOpen, setTransferOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const [fromId, setFromId] = useState("");
@@ -192,10 +204,51 @@ export default function StockTransfersPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelOwnerPin, setCancelOwnerPin] = useState("");
 
-  const locationsQ = useQuery({ queryKey: ["store-locations"], queryFn: () => apiRequest<LocationsResponse>("/stores") });
-  const transfersQ = useQuery({ queryKey: ["stock-transfers"], queryFn: () => apiRequest<Transfer[]>("/stores/transfers?limit=100") });
-  const replenishmentQ = useQuery({ queryKey: ["branch-replenishment-suggestions"], queryFn: () => apiRequest<ReplenishmentResponse>("/stores/replenishment-suggestions") });
-  const sourceQ = useQuery({ queryKey: ["location-inventory", fromId], queryFn: () => apiRequest<LocationInventory>(`/stores/${fromId}/inventory`), enabled: Boolean(fromId) });
+  const locationsQ = useQuery({
+    queryKey: ["store-locations"],
+    queryFn: () => getStoreLocations<LocationsResponse>(),
+    initialData: () => readStockTransferMemoryCache<LocationsResponse>(STOCK_TRANSFER_CACHE_KEYS.locations),
+    initialDataUpdatedAt: () => stockTransferCacheUpdatedAt(STOCK_TRANSFER_CACHE_KEYS.locations),
+  });
+  const transfersQ = useQuery({
+    queryKey: ["stock-transfers"],
+    queryFn: () => listStockTransfers<Transfer[]>(),
+    initialData: () => readStockTransferMemoryCache<Transfer[]>(STOCK_TRANSFER_CACHE_KEYS.transfers),
+    initialDataUpdatedAt: () => stockTransferCacheUpdatedAt(STOCK_TRANSFER_CACHE_KEYS.transfers),
+  });
+  const replenishmentQ = useQuery({
+    queryKey: ["branch-replenishment-suggestions"],
+    queryFn: () => getBranchReplenishment<ReplenishmentResponse>(),
+    initialData: () => readStockTransferMemoryCache<ReplenishmentResponse>(STOCK_TRANSFER_CACHE_KEYS.replenishment),
+    initialDataUpdatedAt: () => stockTransferCacheUpdatedAt(STOCK_TRANSFER_CACHE_KEYS.replenishment),
+  });
+  const sourceCacheKey = STOCK_TRANSFER_CACHE_KEYS.locationInventory(fromId);
+  const sourceQ = useQuery({
+    queryKey: ["location-inventory", fromId],
+    queryFn: () => getLocationInventory<LocationInventory>(fromId),
+    enabled: Boolean(fromId),
+    initialData: () => fromId ? readStockTransferMemoryCache<LocationInventory>(sourceCacheKey) : undefined,
+    initialDataUpdatedAt: () => stockTransferCacheUpdatedAt(sourceCacheKey),
+  });
+
+  const updateTransferLedger = (transfer: Transfer, prepend = false) => {
+    const current = queryClient.getQueryData<Transfer[]>(["stock-transfers"]) ?? [];
+    const withoutCurrent = current.filter((row) => row.id !== transfer.id);
+    const next = prepend ? [transfer, ...withoutCurrent] : current.some((row) => row.id === transfer.id) ? current.map((row) => row.id === transfer.id ? transfer : row) : [transfer, ...current];
+    queryClient.setQueryData(["stock-transfers"], next);
+    cacheStockTransferResource(STOCK_TRANSFER_CACHE_KEYS.transfers, next);
+  };
+
+  const appendLocation = (location: Location) => {
+    const current = queryClient.getQueryData<LocationsResponse>(["store-locations"]);
+    if (!current) return;
+    const next = {
+      locations: [...current.locations.filter((row) => row.id !== location.id), location],
+      usage: { ...current.usage, current: current.locations.some((row) => row.id === location.id) ? current.usage.current : current.usage.current + 1 },
+    };
+    queryClient.setQueryData(["store-locations"], next);
+    cacheStockTransferResource(STOCK_TRANSFER_CACHE_KEYS.locations, next);
+  };
 
   const locations = (locationsQ.data?.locations ?? []).filter((row) => row.active);
   const fromLocation = locations.find((row) => row.id === fromId);
@@ -276,7 +329,7 @@ export default function StockTransfersPage() {
     setQuantity(String(suggestion.recommendedTransferBaseQty));
     setFulfillmentMode("shipment");
     setNote(`Threshold replenishment for ${suggestion.destinationLocation.name}`);
-    setTransferOpen(true);
+    if (isOnline) setTransferOpen(true);
   };
   const transferMutation = useMutation({
     mutationFn: () => apiRequest<Transfer>("/stores/transfers", {
@@ -299,13 +352,13 @@ export default function StockTransfersPage() {
         ownerPin,
       }),
     }),
-    onSuccess: (data) => { void queryClient.invalidateQueries({ queryKey: ["stock-transfers"] }); void queryClient.invalidateQueries({ queryKey: ["location-inventory"] }); void queryClient.invalidateQueries({ queryKey: ["branch-replenishment-suggestions"] }); setTransferOpen(false); resetTransfer(); toast({ title: data.status === "completed" ? "Stock transfer completed" : "Shipment dispatched", description: data.status === "completed" ? `${data.referenceNo} recorded in both locations.` : `${data.referenceNo} reserved at source until destination receipt.` }); },
+    onSuccess: (data) => { updateTransferLedger(data, true); void queryClient.invalidateQueries({ queryKey: ["stock-transfers"] }); void queryClient.invalidateQueries({ queryKey: ["location-inventory"] }); void queryClient.invalidateQueries({ queryKey: ["branch-replenishment-suggestions"] }); setTransferOpen(false); resetTransfer(); toast({ title: data.status === "completed" ? "Stock transfer completed" : "Shipment dispatched", description: data.status === "completed" ? `${data.referenceNo} recorded in both locations.` : `${data.referenceNo} reserved at source until destination receipt.` }); },
     onError: (error: Error) => toast({ title: t("inventory.transfers.notCompleted"), description: error.message, variant: "destructive" }),
   });
   const resetLocation = () => { setLocationName(""); setLocationCode(""); setLocationCity(""); setLocationAddress(""); setRegistrationMode("inherit"); setLocationGstin(""); setLocationLegalName(""); setLocationTradeName(""); };
   const locationMutation = useMutation({
     mutationFn: () => apiRequest<Location>("/stores", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: locationName, code: locationCode, city: locationCity || undefined, address: locationAddress || undefined, ...(registrationMode === "distinct" ? { gstNumber: locationGstin, gstLegalName: locationLegalName || undefined, gstTradeName: locationTradeName || undefined, gstRegistrationType: "regular" } : registrationMode === "unregistered" ? { gstNumber: null, gstRegistrationType: "unregistered" } : {}) }) }),
-    onSuccess: (data) => { void queryClient.invalidateQueries({ queryKey: ["store-locations"] }); void queryClient.invalidateQueries({ queryKey: ["branch-replenishment-suggestions"] }); setLocationOpen(false); resetLocation(); toast({ title: t("inventory.transfers.locationCreated"), description: data.taxRegistration?.formatValid ? `${data.name} uses ${data.taxRegistration.gstin}. Format validated locally.` : `${data.name} can now receive stock.` }); },
+    onSuccess: (data) => { appendLocation(data); void queryClient.invalidateQueries({ queryKey: ["store-locations"] }); void queryClient.invalidateQueries({ queryKey: ["branch-replenishment-suggestions"] }); setLocationOpen(false); resetLocation(); toast({ title: t("inventory.transfers.locationCreated"), description: data.taxRegistration?.formatValid ? `${data.name} uses ${data.taxRegistration.gstin}. Format validated locally.` : `${data.name} can now receive stock.` }); },
     onError: (error: Error) => toast({ title: t("inventory.transfers.locationNotCreated"), description: error.message, variant: "destructive" }),
   });
   const resetReview = () => {
@@ -330,6 +383,7 @@ export default function StockTransfersPage() {
       }),
     }),
     onSuccess: (data) => {
+      updateTransferLedger(data);
       void queryClient.invalidateQueries({ queryKey: ["stock-transfers"] });
       void queryClient.invalidateQueries({ queryKey: ["gst-compliance-readiness"] });
       resetReview();
@@ -360,6 +414,7 @@ export default function StockTransfersPage() {
       body: JSON.stringify({ items: receiptLines, note: receiptNote.trim() || undefined, ownerPin: receiptOwnerPin }),
     }),
     onSuccess: (data) => {
+      updateTransferLedger(data);
       void queryClient.invalidateQueries({ queryKey: ["stock-transfers"] });
       void queryClient.invalidateQueries({ queryKey: ["location-inventory"] });
       void queryClient.invalidateQueries({ queryKey: ["branch-replenishment-suggestions"] });
@@ -376,7 +431,8 @@ export default function StockTransfersPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason: cancelReason.trim(), ownerPin: cancelOwnerPin }),
     }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      updateTransferLedger(data);
       void queryClient.invalidateQueries({ queryKey: ["stock-transfers"] });
       void queryClient.invalidateQueries({ queryKey: ["location-inventory"] });
       void queryClient.invalidateQueries({ queryKey: ["branch-replenishment-suggestions"] });
@@ -385,13 +441,13 @@ export default function StockTransfersPage() {
     },
     onError: (error: Error) => toast({ title: t("inventory.transfers.shipmentNotCancelled"), description: error.message, variant: "destructive" }),
   });
-  const reviewReady = reviewReason.trim().length >= 8
+  const reviewReady = isOnline && reviewReason.trim().length >= 8
     && reviewOwnerPin.length === 4
     && (reviewDecision === "not_required_after_review" || (/^\d{12}$/.test(reviewEWayNumber) && Boolean(reviewEWayDate)));
-  const canTransfer = Boolean(fromId && toId && fromId !== toId && ownerPin.length === 4 && transferReady && !transferMutation.isPending);
-  const receiptReady = receiptLines.length > 0 && receiptOwnerPin.length === 4 && receiptLines.every((line) => line.quantityBaseQty > 0 && line.quantityBaseQty <= Number(receiptTransfer?.items.find((item) => item.id === line.transferItemId)?.remainingBaseQty || 0));
-  const cancellationReady = cancelReason.trim().length >= 8 && cancelOwnerPin.length === 4;
-  const locationReady = locationName.trim().length >= 2 && locationCode.trim().length >= 2 && (registrationMode !== "distinct" || locationGstin.length === 15);
+  const canTransfer = Boolean(isOnline && fromId && toId && fromId !== toId && ownerPin.length === 4 && transferReady && !transferMutation.isPending);
+  const receiptReady = isOnline && receiptLines.length > 0 && receiptOwnerPin.length === 4 && receiptLines.every((line) => line.quantityBaseQty > 0 && line.quantityBaseQty <= Number(receiptTransfer?.items.find((item) => item.id === line.transferItemId)?.remainingBaseQty || 0));
+  const cancellationReady = isOnline && cancelReason.trim().length >= 8 && cancelOwnerPin.length === 4;
+  const locationReady = isOnline && locationName.trim().length >= 2 && locationCode.trim().length >= 2 && (registrationMode !== "distinct" || locationGstin.length === 15);
   const usage = locationsQ.data?.usage;
   const replenishmentSuggestions = replenishmentQ.data?.suggestions ?? [];
   return (
@@ -404,11 +460,13 @@ export default function StockTransfersPage() {
             <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100/90">{t("inventory.transfers.subtitle")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white" onClick={() => setLocationOpen(true)} disabled={Boolean(usage && usage.current >= usage.maximum)}><Building2 size={16} /> {t("inventory.transfers.addLocation")}</Button>
-            <Button className="bg-white font-black text-blue-700 hover:bg-blue-50" onClick={() => setTransferOpen(true)} disabled={locations.length < 2}><ArrowRightLeft size={16} /> {t("inventory.transfers.newTransfer")}</Button>
+            <Button variant="outline" className="border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white" onClick={() => setLocationOpen(true)} disabled={!isOnline || Boolean(usage && usage.current >= usage.maximum)}><Building2 size={16} /> {t("inventory.transfers.addLocation")}</Button>
+            <Button className="bg-white font-black text-blue-700 hover:bg-blue-50" onClick={() => setTransferOpen(true)} disabled={!isOnline || locations.length < 2}><ArrowRightLeft size={16} /> {t("inventory.transfers.newTransfer")}</Button>
           </div>
         </div>
       </section>
+
+      {!isOnline && <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status" data-testid="stock-transfers-offline-readonly"><p className="font-black">{t("inventory.transfers.offlineReadOnly")}</p><p className="mt-1 text-xs leading-5">{t("inventory.transfers.offlineReadOnlyHelp")}</p></div>}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className={`${card} p-5`}><p className="text-xs font-bold uppercase tracking-wider text-slate-500">{t("inventory.transfers.activeLocations")}</p><p className="mt-2 text-3xl font-black text-slate-900">{usage?.current ?? "—"}<span className="text-base text-slate-400"> / {usage?.maximum ?? "—"}</span></p><p className="mt-1 text-xs text-slate-500">{t("inventory.transfers.planEnforced")}</p></div>
@@ -430,7 +488,7 @@ export default function StockTransfersPage() {
               <article key={`${suggestion.destinationLocation.id}:${suggestion.productId}`} className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                 <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-black text-slate-900">{suggestion.productName}</p><p className="mt-1 truncate text-xs font-semibold text-blue-700">{suggestion.destinationLocation.name}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${suggestion.reasonCode === "out_of_stock" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{suggestion.reasonCode === "out_of_stock" ? t("inventory.transfers.outOfStock") : t("inventory.transfers.belowThreshold")}</span></div>
                 <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-white p-3 text-[10px] text-slate-500"><span>{t("inventory.transfers.atBranch")}<br /><b className="text-slate-900">{suggestion.stockBaseQty} {suggestion.baseUnit}</b></span><span>{t("inventory.transfers.incoming")}<br /><b className="text-blue-700">{suggestion.incomingBaseQty} {suggestion.baseUnit}</b></span><span>{t("inventory.transfers.primaryFree")}<br /><b className="text-slate-900">{suggestion.sourceAvailableBaseQty} {suggestion.baseUnit}</b></span></div>
-                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[11px] text-slate-500">{t("inventory.transfers.recommendedMovement")}</p><p className="text-lg font-black text-slate-900">{suggestion.recommendedTransferBaseQty} {suggestion.baseUnit}</p>{suggestion.supplyLimited && <p className="text-[10px] font-bold text-amber-700">{t("inventory.transfers.limitedBySource")}</p>}</div><Button size="sm" onClick={() => prepareReplenishment(suggestion)}><ArrowRightLeft size={14} /> {t("inventory.transfers.prepare")}</Button></div>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-[11px] text-slate-500">{t("inventory.transfers.recommendedMovement")}</p><p className="text-lg font-black text-slate-900">{suggestion.recommendedTransferBaseQty} {suggestion.baseUnit}</p>{suggestion.supplyLimited && <p className="text-[10px] font-bold text-amber-700">{t("inventory.transfers.limitedBySource")}</p>}</div><Button size="sm" disabled={!isOnline} onClick={() => prepareReplenishment(suggestion)}><ArrowRightLeft size={14} /> {t("inventory.transfers.prepare")}</Button></div>
               </article>
             ))}
           </div>
@@ -459,7 +517,7 @@ export default function StockTransfersPage() {
           })}
           {locationsQ.isLoading && <LoadingSkeleton variant="cards" rows={2} className="lg:col-span-2" />}
           {locationsQ.isError && <ErrorState compact className="lg:col-span-2" title={t("inventory.transfers.locationsFailed")} onRetry={() => void locationsQ.refetch()} />}
-          {!locationsQ.isLoading && !locationsQ.isError && locations.length === 0 && <EmptyState className="lg:col-span-2" title={t("inventory.transfers.noLocations")} description={t("inventory.transfers.noLocationsHelp")} action={<Button onClick={() => setLocationOpen(true)}><Plus size={14} /> {t("inventory.transfers.addLocation")}</Button>} />}
+          {!locationsQ.isLoading && !locationsQ.isError && locations.length === 0 && <EmptyState className="lg:col-span-2" title={t("inventory.transfers.noLocations")} description={t("inventory.transfers.noLocationsHelp")} action={isOnline ? <Button onClick={() => setLocationOpen(true)}><Plus size={14} /> {t("inventory.transfers.addLocation")}</Button> : undefined} />}
         </div>
       </section>
 
@@ -514,16 +572,16 @@ export default function StockTransfersPage() {
               )}
               {(transfer.eWayReviewRequired || ["in_transit", "partially_received"].includes(transfer.status)) && (
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
-                  {transfer.eWayReviewRequired && <Button size="sm" variant="outline" className="border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100" onClick={() => setReviewTransfer(transfer)}>
+                  {transfer.eWayReviewRequired && <Button size="sm" variant="outline" disabled={!isOnline} className="border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100" onClick={() => setReviewTransfer(transfer)}>
                     <ShieldCheck size={14} /> Resolve review
                   </Button>}
-                  {["in_transit", "partially_received"].includes(transfer.status) && <Button size="sm" variant="outline" className="border-slate-200 text-slate-700" onClick={() => setCancelTransfer(transfer)}><X size={14} /> {t("inventory.transfers.cancelRemainder")}</Button>}
-                  {["in_transit", "partially_received"].includes(transfer.status) && <Button size="sm" onClick={() => openReceipt(transfer)}><ClipboardCheck size={14} /> {t("inventory.transfers.receiveStock")}</Button>}
+                  {["in_transit", "partially_received"].includes(transfer.status) && <Button size="sm" variant="outline" disabled={!isOnline} className="border-slate-200 text-slate-700" onClick={() => setCancelTransfer(transfer)}><X size={14} /> {t("inventory.transfers.cancelRemainder")}</Button>}
+                  {["in_transit", "partially_received"].includes(transfer.status) && <Button size="sm" disabled={!isOnline} onClick={() => openReceipt(transfer)}><ClipboardCheck size={14} /> {t("inventory.transfers.receiveStock")}</Button>}
                 </div>
               )}
             </div>
           ))}
-          {!transfersQ.isLoading && !transfersQ.isError && !(transfersQ.data?.length) && <EmptyState className="border-0 py-10" title={t("inventory.transfers.noTransfers")} description={t("inventory.transfers.noTransfersHelp")} icon={<ArrowRightLeft size={28} className="text-slate-400" />} action={locations.length >= 2 ? <Button onClick={() => setTransferOpen(true)}><Plus size={14} /> {t("inventory.transfers.newTransfer")}</Button> : undefined} />}
+          {!transfersQ.isLoading && !transfersQ.isError && !(transfersQ.data?.length) && <EmptyState className="border-0 py-10" title={t("inventory.transfers.noTransfers")} description={t("inventory.transfers.noTransfersHelp")} icon={<ArrowRightLeft size={28} className="text-slate-400" />} action={isOnline && locations.length >= 2 ? <Button onClick={() => setTransferOpen(true)}><Plus size={14} /> {t("inventory.transfers.newTransfer")}</Button> : undefined} />}
         </div>
       </section>
       <Dialog open={transferOpen} onOpenChange={(open) => { setTransferOpen(open); if (!open && !transferMutation.isPending) resetTransfer(); }}>

@@ -182,6 +182,8 @@ export const inventoryEn = {
   "inventory.transfers.batchProgress": "{received}/{total} received",
   "inventory.transfers.expiryLabel": "Expiry {date}",
   "inventory.transfers.fefoBatch": "FEFO batch",
+  "inventory.transfers.offlineReadOnly": "Offline · showing the last saved multi-store data",
+  "inventory.transfers.offlineReadOnlyHelp": "History and branch stock remain available for reference. Reconnect before dispatching, receiving, cancelling, reviewing compliance, or adding a location.",
   "inventory.transfers.shipmentDetails": "Shipment details",
   "inventory.transfers.shipment": "Shipment",
   "inventory.transfers.tracking": "Tracking",
