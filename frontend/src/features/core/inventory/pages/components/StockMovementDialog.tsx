@@ -12,16 +12,17 @@ import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { getProductEmoji } from "@/features/core/billing/pages/components/BillingSearch";
 import { isDeletedProduct, productDisplayUnit, toBaseQty } from "@/features/core/products/pages/product-pricing";
 import { activeInventorySellingUnits, findInventorySellingUnit, inventoryDisplayQuantity, inventoryStockLabel } from "@/features/core/inventory/stock-display";
+import { STOCK_OUT_REASON } from "@/features/core/inventory/stock-movement-reasons";
 import { useRecordDamage, useRecordPurchase, useRecordSale } from "@/features/core/inventory/queries";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 
 const OUT_REASONS = [
-  { value: "Counter stock out", labelKey: "inventory.movement.reason.counter" },
-  { value: "Expiry", labelKey: "inventory.movement.reason.expiry" },
-  { value: "Damage", labelKey: "inventory.movement.reason.damage" },
-  { value: "Theft / Missing", labelKey: "inventory.movement.reason.missing" },
-  { value: "Other", labelKey: "inventory.movement.reason.other" },
+  { value: STOCK_OUT_REASON.counter, labelKey: "inventory.movement.reason.counter" },
+  { value: STOCK_OUT_REASON.expiry, labelKey: "inventory.movement.reason.expiry" },
+  { value: STOCK_OUT_REASON.damage, labelKey: "inventory.movement.reason.damage" },
+  { value: STOCK_OUT_REASON.missing, labelKey: "inventory.movement.reason.missing" },
+  { value: STOCK_OUT_REASON.other, labelKey: "inventory.movement.reason.other" },
 ] as const;
 
 function stockBaseQty(product: Product): number {

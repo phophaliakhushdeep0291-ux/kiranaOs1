@@ -52,18 +52,19 @@ export function adaptBackendCommandIntent(data: unknown, command: string): Voice
   const items = Array.isArray(data.items) ? data.items.filter(isRecord) : [];
   const customer = isRecord(data.customer) ? data.customer : undefined;
   const query = str(items[0]?.query) ?? str(data.target);
+  const aiActionLogId = str(data.actionLogId);
 
   switch (intent) {
     case "SEARCH_PRODUCT":
       return query
-        ? { action: "search", route: "/products", search: { target: "product", query }, message, auditable: true }
+        ? { action: "search", route: "/products", search: { target: "product", query }, message, auditable: true, aiActionLogId }
         : null;
     case "SHOW_KHATA":
-      return { action: "navigate", route: "/udhar", message, auditable: true };
+      return { action: "navigate", route: "/udhar", message, auditable: true, aiActionLogId };
     case "OPEN_REPORTS":
-      return { action: "navigate", route: "/reports", message, auditable: true };
+      return { action: "navigate", route: "/reports", message, auditable: true, aiActionLogId };
     case "OPEN_INVENTORY":
-      return { action: "navigate", route: "/inventory", message, auditable: true };
+      return { action: "navigate", route: "/inventory", message, auditable: true, aiActionLogId };
     case "SET_CUSTOMER":
     case "CREATE_CUSTOMER":
       return {
@@ -76,6 +77,7 @@ export function adaptBackendCommandIntent(data: unknown, command: string): Voice
         },
         message,
         auditable: true,
+        aiActionLogId,
       };
     case "ADD_ITEMS":
     case "REMOVE_ITEM":
@@ -92,6 +94,7 @@ export function adaptBackendCommandIntent(data: unknown, command: string): Voice
         requiresConfirmation: true,
         message,
         auditable: true,
+        aiActionLogId,
       };
     default:
       return null;

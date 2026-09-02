@@ -10,6 +10,7 @@ import {
   type AgentTurn,
 } from "@/features/core/assistant/agent-client";
 import type { StagedBillLine } from "../../assistant-staging";
+import { submitAiFeedback, type AiFeedbackOutcome } from "@/lib/ai/ai-feedback-client";
 
 /**
  * The assistant, inline on the till.
@@ -47,6 +48,7 @@ export function BillingAssistantStrip({
   const [busy, setBusy] = useState(true);
   const [note, setNote] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
+  const [feedback, setFeedback] = useState<AiFeedbackOutcome | "submitting" | "failed" | null>(null);
   // The till re-renders constantly as the cart changes; without this the same
   // command would be asked again on every keystroke elsewhere on the screen.
   const askedFor = useRef<string | null>(null);
@@ -59,6 +61,7 @@ export function BillingAssistantStrip({
     setBusy(true);
     setTurn(null);
     setNote(null);
+    setFeedback(null);
 
     void (async () => {
       try {
@@ -107,6 +110,17 @@ export function BillingAssistantStrip({
     onDismiss();
   }, [turn, onDismiss]);
 
+  const labelAnswer = useCallback(async (outcome: AiFeedbackOutcome) => {
+    if (!turn?.turnId) return;
+    setFeedback("submitting");
+    try {
+      await submitAiFeedback(turn.turnId, outcome);
+      setFeedback(outcome);
+    } catch {
+      setFeedback("failed");
+    }
+  }, [turn]);
+
   return (
     <div className="mt-2 rounded-2xl border border-[var(--brand)]/30 bg-[var(--brand-softer)] p-3 text-sm">
       <div className="flex items-start gap-2">
@@ -129,6 +143,29 @@ export function BillingAssistantStrip({
                 </li>
               ))}
             </ul>
+          ) : null}
+          {turn?.turnId ? (
+            <div className="mt-2 border-t border-[var(--brand)]/15 pt-2 text-[11px]">
+              {feedback && !["submitting", "failed"].includes(feedback) ? (
+                <span className="font-bold text-emerald-700">{t("assistant.feedback.thanks")}</span>
+              ) : (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-semibold text-slate-500">{t("assistant.feedback.question")}</span>
+                  {(["correct", "misunderstood", "unsafe"] as const).map((outcome) => (
+                    <button
+                      key={outcome}
+                      type="button"
+                      disabled={feedback === "submitting"}
+                      onClick={() => void labelAnswer(outcome)}
+                      className="min-h-8 rounded-lg border border-slate-300 bg-white px-2 font-bold text-slate-600 disabled:opacity-50"
+                    >
+                      {t(`assistant.feedback.${outcome}`)}
+                    </button>
+                  ))}
+                  {feedback === "failed" ? <span className="font-bold text-rose-600">{t("assistant.feedback.failed")}</span> : null}
+                </div>
+              )}
+            </div>
           ) : null}
         </div>
         <button

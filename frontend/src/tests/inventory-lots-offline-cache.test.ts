@@ -23,13 +23,14 @@ vi.mock("@/lib/api/http", () => ({
 }));
 
 vi.mock("@/lib/offline/instant-cache", () => ({
+  emitLocalDataChanged: vi.fn(),
   instantCacheUpdatedAt: () => 0,
   readIndexedRecentCache: vi.fn(async (key: string, fallback: unknown) => state.cached.has(key) ? state.cached.get(key) : fallback),
   readInstantCache: vi.fn((key: string, fallback: unknown) => state.memory.has(key) ? state.memory.get(key) : fallback),
   writeInstantCache: vi.fn((key: string, value: unknown) => { state.cached.set(key, value); state.memory.set(key, value); }),
 }));
 
-import { getExpiryAlerts, INVENTORY_LOT_CACHE_KEYS, listInventoryLots } from "@/features/core/inventory/inventory-lots-api";
+import { getExpiryAlerts, INVENTORY_LOT_CACHE_KEYS, listInventoryLots, listSellableBatches, reconcileCachedSellableBatches } from "@/features/core/inventory/inventory-lots-api";
 
 describe("inventory lots offline cache", () => {
   beforeEach(() => { state.browserOnline = true; state.cached.clear(); state.memory.clear(); state.request.mockReset(); });
@@ -65,5 +66,54 @@ describe("inventory lots offline cache", () => {
   it("reports a clear miss when batches were never cached", async () => {
     state.browserOnline = false;
     await expect(listInventoryLots()).rejects.toMatchObject({ status: 0, data: { code: "INVENTORY_LOT_CACHE_MISSING" } });
+  });
+
+  it("reopens a product's batch choices after an offline restart", async () => {
+    const batches = [{ id: "lot-1", batchNumber: "B-1", expiresOn: "2030-01-01", availableBaseQty: 5, mrp: 20 }];
+    state.request.mockResolvedValueOnce(batches);
+    await expect(listSellableBatches("product-1")).resolves.toEqual(batches);
+    state.browserOnline = false;
+    state.memory.clear();
+    await expect(listSellableBatches("product-1")).resolves.toEqual(batches);
+    expect(state.request).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates cached FEFO quantities immediately after local movements", async () => {
+    state.cached.set(INVENTORY_LOT_CACHE_KEYS.sellable("product-1"), [
+      { id: "early", batchNumber: "EARLY", expiresOn: "2030-01-01", availableBaseQty: 2, mrp: 20 },
+      { id: "late", batchNumber: "LATE", expiresOn: "2031-01-01", availableBaseQty: 4, mrp: 22 },
+    ]);
+    await reconcileCachedSellableBatches({ productId: "product-1", movementType: "sale", quantityBaseQty: 3 });
+    expect(state.cached.get(INVENTORY_LOT_CACHE_KEYS.sellable("product-1"))).toEqual([
+      { id: "late", batchNumber: "LATE", expiresOn: "2031-01-01", availableBaseQty: 3, mrp: 22 },
+    ]);
+    await reconcileCachedSellableBatches({ productId: "product-1", movementType: "purchase", quantityBaseQty: 5, batchNumber: "NEW", expiresOn: "2032-01-01", batchMrp: 25 });
+    expect(state.cached.get(INVENTORY_LOT_CACHE_KEYS.sellable("product-1"))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ batchNumber: "NEW", availableBaseQty: 5, mrp: 25, pendingSync: true }),
+    ]));
+  });
+
+  it("decrements an explicitly selected batch instead of a different FEFO batch", async () => {
+    state.cached.set(INVENTORY_LOT_CACHE_KEYS.sellable("product-1"), [
+      { id: "early", batchNumber: "EARLY", expiresOn: "2030-01-01", availableBaseQty: 2, mrp: 20 },
+      { id: "selected", batchNumber: "SELECTED", expiresOn: "2031-01-01", availableBaseQty: 4, mrp: 22 },
+    ]);
+    await reconcileCachedSellableBatches({ productId: "product-1", movementType: "sale", quantityBaseQty: 3, batchNumber: "SELECTED" });
+    expect(state.cached.get(INVENTORY_LOT_CACHE_KEYS.sellable("product-1"))).toEqual([
+      { id: "early", batchNumber: "EARLY", expiresOn: "2030-01-01", availableBaseQty: 2, mrp: 20 },
+      { id: "selected", batchNumber: "SELECTED", expiresOn: "2031-01-01", availableBaseQty: 1, mrp: 22 },
+    ]);
+  });
+
+  it("matches a server lot id when billing consumed a specifically selected batch", async () => {
+    state.cached.set(INVENTORY_LOT_CACHE_KEYS.sellable("product-1"), [
+      { id: "early", batchNumber: "SAME", expiresOn: "2030-01-01", availableBaseQty: 2, mrp: 20 },
+      { id: "selected", batchNumber: "SAME", expiresOn: "2031-01-01", availableBaseQty: 4, mrp: 22 },
+    ]);
+    await reconcileCachedSellableBatches({ productId: "product-1", movementType: "sale", quantityBaseQty: 3, inventoryLotId: "selected" });
+    expect(state.cached.get(INVENTORY_LOT_CACHE_KEYS.sellable("product-1"))).toEqual([
+      { id: "early", batchNumber: "SAME", expiresOn: "2030-01-01", availableBaseQty: 2, mrp: 20 },
+      { id: "selected", batchNumber: "SAME", expiresOn: "2031-01-01", availableBaseQty: 1, mrp: 22 },
+    ]);
   });
 });

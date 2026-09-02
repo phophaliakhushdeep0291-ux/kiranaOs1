@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppLanguage } from "@/features/core/settings/i18n";
-import { listSellableBatches, type SellableBatch } from "@/features/core/inventory/inventory-lots-api";
+import { INVENTORY_LOT_CACHE_KEYS, inventoryLotCacheUpdatedAt, listSellableBatches, readInventoryLotMemoryCache, type SellableBatch } from "@/features/core/inventory/inventory-lots-api";
+import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 
 const DAY = 86_400_000;
 
@@ -40,14 +41,24 @@ export function BatchPicker({
 }) {
   const { t } = useAppLanguage();
   const [open, setOpen] = useState(false);
+  const [locationId, setLocationId] = useState(() => getActiveLocationId() ?? "primary");
+
+  useEffect(() => {
+    const refreshLocation = () => setLocationId(getActiveLocationId() ?? "primary");
+    window.addEventListener(LOCATION_CHANGED_EVENT, refreshLocation);
+    return () => window.removeEventListener(LOCATION_CHANGED_EVENT, refreshLocation);
+  }, []);
 
   // Only fetched once the operator opens the picker: a cart of batch-tracked
   // lines would otherwise fire a request per line on every render.
   const query = useQuery({
-    queryKey: ["sellable-batches", productId],
-    queryFn: () => listSellableBatches(productId),
+    queryKey: ["sellable-batches", locationId, productId],
+    queryFn: () => listSellableBatches(productId, locationId),
     enabled: open,
+    initialData: () => readInventoryLotMemoryCache<SellableBatch[]>(INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId)),
+    initialDataUpdatedAt: () => inventoryLotCacheUpdatedAt(INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId)),
     staleTime: 15_000,
+    retry: false,
   });
 
   const batches = query.data ?? [];
@@ -81,6 +92,8 @@ export function BatchPicker({
 
           {query.isLoading ? (
             <p className="px-2 py-2 text-[10px] text-[#9aa7bd]">{t("billing.batch.loading")}</p>
+          ) : query.isError && batches.length === 0 ? (
+            <p className="px-2 py-2 text-[10px] font-semibold text-amber-700" role="status">{t("inventory.lots.offlineReadOnlyHelp")}</p>
           ) : batches.length === 0 ? (
             <p className="px-2 py-2 text-[10px] text-[#9aa7bd]">{t("billing.batch.empty")}</p>
           ) : (
@@ -90,10 +103,12 @@ export function BatchPicker({
                 <button
                   key={batch.id}
                   type="button"
+                  disabled={batch.pendingSync}
                   onClick={() => { onSelect(batch); setOpen(false); }}
                   className={cn(
                     "block w-full rounded px-2 py-1 text-left text-[10px] hover:bg-[#f3f7ff]",
                     selected?.id === batch.id && "bg-[#eef4ff]",
+                    batch.pendingSync && "cursor-not-allowed opacity-60",
                   )}
                 >
                   <span className="font-mono font-bold text-[#3D4354]">{batch.batchNumber}</span>
@@ -102,6 +117,7 @@ export function BatchPicker({
                     {days < 0 ? t("billing.batch.expiredAgo", { days: Math.abs(days) }) : t("billing.batch.daysLeft", { days })}
                   </span>
                   <span className="ml-1 text-[#9aa7bd]">{batch.availableBaseQty} {baseUnit}</span>
+                  {batch.pendingSync ? <span className="ml-1 font-semibold text-amber-700">{t("dashboard.pendingSync")}</span> : null}
                 </button>
               );
             })

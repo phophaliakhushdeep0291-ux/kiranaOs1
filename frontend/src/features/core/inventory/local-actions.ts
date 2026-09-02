@@ -16,6 +16,7 @@ import {
   inventoryUnitLabel,
   productTracksStock,
 } from "@/features/core/inventory/stock-display";
+import { reconcileCachedSellableBatches } from "@/features/core/inventory/inventory-lots-api";
 
 const PRODUCT_CACHE_KEY = "products";
 const INVENTORY_CACHE_KEY = "inventory";
@@ -438,6 +439,15 @@ async function stockMovementLocalFirst(
   else await offlineDB.transaction(STOCK_ADJUSTMENT_TRANSACTION_TABLES, persist);
 
   if (options.updateCache !== false) {
+    await reconcileCachedSellableBatches({
+      productId,
+      movementType,
+      quantityBaseQty: validated.quantityDelta,
+      locationId: data.locationId,
+      batchNumber: data.batchNumber,
+      expiresOn: data.expiresOn,
+      batchMrp: data.batchMrp,
+    }).catch(() => undefined);
     upsertCachedListItem(LEDGER_CACHE_KEY, movement, 1000);
     upsertCachedListItem<Product>(PRODUCT_CACHE_KEY, updatedProduct, 1000);
     upsertCachedListItem<InventoryItem>(INVENTORY_CACHE_KEY, updatedProduct, 1000);
@@ -486,7 +496,17 @@ export async function recordPurchaseBatchLocalFirst(lines: StockMovementInput[])
     }));
   });
 
-  for (const result of results) {
+  for (const [index, result] of results.entries()) {
+    const line = lines[index];
+    await reconcileCachedSellableBatches({
+      productId: String(line.productId),
+      movementType: "purchase",
+      quantityBaseQty: Number(result.movement.quantityDelta ?? result.movement.quantity_delta ?? line.quantity ?? 0),
+      locationId: line.locationId,
+      batchNumber: line.batchNumber,
+      expiresOn: line.expiresOn,
+      batchMrp: line.batchMrp,
+    }).catch(() => undefined);
     upsertCachedListItem(LEDGER_CACHE_KEY, result.movement, 1000);
     upsertCachedListItem<Product>(PRODUCT_CACHE_KEY, result.product, 1000);
     upsertCachedListItem<InventoryItem>(INVENTORY_CACHE_KEY, result.product, 1000);

@@ -13,6 +13,7 @@ import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/
 import { BillPaymentMode } from "@/types/api";
 import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { productTracksStock } from "@/features/core/inventory/stock-display";
+import { reconcileCachedSellableBatches } from "@/features/core/inventory/inventory-lots-api";
 
 const BILL_CACHE_KEY = "bills";
 const CUSTOMER_CACHE_KEY = "customers";
@@ -635,7 +636,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   });
   // A cache/display failure after the financial commit is not a failed sale.
   // Returning an error here invites the cashier to collect the same money again.
-  try { committed.publish(); } catch { /* Durable rows and outbox are already committed. */ }
+  try { await committed.publish(); } catch { /* Durable rows and outbox are already committed. */ }
   return committed.bill;
 }
 
@@ -646,7 +647,7 @@ async function persistLocalBill(
   sensitiveActions: SensitiveBillAction[],
   requestedClientBillId: string | undefined,
   checkoutFingerprint: string,
-): Promise<{ bill: Bill; publish: () => void }> {
+): Promise<{ bill: Bill; publish: () => void | Promise<void> }> {
   const productsById = await loadBillProducts(validated.items);
   const billId = createLocalId("bill");
   const clientBillId = requestedClientBillId ?? billId;
@@ -890,7 +891,7 @@ async function persistLocalBill(
   if (nextLedgerCache) await tx.setSetting("cache:customer_ledger", nextLedgerCache, cacheExpiresAt);
   return {
     bill,
-    publish: () => {
+    publish: async () => {
       writeInstantMemoryCache(BILL_CACHE_KEY, nextBillsCache, BILL_CREATION_CACHE_DAYS);
       if (nextCustomersCache) writeInstantMemoryCache(CUSTOMER_CACHE_KEY, nextCustomersCache, BILL_CREATION_CACHE_DAYS);
       if (nextLedgerCache) writeInstantMemoryCache("customer_ledger", nextLedgerCache, BILL_CREATION_CACHE_DAYS);
@@ -898,6 +899,18 @@ async function persistLocalBill(
         upsertCachedListItem<Product>(PRODUCT_CACHE_KEY, product, 1000);
         upsertCachedListItem<Product & Record<string, unknown>>(INVENTORY_CACHE_KEY, product, 1000);
       });
+      for (const item of billData.items) {
+        if (!item.productId) continue;
+        const product = productsById.get(item.productId);
+        if (product && !productTracksStock(product)) continue;
+        await reconcileCachedSellableBatches({
+          productId: item.productId,
+          movementType: "sale",
+          quantityBaseQty: billItemBaseQuantity(item, product),
+          locationId: billData.locationId,
+          inventoryLotId: item.inventoryLotId,
+        }).catch(() => undefined);
+      }
       emitLocalDataChanged({ type: "bill", id: billId, action: "created" });
       updatedProducts.forEach((product) => emitLocalDataChanged({ type: "product", id: product.id, action: "stock-updated" }));
       if (ledgerEntry) emitLocalDataChanged({ type: "ledger", id: ledgerEntry.id, customerId: billData.customerId, action: "appended" });

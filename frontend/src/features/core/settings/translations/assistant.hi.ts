@@ -56,4 +56,10 @@ export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.unavailable": "इस सर्वर पर सहायक सेट नहीं है।",
   "assistant.busy": "सहायक व्यस्त है। थोड़ी देर में फिर कोशिश करें।",
   "assistant.failed": "यह काम नहीं हुआ। दूसरे शब्दों में कहें।",
+  "assistant.feedback.question": "क्या यह सही था?",
+  "assistant.feedback.correct": "सही",
+  "assistant.feedback.misunderstood": "गलत समझा",
+  "assistant.feedback.unsafe": "असुरक्षित",
+  "assistant.feedback.thanks": "राय दर्ज हो गई — संदेश या ग्राहक की जानकारी कॉपी नहीं हुई।",
+  "assistant.feedback.failed": "राय सेव नहीं हुई। फिर कोशिश करें।",
 };

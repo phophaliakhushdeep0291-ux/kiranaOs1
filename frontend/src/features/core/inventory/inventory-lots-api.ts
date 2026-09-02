@@ -1,5 +1,6 @@
 import { ApiClientError, apiRequest, buildQuery, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
-import { instantCacheUpdatedAt, readIndexedRecentCache, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
+import { emitLocalDataChanged, instantCacheUpdatedAt, readIndexedRecentCache, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
+import { getActiveLocationId } from "@/features/core/stores/location-context";
 
 export interface InventoryLot {
   id: string;
@@ -23,6 +24,8 @@ export interface SellableBatch {
   availableBaseQty: number;
   /** The MRP printed on this batch's pack. Null means the product's MRP applies. */
   mrp: number | null;
+  /** Locally received and usable by automatic FEFO, but not selectable by server id until sync. */
+  pendingSync?: boolean;
 }
 
 export type ExpirySeverity = "expired" | "critical" | "warning";
@@ -55,6 +58,7 @@ export interface ExpiryAlerts {
 export const INVENTORY_LOT_CACHE_KEYS = {
   list: (status = "all", expiringWithinDays?: number) => `inventory-lots:list:v1:${status}:${expiringWithinDays ?? "all"}`,
   alerts: "inventory-lots:expiry-alerts:v1",
+  sellable: (productId: string, locationId = getActiveLocationId() ?? "primary") => `inventory-lots:sellable:v1:${locationId}:${productId}`,
 } as const;
 
 async function readCachedLotResource<T>(path: string, cacheKey: string): Promise<T> {
@@ -93,5 +97,74 @@ export const listInventoryLots = (params: { status?: string; expiringWithinDays?
   return readCachedLotResource<InventoryLot[]>(`/inventory-lots${buildQuery({ status, expiringWithinDays: params.expiringWithinDays, limit: 500 })}`, INVENTORY_LOT_CACHE_KEYS.list(status, params.expiringWithinDays));
 };
 export const getExpiryAlerts = (params: { criticalDays?: number; warningDays?: number } = {}) => readCachedLotResource<ExpiryAlerts>(`/inventory-lots/expiry-alerts${buildQuery({ criticalDays: params.criticalDays, warningDays: params.warningDays })}`, INVENTORY_LOT_CACHE_KEYS.alerts);
-export const listSellableBatches = (productId: string) => apiRequest<SellableBatch[]>(`/inventory-lots/sellable/${productId}`);
+export const listSellableBatches = (productId: string, locationId = getActiveLocationId() ?? "primary") => readCachedLotResource<SellableBatch[]>(`/inventory-lots/sellable/${productId}`, INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId));
 export const changeInventoryLotStatus = (id: string, status: "active" | "quarantined" | "recalled", note: string, ownerPin: string) => apiRequest<InventoryLot>(`/inventory-lots/${id}/status`, { method: "POST", ownerPin, body: JSON.stringify({ status, note }) });
+
+/**
+ * Keep the counter's cached FEFO choices aligned with a local-first movement.
+ * This cache is a projection, not the financial source of truth, so it is
+ * written after the atomic IndexedDB movement. Under uncertainty (damage may
+ * have come from quarantined stock) reducing saleable FEFO stock is the safe
+ * direction: the till can temporarily understate availability but never offer
+ * a batch that the local movement may already have exhausted.
+ */
+export async function reconcileCachedSellableBatches(input: {
+  productId: string;
+  movementType: "purchase" | "sale" | "damage" | "correction";
+  quantityBaseQty: number;
+  locationId?: string;
+  inventoryLotId?: string;
+  batchNumber?: string;
+  expiresOn?: string;
+  batchMrp?: number;
+}) {
+  const key = INVENTORY_LOT_CACHE_KEYS.sellable(input.productId, input.locationId ?? getActiveLocationId() ?? "primary");
+  const cached = await readIndexedRecentCache<SellableBatch[] | undefined>(key, undefined);
+  const quantity = Math.abs(Number(input.quantityBaseQty || 0));
+  if (!(quantity > 0)) return cached;
+
+  if (input.movementType === "purchase" && input.batchNumber && input.expiresOn) {
+    const rows = cached ?? [];
+    const existing = rows.find((row) => row.batchNumber === input.batchNumber && row.expiresOn.slice(0, 10) === input.expiresOn?.slice(0, 10));
+    const next = existing
+      ? rows.map((row) => row.id === existing.id ? { ...row, availableBaseQty: Number(row.availableBaseQty) + quantity, mrp: input.batchMrp ?? row.mrp } : row)
+      : [...rows, {
+        id: `local-batch:${input.productId}:${input.batchNumber}:${input.expiresOn}`,
+        batchNumber: input.batchNumber,
+        expiresOn: input.expiresOn,
+        availableBaseQty: quantity,
+        mrp: input.batchMrp ?? null,
+        pendingSync: true,
+      }];
+    next.sort((a, b) => a.expiresOn.localeCompare(b.expiresOn));
+    writeInstantCache(key, next);
+    emitLocalDataChanged({ type: "inventory_lot", productId: input.productId, action: "cache-updated" });
+    return next;
+  }
+
+  if (!cached) return undefined;
+  if (input.inventoryLotId || input.batchNumber) {
+    const next = cached.map((row) => {
+      const sameBatch = input.inventoryLotId
+        ? row.id === input.inventoryLotId
+        : row.batchNumber === input.batchNumber
+          && (!input.expiresOn || row.expiresOn.slice(0, 10) === input.expiresOn.slice(0, 10));
+      return sameBatch
+        ? { ...row, availableBaseQty: Math.max(0, Number(row.availableBaseQty) - quantity) }
+        : row;
+    }).filter((row) => row.availableBaseQty > 0);
+    writeInstantCache(key, next);
+    emitLocalDataChanged({ type: "inventory_lot", productId: input.productId, action: "cache-updated" });
+    return next;
+  }
+  let remaining = quantity;
+  const next = cached.map((row) => {
+    if (remaining <= 0) return row;
+    const taken = Math.min(remaining, Number(row.availableBaseQty));
+    remaining -= taken;
+    return { ...row, availableBaseQty: Math.max(0, Number(row.availableBaseQty) - taken) };
+  }).filter((row) => row.availableBaseQty > 0);
+  writeInstantCache(key, next);
+  emitLocalDataChanged({ type: "inventory_lot", productId: input.productId, action: "cache-updated" });
+  return next;
+}

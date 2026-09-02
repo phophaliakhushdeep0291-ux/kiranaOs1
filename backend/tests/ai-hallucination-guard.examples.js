@@ -4,7 +4,12 @@ import {
   safeUnknownAiCommand,
 } from "../src/modules/ai/ai.command-schema.js";
 import { groundAiCommand } from "../src/modules/ai/ai.grounding.js";
-import { parseCommand } from "../src/modules/ai/ai.service.js";
+import {
+  AI_COMMAND_POLICY_VERSION,
+  AI_COMMAND_PROMPT_FINGERPRINT,
+  parseCommand,
+} from "../src/modules/ai/ai.service.js";
+import { getMetricsSnapshot } from "../src/lib/metrics.js";
 
 const catalog = [
   { id: "product-sugar", name: "Sugar", aliasesJson: JSON.stringify(["chini", "shakkar"]) },
@@ -165,6 +170,26 @@ const adversarialCases = [
     transcript: "khata dikhao",
     output: command({ intent: "SHOW_KHATA", confidence: 0.3 }),
   },
+  {
+    name: "spoken but nonexistent product deletion",
+    transcript: "delete Unicorn Cereal",
+    output: command({ intent: "DELETE_PRODUCT", target: "Unicorn Cereal", needsConfirmation: true }),
+  },
+  {
+    name: "missing add-item payload",
+    transcript: "chini bill mein add karo",
+    output: command({ intent: "ADD_ITEMS", items: null, needsConfirmation: true }),
+  },
+  {
+    name: "missing payment payload",
+    transcript: "payment set karo",
+    output: command({ intent: "SET_PAYMENT", payment: null, needsConfirmation: true }),
+  },
+  {
+    name: "missing customer payload",
+    transcript: "customer select karo",
+    output: command({ intent: "SET_CUSTOMER", customer: null }),
+  },
 ];
 
 let unsafeAccepted = 0;
@@ -232,6 +257,9 @@ assert.equal(runtimeResult.safety.catalogAvailable, true);
 assert.equal(runtimeResult.safety.provider, "openai");
 assert.equal(runtimeResult.safety.matchedProductIds.includes("product-sugar"), true);
 assert.equal(runtimeResult.safety.providerProseAccepted, false);
+assert.equal(runtimeResult.safety.policyVersion, AI_COMMAND_POLICY_VERSION);
+assert.equal(runtimeResult.safety.promptFingerprint, AI_COMMAND_PROMPT_FINGERPRINT);
+assert.match(runtimeResult.safety.promptFingerprint, /^[a-f0-9]{16}$/);
 assert.equal(runtimeResult.messageToUser, "Item and quantity verified. Review before adding to the bill.");
 assert.equal(providerRequests[0].temperature, 0, "AI parser must be deterministic");
 assert.equal(providerRequests[0].response_format.type, "json_schema", "OpenAI path must request strict structured output");
@@ -296,6 +324,16 @@ const noCatalogResult = await parseCommand(
 assert.equal(noCatalogResult.permissionAllowed, false, "product mutations must fail closed when catalog verification is unavailable");
 assert.equal(noCatalogResult.safety.catalogAvailable, false);
 assert.ok(noCatalogResult.safety.reasons.includes("CATALOG_UNAVAILABLE"));
+
+const metrics = getMetricsSnapshot().data;
+assert.ok(metrics.knownMetrics.includes("ai_grounding_rejections_total"));
+const rejectionMetrics = metrics.counters.filter((metric) => metric.name === "ai_grounding_rejections_total");
+assert.ok(rejectionMetrics.length > 0, "blocked runtime decisions must expose privacy-safe rejection reasons");
+assert.equal(
+  rejectionMetrics.some((metric) => Object.keys(metric.labels).some((key) => /shop|user|phone|mobile|transcript/i.test(key))),
+  false,
+  "hallucination telemetry must never label metrics with tenant or transcript PII",
+);
 
 assert.deepEqual(safeUnknownAiCommand().items, null);
 console.log(JSON.stringify({

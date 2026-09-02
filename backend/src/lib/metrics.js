@@ -25,6 +25,8 @@ const KNOWN_METRICS = [
   "integration_api_auth_total",
   "ai_commands_total",
   "ai_command_effective_confidence",
+  "ai_grounding_rejections_total",
+  "ai_feedback_total",
   "webhook_deliveries_total",
   "webhook_delivery_duration_ms",
   "webhook_queue_dispatch_total",
@@ -145,9 +147,21 @@ export function recordIntegrationApiAuth(status) {
   incrementMetric("integration_api_auth_total", { status });
 }
 
-export function recordAiCommand({ provider = "unknown", status = "blocked", intent = "UNKNOWN", confidence = 0 }) {
-  incrementMetric("ai_commands_total", { provider, status, intent });
-  observeMetric("ai_command_effective_confidence", { provider, status }, confidence);
+export function recordAiCommand({
+  provider = "unknown",
+  status = "blocked",
+  intent = "UNKNOWN",
+  confidence = 0,
+  model = "unknown",
+  policyVersion = "unknown",
+  reasonCodes = [],
+}) {
+  const labels = { provider, model, policyVersion, status, intent };
+  incrementMetric("ai_commands_total", labels);
+  observeMetric("ai_command_effective_confidence", { provider, model, policyVersion, status }, confidence);
+  for (const reason of new Set(Array.isArray(reasonCodes) ? reasonCodes : [])) {
+    incrementMetric("ai_grounding_rejections_total", { provider, model, policyVersion, reason });
+  }
 }
 
 export function recordWebhookDelivery({ eventType, status, durationMs }) {

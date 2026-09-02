@@ -2,6 +2,7 @@ import * as svc from "./ai.service.js";
 import { AppError } from "../../middleware/error.js";
 import { getUploadedAudioFile, removeUploadedAudioFile } from "./ai.upload.js";
 import { createPurchaseInvoiceDraft } from "../finance/accounting-document.service.js";
+import { getAiFeedbackSummary, submitAiFeedback } from "./ai.feedback.service.js";
 
 function sendAiProviderError(err, res) {
   const msg = (err.message ?? "").toLowerCase();
@@ -86,6 +87,28 @@ export async function extractPurchaseInvoice(req, res, next) {
     res.json({ success: true, data: { draft: result.document.extracted, document: result.document, duplicate: result.duplicate } });
   } catch (err) {
     if (sendAiProviderError(err, res)) return;
+    next(err);
+  }
+}
+
+export async function feedback(req, res, next) {
+  try {
+    const data = await submitAiFeedback({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      ...req.body,
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function feedbackSummary(req, res, next) {
+  try {
+    const data = await getAiFeedbackSummary(req.shopId);
+    res.json({ success: true, data });
+  } catch (err) {
     next(err);
   }
 }

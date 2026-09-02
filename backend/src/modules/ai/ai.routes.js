@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { requireShop } from "../../middleware/permissions.js";
 import { validate } from "../../middleware/validate.js";
-import { parseCommandSchema, logActionSchema, agentChatSchema, agentPlanSchema } from "./ai.schema.js";
+import { parseCommandSchema, logActionSchema, agentChatSchema, agentPlanSchema, aiFeedbackSchema } from "./ai.schema.js";
 import { requireOwnerPin } from "../../middleware/permissions.js";
 import * as agent from "./agent/agent.controller.js";
 import { uploadAiAudio } from "./ai.upload.js";
@@ -19,6 +19,8 @@ router.post("/parse-command", validate(parseCommandSchema), ctrl.parseCommand);
 router.post("/transcribe", uploadAiAudio, ctrl.transcribe);
 router.post("/extract-purchase-invoice", requireFeature("purchase_entry"), requireLocationAccess("purchase"), uploadInvoiceImage, ctrl.extractPurchaseInvoice);
 router.post("/log-action", validate(logActionSchema), ctrl.logAction);
+router.post("/feedback", validate(aiFeedbackSchema), ctrl.feedback);
+router.get("/feedback/summary", requireRole("owner", "admin"), ctrl.feedbackSummary);
 
 /**
  * The agent: reads freely, proposes changes, executes only what was confirmed.
