@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../src/db.js";
 import { CREDENTIAL_FIELDS_ALWAYS_PRESERVED, PRESERVED_SHOP_MODELS, RESTORABLE_CHILD_MODELS, RESTORABLE_SHOP_MODELS } from "../src/modules/backups/backup-policy.js";
 
 const tenantModels = Prisma.dmmf.datamodel.models.filter((model) => model.fields.some((field) => field.kind === "scalar" && field.name === "shopId")).map((model) => model.name).sort();
