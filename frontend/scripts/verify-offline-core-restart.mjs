@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -11,7 +11,9 @@ const CHROME_PATH = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrom
 const DEBUG_PORT = Number(process.env.QA_OFFLINE_DEBUG_PORT || 9484);
 const OUTPUT_DIR = path.resolve(process.env.QA_OFFLINE_OUTPUT_DIR || "qa-artifacts/offline-core-restart");
 const BUILD_DIR = path.resolve(process.env.QA_OFFLINE_BUILD_DIR || path.join(OUTPUT_DIR, "dist"));
-const PROFILE_DIR = path.resolve(process.env.QA_OFFLINE_PROFILE_DIR || path.join(tmpdir(), "artha-offline-core-restart-profile"));
+// Start each run with a clean install, then reuse this profile for the actual
+// offline restart. A fixed profile could quietly test a previous release's SW.
+const PROFILE_DIR = path.resolve(process.env.QA_OFFLINE_PROFILE_DIR || await mkdtemp(path.join(tmpdir(), "artha-offline-core-restart-")));
 const BUILD_ID = process.env.QA_OFFLINE_BUILD_ID || "offline-core-restart-qa";
 const VIEWPORT = { width: 390, height: 844 };
 const ALL_ROUTES = [
@@ -249,8 +251,8 @@ async function seedCoreData(client) {
     const products=await request("/products");
     if(!products.some(product=>product.name==="Offline Matrix Rice"))await request("/products",{method:"POST",body:JSON.stringify({name:"Offline Matrix Rice",category:"Grocery",displayUnit:"kg",baseUnit:"kg",rateUnit:"kg",stockBaseQty:25,costPerRateUnit:42,minPricePerRateUnit:45,defaultPricePerRateUnit:50,mrp:55,gstRate:5})});
     const customers=await request("/customers");
-    if(!customers.some(customer=>customer.name==="Offline Matrix Customer"))await request("/customers",{method:"POST",body:JSON.stringify({name:"Offline Matrix Customer",mobile:"9876504321",type:"regular"})});
-    return true
+    const customer=customers.find(customer=>customer.name==="Offline Matrix Customer")||await request("/customers",{method:"POST",body:JSON.stringify({name:"Offline Matrix Customer",mobile:"9876504321",type:"regular"})});
+    return {customerId:customer.id}
   })()`);
 }
 
@@ -264,7 +266,8 @@ async function navigateOnline(client, route) {
 async function primeOfflineInstall(client) {
   await prepareAppOrigin(client);
   await ensureSession(client);
-  await seedCoreData(client);
+  const seeded = await seedCoreData(client);
+  assert(typeof seeded.customerId === "string", "QA customer was not created");
   await navigateOnline(client, "/dashboard");
   await waitForPage(client, `navigator.serviceWorker && navigator.serviceWorker.ready.then(()=>true)`);
   await waitForPage(client, `navigator.serviceWorker.controller !== null`);
@@ -278,7 +281,7 @@ async function primeOfflineInstall(client) {
   await waitForPage(client, `document.body.innerText.includes("Offline Matrix Customer")`, 60_000);
   const cacheState = await client.evaluate(`(async()=>{const keys=(await caches.keys()).filter(key=>key.startsWith("kiranaos-shell"));const entries=[];for(const key of keys){const cache=await caches.open(key);entries.push(...(await cache.keys()).map(request=>new URL(request.url).pathname))}return{keys,entryCount:new Set(entries).size,hasIndex:entries.includes("/index.html"),hasManifest:entries.includes("/manifest.webmanifest"),hasOffline:entries.includes("/offline.html"),hasScript:entries.some(path=>path.endsWith(".js")),hasStyles:entries.some(path=>path.endsWith(".css")),hasCoreMarker:entries.some(path=>path.startsWith("/__offline/core/"))}})()`);
   assert(cacheState.keys.length > 0 && cacheState.hasIndex && cacheState.hasManifest && cacheState.hasOffline && cacheState.hasScript && cacheState.hasStyles && cacheState.hasCoreMarker, `Offline shell did not finish caching: ${JSON.stringify(cacheState)}`);
-  return cacheState;
+  return { cacheState, seeded };
 }
 
 async function setOffline(client) {
@@ -297,8 +300,12 @@ async function auditOfflineRoute(client, qaId, route, expectsInternetRequired = 
   await client.send("Page.navigate", { url: `${FRONTEND_URL}${route}` });
   await waitForPage(client, `document.readyState === "complete" && location.pathname === ${JSON.stringify(route)}`, 60_000);
   await waitForPage(client, `document.body && document.body.innerText.trim().length > 30`, 60_000);
+  // A sidebar already exceeds 30 characters while a lazy page is still loading.
+  // Time the actual route, not just the shared shell.
+  await waitForPage(client, `Boolean(document.querySelector('.app-route-ready, [data-testid="internet-required-route"]')) && !document.querySelector('.app-loading-surface[aria-busy="true"]')`, 15_000);
   if (route === "/products") await waitForPage(client, `document.body.innerText.includes("Offline Matrix Rice")`, 15_000);
   if (route === "/customers") await waitForPage(client, `document.body.innerText.includes("Offline Matrix Customer")`, 15_000);
+  if (qaId === "OQA-CUST-ACCOUNT-01") await waitForPage(client, `document.body.innerText.includes("Offline Matrix Customer") && Boolean(document.querySelector('[data-testid="customer-timeline"]'))`, 15_000);
   if (route === "/recovery-mode") await waitForPage(client, `/Database open|Local database problem detected/.test(document.body.innerText)`, 15_000);
   const readyMs = Date.now() - startedAt;
   await sleep(500);
@@ -342,7 +349,7 @@ async function main() {
   let offlineBrowser;
   try {
     onlineBrowser = await launchChrome("about:blank", DEBUG_PORT);
-    const cacheState = await primeOfflineInstall(onlineBrowser.client);
+    const { cacheState, seeded } = await primeOfflineInstall(onlineBrowser.client);
     await closeChrome(onlineBrowser.client, onlineBrowser.chrome, onlineBrowser.debugPort);
     onlineBrowser = null;
 
@@ -351,6 +358,10 @@ async function main() {
     await setOffline(offlineBrowser.client);
     const results = [];
     for (const [qaId, route, expectsInternetRequired] of ROUTES) results.push(await auditOfflineRoute(offlineBrowser.client, qaId, route, expectsInternetRequired));
+    // Exercise a populated account, not only the existing missing-customer case.
+    // This account route was never visited online and must load locally after
+    // a complete browser restart without waiting for the cloud summary.
+    results.push(await auditOfflineRoute(offlineBrowser.client, "OQA-CUST-ACCOUNT-01", `/customers/${seeded.customerId}`));
     await mkdir(OUTPUT_DIR, { recursive: true });
     await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), buildId: BUILD_ID, frontendUrl: FRONTEND_URL, cacheState, coldRestart: true, networkDisabled: true, results }, null, 2));
     console.log(`Offline cold-restart matrix passed ${results.length}/${results.length} routes. Artifacts: ${OUTPUT_DIR}`);
