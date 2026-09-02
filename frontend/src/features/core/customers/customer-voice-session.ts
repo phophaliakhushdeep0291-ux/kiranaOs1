@@ -50,6 +50,23 @@ export const CUSTOMER_VOICE_PROMPT_KEYS: Record<CustomerVoiceField, TranslationK
   type: "customers.voice.ask.type",
 };
 
+/**
+ * The same questions as the counter reads them — Hinglish in Hindi, English in
+ * English. PROMPT_KEYS above stays the spoken form; see the product form's
+ * PRODUCT_VOICE_DISPLAY_KEYS for why the two are separate.
+ */
+export const CUSTOMER_VOICE_DISPLAY_KEYS: Record<CustomerVoiceField, TranslationKey> = {
+  name: "customers.voice.say.name",
+  mobile: "customers.voice.say.mobile",
+  address: "customers.voice.say.address",
+  udharLimit: "customers.voice.say.udharLimit",
+  gstNumber: "customers.voice.say.gstNumber",
+  dueDate: "customers.voice.say.dueDate",
+  promiseToPayDate: "customers.voice.say.promiseToPayDate",
+  notes: "customers.voice.say.notes",
+  type: "customers.voice.say.type",
+};
+
 export function isCustomerVoiceFieldAnswered(
   values: CustomerVoiceFormValues,
   field: CustomerVoiceField,

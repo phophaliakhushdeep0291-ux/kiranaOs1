@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { buildCustomerTimeline, loadCustomerDetail, projectCustomerOutstanding, reconcileCustomerWithAuthoritativeSummary, formatDateTime, formatMoney, formatShortDate, toLedgerDriftCandidates, type CustomerDetailData, type CustomerTimelineEvent, type CustomerWithLedger } from "@/features/core/customers/customer-ledger-data";
 import { isManualAdjustmentEntry, ledgerEntryLabel, normaliseLedgerType } from "@/features/core/ledger/accounting";
-import { resolveAuthoritativeUdharSummary } from "@/features/core/ledger/authoritative-balances";
+import { loadCachedAuthoritativeSummary, resolveAuthoritativeUdharSummary } from "@/features/core/ledger/authoritative-balances";
 import { repairLedgerDriftFromServer } from "@/features/core/ledger/ledger-drift-repair";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/core/payments/local-actions";
 import { createLedgerAdjustmentLocalFirst } from "@/features/core/ledger/local-actions";
@@ -41,37 +41,52 @@ function useCustomerDetail(id: string) {
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
   }, [id, queryClient]);
-  return useQuery({
+  const detailQuery = useQuery({
     queryKey: ["customer-detail", id],
     queryFn: async () => {
-      const detail = await loadCustomerDetail(id);
-      // Match the customers list: overlay the server's authoritative udhar summary
-      // so "Current udhar" here can't drift from the value shown on the main page.
-      // Offline we reuse the last summary this device saw, for the same reason —
-      // the raw local ledger is the one source that can be silently wrong.
+      // First paint must depend only on local storage. Waiting for the live
+      // summary here kept the entire page behind a loading skeleton whenever
+      // the browser had internet but the API was slow or unreachable.
+      const [detail, cached] = await Promise.all([
+        loadCustomerDetail(id),
+        loadCachedAuthoritativeSummary(),
+      ]);
       if (!detail) return detail;
-      const { summary, source } = await resolveAuthoritativeUdharSummary();
-      if (!summary) return detail;
-      if (source === "server") {
-        const repaired = await repairLedgerDriftFromServer(
-          toLedgerDriftCandidates([detail.customer]),
-          summary,
-        ).catch(() => false);
-        if (repaired) {
-          const refreshed = await loadCustomerDetail(id);
-          if (refreshed) {
-            return {
-              ...refreshed,
-              customer: reconcileCustomerWithAuthoritativeSummary(refreshed.customer, summary),
-            };
-          }
-        }
-      }
-      return { ...detail, customer: reconcileCustomerWithAuthoritativeSummary(detail.customer, summary) };
+      return cached?.summary
+        ? { ...detail, customer: reconcileCustomerWithAuthoritativeSummary(detail.customer, cached.summary) }
+        : detail;
     },
     enabled: id.length > 0,
     staleTime: 1_500,
   });
+
+  const authoritativeQuery = useQuery({
+    queryKey: ["customer-detail-authoritative-summary"],
+    queryFn: resolveAuthoritativeUdharSummary,
+    enabled: id.length > 0,
+    staleTime: 10_000,
+    retry: false,
+  });
+
+  useEffect(() => {
+    const detail = detailQuery.data;
+    const resolved = authoritativeQuery.data;
+    if (!detail || !resolved?.summary) return;
+    queryClient.setQueryData<CustomerDetailData | null>(["customer-detail", id], (current) =>
+      current
+        ? { ...current, customer: reconcileCustomerWithAuthoritativeSummary(current.customer, resolved.summary!) }
+        : current);
+    if (resolved.source !== "server") return;
+    void repairLedgerDriftFromServer(
+      toLedgerDriftCandidates([detail.customer]),
+      resolved.summary,
+    ).then((repaired) => {
+      if (repaired) return queryClient.invalidateQueries({ queryKey: ["customer-detail", id] });
+      return undefined;
+    }).catch(() => undefined);
+  }, [authoritativeQuery.data, detailQuery.data, id, queryClient]);
+
+  return detailQuery;
 }
 
 function readNumber(value: unknown): number {
@@ -180,6 +195,17 @@ export default function CustomerDetailPage() {
     () => ledger.some((entry) => roundMoney(entry.running_balance) < 0),
     [ledger],
   );
+
+  function projectVisibleBalance(nextBalance: number) {
+    if (!customer) return;
+    queryClient.setQueryData<CustomerDetailData | null>(["customer-detail", id], (current) => {
+      if (!current) return current;
+      const projected = projectCustomerOutstanding([current.customer], customer.id, nextBalance)[0];
+      return projected ? { ...current, customer: projected } : current;
+    });
+    queryClient.setQueryData<CustomerWithLedger[]>(["customers-ledger-list"], (current) =>
+      projectCustomerOutstanding(current ?? [], customer.id, nextBalance));
+  }
   const reminder = useMutation({
     mutationFn: (customerId: string) => apiRequest<{
       status: string;
@@ -237,13 +263,7 @@ export default function CustomerDetailPage() {
       // The local transaction already knows the exact remaining balance. Put it
       // on screen before any server refresh so an older response can never leave
       // the operator looking at ₹0/the pre-payment amount until a manual reload.
-      queryClient.setQueryData<CustomerDetailData | null>(["customer-detail", id], (current) => {
-        if (!current) return current;
-        const projected = projectCustomerOutstanding([current.customer], customer.id, result.nextBalance)[0];
-        return projected ? { ...current, customer: projected } : current;
-      });
-      queryClient.setQueryData<CustomerWithLedger[]>(["customers-ledger-list"], (current) =>
-        projectCustomerOutstanding(current ?? [], customer.id, result.nextBalance));
+      projectVisibleBalance(result.nextBalance);
       toast({ title: t("customers.toast.paymentRecorded"), description: t("customers.toast.ledgerOffline") });
       setPaymentOpen(false);
       setPayment({ amount: "", mode: "cash", note: "" });
@@ -259,11 +279,12 @@ export default function CustomerDetailPage() {
     if (!reverse.paymentId) return;
     setSaving(true);
     try {
-      await reversePaymentWithOwnerPinLocalFirst({ paymentId: reverse.paymentId, ownerPin, reason });
+      const result = await reversePaymentWithOwnerPinLocalFirst({ paymentId: reverse.paymentId, ownerPin, reason });
+      projectVisibleBalance(result.nextBalance);
       toast({ title: t("customers.toast.paymentReversed"), description: t("customers.toast.correctionAdded") });
       setReverseOpen(false);
       setReverse({ paymentId: "" });
-      await refetch();
+      void refetch();
     } catch (error) {
       toast({ title: t("customers.toast.reversalFailed"), description: error instanceof Error ? error.message : t("customers.toast.checkOwnerPin"), variant: "destructive" });
     } finally { setSaving(false); }
@@ -278,11 +299,12 @@ export default function CustomerDetailPage() {
     }
     setSaving(true);
     try {
-      await createLedgerAdjustmentLocalFirst({ customerId: customer.id, amount, ownerPin: adjust.ownerPin, note: adjust.note, expectedOutstanding: Math.max(0, roundMoney(Number(customer.ledgerBalance ?? 0))) });
+      const entry = await createLedgerAdjustmentLocalFirst({ customerId: customer.id, amount, ownerPin: adjust.ownerPin, note: adjust.note, expectedOutstanding: Math.max(0, roundMoney(Number(customer.ledgerBalance ?? 0))) });
+      projectVisibleBalance(Number(entry.balance_after ?? customer.ledgerBalance));
       toast({ title: t("customers.toast.adjustmentSaved"), description: t("customers.toast.correctionLocal") });
       setAdjustOpen(false);
       setAdjust({ amount: "", ownerPin: "", note: "" });
-      await refetch();
+      void refetch();
     } catch (error) {
       toast({ title: t("customers.toast.adjustmentFailed"), description: error instanceof Error ? error.message : t("customers.toast.checkOwnerPin"), variant: "destructive" });
     } finally { setSaving(false); }

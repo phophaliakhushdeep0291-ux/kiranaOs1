@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "type": "kiranaos_redis_worker_production_proof",
+  "status": "passed",
+  "startedAt": "2026-09-02T15:24:06.507Z",
+  "completedAt": "2026-09-02T15:24:06.851Z",
+  "durationMs": 344,
+  "repository": {
+    "commit": "3c8012478422f1e1191b38985ebac06eeeb62d89",
+    "branch": "feat/ai-agent",
+    "backendDirty": false,
+    "scopeNote": "Uncommitted frontend route-preload work existed concurrently but was outside the worker/runtime proof scope."
+  },
+  "runtime": {
+    "node": "v24.12.0",
+    "platform": "win32",
+    "arch": "x64",
+    "databaseProvider": "postgresql",
+    "redisServerVersion": "8.4.2",
+    "redisUrlRetained": false
+  },
+  "worker": {
+    "separateProcess": true,
+    "instanceId": "kiranaos-clean-source-proof",
+    "statusBefore": "running",
+    "statusAfter": "running",
+    "heartbeatFreshBefore": true,
+    "heartbeatFreshAfter": true,
+    "staleAfterMs": 15000,
+    "concurrency": 3,
+    "queueNames": [
+      "kiranaos-reminders",
+      "kiranaos-reports",
+      "kiranaos-exports",
+      "kiranaos-backups",
+      "kiranaos-sync-cleanup",
+      "kiranaos-webhooks",
+      "kiranaos-assurance"
+    ]
+  },
+  "job": {
+    "queueName": "kiranaos-sync-cleanup",
+    "jobName": "WORKER_HEALTHCHECK",
+    "jobId": "production-worker-proof-1788362646840-3f6e8dad",
+    "requestedAt": "2026-09-02T15:24:06.840Z",
+    "processedAt": "2026-09-02T15:24:06.849Z",
+    "durationMs": 1,
+    "result": { "status": "ok", "jobName": "WORKER_HEALTHCHECK" }
+  },
+  "command": "cd backend && npm run worker:proof",
+  "cleanup": {
+    "workerStoppedCleanly": true,
+    "postgresStopped": true,
+    "redisStopped": true,
+    "redisPortListeningAfterStop": false,
+    "postgresPortListeningAfterStop": false,
+    "temporaryRedisPackageRemoved": true
+  },
+  "limitations": [
+    "This proves a real Redis-compatible server and a separately running production-mode KiranaOS worker on PostgreSQL.",
+    "It does not prove multi-node failover, managed Redis durability, deployed uptime, or cloud infrastructure operations."
+  ]
+}

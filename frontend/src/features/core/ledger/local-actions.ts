@@ -110,7 +110,19 @@ async function createLedgerAdjustmentLocalFirstUnlocked(
   if (!customer) throw new Error("Customer not found in local records");
 
   const ledgerBalance = roundMoney(Math.max(0, calculateLedgerBalance(existingLedgerEntries)));
-  const currentBalance = roundMoney(Math.max(ledgerBalance, Math.max(0, readNumber(input.expectedOutstanding, 0))));
+  const projectedBalance = customer.balance_derived_from_local_ledger === true
+    ? Math.max(0, readNumber(customer.udharAmount ?? customer.totalUdhar, 0))
+    : null;
+  // A provided value is the authoritative amount visible to the operator. Do
+  // not take max(local, authoritative): historical local-ledger drift can be
+  // larger and would make a ₹30 correction against ₹630 jump to ₹970.
+  // Once this device has committed a newer local financial write, its durable
+  // customer projection wins so concurrent/stale dialogs cannot overwrite it.
+  const currentBalance = roundMoney(projectedBalance !== null
+    ? projectedBalance
+    : input.expectedOutstanding !== undefined
+      ? Math.max(0, readNumber(input.expectedOutstanding, 0))
+      : ledgerBalance);
   if (toPaise(addMoney(currentBalance, amount)) < 0) {
     const error = new Error(`Adjustment would make udhar negative. Maximum reduction is ${formatMoney(currentBalance)}`);
     (error as Error & { code?: string }).code = "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";

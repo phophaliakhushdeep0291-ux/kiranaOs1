@@ -395,17 +395,16 @@
       "id": "redis_worker_proof",
       "domain": "production_maturity",
       "weight": 10,
-      "status": "external_blocked",
+      "status": "verified",
       "proofKind": "external_runtime",
-      "summary": "Queue contracts and worker verification tooling exist, but a real Redis-backed worker execution and retained heartbeat are not yet certified in this environment.",
+      "summary": "A retained 2026-09-02 proof used Redis 8.4.2, PostgreSQL, and a separately running production-mode KiranaOS worker. The worker published fresh before-and-after heartbeats for all seven queues, registered recurring maintenance schedules, and completed a one-time BullMQ WORKER_HEALTHCHECK in one millisecond. The proof stores no Redis URL. This is strong local runtime evidence, not managed-Redis failover or deployed-uptime evidence.",
       "competitorEvidence": [
         { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/cloud-pos/", "claim": "Cloud POS availability and centralized operation are production benchmarks." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/scripts/verify-worker-runtime.js", "backend/src/workers/index.js"],
-        "testCommands": ["cd backend && npm run worker:verify"],
-        "externalProofRequirements": ["Real Redis-compatible server", "Production worker process", "Retained job execution and heartbeat evidence"],
-        "runtimeProof": { "status": "missing", "artifact": null }
+        "sourcePaths": ["backend/scripts/prove-worker-runtime.js", "backend/src/workers/index.js", "docs/evidence/redis-worker-production-proof-2026-09-02.json"],
+        "testCommands": ["cd backend && npm run worker:proof"],
+        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/redis-worker-production-proof-2026-09-02.json" }
       },
       "lastVerifiedAt": "2026-09-02"
     },

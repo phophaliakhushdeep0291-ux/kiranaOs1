@@ -461,4 +461,23 @@ export const customersEn = {
   "customers.voice.ask.promiseToPayDate": "When did they promise to pay?",
   "customers.voice.ask.notes": "Anything to note about them?",
   "customers.voice.ask.type": "Cash customer or khata?",
+
+  // The line the counter READS while a question is on the table. The ask.* line
+  // above is the one that is SPOKEN: a hi-IN voice pronounces Devanagari
+  // correctly and mangles Roman text, while the shopkeeper reads Roman fastest.
+  // In English both are the same string, so an English shop sees no change.
+  // The product form's bar does the same; the two share one hook and one bar.
+  "customers.voice.say.name": "What is the customer called?",
+  "customers.voice.say.mobile": "Mobile number?",
+  "customers.voice.say.address": "Address?",
+  "customers.voice.say.udharLimit": "How much udhar can they take?",
+  "customers.voice.say.gstNumber": "GST number?",
+  "customers.voice.say.dueDate": "Payment due by when?",
+  "customers.voice.say.promiseToPayDate": "When did they promise to pay?",
+  "customers.voice.say.notes": "Anything to note about them?",
+  "customers.voice.say.type": "Cash customer or khata?",
+  "customers.voice.sayReady": "Everything needed is filled. Check it and press Save.",
+  "customers.voice.sayNotUnderstood": "Did not catch that. Say it again, or say skip.",
+  "customers.voice.sayHint": "Say it all at once, like Ramesh Kumar mobile 98765 43210 udhar limit 5000, or answer one question at a time.",
+  "customers.voice.sayControls": "Say skip to pass a question, save when you are done.",
 } as const;

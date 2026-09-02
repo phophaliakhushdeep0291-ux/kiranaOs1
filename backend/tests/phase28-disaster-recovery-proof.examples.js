@@ -39,6 +39,7 @@ for (const snippet of [
   "BACKUP_DRY_RUN",
   "maskPostgresUrl",
   "Backup file was created but is empty",
+  "sha256",
 ]) {
   assert.ok(backupScript.includes(snippet), `backup script must include ${snippet}`);
 }
@@ -60,7 +61,17 @@ for (const snippet of [
   "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;",
   "pg_restore",
   "psql",
-  "information_schema.tables",
+  "pg_tables",
+  "exactPublicTableCounts",
+  "compareTableCounts",
+  "RESTORE_FIDELITY_MISMATCH",
+  "_prisma_migrations",
+  "sha256File",
+  "disaster-recovery-proof-latest.json",
+  "DR_KEEP_BACKUP",
+  "backendSourceFingerprintSha256",
+  '"diff", "--binary", "HEAD", "--", "backend"',
+  "DISASTER_RECOVERY_SOURCE_CHANGED",
   "money:paise:reconcile",
   "PROOF_REQUIRE_DR",
 ]) {
@@ -73,9 +84,16 @@ for (const snippet of [
   "prod|production|live|primary|main",
   "test|_ci|ci_|restore|drill|staging",
   "maskPostgresUrl",
+  "postgresCliUrl",
 ]) {
   assert.ok(safety.includes(snippet), `URL safety helper must include ${snippet}`);
 }
+for (const parameter of ["schema", "connection_limit", "pool_timeout", "pgbouncer", "socket_timeout"]) {
+  assert.ok(safety.includes(`"${parameter}"`), `native PostgreSQL URL adapter must remove Prisma-only ${parameter}`);
+}
+assert.ok(safety.includes("preserve sslmode"), "native PostgreSQL URL adapter must preserve libpq connection parameters");
+assert.ok(backupScript.includes("databaseCliUrl"), "backup script must pass the native PostgreSQL URL to pg_dump");
+assert.ok(backupScript.includes("fs.rmSync(outputFile"), "backup failure must remove a partial dump file");
 
 for (const snippet of [
   "PROOF_REQUIRE_DR",

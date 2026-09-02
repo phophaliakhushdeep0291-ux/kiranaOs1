@@ -58,6 +58,34 @@ export const PRODUCT_VOICE_PROMPT_KEYS: Record<ProductVoiceField, TranslationKey
   lowStockAlert: "products.voice.ask.lowStockAlert",
 };
 
+/**
+ * The same questions as the counter reads them.
+ *
+ * PROMPT_KEYS is what gets spoken; these are what appear on the bar. In Hindi
+ * the two differ on purpose — Devanagari for the voice, which pronounces it,
+ * and Hinglish for the eye, which reads it without slowing down. In English
+ * both resolve to the same sentence, so nothing changes for an English shop.
+ */
+export const PRODUCT_VOICE_DISPLAY_KEYS: Record<ProductVoiceField, TranslationKey> = {
+  name: "products.voice.say.name",
+  sellingPrice: "products.voice.say.sellingPrice",
+  mrp: "products.voice.say.mrp",
+  costPrice: "products.voice.say.costPrice",
+  stockQuantity: "products.voice.say.stockQuantity",
+  category: "products.voice.say.category",
+  brand: "products.voice.say.brand",
+  unit: "products.voice.say.unit",
+  packSize: "products.voice.say.packSize",
+  barcode: "products.voice.say.barcode",
+  hsn: "products.voice.say.hsn",
+  aliases: "products.voice.say.aliases",
+  gstRate: "products.voice.say.gstRate",
+  minimumSellingPrice: "products.voice.say.minimumSellingPrice",
+  retailPrice: "products.voice.say.retailPrice",
+  wholesalePrice: "products.voice.say.wholesalePrice",
+  lowStockAlert: "products.voice.say.lowStockAlert",
+};
+
 function hasName(values: Pick<ProductFormData, "name">) {
   return String(values.name ?? "").trim().length > 0;
 }

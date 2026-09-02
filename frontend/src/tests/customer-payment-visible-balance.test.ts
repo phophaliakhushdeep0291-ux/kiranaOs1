@@ -67,4 +67,22 @@ describe("partial-payment visible balance", () => {
     expect(detailPayment.indexOf("queryClient.setQueryData")).toBeLessThan(detailPayment.indexOf("void refetch()"));
     expect(detailPayment).not.toContain("await refetch()");
   });
+
+  it("does not block reversal or adjustment acknowledgement on a refresh", () => {
+    const detailPage = source("../features/core/customers/pages/CustomerDetailPage.tsx");
+    const reversal = detailPage.slice(
+      detailPage.indexOf("async function saveReverse"),
+      detailPage.indexOf("async function saveAdjustment"),
+    );
+    const adjustment = detailPage.slice(
+      detailPage.indexOf("async function saveAdjustment"),
+      detailPage.indexOf("if (isLoading)"),
+    );
+
+    for (const mutation of [reversal, adjustment]) {
+      expect(mutation).toContain("projectVisibleBalance");
+      expect(mutation).toContain("void refetch()");
+      expect(mutation).not.toContain("await refetch()");
+    }
+  });
 });

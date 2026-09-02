@@ -11,6 +11,7 @@ process.env.LICENSE_SIGNING_SECRET ||= "worker-proof-license-secret-32-character
 process.env.NODE_ENV ||= "test";
 
 const startedAt = new Date();
+const repositoryRoot = path.resolve(process.cwd(), "..");
 const stamp = startedAt.toISOString().replace(/[:.]/g, "-");
 const reportPath = path.resolve(
   process.env.WORKER_PROOF_REPORT_PATH ||
@@ -19,9 +20,40 @@ const reportPath = path.resolve(
 const latestReportPath = path.join(path.dirname(reportPath), "redis-worker-production-proof-latest.json");
 
 function readGitValue(args) {
-  const result = spawnSync("git", args, { cwd: process.cwd(), encoding: "utf8", shell: false });
+  const result = spawnSync("git", args, { cwd: repositoryRoot, encoding: "utf8", shell: false });
   return result.status === 0 ? String(result.stdout || "").trim() || null : null;
 }
+
+function readGitLines(args) {
+  return String(readGitValue(args) || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
+function backendSourceFingerprint() {
+  const hash = crypto.createHash("sha256");
+  hash.update(readGitValue(["rev-parse", "HEAD"]) || "unknown-commit");
+  const diff = spawnSync("git", ["diff", "--binary", "HEAD", "--", "backend"], {
+    cwd: repositoryRoot,
+    encoding: null,
+    shell: false,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (diff.status !== 0) throw new Error("Could not fingerprint backend source diff");
+  hash.update(diff.stdout || Buffer.alloc(0));
+  const untracked = spawnSync("git", ["ls-files", "--others", "--exclude-standard", "-z", "--", "backend"], {
+    cwd: repositoryRoot,
+    encoding: null,
+    shell: false,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (untracked.status !== 0) throw new Error("Could not fingerprint untracked backend source");
+  for (const relativePath of String(untracked.stdout || "").split("\0").filter(Boolean).sort()) {
+    hash.update(`\0${relativePath}\0`);
+    hash.update(fs.readFileSync(path.join(repositoryRoot, relativePath)));
+  }
+  return hash.digest("hex");
+}
+
+const backendSourceFingerprintAtStart = backendSourceFingerprint();
 
 function redisServerVersion(info = "") {
   return String(info).match(/(?:^|\r?\n)redis_version:([^\r\n]+)/)?.[1]?.trim() || "unknown";
@@ -40,6 +72,10 @@ function writeReport({ status, redisVersion = null, heartbeatBefore = null, hear
       commit: readGitValue(["rev-parse", "HEAD"]),
       branch: readGitValue(["branch", "--show-current"]),
       dirty: Boolean(readGitValue(["status", "--porcelain"])),
+      backendDirty: Boolean(readGitValue(["status", "--porcelain", "--", "backend"])),
+      dirtyPaths: readGitLines(["status", "--porcelain"]).map((line) => line.slice(3)).sort(),
+      backendSourceFingerprintSha256: backendSourceFingerprintAtStart,
+      backendSourceStable: backendSourceFingerprintAtStart === backendSourceFingerprint(),
     },
     runtime: { node: process.version, platform: process.platform, arch: process.arch },
     redis: {
@@ -148,6 +184,12 @@ async function main() {
   if (!heartbeatAfter.healthy) {
     const error = new Error("Worker heartbeat became unhealthy while processing the proof job");
     error.code = "WORKER_PROOF_HEARTBEAT_STALE";
+    throw error;
+  }
+
+  if (backendSourceFingerprint() !== backendSourceFingerprintAtStart) {
+    const error = new Error("Backend source changed while the worker proof was running");
+    error.code = "WORKER_PROOF_SOURCE_CHANGED";
     throw error;
   }
 

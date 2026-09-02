@@ -23,6 +23,7 @@ import {
 import {
   applyCustomerVoiceFields,
   nextCustomerVoiceField,
+  CUSTOMER_VOICE_DISPLAY_KEYS,
   CUSTOMER_VOICE_PROMPT_KEYS,
   type CustomerVoiceFormValues,
 } from "../../customer-voice-session";
@@ -86,9 +87,12 @@ export function CustomerVoiceDictation({ values, onChange, open, onRequestSave }
   const dictation = useVoiceDictation<CustomerVoiceField>({
     open,
     language,
+    // Spoken in the app's own language; shown in Hinglish. See
+    // CUSTOMER_VOICE_DISPLAY_KEYS.
     promptFor: (field) => t(CUSTOMER_VOICE_PROMPT_KEYS[field]),
     readyPrompt: t("customers.voice.ready"),
-    notUnderstoodPrompt: t("customers.voice.notUnderstood"),
+    readyNote: t("customers.voice.sayReady"),
+    notUnderstoodPrompt: t("customers.voice.sayNotUnderstood"),
     nextField,
     applyAnswer,
     onSave: onRequestSave,
@@ -100,12 +104,12 @@ export function CustomerVoiceDictation({ values, onChange, open, onRequestSave }
       testId="customer-voice"
       labels={{
         start: t("customers.voice.start"),
-        hint: t("customers.voice.hint"),
+        hint: t("customers.voice.sayHint"),
         unsupported: t("customers.voice.unsupported"),
         listening: t("customers.voice.listening"),
         starting: t("customers.voice.starting"),
         heard: (text) => t("customers.voice.heard", { text }),
-        controls: t("customers.voice.controls"),
+        controls: t("customers.voice.sayControls"),
         stop: t("customers.voice.stop"),
         speakToggle: t("customers.voice.speakToggle"),
       }}
@@ -115,7 +119,7 @@ export function CustomerVoiceDictation({ values, onChange, open, onRequestSave }
       heard={dictation.heard}
       note={dictation.note}
       speakPrompts={dictation.speakPrompts}
-      prompt={dictation.pending ? t(CUSTOMER_VOICE_PROMPT_KEYS[dictation.pending]) : t("customers.voice.ready")}
+      prompt={dictation.pending ? t(CUSTOMER_VOICE_DISPLAY_KEYS[dictation.pending]) : t("customers.voice.sayReady")}
       onStart={dictation.start}
       onStop={dictation.stop}
       onToggleSpeak={dictation.toggleSpeak}

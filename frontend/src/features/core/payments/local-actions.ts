@@ -652,6 +652,8 @@ interface ReversePaymentResult {
   success: true;
   paymentId: string;
   correctionId: string;
+  /** Durable balance after the reversal, calculated inside the local lock. */
+  nextBalance: number;
   pendingSync: true;
 }
 
@@ -753,9 +755,20 @@ async function reversePaymentWithOwnerPinLocalFirstUnlocked(
     "pending_sync",
   ) as unknown as CustomerLedgerEntry;
 
-  const nextBalance = roundMoney(
-    calculateLedgerBalance([...existingLedgerEntries, correction]),
-  );
+  const authoritativeBalance = await resolveCachedAuthoritativePaymentBalance({
+    customerId,
+    customer: existingCustomer as CustomerRecord,
+    ledgerEntries: existingLedgerEntries,
+  });
+  const projectedBalance = (existingCustomer as CustomerRecord).balance_derived_from_local_ledger === true
+    ? Math.max(0, readNumber(existingCustomer.udharAmount ?? existingCustomer.totalUdhar, 0))
+    : null;
+  const currentBalance = authoritativeBalance !== null
+    ? authoritativeBalance
+    : projectedBalance !== null
+      ? projectedBalance
+      : Math.max(0, calculateLedgerBalance(existingLedgerEntries));
+  const nextBalance = roundMoney(currentBalance + amount);
   const correctionWithBalance = {
     ...correction,
     balance_after: nextBalance,
@@ -850,6 +863,7 @@ async function reversePaymentWithOwnerPinLocalFirstUnlocked(
     success: true,
     paymentId: input.paymentId,
     correctionId: correctionWithBalance.id,
+    nextBalance,
     pendingSync: true,
   };
 }

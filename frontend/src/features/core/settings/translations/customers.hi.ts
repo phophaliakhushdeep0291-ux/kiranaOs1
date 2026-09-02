@@ -441,4 +441,23 @@ export const customersHi: Record<keyof typeof customersEn, string> = {
   "customers.voice.ask.promiseToPayDate": "कब देने का वादा किया?",
   "customers.voice.ask.notes": "इनके बारे में कुछ लिखना है?",
   "customers.voice.ask.type": "नकद ग्राहक या खाता?",
+
+  // The line the counter READS while a question is on the table. The ask.* line
+  // above is the one that is SPOKEN: a hi-IN voice pronounces Devanagari
+  // correctly and mangles Roman text, while the shopkeeper reads Roman fastest.
+  // In English both are the same string, so an English shop sees no change.
+  // Hinglish, matching the product form.
+  "customers.voice.say.name": "Grahak ka naam kya hai?",
+  "customers.voice.say.mobile": "Mobile number?",
+  "customers.voice.say.address": "Pata?",
+  "customers.voice.say.udharLimit": "Kitne tak udhar de sakte hain?",
+  "customers.voice.say.gstNumber": "GST number?",
+  "customers.voice.say.dueDate": "Paisa kab tak dena hai?",
+  "customers.voice.say.promiseToPayDate": "Kab dene ka vaada kiya?",
+  "customers.voice.say.notes": "Inke baare mein kuch likhna hai?",
+  "customers.voice.say.type": "Nakad grahak ya khata?",
+  "customers.voice.sayReady": "Zaroori sab bhar gaya. Dekh lein aur Save dabayein.",
+  "customers.voice.sayNotUnderstood": "Samajh nahi aaya. Phir se bolein, ya skip kahein.",
+  "customers.voice.sayHint": "Poora ek saath bolein, jaise Ramesh Kumar mobile 98765 43210 udhar limit 5000, ya ek-ek sawal ka jawab dein.",
+  "customers.voice.sayControls": "Sawal chhodne ke liye skip kahein, poora hone par save kahein.",
 };

@@ -113,6 +113,13 @@ export type VoiceDictationOptions<TField extends string> = {
   promptFor: (field: TField) => string;
   /** Said when nothing is left worth asking. */
   readyPrompt: string;
+  /**
+   * The same closing line as the counter READS it, when that is not the line
+   * that gets spoken. A Hindi shop is asked in Hinglish, because that is what
+   * it reads fastest, and spoken to in Devanagari, because that is what a hi-IN
+   * voice pronounces. Left out, the spoken line is shown as well.
+   */
+  readyNote?: string;
   notUnderstoodPrompt: string;
   /** What to ask next given the fields this session has already put to the shop. */
   nextField: (handled: ReadonlySet<TField>) => TField | null;
@@ -143,7 +150,7 @@ export type VoiceDictationState<TField extends string> = {
 export function useVoiceDictation<TField extends string>(
   options: VoiceDictationOptions<TField>,
 ): VoiceDictationState<TField> {
-  const { open, language, promptFor, readyPrompt, notUnderstoodPrompt, nextField, applyAnswer, onSave, filledNote } =
+  const { open, language, promptFor, readyPrompt, readyNote, notUnderstoodPrompt, nextField, applyAnswer, onSave, filledNote } =
     options;
 
   const [active, setActive] = useState(false);
@@ -228,12 +235,12 @@ export function useVoiceDictation<TField extends string>(
       pendingRef.current = field;
       setPending(field);
       const line = field ? promptFor(field) : readyPrompt;
-      if (!field) setNote(line);
+      if (!field) setNote(readyNote ?? line);
       // Nothing more is needed, but the shop may still want to add a detail, so
       // the mic stays open for one more turn and silence ends it.
       speakThen(line, locale, speakRef.current, listen);
     },
-    [listen, locale, promptFor, readyPrompt],
+    [listen, locale, promptFor, readyNote, readyPrompt],
   );
 
   const handleUtterance = useCallback(

@@ -34,6 +34,10 @@ for (const snippet of [
   "WORKER_HEALTHCHECK",
   "waitUntilFinished",
   "urlRetained: false",
+  '"--porcelain", "--", "backend"',
+  "backendSourceFingerprintSha256",
+  '"diff", "--binary", "HEAD", "--", "backend"',
+  "WORKER_PROOF_SOURCE_CHANGED",
 ]) {
   assert.ok(workerProof.includes(snippet), `worker proof must include ${snippet}`);
 }
