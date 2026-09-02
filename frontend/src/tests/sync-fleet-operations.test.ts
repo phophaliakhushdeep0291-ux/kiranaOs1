@@ -19,6 +19,10 @@ describe("sync fleet operations", () => {
     expect(pull).toContain("acknowledgement?.stale_ack_ignored");
   });
 
+  it("gives production catch-up pulls longer than the generic background timeout", () => {
+    expect(api).toContain("timeoutMs: 30_000");
+  });
+
   it("loads the management fleet endpoint and exposes actionable terminal states", () => {
     expect(api).toContain('"/sync/devices"');
     expect(page).toContain("getSyncFleet({ background: true })");

@@ -7,8 +7,17 @@ function makeConflictId(
   entityType: string,
   entityId: string,
   sourceId: string,
+  localSnapshot?: unknown,
 ) {
-  return `conflict_${entityType}_${entityId}_${sourceId}`.replace(
+  const local = localSnapshot && typeof localSnapshot === "object" && !Array.isArray(localSnapshot)
+    ? localSnapshot as Record<string, unknown>
+    : null;
+  // One local revision can meet several successive server change-log rows while
+  // a device catches up. Those rows are one owner decision, not one conflict per
+  // server sequence. Key the review episode to the local business revision; a
+  // genuinely newer local edit gets a new timestamp/version and a new review.
+  const localRevision = local?.updated_at ?? local?.updatedAt ?? local?.version ?? sourceId;
+  return `conflict_${entityType}_${entityId}_${String(localRevision)}`.replace(
     /[^a-zA-Z0-9_-]/g,
     "_",
   );
@@ -27,7 +36,7 @@ export async function storeConflict(input: {
 }): Promise<void> {
   const scope = getOfflineScope();
   const now = nowIso();
-  const id = makeConflictId(input.entityType, input.entityId, input.sourceId);
+  const id = makeConflictId(input.entityType, input.entityId, input.sourceId, input.localSnapshot);
   const localSnapshot = sanitizeSyncDiagnostic(input.localSnapshot);
   const serverSnapshot = sanitizeSyncDiagnostic(input.serverSnapshot);
   await dexieDB.sync_conflicts.put({

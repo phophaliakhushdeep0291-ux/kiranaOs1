@@ -893,6 +893,50 @@ describe("sync engine reliability", () => {
     ]);
   });
 
+  it("coalesces repeated server changes against one local revision into one conflict", async () => {
+    const localUpdatedAt = "2026-06-06T10:50:00.000Z";
+    dbState.putInto("products", {
+      id: "server_product_conflict_repeat",
+      server_id: "server_product_conflict_repeat",
+      name: "Local Tea",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "pending_sync",
+      updated_at: localUpdatedAt,
+    });
+    syncPullMock
+      .mockResolvedValueOnce({
+        changes: [{
+          entity_type: "product",
+          change_id: "server_change_1",
+          entity: { id: "server_product_conflict_repeat", name: "Cloud Tea v1" },
+        }],
+        cursor: "cursor_repeat_1",
+      })
+      .mockResolvedValueOnce({
+        changes: [{
+          entity_type: "product",
+          change_id: "server_change_2",
+          entity: { id: "server_product_conflict_repeat", name: "Cloud Tea v2" },
+        }],
+        cursor: "cursor_repeat_2",
+      });
+
+    await pullServerChanges();
+    await pullServerChanges();
+
+    expect(scopedRows("products")[0]).toEqual(expect.objectContaining({
+      sync_status: "conflict",
+      updated_at: localUpdatedAt,
+    }));
+    expect(scopedRows("sync_conflicts")).toHaveLength(1);
+    expect(scopedRows("sync_conflicts")[0]).toEqual(expect.objectContaining({
+      entity_id: "server_product_conflict_repeat",
+      source_event_id: "server_change_2",
+      server_snapshot: expect.objectContaining({ name: "Cloud Tea v2" }),
+    }));
+  });
+
   it("sync resumes after reload from persisted pending outbox", async () => {
     const persisted = seedOutbox({
       op_id: "op_after_reload",
