@@ -16,7 +16,7 @@ import { useScreenTracking } from "@/lib/activity";
 import type { FeatureName } from "@/features/core/subscription/plans";
 import { isPathInBusinessProfile, profileHasCapability, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { PermissionDenied } from "@/components/shared/PermissionDenied";
-import { loadBillingRoute, loadCustomersRoute, loadInventoryRoute, loadPurchasesRoute, loadSalesOverviewRoute } from "./route-preload";
+import { loadBillingRoute, loadBillsRoute, loadCustomersRoute, loadInventoryRoute, loadProductsRoute, loadPurchasesRoute, loadReportsRoute, loadSalesOverviewRoute } from "./route-preload";
 import { Button } from "@/components/ui/button";
 import { readBackendConnectionSnapshot, type BackendConnectionSnapshot } from "@/features/core/sync/backend-health";
 
@@ -31,12 +31,12 @@ const DineInMenu = lazy(() => import("@/features/core/customer-order/DineInMenuP
 const ImportOrder = lazy(() => import("@/features/core/customer-order/ImportOrderPage"));
 const Dashboard = lazy(() => import("@/features/core/dashboard/pages/DashboardPage"));
 const Billing = lazy(loadBillingRoute);
-const BillsPage = lazy(() => import("@/features/core/bills/pages/BillsPage"));
+const BillsPage = lazy(loadBillsRoute);
 const BillDetailPage = lazy(() => import("@/features/core/bills/pages/BillDetailPage"));
 const OrdersReceivedPage = lazy(() => import("@/features/core/orders/pages/OrdersReceivedPage"));
 const SalesOverviewPage = lazy(loadSalesOverviewRoute);
 const NewReturnPage = lazy(() => import("@/features/core/returns/pages/NewReturnPage"));
-const Products = lazy(() => import("@/features/core/products/pages/ProductsPage"));
+const Products = lazy(loadProductsRoute);
 const ProductPricing = lazy(() => import("@/features/core/pricing/pages/ProductPricingPage"));
 const Customers = lazy(loadCustomersRoute);
 const CustomerDetailPage = lazy(() => import("@/features/core/customers/pages/CustomerDetailPage"));
@@ -54,7 +54,7 @@ const Expenses = lazy(() => import("@/features/core/expenses/pages/ExpensesPage"
 const Offers = lazy(() => import("@/features/core/offers/pages/OffersPage"));
 const Loyalty = lazy(() => import("@/features/core/loyalty/pages/LoyaltyPage"));
 const GiftCards = lazy(() => import("@/features/core/gift-cards/GiftCardsPage"));
-const Reports = lazy(() => import("@/features/core/reports/pages/ReportsPage"));
+const Reports = lazy(loadReportsRoute);
 const ChannelSettlements = lazy(() => import("@/features/core/reports/pages/ChannelSettlementsPage"));
 const MoneyStatementPage = lazy(() => import("@/features/core/money-statement/pages/MoneyStatementPage"));
 const DailyClosingPage = lazy(() => import("@/features/core/reports/pages/DailyClosingPage"));
