@@ -392,26 +392,6 @@ export interface RecordPaymentOptions {
   expectedOutstanding?: number;
 }
 
-function hasPendingLedgerWork(entries: CustomerLedgerEntry[]): boolean {
-  return entries.some((entry) =>
-    PENDING_LEDGER_STATUSES.has(String(entry.sync_status ?? "").toLowerCase()),
-  );
-}
-
-function isLocalOnlyCustomer(customer: CustomerRecord): boolean {
-  const hasServerIdentity =
-    typeof customer.server_id === "string" ||
-    typeof customer.serverId === "string";
-  if (hasServerIdentity) return false;
-  const status = String(customer.sync_status ?? "").toLowerCase();
-  return (
-    String(customer.id ?? "").startsWith("local_") ||
-    customer.isSynced === false ||
-    customer.is_synced === false ||
-    PENDING_LEDGER_STATUSES.has(status)
-  );
-}
-
 async function resolveCachedAuthoritativePaymentBalance(input: {
   customerId: string;
   customer: CustomerRecord;
@@ -432,20 +412,18 @@ async function resolveCachedAuthoritativePaymentBalance(input: {
   return roundMoney(Math.max(0, base + pendingDeltaForIds(deltas, ids)));
 }
 
-async function recordPaymentLocalFirstUnlocked(
+async function recordPaymentsLocalFirstUnlocked(
   customerId: string,
-  data: UdharPaymentInput,
+  paymentInputs: UdharPaymentInput[],
   options: RecordPaymentOptions = {},
-): Promise<LocalPaymentResult> {
-  const validated = parseOrThrow(paymentRecordingSchema, {
-    ...data,
-    customerId,
-  });
+): Promise<LocalPaymentResult[]> {
+  if (paymentInputs.length === 0) throw new Error("Add at least one payment");
+  const inputs = paymentInputs.map((data) => ({
+    data,
+    validated: parseOrThrow(paymentRecordingSchema, { ...data, customerId }),
+  }));
   const now = new Date().toISOString();
-  const amount = roundMoney(validated.amount);
-  const paymentId = createLocalId("payment");
-  const ledgerEntryId = createLocalId("ledger");
-  const idempotencyKey = `record-payment:${customerId}:${paymentId}`;
+  const totalAmount = roundMoney(inputs.reduce((sum, input) => sum + roundMoney(input.validated.amount), 0));
 
   const existing = await findCustomer(customerId);
   if (!existing) throw new Error("Customer not found in local records");
@@ -461,9 +439,6 @@ async function recordPaymentLocalFirstUnlocked(
     0,
     readNumber(options.expectedOutstanding, 0),
   );
-  const localCanLead =
-    hasPendingLedgerWork(existingLedgerEntries) ||
-    isLocalOnlyCustomer(existing as CustomerRecord);
   // Guard against overpayment: a udhar payment can never exceed the customer's
   // outstanding balance. The backend already rejects this
   // (UDHAR_PAYMENT_EXCEEDS_OUTSTANDING); the offline path must enforce the same
@@ -473,26 +448,36 @@ async function recordPaymentLocalFirstUnlocked(
     ? Math.max(0, readNumber(existing.udharAmount ?? existing.totalUdhar, 0))
     : null;
   const currentBalance = roundMoney(authoritativeBalance !== null
-    ? Math.max(authoritativeBalance, localCanLead ? ledgerBalance : 0)
+    // The cached server balance already has every unsynced local ledger delta
+    // applied by resolveCachedAuthoritativePaymentBalance. Taking the larger
+    // raw device-ledger sum here resurrects historical drift as soon as even
+    // one payment is pending (for example: server 300, stale device 1,000,
+    // pending payment 100 => the honest balance is 200, never 900).
+    ? authoritativeBalance
     : projectedCustomerBalance !== null
       ? Math.max(ledgerBalance, projectedCustomerBalance)
       : Math.max(ledgerBalance, expectedOutstanding));
   const outstanding = roundMoney(Math.max(0, currentBalance));
-  if (moneyExceeds(amount, outstanding)) {
+  if (moneyExceeds(totalAmount, outstanding)) {
     const error = new Error(
-      `Payment ${formatMoney(amount)} exceeds outstanding udhar ${formatMoney(outstanding)}`,
+      `Payment ${formatMoney(totalAmount)} exceeds outstanding udhar ${formatMoney(outstanding)}`,
     );
     (error as Error & { code?: string }).code = "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING";
     throw error;
   }
-  // Never below zero: with a drifted ledger the authoritative base is the honest
-  // starting point, and a negative "balance after" would only deepen the drift.
-  const nextBalance = Math.max(0, subtractMoney(currentBalance, amount));
-  const note = typeof validated.note === "string" ? validated.note : undefined;
-  const paidAt = typeof validated.paidAt === "string" ? validated.paidAt : now;
-
-  const payment = makeLocalEntity(
-    {
+  let runningBalance = currentBalance;
+  const prepared = inputs.map(({ data, validated }) => {
+    const amount = roundMoney(validated.amount);
+    const paymentId = createLocalId("payment");
+    const ledgerEntryId = createLocalId("ledger");
+    const idempotencyKey = `record-payment:${customerId}:${paymentId}`;
+    // Never below zero: with a drifted ledger the authoritative base is the
+    // honest starting point, and a negative balance would deepen the drift.
+    runningBalance = Math.max(0, subtractMoney(runningBalance, amount));
+    const nextBalance = runningBalance;
+    const note = typeof validated.note === "string" ? validated.note : undefined;
+    const paidAt = typeof validated.paidAt === "string" ? validated.paidAt : now;
+    const payment = makeLocalEntity({
       id: paymentId,
       customerId,
       customer_id: customerId,
@@ -516,22 +501,71 @@ async function recordPaymentLocalFirstUnlocked(
       createdAt: now,
       created_at: now,
       status: "active",
-    },
-    "payment",
-    "pending_sync",
-  );
-
-  const ledgerEntry = buildPaymentLedgerEntry({
-    customerId,
-    paymentId,
-    ledgerEntryId,
-    idempotencyKey,
-    amount,
-    mode: validated.mode,
-    nextBalance,
-    note,
-    at: paidAt,
+    }, "payment", "pending_sync");
+    const ledgerEntry = buildPaymentLedgerEntry({
+      customerId,
+      paymentId,
+      ledgerEntryId,
+      idempotencyKey,
+      amount,
+      mode: validated.mode,
+      nextBalance,
+      note,
+      at: paidAt,
+    });
+    const auditLog = buildAuditLogRow({
+      action: "payment_recorded",
+      entityType: "payment",
+      entityId: paymentId,
+      entityLabel: existing.name,
+      newValue: payment,
+      summary: `Payment ₹${amount.toLocaleString("en-IN")} recorded from ${existing.name}`,
+    });
+    const auditOutbox = buildOutboxOperation(buildAuditLogOutboxInput(auditLog));
+    const paymentOutbox = buildOutboxOperation({
+      entity_type: "payment",
+      entity_id: paymentId,
+      operation_type: "RECORD_PAYMENT",
+      idempotency_key: idempotencyKey,
+      payload: {
+        paymentId,
+        localPaymentId: paymentId,
+        local_payment_id: paymentId,
+        clientPaymentId: paymentId,
+        client_payment_id: paymentId,
+        ledgerEntryId,
+        ledger_entry_id: ledgerEntryId,
+        localLedgerEntryId: ledgerEntryId,
+        local_ledger_entry_id: ledgerEntryId,
+        clientLedgerId: ledgerEntryId,
+        client_ledger_id: ledgerEntryId,
+        idempotencyKey,
+        idempotency_key: idempotencyKey,
+        customerId,
+        payment: {
+          ...data,
+          amount,
+          mode: validated.mode,
+          paidAt,
+          paymentId,
+          localPaymentId: paymentId,
+          local_payment_id: paymentId,
+          clientPaymentId: paymentId,
+          client_payment_id: paymentId,
+          ledgerEntryId,
+          ledger_entry_id: ledgerEntryId,
+          localLedgerEntryId: ledgerEntryId,
+          local_ledger_entry_id: ledgerEntryId,
+          clientLedgerId: ledgerEntryId,
+          client_ledger_id: ledgerEntryId,
+          idempotencyKey,
+          idempotency_key: idempotencyKey,
+        },
+      },
+    });
+    return { amount, paymentId, nextBalance, payment, ledgerEntry, auditLog, auditOutbox, paymentOutbox };
   });
+  const nextBalance = runningBalance;
 
   const updatedCustomerBase = normaliseLocalCustomer({
     ...existing,
@@ -541,7 +575,7 @@ async function recordPaymentLocalFirstUnlocked(
   } as Customer);
   const metrics = calculateTrustScore(updatedCustomerBase, [
     ...existingLedgerEntries,
-    ledgerEntry,
+    ...prepared.map((row) => row.ledgerEntry),
   ]);
   const updatedCustomer = {
     ...updatedCustomerBase,
@@ -557,91 +591,36 @@ async function recordPaymentLocalFirstUnlocked(
     balance_derived_from_local_ledger: true,
   } as unknown as Customer & Record<string, unknown>;
 
-  const auditLog = buildAuditLogRow({
-    action: "payment_recorded",
-    entityType: "payment",
-    entityId: paymentId,
-    entityLabel: existing.name,
-    newValue: payment,
-    summary: `Payment ₹${amount.toLocaleString("en-IN")} recorded from ${existing.name}`,
-  });
-
-  const auditOutbox = buildOutboxOperation(buildAuditLogOutboxInput(auditLog));
-  const paymentOutbox = buildOutboxOperation({
-    entity_type: "payment",
-    entity_id: paymentId,
-    operation_type: "RECORD_PAYMENT",
-    idempotency_key: idempotencyKey,
-    payload: {
-      paymentId,
-      localPaymentId: paymentId,
-      local_payment_id: paymentId,
-      clientPaymentId: paymentId,
-      client_payment_id: paymentId,
-      ledgerEntryId,
-      ledger_entry_id: ledgerEntryId,
-      localLedgerEntryId: ledgerEntryId,
-      local_ledger_entry_id: ledgerEntryId,
-      clientLedgerId: ledgerEntryId,
-      client_ledger_id: ledgerEntryId,
-      idempotencyKey,
-      idempotency_key: idempotencyKey,
-      customerId,
-      payment: {
-        ...data,
-        amount,
-        mode: validated.mode,
-        paidAt,
-        paymentId,
-        localPaymentId: paymentId,
-        local_payment_id: paymentId,
-        clientPaymentId: paymentId,
-        client_payment_id: paymentId,
-        ledgerEntryId,
-        ledger_entry_id: ledgerEntryId,
-        localLedgerEntryId: ledgerEntryId,
-        local_ledger_entry_id: ledgerEntryId,
-        clientLedgerId: ledgerEntryId,
-        client_ledger_id: ledgerEntryId,
-        idempotencyKey,
-        idempotency_key: idempotencyKey,
-      },
-    },
-  });
-
   await offlineDB.transaction(PAYMENT_TRANSACTION_TABLES, async (tx) => {
-    await tx.put("payments", payment);
-    await tx.put("customer_ledger", ledgerEntry);
+    await tx.putMany("payments", prepared.map((row) => row.payment));
+    await tx.putMany("customer_ledger", prepared.map((row) => row.ledgerEntry));
     await tx.put("customers", updatedCustomer);
-    await tx.put("local_audit_logs", auditLog);
-    await tx.enqueueOutboxOperation(auditOutbox);
-    await tx.enqueueOutboxOperation(paymentOutbox);
+    await tx.putMany("local_audit_logs", prepared.map((row) => row.auditLog));
+    for (const row of prepared) {
+      await tx.enqueueOutboxOperation(row.auditOutbox);
+      await tx.enqueueOutboxOperation(row.paymentOutbox);
+    }
   });
 
-  upsertCachedListItem(PAYMENT_CACHE_KEY, payment, 1000);
   upsertCachedListItem<Customer & Record<string, unknown>>(
     CUSTOMER_CACHE_KEY,
     updatedCustomer,
     1000,
   );
-  upsertCachedListItem<CustomerLedgerEntry>(
-    "customer_ledger",
-    ledgerEntry,
-    1500,
-  );
-  emitLocalDataChanged({
-    type: "payment",
-    id: paymentId,
+  for (const row of prepared) {
+    upsertCachedListItem(PAYMENT_CACHE_KEY, row.payment, 1000);
+    upsertCachedListItem<CustomerLedgerEntry>("customer_ledger", row.ledgerEntry, 1500);
+    emitLocalDataChanged({ type: "payment", id: row.paymentId, customerId, action: "recorded" });
+    emitLocalDataChanged({ type: "ledger", id: row.ledgerEntry.id, customerId, action: "appended" });
+  }
+  return prepared.map((row) => ({
+    success: true,
+    paymentId: row.paymentId,
     customerId,
-    action: "recorded",
-  });
-  emitLocalDataChanged({
-    type: "ledger",
-    id: ledgerEntry.id,
-    customerId,
-    action: "appended",
-  });
-  return { success: true, paymentId, customerId, amount, nextBalance, pendingSync: true };
+    amount: row.amount,
+    nextBalance: row.nextBalance,
+    pendingSync: true,
+  }));
 }
 
 export function recordPaymentLocalFirst(
@@ -649,8 +628,18 @@ export function recordPaymentLocalFirst(
   data: UdharPaymentInput,
   options: RecordPaymentOptions = {},
 ): Promise<LocalPaymentResult> {
+  return withCustomerFinancialLock(customerId, async () =>
+    (await recordPaymentsLocalFirstUnlocked(customerId, [data], options))[0]);
+}
+
+/** Cash + UPI collections commit together or not at all, including their ledger and outbox rows. */
+export function recordSplitPaymentLocalFirst(
+  customerId: string,
+  payments: UdharPaymentInput[],
+  options: RecordPaymentOptions = {},
+): Promise<LocalPaymentResult[]> {
   return withCustomerFinancialLock(customerId, () =>
-    recordPaymentLocalFirstUnlocked(customerId, data, options));
+    recordPaymentsLocalFirstUnlocked(customerId, payments, options));
 }
 
 interface ReversePaymentInput {
