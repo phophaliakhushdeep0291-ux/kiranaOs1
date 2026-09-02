@@ -448,10 +448,10 @@ export const customersHi: Record<keyof typeof customersEn, string> = {
   // In English both are the same string, so an English shop sees no change.
   // Hinglish, matching the product form.
   "customers.voice.say.name": "Grahak ka naam kya hai?",
-  "customers.voice.say.mobile": "Mobile number?",
+  "customers.voice.say.mobile": "Mobile number kya hai?",
   "customers.voice.say.address": "Pata?",
   "customers.voice.say.udharLimit": "Kitne tak udhar de sakte hain?",
-  "customers.voice.say.gstNumber": "GST number?",
+  "customers.voice.say.gstNumber": "GST number kya hai?",
   "customers.voice.say.dueDate": "Paisa kab tak dena hai?",
   "customers.voice.say.promiseToPayDate": "Kab dene ka vaada kiya?",
   "customers.voice.say.notes": "Inke baare mein kuch likhna hai?",

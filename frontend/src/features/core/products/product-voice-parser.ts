@@ -701,10 +701,15 @@ export function parseProductVoiceAnswer(field: ProductVoiceField, spoken: string
   if (NUMERIC_FIELDS.has(field)) {
     const at = tokens.findIndex((token) => spokenNumber(token) !== undefined);
     if (at === -1) return {};
-    const value = spokenNumber(tokens[at]);
-    if (value === undefined) return {};
+    // readSpokenAmount rather than spokenNumber, because "paanch sau" is five
+    // hundred and one token at a time it comes back as five. The free-form
+    // reader was fixed for this; this path — the one the voice bar actually
+    // uses, one question at a time — was not, so answering "MRP?" with
+    // "paanch sau" wrote 5, "ek sau bees" wrote 1 and "do hazaar" wrote 2.
+    const amount = readSpokenAmount(tokens, at);
+    if (amount === undefined) return {};
     const numeric: ProductVoiceFields = {};
-    applyNumeric(numeric, field, value, unitOf(tokens[at + 1]));
+    applyNumeric(numeric, field, amount.value, unitOf(tokens[amount.end + 1]));
     return numeric;
   }
 
