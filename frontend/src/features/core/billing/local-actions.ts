@@ -13,7 +13,7 @@ import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/
 import { BillPaymentMode } from "@/types/api";
 import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { productTracksStock } from "@/features/core/inventory/stock-display";
-import { reconcileCachedSellableBatches } from "@/features/core/inventory/inventory-lots-api";
+import { INVENTORY_LOT_CACHE_KEYS, loadCachedSellableBatches, projectCachedSellableBatches, type SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 
 const BILL_CACHE_KEY = "bills";
 const CUSTOMER_CACHE_KEY = "customers";
@@ -592,8 +592,18 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const inputForCreation: BillInput = { ...input, locationId: input.locationId ?? getActiveLocationId() ?? undefined };
   const validated = parseOrThrow(billCreationSchema, inputForCreation) as BillInput;
   validateBillCreationBusinessRules(validated);
-  const productsById = await loadBillProducts(validated.items);
-  const sensitiveActions = deriveLocalSensitiveBillActions(inputForCreation, productsById);
+  const billLocationId = validated.locationId ?? getActiveLocationId() ?? "primary";
+  const productsForApproval = await loadBillProducts(validated.items);
+  const sensitiveActions = deriveLocalSensitiveBillActions(inputForCreation, productsForApproval);
+  const batchTrackedProductIds = [...new Set(validated.items
+    .map((item) => item.productId)
+    .filter((id): id is string => Boolean(id && productsForApproval.get(id)?.batchTrackingEnabled)))];
+  const cachedSellableBatches = new Map<string, SellableBatch[] | undefined>(await Promise.all(
+    batchTrackedProductIds.map(async (productId) => [
+      productId,
+      await loadCachedSellableBatches(productId, billLocationId),
+    ] as const),
+  ));
   validated.sensitiveActions = sensitiveActions;
   validated.ownerPin = inputForCreation.ownerPin;
   validated.reason = inputForCreation.reason;
@@ -632,7 +642,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
         return { bill: withBillAliases(existing), publish: (): void => undefined };
       }
     }
-    return persistLocalBill(tx, validated, inputForCreation, sensitiveActions, clientBillId, checkoutFingerprint);
+    return persistLocalBill(tx, validated, inputForCreation, sensitiveActions, clientBillId, checkoutFingerprint, cachedSellableBatches);
   });
   // A cache/display failure after the financial commit is not a failed sale.
   // Returning an error here invites the cashier to collect the same money again.
@@ -647,6 +657,7 @@ async function persistLocalBill(
   sensitiveActions: SensitiveBillAction[],
   requestedClientBillId: string | undefined,
   checkoutFingerprint: string,
+  cachedSellableBatches: Map<string, SellableBatch[] | undefined>,
 ): Promise<{ bill: Bill; publish: () => void | Promise<void> }> {
   const productsById = await loadBillProducts(validated.items);
   const billId = createLocalId("bill");
@@ -873,6 +884,21 @@ async function persistLocalBill(
   const nextLedgerCache = ledgerEntry
     ? nextCachedList<Record<string, unknown> & { id: string }>("customer_ledger", ledgerEntry, 1500)
     : null;
+  const projectedSellableBatches = new Map<string, SellableBatch[]>();
+  for (const item of billData.items) {
+    if (!item.productId || !cachedSellableBatches.has(item.productId)) continue;
+    const current = projectedSellableBatches.has(item.productId)
+      ? projectedSellableBatches.get(item.productId)
+      : cachedSellableBatches.get(item.productId);
+    const projected = projectCachedSellableBatches(current, {
+      productId: item.productId,
+      movementType: "sale",
+      quantityBaseQty: billItemBaseQuantity(item, productsById.get(item.productId)),
+      locationId: billData.locationId,
+      inventoryLotId: item.inventoryLotId,
+    });
+    if (projected !== undefined) projectedSellableBatches.set(item.productId, projected);
+  }
   const cacheExpiresAt = Date.now() + BILL_CREATION_CACHE_EXPIRES_MS;
 
   if (customerPreparation.customerToPut) await tx.put("customers", customerPreparation.customerToPut);
@@ -889,9 +915,13 @@ async function persistLocalBill(
   await tx.setSetting(`cache:${BILL_CACHE_KEY}`, nextBillsCache, cacheExpiresAt);
   if (nextCustomersCache) await tx.setSetting(`cache:${CUSTOMER_CACHE_KEY}`, nextCustomersCache, cacheExpiresAt);
   if (nextLedgerCache) await tx.setSetting("cache:customer_ledger", nextLedgerCache, cacheExpiresAt);
+  for (const [productId, batches] of projectedSellableBatches) {
+    const key = INVENTORY_LOT_CACHE_KEYS.sellable(productId, billData.locationId ?? "primary");
+    await tx.setSetting(`cache:${key}`, batches, cacheExpiresAt);
+  }
   return {
     bill,
-    publish: async () => {
+    publish: () => {
       writeInstantMemoryCache(BILL_CACHE_KEY, nextBillsCache, BILL_CREATION_CACHE_DAYS);
       if (nextCustomersCache) writeInstantMemoryCache(CUSTOMER_CACHE_KEY, nextCustomersCache, BILL_CREATION_CACHE_DAYS);
       if (nextLedgerCache) writeInstantMemoryCache("customer_ledger", nextLedgerCache, BILL_CREATION_CACHE_DAYS);
@@ -899,17 +929,10 @@ async function persistLocalBill(
         upsertCachedListItem<Product>(PRODUCT_CACHE_KEY, product, 1000);
         upsertCachedListItem<Product & Record<string, unknown>>(INVENTORY_CACHE_KEY, product, 1000);
       });
-      for (const item of billData.items) {
-        if (!item.productId) continue;
-        const product = productsById.get(item.productId);
-        if (product && !productTracksStock(product)) continue;
-        await reconcileCachedSellableBatches({
-          productId: item.productId,
-          movementType: "sale",
-          quantityBaseQty: billItemBaseQuantity(item, product),
-          locationId: billData.locationId,
-          inventoryLotId: item.inventoryLotId,
-        }).catch(() => undefined);
+      for (const [productId, batches] of projectedSellableBatches) {
+        const key = INVENTORY_LOT_CACHE_KEYS.sellable(productId, billData.locationId ?? "primary");
+        writeInstantMemoryCache(key, batches, BILL_CREATION_CACHE_DAYS);
+        emitLocalDataChanged({ type: "inventory_lot", productId, action: "cache-updated" });
       }
       emitLocalDataChanged({ type: "bill", id: billId, action: "created" });
       updatedProducts.forEach((product) => emitLocalDataChanged({ type: "product", id: product.id, action: "stock-updated" }));

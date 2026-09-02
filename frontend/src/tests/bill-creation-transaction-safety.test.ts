@@ -73,6 +73,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   createLocalId: vi.fn((prefix: string) => `${prefix}_${++dbState.idCounter}`),
   emitLocalDataChanged: vi.fn(),
   normaliseInstantCacheValue: vi.fn((value: unknown) => value),
+  readIndexedRecentCache: vi.fn(async (_key: string, fallback: unknown) => fallback),
   readInstantCache: vi.fn((_key: string, fallback: unknown) => fallback),
   upsertCachedListItem: vi.fn(),
   writeInstantMemoryCache: vi.fn(),
@@ -150,6 +151,32 @@ describe("bill creation transaction safety", () => {
     expect(tableRows("customer_ledger")[0]).toEqual(expect.objectContaining({ bill_id: bill.id, customer_id: "customer_1", amount: 60, balance_after: 85 }));
     expect(tableRows("payments")[0]).toEqual(expect.objectContaining({ bill_id: bill.id, mode: BillPaymentMode.cash, amount: 40 }));
     expect(tableRows("settings").some((row) => row.key === "cache:bills")).toBe(true);
+  });
+
+  it("commits the reduced offline batch cache in the same transaction as the sale", async () => {
+    dbState.committed.products = [{
+      id: "product_1",
+      name: "Sugar",
+      baseUnit: "kg",
+      stockBaseQty: 20,
+      defaultPricePerRateUnit: 50,
+      batchTrackingEnabled: true,
+    }];
+    vi.mocked(readInstantCache).mockImplementation((key, fallback) => key === "inventory-lots:sellable:v1:primary:product_1"
+      ? [{ id: "lot_1", batchNumber: "B-1", expiresOn: "2030-01-01", availableBaseQty: 5, mrp: 50 }]
+      : fallback);
+
+    await createBillLocalFirst(baseInput());
+
+    expect(tableRows("settings")).toContainEqual(expect.objectContaining({
+      key: "cache:inventory-lots:sellable:v1:primary:product_1",
+      value: [{ id: "lot_1", batchNumber: "B-1", expiresOn: "2030-01-01", availableBaseQty: 3, mrp: 50 }],
+    }));
+    expect(mockedWriteInstantMemoryCache).toHaveBeenCalledWith(
+      "inventory-lots:sellable:v1:primary:product_1",
+      [{ id: "lot_1", batchNumber: "B-1", expiresOn: "2030-01-01", availableBaseQty: 3, mrp: 50 }],
+      30,
+    );
   });
 
   it("does not invent offline stock or ledger movement for an untracked dish", async () => {

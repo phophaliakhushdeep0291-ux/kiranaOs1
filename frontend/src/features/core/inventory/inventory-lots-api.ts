@@ -110,15 +110,7 @@ export const getExpiryAlerts = (params: { criticalDays?: number; warningDays?: n
 export const listSellableBatches = (productId: string, locationId = getActiveLocationId() ?? "primary") => readCachedLotResource<SellableBatch[]>(`/inventory-lots/sellable/${productId}`, INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId), locationId);
 export const changeInventoryLotStatus = (id: string, status: "active" | "quarantined" | "recalled", note: string, ownerPin: string) => apiRequest<InventoryLot>(`/inventory-lots/${id}/status`, { method: "POST", ownerPin, body: JSON.stringify({ status, note }) });
 
-/**
- * Keep the counter's cached FEFO choices aligned with a local-first movement.
- * This cache is a projection, not the financial source of truth, so it is
- * written after the atomic IndexedDB movement. Under uncertainty (damage may
- * have come from quarantined stock) reducing saleable FEFO stock is the safe
- * direction: the till can temporarily understate availability but never offer
- * a batch that the local movement may already have exhausted.
- */
-export async function reconcileCachedSellableBatches(input: {
+export interface SellableBatchProjectionInput {
   productId: string;
   movementType: "purchase" | "sale" | "damage" | "correction";
   quantityBaseQty: number;
@@ -127,9 +119,20 @@ export async function reconcileCachedSellableBatches(input: {
   batchNumber?: string;
   expiresOn?: string;
   batchMrp?: number;
-}) {
-  const key = INVENTORY_LOT_CACHE_KEYS.sellable(input.productId, input.locationId ?? getActiveLocationId() ?? "primary");
-  const cached = await readIndexedRecentCache<SellableBatch[] | undefined>(key, undefined);
+}
+
+export async function loadCachedSellableBatches(productId: string, locationId?: string) {
+  const key = INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId ?? getActiveLocationId() ?? "primary");
+  const memory = readInventoryLotMemoryCache<SellableBatch[]>(key);
+  if (memory !== undefined) return memory;
+  return readIndexedRecentCache<SellableBatch[] | undefined>(key, undefined).catch(() => undefined);
+}
+
+/** Pure projection used both by post-commit UI refreshes and atomic financial writes. */
+export function projectCachedSellableBatches(
+  cached: SellableBatch[] | undefined,
+  input: SellableBatchProjectionInput,
+): SellableBatch[] | undefined {
   const quantity = Math.abs(Number(input.quantityBaseQty || 0));
   if (!(quantity > 0)) return cached;
 
@@ -146,15 +149,12 @@ export async function reconcileCachedSellableBatches(input: {
         mrp: input.batchMrp ?? null,
         pendingSync: true,
       }];
-    next.sort((a, b) => a.expiresOn.localeCompare(b.expiresOn));
-    writeInstantCache(key, next);
-    emitLocalDataChanged({ type: "inventory_lot", productId: input.productId, action: "cache-updated" });
-    return next;
+    return next.sort((a, b) => a.expiresOn.localeCompare(b.expiresOn));
   }
 
   if (!cached) return undefined;
   if (input.inventoryLotId || input.batchNumber) {
-    const next = cached.map((row) => {
+    return cached.map((row) => {
       const sameBatch = input.inventoryLotId
         ? row.id === input.inventoryLotId
         : row.batchNumber === input.batchNumber
@@ -163,17 +163,29 @@ export async function reconcileCachedSellableBatches(input: {
         ? { ...row, availableBaseQty: Math.max(0, Number(row.availableBaseQty) - quantity) }
         : row;
     }).filter((row) => row.availableBaseQty > 0);
-    writeInstantCache(key, next);
-    emitLocalDataChanged({ type: "inventory_lot", productId: input.productId, action: "cache-updated" });
-    return next;
   }
   let remaining = quantity;
-  const next = cached.map((row) => {
+  return cached.map((row) => {
     if (remaining <= 0) return row;
     const taken = Math.min(remaining, Number(row.availableBaseQty));
     remaining -= taken;
     return { ...row, availableBaseQty: Math.max(0, Number(row.availableBaseQty) - taken) };
   }).filter((row) => row.availableBaseQty > 0);
+}
+
+/**
+ * Keep the counter's cached FEFO choices aligned with a local-first movement.
+ * This cache is a projection, not the financial source of truth, so it is
+ * written after the atomic IndexedDB movement. Under uncertainty (damage may
+ * have come from quarantined stock) reducing saleable FEFO stock is the safe
+ * direction: the till can temporarily understate availability but never offer
+ * a batch that the local movement may already have exhausted.
+ */
+export async function reconcileCachedSellableBatches(input: SellableBatchProjectionInput) {
+  const key = INVENTORY_LOT_CACHE_KEYS.sellable(input.productId, input.locationId ?? getActiveLocationId() ?? "primary");
+  const cached = await readIndexedRecentCache<SellableBatch[] | undefined>(key, undefined);
+  const next = projectCachedSellableBatches(cached, input);
+  if (next === undefined || next === cached) return next;
   writeInstantCache(key, next);
   emitLocalDataChanged({ type: "inventory_lot", productId: input.productId, action: "cache-updated" });
   return next;
