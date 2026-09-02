@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "type": "kiranaos_postgres_production_proof",
+  "status": "passed",
+  "observedCompletedAt": "2026-09-02T12:07:48.995Z",
+  "repository": {
+    "commit": "2934817d42b624b4bffd10a47d0599d6c09211a6",
+    "branch": "feat/ai-agent",
+    "backendTrackedDirty": false,
+    "backendStagedDirty": false,
+    "backendUntracked": false,
+    "scopeNote": "Uncommitted frontend work existed concurrently but the PostgreSQL proof target and backend source were clean."
+  },
+  "runtime": {
+    "node": "v24.12.0",
+    "npm": "11.6.2",
+    "postgresql": "18.3",
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "database": {
+    "protocol": "postgresql",
+    "host": "127.0.0.1",
+    "port": "55439",
+    "database": "kiranaos_cert_test",
+    "schema": "public",
+    "credentialPolicy": "Temporary isolated cluster with trust authentication; no credential was retained.",
+    "safety": "The database name and local host passed assertSafePostgresTestDatabaseUrl before any destructive reset."
+  },
+  "migrations": {
+    "directoryCount": 131,
+    "first": "000001_init",
+    "last": "000130_stock_transfer_lot_allocations",
+    "note": "All migration directories applied successfully; sequence 000062 intentionally contains two independently named migrations."
+  },
+  "command": "cd backend && npm run proof:postgres",
+  "results": [
+    { "id": "prisma-client", "status": "passed", "evidence": "PostgreSQL Prisma client generated." },
+    { "id": "schema-validation", "status": "passed", "evidence": "prisma-postgres/schema.prisma validated." },
+    { "id": "database-reset", "status": "passed", "evidence": "All 131 migration directories through 000130 applied to a fresh isolated database." },
+    { "id": "integration-concurrency", "status": "passed", "evidence": "The complete DB-backed integration suite, including deliberate rollback, conflict, idempotency, tenant isolation, and concurrent-allocation cases, exited zero." },
+    { "id": "payment-provider-connections", "status": "passed", "evidence": "Tenant-owned connection lifecycle and required-audit rollback cases passed on PostgreSQL." },
+    { "id": "money-paise-reconciliation", "status": "passed", "evidence": "All inspected paise shadow columns reported zero missing and zero mismatched rows." },
+    { "id": "api-contract", "status": "passed", "evidence": "API contract v1 covered 174 endpoints." },
+    { "id": "production-static", "status": "passed", "evidence": "Application module graph and production-readiness checks passed." }
+  ],
+  "processEvidence": {
+    "exitCode": 0,
+    "completionMarker": "PostgreSQL production proof passed.",
+    "observation": "The original live process handle completed successfully; intentionally injected PostgreSQL errors were asserted fail-closed rollback cases."
+  },
+  "cleanup": {
+    "serverStopped": true,
+    "portListeningAfterStop": false,
+    "postmasterPidPresentAfterStop": false,
+    "temporaryDirectoryRemoved": false,
+    "note": "The stopped temporary data directory was retained because the host safety policy rejected recursive deletion after exact-path verification. No server remains active."
+  },
+  "limitations": [
+    "This is strong local PostgreSQL runtime evidence, not proof of a deployed production environment or managed-database operations.",
+    "Redis worker, live API, cloud object storage, disaster recovery, Docker image, physical hardware, and credentialed provider traffic require separate retained proofs."
+  ]
+}

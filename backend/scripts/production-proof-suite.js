@@ -73,7 +73,7 @@ addStep("Live backend smoke test", "npm", ["run", "smoke:test"], {
   skipReason: "set PROOF_BASE_URL or SMOKE_BASE_URL after starting backend",
   env: { SMOKE_BASE_URL: liveBaseUrl },
 });
-addStep("Redis worker heartbeat proof", "npm", ["run", "worker:health"], {
+addStep("Redis worker heartbeat and external job execution proof", "npm", ["run", "worker:proof"], {
   skip: !shouldCheckWorker,
   skipReason: "QUEUES_ENABLED/PROOF_REQUIRE_WORKER is not true",
 });

@@ -66,6 +66,7 @@ for (const evidence of [
   "hardware-bridge-contracts",
   "postgres-production-proof",
   "redis-worker-runtime",
+  "worker:proof",
   "cloud-storage-proof",
   "disaster-recovery-proof",
   "docker-build",
