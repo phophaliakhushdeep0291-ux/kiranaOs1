@@ -7,6 +7,7 @@ function read(file) {
 
 const backupScript = read("scripts/postgres-backup-create.js");
 const restoreProof = read("scripts/disaster-recovery-proof.js");
+const fidelity = read("scripts/restore-fidelity.js");
 const safety = read("scripts/postgres-url-safety.js");
 const shellBackup = read("scripts/backup-postgres.sh");
 const proofSuite = read("scripts/production-proof-suite.js");
@@ -52,6 +53,8 @@ for (const snippet of [
 ]) {
   assert.ok(shellBackup.includes(snippet), `shell backup script must use safer pg_dump option ${snippet}`);
 }
+assert.ok(shellBackup.includes('exec node "$SCRIPT_DIR/postgres-backup-create.js"'), "shell entry point must delegate to the verified native backup implementation");
+assert.ok(restoreProof.includes('ALLOW_MONEY_PAISE_BACKFILL: "false"'), "a restore proof must never repair the monetary evidence it verifies");
 
 for (const snippet of [
   "ALLOW_RESTORE_TEST_DB=true",
@@ -61,11 +64,8 @@ for (const snippet of [
   "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;",
   "pg_restore",
   "psql",
-  "pg_tables",
-  "exactPublicTableCounts",
-  "compareTableCounts",
-  "RESTORE_FIDELITY_MISMATCH",
-  "_prisma_migrations",
+  "openPostgresSnapshot",
+  "compareRestoreManifests",
   "sha256File",
   "disaster-recovery-proof-latest.json",
   "DR_KEEP_BACKUP",
@@ -77,6 +77,10 @@ for (const snippet of [
 ]) {
   assert.ok(restoreProof.includes(snippet), `restore proof must include ${snippet}`);
 }
+for (const snippet of ["pg_tables", "RESTORE_FIDELITY_MISMATCH", "RESTORE_WORKLOAD_EMPTY", "_prisma_migrations", "pg_export_snapshot", "READ ONLY"]) {
+  assert.ok(fidelity.includes(snippet), `restore fidelity helper must include ${snippet}`);
+}
+await import("./restore-fidelity.examples.js");
 
 for (const snippet of [
   "RESTORE_TEST_DATABASE_URL must not point to the same database as DATABASE_URL",

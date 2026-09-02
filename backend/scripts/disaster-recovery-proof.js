@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 import { assertSafeRestoreTarget, maskPostgresUrl, postgresCliUrl } from "./postgres-url-safety.js";
+import { sha256File, openPostgresSnapshot, compareRestoreManifests, validateManifest } from "./restore-fidelity.js";
 
 function boolEnv(name) {
   return String(process.env[name] || "").toLowerCase() === "true";
@@ -56,86 +57,6 @@ function run(command, args, options = {}) {
     throw new Error(`${label} failed${stderr ? `: ${stderr}` : ""}`);
   }
   return result;
-}
-
-function backupFiles(backupDir) {
-  if (!fs.existsSync(backupDir)) return [];
-  return fs.readdirSync(backupDir)
-    .filter((name) => /\.(dump|sql|sql\.gz)$/.test(name))
-    .map((name) => path.resolve(backupDir, name))
-    .map((file) => ({ file, mtimeMs: fs.statSync(file).mtimeMs, size: fs.statSync(file).size }))
-    .filter((item) => item.size > 0)
-    .sort((a, b) => b.mtimeMs - a.mtimeMs);
-}
-
-function latestNewBackupFile(backupDir, existingFiles) {
-  return backupFiles(backupDir).find((item) => !existingFiles.has(item.file))?.file || null;
-}
-
-function sha256File(file) {
-  const hash = crypto.createHash("sha256");
-  const handle = fs.openSync(file, "r");
-  const buffer = Buffer.allocUnsafe(1024 * 1024);
-  try {
-    let bytesRead;
-    do {
-      bytesRead = fs.readSync(handle, buffer, 0, buffer.length, null);
-      if (bytesRead > 0) hash.update(buffer.subarray(0, bytesRead));
-    } while (bytesRead > 0);
-  } finally {
-    fs.closeSync(handle);
-  }
-  return hash.digest("hex");
-}
-
-const TABLE_COUNTS_SQL = `
-CREATE TEMP TABLE kiranaos_dr_counts (table_name text PRIMARY KEY, row_count bigint NOT NULL);
-DO $kiranaos$
-DECLARE item record; counted bigint;
-BEGIN
-  FOR item IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename LOOP
-    EXECUTE format('SELECT count(*) FROM public.%I', item.tablename) INTO counted;
-    INSERT INTO kiranaos_dr_counts(table_name, row_count) VALUES (item.tablename, counted);
-  END LOOP;
-END
-$kiranaos$;
-SELECT COALESCE(jsonb_object_agg(table_name, row_count ORDER BY table_name), '{}'::jsonb)::text
-FROM kiranaos_dr_counts;`;
-
-function exactPublicTableCounts(databaseUrl, label) {
-  const result = run("psql", [databaseUrl, "-v", "ON_ERROR_STOP=1", "-qAt", "-c", TABLE_COUNTS_SQL], {
-    id: `${label}-table-counts`,
-    label: `Capture exact ${label} public-table row counts`,
-    capture: true,
-  });
-  const candidates = String(result.stdout || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const jsonLine = candidates.findLast((line) => line.startsWith("{") && line.endsWith("}"));
-  if (!jsonLine) throw new Error(`Could not read ${label} table-count manifest`);
-  const counts = JSON.parse(jsonLine);
-  if (!Object.keys(counts).length) throw new Error(`${label} database has no public tables`);
-  return counts;
-}
-
-function compareTableCounts(sourceCounts, restoredCounts) {
-  const sourceTables = Object.keys(sourceCounts).sort();
-  const restoredTables = Object.keys(restoredCounts).sort();
-  const missing = sourceTables.filter((table) => !(table in restoredCounts));
-  const unexpected = restoredTables.filter((table) => !(table in sourceCounts));
-  const rowCountMismatches = sourceTables
-    .filter((table) => table in restoredCounts && Number(sourceCounts[table]) !== Number(restoredCounts[table]))
-    .map((table) => ({ table, source: Number(sourceCounts[table]), restored: Number(restoredCounts[table]) }));
-  if (missing.length || unexpected.length || rowCountMismatches.length) {
-    const error = new Error("Restore fidelity failed: table inventory or exact row counts differ from the source snapshot");
-    error.code = "RESTORE_FIDELITY_MISMATCH";
-    error.details = { missing, unexpected, rowCountMismatches };
-    throw error;
-  }
-  return {
-    tableCount: sourceTables.length,
-    totalRows: sourceTables.reduce((sum, table) => sum + Number(sourceCounts[table] || 0), 0),
-    migrationRows: Number(sourceCounts._prisma_migrations || 0),
-    exactMatch: true,
-  };
 }
 
 function readGitValue(args) {
@@ -203,8 +124,10 @@ let restoreCliUrl = null;
 let backupFile = providedBackupFile ? path.resolve(providedBackupFile) : null;
 let generatedBackup = false;
 let backupEvidence = null;
-let sourceCounts = null;
-let restoredCounts = null;
+let sourceManifest = null;
+let restoredManifest = null;
+let sourceSnapshot = null;
+let restoredSnapshot = null;
 let fidelity = null;
 let failure = null;
 let cleanup = { generatedBackupRemoved: false };
@@ -231,13 +154,14 @@ function writeReport() {
     restore: parsedRestore ? databaseIdentity(parsedRestore, restoreUrl) : null,
     backup: backupEvidence,
     fidelity,
-    sourceTableCounts: sourceCounts,
-    restoredTableCounts: restoredCounts,
+    sourceManifest,
+    restoredManifest,
     stages,
     cleanup,
     failure,
     limitations: [
-      "This proves logical backup and exact-row-count restoration on an isolated PostgreSQL runtime.",
+      "This proves logical backup and public-table row counts and content hashes from a shared PostgreSQL transaction snapshot, including non-empty business records.",
+      "Sequence values, roles, permissions, indexes and non-public schemas are not independently compared by the content manifest.",
       "It does not prove cloud object-storage durability, cross-region recovery, recovery-time objectives under production load, or operator incident response.",
     ],
   };
@@ -261,6 +185,11 @@ try {
   ({ source: parsedSource, restore: parsedRestore } = assertSafeRestoreTarget({ sourceUrl, restoreUrl, allowFlag: allowRestore }));
   sourceCliUrl = postgresCliUrl(sourceUrl);
   restoreCliUrl = postgresCliUrl(restoreUrl);
+  for (const url of [sourceUrl, restoreUrl]) {
+    if ((new URL(url).searchParams.get("schema") || "public") !== "public") {
+      throw new Error("This drill only certifies the public application schema");
+    }
+  }
   for (const command of ["pg_dump", "pg_restore", "psql"]) {
     if (!commandExists(command)) throw new Error(`${command} was not found. Install PostgreSQL client tools or set PG_BIN_DIR.`);
   }
@@ -275,18 +204,36 @@ try {
     time: new Date().toISOString(),
   }, null, 2));
 
-  const existingBackupFiles = new Set(backupFiles(backupDir).map((item) => item.file));
   if (createBackup) {
+    const manifestStarted = Date.now();
+    sourceSnapshot = await openPostgresSnapshot(sourceCliUrl);
+    sourceManifest = sourceSnapshot.manifest;
+    compareRestoreManifests(sourceManifest, sourceManifest);
+    stages.push({ id: "source-snapshot", label: "Capture non-empty source content from an exported snapshot", status: "passed", durationMs: Date.now() - manifestStarted });
+    const filename = `kiranaos-dr-${crypto.randomUUID()}.dump`;
+    backupFile = path.join(backupDir, filename);
     run("node", ["scripts/postgres-backup-create.js"], {
       id: "create-backup",
       label: "Create fresh PostgreSQL logical backup",
-      env: { BACKUP_FORMAT: "custom", BACKUP_DIR: backupDir },
+      env: {
+        BACKUP_FORMAT: "custom", BACKUP_DIR: backupDir, BACKUP_FILENAME: filename,
+        BACKUP_SNAPSHOT_ID: sourceSnapshot.snapshotId, BACKUP_DRY_RUN: "false",
+        DATABASE_BACKUP_DISCARD_LOCAL: "false",
+      },
     });
-    backupFile = latestNewBackupFile(backupDir, existingBackupFiles);
     generatedBackup = true;
+    await sourceSnapshot.close();
+    sourceSnapshot = null;
+  } else {
+    if (!process.env.BACKUP_MANIFEST_FILE) throw new Error("An existing BACKUP_FILE requires its trusted BACKUP_MANIFEST_FILE from the same snapshot");
+    const saved = JSON.parse(fs.readFileSync(process.env.BACKUP_MANIFEST_FILE, "utf8"));
+    sourceManifest = validateManifest(saved.sourceManifest);
+    if (saved.backup?.sha256 !== sha256File(backupFile)) throw new Error("Backup checksum does not match the trusted snapshot manifest");
+    compareRestoreManifests(sourceManifest, sourceManifest);
   }
 
   if (!backupFile || !fs.existsSync(backupFile)) throw new Error("No new backup file available for restore drill");
+  if (!/\.(dump|sql)$/.test(backupFile)) throw new Error("Restore proof supports only .dump or .sql backups");
   const backupStat = fs.statSync(backupFile);
   if (backupStat.size <= 0) throw new Error("Backup file is empty");
   backupEvidence = {
@@ -298,15 +245,13 @@ try {
     retainedAfterProof: generatedBackup ? keepGeneratedBackup : true,
   };
 
-  sourceCounts = exactPublicTableCounts(sourceCliUrl, "source");
-
-  run("psql", [restoreCliUrl, "-v", "ON_ERROR_STOP=1", "-c", "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"], {
+  run("psql", [restoreCliUrl, "-X", "--no-password", "-v", "ON_ERROR_STOP=1", "-c", "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;"], {
     id: "reset-restore-schema",
     label: "Reset restore-test schema",
   });
 
   if (backupFile.endsWith(".sql")) {
-    run("psql", [restoreCliUrl, "-v", "ON_ERROR_STOP=1", "-f", backupFile], {
+    run("psql", [restoreCliUrl, "-X", "--no-password", "-v", "ON_ERROR_STOP=1", "-f", backupFile], {
       id: "restore-backup",
       label: "Restore plain SQL backup into restore-test database",
     });
@@ -317,21 +262,22 @@ try {
     });
   }
 
-  restoredCounts = exactPublicTableCounts(restoreCliUrl, "restored");
-  fidelity = compareTableCounts(sourceCounts, restoredCounts);
+  restoredSnapshot = await openPostgresSnapshot(restoreCliUrl);
+  restoredManifest = restoredSnapshot.manifest;
+  fidelity = compareRestoreManifests(sourceManifest, restoredManifest);
+  await restoredSnapshot.close();
+  restoredSnapshot = null;
   stages.push({
     id: "exact-restore-fidelity",
-    label: "Compare exact source and restored table inventory and row counts",
+    label: "Compare exact source and restored table inventory, row counts and content hashes",
     status: "passed",
     exitCode: 0,
     durationMs: 0,
   });
-  if (fidelity.migrationRows <= 0) throw new Error("Restore verification failed: Prisma migration ledger is empty");
-
-  run("npm", ["run", "money:paise:reconcile"], {
+  run("npm", ["run", "money:paise:reconcile", "--", "--native"], {
     id: "money-paise-reconciliation",
     label: "Run money paise reconciliation against restored DB",
-    env: { DATABASE_URL: restoreUrl, TEST_DATABASE_URL: restoreUrl },
+    env: { DATABASE_URL: restoreUrl, TEST_DATABASE_URL: restoreUrl, DIRECT_DATABASE_URL: restoreUrl, ALLOW_MONEY_PAISE_BACKFILL: "false" },
   });
 
   if (backendSourceFingerprint() !== backendSourceFingerprintAtStart) {
@@ -349,6 +295,8 @@ try {
   };
   process.exitCode = 1;
 } finally {
+  await sourceSnapshot?.close();
+  await restoredSnapshot?.close();
   if (generatedBackup && !keepGeneratedBackup && backupFile && fs.existsSync(backupFile)) {
     fs.rmSync(backupFile, { force: true });
     cleanup = { generatedBackupRemoved: !fs.existsSync(backupFile) };

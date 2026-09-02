@@ -82,7 +82,7 @@ import { cn } from "@/lib/utils";
 import { validateGstin } from "@/lib/gstin";
 import { escapeHtml } from "@/lib/escape-html";
 import { apiRequest, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
-import { cacheCustomers, mergeCustomers } from "@/features/core/customers/queries";
+import { cacheCustomers } from "@/features/core/customers/queries";
 import { listCustomers as listCustomersFromServer } from "@/features/core/customers/api";
 import {
   findDuplicateCustomerWarnings,
@@ -171,13 +171,8 @@ function useCustomersLedgerList() {
     queryFn: async () => {
       if (!isBrowserOnline()) return null;
       try {
-        const [fresh, localRows] = await Promise.all([
-          listCustomersFromServer({ limit: 1_000 }),
-          offlineDB.getAll<CustomerWithLedger>("customers").catch(() => []),
-        ]);
-        const merged = mergeCustomers(fresh, localRows);
-        await cacheCustomers(merged);
-        return merged;
+        const fresh = await listCustomersFromServer({ limit: 1_000 });
+        return await cacheCustomers(fresh);
       } catch (error) {
         if (isRecoverableNetworkError(error)) return null;
         throw error;

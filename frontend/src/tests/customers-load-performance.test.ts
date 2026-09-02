@@ -41,7 +41,7 @@ describe("Customers/Udhar first-load performance contracts", () => {
 
     expect(hook).toContain('queryKey: ["customers-ledger-server-refresh"]');
     expect(hook).toContain("listCustomersFromServer({ limit: 1_000 })");
-    expect(hook).toContain("await cacheCustomers(merged)");
+    expect(hook).toContain("await cacheCustomers(fresh)");
     expect(hook.indexOf("const localQuery = useQuery")).toBeLessThan(hook.indexOf("const serverCustomersQuery = useQuery"));
   });
 

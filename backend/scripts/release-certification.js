@@ -491,9 +491,11 @@ runStep({
 runStep({
   id: "disaster-recovery-proof",
   label: "PostgreSQL backup and isolated restore drill",
-  args: ["run", "proof:dr"],
-  requiredFor: ["strict"],
-  configured: hasRestore,
+  // CI proves populated synthetic tenants against the migrated test database.
+  // Strict release mode verifies the operator's source without seeding it.
+  args: ["run", mode === "ci" ? "test:restore-runtime" : "proof:dr"],
+  requiredFor: ["ci", "strict"],
+  configured: hasRestore && (mode !== "ci" || hasPostgres),
   blockedReason: "set RESTORE_TEST_DATABASE_URL and ALLOW_RESTORE_TEST_DB=true",
 });
 // The image build is the most expensive step in a certification run. On a

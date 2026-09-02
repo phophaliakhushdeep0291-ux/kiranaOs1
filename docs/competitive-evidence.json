@@ -432,17 +432,17 @@
       "weight": 15,
       "status": "external_blocked",
       "proofKind": "external_runtime",
-      "summary": "Docker image, isolated PostgreSQL restore drill and approved rollback metadata remain unproved externally.",
+      "summary": "A 2026-09-02 local PostgreSQL 18.3 drill now proves populated two-tenant restoration: 143 public tables and 168 rows matched by count and content hash, including 131 migrations. Five live cases cover snapshot consistency during source writes, one-paise same-count corruption rejection, checksum rejection before resetting the target, and read-only monetary verification. Docker image, cloud/cross-region recovery, production-scale RTO/RPO and approved rollback metadata remain unproved externally; the combined production claim remains blocked.",
       "competitorEvidence": [
         { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/retail/features/", "claim": "Business continuity, cloud/local backup and recovery are production benchmarks." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/scripts/disaster-recovery-proof.js", "backend/Dockerfile", "backend/scripts/release-gate.js"],
-        "testCommands": ["cd backend && npm run proof:dr", "cd backend && npm run docker:build"],
-        "externalProofRequirements": ["Docker engine", "Isolated restore target", "Release approval and rollback image metadata"],
-        "runtimeProof": { "status": "missing", "artifact": null }
+        "sourcePaths": ["backend/scripts/disaster-recovery-proof.js", "backend/scripts/restore-fidelity.js", "backend/Dockerfile", "backend/scripts/release-gate.js"],
+        "testCommands": ["cd backend && npm run test:restore-runtime", "cd backend && npm run proof:dr", "cd backend && npm run docker:build"],
+        "externalProofRequirements": ["Docker engine", "Cloud/cross-region restore and production-scale RTO/RPO", "Release approval and rollback image metadata"],
+        "runtimeProof": { "status": "local-restore-only", "artifact": "docs/evidence/postgres-restore-fidelity-2026-09-02.json" }
       },
-      "lastVerifiedAt": "2026-08-08"
+      "lastVerifiedAt": "2026-09-02"
     },
     {
       "id": "automated_ui_quality",
