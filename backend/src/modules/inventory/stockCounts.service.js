@@ -4,6 +4,7 @@ import { round2 } from "../../utils/money.js";
 import { getLocationQuantity, resolveOperationalLocation, setLocationInventory } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { stockLedgerProvenance } from "./stock-ledger-provenance.js";
+import { reconcileInventoryLotsForCorrection } from "../inventory-lots/inventoryLots.service.js";
 
 const includeDetail = { location: true, lines: { orderBy: { productName: "asc" } } };
 
@@ -152,10 +153,24 @@ export async function updateStockCountLines(shopId, locationId, sessionId, data,
     if (!session) throw new AppError("Stock count not found", 404, "STOCK_COUNT_NOT_FOUND");
     if (session.status !== "counting") throw new AppError("Only an active count can be edited", 409, "STOCK_COUNT_NOT_EDITABLE");
     const existing = new Map(session.lines.map((line) => [line.productId, line]));
+    const products = await tx.product.findMany({
+      where: { shopId, id: { in: [...uniqueLines.keys()] }, deletedAt: null },
+      select: { id: true, name: true, batchTrackingEnabled: true },
+    });
+    const productById = new Map(products.map((product) => [product.id, product]));
     for (const [productId, input] of uniqueLines) {
       const line = existing.get(productId);
       if (!line) throw new AppError("A submitted product is not part of this count", 422, "STOCK_COUNT_LINE_INVALID");
       const counted = round2(input.countedBaseQty);
+      const product = productById.get(productId);
+      if (!product) throw new AppError("A submitted product is no longer available", 409, "STOCK_COUNT_PRODUCT_UNAVAILABLE");
+      if (product.batchTrackingEnabled && counted > Number(line.expectedBaseQty) + 0.000001) {
+        throw new AppError(
+          `${product.name} is batch tracked. Receive the ${round2(counted - Number(line.expectedBaseQty))} extra units through Stock In with their batch number and expiry, then restart this count.`,
+          422,
+          "BATCH_STOCK_COUNT_INCREASE_REQUIRES_RECEIPT",
+        );
+      }
       await tx.stockCountLine.update({
         where: { id: line.id },
         data: {
@@ -223,10 +238,18 @@ export async function applyStockCount(shopId, locationId, sessionId, actor = {})
     const products = await tx.product.findMany({ where: { shopId, id: { in: productIds }, deletedAt: null } });
     const productById = new Map(products.map((product) => [product.id, product]));
     let movementCount = 0;
+    const batchReconciliations = [];
     for (const line of session.lines) {
       const product = productById.get(line.productId);
       if (!product) throw new AppError(`Product ${line.productName} is no longer available`, 409, "STOCK_COUNT_PRODUCT_UNAVAILABLE");
       const result = await setLocationInventory(tx, { shopId, location, product, newStockBaseQty: line.countedBaseQty });
+      const lotAllocations = await reconcileInventoryLotsForCorrection(tx, {
+        shopId,
+        locationId: location.id,
+        product,
+        differenceBaseQty: result.difference,
+      });
+      if (lotAllocations.length) batchReconciliations.push({ productId: product.id, lotAllocations });
       if (result.difference !== 0) {
         await tx.stockLedger.create({ data: {
           shopId,
@@ -255,7 +278,7 @@ export async function applyStockCount(shopId, locationId, sessionId, actor = {})
       entityId: sessionId,
       before: { status: "review" },
       after: { status: "applied" },
-      metadata: { ...summary, locationId: location.id, movementCount, note: actor.note ?? null },
+      metadata: { ...summary, locationId: location.id, movementCount, batchReconciliations, note: actor.note ?? null },
     }, tx);
     return updated;
   }));

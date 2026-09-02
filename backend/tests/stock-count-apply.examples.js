@@ -100,6 +100,7 @@ after(async () => {
     await db.auditLog.deleteMany({ where: { shopId: shop.id } });
     await db.stockCountSession.deleteMany({ where: { shopId: shop.id } });
     await db.stockLedger.deleteMany({ where: { shopId: shop.id } });
+    await db.inventoryLot.deleteMany({ where: { shopId: shop.id } });
     await db.product.deleteMany({ where: { shopId: shop.id } });
     await db.storeLocation.deleteMany({ where: { shopId: shop.id } });
     await db.user.deleteMany({ where: { shopId: shop.id } });
@@ -168,6 +169,44 @@ test("a multi-line count corrects each product to its own counted quantity", asy
   // What the review screen totals up before the owner accepts it.
   assert.equal(applied.summary.varianceLines, 2);
   assert.equal(applied.summary.netVarianceBaseQty, 15, "-60 + 75 + 0");
+});
+
+test("a lower batch count reconciles exact FEFO lots in the same apply", async () => {
+  const medicine = await makeProduct("Counted Medicine", 10);
+  await db.product.update({ where: { id: medicine.id }, data: { batchTrackingEnabled: true } });
+  await db.inventoryLot.createMany({ data: [
+    { shopId: shop.id, locationId: location.id, productId: medicine.id, batchNumber: "EARLY", expiresOn: new Date("2030-01-01T00:00:00.000Z"), receivedBaseQty: 4, availableBaseQty: 4, costPerRateUnit: 40 },
+    { shopId: shop.id, locationId: location.id, productId: medicine.id, batchNumber: "LATE", expiresOn: new Date("2031-01-01T00:00:00.000Z"), receivedBaseQty: 6, availableBaseQty: 6, costPerRateUnit: 40 },
+  ] });
+
+  const session = await countedSession("Batch shelf count", [{ product: medicine, counted: 7, reason: "Three units missing" }]);
+  await applyStockCount(shop.id, location.id, session.id, { userId: ownerUser.id, note: "Owner verified shelf" });
+
+  assert.equal(await stockOf(medicine), 7);
+  const lots = await db.inventoryLot.findMany({ where: { productId: medicine.id }, orderBy: { expiresOn: "asc" } });
+  assert.deepEqual(lots.map((lot) => [lot.batchNumber, lot.availableBaseQty, lot.status]), [["EARLY", 1, "active"], ["LATE", 6, "active"]]);
+  const audit = await db.auditLog.findFirstOrThrow({ where: { shopId: shop.id, entityId: session.id, action: "STOCK_COUNT_APPLIED" } });
+  assert.match(audit.metadataJson ?? "", /EARLY/, "the trusted audit retains the exact batch allocation");
+});
+
+test("a higher batch count is stopped while entering it, before totals can drift", async () => {
+  const medicine = await makeProduct("Found Batch Medicine", 5);
+  await db.product.update({ where: { id: medicine.id }, data: { batchTrackingEnabled: true } });
+  const session = await createStockCount(shop.id, location.id, {
+    name: "Found batch count",
+    blindCount: false,
+    productIds: [medicine.id],
+  }, { userId: counterUser.id });
+
+  await refuses(
+    updateStockCountLines(shop.id, location.id, session.id, { lines: [{ productId: medicine.id, countedBaseQty: 7 }] }, { userId: counterUser.id }),
+    "BATCH_STOCK_COUNT_INCREASE_REQUIRES_RECEIPT",
+    422,
+    "a batch count that would invent untraceable stock",
+  );
+  assert.equal(await stockOf(medicine), 5);
+  assert.equal((await db.stockCountLine.findFirstOrThrow({ where: { sessionId: session.id } })).countedBaseQty, null);
+  await cancelStockCount(shop.id, location.id, session.id, { userId: ownerUser.id });
 });
 
 test("a count still being counted cannot be applied", async () => {
