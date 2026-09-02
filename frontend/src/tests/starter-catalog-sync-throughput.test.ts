@@ -55,12 +55,12 @@ describe("a batch is sized against what the server actually accepts", () => {
   });
 
   it("would carry the whole catalog load in a handful of requests", () => {
-    // 560 products + one audit row each + one summary per commit batch.
-    const auditRowsPerProduct = 1;
+    // A create-only load queues one operation per product plus one completion
+    // summary per commit batch. It used to queue an audit row per product too,
+    // which made a "560 item" catalog 1,134 rows.
     const commitBatches = Math.ceil(KIRANA_STARTER_CATALOG_COUNT / 40);
-    const queued = KIRANA_STARTER_CATALOG_COUNT * (1 + auditRowsPerProduct) + commitBatches;
-    expect(queued).toBeGreaterThan(1_000);
-    expect(Math.ceil(queued / SYNC_BATCH_SIZE)).toBeLessThanOrEqual(6);
+    const queued = KIRANA_STARTER_CATALOG_COUNT + commitBatches;
+    expect(Math.ceil(queued / SYNC_BATCH_SIZE)).toBeLessThanOrEqual(3);
   });
 });
 
@@ -207,5 +207,50 @@ describe("the list caches are rebuilt once, not once per batch", () => {
     expect(rowsReadBefore).toBeGreaterThan(4_000);
     expect(rowsReadBefore / rowsReadAfter).toBeGreaterThan(7);
     expect(clonesBefore - clonesAfter).toBeGreaterThan(7_000);
+  });
+});
+
+describe("a bulk create does not audit every row twice over", () => {
+  const actions = readFileSync("src/features/core/products/local-actions.ts", "utf8");
+
+  it("writes a per-row audit for updates, where there is a before and after", () => {
+    expect(actions).toContain('if (operation.action === "update") {');
+    expect(actions).toContain('action: "product_import_updated"');
+    expect(actions).toContain("oldValue: existing ?? null,");
+  });
+
+  it("no longer writes one for creates, where old value is null by definition", () => {
+    // The product row already records who created it and when, so the audit row
+    // was a copy. At 560 products it was half of everything written and synced.
+    expect(actions).not.toContain('"product_import_created"');
+  });
+
+  it("keeps the completion summary, and makes it carry the approval", () => {
+    // With no per-row audit behind a create-only import this is the only row
+    // that records the import was approved rather than silent.
+    expect(actions).toContain('action: "product_import_completed"');
+    expect(actions).toContain("ownerPinProvided: Boolean(approval?.ownerPin),");
+  });
+
+  it("still audits a price below minimum, on creates as well as updates", () => {
+    // Unconditional and separate from the per-row import audit: a row that
+    // undercuts the floor is a money decision whichever way it arrived.
+    expect(actions).toContain("const priceAudit = buildPriceBelowMinimumAudit(product, existing, validated.ownerPin, validated.ownerPinReason);");
+  });
+
+  it("halves what a catalog load writes and sends", () => {
+    const items = KIRANA_STARTER_CATALOG_COUNT;
+    const batches = Math.ceil(items / 40);
+
+    const auditsBefore = items + batches;
+    const auditsAfter = batches;
+    const outboxBefore = items + auditsBefore;
+    const outboxAfter = items + auditsAfter;
+
+    expect(outboxBefore).toBe(1_134);
+    expect(outboxAfter).toBe(574);
+    // Local rows: products + audit logs + outbox.
+    expect(items + auditsBefore + outboxBefore).toBe(2_268);
+    expect(items + auditsAfter + outboxAfter).toBeLessThan(1_200);
   });
 });

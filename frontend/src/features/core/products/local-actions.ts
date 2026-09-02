@@ -649,18 +649,34 @@ export async function importProductsLocalFirst(
       : touchLocalEntity(toProduct(validated, existing!.id, existing), "pending_sync");
     products.push(product);
 
-    const auditLog = buildAuditLogRow({
-      action: operation.action === "create" ? "product_import_created" : "product_import_updated",
-      entityType: "product",
-      entityId: product.id,
-      entityLabel: product.name,
-      oldValue: existing ?? null,
-      newValue: product,
-      reason: `Product migration from ${metadata.fileName}, row ${operation.rowNumber}`,
-      ownerPinProvided: Boolean(validated.ownerPin),
-      summary: `${operation.action === "create" ? "Created" : "Updated"} ${product.name} from product migration`,
-    });
-    auditLogs.push(auditLog);
+    /*
+     * Updates get a per-row audit; creates do not.
+     *
+     * On an update the row is the whole point — an import that moves a selling
+     * price has to record the before and the after, and a summary count cannot
+     * reconstruct that. On a create it records nothing the product does not
+     * already carry: `oldValue` is null by definition, `newValue` is the product,
+     * and the product row itself holds who created it and when.
+     *
+     * One product at a time that redundancy is free. At 560 it was half of
+     * everything written and half of everything synced — 574 audit rows plus 574
+     * audit outbox operations, for a catalog of 560 items. The completion summary
+     * below carries what is actually load-bearing: who approved it, which file,
+     * how many rows, and when.
+     */
+    if (operation.action === "update") {
+      auditLogs.push(buildAuditLogRow({
+        action: "product_import_updated",
+        entityType: "product",
+        entityId: product.id,
+        entityLabel: product.name,
+        oldValue: existing ?? null,
+        newValue: product,
+        reason: `Product migration from ${metadata.fileName}, row ${operation.rowNumber}`,
+        ownerPinProvided: Boolean(validated.ownerPin),
+        summary: `Updated ${product.name} from product migration`,
+      }));
+    }
 
     const priceAudit = buildPriceBelowMinimumAudit(product, existing, validated.ownerPin, validated.ownerPinReason);
     if (priceAudit) auditLogs.push(priceAudit);
@@ -721,6 +737,9 @@ export async function importProductsLocalFirst(
     entityLabel: metadata.fileName,
     newValue: session,
     reason: `Imported ${session.createdRows} new and ${session.updatedRows} existing products`,
+    // Now load-bearing. With no per-row audit behind a create-only import, this
+    // is the only row that records the import was approved rather than silent.
+    ownerPinProvided: Boolean(approval?.ownerPin),
     summary: `Product migration completed from ${metadata.fileName}`,
   });
   auditLogs.push(summaryAudit);
