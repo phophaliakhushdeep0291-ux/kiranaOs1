@@ -1,5 +1,8 @@
 import process from "node:process";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { maskDatabaseUrl } from "./test-db-utils.js";
+import { postgresCliUrl } from "./postgres-url-safety.js";
 
 const MONEY_COLUMN_MAP = Object.freeze([
   { table: "Product", float: "costPerRateUnit", paise: "costPerRateUnitPaise" },
@@ -109,9 +112,35 @@ async function main() {
   }
 
   const write = process.argv.includes("--write") || process.env.ALLOW_MONEY_PAISE_BACKFILL === "true";
-  const prismaModule = await import("@prisma/client");
-  const { PrismaClient } = prismaModule.default ?? prismaModule;
-  const prisma = new PrismaClient();
+  const native = process.argv.includes("--native");
+  if (native && write) throw new Error("Native recovery reconciliation is strictly read-only");
+  let prisma;
+  if (native) {
+    // Recovery must not depend on whichever SQLite/PostgreSQL Prisma client a
+    // developer last generated. Native tools verify the restored database
+    // without changing the running application's client or repairing evidence.
+    const executable = process.env.PG_BIN_DIR
+      ? path.join(process.env.PG_BIN_DIR, process.platform === "win32" ? "psql.exe" : "psql") : "psql";
+    const schema = new URL(databaseUrl).searchParams.get("schema") || "public";
+    const schemaIdentifier = q(schema);
+    prisma = {
+      $queryRawUnsafe: async (sql) => {
+        const query = `BEGIN READ ONLY; SET LOCAL search_path TO ${schemaIdentifier}; SET LOCAL statement_timeout=30000; SELECT COALESCE(jsonb_agg(result), '[]'::jsonb)::text FROM (${sql.trim().replace(/;$/, "")}) result; ROLLBACK;`;
+        const result = spawnSync(executable, [postgresCliUrl(databaseUrl), "-X", "--no-password", "-qAt", "-v", "ON_ERROR_STOP=1"], {
+          input: query, encoding: "utf8", shell: false, windowsHide: true, timeout: 40000,
+        });
+        if (result.status !== 0) throw new Error("Native read-only money reconciliation query failed");
+        const line = result.stdout.split(/\r?\n/).find((value) => value.startsWith("["));
+        if (!line) throw new Error("Native money reconciliation returned no result");
+        return JSON.parse(line);
+      },
+      $disconnect: async () => {},
+    };
+  } else {
+    // From db.js, so this reads through the same client the server does.
+    const { PrismaClient } = await import("../src/db.js");
+    prisma = new PrismaClient();
+  }
   try {
     console.log(`Money paise reconciliation database: ${maskDatabaseUrl(databaseUrl)}`);
     console.log(`Mode: ${write ? "write/backfill" : "read-only"}`);

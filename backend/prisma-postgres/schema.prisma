@@ -4,6 +4,16 @@
 
 generator client {
   provider      = "prisma-client-js"
+  // Its own directory rather than the default @prisma/client.
+  //
+  // Both schemas used to generate into that one path, so running
+  // prisma:generate:postgres on a developer machine silently replaced the
+  // SQLite client the dev server needs: `npm run dev` then died at boot with
+  // "the URL must start with the protocol postgresql://", pointing at the
+  // datasource rather than at the artifact that had been overwritten.
+  //
+  // db.js chooses between the two by datasource, so both can exist at once.
+  output        = "../generated/postgres-prisma-client"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 

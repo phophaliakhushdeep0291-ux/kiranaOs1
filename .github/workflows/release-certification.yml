@@ -69,6 +69,8 @@ jobs:
       TEST_DATABASE_URL: postgresql://kiranaos:kiranaos@127.0.0.1:5432/kiranaos_ci?schema=public
       POSTGRES_TEST_DATABASE_URL: postgresql://kiranaos:kiranaos@127.0.0.1:5432/kiranaos_ci?schema=public
       ALLOW_POSTGRES_TEST_DB: "true"
+      RESTORE_TEST_DATABASE_URL: postgresql://kiranaos:kiranaos@127.0.0.1:5432/kiranaos_restore_ci?schema=public
+      ALLOW_RESTORE_TEST_DB: "true"
       FORCE_DB_TESTS: "true"
       JWT_SECRET: ci-jwt-secret-change-me-at-least-32-characters
       LICENSE_SIGNING_SECRET: ci-license-signing-secret-change-me-at-least-32-characters
@@ -143,6 +145,11 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
+
+      - name: Prepare isolated restore target
+        env:
+          PGPASSWORD: kiranaos
+        run: createdb -h 127.0.0.1 -p 5432 -U kiranaos kiranaos_restore_ci
 
       - name: Run CI release certification
         working-directory: backend

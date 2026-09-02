@@ -63,12 +63,26 @@ function filterCachedCustomers(customers: Customer[], params?: ListCustomersPara
   return filtered.slice(0, Number.isFinite(limit) && limit > 0 ? limit : filtered.length);
 }
 
-export async function cacheCustomers(customers: Customer[]) {
-  writeInstantCache(CUSTOMERS_CACHE_KEY, customers);
+/** Cache raw server rows, never a caller's pre-request snapshot of local rows. */
+export async function cacheCustomers(serverRows: Customer[]): Promise<Customer[]> {
   try {
-    await offlineDB.putMany("customers", customers);
+    const merged = await offlineDB.transaction(["customers"], async (tx) => {
+      // Sync can remap/delete a local id while a customer request is in flight.
+      // Reading the device rows inside this write transaction prevents an old
+      // pending local echo from being reinserted after its server id is known.
+      const current = await offlineDB.getAll<Customer>("customers");
+      const byId = new Map(current.map((row) => [row.id, row]));
+      const fresh = serverRows.map((row) => ({ ...byId.get(row.id), ...row }));
+      const rows = mergeCustomers(fresh, current).map(normaliseCustomerForCache);
+      await tx.putMany("customers", rows);
+      return rows;
+    });
+    writeInstantCache(CUSTOMERS_CACHE_KEY, merged);
+    return merged;
   } catch {
-    // IndexedDB cache is best effort for instant paint.
+    // A cache failure may still show the response, but must not replace the
+    // durable local data or publish a stale snapshot back into storage.
+    return mergeCustomers(serverRows, readCachedCustomers()).map(normaliseCustomerForCache);
   }
 }
 
@@ -142,12 +156,10 @@ export function useListCustomers(
         const fresh = (await customersApi.listCustomers(params)).map(normaliseCustomerForCache);
         if (params?.search) {
           const fullServerRows = await customersApi.listCustomers({ limit: 1000 });
-          void cacheCustomers(mergeCustomers(fullServerRows, localRows).map(normaliseCustomerForCache));
-          return filterCachedCustomers(mergeCustomers(fresh, localRows), params).map(normaliseCustomerForCache);
+          const current = await cacheCustomers(fullServerRows);
+          return filterCachedCustomers(mergeCustomers(fresh, current), params).map(normaliseCustomerForCache);
         }
-        const merged = filterCachedCustomers(mergeCustomers(fresh, localRows), params).map(normaliseCustomerForCache);
-        void cacheCustomers(merged);
-        return merged;
+        return filterCachedCustomers(await cacheCustomers(fresh), params);
       } catch (error) {
         if (isRecoverableNetworkError(error)) return filterCachedCustomers(localRows, params).map(normaliseCustomerForCache);
         throw error;

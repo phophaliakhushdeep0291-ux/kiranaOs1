@@ -1,0 +1,1261 @@
+{
+  "schemaVersion": 1,
+  "type": "kiranaos_disaster_recovery_proof",
+  "status": "passed",
+  "startedAt": "2026-09-02T16:54:58.885Z",
+  "completedAt": "2026-09-02T16:55:06.954Z",
+  "durationMs": 8069,
+  "repository": {
+    "commit": "618a357e373a6befe12d4717398c4ca53e30b9b7",
+    "branch": "feat/ai-agent",
+    "dirty": true,
+    "backendDirty": true,
+    "backendSourceFingerprintSha256": "4e14a5e67ac355d5d1ed738f95c7eedd686343ed3effa4efbff6074967d7513d",
+    "backendSourceStable": true
+  },
+  "source": {
+    "host": "127.0.0.1",
+    "port": "55439",
+    "database": "kiranaos_cert_test",
+    "maskedUrl": "postgresql://***@127.0.0.1:55439/kiranaos_cert_test?schema=public"
+  },
+  "restore": {
+    "host": "127.0.0.1",
+    "port": "55439",
+    "database": "kiranaos_restore_test",
+    "maskedUrl": "postgresql://***@127.0.0.1:55439/kiranaos_restore_test?schema=public"
+  },
+  "backup": {
+    "format": "custom",
+    "filename": "kiranaos-dr-bf5e1383-c56b-45da-a112-66f95b09ae6a.dump",
+    "bytes": 549291,
+    "sha256": "42e0164fcf4eda05611dca95e6776f7aef369fb2333cfe3dcdadeaac89039ef1",
+    "generatedByThisProof": true,
+    "retainedAfterProof": false
+  },
+  "fidelity": {
+    "tableCount": 143,
+    "totalRows": "168",
+    "migrationRows": "131",
+    "exactMatch": true,
+    "contentHashesMatched": true,
+    "businessWorkloadVerified": true
+  },
+  "sourceManifest": {
+    "tables": {
+      "Bill": {
+        "rows": "2",
+        "sha256": "e0a66d2c18750fac17953949e98000533615fd0773b9a471f18ef0036a6961d6"
+      },
+      "Plan": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Shop": {
+        "rows": "4",
+        "sha256": "909462e6865493795bcc05ebe5a74d9d4f25ade68b3b3724c7590625bb3cc50f"
+      },
+      "User": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Offer": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Device": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Expense": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Payment": {
+        "rows": "2",
+        "sha256": "8288aa643b6f53c83a1b3f90b86117e82e28f32e9c099804a9bba9fcf4411899"
+      },
+      "Product": {
+        "rows": "2",
+        "sha256": "10fe079dda91bb3c9f06db8723c2839ac70a14761582835c55ef2d572eafc11a"
+      },
+      "Session": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditLog": {
+        "rows": "6",
+        "sha256": "85577053a201f44f4c941e821bf06e7843aea13caed95501a7e2bbf9d1c0751c"
+      },
+      "AuditRun": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BillItem": {
+        "rows": "2",
+        "sha256": "a960c4840699dfa7016a32b6f5919d058c935d8028f334a9b3cbae11a2c2dbff"
+      },
+      "BookList": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Customer": {
+        "rows": "2",
+        "sha256": "60e741109c5916eb65ef9ea4b558e8662f12552d1e2f630cea733d7af0e9695e"
+      },
+      "GiftCard": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Supplier": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditCase": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditRule": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuthToken": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ChangeLog": {
+        "rows": "14",
+        "sha256": "91693f8986aec7e88ed8b2a36fcb74cb4366aa8c73d48542fe146aa6e10585db"
+      },
+      "TallyPost": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ErrorEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ErrorGroup": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StaffShift": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StorageBin": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TesterUnit": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TradeOrder": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AiActionLog": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditReview": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BillCounter": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "JournalLine": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PartFitment": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PricingRule": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductUnit": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ReminderLog": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockLedger": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "SyncCommand": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "UdharLedger": {
+        "rows": "2",
+        "sha256": "cb708c13a6f71be4e811196e2fd7f6bc8c6e47d272f3e2f6e22d60e927c7bc6f"
+      },
+      "AuditFinding": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BinPlacement": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BookListItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "InventoryLot": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "JournalEntry": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Prescription": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Subscription": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "SyncConflict": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ActivityEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditBaseline": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditEvidence": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BillItemAddon": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "CustomerOrder": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "DeviceCommand": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "DeviceLicense": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "KioskTerminal": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "KitchenTicket": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "LocationStock": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductionRun": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseOrder": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "RentalBooking": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockTransfer": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StoreLocation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "SyncIdMapping": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TradeDispatch": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BackupArtifact": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ChartOfAccount": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "FurnitureOrder": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "LoyaltyAccount": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "LoyaltyProgram": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "MenuAddonGroup": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseReturn": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockCountLine": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "SupportRequest": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "SupportSession": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TradeOrderItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditEvaluation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "FinancialLedger": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "MenuAddonOption": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseHistory": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseReceipt": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ReportExportJob": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "RestaurantTable": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "WebhookDelivery": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "WebhookEndpoint": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AccountingPeriod": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditCaseFinding": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditFindingRule": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ManufacturingBom": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "OfflineSyncEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PrescriptionItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductionOutput": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ReminderTemplate": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TableReservation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ActivityAggregate": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "IntegrationApiKey": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductAddonGroup": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseOrderItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "RentalBookingItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockCountSession": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockTransferItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AccountingDocument": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ComplianceDocument": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "FurnitureOrderItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "LoyaltyTransaction": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "MenuComboComponent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "OnboardingPurchase": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PartCrossReference": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PaymentTransaction": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductSellingUnit": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseReturnItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "UserLocationAccess": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "_prisma_migrations": {
+        "rows": "131",
+        "sha256": "9a651a1579fc2bad70d517de03835692e694c18bc083bc46f35896e705a12991"
+      },
+      "BankStatementImport": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "DishRecipeComponent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "FootwearSizeProfile": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "GiftCardTransaction": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseReceiptItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "RetailPaymentIntent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ShopMaintenanceLock": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ChannelSettlementRow": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "DailyClosingSnapshot": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "DeviceHealthSnapshot": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ManufacturingBomItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PaymentProviderEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PricingDecisionEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TradeOrderAllocation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BillItemLotAllocation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "FurnitureOrderPayment": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductionConsumption": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ReminderDeliveryEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ChannelSettlementEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "RestaurantGuestRequest": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AccountingDocumentEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BankReconciliationEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ChannelSettlementImport": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TransferDocumentCounter": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditEvidenceRequirement": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BankStatementTransaction": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditFindingStatusHistory": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PaymentProviderConnection": {
+        "rows": "1",
+        "sha256": "212a678093e99e64a74337ad30e959660e79a27828896490a03751a759155159"
+      },
+      "DeviceReplacementChallenge": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockTransferLotAllocation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BankReconciliationAllocation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  "restoredManifest": {
+    "tables": {
+      "Bill": {
+        "rows": "2",
+        "sha256": "e0a66d2c18750fac17953949e98000533615fd0773b9a471f18ef0036a6961d6"
+      },
+      "Plan": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Shop": {
+        "rows": "4",
+        "sha256": "909462e6865493795bcc05ebe5a74d9d4f25ade68b3b3724c7590625bb3cc50f"
+      },
+      "User": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Offer": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Device": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Expense": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Payment": {
+        "rows": "2",
+        "sha256": "8288aa643b6f53c83a1b3f90b86117e82e28f32e9c099804a9bba9fcf4411899"
+      },
+      "Product": {
+        "rows": "2",
+        "sha256": "10fe079dda91bb3c9f06db8723c2839ac70a14761582835c55ef2d572eafc11a"
+      },
+      "Session": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditLog": {
+        "rows": "6",
+        "sha256": "85577053a201f44f4c941e821bf06e7843aea13caed95501a7e2bbf9d1c0751c"
+      },
+      "AuditRun": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BillItem": {
+        "rows": "2",
+        "sha256": "a960c4840699dfa7016a32b6f5919d058c935d8028f334a9b3cbae11a2c2dbff"
+      },
+      "BookList": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Customer": {
+        "rows": "2",
+        "sha256": "60e741109c5916eb65ef9ea4b558e8662f12552d1e2f630cea733d7af0e9695e"
+      },
+      "GiftCard": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Supplier": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditCase": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditRule": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuthToken": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ChangeLog": {
+        "rows": "14",
+        "sha256": "91693f8986aec7e88ed8b2a36fcb74cb4366aa8c73d48542fe146aa6e10585db"
+      },
+      "TallyPost": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ErrorEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ErrorGroup": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StaffShift": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StorageBin": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TesterUnit": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TradeOrder": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AiActionLog": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditReview": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BillCounter": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "JournalLine": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PartFitment": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PricingRule": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductUnit": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ReminderLog": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockLedger": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "SyncCommand": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "UdharLedger": {
+        "rows": "2",
+        "sha256": "cb708c13a6f71be4e811196e2fd7f6bc8c6e47d272f3e2f6e22d60e927c7bc6f"
+      },
+      "AuditFinding": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BinPlacement": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BookListItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "InventoryLot": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "JournalEntry": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Prescription": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "Subscription": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "SyncConflict": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ActivityEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditBaseline": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditEvidence": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BillItemAddon": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "CustomerOrder": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "DeviceCommand": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "DeviceLicense": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "KioskTerminal": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "KitchenTicket": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "LocationStock": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductionRun": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseOrder": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "RentalBooking": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockTransfer": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StoreLocation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "SyncIdMapping": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TradeDispatch": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BackupArtifact": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ChartOfAccount": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "FurnitureOrder": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "LoyaltyAccount": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "LoyaltyProgram": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "MenuAddonGroup": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseReturn": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockCountLine": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "SupportRequest": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "SupportSession": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TradeOrderItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditEvaluation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "FinancialLedger": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "MenuAddonOption": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseHistory": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseReceipt": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ReportExportJob": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "RestaurantTable": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "WebhookDelivery": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "WebhookEndpoint": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AccountingPeriod": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditCaseFinding": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditFindingRule": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ManufacturingBom": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "OfflineSyncEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PrescriptionItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductionOutput": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ReminderTemplate": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TableReservation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ActivityAggregate": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "IntegrationApiKey": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductAddonGroup": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseOrderItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "RentalBookingItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockCountSession": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockTransferItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AccountingDocument": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ComplianceDocument": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "FurnitureOrderItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "LoyaltyTransaction": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "MenuComboComponent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "OnboardingPurchase": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PartCrossReference": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PaymentTransaction": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductSellingUnit": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseReturnItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "UserLocationAccess": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "_prisma_migrations": {
+        "rows": "131",
+        "sha256": "9a651a1579fc2bad70d517de03835692e694c18bc083bc46f35896e705a12991"
+      },
+      "BankStatementImport": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "DishRecipeComponent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "FootwearSizeProfile": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "GiftCardTransaction": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PurchaseReceiptItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "RetailPaymentIntent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ShopMaintenanceLock": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ChannelSettlementRow": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "DailyClosingSnapshot": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "DeviceHealthSnapshot": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ManufacturingBomItem": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PaymentProviderEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PricingDecisionEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TradeOrderAllocation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BillItemLotAllocation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "FurnitureOrderPayment": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ProductionConsumption": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ReminderDeliveryEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ChannelSettlementEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "RestaurantGuestRequest": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AccountingDocumentEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BankReconciliationEvent": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "ChannelSettlementImport": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "TransferDocumentCounter": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditEvidenceRequirement": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BankStatementTransaction": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "AuditFindingStatusHistory": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "PaymentProviderConnection": {
+        "rows": "1",
+        "sha256": "212a678093e99e64a74337ad30e959660e79a27828896490a03751a759155159"
+      },
+      "DeviceReplacementChallenge": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "StockTransferLotAllocation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "BankReconciliationAllocation": {
+        "rows": "0",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  "stages": [
+    {
+      "id": "source-snapshot",
+      "label": "Capture non-empty source content from an exported snapshot",
+      "status": "passed",
+      "durationMs": 479
+    },
+    {
+      "id": "create-backup",
+      "label": "Create fresh PostgreSQL logical backup",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 414
+    },
+    {
+      "id": "reset-restore-schema",
+      "label": "Reset restore-test schema",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 882
+    },
+    {
+      "id": "restore-backup",
+      "label": "Restore custom-format backup into restore-test database",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 1929
+    },
+    {
+      "id": "exact-restore-fidelity",
+      "label": "Compare exact source and restored table inventory, row counts and content hashes",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 0
+    },
+    {
+      "id": "money-paise-reconciliation",
+      "label": "Run money paise reconciliation against restored DB",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 3546
+    }
+  ],
+  "cleanup": {
+    "generatedBackupRemoved": true
+  },
+  "failure": null,
+  "limitations": [
+    "This proves logical backup and public-table row counts and content hashes from a shared PostgreSQL transaction snapshot, including non-empty business records.",
+    "Sequence values, roles, permissions, indexes and non-public schemas are not independently compared by the content manifest.",
+    "It does not prove cloud object-storage durability, cross-region recovery, recovery-time objectives under production load, or operator incident response."
+  ],
+  "runtimeTestEvidence": {
+    "status": "passed",
+    "cases": 5,
+    "syntheticTenants": 2,
+    "tests": [
+      "populated multi-tenant restore",
+      "concurrent source writes use exported snapshot",
+      "same-count one-paise corruption rejected",
+      "checksum rejection preserves target",
+      "fresh restore content and read-only money verification"
+    ],
+    "command": "cd backend && npm run test:restore-runtime"
+  }
+}

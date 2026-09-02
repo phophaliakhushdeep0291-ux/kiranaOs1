@@ -34,7 +34,9 @@ export function useRealtimeRefreshBridge() {
       // Never let a later low-priority sync-status event downgrade an already
       // scheduled active refresh from a local write.
       if (refetchType === "active") pendingRefetchTypeRef.current = "active";
-      clearTimer(fastTimerRef.current);
+      // Coalesce into a bounded window, not a trailing debounce: a busy outbox
+      // must not continually move the timer and starve a visible local edit.
+      if (fastTimerRef.current !== null) return;
       fastTimerRef.current = window.setTimeout(() => {
         fastTimerRef.current = null;
         const pendingRefetchType = pendingRefetchTypeRef.current;
@@ -60,19 +62,12 @@ export function useRealtimeRefreshBridge() {
       }, FULL_REFRESH_DELAY_MS);
     };
 
-    const onLocalDataChanged = (event: Event) => {
-      const detail = (event as CustomEvent<{ source?: string }>).detail;
-      if (detail?.source === "broadcast") {
-        const refetchType = shouldPassSharedThrottle("kirana.broadcastActiveQueryRefresh.lastRun", 1_200)
-          ? "active"
-          : "none";
-        scheduleRefresh(FAST_REFRESH_DELAY_MS, refetchType);
-        return;
-      }
-      if (!shouldPassSharedThrottle("kirana.localActiveQueryRefresh.lastRun", 1_200)) {
-        scheduleRefresh(FAST_REFRESH_DELAY_MS, "none");
-        return;
-      }
+    const onLocalDataChanged = () => {
+      // Every visible tab must consume committed data, including broadcasts.
+      // A shared network throttle previously downgraded the next write to
+      // passive invalidation and left the UI stale until navigation/reload.
+      // The per-tab window above still coalesces bursts; queue-only churn stays
+      // passive and scheduled cloud recovery keeps its shared throttle.
       scheduleRefresh(FAST_REFRESH_DELAY_MS, "active");
     };
     const onSyncQueueUpdated = () => scheduleRefresh();

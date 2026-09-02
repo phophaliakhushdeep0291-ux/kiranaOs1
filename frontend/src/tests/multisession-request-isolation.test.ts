@@ -28,12 +28,13 @@ describe("multi-session request isolation", () => {
 
   it("actively refetches visible queries after local writes without hammering sync status churn", () => {
     expect(realtimeBridge).toContain("scheduleRefresh(FAST_REFRESH_DELAY_MS, \"active\")");
-    expect(realtimeBridge).toContain("detail?.source === \"broadcast\"");
-    expect(realtimeBridge).toContain("kirana.localActiveQueryRefresh.lastRun");
+    expect(realtimeBridge).toContain('source: "broadcast"');
+    expect(realtimeBridge).not.toContain("kirana.localActiveQueryRefresh.lastRun");
     expect(realtimeBridge).toContain("const onSyncQueueUpdated = () => scheduleRefresh()");
     expect(realtimeBridge).toContain("pendingRefetchTypeRef");
     expect(realtimeBridge).toContain("refetchType: pendingRefetchType");
-    expect(realtimeBridge).toContain("kirana.broadcastActiveQueryRefresh.lastRun");
+    expect(realtimeBridge).not.toContain("kirana.broadcastActiveQueryRefresh.lastRun");
+    expect(realtimeBridge).toContain("kirana.activeQueryRefresh.lastRun");
   });
 
   it("bounds automatic retry loops while preserving manual retry", () => {

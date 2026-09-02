@@ -10,8 +10,14 @@ The proof checks that:
 2. The restore target is not the production database.
 3. The restore target database name looks safe, such as `kiranaos_restore_test`, `kiranaos_test`, `kiranaos_ci`, or `kiranaos_staging`.
 4. The restore-test database can be reset and restored.
-5. Restored database tables exist.
-6. Money paise shadow reconciliation still passes after restore.
+5. Every public table matches the source by exact row count and sorted SHA-256 row-content digest, including the migration ledger.
+6. The source contains real records in Shop, Product, Customer, Bill, BillItem, Payment and UdharLedger; an empty financial schema cannot pass.
+7. Money paise shadow reconciliation passes in read-only mode after restore. This does not depend on a developer's currently generated Prisma client.
+
+Fresh dumps and source manifests use the same exported PostgreSQL transaction
+snapshot. Concurrent source writes therefore do not produce false comparisons.
+Source data is never seeded by `proof:dr`; the separate `test:restore-runtime`
+command adds two synthetic tenants only to a safety-validated test database.
 
 ## Create a backup
 
@@ -70,7 +76,27 @@ BACKUP_DIR="./backups" \
 npm run proof:dr
 ```
 
-This command will reset only the restore-test database schema, restore the backup, verify tables, and run money paise reconciliation against the restored database.
+This command resets only the restore-test database's public schema, restores the
+backup, compares content and counts, and checks money without repairing it. It
+emits a timestamped JSON report and `disaster-recovery-proof-latest.json` under
+`backend/release-artifacts`. Reports contain hashes/counts, not customer rows.
+Keep reports private: even hashes of low-entropy data are not anonymization.
+
+Set `PG_BIN_DIR` when native PostgreSQL tools are not on PATH. Prisma-only URL
+parameters such as `schema` are removed for native tools; SSL settings are kept.
+Native recovery verification currently supports the public application schema.
+
+The drill removes only its own freshly generated dump unless `DR_KEEP_BACKUP=true`.
+It never deletes a supplied `BACKUP_FILE`. To rehearse an existing dump, set
+`DR_CREATE_BACKUP=false`, `BACKUP_FILE`, and `BACKUP_MANIFEST_FILE` to its trusted
+same-snapshot report. The dump checksum is checked before resetting the target.
+Keep that manifest in trusted storage; this is not a digital-signature scheme.
+
+For repeatable regression coverage use `npm run test:restore-runtime` with
+`POSTGRES_TEST_DATABASE_URL`, `ALLOW_POSTGRES_TEST_DB=true` and a distinct restore
+target. It verifies populated multi-tenant records, concurrent source writes,
+same-count one-paise tampering, checksum rejection before reset, and a fresh
+restore. CI runs this test against its disposable PostgreSQL databases.
 
 ## Strict production proof mode
 
@@ -96,7 +122,8 @@ npm run proof:ops
 The restore proof refuses to run unless:
 
 - `ALLOW_RESTORE_TEST_DB=true` is set.
-- `RESTORE_TEST_DATABASE_URL` is different from `DATABASE_URL`.
+- The restore database name differs from the source even when hostnames differ, preventing localhost/DNS alias bypasses.
+- Neither URL overrides connection identity through query parameters such as `dbname`, `hostaddr`, or `service`.
 - The restore database name contains a safe marker like `test`, `_ci`, `restore`, `drill`, or `staging`.
 - The restore database name does not contain production-looking words like `prod`, `production`, `live`, `primary`, or `main`.
 
@@ -117,3 +144,9 @@ Minimum production policy:
 Do not restore into your production database to “test backup”. Always restore into a separate throwaway database.
 
 Do not treat backup creation alone as proof. A backup that cannot be restored is not a backup.
+
+This local proof does not certify cloud durability, cross-region recovery,
+production-scale RTO/RPO or incident response. It compares public-table content,
+not sequence state, roles, permissions, indexes or non-public schemas. Hash
+aggregation is bounded by a query timeout and fails closed on resource limits;
+large production databases still need a measured restore rehearsal.

@@ -347,7 +347,4 @@ export const productsEn = {
   "products.voice.say.wholesalePrice": "Wholesale price?",
   "products.voice.say.lowStockAlert": "Alert when stock falls to?",
   "products.voice.sayReady": "Everything needed is filled. Check it and press Save.",
-  "products.voice.sayNotUnderstood": "Did not catch that. Say it again, or say skip.",
-  "products.voice.sayHint": "Say it all at once, like Tata Salt 1 kg MRP 28 cost 24 selling 26, or answer one question at a time.",
-  "products.voice.sayControls": "Say skip to pass a question, save when you are done.",
 } as const;

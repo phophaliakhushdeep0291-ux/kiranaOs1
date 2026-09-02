@@ -92,7 +92,7 @@ export function CustomerVoiceDictation({ values, onChange, open, onRequestSave }
     promptFor: (field) => t(CUSTOMER_VOICE_PROMPT_KEYS[field]),
     readyPrompt: t("customers.voice.ready"),
     readyNote: t("customers.voice.sayReady"),
-    notUnderstoodPrompt: t("customers.voice.sayNotUnderstood"),
+    notUnderstoodPrompt: t("customers.voice.notUnderstood"),
     nextField,
     applyAnswer,
     onSave: onRequestSave,
@@ -104,12 +104,12 @@ export function CustomerVoiceDictation({ values, onChange, open, onRequestSave }
       testId="customer-voice"
       labels={{
         start: t("customers.voice.start"),
-        hint: t("customers.voice.sayHint"),
+        hint: t("customers.voice.hint"),
         unsupported: t("customers.voice.unsupported"),
         listening: t("customers.voice.listening"),
         starting: t("customers.voice.starting"),
         heard: (text) => t("customers.voice.heard", { text }),
-        controls: t("customers.voice.sayControls"),
+        controls: t("customers.voice.controls"),
         stop: t("customers.voice.stop"),
         speakToggle: t("customers.voice.speakToggle"),
       }}

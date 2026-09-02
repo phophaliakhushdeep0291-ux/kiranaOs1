@@ -67,6 +67,7 @@ for (const evidence of [
   "postgres-production-proof",
   "redis-worker-runtime",
   "worker:proof",
+  "test:restore-runtime",
   "cloud-storage-proof",
   "disaster-recovery-proof",
   "docker-build",
@@ -83,6 +84,8 @@ for (const snippet of [
   "npm run release:certify:ci",
   "postgres:16-alpine",
   "redis:7-alpine",
+  "kiranaos_restore_ci",
+  'ALLOW_RESTORE_TEST_DB: "true"',
   "QUEUES_ENABLED: \"true\"",
   "actions/upload-artifact@v4",
 ]) {

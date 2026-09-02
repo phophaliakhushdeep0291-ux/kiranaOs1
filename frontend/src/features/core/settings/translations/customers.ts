@@ -477,7 +477,4 @@ export const customersEn = {
   "customers.voice.say.notes": "Anything to note about them?",
   "customers.voice.say.type": "Cash customer or khata?",
   "customers.voice.sayReady": "Everything needed is filled. Check it and press Save.",
-  "customers.voice.sayNotUnderstood": "Did not catch that. Say it again, or say skip.",
-  "customers.voice.sayHint": "Say it all at once, like Ramesh Kumar mobile 98765 43210 udhar limit 5000, or answer one question at a time.",
-  "customers.voice.sayControls": "Say skip to pass a question, save when you are done.",
 } as const;

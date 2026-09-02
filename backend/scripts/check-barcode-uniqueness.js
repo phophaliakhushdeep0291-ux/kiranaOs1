@@ -13,7 +13,7 @@
  * Exit 0 = safe to migrate. Exit 1 = duplicates listed on stdout.
  */
 import process from "node:process";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../src/db.js";
 
 // Deliberately NOT filtered by deletedAt: the index covers every row, because a
 // soft-deleted product keeps its barcode reserved so a restore from the recycle

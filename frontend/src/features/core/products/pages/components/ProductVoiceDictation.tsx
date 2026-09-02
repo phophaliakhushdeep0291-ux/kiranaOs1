@@ -76,7 +76,7 @@ export function ProductVoiceDictation({ form, open, onRequestSave }: ProductVoic
     promptFor: (field) => t(PRODUCT_VOICE_PROMPT_KEYS[field]),
     readyPrompt: t("products.voice.ready"),
     readyNote: t("products.voice.sayReady"),
-    notUnderstoodPrompt: t("products.voice.sayNotUnderstood"),
+    notUnderstoodPrompt: t("products.voice.notUnderstood"),
     nextField,
     applyAnswer,
     onSave: onRequestSave,
@@ -88,12 +88,12 @@ export function ProductVoiceDictation({ form, open, onRequestSave }: ProductVoic
       testId="product-voice"
       labels={{
         start: t("products.voice.start"),
-        hint: t("products.voice.sayHint"),
+        hint: t("products.voice.hint"),
         unsupported: t("products.voice.unsupported"),
         listening: t("products.voice.listening"),
         starting: t("products.voice.starting"),
         heard: (text) => t("products.voice.heard", { text }),
-        controls: t("products.voice.sayControls"),
+        controls: t("products.voice.controls"),
         stop: t("products.voice.stop"),
         speakToggle: t("products.voice.speakToggle"),
       }}
