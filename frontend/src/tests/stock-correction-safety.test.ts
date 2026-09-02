@@ -258,6 +258,29 @@ describe("stock adjustment transaction safety", () => {
     ]));
   });
 
+  it("refuses corrections that cannot preserve batch or per-pack identity", async () => {
+    dbState.committed.products = [{ ...productRow, batchTrackingEnabled: true }];
+    await expect(stockCorrectionLocalFirst({ productId: "product_1", quantityDelta: 5, unit: "kg", reason: "Found stock", ownerPin: "1234" }))
+      .rejects.toThrow(/Stock In.*batch number and expiry/i);
+    expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
+
+    dbState.committed.products = [{ ...productRow, packagingMode: "per_pack" }];
+    await expect(stockCorrectionLocalFirst({ productId: "product_1", quantityDelta: -2, unit: "kg", reason: "Count shortage", ownerPin: "1234" }))
+      .rejects.toThrow(/counted per packaging/i);
+    expect(tableRows("inventory_movements")).toHaveLength(0);
+    expect(tableRows("sync_outbox")).toHaveLength(0);
+  });
+
+  it("allows a downward batch correction to queue for transactional lot reconciliation", async () => {
+    dbState.committed.products = [{ ...productRow, batchTrackingEnabled: true }];
+    await stockCorrectionLocalFirst({ productId: "product_1", quantityDelta: -2, unit: "kg", reason: "Physical shortage", ownerPin: "1234" });
+
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 8 }));
+    expect(tableRows("sync_outbox")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ operation_type: "STOCK_CORRECTION", payload: expect.objectContaining({ nextStock: 8, quantityDelta: -2 }) }),
+    ]));
+  });
+
   it("failed stock transaction leaves no partial movement or product update", async () => {
     dbState.failOnTable = "local_audit_logs";
 

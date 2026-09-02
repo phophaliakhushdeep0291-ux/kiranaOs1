@@ -241,6 +241,12 @@ async function stockMovementLocalFirst(
   const nextStock = roundMoney(previousStock + validated.quantityDelta);
   assertStockMovementRules({ movementType, reason: validatedReason, ownerPin: validatedOwnerPin, product, productId, nextStock, data });
   if (!product) throw new Error("Product not found in local records");
+  if (movementType === "correction" && product.packagingMode === "per_pack") {
+    throw new Error(`${product.name} is counted per packaging. Correct each pack size instead of changing one combined total.`);
+  }
+  if (movementType === "correction" && product.batchTrackingEnabled && validated.quantityDelta > 0) {
+    throw new Error(`${product.name} is batch tracked. Add extra stock through Stock In with its batch number and expiry date.`);
+  }
   if (movementType === "purchase" && (!purchaseBillAmount || purchaseBillAmount <= 0)) {
     throw new Error("Enter purchase cost or bill amount before adding stock.");
   }

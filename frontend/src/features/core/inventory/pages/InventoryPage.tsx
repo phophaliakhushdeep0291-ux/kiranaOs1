@@ -619,9 +619,23 @@ export default function InventoryPage() {
       toast({ title: t("inventory.page.selectProduct"), variant: "destructive" });
       return;
     }
-    if (!Number.isFinite(quantity) || quantity <= 0) {
+    const invalidQuantity = form.movementType === "correction"
+      ? !Number.isFinite(quantity) || quantity === 0
+      : !Number.isFinite(quantity) || quantity <= 0;
+    if (invalidQuantity) {
       toast({ title: t("inventory.page.enterValidQuantity"), variant: "destructive" });
       return;
+    }
+    if (form.movementType === "correction" && selectedProduct?.packagingMode === "per_pack") {
+      toast({ title: t("inventory.page.packCorrectionBlocked"), description: t("inventory.page.packCorrectionBlockedHelp", { name: selectedProduct.name }), variant: "destructive" });
+      return;
+    }
+    if (form.movementType === "correction" && selectedProduct?.batchTrackingEnabled) {
+      const correctionBaseQty = inventoryQuantityToBase(selectedProduct, quantity, form.unit);
+      if (correctionBaseQty > 0) {
+        toast({ title: t("inventory.page.batchCorrectionIncreaseBlocked"), description: t("inventory.page.batchCorrectionIncreaseBlockedHelp", { name: selectedProduct.name }), variant: "destructive" });
+        return;
+      }
     }
     if (form.movementType === "purchase") {
       if (purchaseBillAmount <= 0) {
@@ -1130,7 +1144,7 @@ export default function InventoryPage() {
               <div><Label>{t("inventory.page.productRequired")}</Label><Select value={form.productId} onValueChange={(value) => { const product = (products.data ?? []).find((row: Product) => row.id === value); setForm((current) => ({ ...current, productId: value, unit: product ? inventoryMovementUnit(product) : current.unit, costPrice: String(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? current.costPrice), minPrice: String(product?.minimumSellingPrice ?? product?.minPricePerRateUnit ?? current.minPrice), sellingPrice: String(product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? current.sellingPrice) })); }}><SelectTrigger aria-label={t("inventory.page.productRequired")} className="mt-1"><SelectValue placeholder={t("inventory.page.selectProduct")} /></SelectTrigger><SelectContent>{(products.data ?? []).map((product: Product) => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}</SelectContent></Select></div>
             </div>
             <div className="grid md:grid-cols-3 gap-3">
-              <div><Label>{form.movementType === "correction" ? t("inventory.page.newStockDelta") : t("inventory.col.quantity")}</Label><Input type="number" step="0.01" className="mt-1" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))} /></div>
+              <div><Label>{form.movementType === "correction" ? t("inventory.page.newStockDelta") : t("inventory.col.quantity")}</Label><Input type="number" step="0.01" className="mt-1" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))} />{form.movementType === "correction" ? <p className="mt-1 text-xs text-muted-foreground">{t("inventory.page.correctionDeltaHelp")}</p> : null}</div>
               <div><Label>{t("inventory.col.unit")}</Label><Select value={form.unit} onValueChange={(value) => setForm((current) => ({ ...current, unit: value }))}><SelectTrigger aria-label={t("inventory.col.unit")} className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{movementUnitOptions.map((unit) => <SelectItem key={unit.value} value={unit.value}>{unit.label}</SelectItem>)}</SelectContent></Select>{unitMismatchWarning ? <p className="mt-1 text-xs text-orange-700">{unitMismatchWarning}</p> : null}</div>
               <div><Label>{t("inventory.page.totalBillAmount")}</Label><Input type="number" step="0.01" className="mt-1" value={form.billAmount} onChange={(event) => setForm((current) => ({ ...current, billAmount: event.target.value }))} disabled={form.movementType !== "purchase"} /></div>
             </div>

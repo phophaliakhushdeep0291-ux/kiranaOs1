@@ -6,7 +6,7 @@ const source = readFileSync(join(process.cwd(), "src/features/core/inventory/pag
 
 describe("Stock Out write-off safety", () => {
   it("treats every non-counter removal as an owner-approved damage movement", () => {
-    expect(source).toContain("const isWriteOff = reason !== OUT_REASONS[0]");
+    expect(source).toContain("const isWriteOff = reason !== OUT_REASONS[0].value");
     expect(source).toContain("setOwnerPinOpen(true)");
     expect(source).toContain("recordDamage.mutate(");
     expect(source).toContain("ownerPin }");
