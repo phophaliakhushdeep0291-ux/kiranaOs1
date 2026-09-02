@@ -137,8 +137,8 @@ async function main() {
       $disconnect: async () => {},
     };
   } else {
-    const prismaModule = await import("@prisma/client");
-    const { PrismaClient } = prismaModule.default ?? prismaModule;
+    // From db.js, so this reads through the same client the server does.
+    const { PrismaClient } = await import("../src/db.js");
     prisma = new PrismaClient();
   }
   try {

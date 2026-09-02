@@ -17,10 +17,23 @@ if (testProcess && sharedDevelopmentDatabase && process.env.ALLOW_SHARED_TEST_DA
     "Use scripts/run-db-example-tests.js or npm test so KiranaOS QA data stays isolated."
   );
 }
+// Which generated client this process talks through.
+//
 // The isolated integration client is generated from the SQLite schema. CI's
 // PostgreSQL proof intentionally reuses the integration runner, so select that
-// client only for a file: datasource; otherwise use the PostgreSQL client that
-// prisma:generate:postgres generated in @prisma/client.
+// client only for a file: datasource.
+//
+// A PostgreSQL URL takes the client prisma:generate:postgres builds, which now
+// has a directory of its own. It used to land in @prisma/client - the same
+// place the SQLite dev client lives - so the two overwrote each other, and
+// generating for PostgreSQL on a developer machine left the dev server dead at
+// boot. Anything that is neither keeps the default client, so an unset
+// DATABASE_URL behaves exactly as it did.
+const POSTGRES_CLIENT_PACKAGE = "../generated/postgres-prisma-client";
+// The scheme, read without a regex: this file is the one place a wrong answer
+// silently routes every query through a client built from another schema.
+const datasourceScheme = databaseUrl.slice(0, databaseUrl.indexOf(":")).toLowerCase();
+const postgresDatasource = datasourceScheme === "postgres" || datasourceScheme === "postgresql";
 const sqliteClientVariant = databaseUrl.startsWith("file:")
   ? String(process.env.PRISMA_CLIENT_VARIANT || "")
   : "";
@@ -29,10 +42,33 @@ const isolatedClientPackages = {
   certification: "../generated/certification-prisma-client",
 };
 const isolatedClientPackage = isolatedClientPackages[sqliteClientVariant];
-const prismaPackage = isolatedClientPackage
-  ? require(isolatedClientPackage)
-  : require("@prisma/client");
-const { PrismaClient } = prismaPackage;
+
+function loadPrismaPackage() {
+  if (isolatedClientPackage) return require(isolatedClientPackage);
+  if (!postgresDatasource) return require("@prisma/client");
+  try {
+    return require(POSTGRES_CLIENT_PACKAGE);
+  } catch (error) {
+    // Name the command that is missing. A bare module-not-found points at a
+    // path inside generated/ that means nothing to whoever is deploying.
+    if (error?.code !== "MODULE_NOT_FOUND") throw error;
+    throw new Error(
+      "DATABASE_URL is PostgreSQL but the PostgreSQL Prisma client has not been generated. " +
+      "Run npm run prisma:generate:postgres.",
+    );
+  }
+}
+
+const prismaPackage = loadPrismaPackage();
+
+/**
+ * The constructor belonging to the client this process resolved.
+ *
+ * Exported for the same reason Prisma is: the fixed @prisma/client path is now
+ * one of three possible clients, so an ops script reaching for it directly can
+ * end up querying through a different schema from the running server.
+ */
+export const { PrismaClient } = prismaPackage;
 
 /**
  * The schema metadata belonging to the client this process actually uses.

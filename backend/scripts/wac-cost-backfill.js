@@ -24,7 +24,7 @@
 // Products with no purchase rows are never touched (their cost was set manually).
 
 import process from "node:process";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../src/db.js";
 import { weightedAvgCost, moneyEquals, moneyShadows } from "../src/utils/money.js";
 
 const WRITE = process.argv.includes("--write");
