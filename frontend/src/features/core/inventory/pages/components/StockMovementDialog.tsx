@@ -8,10 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Search, X } from "lucide-react";
 import { getListProductsQueryKey, useListProducts, type Product } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
+import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { getProductEmoji } from "@/features/core/billing/pages/components/BillingSearch";
 import { isDeletedProduct, productDisplayUnit, toBaseQty } from "@/features/core/products/pages/product-pricing";
 import { activeInventorySellingUnits, findInventorySellingUnit, inventoryDisplayQuantity, inventoryStockLabel } from "@/features/core/inventory/stock-display";
-import { useRecordPurchase, useRecordSale } from "@/features/core/inventory/queries";
+import { useRecordDamage, useRecordPurchase, useRecordSale } from "@/features/core/inventory/queries";
 import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 
@@ -54,6 +55,8 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
   const [batchMrp, setBatchMrp] = useState<number | "">("");
   const [reason, setReason] = useState(OUT_REASONS[0]);
   const [note, setNote] = useState("");
+  const [ownerPinOpen, setOwnerPinOpen] = useState(false);
+  const [ownerPinError, setOwnerPinError] = useState("");
 
   const list = useMemo(() => (products.data ?? []).filter((p) => !isDeletedProduct(p)), [products.data]);
   const selectableProducts = useMemo(
@@ -79,10 +82,11 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
 
   const recordPurchase = useRecordPurchase();
   const recordSale = useRecordSale();
-  const pending = recordPurchase.isPending || recordSale.isPending;
+  const recordDamage = useRecordDamage();
+  const pending = recordPurchase.isPending || recordSale.isPending || recordDamage.isPending;
 
   function reset() {
-    setProductId(""); setUnitCode(""); setSearch(""); setQty(""); setCost(""); setSupplier(""); setBatchNumber(""); setManufacturedOn(""); setExpiresOn(""); setBatchMrp(""); setReason(OUT_REASONS[0]); setNote("");
+    setProductId(""); setUnitCode(""); setSearch(""); setQty(""); setCost(""); setSupplier(""); setBatchNumber(""); setManufacturedOn(""); setExpiresOn(""); setBatchMrp(""); setReason(OUT_REASONS[0]); setNote(""); setOwnerPinOpen(false); setOwnerPinError("");
   }
   function close() { reset(); onOpenChange(false); }
 
@@ -99,7 +103,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
     return inventoryStockLabel(p);
   }
 
-  function submit() {
+  function submit(ownerPin?: string, approvalReason?: string) {
     if (!productId || !selected) { toast({ title: t("inventory.movement.pickProduct"), variant: "destructive" }); return; }
     const quantity = Number(qty);
     if (!quantity || quantity <= 0) { toast({ title: t("inventory.movement.invalidQuantity"), variant: "destructive" }); return; }
@@ -166,6 +170,27 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
         toast({ title: t("inventory.movement.outExceedsStock"), description: t("inventory.movement.availableToast", { qty: currentStock(selected) }), variant: "destructive" });
         return;
       }
+      // Expiry, damage, theft and an unclassified write-off are financial loss,
+      // not a counter sale. Sending them through STOCK_SALE bypassed the owner
+      // gate and lost their damage value. Collect approval before the local
+      // transaction so an un-syncable write-off is never persisted.
+      const isWriteOff = reason !== OUT_REASONS[0];
+      if (isWriteOff && !ownerPin) {
+        setOwnerPinError("");
+        setOwnerPinOpen(true);
+        return;
+      }
+      if (isWriteOff) {
+        const writeOffReason = approvalReason?.trim() || note.trim() || reason;
+        recordDamage.mutate(
+          { data: { productId, quantity, enteredUnit, sellingUnitId: selectedPack?.id, reason: writeOffReason, note: writeOffReason, ownerPin } },
+          {
+            onSuccess: () => { setOwnerPinOpen(false); onDone(`Wrote off ${quantity} ${unitLabelForToast} from ${selected.name}`); },
+            onError: (error) => setOwnerPinError(error instanceof Error ? error.message : t("inventory.movement.removeFailed")),
+          },
+        );
+        return;
+      }
       recordSale.mutate(
         { data: { productId, quantity, enteredUnit, sellingUnitId: selectedPack?.id, reason, note: note.trim() || undefined } },
         { onSuccess: () => onDone(`Removed ${quantity} ${unitLabelForToast} from ${selected.name}`), onError: (e) => toast({ title: t("inventory.movement.removeFailed"), description: e instanceof Error ? e.message : t("inventory.movement.tryAgain"), variant: "destructive" }) },
@@ -176,6 +201,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
   const unitLabel = selectedPack?.name ?? (selected ? productDisplayUnit(selected) : "");
 
   return (
+    <>
     <aside
       style={{ width }}
       className={`app-slide-panel fixed right-0 top-0 z-[80] flex h-[100dvh] w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
@@ -320,7 +346,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
           <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={close}>{t("inventory.cancel")}</Button>
           <Button
             type="button"
-            onClick={submit}
+            onClick={() => submit()}
             disabled={pending}
             style={{ background: mode === "in" ? "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" : "linear-gradient(180deg,#f43f5e 0%,#e11d48 100%)" }}
             className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95"
@@ -330,5 +356,18 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
         </div>
       </div>
     </aside>
+    <OwnerPinModal
+      open={ownerPinOpen}
+      title="Approve stock write-off"
+      description={`${selected?.name ?? "This product"} will be removed as ${reason.toLowerCase()} and its cost will be recorded as inventory loss.`}
+      confirmLabel="Write off stock"
+      reasonRequired
+      reasonLabel="Write-off details"
+      loading={recordDamage.isPending}
+      error={ownerPinError}
+      onCancel={() => { if (!recordDamage.isPending) { setOwnerPinOpen(false); setOwnerPinError(""); } }}
+      onConfirm={({ ownerPin, reason: approvalReason }) => submit(ownerPin, approvalReason)}
+    />
+    </>
   );
 }
