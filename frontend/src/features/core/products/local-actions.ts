@@ -581,7 +581,16 @@ export async function importProductsLocalFirst(
   approval?: { ownerPin: string; reason?: string },
 ): Promise<ProductImportSession> {
   const startedAt = new Date().toISOString();
-  const existingProducts = await offlineDB.getAll<Product>("products");
+  /*
+   * Read the products table only when a row in this batch actually targets an
+   * existing product. It is consulted for nothing else, and reading it
+   * unconditionally made a bulk import quadratic: the starter catalog arrives as
+   * fourteen create-only batches, so this was fourteen full scans of a table that
+   * each preceding batch had just made bigger — roughly 3,600 rows read to
+   * resolve nothing.
+   */
+  const hasUpdates = operations.some((operation) => operation.action === "update");
+  const existingProducts = hasUpdates ? await offlineDB.getAll<Product>("products") : [];
   const existingById = new Map(existingProducts.map((product) => [product.id, product]));
   const seenUpdateIds = new Set<string>();
   const products: Product[] = [];
