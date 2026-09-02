@@ -11,7 +11,7 @@ import {
   setLocationInventory,
 } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
-import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
+import { consumeInventoryLotsForMovement, reconcileInventoryLotsForCorrection, recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
 import { postPurchaseHistoryLedger } from "../finance/financial-ledger.service.js";
 import { stockLedgerProvenance } from "./stock-ledger-provenance.js";
 
@@ -565,6 +565,15 @@ export async function recordDamage(shopId, data, identity = {}) {
           ? new Map([[removedSellingUnit.id, { sellingUnit: removedSellingUnit, qty: round2(quantity) }]])
           : null,
       });
+      const lotAllocations = await consumeInventoryLotsForMovement(tx, {
+        shopId,
+        locationId: location.id,
+        product,
+        quantityBaseQty: qtyInBase,
+        // Damage/expiry write-offs are allowed to consume blocked or expired
+        // physical stock; a sale is not. The exact lots remain in the audit.
+        includeBlockedOrExpired: true,
+      });
 
       const stockLedger = await tx.stockLedger.create({
         data: {
@@ -608,6 +617,7 @@ export async function recordDamage(shopId, data, identity = {}) {
           stockLedgerId: stockLedger.id,
           idempotencyKey,
           offlineSyncEventId: identity.syncEventId ?? null,
+          lotAllocations,
         },
         req: identity.req ?? null,
       }, tx);
@@ -672,6 +682,12 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
 
       const stockResult = await setLocationInventory(tx, { shopId, location, product, newStockBaseQty });
       const diff = stockResult.difference;
+      const lotAllocations = await reconcileInventoryLotsForCorrection(tx, {
+        shopId,
+        locationId: location.id,
+        product,
+        differenceBaseQty: diff,
+      });
 
       const stockLedger = await tx.stockLedger.create({
         data: {
@@ -707,6 +723,7 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
           stockLedgerId: stockLedger.id,
           idempotencyKey,
           offlineSyncEventId: identity.syncEventId ?? null,
+          lotAllocations,
         },
         req: identity.req ?? null,
       }, tx);
