@@ -1,6 +1,6 @@
 import { offlineDB, type OfflineWriteTransaction } from "@/lib/offline/db";
 import { stockAdjustmentSchema } from "@/lib/validation";
-import { createLocalId, readInstantCache, upsertCachedListItem } from "@/lib/offline/instant-cache";
+import { createLocalId, emitLocalDataChanged, readInstantCache, upsertCachedListItem, writeInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { buildOutboxOperation, type SyncOutboxOperationType } from "@/features/core/sync/outbox";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import type { InventoryItem, Product, StockMovementInput } from "@/types/api";
@@ -16,17 +16,25 @@ import {
   inventoryUnitLabel,
   productTracksStock,
 } from "@/features/core/inventory/stock-display";
-import { reconcileCachedSellableBatches } from "@/features/core/inventory/inventory-lots-api";
+import {
+  INVENTORY_LOT_CACHE_KEYS,
+  loadPersistedCachedSellableBatches,
+  projectCachedSellableBatches,
+  type SellableBatch,
+} from "@/features/core/inventory/inventory-lots-api";
 
 const PRODUCT_CACHE_KEY = "products";
 const INVENTORY_CACHE_KEY = "inventory";
 const LEDGER_CACHE_KEY = "inventory_movements";
+const INVENTORY_CACHE_DAYS = 30;
+const INVENTORY_CACHE_EXPIRES_MS = INVENTORY_CACHE_DAYS * 24 * 60 * 60 * 1000;
 
 const STOCK_ADJUSTMENT_TRANSACTION_TABLES = [
   "inventory_movements",
   "products",
   "local_audit_logs",
   "sync_outbox",
+  "settings",
 ];
 
 type StockMovementType = "purchase" | "sale" | "damage" | "correction";
@@ -198,16 +206,22 @@ function derivePurchaseBillAmount(input: {
   return roundMoney(unitCost * qtyInRateUnit);
 }
 
-async function stockMovementLocalFirst(
+async function persistStockMovementLocalFirst(
   data: StockMovementInput,
   movementType: StockMovementType,
-  options: { tx?: OfflineWriteTransaction; product?: Product; updateCache?: boolean; enqueueStockOutbox?: boolean } = {},
+  options: {
+    tx: OfflineWriteTransaction;
+    product: Product;
+    enqueueStockOutbox?: boolean;
+    cachedSellableBatches?: SellableBatch[];
+    batchCacheLoaded?: boolean;
+  },
 ) {
   data = { ...data, locationId: data.locationId ?? getActiveLocationId() ?? undefined };
   const productId = typeof data.productId === "string" ? data.productId : "";
   const quantity = readNumber(data.quantity ?? data.quantityDelta, 0);
   const enteredUnit = typeof data.enteredUnit === "string" ? data.enteredUnit : typeof data.unit === "string" ? data.unit : "piece";
-  const product = options.product ?? await getProduct(productId);
+  const product = options.product;
   const correctionQuantity = data.quantity !== undefined
     ? readNumber(data.quantity, 0)
     : readNumber(data.quantityDelta, 0);
@@ -241,7 +255,6 @@ async function stockMovementLocalFirst(
   const unitMismatchWarning = buildUnitMismatchWarning(productUnit, productDefaultUnit);
   const nextStock = roundMoney(previousStock + validated.quantityDelta);
   assertStockMovementRules({ movementType, reason: validatedReason, ownerPin: validatedOwnerPin, product, productId, nextStock, data });
-  if (!product) throw new Error("Product not found in local records");
   if (movementType === "correction" && product.packagingMode === "per_pack") {
     throw new Error(`${product.name} is counted per packaging. Correct each pack size instead of changing one combined total.`);
   }
@@ -265,6 +278,27 @@ async function stockMovementLocalFirst(
       throw new Error("Expiry date must be after manufacturing date.");
     }
   }
+
+  const locationId = data.locationId ?? "primary";
+  const batchCacheKey = product.batchTrackingEnabled
+    ? INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId)
+    : undefined;
+  const cachedSellableBatches = product.batchTrackingEnabled
+    ? options.batchCacheLoaded
+      ? options.cachedSellableBatches
+      : await loadPersistedCachedSellableBatches(productId, locationId)
+    : undefined;
+  const projectedSellableBatches = product.batchTrackingEnabled
+    ? projectCachedSellableBatches(cachedSellableBatches, {
+      productId,
+      movementType,
+      quantityBaseQty: validated.quantityDelta,
+      locationId,
+      batchNumber: data.batchNumber,
+      expiresOn: data.expiresOn,
+      batchMrp: data.batchMrp,
+    })
+    : undefined;
 
   const movementId = createLocalId(`stock_${movementType}`);
   const now = new Date().toISOString();
@@ -434,25 +468,57 @@ async function stockMovementLocalFirst(
     await tx.put("local_audit_logs", auditLog);
     await tx.enqueueOutboxOperation(auditOutbox);
     if (options.enqueueStockOutbox !== false) await tx.enqueueOutboxOperation(stockOutbox);
+    if (batchCacheKey && projectedSellableBatches !== undefined) {
+      await tx.setSetting(`cache:${batchCacheKey}`, projectedSellableBatches, Date.now() + INVENTORY_CACHE_EXPIRES_MS);
+    }
   };
-  if (options.tx) await persist(options.tx);
-  else await offlineDB.transaction(STOCK_ADJUSTMENT_TRANSACTION_TABLES, persist);
+  await persist(options.tx);
+  return {
+    success: true,
+    movement,
+    product: updatedProduct,
+    stockOutbox,
+    pendingSync: true,
+    batchCacheKey,
+    projectedSellableBatches,
+  };
+}
 
-  if (options.updateCache !== false) {
-    await reconcileCachedSellableBatches({
-      productId,
-      movementType,
-      quantityBaseQty: validated.quantityDelta,
-      locationId: data.locationId,
-      batchNumber: data.batchNumber,
-      expiresOn: data.expiresOn,
-      batchMrp: data.batchMrp,
-    }).catch(() => undefined);
-    upsertCachedListItem(LEDGER_CACHE_KEY, movement, 1000);
-    upsertCachedListItem<Product>(PRODUCT_CACHE_KEY, updatedProduct, 1000);
-    upsertCachedListItem<InventoryItem>(INVENTORY_CACHE_KEY, updatedProduct, 1000);
-  }
-  return { success: true, movement, product: updatedProduct, stockOutbox, pendingSync: true };
+function publishStockMovement(result: Awaited<ReturnType<typeof persistStockMovementLocalFirst>>) {
+  try {
+    const productId = String(result.movement.productId ?? result.movement.product_id ?? result.product.id);
+    upsertCachedListItem(LEDGER_CACHE_KEY, result.movement, 1000);
+    upsertCachedListItem<Product>(PRODUCT_CACHE_KEY, result.product, 1000);
+    upsertCachedListItem<InventoryItem>(INVENTORY_CACHE_KEY, result.product, 1000);
+    if (result.batchCacheKey && result.projectedSellableBatches !== undefined) {
+      writeInstantMemoryCache(result.batchCacheKey, result.projectedSellableBatches, INVENTORY_CACHE_DAYS);
+      emitLocalDataChanged({ type: "inventory_lot", productId, action: "cache-updated" });
+    }
+  } catch { /* Durable stock, outbox, and batch projection are already committed. */ }
+}
+
+async function stockMovementLocalFirst(data: StockMovementInput, movementType: StockMovementType) {
+  const normalizedData = { ...data, locationId: data.locationId ?? getActiveLocationId() ?? undefined };
+  const productId = String(normalizedData.productId ?? "");
+  const preliminaryProduct = await getProduct(productId);
+  if (!preliminaryProduct) throw new Error("Product not found in local records");
+  let committed: Awaited<ReturnType<typeof persistStockMovementLocalFirst>> | undefined;
+  await offlineDB.transaction(STOCK_ADJUSTMENT_TRANSACTION_TABLES, async (tx) => {
+    const currentProduct = (await offlineDB.getAll<Product>("products")).find((row) => row.id === productId) ?? preliminaryProduct;
+    const locationId = normalizedData.locationId ?? "primary";
+    const cachedSellableBatches = currentProduct.batchTrackingEnabled
+      ? await loadPersistedCachedSellableBatches(productId, locationId)
+      : undefined;
+    committed = await persistStockMovementLocalFirst(normalizedData, movementType, {
+      tx,
+      product: currentProduct,
+      cachedSellableBatches,
+      batchCacheLoaded: Boolean(currentProduct.batchTrackingEnabled),
+    });
+  });
+  if (!committed) throw new Error("Stock movement transaction did not complete");
+  publishStockMovement(committed);
+  return committed;
 }
 
 export function recordPurchaseLocalFirst(data: StockMovementInput) {
@@ -469,18 +535,38 @@ export async function recordPurchaseBatchLocalFirst(lines: StockMovementInput[])
     if (!product) throw new Error(`Product ${productId} was not found in local records`);
     products.set(productId, product);
   }
-
   const results: Awaited<ReturnType<typeof stockMovementLocalFirst>>[] = [];
   await offlineDB.transaction(STOCK_ADJUSTMENT_TRANSACTION_TABLES, async (tx) => {
+    const durableProducts = await offlineDB.getAll<Product>("products");
+    for (const productId of productIds) {
+      const current = durableProducts.find((product) => product.id === productId);
+      if (current) products.set(productId, current);
+    }
+    const batchCaches = new Map<string, SellableBatch[] | undefined>();
     for (const line of lines) {
       const productId = String(line.productId ?? "");
-      const result = await stockMovementLocalFirst(line, "purchase", {
+      if (!products.get(productId)?.batchTrackingEnabled) continue;
+      const locationId = line.locationId ?? getActiveLocationId() ?? "primary";
+      const key = INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId);
+      if (!batchCaches.has(key)) {
+        batchCaches.set(key, await loadPersistedCachedSellableBatches(productId, locationId));
+      }
+    }
+    for (const line of lines) {
+      const productId = String(line.productId ?? "");
+      const locationId = line.locationId ?? getActiveLocationId() ?? "primary";
+      const batchCacheKey = INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId);
+      const result = await persistStockMovementLocalFirst(line, "purchase", {
         tx,
-        product: products.get(productId),
-        updateCache: false,
+        product: products.get(productId)!,
         enqueueStockOutbox: false,
+        cachedSellableBatches: batchCaches.get(batchCacheKey),
+        batchCacheLoaded: batchCaches.has(batchCacheKey),
       });
       products.set(productId, result.product);
+      if (result.batchCacheKey && result.projectedSellableBatches !== undefined) {
+        batchCaches.set(result.batchCacheKey, result.projectedSellableBatches);
+      }
       results.push(result);
     }
     const batchId = createLocalId("purchase_batch");
@@ -496,21 +582,7 @@ export async function recordPurchaseBatchLocalFirst(lines: StockMovementInput[])
     }));
   });
 
-  for (const [index, result] of results.entries()) {
-    const line = lines[index];
-    await reconcileCachedSellableBatches({
-      productId: String(line.productId),
-      movementType: "purchase",
-      quantityBaseQty: Number(result.movement.quantityDelta ?? result.movement.quantity_delta ?? line.quantity ?? 0),
-      locationId: line.locationId,
-      batchNumber: line.batchNumber,
-      expiresOn: line.expiresOn,
-      batchMrp: line.batchMrp,
-    }).catch(() => undefined);
-    upsertCachedListItem(LEDGER_CACHE_KEY, result.movement, 1000);
-    upsertCachedListItem<Product>(PRODUCT_CACHE_KEY, result.product, 1000);
-    upsertCachedListItem<InventoryItem>(INVENTORY_CACHE_KEY, result.product, 1000);
-  }
+  for (const result of results) publishStockMovement(result);
   return results;
 }
 

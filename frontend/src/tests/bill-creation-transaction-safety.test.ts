@@ -19,6 +19,10 @@ function tableRows(table: string) {
 vi.mock("@/lib/offline/db", () => ({
   offlineDB: {
     getAll: vi.fn(async (table: string) => cloneRows(dbState.committed[table] ?? [])),
+    getRecentCache: vi.fn(async (key: string, fallback: unknown) => {
+      const row = (dbState.committed.settings ?? []).find((setting) => (setting as Record<string, unknown>).key === `cache:${key}`) as Record<string, unknown> | undefined;
+      return row?.value ?? fallback;
+    }),
     transaction: vi.fn((_tables: string[], callback: (tx: {
       put: (table: string, value: unknown) => Promise<void>;
       putMany: (table: string, values: unknown[]) => Promise<void>;
@@ -165,6 +169,10 @@ describe("bill creation transaction safety", () => {
     vi.mocked(readInstantCache).mockImplementation((key, fallback) => key === "inventory-lots:sellable:v1:primary:product_1"
       ? [{ id: "lot_1", batchNumber: "B-1", expiresOn: "2030-01-01", availableBaseQty: 5, mrp: 50 }]
       : fallback);
+    dbState.committed.settings = [{
+      key: "cache:inventory-lots:sellable:v1:primary:product_1",
+      value: [{ id: "lot_1", batchNumber: "B-1", expiresOn: "2030-01-01", availableBaseQty: 5, mrp: 50 }],
+    }];
 
     await createBillLocalFirst(baseInput());
 
@@ -177,6 +185,31 @@ describe("bill creation transaction safety", () => {
       [{ id: "lot_1", batchNumber: "B-1", expiresOn: "2030-01-01", availableBaseQty: 3, mrp: 50 }],
       30,
     );
+  });
+
+  it("serializes simultaneous batch sales so cached availability cannot lose a decrement", async () => {
+    dbState.committed.products = [{
+      id: "product_1",
+      name: "Sugar",
+      baseUnit: "kg",
+      stockBaseQty: 20,
+      defaultPricePerRateUnit: 50,
+      batchTrackingEnabled: true,
+    }];
+    dbState.committed.settings = [{
+      key: "cache:inventory-lots:sellable:v1:primary:product_1",
+      value: [{ id: "lot_1", batchNumber: "B-1", expiresOn: "2030-01-01", availableBaseQty: 5, mrp: 50 }],
+    }];
+    await Promise.all([
+      createBillLocalFirst(baseInput({ clientBillId: "batch-sale-a" })),
+      createBillLocalFirst(baseInput({ clientBillId: "batch-sale-b" })),
+    ]);
+
+    const cached = tableRows("settings").find((row) => row.key === "cache:inventory-lots:sellable:v1:primary:product_1");
+    expect(cached?.value).toEqual([
+      { id: "lot_1", batchNumber: "B-1", expiresOn: "2030-01-01", availableBaseQty: 1, mrp: 50 },
+    ]);
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 16 }));
   });
 
   it("does not invent offline stock or ledger movement for an untracked dish", async () => {

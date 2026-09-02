@@ -1,5 +1,6 @@
 import { ApiClientError, apiRequest, buildQuery, isBrowserOnline, isRecoverableNetworkError } from "@/lib/api/http";
 import { emitLocalDataChanged, instantCacheUpdatedAt, readIndexedRecentCache, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
+import { offlineDB } from "@/lib/offline/db";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
 
 export interface InventoryLot {
@@ -125,7 +126,13 @@ export async function loadCachedSellableBatches(productId: string, locationId?: 
   const key = INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId ?? getActiveLocationId() ?? "primary");
   const memory = readInventoryLotMemoryCache<SellableBatch[]>(key);
   if (memory !== undefined) return memory;
-  return readIndexedRecentCache<SellableBatch[] | undefined>(key, undefined).catch(() => undefined);
+  return loadPersistedCachedSellableBatches(productId, locationId).catch(() => undefined);
+}
+
+/** Read the durable projection, bypassing memory so an active write transaction sees the latest committed value. */
+export async function loadPersistedCachedSellableBatches(productId: string, locationId?: string) {
+  const key = INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId ?? getActiveLocationId() ?? "primary");
+  return offlineDB.getRecentCache<SellableBatch[] | undefined>(key, undefined);
 }
 
 /** Pure projection used both by post-commit UI refreshes and atomic financial writes. */

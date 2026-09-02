@@ -13,7 +13,7 @@ import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/
 import { BillPaymentMode } from "@/types/api";
 import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { productTracksStock } from "@/features/core/inventory/stock-display";
-import { INVENTORY_LOT_CACHE_KEYS, loadCachedSellableBatches, projectCachedSellableBatches, type SellableBatch } from "@/features/core/inventory/inventory-lots-api";
+import { INVENTORY_LOT_CACHE_KEYS, loadPersistedCachedSellableBatches, projectCachedSellableBatches, type SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 
 const BILL_CACHE_KEY = "bills";
 const CUSTOMER_CACHE_KEY = "customers";
@@ -598,12 +598,6 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const batchTrackedProductIds = [...new Set(validated.items
     .map((item) => item.productId)
     .filter((id): id is string => Boolean(id && productsForApproval.get(id)?.batchTrackingEnabled)))];
-  const cachedSellableBatches = new Map<string, SellableBatch[] | undefined>(await Promise.all(
-    batchTrackedProductIds.map(async (productId) => [
-      productId,
-      await loadCachedSellableBatches(productId, billLocationId),
-    ] as const),
-  ));
   validated.sensitiveActions = sensitiveActions;
   validated.ownerPin = inputForCreation.ownerPin;
   validated.reason = inputForCreation.reason;
@@ -642,6 +636,12 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
         return { bill: withBillAliases(existing), publish: (): void => undefined };
       }
     }
+    const cachedSellableBatches = new Map<string, SellableBatch[] | undefined>(await Promise.all(
+      batchTrackedProductIds.map(async (productId) => [
+        productId,
+        await loadPersistedCachedSellableBatches(productId, billLocationId),
+      ] as const),
+    ));
     return persistLocalBill(tx, validated, inputForCreation, sensitiveActions, clientBillId, checkoutFingerprint, cachedSellableBatches);
   });
   // A cache/display failure after the financial commit is not a failed sale.
