@@ -212,6 +212,33 @@ function trimHistory(history) {
  */
 /** What to call the shop's language when telling the model which one to use. */
 const LANGUAGE_NAMES = { hi: "Hindi", en: "English" };
+const SERVER_REPLIES = Object.freeze({
+  en: {
+    unverified: "I could not verify that from your shop records. Please rephrase it or open the relevant screen.",
+    proposed: "I prepared the changes below. Nothing has changed yet; review and confirm them.",
+  },
+  hi: {
+    unverified: "मैं दुकान के रिकॉर्ड से इसकी पुष्टि नहीं कर सका। इसे दूसरे शब्दों में कहें या संबंधित स्क्रीन खोलें।",
+    proposed: "मैंने नीचे बदलाव तैयार किए हैं। अभी कुछ नहीं बदला है; देखकर पुष्टि करें।",
+  },
+});
+
+/**
+ * A provider sentence is not evidence. Read-only prose is displayable only
+ * after at least one successful server tool read. Change turns always use a
+ * server-owned sentence because the plan is merely proposed, never completed.
+ */
+export function groundAgentReply({ reply, plan = [], trace = [], language = "hi" }) {
+  const copy = SERVER_REPLIES[language] ?? SERVER_REPLIES.hi;
+  if (plan.length > 0) {
+    return { reply: copy.proposed, providerReplyAccepted: false, grounding: "server_composed_proposal" };
+  }
+  const evidenceReads = trace.filter((step) => step?.kind === "read" && step?.status === "ok").length;
+  if (evidenceReads === 0) {
+    return { reply: copy.unverified, providerReplyAccepted: false, grounding: "no_verified_evidence" };
+  }
+  return { reply, providerReplyAccepted: true, grounding: "verified_tool_reads", evidenceReads };
+}
 
 /**
  * The bill on the counter right now, as the model should see it.
@@ -453,6 +480,9 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     if (stoppedBecause === "completed") stoppedBecause = "no_final_message";
   }
 
+  const replySafety = groundAgentReply({ reply, plan, trace, language });
+  reply = replySafety.reply;
+
   const highestRisk = plan.reduce(
     (worst, item) => (RISK_ORDER[item.risk] > RISK_ORDER[worst] ? item.risk : worst),
     TOOL_RISK.SAFE,
@@ -474,6 +504,8 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
           model: selected.model,
           policyVersion: AI_AGENT_POLICY_VERSION,
           promptFingerprint: AI_AGENT_PROMPT_FINGERPRINT,
+          providerReplyAccepted: replySafety.providerReplyAccepted,
+          replyGrounding: replySafety.grounding,
         },
       }),
       permissionLevel: plan.length ? highestRisk : TOOL_RISK.SAFE,
@@ -490,6 +522,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     requiresOwnerPin: highestRisk === TOOL_RISK.OWNER_PIN && plan.length > 0,
     trace,
     stoppedBecause,
+    safety: replySafety,
     provider: {
       name: selected.provider,
       model: selected.model,

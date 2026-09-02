@@ -228,7 +228,7 @@ function fakeDatabase(logs) {
     aiActionLog: {
       async create({ data }) {
         logs.push(data);
-        return data;
+        return { id: `ai-log-${logs.length}`, ...data };
       },
     },
   };
@@ -257,6 +257,7 @@ assert.equal(runtimeResult.safety.catalogAvailable, true);
 assert.equal(runtimeResult.safety.provider, "openai");
 assert.equal(runtimeResult.safety.matchedProductIds.includes("product-sugar"), true);
 assert.equal(runtimeResult.safety.providerProseAccepted, false);
+assert.equal(runtimeResult.actionLogId, "ai-log-1", "the UI needs a tenant-bound log ID for bounded quality feedback");
 assert.equal(runtimeResult.safety.policyVersion, AI_COMMAND_POLICY_VERSION);
 assert.equal(runtimeResult.safety.promptFingerprint, AI_COMMAND_PROMPT_FINGERPRINT);
 assert.match(runtimeResult.safety.promptFingerprint, /^[a-f0-9]{16}$/);

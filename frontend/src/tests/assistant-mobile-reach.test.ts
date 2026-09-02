@@ -18,6 +18,8 @@ import { readFileSync } from "node:fs";
  */
 const panel = readFileSync("src/features/core/assistant/AssistantPanel.tsx", "utf8");
 const launcher = readFileSync("src/features/core/assistant/AssistantLauncher.tsx", "utf8");
+const tillAssistant = readFileSync("src/features/core/billing/pages/components/BillingAssistantStrip.tsx", "utf8");
+const voiceAssistant = readFileSync("src/features/core/voice/VoiceAssistant.tsx", "utf8");
 
 describe("the assistant is reachable on a phone", () => {
   it("sizes the panel to the visible viewport, not the layout one", () => {
@@ -39,5 +41,13 @@ describe("the assistant is reachable on a phone", () => {
     // bottom-20 was 80px of guess that ignored the inset entirely.
     expect(launcher).toContain("var(--app-mobile-bottom-nav-clearance)");
     expect(launcher).not.toContain("bottom-20");
+  });
+
+  it("keeps bounded quality feedback reachable on the full assistant, till fallback, and voice parser", () => {
+    for (const surface of [panel, tillAssistant, voiceAssistant]) {
+      expect(surface).toContain('"correct", "misunderstood", "unsafe"');
+      expect(surface).toContain("submitAiFeedback");
+      expect(surface).toContain("assistant.feedback.question");
+    }
   });
 });

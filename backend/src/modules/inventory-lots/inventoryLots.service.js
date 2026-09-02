@@ -426,7 +426,19 @@ export async function reapplyBillLotAllocations(tx, billId) {
   }
 }
 
-export async function restoreLotsForSaleReturn(tx, { originalBillId, returnBill }) {
+/**
+ * Put a sale return's stock back into the batches it came out of.
+ *
+ * Only the resellable part comes back. A line the counter marked damaged is
+ * written off by bills.service.js — it records the cost loss and deliberately
+ * does not restock it — so its units must not reappear here either. They were
+ * consumed from a lot at the sale and are gone from the shelf for good.
+ *
+ * damagedBaseQtyByProduct carries that write-off, in base units per product,
+ * because the damaged flag lives on the request rather than on the stored
+ * return line.
+ */
+export async function restoreLotsForSaleReturn(tx, { originalBillId, returnBill, damagedBaseQtyByProduct = new Map() }) {
   if (!originalBillId) return;
   const original = await tx.billItemLotAllocation.findMany({ where: { billItem: { billId: originalBillId }, quantityBaseQty: { gt: 0 } }, include: { billItem: true, inventoryLot: true }, orderBy: { createdAt: "asc" } });
   const previousRestores = await tx.billItemLotAllocation.findMany({ where: { billItem: { bill: { returnOfBillId: originalBillId } }, quantityBaseQty: { lt: 0 } } });
@@ -434,6 +446,18 @@ export async function restoreLotsForSaleReturn(tx, { originalBillId, returnBill 
   for (const row of previousRestores) restoredByLot.set(row.inventoryLotId, round2((restoredByLot.get(row.inventoryLotId) ?? 0) + Math.abs(row.quantityBaseQty)));
   const requestedByProduct = new Map();
   for (const item of returnBill.items ?? []) if (item.productId) requestedByProduct.set(item.productId, { billItemId: item.id, quantity: round2((requestedByProduct.get(item.productId)?.quantity ?? 0) + Math.abs(item.quantityInBaseUnit)) });
+  // Restoring a damaged unit would leave InventoryLot advertising stock the
+  // shelf count does not have. The next sale of that batch would then either
+  // be refused at checkout or push the product negative — exactly the drift
+  // between these two views of one shelf that consumeInventoryLotsForMovement
+  // was added to prevent.
+  for (const [productId, damagedBaseQty] of damagedBaseQtyByProduct) {
+    const request = requestedByProduct.get(productId);
+    if (!request) continue;
+    const resellable = round2(request.quantity - Math.abs(Number(damagedBaseQty || 0)));
+    if (resellable <= 0.000001) requestedByProduct.delete(productId);
+    else request.quantity = resellable;
+  }
   for (const [productId, request] of requestedByProduct.entries()) {
     let remaining = request.quantity;
     for (const allocation of original.filter((row) => row.billItem.productId === productId)) {

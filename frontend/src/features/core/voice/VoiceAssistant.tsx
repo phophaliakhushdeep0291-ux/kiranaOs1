@@ -20,6 +20,7 @@ import { useAppLanguage } from "@/features/core/settings/i18n";
 import { createOneShotRecognition, getSpeechRecognitionConstructor, shouldAcceptFinalTranscript, speechRecognitionLocale, voiceTranscriptKey } from "./voice-recognition";
 import type { SpeechRecognitionLike, VoiceToastPayload } from "./voice-types";
 import { startBackendTranscription, type BackendTranscriptionSession } from "./backend-transcription";
+import { submitAiFeedback, type AiFeedbackOutcome } from "@/lib/ai/ai-feedback-client";
 
 type AssistantPosition = { x: number; y: number };
 
@@ -69,11 +70,13 @@ function saveAssistantPosition(position: AssistantPosition): void {
 export function VoiceAssistant() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
-  const { language } = useAppLanguage();
+  const { language, t } = useAppLanguage();
   const [open, setOpen] = useState(false);
   const [command, setCommand] = useState("");
   const [listening, setListening] = useState(false);
   const [status, setStatus] = useState("Say: open billing, search product chini, add customer Ramesh, record payment Ramesh 500 cash, or pending sync count.");
+  const [feedbackTarget, setFeedbackTarget] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<AiFeedbackOutcome | "submitting" | "failed" | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const backendRecordingRef = useRef<BackendTranscriptionSession | null>(null);
   const preferBackendRecordingRef = useRef(false);
@@ -323,6 +326,8 @@ export function VoiceAssistant() {
     }
 
     setStatus("Understanding command...");
+    setFeedbackTarget(null);
+    setFeedback(null);
     const local = parseLocalVoiceIntent(spoken, location);
     const preferLocalContext = location.startsWith("/products") && local.action === "product_draft";
     const aiIntent = preferLocalContext ? null : await askAiIntent(spoken, location);
@@ -336,9 +341,21 @@ export function VoiceAssistant() {
       setStatus,
       toast: showToast,
     });
+    setFeedbackTarget(aiIntent?.aiActionLogId ?? null);
 
     lastProcessedTranscriptRef.current = { key: voiceTranscriptKey(spoken), at: Date.now() };
     setCommand("");
+  }
+
+  async function labelAiResult(outcome: AiFeedbackOutcome) {
+    if (!feedbackTarget) return;
+    setFeedback("submitting");
+    try {
+      await submitAiFeedback(feedbackTarget, outcome);
+      setFeedback(outcome);
+    } catch {
+      setFeedback("failed");
+    }
   }
 
   return (
@@ -383,6 +400,29 @@ export function VoiceAssistant() {
             <Button type="button" variant="secondary" onClick={() => void runCommand("purchase 10 kilo chini cost 40")}>Inventory demo</Button>
           </div>
           <div className="mt-2 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">{status}</div>
+          {feedbackTarget ? (
+            <div className="mt-2 rounded-lg border bg-card px-3 py-2 text-xs">
+              {feedback && !["submitting", "failed"].includes(feedback) ? (
+                <p className="font-semibold text-emerald-700">{t("assistant.feedback.thanks")}</p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-semibold text-muted-foreground">{t("assistant.feedback.question")}</span>
+                  {(["correct", "misunderstood", "unsafe"] as const).map((outcome) => (
+                    <button
+                      key={outcome}
+                      type="button"
+                      disabled={feedback === "submitting"}
+                      onClick={() => void labelAiResult(outcome)}
+                      className="min-h-8 rounded-md border px-2 font-semibold disabled:opacity-50"
+                    >
+                      {t(`assistant.feedback.${outcome}`)}
+                    </button>
+                  ))}
+                  {feedback === "failed" ? <span className="font-semibold text-destructive">{t("assistant.feedback.failed")}</span> : null}
+                </div>
+              )}
+            </div>
+          ) : null}
           <Badge variant="outline" className="mt-2">AI used when backend proxy is configured</Badge>
         </div>
       )}

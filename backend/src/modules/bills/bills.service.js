@@ -1553,7 +1553,15 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         },
         include: { items: true, payments: true },
       });
-      await restoreLotsForSaleReturn(tx, { originalBillId: original?.id ?? null, returnBill });
+      // Only the resellable part of the return goes back into its batch. The
+      // damaged part is written off just below and never reaches the shelf, so
+      // the batch ledger must not take it back either.
+      const damagedBaseQtyByProduct = new Map();
+      for (const row of restockPlan) {
+        if (!row.damaged) continue;
+        damagedBaseQtyByProduct.set(row.product.id, round2((damagedBaseQtyByProduct.get(row.product.id) ?? 0) + row.qtyInBase));
+      }
+      await restoreLotsForSaleReturn(tx, { originalBillId: original?.id ?? null, returnBill, damagedBaseQtyByProduct });
 
       // Restock resellable items; write off damaged ones (no restock, records the cost loss).
       for (const { product, qtyInBase, lineCost, damaged, sellingUnitId, sellingUnitQty } of restockPlan) {

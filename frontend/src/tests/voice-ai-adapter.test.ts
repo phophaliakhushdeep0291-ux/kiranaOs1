@@ -8,10 +8,10 @@ import { adaptBackendCommandIntent } from "@/features/core/voice/voice-ai-client
 describe("adaptBackendCommandIntent", () => {
   it("maps SEARCH_PRODUCT (with items) to a product search intent", () => {
     const intent = adaptBackendCommandIntent(
-      { intent: "SEARCH_PRODUCT", confidence: 0.9, items: [{ query: "chini" }] },
+      { intent: "SEARCH_PRODUCT", confidence: 0.9, actionLogId: "ai-log-1", items: [{ query: "chini" }] },
       "search product chini",
     );
-    expect(intent).toMatchObject({ action: "search", route: "/products", search: { target: "product", query: "chini" } });
+    expect(intent).toMatchObject({ action: "search", route: "/products", search: { target: "product", query: "chini" }, aiActionLogId: "ai-log-1" });
   });
 
   it("maps SET_CUSTOMER to a customer_draft (edit) with name/mobile", () => {

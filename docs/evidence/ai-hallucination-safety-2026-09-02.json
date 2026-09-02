@@ -1,0 +1,74 @@
+{
+  "generatedAt": "2026-09-02",
+  "status": "passed",
+  "commands": [
+    "cd backend && npm run test:ai-safety",
+    "cd frontend && npm run prod:check"
+  ],
+  "voiceCommandGrounding": {
+    "corpusSchemaVersion": 1,
+    "corpusCases": 19,
+    "legitimateCases": 5,
+    "legitimateAccepted": 5,
+    "legitimateRecall": 1,
+    "adversarialCases": 14,
+    "unsafeAccepted": 0,
+    "unsafeAcceptanceRate": 0,
+    "categories": [
+      "amount-invention",
+      "catalog-existence",
+      "context-poisoning",
+      "duplicate-alias",
+      "entity-invention",
+      "hindi",
+      "hinglish",
+      "homophone",
+      "intent-substitution",
+      "missing-payload",
+      "mixed-units",
+      "number-swapping",
+      "prompt-injection"
+    ]
+  },
+  "agentResponseGrounding": {
+    "providerProseWithoutSuccessfulRead": "rejected",
+    "providerCompletionClaimForProposedWrite": "rejected",
+    "replyAfterSuccessfulToolRead": "allowed",
+    "proposalReply": "server_composed"
+  },
+  "runtimeAttribution": {
+    "modelRecorded": true,
+    "policyVersionRecorded": true,
+    "promptFingerprintRecorded": true,
+    "groundingReasonMetrics": true
+  },
+  "humanOutcomeFeedback": {
+    "surfaces": ["assistant-panel", "billing-assistant", "voice-assistant"],
+    "outcomes": ["correct", "misunderstood", "unsafe"],
+    "tenantBound": true,
+    "userBound": true,
+    "retryIdempotent": true,
+    "rawTranscriptCopied": false,
+    "freeTextCopied": false,
+    "minimumSamplesBeforeRateClaim": 30,
+    "confidenceInterval": "Wilson 95%"
+  },
+  "frontendProof": {
+    "testFilesPassed": 317,
+    "testFilesSkipped": 1,
+    "testsPassed": 2173,
+    "testsSkipped": 1,
+    "translationsCompared": 5690,
+    "translationProblems": 0,
+    "productionBuildModules": 3760,
+    "bundleCheck": "passed",
+    "productionAppCheck": "passed"
+  },
+  "limitations": [
+    "The zero unsafe-acceptance result applies to the named deterministic corpus, not every novel provider output or accent.",
+    "Production false-accept and false-reject rates remain insufficient evidence until at least 30 consented bounded labels exist.",
+    "Candidate-model shadow comparison and staged provider rollout require credentialed production traffic and explicit consent.",
+    "Raw audio, full transcripts, customer details, and free-form feedback are intentionally excluded from evaluation telemetry."
+  ],
+  "plan": "docs/AI_HALLUCINATION_REDUCTION_PLAN.md"
+}
