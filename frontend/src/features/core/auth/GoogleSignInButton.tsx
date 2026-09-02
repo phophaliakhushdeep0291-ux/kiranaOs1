@@ -65,7 +65,7 @@ export function isGoogleSignInConfigured(): boolean {
 const GOOGLE_BUTTON_MIN_WIDTH = 200;
 const GOOGLE_BUTTON_MAX_WIDTH = 400;
 
-function googleButtonWidth(available: number): number {
+export function googleButtonWidth(available: number): number {
   if (!Number.isFinite(available) || available <= 0) return GOOGLE_BUTTON_MIN_WIDTH;
   return Math.round(Math.min(GOOGLE_BUTTON_MAX_WIDTH, Math.max(GOOGLE_BUTTON_MIN_WIDTH, available)));
 }
@@ -101,12 +101,29 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (credential
             width: googleButtonWidth(host.clientWidth),
           });
         };
-        render();
+        /**
+         * Wait for a frame before measuring.
+         *
+         * Measured on production: the host is 251px wide, and Google had
+         * rendered at 200 — the fallback for an unmeasurable container. The
+         * script resolves before the first paint, so `clientWidth` was still 0,
+         * and the observer never corrected it because the host is `w-full` and
+         * its own width never changed afterwards. Nothing to observe.
+         *
+         * That was benign here only by luck: 200 happened to fit inside 251. In
+         * a container narrower than 200 the fallback overflows exactly the way
+         * the hardcoded 320 did, so measuring after layout is what makes this a
+         * fix rather than a different guess.
+         */
+        const frame = requestAnimationFrame(render);
         // A rotation changes the available width, and the iframe keeps the one
         // it was built with. Re-rendering is the only way to resize it.
         const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(render);
         observer?.observe(containerRef.current);
-        cleanupRef.current = () => observer?.disconnect();
+        cleanupRef.current = () => {
+          cancelAnimationFrame(frame);
+          observer?.disconnect();
+        };
       })
       .catch(() => {
         if (active) setFailed(true); // offline / blocked — hide quietly, password login still works
@@ -119,8 +136,10 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (credential
 
   if (!CLIENT_ID || failed) return null;
 
-  // `min-w-0` and the clip are the belt to the measurement's braces: whatever
-  // width Google decides on, it can no longer widen the page around it.
+  // Defensive, not the fix. `overflow-x-clip` stops an oversized child painting
+  // outside the host, but its layout box still extends — measured at 360px — so
+  // these only stop the container adding width of its own. The measurement above
+  // is what actually keeps the card on screen.
   return (
     <div
       ref={containerRef}
