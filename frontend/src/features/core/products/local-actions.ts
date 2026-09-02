@@ -575,10 +575,38 @@ export async function updateProductLocalFirst(id: string, data: ProductInput): P
  * row, audit entry, and sync operation is stored, or none is. Re-selecting the same file is
  * safe because the dry-run reconciler will match the products created by the first import.
  */
+/**
+ * Rebuild the product list caches from what is now in the database.
+ *
+ * Split out of the import so a batched load can do it once at the end instead of
+ * once per batch. It reads the whole table and re-serialises the entire cached
+ * array twice, so running it per batch is quadratic — see `deferCacheRefresh`.
+ */
+export async function refreshProductCaches(): Promise<void> {
+  const refreshedProducts = (await offlineDB.getAll<Product>("products")).slice(0, 1000);
+  writeInstantCache(CACHE_KEY, refreshedProducts, 3650);
+  writeInstantCache(INVENTORY_CACHE_KEY, refreshedProducts, 3650);
+}
+
+export interface ImportProductsOptions {
+  /**
+   * Skip the cache rebuild and leave it to the caller.
+   *
+   * A batched load calls this function once per batch, and the rebuild reads
+   * every product and rewrites both caches whole — so across fourteen batches of
+   * the starter catalog it read roughly 3,900 rows and re-serialised about 7,800
+   * product objects to produce one final cache. The caller that owns the loop is
+   * the only one that knows when the last batch has landed, so it owns the
+   * refresh; `refreshProductCaches` is exported for it.
+   */
+  deferCacheRefresh?: boolean;
+}
+
 export async function importProductsLocalFirst(
   operations: ProductImportOperation[],
   metadata: ProductImportMetadata,
   approval?: { ownerPin: string; reason?: string },
+  options: ImportProductsOptions = {},
 ): Promise<ProductImportSession> {
   const startedAt = new Date().toISOString();
   /*
@@ -710,9 +738,7 @@ export async function importProductsLocalFirst(
     await tx.setSetting(LAST_PRODUCT_IMPORT_SETTING_KEY, session);
   });
 
-  const refreshedProducts = (await offlineDB.getAll<Product>("products")).slice(0, 1000);
-  writeInstantCache(CACHE_KEY, refreshedProducts, 3650);
-  writeInstantCache(INVENTORY_CACHE_KEY, refreshedProducts, 3650);
+  if (!options.deferCacheRefresh) await refreshProductCaches();
   emitLocalDataChanged({
     entityType: "product",
     action: "bulk_imported",

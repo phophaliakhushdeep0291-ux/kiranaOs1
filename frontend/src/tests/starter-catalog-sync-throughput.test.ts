@@ -163,3 +163,49 @@ describe("the local write is not quadratic", () => {
     expect(source).toContain('hasUpdates ? await offlineDB.getAll<Product>("products") : []');
   });
 });
+
+describe("the list caches are rebuilt once, not once per batch", () => {
+  const loader = readFileSync("src/features/core/products/starter-catalog/load-starter-catalog.ts", "utf8");
+  const actions = readFileSync("src/features/core/products/local-actions.ts", "utf8");
+
+  it("hands the rebuild to the caller that owns the loop", () => {
+    expect(actions).toContain("export async function refreshProductCaches()");
+    expect(actions).toContain("if (!options.deferCacheRefresh) await refreshProductCaches();");
+    expect(loader).toContain("{ deferCacheRefresh: true }");
+  });
+
+  it("still rebuilds after a cancelled load, which has committed whole batches", () => {
+    // The abort check returns from inside the loop, so the rebuild has to be in a
+    // `finally` or a stopped load leaves the product list showing stale contents.
+    expect(loader).toContain("} finally {");
+    expect(loader).toContain("if (created > 0) await refreshProductCaches();");
+  });
+
+  it("leaves the single-file import path rebuilding as it always did", () => {
+    // ImportProductsDialog imports in one call, so the default must stay "refresh".
+    const dialog = readFileSync("src/features/core/products/pages/components/ImportProductsDialog.tsx", "utf8");
+    expect(dialog).not.toContain("deferCacheRefresh");
+  });
+
+  it("avoids work that grew with every batch", () => {
+    // The rebuild reads the whole products table and re-serialises both list
+    // caches in full. Per batch that is a pass over a table each previous batch
+    // had just grown — the classic quadratic — to produce a cache only the last
+    // pass's version survives.
+    const items = KIRANA_STARTER_CATALOG_COUNT;
+    const batch = 40;
+    const batches = Math.ceil(items / batch);
+
+    let rowsReadBefore = 0;
+    for (let done = batch; done <= items; done += batch) rowsReadBefore += done;
+    const clonesBefore = rowsReadBefore * 2; // two caches, each written whole
+
+    const rowsReadAfter = items;
+    const clonesAfter = items * 2;
+
+    expect(batches).toBe(14);
+    expect(rowsReadBefore).toBeGreaterThan(4_000);
+    expect(rowsReadBefore / rowsReadAfter).toBeGreaterThan(7);
+    expect(clonesBefore - clonesAfter).toBeGreaterThan(7_000);
+  });
+});

@@ -3,7 +3,7 @@ import {
   parseProductsCsv,
   planProductImport,
 } from "@/features/core/products/import/product-import-csv";
-import { importProductsLocalFirst, type ProductImportOperation } from "@/features/core/products/local-actions";
+import { importProductsLocalFirst, refreshProductCaches, type ProductImportOperation } from "@/features/core/products/local-actions";
 import { offlineDB } from "@/lib/offline/db";
 import type { Product } from "@/types/api";
 import type { BusinessType } from "@/features/core/settings/business-type-store";
@@ -85,25 +85,39 @@ export async function importStarterCatalogItems(
   let created = 0;
   onProgress?.({ created, total });
 
-  for (let offset = 0; offset < total; offset += batchSize) {
-    // Checked between batches only: a batch already handed to IndexedDB is committed, and
-    // abandoning it there is what would leave the half-written state this design avoids.
-    if (signal?.aborted) return { created, skipped: plan.skipCount, invalid: plan.errorCount, total, cancelled: true };
+  /*
+   * One cache rebuild for the whole load, not one per batch.
+   *
+   * The rebuild reads every product and rewrites both list caches in full, so
+   * doing it inside the loop was quadratic: fourteen passes over a table each
+   * previous pass had just grown, to produce a cache that only the last pass's
+   * version survives. Deferred here and run once in the `finally` below, which
+   * also covers the cancel path — a stopped load has still committed whole
+   * batches, and they must appear in the list.
+   */
+  try {
+    for (let offset = 0; offset < total; offset += batchSize) {
+      // Checked between batches only: a batch already handed to IndexedDB is committed, and
+      // abandoning it there is what would leave the half-written state this design avoids.
+      if (signal?.aborted) return { created, skipped: plan.skipCount, invalid: plan.errorCount, total, cancelled: true };
 
-    const batch = operations.slice(offset, offset + batchSize);
-    await importProductsLocalFirst(batch, {
+      const batch = operations.slice(offset, offset + batchSize);
+      await importProductsLocalFirst(batch, {
       // One session record per committed batch. They are genuinely separate transactions,
       // and a shared fingerprint would make each batch overwrite the previous batch's
       // session under the same settings key.
-      fingerprint: `${fingerprint}-${offset / batchSize}`,
-      fileName: STARTER_CATALOG_FILE_NAME,
-      source: STARTER_CATALOG_SOURCE,
-      totalRows: batch.length,
-      skippedRows: 0,
-      errorRows: 0,
-    }, ownerPin ? { ownerPin, reason: ownerPinReason || "Approved built-in starter catalog" } : undefined);
-    created += batch.length;
-    onProgress?.({ created, total });
+        fingerprint: `${fingerprint}-${offset / batchSize}`,
+        fileName: STARTER_CATALOG_FILE_NAME,
+        source: STARTER_CATALOG_SOURCE,
+        totalRows: batch.length,
+        skippedRows: 0,
+        errorRows: 0,
+      }, ownerPin ? { ownerPin, reason: ownerPinReason || "Approved built-in starter catalog" } : undefined, { deferCacheRefresh: true });
+      created += batch.length;
+      onProgress?.({ created, total });
+    }
+  } finally {
+    if (created > 0) await refreshProductCaches();
   }
 
   return { created, skipped: plan.skipCount, invalid: plan.errorCount, total, cancelled: false };
