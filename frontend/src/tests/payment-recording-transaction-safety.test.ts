@@ -76,7 +76,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache, upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY } from "@/features/core/ledger/authoritative-balances";
-import { getLocalUdharSummary, recordPaymentLocalFirst } from "@/features/core/payments/local-actions";
+import { getLocalUdharSummary, recordPaymentLocalFirst, recordSplitPaymentLocalFirst } from "@/features/core/payments/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedReadInstantCache = vi.mocked(readInstantCache);
@@ -186,6 +186,36 @@ describe("payment recording transaction safety", () => {
       .rejects.toMatchObject({ code: "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING" });
   });
 
+  it("does not resurrect a drifted local ledger when a server-backed payment is pending", async () => {
+    dbState.committed.customers = [
+      { id: "customer_1", name: "Ramesh", type: "udhar", udharAmount: 900, totalUdhar: 900, sync_status: "synced" },
+    ];
+    dbState.committed.customer_ledger = [
+      { id: "stale_bill", customerId: "customer_1", type: "BILL", amount: 1000, sync_status: "synced", entry_at: "2026-01-01T00:00:00.000Z" },
+      { id: "pending_payment", customerId: "customer_1", type: "PAYMENT", amount: 100, sync_status: "pending_sync", entry_at: "2026-01-02T00:00:00.000Z" },
+    ];
+    mockedReadInstantCache.mockImplementation((key: string, fallback: unknown) => {
+      if (key === AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY) {
+        return {
+          capturedAt: "2026-01-01T00:00:00.000Z",
+          summary: {
+            totalOutstanding: 300,
+            customers: [{ customerId: "customer_1", customerName: "Ramesh", amount: 300, outstanding: 300 }],
+          },
+        };
+      }
+      return fallback;
+    });
+
+    const result = await recordPaymentLocalFirst("customer_1", { amount: 200, mode: "cash" });
+
+    expect(result.nextBalance).toBe(0);
+    expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }));
+    expect(tableRows("customer_ledger").find((row) => row.id === "ledger_2")).toEqual(
+      expect.objectContaining({ amount: 200, balance_after: 0 }),
+    );
+  });
+
   it("allows two same-amount payments that exactly clear the balance", async () => {
     dbState.committed.customers = [{ id: "customer_1", name: "Ramesh", type: "udhar", udharAmount: 200, totalUdhar: 200, trustScore: 70 }];
     dbState.committed.customer_ledger = [
@@ -209,6 +239,33 @@ describe("payment recording transaction safety", () => {
     expect(tableRows("customer_ledger").filter((row) => row.type === "PAYMENT")).toHaveLength(2);
     expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }));
     expect(tableRows("sync_outbox").filter((row) => row.operation_type === "RECORD_PAYMENT")).toHaveLength(2);
+  });
+
+  it("commits a cash and UPI split as one customer-financial transaction", async () => {
+    const results = await recordSplitPaymentLocalFirst("customer_1", [
+      { amount: 200, mode: "cash", note: "split cash" },
+      { amount: 125, mode: "upi", note: "split UPI" },
+    ]);
+
+    expect(results.map((result) => result.nextBalance)).toEqual([300, 175]);
+    expect(tableRows("payments").map((row) => row.mode)).toEqual(["cash", "upi"]);
+    expect(tableRows("customer_ledger").filter((row) => row.type === "PAYMENT")).toHaveLength(2);
+    expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 175, totalUdhar: 175 }));
+    expect(tableRows("sync_outbox").filter((row) => row.operation_type === "RECORD_PAYMENT")).toHaveLength(2);
+  });
+
+  it("rolls back the entire split if any shared financial write fails", async () => {
+    dbState.failOnTable = "local_audit_logs";
+
+    await expect(recordSplitPaymentLocalFirst("customer_1", [
+      { amount: 200, mode: "cash" },
+      { amount: 125, mode: "upi" },
+    ])).rejects.toThrow(/local_audit_logs write failure/i);
+
+    expect(tableRows("payments")).toHaveLength(0);
+    expect(tableRows("customer_ledger").filter((row) => row.type === "PAYMENT")).toHaveLength(0);
+    expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 500, totalUdhar: 500 }));
+    expect(tableRows("sync_outbox")).toHaveLength(0);
   });
 
   it("allows a rupee and paise split that exactly clears the balance", async () => {

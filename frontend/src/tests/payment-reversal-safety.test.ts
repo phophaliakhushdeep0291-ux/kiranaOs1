@@ -182,6 +182,7 @@ describe("payment reversal transaction safety", () => {
       success: true,
       paymentId: "payment_local_1",
       correctionId: "ledger_1",
+      nextBalance: 500,
       pendingSync: true,
     });
     expect(mockedOfflineDB.delete).not.toHaveBeenCalled();

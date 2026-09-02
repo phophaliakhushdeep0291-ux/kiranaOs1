@@ -303,4 +303,31 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.voice.ask.retailPrice": "खुदरा दाम?",
   "products.voice.ask.wholesalePrice": "थोक दाम?",
   "products.voice.ask.lowStockAlert": "स्टॉक कितना रह जाए तो अलर्ट?",
+
+  // The line the counter READS while a question is on the table. The ask.* line
+  // above is the one that is SPOKEN: a hi-IN voice pronounces Devanagari
+  // correctly and mangles Roman text, while the shopkeeper reads Roman fastest.
+  // In English both are the same string, so an English shop sees no change.
+  // Hinglish, because that is what a counter reads without slowing down.
+  "products.voice.say.name": "Maal ka naam kya hai?",
+  "products.voice.say.sellingPrice": "Bikri ka daam kitna?",
+  "products.voice.say.mrp": "Packet par chhapa MRP?",
+  "products.voice.say.costPrice": "Aapko kitne ka pada?",
+  "products.voice.say.stockQuantity": "Kitna stock aa raha hai?",
+  "products.voice.say.category": "Kaun si category?",
+  "products.voice.say.brand": "Kaun sa brand?",
+  "products.voice.say.unit": "Kis unit mein bikta hai?",
+  "products.voice.say.packSize": "Ek pack mein kitna aata hai?",
+  "products.voice.say.barcode": "Barcode number kya hai?",
+  "products.voice.say.hsn": "HSN code kya hai?",
+  "products.voice.say.aliases": "Iske aur koi naam?",
+  "products.voice.say.gstRate": "GST kitna?",
+  "products.voice.say.minimumSellingPrice": "Kam se kam bikri daam?",
+  "products.voice.say.retailPrice": "Khudra daam?",
+  "products.voice.say.wholesalePrice": "Thok daam?",
+  "products.voice.say.lowStockAlert": "Stock kitna reh jaye to alert?",
+  "products.voice.sayReady": "Zaroori sab bhar gaya. Dekh lein aur Save dabayein.",
+  "products.voice.sayNotUnderstood": "Samajh nahi aaya. Phir se bolein, ya skip kahein.",
+  "products.voice.sayHint": "Poora ek saath bolein, jaise Tata Namak 1 kilo MRP 28 lagat 24 bikri 26, ya ek-ek sawal ka jawab dein.",
+  "products.voice.sayControls": "Sawal chhodne ke liye skip kahein, poora hone par save kahein.",
 };

@@ -45,6 +45,7 @@ function stampServiceWorkerBuild() {
       }>;
       const criticalEntries = [
         "index.html",
+        "src/features/core/sync/BackgroundRuntime.tsx",
         "src/features/core/dashboard/pages/DashboardPage.tsx",
         "src/features/core/billing/pages/BillingPage.tsx",
         "src/features/core/customer-order/ImportOrderPage.tsx",

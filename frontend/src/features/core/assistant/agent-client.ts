@@ -42,6 +42,7 @@ export interface AgentTraceStep {
 }
 
 export interface AgentTurn {
+  turnId: string;
   planId: string | null;
   reply: string;
   plan: AgentProposal[];

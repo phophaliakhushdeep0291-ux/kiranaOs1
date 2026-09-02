@@ -84,6 +84,7 @@ With Redis enabled in another terminal:
 ```bash
 npm run worker
 npm run worker:health
+npm run worker:proof
 ```
 
 With Razorpay test-mode credentials enabled, repeat the checkout + webhook flows from `docs/E2E_PRODUCTION_PROOF.md`.

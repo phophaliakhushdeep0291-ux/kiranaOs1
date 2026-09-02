@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "KiranaOS competitive capability evidence",
-  "generatedAt": "2026-08-30",
+  "generatedAt": "2026-09-02",
   "scoreScale": 10,
   "statusFactors": {
     "verified": 1,
@@ -375,22 +375,38 @@
       "lastVerifiedAt": "2026-08-24"
     },
     {
-      "id": "postgres_redis_proof",
+      "id": "postgres_runtime_proof",
       "domain": "production_maturity",
-      "weight": 30,
-      "status": "external_blocked",
+      "weight": 20,
+      "status": "verified",
       "proofKind": "external_runtime",
-      "summary": "PostgreSQL, production concurrency and Redis worker proof require external services and are not certified by the local run.",
+      "summary": "A retained 2026-09-02 proof ran KiranaOS against an isolated PostgreSQL 18.3 server: all 131 migration directories through 000130 applied, the complete database integration and production-concurrency suite exited zero, payment-connection audit rollback passed, every inspected paise shadow column had zero mismatches, the 174-endpoint API contract passed, and production static checks passed. This proves the PostgreSQL code path locally; it does not imply a deployed managed database, Redis, or disaster-recovery readiness.",
       "competitorEvidence": [
         { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/cloud-pos/", "claim": "Cloud POS availability and centralized operation are production benchmarks." }
       ],
       "kiranaEvidence": {
-        "sourcePaths": ["backend/scripts/postgres-production-proof.js", "backend/scripts/verify-worker-runtime.js"],
-        "testCommands": ["cd backend && npm run proof:postgres", "cd backend && npm run worker:verify"],
-        "externalProofRequirements": ["Isolated PostgreSQL test database", "Redis worker runtime", "Concurrency and reconciliation report"],
-        "runtimeProof": { "status": "missing", "artifact": null }
+        "sourcePaths": ["backend/scripts/postgres-production-proof.js", "docs/evidence/postgres-production-proof-2026-09-02.json"],
+        "testCommands": ["cd backend && npm run proof:postgres"],
+        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/postgres-production-proof-2026-09-02.json" }
       },
-      "lastVerifiedAt": "2026-08-08"
+      "lastVerifiedAt": "2026-09-02"
+    },
+    {
+      "id": "redis_worker_proof",
+      "domain": "production_maturity",
+      "weight": 10,
+      "status": "verified",
+      "proofKind": "external_runtime",
+      "summary": "A retained 2026-09-02 proof used Redis 8.4.2, PostgreSQL, and a separately running production-mode KiranaOS worker. The worker published fresh before-and-after heartbeats for all seven queues, registered recurring maintenance schedules, and completed a one-time BullMQ WORKER_HEALTHCHECK in one millisecond. The proof stores no Redis URL. This is strong local runtime evidence, not managed-Redis failover or deployed-uptime evidence.",
+      "competitorEvidence": [
+        { "product": "GOFRUGAL", "url": "https://www.gofrugal.com/cloud-pos/", "claim": "Cloud POS availability and centralized operation are production benchmarks." }
+      ],
+      "kiranaEvidence": {
+        "sourcePaths": ["backend/scripts/prove-worker-runtime.js", "backend/src/workers/index.js", "docs/evidence/redis-worker-production-proof-2026-09-02.json"],
+        "testCommands": ["cd backend && npm run worker:proof"],
+        "runtimeProof": { "status": "verified", "artifact": "docs/evidence/redis-worker-production-proof-2026-09-02.json" }
+      },
+      "lastVerifiedAt": "2026-09-02"
     },
     {
       "id": "live_cloud_proof",
@@ -486,7 +502,7 @@
     { "domain": "multi_store", "maxScore": 8.5, "requiresVerifiedClaims": ["warehouse_repackaging"], "reason": "Full multi-store parity requires warehouse and replenishment workflows." },
     { "domain": "hardware_payments", "maxScore": 6, "requiresVerifiedClaims": ["local_print_bridge", "razorpay_adapter", "integrated_terminals_dynamic_qr", "store_peripherals"], "reason": "Adapter code is not equivalent to certified physical/provider integration." },
     { "domain": "omnichannel_loyalty", "maxScore": 7, "requiresVerifiedClaims": ["channel_order_settlement", "native_channel_order_ingestion"], "reason": "Omnichannel parity requires both payout reconciliation and credentialed native channel-order ingestion." },
-    { "domain": "production_maturity", "maxScore": 6.5, "requiresVerifiedClaims": ["postgres_redis_proof", "live_cloud_proof", "dr_container_release_proof"], "reason": "Local tests cannot prove deployed production maturity." },
+    { "domain": "production_maturity", "maxScore": 6.5, "requiresVerifiedClaims": ["postgres_runtime_proof", "redis_worker_proof", "live_cloud_proof", "dr_container_release_proof"], "reason": "Local tests cannot prove deployed production maturity." },
     { "domain": "ux_accessibility", "maxScore": 7.5, "requiresVerifiedClaims": ["live_ui_matrix", "formal_accessibility_audit"], "reason": "Automated component tests cannot certify end-to-end UX or accessibility alone." }
   ]
 }

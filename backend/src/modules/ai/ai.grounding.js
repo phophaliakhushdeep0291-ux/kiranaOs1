@@ -61,7 +61,20 @@ const CONFIRM_INTENTS = new Set([
 ]);
 const CATALOG_REQUIRED_INTENTS = new Set([
   AI_INTENTS.ADD_ITEMS,
+  AI_INTENTS.REMOVE_ITEM,
   AI_INTENTS.UPDATE_QUANTITY,
+]);
+const ITEM_REQUIRED_INTENTS = new Set([
+  AI_INTENTS.ADD_ITEMS,
+  AI_INTENTS.UPDATE_QUANTITY,
+]);
+const PRODUCT_REFERENCE_REQUIRED_INTENTS = new Set([
+  AI_INTENTS.ADD_ITEMS,
+  AI_INTENTS.REMOVE_ITEM,
+  AI_INTENTS.UPDATE_QUANTITY,
+  AI_INTENTS.UPDATE_PRODUCT_PRICE,
+  AI_INTENTS.ADJUST_STOCK,
+  AI_INTENTS.DELETE_PRODUCT,
 ]);
 const QUANTITY_UNIT_INTENTS = new Set([
   AI_INTENTS.ADD_ITEMS,
@@ -213,6 +226,10 @@ export function groundAiCommand(command, { transcript, catalog = [] } = {}) {
   const reasons = [];
   const matchedProductIds = new Set();
 
+  if (ITEM_REQUIRED_INTENTS.has(command.intent) && !(command.items?.length > 0)) {
+    addReason(reasons, "ITEMS_REQUIRED_FOR_INTENT");
+  }
+
   for (const item of command.items ?? []) {
     const directEvidence = phraseIsSupported(item.query, normalizedTranscript);
     const catalogMatch = matchCatalogProduct(item.query, normalizedTranscript, normalizedCatalog);
@@ -242,6 +259,36 @@ export function groundAiCommand(command, { transcript, catalog = [] } = {}) {
       addReason(reasons, "TARGET_NOT_IN_TRANSCRIPT");
     }
     if (catalogEvidence) matchedProductIds.add(catalogEvidence.id);
+  }
+
+  // Repeating a name from the transcript proves only that the user said it; it
+  // does not prove that the product exists in this tenant. Every command that
+  // can change a product or a bill line must resolve one unambiguous catalogue
+  // row. Search remains exempt because looking for an absent product is valid.
+  const catalogRequired = PRODUCT_REFERENCE_REQUIRED_INTENTS.has(command.intent);
+  if (catalogRequired && matchedProductIds.size === 0) {
+    addReason(
+      reasons,
+      normalizedCatalog.length > 0 ? "PRODUCT_NOT_MATCHED_TO_CATALOG" : "CATALOG_EMPTY_OR_UNAVAILABLE",
+    );
+  }
+
+  if ((command.intent === AI_INTENTS.SET_CUSTOMER || command.intent === AI_INTENTS.CREATE_CUSTOMER)
+    && !command.customer?.name
+    && !command.customer?.mobile) {
+    addReason(reasons, "CUSTOMER_DETAILS_REQUIRED_FOR_INTENT");
+  }
+  if (command.intent === AI_INTENTS.SET_PAYMENT
+    && command.payment?.cash === null
+    && command.payment?.upi === null
+    && command.payment?.remaining === null) {
+    addReason(reasons, "PAYMENT_DETAILS_REQUIRED_FOR_INTENT");
+  }
+  if (command.intent === AI_INTENTS.SET_PAYMENT && !command.payment) {
+    addReason(reasons, "PAYMENT_DETAILS_REQUIRED_FOR_INTENT");
+  }
+  if (command.intent === AI_INTENTS.APPLY_DISCOUNT && command.discount === null) {
+    addReason(reasons, "DISCOUNT_REQUIRED_FOR_INTENT");
   }
 
   if (command.customer?.name && !phraseIsSupported(command.customer.name, normalizedTranscript)) addReason(reasons, "CUSTOMER_NAME_NOT_IN_TRANSCRIPT");
@@ -295,6 +342,7 @@ export function groundAiCommand(command, { transcript, catalog = [] } = {}) {
       matchedProductIds: [...matchedProductIds].slice(0, 50),
       requiresManualFallback: !allowed,
       providerProseAccepted: false,
+      catalogRequired,
     },
   };
 }

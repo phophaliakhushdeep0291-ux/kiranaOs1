@@ -41,6 +41,10 @@ describe("offline route capability contract", () => {
     }
   });
 
+  it("precaches the background refresh bridge needed for reload-free offline updates", () => {
+    expect(criticalEntries).toContain("src/features/core/sync/BackgroundRuntime.tsx");
+  });
+
   it("does not classify local counter work as internet-only", () => {
     for (const page of ["Billing", "Products", "Customers", "CustomerDetailPage", "Inventory", "BillsPage", "PurchaseBillsPage", "Suppliers", "Expenses", "Reports", "DailyClosingPage", "RecycleBinPage", "RecoveryModePage"]) {
       expect(routes).not.toMatch(new RegExp(`ProtectedRoute component=\\{${page}\\}[^>]*onlineOnly`));

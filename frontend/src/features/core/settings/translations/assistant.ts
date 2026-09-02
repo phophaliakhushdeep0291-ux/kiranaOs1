@@ -55,4 +55,10 @@ export const assistantEn = {
   "assistant.unavailable": "The assistant is not set up on this server.",
   "assistant.busy": "The assistant is busy. Try again in a moment.",
   "assistant.failed": "That did not work. Try rephrasing it.",
+  "assistant.feedback.question": "Was this right?",
+  "assistant.feedback.correct": "Correct",
+  "assistant.feedback.misunderstood": "Misunderstood",
+  "assistant.feedback.unsafe": "Unsafe",
+  "assistant.feedback.thanks": "Feedback recorded — no message or customer data was copied.",
+  "assistant.feedback.failed": "Feedback was not saved. Try again.",
 } as const;

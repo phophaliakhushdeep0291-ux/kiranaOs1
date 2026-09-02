@@ -1,19 +1,24 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { parsePostgresUrl, maskPostgresUrl } from "./postgres-url-safety.js";
+import { parsePostgresUrl, maskPostgresUrl, postgresCliUrl } from "./postgres-url-safety.js";
 
 function boolEnv(name) {
   return String(process.env[name] || "").toLowerCase() === "true";
 }
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const suffix = process.platform === "win32" ? ".exe" : "";
+  const executable = command === "pg_dump" && process.env.PG_BIN_DIR
+    ? path.join(process.env.PG_BIN_DIR, `pg_dump${suffix}`)
+    : command;
+  const result = spawnSync(executable, args, {
     cwd: process.cwd(),
     env: process.env,
     stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
     encoding: options.capture ? "utf8" : undefined,
-    shell: process.platform === "win32",
+    shell: false,
   });
   if (result.status !== 0) {
     const stderr = options.capture ? result.stderr : "";
@@ -23,7 +28,11 @@ function run(command, args, options = {}) {
 }
 
 function commandExists(command) {
-  const probe = spawnSync(command, ["--version"], { stdio: "ignore", shell: process.platform === "win32" });
+  const suffix = process.platform === "win32" ? ".exe" : "";
+  const executable = command === "pg_dump" && process.env.PG_BIN_DIR
+    ? path.join(process.env.PG_BIN_DIR, `pg_dump${suffix}`)
+    : command;
+  const probe = spawnSync(executable, ["--version"], { stdio: "ignore", shell: false });
   return probe.status === 0;
 }
 
@@ -33,6 +42,7 @@ const backupFormat = process.env.BACKUP_FORMAT || "custom";
 const dryRun = boolEnv("BACKUP_DRY_RUN");
 
 const db = parsePostgresUrl(databaseUrl, "DATABASE_URL");
+const databaseCliUrl = postgresCliUrl(databaseUrl);
 if (!commandExists("pg_dump")) {
   throw new Error("pg_dump was not found. Install PostgreSQL client tools before running backup proof.");
 }
@@ -43,8 +53,8 @@ const extension = backupFormat === "plain" ? "sql" : "dump";
 const outputFile = path.resolve(backupDir, `kiranaos-${db.database}-${timestamp}.${extension}`);
 
 const args = backupFormat === "plain"
-  ? ["--no-owner", "--no-privileges", "--file", outputFile, databaseUrl]
-  : ["--format=custom", "--no-owner", "--no-privileges", "--file", outputFile, databaseUrl];
+  ? ["--no-owner", "--no-privileges", "--file", outputFile, databaseCliUrl]
+  : ["--format=custom", "--no-owner", "--no-privileges", "--file", outputFile, databaseCliUrl];
 
 console.log(JSON.stringify({
   type: "postgres_backup_plan",
@@ -61,15 +71,25 @@ if (dryRun) {
   process.exit(0);
 }
 
-run("pg_dump", args);
+try {
+  run("pg_dump", args);
+} catch (error) {
+  // pg_dump may create an empty/partial destination before a connection or
+  // streaming failure. Never leave that file where an operator may mistake it
+  // for a usable backup.
+  fs.rmSync(outputFile, { force: true });
+  throw error;
+}
 const stat = fs.statSync(outputFile);
 if (!stat.size) throw new Error("Backup file was created but is empty");
+const sha256 = crypto.createHash("sha256").update(fs.readFileSync(outputFile)).digest("hex");
 
 console.log(JSON.stringify({
   type: "postgres_backup",
   status: "passed",
   outputFile,
   bytes: stat.size,
+  sha256,
   time: new Date().toISOString(),
 }, null, 2));
 

@@ -323,4 +323,31 @@ export const productsEn = {
   "products.voice.ask.retailPrice": "Retail price?",
   "products.voice.ask.wholesalePrice": "Wholesale price?",
   "products.voice.ask.lowStockAlert": "Alert when stock falls to?",
+
+  // The line the counter READS while a question is on the table. The ask.* line
+  // above is the one that is SPOKEN: a hi-IN voice pronounces Devanagari
+  // correctly and mangles Roman text, while the shopkeeper reads Roman fastest.
+  // In English both are the same string, so an English shop sees no change.
+  // The voice parser has understood Hinglish from the start; this is the app answering in it.
+  "products.voice.say.name": "What is the product called?",
+  "products.voice.say.sellingPrice": "Selling price?",
+  "products.voice.say.mrp": "MRP printed on the pack?",
+  "products.voice.say.costPrice": "What does it cost you?",
+  "products.voice.say.stockQuantity": "How much stock is coming in?",
+  "products.voice.say.category": "Which category?",
+  "products.voice.say.brand": "Which brand?",
+  "products.voice.say.unit": "Sold by which unit?",
+  "products.voice.say.packSize": "What does one pack hold?",
+  "products.voice.say.barcode": "Barcode number?",
+  "products.voice.say.hsn": "HSN code?",
+  "products.voice.say.aliases": "Any other names for it?",
+  "products.voice.say.gstRate": "GST rate?",
+  "products.voice.say.minimumSellingPrice": "Minimum selling price?",
+  "products.voice.say.retailPrice": "Retail price?",
+  "products.voice.say.wholesalePrice": "Wholesale price?",
+  "products.voice.say.lowStockAlert": "Alert when stock falls to?",
+  "products.voice.sayReady": "Everything needed is filled. Check it and press Save.",
+  "products.voice.sayNotUnderstood": "Did not catch that. Say it again, or say skip.",
+  "products.voice.sayHint": "Say it all at once, like Tata Salt 1 kg MRP 28 cost 24 selling 26, or answer one question at a time.",
+  "products.voice.sayControls": "Say skip to pass a question, save when you are done.",
 } as const;

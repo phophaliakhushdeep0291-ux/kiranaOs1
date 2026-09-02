@@ -455,8 +455,8 @@ runStep({
 });
 runStep({
   id: "worker-heartbeat",
-  label: "Deployed worker heartbeat freshness",
-  args: ["run", "worker:health"],
+  label: "Deployed worker heartbeat and external job execution",
+  args: ["run", "worker:proof"],
   requiredFor: ["strict"],
   configured: hasRedis && boolEnv("PROOF_REQUIRE_WORKER"),
   blockedReason: "start the production worker and set PROOF_REQUIRE_WORKER=true with Redis configured",

@@ -4,6 +4,7 @@ const dbState = vi.hoisted(() => ({
   committed: {} as Record<string, unknown[]>,
   failOnTable: null as string | null,
   idCounter: 0,
+  transactions: Promise.resolve() as Promise<unknown>,
 }));
 
 vi.mock("@/lib/storage/auth-storage", () => ({
@@ -26,14 +27,19 @@ function tableRows(table: string) {
 vi.mock("@/lib/offline/db", () => ({
   offlineDB: {
     getAll: vi.fn(async (table: string) => cloneRows(dbState.committed[table] ?? [])),
+    getRecentCache: vi.fn(async (key: string, fallback: unknown) => {
+      const row = (dbState.committed.settings ?? []).find((setting) => (setting as Record<string, unknown>).key === `cache:${key}`) as Record<string, unknown> | undefined;
+      return row?.value ?? fallback;
+    }),
     put: vi.fn(async () => undefined),
     putMany: vi.fn(async () => undefined),
-    transaction: vi.fn(async (_tables: string[], callback: (tx: {
+    transaction: vi.fn((_tables: string[], callback: (tx: {
       put: (table: string, value: unknown) => Promise<void>;
       putMany: (table: string, values: unknown[]) => Promise<void>;
       enqueueOutboxOperation: (event: unknown) => Promise<void>;
       setSetting: (key: string, value: unknown, expiresAt?: number | null) => Promise<void>;
     }) => Promise<unknown>) => {
+      const operation = dbState.transactions.then(async () => {
       const staged = Object.fromEntries(Object.entries(dbState.committed).map(([table, rows]) => [table, cloneRows(rows)])) as Record<string, unknown[]>;
       const ensure = (table: string) => {
         staged[table] ??= [];
@@ -48,7 +54,8 @@ vi.mock("@/lib/offline/db", () => ({
           maybeFail(table);
           const row = { ...(value as Record<string, unknown>) };
           const rows = ensure(table);
-          const index = rows.findIndex((existing) => (existing as Record<string, unknown>).id === row.id);
+          const keyField = table === "settings" ? "key" : "id";
+          const index = rows.findIndex((existing) => (existing as Record<string, unknown>)[keyField] === row[keyField]);
           if (index >= 0) rows[index] = row;
           else rows.push(row);
         }),
@@ -68,22 +75,29 @@ vi.mock("@/lib/offline/db", () => ({
 
       await callback(tx);
       dbState.committed = staged;
+      });
+      dbState.transactions = operation.catch(() => undefined);
+      return operation;
     }),
   },
 }));
 
 vi.mock("@/lib/offline/instant-cache", () => ({
   createLocalId: vi.fn((prefix: string) => `${prefix}_${++dbState.idCounter}`),
+  emitLocalDataChanged: vi.fn(),
+  readIndexedRecentCache: vi.fn(async (_key: string, fallback: unknown) => fallback),
   readInstantCache: vi.fn((_key: string, fallback: unknown) => fallback),
   upsertCachedListItem: vi.fn(),
+  writeInstantMemoryCache: vi.fn(),
 }));
 
 import { offlineDB } from "@/lib/offline/db";
-import { upsertCachedListItem } from "@/lib/offline/instant-cache";
-import { recordDamageLocalFirst, recordPurchaseLocalFirst, recordSaleLocalFirst, stockCorrectionLocalFirst } from "@/features/core/inventory/local-actions";
+import { readInstantCache, upsertCachedListItem, writeInstantMemoryCache } from "@/lib/offline/instant-cache";
+import { recordDamageLocalFirst, recordPurchaseBatchLocalFirst, recordPurchaseLocalFirst, recordSaleLocalFirst, stockCorrectionLocalFirst } from "@/features/core/inventory/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedUpsertCachedListItem = vi.mocked(upsertCachedListItem);
+const mockedWriteInstantMemoryCache = vi.mocked(writeInstantMemoryCache);
 
 const productRow = {
   id: "product_1",
@@ -102,8 +116,10 @@ const productRow = {
 describe("stock adjustment transaction safety", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(readInstantCache).mockImplementation((_key, fallback) => fallback);
     dbState.idCounter = 0;
     dbState.failOnTable = null;
+    dbState.transactions = Promise.resolve();
     dbState.committed = {
       products: [{ ...productRow }],
       inventory_movements: [],
@@ -117,7 +133,7 @@ describe("stock adjustment transaction safety", () => {
 
     expect(result.success).toBe(true);
     expect(mockedOfflineDB.transaction).toHaveBeenCalledWith(
-      expect.arrayContaining(["inventory_movements", "products", "local_audit_logs", "sync_outbox"]),
+      expect.arrayContaining(["inventory_movements", "products", "local_audit_logs", "sync_outbox", "settings"]),
       expect.any(Function),
     );
     expect(tableRows("products")[0]).toEqual(expect.objectContaining({ id: "product_1", stockBaseQty: 15, sync_status: "pending_sync" }));
@@ -197,7 +213,7 @@ describe("stock adjustment transaction safety", () => {
     // its STOCK_DAMAGE sync op failed forever ("Owner PIN required"), diverging
     // local stock from the server.
     await expect(recordDamageLocalFirst({ productId: "product_1", quantity: 1, unit: "kg", reason: "Packet damaged" })).rejects.toThrow(/Owner PIN/i);
-    expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
+    expect(tableRows("inventory_movements")).toHaveLength(0);
     // PIN present but no reason → still rejected.
     await expect(recordDamageLocalFirst({ productId: "product_1", quantity: 1, unit: "kg", ownerPin: "1234" })).rejects.toThrow(/reason/i);
     expect(tableRows("inventory_movements")).toHaveLength(0);
@@ -232,10 +248,21 @@ describe("stock adjustment transaction safety", () => {
     ]));
   });
 
+  it("serializes simultaneous stock movements so neither update is lost", async () => {
+    await Promise.all([
+      recordSaleLocalFirst({ productId: "product_1", quantity: 3, unit: "kg", reason: "Counter A" }),
+      recordSaleLocalFirst({ productId: "product_1", quantity: 2, unit: "kg", reason: "Counter B" }),
+    ]);
+
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 5 }));
+    expect(tableRows("inventory_movements").map((row) => row.stock_after)).toEqual([7, 5]);
+    expect(tableRows("sync_outbox").filter((row) => row.operation_type === "STOCK_SALE")).toHaveLength(2);
+  });
+
   it("correction requires owner PIN before any stock write", async () => {
     await expect(stockCorrectionLocalFirst({ productId: "product_1", quantityDelta: 5, unit: "kg", reason: "Physical count", ownerPin: "" })).rejects.toThrow(/Owner PIN/i);
 
-    expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
+    expect(tableRows("inventory_movements")).toHaveLength(0);
     expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 10 }));
     expect(tableRows("inventory_movements")).toHaveLength(0);
     expect(tableRows("local_audit_logs")).toHaveLength(0);
@@ -258,6 +285,99 @@ describe("stock adjustment transaction safety", () => {
     ]));
   });
 
+  it("commits a batch purchase and its offline sellable quantity atomically", async () => {
+    dbState.committed.products = [{ ...productRow, batchTrackingEnabled: true }];
+    vi.mocked(readInstantCache).mockImplementation((key, fallback) => key === "inventory-lots:sellable:v1:primary:product_1"
+      ? [{ id: "lot_old", batchNumber: "OLD", expiresOn: "2029-01-01", availableBaseQty: 2, mrp: 45 }]
+      : fallback);
+    dbState.committed.settings = [{
+      key: "cache:inventory-lots:sellable:v1:primary:product_1",
+      value: [{ id: "lot_old", batchNumber: "OLD", expiresOn: "2029-01-01", availableBaseQty: 2, mrp: 45 }],
+    }];
+
+    await recordPurchaseLocalFirst({
+      productId: "product_1",
+      quantity: 5,
+      unit: "kg",
+      costPerRateUnit: 50,
+      batchNumber: "NEW",
+      expiresOn: "2030-01-01",
+      batchMrp: 60,
+    });
+
+    expect(tableRows("settings")).toContainEqual(expect.objectContaining({
+      key: "cache:inventory-lots:sellable:v1:primary:product_1",
+      value: expect.arrayContaining([
+        expect.objectContaining({ batchNumber: "OLD", availableBaseQty: 2 }),
+        expect.objectContaining({ batchNumber: "NEW", availableBaseQty: 5, pendingSync: true }),
+      ]),
+    }));
+    expect(mockedWriteInstantMemoryCache).toHaveBeenCalledWith(
+      "inventory-lots:sellable:v1:primary:product_1",
+      expect.arrayContaining([expect.objectContaining({ batchNumber: "NEW", availableBaseQty: 5 })]),
+      30,
+    );
+  });
+
+  it("rolls back stock, movement, audit, and outbox when the batch projection cannot persist", async () => {
+    dbState.committed.products = [{ ...productRow, batchTrackingEnabled: true }];
+    dbState.failOnTable = "settings";
+
+    await expect(recordPurchaseLocalFirst({
+      productId: "product_1",
+      quantity: 5,
+      unit: "kg",
+      costPerRateUnit: 50,
+      batchNumber: "NEW",
+      expiresOn: "2030-01-01",
+    })).rejects.toThrow(/settings write failure/i);
+
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 10 }));
+    expect(tableRows("inventory_movements")).toHaveLength(0);
+    expect(tableRows("local_audit_logs")).toHaveLength(0);
+    expect(tableRows("sync_outbox")).toHaveLength(0);
+    expect(mockedWriteInstantMemoryCache).not.toHaveBeenCalled();
+  });
+
+  it("accumulates repeated batch lines without losing an earlier line in the same purchase", async () => {
+    dbState.committed.products = [{ ...productRow, batchTrackingEnabled: true }];
+
+    await recordPurchaseBatchLocalFirst([
+      { productId: "product_1", quantity: 2, unit: "kg", costPerRateUnit: 50, batchNumber: "B-1", expiresOn: "2030-01-01" },
+      { productId: "product_1", quantity: 3, unit: "kg", costPerRateUnit: 50, batchNumber: "B-1", expiresOn: "2030-01-01" },
+    ]);
+
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 15 }));
+    expect(tableRows("settings")).toContainEqual(expect.objectContaining({
+      key: "cache:inventory-lots:sellable:v1:primary:product_1",
+      value: [expect.objectContaining({ batchNumber: "B-1", availableBaseQty: 5 })],
+    }));
+    expect(tableRows("sync_outbox").filter((row) => row.operation_type === "STOCK_PURCHASE_BATCH")).toHaveLength(1);
+  });
+
+  it("refuses corrections that cannot preserve batch or per-pack identity", async () => {
+    dbState.committed.products = [{ ...productRow, batchTrackingEnabled: true }];
+    await expect(stockCorrectionLocalFirst({ productId: "product_1", quantityDelta: 5, unit: "kg", reason: "Found stock", ownerPin: "1234" }))
+      .rejects.toThrow(/Stock In.*batch number and expiry/i);
+    expect(tableRows("inventory_movements")).toHaveLength(0);
+
+    dbState.committed.products = [{ ...productRow, packagingMode: "per_pack" }];
+    await expect(stockCorrectionLocalFirst({ productId: "product_1", quantityDelta: -2, unit: "kg", reason: "Count shortage", ownerPin: "1234" }))
+      .rejects.toThrow(/counted per packaging/i);
+    expect(tableRows("inventory_movements")).toHaveLength(0);
+    expect(tableRows("sync_outbox")).toHaveLength(0);
+  });
+
+  it("allows a downward batch correction to queue for transactional lot reconciliation", async () => {
+    dbState.committed.products = [{ ...productRow, batchTrackingEnabled: true }];
+    await stockCorrectionLocalFirst({ productId: "product_1", quantityDelta: -2, unit: "kg", reason: "Physical shortage", ownerPin: "1234" });
+
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 8 }));
+    expect(tableRows("sync_outbox")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ operation_type: "STOCK_CORRECTION", payload: expect.objectContaining({ nextStock: 8, quantityDelta: -2 }) }),
+    ]));
+  });
+
   it("failed stock transaction leaves no partial movement or product update", async () => {
     dbState.failOnTable = "local_audit_logs";
 
@@ -276,8 +396,10 @@ import { buildUnitMismatchWarning, calculateInventoryPriceSuggestions } from "@/
 describe("inventory reliability business rules", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(readInstantCache).mockImplementation((_key, fallback) => fallback);
     dbState.idCounter = 0;
     dbState.failOnTable = null;
+    dbState.transactions = Promise.resolve();
     dbState.committed = {
       products: [{ ...productRow }],
       inventory_movements: [],

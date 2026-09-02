@@ -74,10 +74,13 @@ QUEUES_ENABLED=true REDIS_URL=redis://localhost:6379 PROOF_REQUIRE_WORKER=true n
 This adds:
 
 ```text
-npm run worker:health
+npm run worker:proof
 ```
 
-If no fresh worker heartbeat exists, the proof fails.
+This requires a fresh heartbeat from the separately running worker, sends a
+one-time healthcheck job through Redis/BullMQ, waits for that external worker to
+finish it, and retains a credential-free JSON report. If no fresh worker
+heartbeat exists or no external worker completes the job, the proof fails.
 
 ## Razorpay fixture proof
 

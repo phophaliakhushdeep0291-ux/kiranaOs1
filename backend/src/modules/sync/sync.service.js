@@ -45,6 +45,7 @@ import {
   resolveOperationalLocation,
   setLocationInventory,
 } from "../stores/location-context.service.js";
+import { consumeInventoryLotsForMovement } from "../inventory-lots/inventoryLots.service.js";
 
 const protectedProductFields = [
   "stockBaseQty",
@@ -3575,6 +3576,12 @@ async function applyStockSale(shopId, event, user, context) {
         allowShortfall: true,
         packs: pack ? new Map([[pack.sellingUnitId, { sellingUnit: pack.sellingUnit, qty: pack.quantity }]]) : null,
       });
+      const lotAllocations = await consumeInventoryLotsForMovement(tx, {
+        shopId,
+        locationId: location.id,
+        product,
+        quantityBaseQty: qtyInBase,
+      });
       const ledger = await tx.stockLedger.create({
         data: {
           shopId,
@@ -3617,6 +3624,7 @@ async function applyStockSale(shopId, event, user, context) {
           shortfallBaseQty: stock.shortfallBaseQty,
           idempotencyKey,
           offlineSyncEventId: getClientEventId(event),
+          lotAllocations,
         },
         client: tx,
       });

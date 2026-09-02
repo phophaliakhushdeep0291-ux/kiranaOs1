@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CalendarClock, CheckCircle2, IndianRupee, PackageSearch, ShieldAlert } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -12,6 +12,7 @@ import { NEAR_EXPIRY_QUERY_KEY, NearExpiryAlert } from "@/features/core/inventor
 import { cn } from "@/lib/utils";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useOfflineStatus } from "@/features/core/sync/useOfflineStatus";
+import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 
 type Action = { lot: InventoryLot; status: "active" | "quarantined" | "recalled" };
 const DAY = 86_400_000;
@@ -26,12 +27,19 @@ export default function InventoryLotsPage() {
   const [action, setAction] = useState<Action | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const listCacheKey = INVENTORY_LOT_CACHE_KEYS.list(status);
-  const query = useQuery({ queryKey: ["inventory-lots", status], queryFn: () => listInventoryLots({ status }), initialData: () => readInventoryLotMemoryCache<InventoryLot[]>(listCacheKey), initialDataUpdatedAt: () => inventoryLotCacheUpdatedAt(listCacheKey) });
+  const [locationId, setLocationId] = useState(() => getActiveLocationId() ?? "primary");
+  useEffect(() => {
+    const refreshLocation = () => setLocationId(getActiveLocationId() ?? "primary");
+    window.addEventListener(LOCATION_CHANGED_EVENT, refreshLocation);
+    return () => window.removeEventListener(LOCATION_CHANGED_EVENT, refreshLocation);
+  }, []);
+  const listCacheKey = INVENTORY_LOT_CACHE_KEYS.list(status, undefined, locationId);
+  const alertsCacheKey = INVENTORY_LOT_CACHE_KEYS.alerts(locationId);
+  const query = useQuery({ queryKey: ["inventory-lots", locationId, status], queryFn: () => listInventoryLots({ status, locationId }), initialData: () => readInventoryLotMemoryCache<InventoryLot[]>(listCacheKey), initialDataUpdatedAt: () => inventoryLotCacheUpdatedAt(listCacheKey) });
   // Counted on the server against the shop's own windows, and costed. The card
   // below used to derive "expiring in 30 days" from whatever page of lots had
   // been fetched, so it silently undercounted and never showed the money.
-  const alerts = useQuery({ queryKey: NEAR_EXPIRY_QUERY_KEY, queryFn: () => getExpiryAlerts(), initialData: () => readInventoryLotMemoryCache<ExpiryAlerts>(INVENTORY_LOT_CACHE_KEYS.alerts), initialDataUpdatedAt: () => inventoryLotCacheUpdatedAt(INVENTORY_LOT_CACHE_KEYS.alerts), staleTime: 5 * 60_000, retry: false });
+  const alerts = useQuery({ queryKey: [...NEAR_EXPIRY_QUERY_KEY, locationId], queryFn: () => getExpiryAlerts({ locationId }), initialData: () => readInventoryLotMemoryCache<ExpiryAlerts>(alertsCacheKey), initialDataUpdatedAt: () => inventoryLotCacheUpdatedAt(alertsCacheKey), staleTime: 5 * 60_000, retry: false });
   const now = Date.now();
   const rows = useMemo(() => (query.data ?? []).filter((lot) => `${lot.product.name} ${lot.batchNumber} ${lot.location.name}`.toLowerCase().includes(search.trim().toLowerCase())), [query.data, search]);
   const metrics = useMemo(() => ({ active: (query.data ?? []).filter((lot) => lot.status === "active" && lot.availableBaseQty > 0 && new Date(lot.expiresOn).getTime() >= now).length, expiring: (query.data ?? []).filter((lot) => lot.status === "active" && new Date(lot.expiresOn).getTime() >= now && new Date(lot.expiresOn).getTime() - now <= 30 * DAY).length, blocked: (query.data ?? []).filter((lot) => ["quarantined", "recalled"].includes(lot.status)).length, units: (query.data ?? []).filter((lot) => lot.status === "active" && new Date(lot.expiresOn).getTime() >= now).reduce((sum, lot) => sum + lot.availableBaseQty, 0) }), [query.data, now]);
@@ -41,9 +49,9 @@ export default function InventoryLotsPage() {
     setBusy(true); setError("");
     try {
       const updated = await changeInventoryLotStatus(action.lot.id, action.status, action.status === "active" ? "Released after owner review" : `${action.status} by owner from expiry control`, pin);
-      const current = queryClient.getQueryData<InventoryLot[]>(["inventory-lots", status]) ?? [];
+      const current = queryClient.getQueryData<InventoryLot[]>(["inventory-lots", locationId, status]) ?? [];
       const visible = status === "all" || updated.status === status ? current.map((lot) => lot.id === updated.id ? updated : lot) : current.filter((lot) => lot.id !== updated.id);
-      queryClient.setQueryData(["inventory-lots", status], visible);
+      queryClient.setQueryData(["inventory-lots", locationId, status], visible);
       cacheInventoryLotResource(listCacheKey, visible);
       void queryClient.invalidateQueries({ queryKey: ["inventory-lots"] });
       toast({ title: `Batch ${action.status}`, description: `${action.lot.product.name} · ${action.lot.batchNumber}` });

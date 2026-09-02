@@ -9,12 +9,17 @@ describe("high-frequency route preloading", () => {
     const preload = source("../app/route-preload.ts");
     const routes = source("../app/routes.tsx");
 
-    for (const name of ["loadBillingRoute", "loadCustomersRoute", "loadInventoryRoute", "loadPurchasesRoute", "loadSalesOverviewRoute"]) {
+    for (const name of ["loadBillingRoute", "loadBillsRoute", "loadCustomersRoute", "loadInventoryRoute", "loadProductsRoute", "loadPurchasesRoute", "loadReportsRoute", "loadSalesOverviewRoute"]) {
       expect(routes).toContain(`lazy(${name})`);
       expect(preload).toContain(`export const ${name}`);
     }
     expect(preload).toContain("requestIdleCallback");
     expect(preload).toContain("pending.get(key)");
+    for (const path of ["/billing", "/bills", "/customers", "/inventory", "/products", "/purchase-bills", "/reports", "/sales-overview"]) {
+      expect(preload).toContain(`"${path}"`);
+    }
+    expect(preload).not.toContain('"/purchases":');
+    expect(preload).not.toContain('"/sales/overview":');
   });
 
   it("warms customer routes after dashboard idle and before pointer, focus, or touch navigation", () => {

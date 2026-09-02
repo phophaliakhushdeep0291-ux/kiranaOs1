@@ -191,6 +191,18 @@ const NUMERIC_FIELDS = new Set<ProductVoiceField>([
 /** Identifiers are digit strings, not quantities — "hsn 0405" must keep its zero. */
 const CODE_FIELDS = new Set<ProductVoiceField>(["barcode", "hsn"]);
 
+/** Fields whose answer is words rather than a number. */
+const TEXT_ANSWER_FIELDS = new Set<ProductVoiceField>(["name", "brand", "category", "aliases"]);
+
+/**
+ * The fields that can only be produced by a stated price.
+ *
+ * Reaching one of these takes a money word or an explicit label, so an ordinary
+ * product name never raises one. That is what makes them safe to act on when a
+ * text question comes back carrying more than text.
+ */
+const MONEY_KEYS = new Set(["mrp", "costPrice", "sellingPrice", "minimumSellingPrice", "retailPrice", "wholesalePrice"]);
+
 const UNIT_WORDS: Record<string, string> = {
   kg: "kg",
   kilo: "kg",
@@ -650,6 +662,29 @@ export function parseProductVoiceAnswer(field: ProductVoiceField, spoken: string
   // and states nothing.
   const parsed = parseSpokenProductFields(spoken);
   const named = Object.keys(parsed).filter((key) => key !== "name");
+
+  // Asked what the product is called, a shopkeeper says the whole thing:
+  // "Tata Salt chhabbis rupaye", "surf excel 1 kg 120 rupaye". The free reading
+  // gets those exactly right — name, pack size and price — but the label test
+  // below did not count a money word as stating a field, so the free reading was
+  // thrown away and the entire sentence became the name. The shop was left with
+  // a product called "tata salt chhabbis rupaye" carrying no price, and then
+  // asked for the price it had just been told.
+  //
+  // A price is a safe signal; a bare quantity is not. "5 star chocolate" and
+  // "500 ml bottle" are names, and reading their numbers would eat the very
+  // words the question asked for.
+  if (TEXT_ANSWER_FIELDS.has(field) && parsed.name && named.some((key) => MONEY_KEYS.has(key))) {
+    if (field === "name") return parsed;
+    // The same sentence answering "which brand?" means the words are the brand.
+    const { name, ...rest } = parsed;
+    const carried: ProductVoiceFields = { ...rest };
+    if (field === "aliases") carried.aliases = uniqueWords(name.split(" "));
+    else if (field === "brand") carried.brand = name;
+    else carried.category = name;
+    return carried;
+  }
+
   if (named.length > 0 && statesAFieldLabel(spoken)) return parsed;
 
   const tokens = normalizeProductVoiceText(spoken).split(" ").filter(Boolean);
@@ -666,10 +701,15 @@ export function parseProductVoiceAnswer(field: ProductVoiceField, spoken: string
   if (NUMERIC_FIELDS.has(field)) {
     const at = tokens.findIndex((token) => spokenNumber(token) !== undefined);
     if (at === -1) return {};
-    const value = spokenNumber(tokens[at]);
-    if (value === undefined) return {};
+    // readSpokenAmount rather than spokenNumber, because "paanch sau" is five
+    // hundred and one token at a time it comes back as five. The free-form
+    // reader was fixed for this; this path — the one the voice bar actually
+    // uses, one question at a time — was not, so answering "MRP?" with
+    // "paanch sau" wrote 5, "ek sau bees" wrote 1 and "do hazaar" wrote 2.
+    const amount = readSpokenAmount(tokens, at);
+    if (amount === undefined) return {};
     const numeric: ProductVoiceFields = {};
-    applyNumeric(numeric, field, value, unitOf(tokens[at + 1]));
+    applyNumeric(numeric, field, amount.value, unitOf(tokens[amount.end + 1]));
     return numeric;
   }
 

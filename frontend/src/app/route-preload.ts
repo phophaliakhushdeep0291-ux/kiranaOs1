@@ -4,19 +4,25 @@ type RouteModule = { default: ComponentType };
 type RouteLoader = () => Promise<RouteModule>;
 
 export const loadBillingRoute: RouteLoader = () => import("@/features/core/billing/pages/BillingPage");
+export const loadBillsRoute: RouteLoader = () => import("@/features/core/bills/pages/BillsPage");
 export const loadCustomersRoute: RouteLoader = () => import("@/features/core/customers/pages/CustomersPage");
 export const loadInventoryRoute: RouteLoader = () => import("@/features/core/inventory/pages/InventoryPage");
+export const loadProductsRoute: RouteLoader = () => import("@/features/core/products/pages/ProductsPage");
 export const loadPurchasesRoute: RouteLoader = () => import("@/features/core/purchases/pages/PurchaseBillsPage");
+export const loadReportsRoute: RouteLoader = () => import("@/features/core/reports/pages/ReportsPage");
 export const loadSalesOverviewRoute: RouteLoader = () => import("@/features/core/sales/pages/SalesOverviewPage");
 
 const loaders: Record<string, RouteLoader> = {
   "/billing": loadBillingRoute,
+  "/bills": loadBillsRoute,
   "/customers": loadCustomersRoute,
   // "/udhar" redirects to the customer credit view, so warming it warms that chunk.
   "/udhar": loadCustomersRoute,
   "/inventory": loadInventoryRoute,
-  "/purchases": loadPurchasesRoute,
-  "/sales/overview": loadSalesOverviewRoute,
+  "/products": loadProductsRoute,
+  "/purchase-bills": loadPurchasesRoute,
+  "/reports": loadReportsRoute,
+  "/sales-overview": loadSalesOverviewRoute,
 };
 const pending = new Map<string, Promise<RouteModule>>();
 

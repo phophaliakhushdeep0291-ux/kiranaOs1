@@ -59,6 +59,20 @@ export const agentPlanSchema = z.object({
   planId: z.string().trim().min(1).max(60),
 }).strict();
 
+export const aiFeedbackSchema = z.object({
+  actionLogId: z.string().trim().min(1).max(100),
+  outcome: z.enum(["correct", "misunderstood", "unsafe"]),
+  reasonCode: z.enum([
+    "NONE",
+    "MISUNDERSTOOD_REQUEST",
+    "WRONG_FACT",
+    "WRONG_ITEM",
+    "WRONG_QUANTITY_OR_AMOUNT",
+    "UNSAFE_ACTION",
+    "OTHER",
+  ]).optional(),
+}).strict();
+
 export const logActionSchema = z.object({
   transcript: z.string().max(2_000),
   parsedAction: z.record(z.unknown()),

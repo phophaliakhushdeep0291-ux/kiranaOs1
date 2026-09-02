@@ -50,7 +50,7 @@ import { CHIP_TONES } from "@/lib/chip-tones";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useToast } from "@/hooks/use-toast";
 import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/core/customers/local-actions";
-import { recordPaymentLocalFirst } from "@/features/core/payments/local-actions";
+import { recordPaymentLocalFirst, recordSplitPaymentLocalFirst } from "@/features/core/payments/local-actions";
 import { useOfflineStatus } from "@/features/core/sync";
 import { dedupePaymentsForDisplay } from "@/features/core/sync/bill-reconciliation";
 import {
@@ -928,14 +928,11 @@ export default function CustomersPage() {
       let nextOutstanding = outstanding;
       if (paymentForm.mode === "split") {
         const baseNote = paymentForm.note.trim();
-        if (cashAmount > 0) {
-          const result = await recordPaymentLocalFirst(paymentForm.customerId, { amount: cashAmount, mode: "cash", note: baseNote ? `${baseNote} (split cash)` : t("customers.detail.splitCash") }, { expectedOutstanding: outstanding });
-          nextOutstanding = result.nextBalance;
-        }
-        if (upiAmount > 0) {
-          const result = await recordPaymentLocalFirst(paymentForm.customerId, { amount: upiAmount, mode: "upi", note: baseNote ? `${baseNote} (split UPI)` : t("customers.detail.splitUpi") }, { expectedOutstanding: nextOutstanding });
-          nextOutstanding = result.nextBalance;
-        }
+        const results = await recordSplitPaymentLocalFirst(paymentForm.customerId, [
+          ...(cashAmount > 0 ? [{ amount: cashAmount, mode: "cash" as const, note: baseNote ? `${baseNote} (split cash)` : t("customers.detail.splitCash") }] : []),
+          ...(upiAmount > 0 ? [{ amount: upiAmount, mode: "upi" as const, note: baseNote ? `${baseNote} (split UPI)` : t("customers.detail.splitUpi") }] : []),
+        ], { expectedOutstanding: outstanding });
+        nextOutstanding = results.at(-1)?.nextBalance ?? outstanding;
       } else {
         const result = await recordPaymentLocalFirst(paymentForm.customerId, { amount, mode: paymentForm.mode, note: paymentForm.note.trim() || undefined }, { expectedOutstanding: outstanding });
         nextOutstanding = result.nextBalance;

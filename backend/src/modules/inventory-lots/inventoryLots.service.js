@@ -182,6 +182,96 @@ export async function recordReceiptLot(tx, { shopId, locationId, product, receip
 }
 
 /**
+ * Remove a non-bill stock movement from the physical batches that supplied it.
+ *
+ * Product/location stock and InventoryLot are two views of the same shelf. A
+ * manual stock-out used to update only the former, leaving FEFO, expiry alerts,
+ * recalls and the billing batch picker advertising stock that had already left.
+ * This helper is intentionally transaction-only: callers update both views in
+ * one Prisma transaction, or neither view changes.
+ */
+export async function consumeInventoryLotsForMovement(tx, {
+  shopId,
+  locationId,
+  product,
+  quantityBaseQty,
+  includeBlockedOrExpired = false,
+}) {
+  if (!product?.batchTrackingEnabled) return [];
+  const quantity = round2(Math.abs(Number(quantityBaseQty || 0)));
+  if (!(quantity > 0)) return [];
+
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const lots = await tx.inventoryLot.findMany({
+    where: {
+      shopId,
+      locationId,
+      productId: product.id,
+      availableBaseQty: { gt: 0 },
+      ...(includeBlockedOrExpired ? {} : { status: "active", expiresOn: { gte: today } }),
+    },
+    orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }],
+  });
+  const available = round2(lots.reduce((sum, lot) => sum + Number(lot.availableBaseQty), 0));
+  if (available + 0.000001 < quantity) {
+    const source = includeBlockedOrExpired ? "recorded batches" : "saleable, unexpired batches";
+    const error = new AppError(`${product.name} has only ${available} ${product.baseUnit} in ${source}`, 409, "BATCH_STOCK_INSUFFICIENT");
+    error.publicData = { productId: product.id, requestedBaseQty: quantity, availableBaseQty: available };
+    throw error;
+  }
+
+  let remaining = quantity;
+  const allocations = [];
+  for (const lot of lots) {
+    if (remaining <= 0.000001) break;
+    const consumed = round2(Math.min(remaining, Number(lot.availableBaseQty)));
+    const changed = await tx.inventoryLot.updateMany({
+      where: { id: lot.id, availableBaseQty: { gte: consumed }, status: lot.status },
+      data: { availableBaseQty: { decrement: consumed } },
+    });
+    if (changed.count !== 1) throw new AppError("Batch stock changed during stock movement; retry", 409, "CONCURRENT_BATCH_STOCK_CHANGE");
+    const updated = await tx.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } });
+    if (updated.availableBaseQty <= 0.000001) {
+      await tx.inventoryLot.update({ where: { id: lot.id }, data: { status: "depleted", availableBaseQty: 0 } });
+    }
+    allocations.push({
+      inventoryLotId: lot.id,
+      batchNumber: lot.batchNumber,
+      expiresOn: lot.expiresOn,
+      quantityBaseQty: consumed,
+      statusBefore: lot.status,
+    });
+    remaining = round2(remaining - consumed);
+  }
+  return allocations;
+}
+
+/**
+ * An upward total correction cannot manufacture a batch identity. It must enter
+ * through Stock In, where the printed batch and expiry are captured. A downward
+ * correction can safely reconcile the batch ledger using the earliest dated
+ * physical stock first, including quarantined/expired stock that may be the
+ * missing units found during a count.
+ */
+export async function reconcileInventoryLotsForCorrection(tx, { shopId, locationId, product, differenceBaseQty }) {
+  if (!product?.batchTrackingEnabled || Math.abs(Number(differenceBaseQty || 0)) <= 0.000001) return [];
+  if (differenceBaseQty > 0) {
+    throw new AppError(
+      `${product.name} is batch tracked. Add the extra stock through Stock In with its batch number and expiry date.`,
+      422,
+      "BATCH_CORRECTION_RECEIPT_REQUIRED",
+    );
+  }
+  return consumeInventoryLotsForMovement(tx, {
+    shopId,
+    locationId,
+    product,
+    quantityBaseQty: Math.abs(differenceBaseQty),
+    includeBlockedOrExpired: true,
+  });
+}
+
+/**
  * The batches a counter may dispense from right now, newest expiry last.
  *
  * FEFO order, so the batch the till would pick on its own is the first row — a
@@ -336,7 +426,19 @@ export async function reapplyBillLotAllocations(tx, billId) {
   }
 }
 
-export async function restoreLotsForSaleReturn(tx, { originalBillId, returnBill }) {
+/**
+ * Put a sale return's stock back into the batches it came out of.
+ *
+ * Only the resellable part comes back. A line the counter marked damaged is
+ * written off by bills.service.js — it records the cost loss and deliberately
+ * does not restock it — so its units must not reappear here either. They were
+ * consumed from a lot at the sale and are gone from the shelf for good.
+ *
+ * damagedBaseQtyByProduct carries that write-off, in base units per product,
+ * because the damaged flag lives on the request rather than on the stored
+ * return line.
+ */
+export async function restoreLotsForSaleReturn(tx, { originalBillId, returnBill, damagedBaseQtyByProduct = new Map() }) {
   if (!originalBillId) return;
   const original = await tx.billItemLotAllocation.findMany({ where: { billItem: { billId: originalBillId }, quantityBaseQty: { gt: 0 } }, include: { billItem: true, inventoryLot: true }, orderBy: { createdAt: "asc" } });
   const previousRestores = await tx.billItemLotAllocation.findMany({ where: { billItem: { bill: { returnOfBillId: originalBillId } }, quantityBaseQty: { lt: 0 } } });
@@ -344,6 +446,18 @@ export async function restoreLotsForSaleReturn(tx, { originalBillId, returnBill 
   for (const row of previousRestores) restoredByLot.set(row.inventoryLotId, round2((restoredByLot.get(row.inventoryLotId) ?? 0) + Math.abs(row.quantityBaseQty)));
   const requestedByProduct = new Map();
   for (const item of returnBill.items ?? []) if (item.productId) requestedByProduct.set(item.productId, { billItemId: item.id, quantity: round2((requestedByProduct.get(item.productId)?.quantity ?? 0) + Math.abs(item.quantityInBaseUnit)) });
+  // Restoring a damaged unit would leave InventoryLot advertising stock the
+  // shelf count does not have. The next sale of that batch would then either
+  // be refused at checkout or push the product negative — exactly the drift
+  // between these two views of one shelf that consumeInventoryLotsForMovement
+  // was added to prevent.
+  for (const [productId, damagedBaseQty] of damagedBaseQtyByProduct) {
+    const request = requestedByProduct.get(productId);
+    if (!request) continue;
+    const resellable = round2(request.quantity - Math.abs(Number(damagedBaseQty || 0)));
+    if (resellable <= 0.000001) requestedByProduct.delete(productId);
+    else request.quantity = resellable;
+  }
   for (const [productId, request] of requestedByProduct.entries()) {
     let remaining = request.quantity;
     for (const allocation of original.filter((row) => row.billItem.productId === productId)) {

@@ -34,6 +34,23 @@ export function maskPostgresUrl(rawUrl) {
   }
 }
 
+const PRISMA_ONLY_POSTGRES_QUERY_PARAMS = Object.freeze([
+  "schema",
+  "connection_limit",
+  "pool_timeout",
+  "pgbouncer",
+  "socket_timeout",
+]);
+
+// Prisma accepts connection-string parameters that libpq tools such as
+// pg_dump, pg_restore and psql reject. Remove only those Prisma-specific
+// options; preserve sslmode, connect_timeout, options and other libpq settings.
+export function postgresCliUrl(rawUrl) {
+  const parsed = new URL(rawUrl);
+  for (const parameter of PRISMA_ONLY_POSTGRES_QUERY_PARAMS) parsed.searchParams.delete(parameter);
+  return parsed.toString();
+}
+
 export function isSafeRestoreDatabaseName(name = "") {
   const db = String(name).toLowerCase();
   if (!db) return false;

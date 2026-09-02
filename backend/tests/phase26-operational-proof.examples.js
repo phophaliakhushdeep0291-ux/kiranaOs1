@@ -8,6 +8,7 @@ function read(file) {
 const pkg = JSON.parse(read("package.json"));
 assert.ok(pkg.scripts["proof:ops"], "proof:ops script must exist");
 assert.ok(pkg.scripts["razorpay:fixtures"], "razorpay:fixtures script must exist");
+assert.ok(pkg.scripts["worker:proof"], "worker:proof script must exist");
 
 const suite = read("scripts/production-proof-suite.js");
 for (const snippet of [
@@ -16,13 +17,29 @@ for (const snippet of [
   "razorpay:fixtures",
   "contract:smoke",
   "smoke:test",
-  "worker:health",
+  "worker:proof",
   "proof:postgres",
   "PROOF_REQUIRE_LIVE",
   "PROOF_REQUIRE_POSTGRES",
   "PROOF_REQUIRE_WORKER",
 ]) {
   assert.ok(suite.includes(snippet), `production proof suite must include ${snippet}`);
+}
+
+const workerProof = read("scripts/prove-worker-runtime.js");
+for (const snippet of [
+  "kiranaos_redis_worker_production_proof",
+  "redis-worker-production-proof-latest.json",
+  "getWorkerHeartbeats",
+  "WORKER_HEALTHCHECK",
+  "waitUntilFinished",
+  "urlRetained: false",
+  '"--porcelain", "--", "backend"',
+  "backendSourceFingerprintSha256",
+  '"diff", "--binary", "HEAD", "--", "backend"',
+  "WORKER_PROOF_SOURCE_CHANGED",
+]) {
+  assert.ok(workerProof.includes(snippet), `worker proof must include ${snippet}`);
 }
 
 const razorpayFixture = read("scripts/razorpay-fixture-proof.js");

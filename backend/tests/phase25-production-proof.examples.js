@@ -42,6 +42,16 @@ for (const command of [
   assert.ok(proofRunner.includes(command), `proof runner must execute ${command}`);
 }
 assert.ok(proofRunner.includes("FORCE_DB_TESTS"), "proof runner must force DB tests instead of sandbox skip");
+for (const evidenceSnippet of [
+  "kiranaos_postgres_production_proof",
+  "POSTGRES_PROOF_REPORT_PATH",
+  "postgres-production-proof-latest.json",
+  "migrationInventory",
+  "safeDatabaseIdentity",
+  'writeReport("passed")',
+]) {
+  assert.ok(proofRunner.includes(evidenceSnippet), `proof runner must retain ${evidenceSnippet}`);
+}
 
 const integrationSetup = read("tests/integration/setup.js");
 for (const snippet of [

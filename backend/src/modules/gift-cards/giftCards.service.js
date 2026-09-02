@@ -214,7 +214,16 @@ export async function reverseGiftCardRedemptions(tx, shopId, billId, { userId, n
   for (const [giftCardId, state] of byCard) {
     if (state.netPaise >= 0n) continue;
     const amountPaise = -state.netPaise;
-    const card = await tx.giftCard.update({ where: { id: giftCardId }, data: { balancePaise: { increment: amountPaise }, status: "active" } });
+    // A card the shop disabled — reported lost, stolen, or withdrawn — stays
+    // disabled. The value goes back onto its balance so the gift-card ledger
+    // still adds up against its transactions, but cancelling a bill must not
+    // quietly hand a blocked card back to whoever is holding it. Any other
+    // status, depleted included, becomes spendable again as it should.
+    const existing = await tx.giftCard.findUnique({ where: { id: giftCardId } });
+    const card = await tx.giftCard.update({
+      where: { id: giftCardId },
+      data: { balancePaise: { increment: amountPaise }, ...(existing?.status === "disabled" ? {} : { status: "active" }) },
+    });
     await tx.giftCardTransaction.create({ data: { shopId, giftCardId: card.id, billId, locationId: state.locationId, type: `redemption_reversal_${Date.now()}_${crypto.randomBytes(2).toString("hex")}`, amountPaise, balanceAfterPaise: card.balancePaise, note: note ?? "Bill cancellation restored gift card value", createdByUserId: userId ?? null } });
   }
 }

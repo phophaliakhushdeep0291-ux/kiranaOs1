@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { AlertTriangle, CalendarClock, IndianRupee } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getExpiryAlerts, INVENTORY_LOT_CACHE_KEYS, inventoryLotCacheUpdatedAt, readInventoryLotMemoryCache, type ExpiringBatch, type ExpiryAlerts, type ExpirySeverity } from "@/features/core/inventory/inventory-lots-api";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
+import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/core/stores/location-context";
 
 export const NEAR_EXPIRY_QUERY_KEY = ["inventory-lots", "expiry-alerts"] as const;
 
@@ -58,11 +60,18 @@ export function ExpiringBatchRow({ batch }: { batch: ExpiringBatch }) {
  */
 export function NearExpiryAlert({ limit = 5, className }: { limit?: number; className?: string }) {
   const { t } = useAppLanguage();
+  const [locationId, setLocationId] = useState(() => getActiveLocationId() ?? "primary");
+  useEffect(() => {
+    const refreshLocation = () => setLocationId(getActiveLocationId() ?? "primary");
+    window.addEventListener(LOCATION_CHANGED_EVENT, refreshLocation);
+    return () => window.removeEventListener(LOCATION_CHANGED_EVENT, refreshLocation);
+  }, []);
+  const cacheKey = INVENTORY_LOT_CACHE_KEYS.alerts(locationId);
   const query = useQuery({
-    queryKey: NEAR_EXPIRY_QUERY_KEY,
-    queryFn: () => getExpiryAlerts(),
-    initialData: () => readInventoryLotMemoryCache<ExpiryAlerts>(INVENTORY_LOT_CACHE_KEYS.alerts),
-    initialDataUpdatedAt: () => inventoryLotCacheUpdatedAt(INVENTORY_LOT_CACHE_KEYS.alerts),
+    queryKey: [...NEAR_EXPIRY_QUERY_KEY, locationId],
+    queryFn: () => getExpiryAlerts({ locationId }),
+    initialData: () => readInventoryLotMemoryCache<ExpiryAlerts>(cacheKey),
+    initialDataUpdatedAt: () => inventoryLotCacheUpdatedAt(cacheKey),
     staleTime: 5 * 60_000,
     // Batch tracking is off for most trades, and the endpoint is capability-gated;
     // a shop without it should see no error, just nothing.

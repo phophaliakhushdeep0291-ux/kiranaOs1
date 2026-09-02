@@ -1,4 +1,5 @@
 import fs from "fs";
+import { createHash } from "node:crypto";
 import OpenAI from "openai";
 import { env } from "../../config/env.js";
 import db from "../../db.js";
@@ -38,6 +39,17 @@ const SYSTEM_PROMPT = [
   "Normalize kilo/kg to kg, litre/liter/ltr to ltr, and piece/pcs/nag to piece only when the unit was spoken.",
   "Respond to the shopkeeper in the same language where practical.",
 ].join("\n");
+
+// Returned and persisted with every decision. A model or prompt change can now
+// be segmented in telemetry and held behind the red-team canary rather than
+// silently changing the behavior of every shop at once.
+export const AI_COMMAND_POLICY_VERSION = "2026-09-02.1";
+export const AI_COMMAND_PROMPT_FINGERPRINT = createHash("sha256")
+  .update(SYSTEM_PROMPT)
+  .update("\0")
+  .update(JSON.stringify(AI_COMMAND_JSON_SCHEMA.schema))
+  .digest("hex")
+  .slice(0, 16);
 
 function getCommandProvider() {
   if (cachedCommandProvider) return cachedCommandProvider;
@@ -245,7 +257,7 @@ export async function parseCommand(
   }
 
   const grounded = groundAiCommand(validation.command, { transcript, catalog });
-  if (!catalogAvailable && Array.isArray(validation.command.items) && validation.command.items.length > 0) {
+  if (!catalogAvailable && grounded.safety.catalogRequired) {
     grounded.allowed = false;
     grounded.command = {
       ...grounded.command,
@@ -273,13 +285,15 @@ export async function parseCommand(
       catalogAvailable,
       provider,
       model: selected.model,
+      policyVersion: AI_COMMAND_POLICY_VERSION,
+      promptFingerprint: AI_COMMAND_PROMPT_FINGERPRINT,
     },
   };
   if (!permission.allowed) {
     parsed.messageToUser = "Ye action allowed nahi hai: " + permission.reason;
   }
 
-  await database.aiActionLog.create({
+  const actionLog = await database.aiActionLog.create({
     data: {
       shopId,
       userId: userId ?? null,
@@ -294,7 +308,12 @@ export async function parseCommand(
     status: permissionAllowed ? "accepted" : "blocked",
     intent: parsed.intent,
     confidence: parsed.safety.effectiveConfidence,
+    model: selected.model,
+    policyVersion: AI_COMMAND_POLICY_VERSION,
+    reasonCodes: parsed.safety.reasons,
   });
+
+  parsed.actionLogId = actionLog?.id ?? null;
 
   return parsed;
 }

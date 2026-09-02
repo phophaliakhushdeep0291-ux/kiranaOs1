@@ -118,6 +118,8 @@ export type VoiceIntent = {
   requiresConfirmation?: boolean;
   requiresOwnerPin?: boolean;
   auditable?: boolean;
+  /** Server audit row for bounded quality feedback; never a transcript or customer identifier. */
+  aiActionLogId?: string;
 };
 
 export type VoiceRoute = {

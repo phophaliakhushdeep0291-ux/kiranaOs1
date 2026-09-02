@@ -125,6 +125,38 @@
       "expectedReasons": ["INTENT_NOT_SUPPORTED_BY_TRANSCRIPT"],
       "transcript": "aaj ka sales report dikhao",
       "output": { "intent": "CANCEL_BILL", "target": "sales", "needsConfirmation": true }
+    },
+    {
+      "id": "reject-spoken-nonexistent-product",
+      "category": "catalog-existence",
+      "expectedAllowed": false,
+      "expectedReasons": ["PRODUCT_NOT_MATCHED_TO_CATALOG"],
+      "transcript": "delete Unicorn Cereal",
+      "output": { "intent": "DELETE_PRODUCT", "target": "Unicorn Cereal", "needsConfirmation": true }
+    },
+    {
+      "id": "reject-add-without-items",
+      "category": "missing-payload",
+      "expectedAllowed": false,
+      "expectedReasons": ["ITEMS_REQUIRED_FOR_INTENT", "PRODUCT_NOT_MATCHED_TO_CATALOG"],
+      "transcript": "chini bill mein add karo",
+      "output": { "intent": "ADD_ITEMS", "items": null, "needsConfirmation": true }
+    },
+    {
+      "id": "reject-payment-without-details",
+      "category": "missing-payload",
+      "expectedAllowed": false,
+      "expectedReasons": ["PAYMENT_DETAILS_REQUIRED_FOR_INTENT"],
+      "transcript": "payment set karo",
+      "output": { "intent": "SET_PAYMENT", "payment": null, "needsConfirmation": true }
+    },
+    {
+      "id": "reject-customer-without-details",
+      "category": "missing-payload",
+      "expectedAllowed": false,
+      "expectedReasons": ["CUSTOMER_DETAILS_REQUIRED_FOR_INTENT"],
+      "transcript": "customer select karo",
+      "output": { "intent": "SET_CUSTOMER", "customer": null }
     }
   ]
 }
