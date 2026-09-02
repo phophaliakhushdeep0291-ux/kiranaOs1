@@ -36,11 +36,30 @@ const devanagari = (text: string) =>
     return code >= 0x900 && code <= 0x97f;
   });
 
-const CONVERSATION_LINES: [string, string][] = [
-  ["ready", "sayReady"],
-  ["notUnderstood", "sayNotUnderstood"],
-  ["hint", "sayHint"],
-  ["controls", "sayControls"],
+/** The one line that is both spoken and shown, so the only one with a twin. */
+const CONVERSATION_LINES: [string, string][] = [["ready", "sayReady"]];
+
+/**
+ * Everything on the strip a shop reads while it is talking.
+ *
+ * None of these is spoken — only ask.* and ready reach the speech engine — so
+ * none has a Devanagari twin to keep. Half a bar in Hinglish and half in
+ * Devanagari read as unfinished, so it now runs in one register from the button
+ * at the top to the controls hint at the bottom.
+ */
+const SHOWN_BAR_LINES = [
+  "start",
+  "listening",
+  "starting",
+  "stop",
+  "speakToggle",
+  "heard",
+  "notUnderstood",
+  "unsupported",
+  "hint",
+  "controls",
+  "filled",
+  "sayReady",
 ];
 
 describe.each([
@@ -78,12 +97,15 @@ describe.each([
     }
   });
 
-  it("carries the closing line, the retry and the two hints into Hinglish as well", () => {
-    for (const [, shown] of CONVERSATION_LINES) {
-      const line = hi[`${domain}.voice.${shown}`];
-      expect(line, `${domain}.voice.${shown} missing`).toBeTruthy();
-      expect(devanagari(line), `${domain}.voice.${shown} should read in Roman`).toBe(false);
+  it("reads in Hinglish the whole way down the bar", () => {
+    for (const key of SHOWN_BAR_LINES) {
+      const line = hi[`${domain}.voice.${key}`];
+      expect(line, `${domain}.voice.${key} missing`).toBeTruthy();
+      expect(devanagari(line), `${domain}.voice.${key} should read in Roman`).toBe(false);
     }
+    // The closing line is the one thing that is also spoken, and that half stays
+    // in Devanagari so a hi-IN voice can pronounce it.
+    expect(devanagari(hi[`${domain}.voice.ready`]), `${domain}.voice.ready is spoken`).toBe(true);
   });
 });
 
