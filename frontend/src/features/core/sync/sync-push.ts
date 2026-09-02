@@ -33,6 +33,7 @@ import {
   nextCursorFromResponse,
   resultListFromPush,
   SYNC_BATCH_SIZE,
+  SYNC_BATCH_MAX_BYTES,
   type PreparedOperation,
 } from "@/features/core/sync/sync-types";
 import {
@@ -87,8 +88,32 @@ async function updateOutboxStatus(
   if (status !== "SYNCED") await updateBusinessRowsForOutboxStatus(events, status).catch(() => undefined);
 }
 
+const utf8 = typeof TextEncoder === "undefined" ? null : new TextEncoder();
+
+/**
+ * The size this operation will actually add to the request body.
+ *
+ * Measured in UTF-8 bytes rather than `String.length`, which counts UTF-16
+ * units. The starter catalog carries Devanagari search aliases on every row and
+ * one of those characters is three bytes, so `.length` would undercount them
+ * threefold and wave through a batch the 2 MB body limit then rejects.
+ */
+function operationByteSize(operation: SyncPushOperationPayload): number {
+  let json: string;
+  try {
+    json = JSON.stringify(operation);
+  } catch {
+    // Unserializable, so unsizable. Charge it the whole budget: it travels
+    // alone and the server gives the real verdict, instead of this silently
+    // deciding a row can never be sent.
+    return SYNC_BATCH_MAX_BYTES;
+  }
+  return utf8 ? utf8.encode(json).length : json.length * 3;
+}
+
 export async function preparePendingOperations(
   limit = SYNC_BATCH_SIZE,
+  maxBytes = SYNC_BATCH_MAX_BYTES,
 ): Promise<{ prepared: PreparedOperation[]; skipped: number }> {
   await dexieDB.open();
   const idMap = await loadIdMap();
@@ -105,7 +130,9 @@ export async function preparePendingOperations(
   // their owning create/update event is included in this push request, so the
   // Phase 30 backend can resolve localId -> serverId in one transaction.
   let madeProgress = true;
-  while (prepared.length < limit && madeProgress) {
+  let bytes = 0;
+  let budgetSpent = false;
+  while (prepared.length < limit && madeProgress && !budgetSpent) {
     madeProgress = false;
 
     for (const event of pending) {
@@ -158,6 +185,17 @@ export async function preparePendingOperations(
         retry_count: event.retry_count,
         payload: backendShape.payload,
       };
+      // The first operation always goes, whatever it weighs. A single row
+      // larger than the entire budget must still reach the server and get a
+      // real answer; refusing to batch it would wedge the queue behind it
+      // forever, which is worse than one oversized request.
+      const size = operationByteSize(operation);
+      if (prepared.length > 0 && bytes + size > maxBytes) {
+        budgetSpent = true;
+        break;
+      }
+      bytes += size;
+
       prepared.push({ event, operation });
       preparedEventIds.add(event.clientEventId);
       if (event.entity_id) preparedLocalIds.add(event.entity_id);
@@ -551,4 +589,69 @@ export async function pushPendingOutboxOperations(): Promise<{
     await updateOutboxStatus(events, "FAILED", message);
     return { pushed: 0, failed: prepared.length, conflicts: 0, skipped };
   }
+}
+
+/**
+ * How many pushes one drain may make before handing back to the scheduler.
+ *
+ * A ceiling, not a target: at 200 operations a batch this is 8,000 rows, far
+ * more than any real backlog, and it exists so that a bug which somehow reports
+ * progress without shrinking the queue costs one long cycle rather than a
+ * wedged tab.
+ */
+const MAX_DRAIN_PASSES = 40;
+
+export interface PushOutcome {
+  pushed: number;
+  failed: number;
+  conflicts: number;
+  skipped: number;
+}
+
+/**
+ * Push until the outbox is empty, rather than one batch per scheduled tick.
+ *
+ * The scheduler in `useOfflineStatus` fires on the cadence ladder, which starts
+ * at 2.5s, and each tick sent exactly one batch. That is the right shape for a
+ * till with a queued sale and the wrong one for a bulk load: loading the built-in
+ * starter catalog queues 1,134 rows, so the queue drained one batch per timer
+ * tick with the timer's delay as dead air in between — and stopped completely
+ * whenever the shopkeeper switched tabs or the screen locked, because
+ * `runScheduledTick` only runs while `visibilityState === "visible"`.
+ *
+ * Looping here keeps the timer for deciding *when to start* and takes it out of
+ * the middle of a backlog.
+ */
+export async function drainPendingOutboxOperations(
+  // Injectable so the stopping rules can be tested as rules, against a scripted
+  // sequence of outcomes, rather than only through a mocked IndexedDB where the
+  // interesting cases are hard to stage.
+  pushOnce: () => Promise<PushOutcome> = pushPendingOutboxOperations,
+): Promise<PushOutcome> {
+  let pushed = 0;
+  let failed = 0;
+  let conflicts = 0;
+  // Not accumulated. `skipped` is a snapshot of what could not be prepared on a
+  // pass — on the first pass of a 1,134-row backlog that is everything over the
+  // batch limit — so summing it would report thousands of skips for a queue that
+  // drained cleanly. The last pass's figure is the one that means anything: what
+  // was still unpreparable when the drain stopped.
+  let skipped = 0;
+
+  for (let pass = 0; pass < MAX_DRAIN_PASSES; pass += 1) {
+    const result = await pushOnce();
+    pushed += result.pushed;
+    failed += result.failed;
+    conflicts += result.conflicts;
+    skipped = result.skipped;
+
+    // Stop on anything that is not clean progress. A pass that pushed nothing
+    // has either emptied the queue or hit something an identical next pass would
+    // hit again; a transient failure already carries its own defer and a
+    // rejection is already FAILED. Both belong to the scheduler, not to a loop
+    // that would only retry them faster.
+    if (result.pushed === 0 || result.failed > 0 || result.conflicts > 0) break;
+  }
+
+  return { pushed, failed, conflicts, skipped };
 }

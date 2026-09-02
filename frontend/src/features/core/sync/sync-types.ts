@@ -6,7 +6,34 @@ import type {
 } from "@/types/api";
 import type { SyncStatus } from "@/types/domain";
 
-export const SYNC_BATCH_SIZE = 50;
+/**
+ * How many outbox operations travel in one push request.
+ *
+ * The server accepts 500 (`PUSH_MAX_BATCH_SIZE`, sync.schema.js) and this sent
+ * 50, so every bulk load paid ten times the round-trips it needed. Loading the
+ * built-in starter catalog queues 1,134 rows — 560 product creates plus 574
+ * audit rows — which at 50 was 23 separate requests.
+ *
+ * Deliberately below the server's cap rather than at it, because the count is
+ * only half of what limits a batch. The other half is bytes.
+ */
+export const SYNC_BATCH_SIZE = 200;
+
+/**
+ * How many bytes of prepared operations travel in one push request.
+ *
+ * Counting operations alone is not safe, because they are not the same size. A
+ * product create is roughly a kilobyte; a bill with forty lines, or a
+ * STOCK_PURCHASE_BATCH, is far bigger — and 200 of those would exceed the 2 MB
+ * `express.json` limit the API is mounted with, failing the whole batch rather
+ * than any one row. So a batch closes at whichever limit it reaches first,
+ * which is what lets the count above be generous for small rows without putting
+ * the big ones at risk.
+ *
+ * 1 MB keeps the request comfortably inside the 2 MB ceiling once the JSON
+ * envelope and transport overhead are added.
+ */
+export const SYNC_BATCH_MAX_BYTES = 1_000_000;
 export const DEFAULT_CURSOR_ID = "global";
 export const SERVER_SEQUENCE_CURSOR_ID = "server-sequence-v2";
 export const LOCAL_ID_PREFIXES = [

@@ -1,7 +1,7 @@
 import { dexieDB, offlineDB, rowMatchesCurrentScope, type PendingSyncEvent } from "@/lib/offline/db";
 import { getSyncStatus, requestSyncRetry } from "@/features/core/sync/api";
 import { pullServerChanges } from "@/features/core/sync/sync-pull";
-import { applyRecoveredSyncEventResult, pushPendingOutboxOperations } from "@/features/core/sync/sync-push";
+import { applyRecoveredSyncEventResult, drainPendingOutboxOperations, pushPendingOutboxOperations } from "@/features/core/sync/sync-push";
 import { getCurrentSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { readSyncQueueCounts, repairResolvedSyncStatusNoise, repairRetryableBillValidationConflicts } from "@/features/core/sync/sync-status-repair";
 import { entityTypeFromOperation, tableNameForEntity, type SyncRunResult } from "@/features/core/sync/sync-types";
@@ -146,7 +146,10 @@ async function runSyncCycleBody(ownsCrossTabLock = false): Promise<SyncRunResult
   let push: Awaited<ReturnType<typeof pushPendingOutboxOperations>>;
   let pull: Awaited<ReturnType<typeof pullServerChanges>>;
   try {
-    push = await pushPendingOutboxOperations();
+    // Drains rather than sending a single batch. One batch per cycle meant a
+    // backlog moved at the scheduler's cadence — 2.5s of dead air per batch,
+    // and no movement at all while the tab was hidden.
+    push = await drainPendingOutboxOperations();
     pull = await pullServerChanges();
   } catch (error) {
     trackSyncEvent(ACTIVITY_EVENTS.SYNC_FAILED, Date.now() - startedAt, {
