@@ -7,6 +7,16 @@ function source(relativePath: string) {
 }
 
 describe("Customers/Udhar first-load performance contracts", () => {
+  it("loads customer detail locally while the shared cloud summary refresh runs independently", () => {
+    const content = source("../features/core/customers/pages/CustomerDetailPage.tsx");
+    const local = content.slice(content.indexOf("const detailQuery = useQuery"), content.indexOf("const authoritativeQuery = useQuery"));
+    expect(local).toContain("loadCustomerDetail(id)");
+    expect(local).toContain("loadCachedAuthoritativeSummary()");
+    expect(local).not.toContain("resolveAuthoritativeUdharSummary");
+    expect(local).not.toContain("repairLedgerDriftFromServer");
+    expect(content).toContain('queryKey: ["customers-authoritative-summary-refresh"]');
+    expect(content).toContain("appliedSummary.current = { id, data: resolved");
+  });
   it("defers the financial integrity scan and indexes ledger rows in one pass", () => {
     const content = source("../features/core/customers/customer-ledger-data.ts");
     const loader = content.slice(content.indexOf("export async function loadCustomersWithLedger"));

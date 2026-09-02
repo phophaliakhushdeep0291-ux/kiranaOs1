@@ -193,6 +193,10 @@ export function projectCustomerOutstanding(
       totalUdhar: balance,
       udharAmount: balance,
       balance_source: "local_payment_projection",
+      // This projection is published only after a local financial transaction
+      // commits. Protect it from an older in-flight cloud response until the
+      // durable ledger refresh replaces this flag with the actual sync state.
+      hasUnsyncedLedgerEntries: true,
       ledgerMetrics: {
         ...customer.ledgerMetrics,
         balance,

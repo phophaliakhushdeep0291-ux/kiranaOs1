@@ -2,6 +2,7 @@ import { getUdharSummary } from "@/features/core/ledger/api";
 import { isBrowserOnline } from "@/lib/api/http";
 import { readIndexedRecentCache, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import type { UdharSummary } from "@/types/api";
+import { dedupeLedgerEntries, getLedgerCustomerId, ledgerSignedAmount, roundMoney, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 
 /**
  * The server's `/udhar/summary` is the ONLY authoritative udhar balance: it is
@@ -97,4 +98,24 @@ export function authoritativeOutstandingFor(
   // A customer missing from the summary is settled (the endpoint only returns
   // customers with a balance), which is still an authoritative answer of zero.
   return row ? Math.max(0, Number(row.outstanding ?? 0)) : 0;
+}
+
+/** One balance rule for all local financial mutations, including corrections. */
+export function authoritativeOutstandingWithPendingLedger(
+  summary: UdharSummary,
+  customerIds: string[],
+  entries: CustomerLedgerEntry[],
+): number | null {
+  const base = authoritativeOutstandingFor(summary, customerIds);
+  if (base === null) return null;
+  const ids = new Set(customerIds);
+  const pending = new Set(["pending_sync", "syncing", "failed", "local_only"]);
+  let balance = base;
+  for (const entry of dedupeLedgerEntries(entries)) {
+    const id = getLedgerCustomerId(entry);
+    // Conflicts were rejected by the server and must not change its balance.
+    if (!id || !ids.has(id) || !pending.has(String(entry.sync_status ?? "").toLowerCase())) continue;
+    balance = roundMoney(balance + ledgerSignedAmount(entry));
+  }
+  return roundMoney(Math.max(0, balance));
 }

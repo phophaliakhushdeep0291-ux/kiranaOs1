@@ -29,7 +29,7 @@ import {
   type CustomerLedgerEntry,
 } from "@/features/core/ledger/accounting";
 import {
-  authoritativeOutstandingFor,
+  authoritativeOutstandingWithPendingLedger,
   loadCachedAuthoritativeSummary,
   readCachedAuthoritativeSummary,
 } from "@/features/core/ledger/authoritative-balances";
@@ -298,27 +298,11 @@ export function getLocalUdharLedger(limit = 50) {
 }
 
 async function findCustomer(customerId: string): Promise<Customer | undefined> {
-  const cached = readInstantCache<Customer[]>(CUSTOMER_CACHE_KEY, []).map(
-    normaliseLocalCustomer,
-  );
-  return (
-    cached.find((customer) => customer.id === customerId) ??
-    offlineDB
-      .getAll<Customer>("customers")
-      .then((rows) =>
-        rows
-          .map(normaliseLocalCustomer)
-          .find(
-            (row) =>
-              row.id === customerId ||
-              (row as unknown as Record<string, unknown>).local_id ===
-                customerId ||
-              (row as unknown as Record<string, unknown>).server_id ===
-                customerId,
-          ),
-      )
-      .catch(() => undefined)
-  );
+  // Read durable state after acquiring the customer lock. Another tab may have
+  // committed a payment while this tab's memory cache still shows the old debt.
+  const rows = await offlineDB.getAll<CustomerRecord>("customers");
+  return rows.map(normaliseLocalCustomer).find((row) =>
+    customerIdentitySet(row as CustomerRecord).has(customerId));
 }
 
 const PAYMENT_TRANSACTION_TABLES = [
@@ -406,10 +390,7 @@ async function resolveCachedAuthoritativePaymentBalance(input: {
     customerIdentitySet(input.customer, input.customerId),
     mappings,
   );
-  const base = authoritativeOutstandingFor(cached.summary, [...ids]);
-  if (base === null) return null;
-  const deltas = pendingLedgerDeltas(input.ledgerEntries);
-  return roundMoney(Math.max(0, base + pendingDeltaForIds(deltas, ids)));
+  return authoritativeOutstandingWithPendingLedger(cached.summary, [...ids], input.ledgerEntries);
 }
 
 async function recordPaymentsLocalFirstUnlocked(

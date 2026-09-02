@@ -8,6 +8,7 @@ import type { Customer } from "@/types/api";
 import { calculateLedgerBalance, dedupeLedgerEntries, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/core/audit-logs/local-actions";
 import { withCustomerFinancialLock } from "@/features/core/ledger/customer-financial-lock";
+import { authoritativeOutstandingWithPendingLedger, loadCachedAuthoritativeSummary } from "@/features/core/ledger/authoritative-balances";
 
 const CUSTOMER_CACHE_KEY = "customers";
 const LEDGER_CACHE_KEY = "customer_ledger";
@@ -81,9 +82,9 @@ export interface CreateLedgerAdjustmentInput {
    * The outstanding balance the operator is actually looking at (the authoritative
    * `/udhar/summary` value the udhar page overlays). The local ledger can be stale
    * or diverged from the server, so validating a reduction against the raw local
-   * sum alone wrongly blocks a legitimate adjustment (e.g. "Maximum reduction is
-   * Rs 0" while ₹630 is displayed). We guard against the max of the two and let the
-   * backend's own negative-balance check be the final authority on sync.
+   * sum alone wrongly blocks a legitimate adjustment. A cached authoritative
+   * summary plus pending local entries, or a newer local projection, wins over
+   * this hint. The backend validates again on sync.
    */
   expectedOutstanding?: number;
 }
@@ -99,10 +100,11 @@ async function createLedgerAdjustmentLocalFirstUnlocked(
   });
   const amount = roundMoney(readNumber(input.amount, 0));
   if (amount === 0) throw new Error("Adjustment amount cannot be zero");
-  const [existingLedgerEntries, customers, mappings] = await Promise.all([
+  const [existingLedgerEntries, customers, mappings, cached] = await Promise.all([
     readCustomerLedgerEntries(input.customerId),
     offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []),
     offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
+    loadCachedAuthoritativeSummary(),
   ]);
   const customer = customers.find((row) =>
     expandIdsWithMappings(customerIdentitySet(row), mappings).has(input.customerId),
@@ -118,11 +120,20 @@ async function createLedgerAdjustmentLocalFirstUnlocked(
   // larger and would make a ₹30 correction against ₹630 jump to ₹970.
   // Once this device has committed a newer local financial write, its durable
   // customer projection wins so concurrent/stale dialogs cannot overwrite it.
-  const currentBalance = roundMoney(projectedBalance !== null
-    ? projectedBalance
-    : input.expectedOutstanding !== undefined
-      ? Math.max(0, readNumber(input.expectedOutstanding, 0))
-      : ledgerBalance);
+  const authoritativeBalance = cached
+    ? authoritativeOutstandingWithPendingLedger(
+      cached.summary,
+      [...expandIdsWithMappings(customerIdentitySet(customer), mappings)],
+      existingLedgerEntries,
+    )
+    : null;
+  const currentBalance = roundMoney(authoritativeBalance !== null
+    ? authoritativeBalance
+    : projectedBalance !== null
+      ? projectedBalance
+      : input.expectedOutstanding !== undefined
+        ? Math.max(0, readNumber(input.expectedOutstanding, 0))
+        : ledgerBalance);
   if (toPaise(addMoney(currentBalance, amount)) < 0) {
     const error = new Error(`Adjustment would make udhar negative. Maximum reduction is ${formatMoney(currentBalance)}`);
     (error as Error & { code?: string }).code = "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";

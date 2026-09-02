@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { projectCustomerOutstanding, type CustomerWithLedger } from "@/features/core/customers/customer-ledger-data";
+import { projectCustomerOutstanding, reconcileCustomerWithAuthoritativeSummary, type CustomerWithLedger } from "@/features/core/customers/customer-ledger-data";
 
 function source(relativePath: string) {
   return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), "utf8");
@@ -64,8 +64,19 @@ describe("partial-payment visible balance", () => {
     expect(listPayment.indexOf("queryClient.setQueryData")).toBeLessThan(listPayment.indexOf("void refetch()"));
     expect(listPayment).not.toContain("await refetch()");
     expect(detailPayment).toContain("result.nextBalance");
-    expect(detailPayment.indexOf("queryClient.setQueryData")).toBeLessThan(detailPayment.indexOf("void refetch()"));
+    expect(detailPayment).toContain("projectVisibleBalance(result.nextBalance)");
+    expect(detailPayment.indexOf("projectVisibleBalance")).toBeLessThan(detailPayment.indexOf("void refetch()"));
     expect(detailPayment).not.toContain("await refetch()");
+  });
+
+  it("does not let an older cloud response overwrite a committed payment projection", () => {
+    const [projected] = projectCustomerOutstanding([customer()], "customer_1", 255);
+    const reconciled = reconcileCustomerWithAuthoritativeSummary(projected, {
+      totalOutstanding: 356,
+      customers: [{ customerId: "customer_1", customerName: "Mohan", amount: 356, outstanding: 356 }],
+    });
+    expect(reconciled.ledgerBalance).toBe(255);
+    expect(reconciled.hasUnsyncedLedgerEntries).toBe(true);
   });
 
   it("does not block reversal or adjustment acknowledgement on a refresh", () => {

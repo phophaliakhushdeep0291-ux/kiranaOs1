@@ -100,6 +100,8 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
+import { readInstantCache } from "@/lib/offline/instant-cache";
+import { AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY } from "@/features/core/ledger/authoritative-balances";
 import { createBillLocalFirst } from "@/features/core/billing/local-actions";
 import { cancelBillWithOwnerPinLocalFirst } from "@/features/core/bills/local-actions";
 import { createLedgerAdjustmentLocalFirst, readCustomerLedgerEntries } from "@/features/core/ledger/local-actions";
@@ -107,6 +109,7 @@ import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@
 import { applyAuthoritativeUdharSummary, reconcileCustomerWithAuthoritativeSummary, loadCustomerDetail, loadCustomersWithLedger } from "@/features/core/customers/customer-ledger-data";
 
 function resetTables() {
+  vi.mocked(readInstantCache).mockImplementation((_key, fallback) => fallback);
   dbState.idCounter = 0;
   dbState.failTransactionBeforeCommit = false;
   dbState.committed = {
@@ -344,6 +347,53 @@ describe("customer ledger correctness", () => {
     expect(scopedRows("customers").find((row) => row.id === "customer_1")).toEqual(
       expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }),
     );
+  });
+
+  it("adjusts from cached server truth rather than a larger drifted ledger or stale dialog", async () => {
+    seedLedger({ id: "drifted_bill", type: "BILL", amount: 1000 });
+    vi.mocked(readInstantCache).mockImplementation((key, fallback) => key === AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY ? {
+      capturedAt: "2026-06-06T09:00:00.000Z",
+      summary: { totalOutstanding: 630, customers: [{ customerId: "customer_1", customerName: "Ramesh", outstanding: 630, amount: 630 }] },
+    } : fallback);
+
+    const first = await createLedgerAdjustmentLocalFirst({ customerId: "customer_1", amount: -30, ownerPin: "1234", note: "correct balance", expectedOutstanding: 1000 });
+    const second = await createLedgerAdjustmentLocalFirst({ customerId: "customer_1", amount: -25, ownerPin: "1234", note: "second correction", expectedOutstanding: 630 });
+
+    expect(first.balance_after).toBe(600);
+    expect(second.balance_after).toBe(575);
+    expect(scopedRows("customers")[0].udharAmount).toBe(575);
+  });
+
+  it("serializes adjustments from stale dialogs and rejects a second excessive reduction", async () => {
+    const attempts = await Promise.allSettled([
+      createLedgerAdjustmentLocalFirst({ customerId: "customer_1", amount: -200, ownerPin: "1234", note: "first correction", expectedOutstanding: 300 }),
+      createLedgerAdjustmentLocalFirst({ customerId: "customer_1", amount: -200, ownerPin: "1234", note: "second correction", expectedOutstanding: 300 }),
+    ]);
+    expect(attempts.filter((attempt) => attempt.status === "fulfilled")).toHaveLength(1);
+    expect(attempts.filter((attempt) => attempt.status === "rejected")).toHaveLength(1);
+    expect(scopedRows("customers")[0].udharAmount).toBe(100);
+    expect(scopedRows("customer_ledger")).toHaveLength(1);
+  });
+
+  it("restores the projected balance when reversing a collection against an incomplete ledger", async () => {
+    const payment = await recordPaymentLocalFirst("customer_1", { amount: 150, mode: "cash" }, { expectedOutstanding: 300 });
+    expect(payment.nextBalance).toBe(150);
+    const reversed = await reversePaymentWithOwnerPinLocalFirst({ paymentId: payment.paymentId, ownerPin: "1234", reason: "Payment failed" });
+    expect(reversed.nextBalance).toBe(300);
+    expect(scopedRows("customers")[0].udharAmount).toBe(300);
+    const detail = await loadCustomerDetail("customer_1");
+    expect(detail?.customer.ledgerBalance).toBe(300);
+  });
+
+  it("reads the committed customer instead of another tab's stale memory projection", async () => {
+    seedCustomer({ udharAmount: 100, totalUdhar: 100, balance_derived_from_local_ledger: true });
+    vi.mocked(readInstantCache).mockImplementation((key, fallback) => key === "customers"
+      ? [{ ...scopedRows("customers")[0], udharAmount: 300, totalUdhar: 300 }]
+      : fallback);
+    await expect(recordPaymentLocalFirst("customer_1", { amount: 200, mode: "cash" }, { expectedOutstanding: 300 }))
+      .rejects.toMatchObject({ code: "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING" });
+    expect(scopedRows("payments")).toHaveLength(0);
+    expect(scopedRows("customers")[0].udharAmount).toBe(100);
   });
 
   it("payment validates against the authoritative balance, not the drifted local ledger", async () => {

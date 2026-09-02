@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CalendarClock, CreditCard, FileText, Loader2, MessageCircle, RotateCcw, ShieldAlert, ShoppingBag } from "lucide-react";
@@ -32,6 +32,7 @@ interface AdjustmentFormState { amount: string; ownerPin: string; note: string }
 
 function useCustomerDetail(id: string) {
   const queryClient = useQueryClient();
+  const appliedSummary = useRef<{ id: string; data: unknown; updatedAt: number } | null>(null);
   useEffect(() => {
     const refresh = () => void queryClient.invalidateQueries({ queryKey: ["customer-detail", id] });
     window.addEventListener("kirana:local-data-changed", refresh);
@@ -61,7 +62,7 @@ function useCustomerDetail(id: string) {
   });
 
   const authoritativeQuery = useQuery({
-    queryKey: ["customer-detail-authoritative-summary"],
+    queryKey: ["customers-authoritative-summary-refresh"],
     queryFn: resolveAuthoritativeUdharSummary,
     enabled: id.length > 0,
     staleTime: 10_000,
@@ -72,9 +73,16 @@ function useCustomerDetail(id: string) {
     const detail = detailQuery.data;
     const resolved = authoritativeQuery.data;
     if (!detail || !resolved?.summary) return;
+    // Apply each cloud response once. Local payment projections also update
+    // detailQuery.data; reapplying the same old response on those updates would
+    // overwrite a just-committed balance before IndexedDB finishes refreshing.
+    const applied = appliedSummary.current;
+    if (applied?.id === id && applied.data === resolved && applied.updatedAt === authoritativeQuery.dataUpdatedAt) return;
+    appliedSummary.current = { id, data: resolved, updatedAt: authoritativeQuery.dataUpdatedAt };
+    const summary = resolved.summary;
     queryClient.setQueryData<CustomerDetailData | null>(["customer-detail", id], (current) =>
       current
-        ? { ...current, customer: reconcileCustomerWithAuthoritativeSummary(current.customer, resolved.summary!) }
+        ? { ...current, customer: reconcileCustomerWithAuthoritativeSummary(current.customer, summary) }
         : current);
     if (resolved.source !== "server") return;
     void repairLedgerDriftFromServer(
@@ -84,7 +92,7 @@ function useCustomerDetail(id: string) {
       if (repaired) return queryClient.invalidateQueries({ queryKey: ["customer-detail", id] });
       return undefined;
     }).catch(() => undefined);
-  }, [authoritativeQuery.data, detailQuery.data, id, queryClient]);
+  }, [authoritativeQuery.data, authoritativeQuery.dataUpdatedAt, detailQuery.data, id, queryClient]);
 
   return detailQuery;
 }
