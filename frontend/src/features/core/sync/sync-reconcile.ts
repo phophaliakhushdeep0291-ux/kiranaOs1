@@ -330,7 +330,10 @@ export async function mergeServerChange(
         errorMessage: "Server deleted an entity that has unsynced local changes",
       });
       const table = dexieDB.table(tableName) as Table<Record<string, unknown>, string>;
-      await table.put({ ...existing, sync_status: "conflict", updated_at: nowIso() });
+      // Sync metadata is not a business edit. Advancing updated_at here makes
+      // the next pulled server sequence look like a fresh local revision and
+      // creates duplicate review cards for the same owner decision.
+      await table.put({ ...existing, sync_status: "conflict" });
       return "conflict";
     }
     if (existing) {
@@ -423,7 +426,6 @@ export async function mergeServerChange(
     await table.put({
       ...existing,
       sync_status: "conflict",
-      updated_at: nowIso(),
     });
     return "conflict";
   }
