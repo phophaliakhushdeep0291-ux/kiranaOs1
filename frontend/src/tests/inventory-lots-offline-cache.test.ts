@@ -68,6 +68,19 @@ describe("inventory lots offline cache", () => {
     await expect(listInventoryLots()).rejects.toMatchObject({ status: 0, data: { code: "INVENTORY_LOT_CACHE_MISSING" } });
   });
 
+  it("never reuses one branch's lot or expiry cache for another branch", async () => {
+    const branchALots = [{ id: "lot-a", batchNumber: "A" }];
+    const branchAAlerts = { totalCount: 1, totalValueAtRisk: 10, batches: branchALots };
+    state.request.mockResolvedValueOnce(branchALots).mockResolvedValueOnce(branchAAlerts);
+    await listInventoryLots({ locationId: "branch-a" });
+    await getExpiryAlerts({ locationId: "branch-a" });
+    state.browserOnline = false;
+    await expect(listInventoryLots({ locationId: "branch-b" })).rejects.toMatchObject({ data: { code: "INVENTORY_LOT_CACHE_MISSING" } });
+    await expect(getExpiryAlerts({ locationId: "branch-b" })).rejects.toMatchObject({ data: { code: "INVENTORY_LOT_CACHE_MISSING" } });
+    await expect(listInventoryLots({ locationId: "branch-a" })).resolves.toEqual(branchALots);
+    await expect(getExpiryAlerts({ locationId: "branch-a" })).resolves.toEqual(branchAAlerts);
+  });
+
   it("reopens a product's batch choices after an offline restart", async () => {
     const batches = [{ id: "lot-1", batchNumber: "B-1", expiresOn: "2030-01-01", availableBaseQty: 5, mrp: 20 }];
     state.request.mockResolvedValueOnce(batches);

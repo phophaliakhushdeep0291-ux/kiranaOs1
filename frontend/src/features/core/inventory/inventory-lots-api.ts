@@ -56,19 +56,25 @@ export interface ExpiryAlerts {
 }
 
 export const INVENTORY_LOT_CACHE_KEYS = {
-  list: (status = "all", expiringWithinDays?: number) => `inventory-lots:list:v1:${status}:${expiringWithinDays ?? "all"}`,
-  alerts: "inventory-lots:expiry-alerts:v1",
+  list: (status = "all", expiringWithinDays?: number, locationId = getActiveLocationId() ?? "primary") => `inventory-lots:list:v1:${locationId}:${status}:${expiringWithinDays ?? "all"}`,
+  alerts: (locationId = getActiveLocationId() ?? "primary") => `inventory-lots:expiry-alerts:v1:${locationId}`,
   sellable: (productId: string, locationId = getActiveLocationId() ?? "primary") => `inventory-lots:sellable:v1:${locationId}:${productId}`,
 } as const;
 
-async function readCachedLotResource<T>(path: string, cacheKey: string): Promise<T> {
+function locationRequestOptions(locationId?: string) {
+  return locationId && locationId !== "primary"
+    ? { headers: { "x-location-id": locationId } }
+    : undefined;
+}
+
+async function readCachedLotResource<T>(path: string, cacheKey: string, locationId?: string): Promise<T> {
   if (!isBrowserOnline()) {
     const cached = await readIndexedRecentCache<T | undefined>(cacheKey, undefined);
     if (cached !== undefined) return cached;
     throw new ApiClientError("Batch and expiry data has not been cached on this device yet.", 0, { code: "INVENTORY_LOT_CACHE_MISSING" });
   }
   try {
-    const current = await apiRequest<T>(path, { background: true });
+    const current = await apiRequest<T>(path, { background: true, ...locationRequestOptions(locationId) });
     writeInstantCache(cacheKey, current);
     return current;
   } catch (error) {
@@ -92,12 +98,16 @@ export function cacheInventoryLotResource<T>(cacheKey: string, value: T): T {
   return value;
 }
 
-export const listInventoryLots = (params: { status?: string; expiringWithinDays?: number } = {}) => {
+export const listInventoryLots = (params: { status?: string; expiringWithinDays?: number; locationId?: string } = {}) => {
   const status = params.status ?? "all";
-  return readCachedLotResource<InventoryLot[]>(`/inventory-lots${buildQuery({ status, expiringWithinDays: params.expiringWithinDays, limit: 500 })}`, INVENTORY_LOT_CACHE_KEYS.list(status, params.expiringWithinDays));
+  const locationId = params.locationId ?? getActiveLocationId() ?? "primary";
+  return readCachedLotResource<InventoryLot[]>(`/inventory-lots${buildQuery({ status, expiringWithinDays: params.expiringWithinDays, limit: 500 })}`, INVENTORY_LOT_CACHE_KEYS.list(status, params.expiringWithinDays, locationId), locationId);
 };
-export const getExpiryAlerts = (params: { criticalDays?: number; warningDays?: number } = {}) => readCachedLotResource<ExpiryAlerts>(`/inventory-lots/expiry-alerts${buildQuery({ criticalDays: params.criticalDays, warningDays: params.warningDays })}`, INVENTORY_LOT_CACHE_KEYS.alerts);
-export const listSellableBatches = (productId: string, locationId = getActiveLocationId() ?? "primary") => readCachedLotResource<SellableBatch[]>(`/inventory-lots/sellable/${productId}`, INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId));
+export const getExpiryAlerts = (params: { criticalDays?: number; warningDays?: number; locationId?: string } = {}) => {
+  const locationId = params.locationId ?? getActiveLocationId() ?? "primary";
+  return readCachedLotResource<ExpiryAlerts>(`/inventory-lots/expiry-alerts${buildQuery({ criticalDays: params.criticalDays, warningDays: params.warningDays })}`, INVENTORY_LOT_CACHE_KEYS.alerts(locationId), locationId);
+};
+export const listSellableBatches = (productId: string, locationId = getActiveLocationId() ?? "primary") => readCachedLotResource<SellableBatch[]>(`/inventory-lots/sellable/${productId}`, INVENTORY_LOT_CACHE_KEYS.sellable(productId, locationId), locationId);
 export const changeInventoryLotStatus = (id: string, status: "active" | "quarantined" | "recalled", note: string, ownerPin: string) => apiRequest<InventoryLot>(`/inventory-lots/${id}/status`, { method: "POST", ownerPin, body: JSON.stringify({ status, note }) });
 
 /**
