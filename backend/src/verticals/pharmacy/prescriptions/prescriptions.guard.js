@@ -49,15 +49,31 @@ export function registerPrescriptionSaleGuard() {
       };
     }
 
+    // Nothing restricted on this bill means there is no register entry to close.
+    //
+    // An OTC line still gets this far: it carries a drugSchedule, so it survives
+    // the filter above, and only evaluateSale decides it is unrestricted. Handing
+    // back an onConfirmed anyway is what made an ordinary sale in a classified
+    // pharmacy dereference a null prescription the moment the bill was confirmed.
+    if (!decision.requiresPrescription || !prescription) return null;
+
     // Allowed — and once the bill exists, close the register entry against it.
+    //
+    // Whether this hand-over is a repeat has to be read BEFORE the sale, from the
+    // slip as it stood when the decision was made. By the time onConfirmed runs
+    // the row is being written to.
+    const isRefill = prescription.status === "dispensed";
     return {
       onConfirmed: async ({ tx: confirmTx, bill, billNo }) => {
         // billNumber is copied alongside the id on purpose, matching the model's
         // own note: the entry is the legal record and must keep saying what went
         // out even if the bill is later cancelled or purged.
         //
-        // refillsUsed only increments, so a repeat slip walks toward exhaustion
-        // rather than authorising sales forever.
+        // refillsUsed counts REPEATS taken, never the original hand-over — the
+        // scale dispensePrescription, canDispense and the refillable summary all
+        // use. Incrementing on the first dispense too put this one path on its
+        // own scale, and a slip dispensed at the register then billed here was
+        // read as having a hand-over left when it did not.
         await confirmTx.prescription.update({
           where: { id: prescription.id },
           data: {
@@ -65,7 +81,7 @@ export function registerPrescriptionSaleGuard() {
             dispensedAt: new Date(),
             billId: bill.id,
             billNumber: billNo,
-            refillsUsed: { increment: 1 },
+            ...(isRefill ? { refillsUsed: { increment: 1 } } : {}),
           },
         });
       },

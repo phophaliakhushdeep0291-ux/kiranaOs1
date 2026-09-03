@@ -264,6 +264,8 @@ export const shopTypesHi: Record<keyof typeof shopTypesEn, string> = {
 
   // ── साइडबार में ट्रेड की स्क्रीन ───────────────────────────────────────────
   "shopType.nav.fitment": "पार्ट खोजें",
+  // Sends the found part to the till.
+  "shopType.fitment.sell": "बिल में डालें",
   "shopType.nav.fitment.helper": "ग्राहक की गाड़ी में कौन सा पार्ट लगेगा",
   "shopType.nav.testers": "टेस्टर",
   "shopType.nav.testers.helper": "काउंटर पर क्या खुला है, और उसकी लागत",

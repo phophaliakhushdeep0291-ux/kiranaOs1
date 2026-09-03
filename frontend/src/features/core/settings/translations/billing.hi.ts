@@ -333,6 +333,9 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.parkedBillsCleared": "{count} पुराना रुका बिल हटाया",
   "billing.page.parkedBillsClearedPlural": "{count} पुराने रुके बिल हटाए",
   "billing.page.parkedBillsClearedDetail": "हफ्ते भर से रुके बिल हटा दिए ताकि खुले बिल की पट्टी साफ रहे।",
+  // A part sent over from another screen that billing could not find.
+  "billing.pending.notFound": "इस बिल में नहीं जोड़ पाए",
+  "billing.pending.notFoundDetail": "{names} अभी लोड की गई सूची में नहीं है। नाम से खोजें।",
   "billing.page.printWindowClosed": "प्रिंट विंडो बंद हो गई",
   "billing.page.printWindowClosedDetail": "बिल सेव हो गया। पिछला बिल छापने के लिए प्रिंट दबाएं।",
   "billing.page.billSaved": "बिल {billNo} सेव हो गया",

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   RESTRICTED_SCHEDULES,
   RETENTION_YEARS,
@@ -94,14 +95,41 @@ test("a cancelled or deleted slip authorises nothing", () => {
 });
 
 test("refills are counted so one slip cannot be used forever", () => {
-  // refillsAllowed is the number of REPEATS, so the original dispense is always
-  // permitted: allowed 0, used 0 is the first sale and must pass.
-  assert.deepEqual(prescriptionBlockers(slip({ status: "dispensed", refillsAllowed: 0, refillsUsed: 0 }), { now: NOW }), []);
-  // Used once beyond a no-repeat slip: exhausted.
+  // refillsAllowed counts REPEATS and refillsUsed counts repeats taken: the first
+  // hand-over is not a refill. So status "dispensed" already means the original
+  // has gone, and the ceiling is >=, not >.
+  //
+  // A slip still to be handed over is "pending", which never reaches this check
+  // at all — asserted below so the two states cannot be confused again.
+  assert.deepEqual(prescriptionBlockers(slip({ status: "pending", refillsAllowed: 0, refillsUsed: 0 }), { now: NOW }), []);
+
+  // A one-time slip that has been handed over is spent. This read as permitted
+  // for a while, one dispense looser than the register, so a slip dispensed at
+  // the register could buy Schedule H again at the till.
+  assert.deepEqual(prescriptionBlockers(slip({ status: "dispensed", refillsAllowed: 0, refillsUsed: 0 }), { now: NOW }), ["PRESCRIPTION_REFILLS_EXHAUSTED"]);
   assert.deepEqual(prescriptionBlockers(slip({ status: "dispensed", refillsAllowed: 0, refillsUsed: 1 }), { now: NOW }), ["PRESCRIPTION_REFILLS_EXHAUSTED"]);
-  // A two-repeat slip survives its second dispense and dies on its fourth.
-  assert.deepEqual(prescriptionBlockers(slip({ status: "dispensed", refillsAllowed: 2, refillsUsed: 2 }), { now: NOW }), []);
-  assert.deepEqual(prescriptionBlockers(slip({ status: "dispensed", refillsAllowed: 2, refillsUsed: 3 }), { now: NOW }), ["PRESCRIPTION_REFILLS_EXHAUSTED"]);
+
+  // Two repeats: the original plus two more, and nothing after that.
+  assert.deepEqual(prescriptionBlockers(slip({ status: "dispensed", refillsAllowed: 2, refillsUsed: 0 }), { now: NOW }), []);
+  assert.deepEqual(prescriptionBlockers(slip({ status: "dispensed", refillsAllowed: 2, refillsUsed: 1 }), { now: NOW }), []);
+  assert.deepEqual(prescriptionBlockers(slip({ status: "dispensed", refillsAllowed: 2, refillsUsed: 2 }), { now: NOW }), ["PRESCRIPTION_REFILLS_EXHAUSTED"]);
+});
+
+test("the till counts a repeat the same way the register does", () => {
+  // One field, one scale. The guard used to increment refillsUsed on the first
+  // hand-over while dispensePrescription, canDispense and the refillable summary
+  // all counted repeats only — so the same slip read differently depending on
+  // which door it came through.
+  const guard = readFileSync(new URL("../src/verticals/pharmacy/prescriptions/prescriptions.guard.js", import.meta.url), "utf8");
+  assert.ok(guard.includes(`const isRefill = prescription.status === "dispensed";`), "the guard decides refill-or-not from the slip as it stood");
+  assert.ok(guard.includes("...(isRefill ? { refillsUsed: { increment: 1 } } : {})"), "and only a repeat increments the count");
+
+  const register = readFileSync(new URL("../src/verticals/pharmacy/prescriptions/prescriptions.service.js", import.meta.url), "utf8");
+  assert.ok(register.includes(`const isRefill = prescription.status === "dispensed";`), "the register reads it the same way");
+  assert.ok(
+    register.includes("prescription.refillsUsed >= prescription.refillsAllowed"),
+    "the register refuses at the same ceiling the sale guard now uses",
+  );
 });
 
 test("an old slip stops being a licence", () => {

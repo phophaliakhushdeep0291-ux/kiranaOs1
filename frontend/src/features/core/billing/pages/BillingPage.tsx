@@ -45,6 +45,7 @@ import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { billingSlotsFor } from "@/features/core/billing/billing-slots";
+import { takeQueuedProducts } from "@/features/core/billing/pending-cart-additions";
 import { productConfiguratorFor, type ProductConfigurator } from "@/features/core/billing/product-configurators";
 import { SPLIT_PAYMENT, addonUnitPrice, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceNewProductLine, type VoiceParsedDraft } from "./billing-types";
 import { createRetailPaymentQr, getRetailPaymentReadiness, verifyRetailPayment, type RetailQrCheckout } from "../retail-payment";
@@ -726,6 +727,42 @@ export default function Billing() {
       });
     return () => { active = false; };
   }, []);
+
+  /**
+   * Ring up whatever another screen sent over.
+   *
+   * The parts trade's fitment book hands a part to the till this way, so a
+   * counter that has just found the right box does not have to search the
+   * catalogue again from memory. Billing does not learn what a fitment is: it
+   * is handed product ids and rings them up the ordinary way, which is what
+   * keeps pricing, packs and batches in one place.
+   *
+   * Waits for the draft, or the line lands on the workspace a moment before the
+   * restored cart overwrites it. Waits for the catalogue too, because addToCart
+   * needs the real product to price it.
+   */
+  useEffect(() => {
+    if (!draftHydrated || productById.size === 0) return;
+    let active = true;
+    void takeQueuedProducts().then((queued) => {
+      if (!active || queued.length === 0) return;
+      const missing: string[] = [];
+      for (const entry of queued) {
+        const product = productById.get(entry.productId);
+        if (product) addToCart(product);
+        else missing.push(entry.name || entry.productId);
+      }
+      // Say so once. The queue is already cleared, so an unfindable part cannot
+      // re-announce itself on every bill for the rest of the day.
+      if (missing.length > 0) {
+        toast({ title: t("billing.pending.notFound"), description: t("billing.pending.notFoundDetail", { names: missing.join(", ") }), variant: "destructive" });
+      }
+    });
+    return () => { active = false; };
+    // addToCart is redeclared every render and deliberately left out: the queue
+    // is cleared as it is read, so a re-run finds nothing and cannot double-add.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftHydrated, productById]);
 
   useEffect(() => {
     if (!draftHydrated) return;

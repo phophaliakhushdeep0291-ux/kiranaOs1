@@ -346,6 +346,10 @@ export const billingEn = {
   "billing.page.parkedBillsCleared": "{count} old parked bill cleared",
   "billing.page.parkedBillsClearedPlural": "{count} old parked bills cleared",
   "billing.page.parkedBillsClearedDetail": "Bills parked over a week ago were archived to keep the open-bills bar usable.",
+  // A part sent over from another screen that billing could not find in the
+  // catalogue it has loaded. Said once, not on every bill after it.
+  "billing.pending.notFound": "Could not add to this bill",
+  "billing.pending.notFoundDetail": "{names} is not in the loaded catalogue. Search for it by name instead.",
   "billing.page.printWindowClosed": "Print window closed",
   "billing.page.printWindowClosedDetail": "Bill was saved. Use Print to print the last bill.",
   "billing.page.billSaved": "Bill {billNo} saved",

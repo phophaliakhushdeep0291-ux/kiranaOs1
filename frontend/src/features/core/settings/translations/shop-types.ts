@@ -269,6 +269,9 @@ export const shopTypesEn = {
   // The entries each vertical pack adds. Keys rather than words for the same
   // reason as above: a pack is a module-level constant too.
   "shopType.nav.fitment": "Part Finder",
+  // Sends the part it found to the till, so the counter does not search the
+  // catalogue again for a name it was just looking at.
+  "shopType.fitment.sell": "Bill this part",
   "shopType.nav.fitment.helper": "Find what fits a customer's vehicle",
   "shopType.nav.testers": "Testers",
   "shopType.nav.testers.helper": "What is open on the counter, and what it costs",
