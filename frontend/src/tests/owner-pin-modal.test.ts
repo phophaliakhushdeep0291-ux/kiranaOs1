@@ -22,4 +22,9 @@ describe("OwnerPinModal source contract", () => {
     expect(dialogSource.match(/z-\[100\]/g)).toHaveLength(2);
     expect(dialogSource).not.toContain("z-50 grid");
   });
+
+  it("keeps the confirmation controls reachable above a mobile keyboard", () => {
+    expect(source).toContain("max-h-[calc(100dvh-2rem)]");
+    expect(source).toContain("overflow-y-auto");
+  });
 });
