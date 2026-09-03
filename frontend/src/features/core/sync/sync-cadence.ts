@@ -15,7 +15,30 @@ export const SYNC_INTERVAL_LADDER_MS = [2_500, 8_000, 20_000, 45_000] as const;
 
 export const MAX_IDLE_STEP = SYNC_INTERVAL_LADDER_MS.length - 1;
 
-export function syncDelayForStep(step: number): number {
+/**
+ * The gap between batches while a queue is emptying.
+ *
+ * The engine sends up to SYNC_BATCH_SIZE rows per cycle, so a bulk write takes
+ * several passes: loading the built-in starter catalogue queues one row per
+ * product, and at the fast rung those passes were still 2.5s apart. That is
+ * about half a minute of pure waiting added to a few seconds of actual work,
+ * with a full backup warning on screen for all of it.
+ *
+ * Short rather than zero: it keeps a yield in the loop, so the till stays
+ * responsive between batches and a miscomputed flag can never spin.
+ */
+export const SYNC_DRAINING_DELAY_MS = 150;
+
+/**
+ * `draining` means the last cycle actually SENT rows and more are still queued.
+ *
+ * Progress is the condition, not the backlog. A push that keeps failing leaves
+ * exactly the same rows behind, and treating that as draining would turn a
+ * broken sync into a hot loop against the server — so a failing queue keeps the
+ * ladder and its backoff.
+ */
+export function syncDelayForStep(step: number, draining = false): number {
+  if (draining) return SYNC_DRAINING_DELAY_MS;
   const clamped = Math.max(0, Math.min(Math.trunc(step), MAX_IDLE_STEP));
   return SYNC_INTERVAL_LADDER_MS[clamped];
 }

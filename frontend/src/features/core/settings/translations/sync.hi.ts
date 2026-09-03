@@ -25,6 +25,22 @@ export const syncHi: Record<keyof typeof syncEn, string> = {
   // ── Status badge ──
   "sync.badge.failed": "{count} बैकअप नाकाम",
   "sync.badge.pending": "{count} बैकअप बाकी",
+
+  // The top-of-app banner. Three states, because a queue that is emptying is not
+  // a fault: loading the starter catalogue queues hundreds of rows at once, and
+  // wearing the warning colour through all of it made a healthy first run look
+  // broken.
+  "sync.banner.reviewTitle": "{count} बदलाव देखने हैं",
+  "sync.banner.reviewBody": "आपका डेटा इसी डिवाइस पर सुरक्षित है। फिर से कोशिश करें, या सिंक स्टेटस खोलकर देखें।",
+  "sync.banner.backingUpTitle": "{count} बदलाव बैकअप हो रहे हैं...",
+  "sync.banner.backingUpBody": "क्लाउड पर सेव हो रहा है। आप काम करते रहें।",
+  "sync.banner.waitingTitle": "{count} बदलाव बैकअप बाकी",
+  "sync.banner.waitingBody": "कनेक्शन ठीक होते ही अपने आप फिर कोशिश होगी।",
+  "sync.banner.retry": "फिर से कोशिश करें",
+  "sync.banner.retrying": "कोशिश हो रही है...",
+  "sync.banner.view": "देखें",
+  "sync.banner.retryFailedTitle": "कोशिश नाकाम",
+  "sync.banner.retryFailedBody": "अपना कनेक्शन जांचकर फिर कोशिश करें।",
   "sync.badge.offline": "ऑफलाइन",
 
   // ── Top alerts ──

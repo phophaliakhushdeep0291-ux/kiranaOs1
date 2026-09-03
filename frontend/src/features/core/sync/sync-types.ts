@@ -6,7 +6,23 @@ import type {
 } from "@/types/api";
 import type { SyncStatus } from "@/types/domain";
 
-export const SYNC_BATCH_SIZE = 50;
+/**
+ * Outbox rows per push.
+ *
+ * The server accepts up to PUSH_MAX_BATCH_SIZE — 500, in sync.schema.js, where
+ * it is validated and refused with maxAllowed. This sat at 50, so a bulk write
+ * cost ten times the round trips it needed: loading the built-in starter
+ * catalogue queues roughly one row per product, which was twelve pushes, twelve
+ * pulls and twelve backend probes for a few seconds of actual writing.
+ *
+ * 200 rather than the server's full 500. A push is allowed 30s
+ * (requestTimeoutMs in lib/api/http.ts) and a batch that times out fails and
+ * retries whole, so on a weak connection a bigger batch is not uniformly
+ * better — past some size it is strictly worse. 200 takes the catalogue to
+ * three pushes while keeping each payload comfortably inside the timeout on a
+ * slow link.
+ */
+export const SYNC_BATCH_SIZE = 200;
 export const DEFAULT_CURSOR_ID = "global";
 export const SERVER_SEQUENCE_CURSOR_ID = "server-sequence-v2";
 export const LOCAL_ID_PREFIXES = [

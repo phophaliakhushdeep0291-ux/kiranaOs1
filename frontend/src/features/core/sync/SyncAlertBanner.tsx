@@ -1,91 +1,130 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { offlineDB, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { useOfflineStatus } from "@/features/core/sync/useOfflineStatus";
 import { runManualSyncCycle } from "@/features/core/sync/manual-sync";
 
-interface Counts { pending: number; failedOrConflict: number }
+/**
+ * What the top of the app says about work that has not reached the cloud yet.
+ *
+ * A silent "pending" bill is worse than a visible "syncing" one — the shopkeeper
+ * needs to know the bill is not backed up. But the banner used to have only two
+ * faces, and anything pending wore the warning triangle.
+ *
+ * That is wrong for the case that produces the most pending rows by far. Loading
+ * the built-in starter catalogue queues one outbox row per product — several
+ * hundred at once — and a shop watching that drain was shown an amber alert
+ * counting down, indistinguishable from a real backup failure, at the exact
+ * moment nothing was wrong. The first thing a new shop does with the product
+ * list looked like a fault.
+ *
+ * So there are three states, not two:
+ *
+ *   review     something failed or conflicted and a person must look at it
+ *   backing up rows are queued and the engine is actively sending them
+ *   waiting    rows are queued and nothing is moving right now (offline, paused)
+ *
+ * Only the first two existed before, and everything that was not failing got the
+ * third one's wording with the first one's colour.
+ */
+export type SyncBannerMode = "review" | "backingUp" | "waiting";
 
 /**
- * Persistent top-of-app warning whenever any local change hasn't reached the cloud yet.
- * A silent "pending" bill is worse than visible "syncing" — the shopkeeper needs to know
- * the bill isn't backed up. Shows pending and failed/conflict counts separately so the
- * user understands the difference (will-retry vs needs-attention) and can Retry inline.
+ * Which face the banner wears, as a rule rather than a nested ternary.
+ *
+ * null means say nothing at all: an empty queue is not news.
+ *
+ * Review outranks progress on purpose. A batch can be moving while an earlier
+ * row sits failed, and the failure is the thing that needs saying — showing a
+ * calm spinner over it is how a stuck row goes unnoticed for a day.
  */
+export function syncBannerMode(counts: {
+  pendingCount: number;
+  failedCount: number;
+  conflictCount: number;
+  isSyncing: boolean;
+}): SyncBannerMode | null {
+  const needsReview = counts.failedCount + counts.conflictCount;
+  if (counts.pendingCount + needsReview === 0) return null;
+  if (needsReview > 0) return "review";
+  return counts.isSyncing ? "backingUp" : "waiting";
+}
+
 export function SyncAlertBanner() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
-  const [counts, setCounts] = useState<Counts>({ pending: 0, failedOrConflict: 0 });
+  // The engine already keeps these counts and publishes them; reading them here
+  // replaces a second IndexedDB poll that ran every eight seconds on its own
+  // timer, and is what makes isSyncing — the whole point of this change —
+  // visible to the banner at all.
+  const { pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
   const [retrying, setRetrying] = useState(false);
 
-  const refresh = useCallback(async () => {
-    try {
-      const rows = await offlineDB.getAll<PendingSyncEvent & OfflineRow>("sync_outbox");
-      const pending = rows.filter((r) => r.status === "PENDING" || r.status === "SYNCING").length;
-      const failedOrConflict = rows.filter((r) => r.status === "FAILED" || r.status === "CONFLICT").length;
-      setCounts({ pending, failedOrConflict });
-    } catch {
-      setCounts({ pending: 0, failedOrConflict: 0 });
-    }
-  }, []);
+  const needsReview = failedCount + conflictCount;
+  // A manual retry is the shop asking for exactly this, so treat it as sending.
+  const mode = syncBannerMode({ pendingCount, failedCount, conflictCount, isSyncing: isSyncing || retrying });
+  if (!mode) return null;
 
-  useEffect(() => {
-    void refresh();
-    const onUpdate = () => void refresh();
-    window.addEventListener("kirana:sync-queue-updated", onUpdate);
-    window.addEventListener("kirana:local-data-changed", onUpdate);
-    const interval = window.setInterval(refresh, 8_000);
-    return () => {
-      window.removeEventListener("kirana:sync-queue-updated", onUpdate);
-      window.removeEventListener("kirana:local-data-changed", onUpdate);
-      window.clearInterval(interval);
-    };
-  }, [refresh]);
+  const headline = mode === "review"
+    ? t("sync.banner.reviewTitle", { count: needsReview })
+    : mode === "backingUp"
+      ? t("sync.banner.backingUpTitle", { count: pendingCount })
+      : t("sync.banner.waitingTitle", { count: pendingCount });
 
-  const total = counts.pending + counts.failedOrConflict;
-  if (total === 0) return null;
+  const sub = mode === "review"
+    ? t("sync.banner.reviewBody")
+    : mode === "backingUp"
+      ? t("sync.banner.backingUpBody")
+      : t("sync.banner.waitingBody");
 
-  const isFailing = counts.failedOrConflict > 0;
-  const headline = isFailing
-    ? `${counts.failedOrConflict} change${counts.failedOrConflict === 1 ? "" : "s"} needs review`
-    : `${counts.pending} change${counts.pending === 1 ? "" : "s"} waiting to back up`;
-  const sub = isFailing
-    ? "Your data is safe on this device. Retry, or open Sync Status to review."
-    : "Will retry automatically when the connection is healthy.";
+  const tone = mode === "review"
+    ? "border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200"
+    : mode === "backingUp"
+      ? "border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200"
+      : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200";
 
   const onRetry = async () => {
     setRetrying(true);
     try {
       await runManualSyncCycle();
-      await refresh();
     } catch {
-      toast({ title: "Retry failed", description: "Please check your connection and try again.", variant: "destructive" });
+      toast({
+        title: t("sync.banner.retryFailedTitle"),
+        description: t("sync.banner.retryFailedBody"),
+        variant: "destructive",
+      });
     } finally {
       setRetrying(false);
     }
   };
 
-  const tone = isFailing
-    ? "border-rose-300 bg-rose-50 text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200"
-    : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200";
-
   return (
-    <div className={`flex items-center gap-3 border-b px-3 py-2 ${tone}`}>
-      <AlertTriangle size={16} className="shrink-0" aria-hidden="true" />
+    <div className={`flex items-center gap-3 border-b px-3 py-2 ${tone}`} data-testid="sync-alert-banner" data-mode={mode}>
+      {mode === "backingUp"
+        ? <Loader2 size={16} className="shrink-0 animate-spin" aria-hidden="true" />
+        : <AlertTriangle size={16} className="shrink-0" aria-hidden="true" />}
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-bold leading-tight">{headline}</div>
         <div className="text-[11px] leading-tight opacity-80">{sub}</div>
       </div>
-      <button
-        type="button"
-        onClick={() => void onRetry()}
-        disabled={retrying}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-current/30 bg-white/70 px-3 text-[12px] font-bold disabled:opacity-50 dark:bg-black/20"
-      >
-        <RefreshCw size={13} className={retrying ? "animate-spin" : ""} aria-hidden="true" />
-        {retrying ? "Retrying…" : "Retry now"}
-      </button>
-      <Link href="/sync-status" className="inline-flex h-11 shrink-0 items-center rounded-lg px-2 text-[12px] font-bold underline-offset-2 hover:underline">View</Link>
+      {/* Nothing to retry while the queue is already moving — offering it there
+          invites a second cycle that the engine would only serialise anyway. */}
+      {mode === "backingUp" ? null : (
+        <button
+          type="button"
+          onClick={() => void onRetry()}
+          disabled={retrying}
+          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg border border-current/30 bg-white/70 px-3 text-[12px] font-bold disabled:opacity-50 dark:bg-black/20"
+        >
+          <RefreshCw size={13} className={retrying ? "animate-spin" : ""} aria-hidden="true" />
+          {retrying ? t("sync.banner.retrying") : t("sync.banner.retry")}
+        </button>
+      )}
+      <Link href="/sync-status" className="inline-flex h-11 shrink-0 items-center rounded-lg px-2 text-[12px] font-bold underline-offset-2 hover:underline">
+        {t("sync.banner.view")}
+      </Link>
     </div>
   );
 }
