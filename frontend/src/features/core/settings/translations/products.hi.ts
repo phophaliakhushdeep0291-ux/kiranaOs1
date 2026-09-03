@@ -77,6 +77,7 @@ export const productsHi: Record<keyof typeof productsEn, string> = {
   "products.toast.changesWillSync": "इंटरनेट आते ही बदलाव अपने आप चढ़ जाएंगे।",
   "products.toast.saveFailed": "माल सेव नहीं हो सका",
   "products.toast.updateFailed": "माल बदला नहीं जा सका",
+  "products.toast.deleteFailed": "माल रीस्टोर बिन में नहीं जा सका",
   "products.toast.checkRequired": "जरूरी खाने भरें।",
   "products.toast.recycledLocally": "माल यहीं रीस्टोर बिन में डाल दिया",
   "products.toast.draftPrepared": "माल का ड्राफ्ट तैयार है",
