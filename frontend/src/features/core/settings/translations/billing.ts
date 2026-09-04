@@ -486,6 +486,10 @@ export const billingEn = {
   "billing.page.closeCheckout": "Close checkout",
   "billing.page.reviewCollectPayment": "Review and collect payment",
   "billing.summary.roundOff": "Round off",
+  // The confirm button after a sale has been saved: the cart is empty and the
+  // last bill number is still on screen. Shown on every completed sale, and it
+  // was the one word on that screen still in English.
+  "billing.summary.startNewBill": "Start new bill",
   "billing.page.markDone": "Mark done",
   "billing.page.originalCustomerCopy": "Original customer copy",
   "billing.page.estimateCopy": "Estimate copy",

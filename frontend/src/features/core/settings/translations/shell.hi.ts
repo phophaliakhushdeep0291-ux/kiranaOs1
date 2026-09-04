@@ -629,6 +629,7 @@ export const shellHi: Record<keyof typeof shellEn, string> = {
   "storefront.itemMany": "{count} सामान",
   "storefront.totalCount": "कुल {count}",
   "storefront.placeOrder": "ऑर्डर दें · {total}",
+  "storefront.placeOrderAction": "ऑर्डर दें",
   "storefront.bigOrderQrs": "बड़ा ऑर्डर — सभी {total} QR दिखाएं",
   "storefront.readyForHandover": "आपका ऑर्डर डिलीवरी के लिए तैयार है",
   "storefront.allCategories": "सभी",

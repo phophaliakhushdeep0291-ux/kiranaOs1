@@ -653,6 +653,10 @@ export const shellEn = {
   "storefront.itemMany": "{count} items",
   "storefront.totalCount": "{count} total",
   "storefront.placeOrder": "Place order · {total}",
+  // The button itself, with no total on it. The placing/spinner state beside it
+  // was already translated; this one was written straight into the JSX, on the
+  // page a customer taps.
+  "storefront.placeOrderAction": "Place Order",
   "storefront.bigOrderQrs": "Big order - show all {total} QRs",
   "storefront.readyForHandover": "Your order is ready for delivery handover",
   "storefront.allCategories": "All",

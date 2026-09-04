@@ -467,6 +467,8 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.closeCheckout": "पेमेंट बंद करें",
   "billing.page.reviewCollectPayment": "जांचें और पेमेंट लें",
   "billing.summary.roundOff": "राउंड ऑफ",
+  // Seen after every completed sale.
+  "billing.summary.startNewBill": "नया बिल शुरू करें",
   "billing.page.markDone": "पूरा हुआ",
   "billing.page.originalCustomerCopy": "ग्राहक की असली कॉपी",
   "billing.page.estimateCopy": "कच्चे बिल की कॉपी",

@@ -160,6 +160,15 @@ function saveSettingList<T>(key: string, rows: T[]) {
   void offlineDB.setSetting(key, rows).catch(() => undefined);
 }
 
+/**
+ * How long a billing lock may be held before a fresh tap is allowed through.
+ *
+ * Long enough that a real commit — local write, queue, and a slow network round
+ * trip behind it — is never interrupted. Short enough that a lock which never
+ * came off costs the counter one pause rather than the rest of the day.
+ */
+const STALE_BILLING_LOCK_MS = 15_000;
+
 export default function Billing() {
   const { t, language } = useAppLanguage();
   const { toast } = useToast();
@@ -211,7 +220,19 @@ export default function Billing() {
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [activeBillId, setActiveBillId] = useState<string>(() => readBillingDraft().activeBillId ?? newBillId());
   const openBillTransitionLockRef = useRef(false);
+  /** Same timing, for the lock that guards switching between open bills. */
+  const openBillTransitionLockAtRef = useRef(0);
   const billingCommitLockRef = useRef(false);
+  /**
+   * When the commit lock went on.
+   *
+   * The lock exists to swallow a double-tap in the same frame, and swallowing
+   * is right for that. It is wrong for a lock that never came off: the confirm
+   * button then does nothing, for ever, with no toast, no console line and no
+   * way back except reloading — the till has silently stopped billing and the
+   * counter cannot tell why. Timing the lock is what separates the two.
+   */
+  const billingCommitLockAtRef = useRef(0);
   const [openBillTransitionPending, setOpenBillTransitionPending] = useState(false);
   // If the workspace bill came from a customer QR order, its id — so finalizing marks that order
   // fulfilled + links the bill. Mirrored into a ref so the save-success callback reads it live.
@@ -1804,6 +1825,18 @@ export default function Billing() {
     approvalOverride?: NonNullable<typeof sensitiveApproval>,
   ) {
     // Block taps/shortcuts in the same frame, before React renders pending state.
+    //
+    // Silently, because a double-tap is not worth a message — the button is
+    // already showing its spinner. But only while the lock is fresh: one held
+    // for seconds is not a second tap, it is a commit that never settled, and
+    // leaving it set turns the till's main action into a button that does
+    // nothing and says nothing. Let a stale one go and take the tap.
+    if (billingCommitLockRef.current && Date.now() - billingCommitLockAtRef.current > STALE_BILLING_LOCK_MS) {
+      billingCommitLockRef.current = false;
+    }
+    if (openBillTransitionLockRef.current && Date.now() - openBillTransitionLockAtRef.current > STALE_BILLING_LOCK_MS) {
+      openBillTransitionLockRef.current = false;
+    }
     if (billingCommitLockRef.current || openBillTransitionLockRef.current) return;
     if (!newBillingFeature.allowed) {
       toast({ title: t("billing.page.billingLocked"), description: newBillingFeature.reason, variant: "destructive" });
@@ -1940,6 +1973,7 @@ export default function Billing() {
     }
 
     billingCommitLockRef.current = true;
+    billingCommitLockAtRef.current = Date.now();
     confirmBill.mutate({
       data: {
         // Both local and online saves preserve this identity through retries.
@@ -2079,6 +2113,7 @@ export default function Billing() {
       return false;
     }
     openBillTransitionLockRef.current = true;
+    openBillTransitionLockAtRef.current = Date.now();
     setOpenBillTransitionPending(true);
     try {
       await commitBillingWorkspace(offlineDB, transition.snapshot, (snapshot) => {
@@ -2125,6 +2160,7 @@ export default function Billing() {
     if (!transition.ok) return;
 
     openBillTransitionLockRef.current = true;
+    openBillTransitionLockAtRef.current = Date.now();
     setOpenBillTransitionPending(true);
     try {
       await commitBillingWorkspace(offlineDB, transition.snapshot, (snapshot) => {
