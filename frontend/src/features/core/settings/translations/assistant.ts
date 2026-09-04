@@ -33,6 +33,7 @@ export const assistantEn = {
   "assistant.confirmed": "Done",
   "assistant.rejected": "Cancelled",
   "assistant.partialFailure": "Some changes could not be applied",
+  "assistant.outcomeUnknown": "The result is uncertain. Check the affected record before trying again.",
   "assistant.openBill": "Open the bill ({count} items added)",
   "assistant.till.title": "Assistant",
   "assistant.till.thinking": "Working it out…",

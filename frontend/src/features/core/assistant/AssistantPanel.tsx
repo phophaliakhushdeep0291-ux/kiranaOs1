@@ -118,8 +118,10 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
       setStagedCount(staged);
       setPlanState({
         status: "done",
-        ok: result.allSucceeded,
-        message: result.allSucceeded ? undefined : t("assistant.partialFailure"),
+        ok: result.allSucceeded && !result.requiresReview,
+        message: result.requiresReview
+          ? t("assistant.outcomeUnknown")
+          : result.allSucceeded ? undefined : t("assistant.partialFailure"),
       });
       setPending(null);
       setPin("");

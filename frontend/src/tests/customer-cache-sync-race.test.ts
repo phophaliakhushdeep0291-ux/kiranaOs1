@@ -88,4 +88,12 @@ describe("customer list refresh racing sync acknowledgement", () => {
     const rows = await cacheCustomers([{ ...server, udharAmount: 100, totalUdhar: 100 }]);
     expect(rows[0].udharAmount).toBe(100);
   });
+
+  it("finds a pending projection through the server-id alias", async () => {
+    state.rows = [{ ...server, id: "local-customer", server_id: server.id, udharAmount: 125, totalUdhar: 125, balance_derived_from_local_ledger: true, sync_status: "pending_sync" }];
+    state.ledger = [{ id: "payment-ledger", customer_id: "local-customer", type: "PAYMENT", amount: 75, sync_status: "pending_sync" }];
+    const rows = await cacheCustomers([server]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: "local-customer", server_id: server.id, udharAmount: 125 });
+  });
 });

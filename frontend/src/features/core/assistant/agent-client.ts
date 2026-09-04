@@ -72,7 +72,9 @@ export interface AgentClientAction {
 export interface AgentExecutionResult {
   planId: string;
   allSucceeded: boolean;
-  results: Array<{ ref: string; ok: boolean; summary?: string; error?: string }>;
+  executionStatus: "executed" | "failed" | "uncertain";
+  requiresReview: boolean;
+  results: Array<{ ref: string; ok: boolean; summary?: string; error?: string; outcomeUnknown?: boolean; warning?: string }>;
   clientActions?: AgentClientAction[];
 }
 

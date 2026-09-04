@@ -34,6 +34,7 @@ export const assistantHi: Record<keyof typeof assistantEn, string> = {
   "assistant.confirmed": "हो गया",
   "assistant.rejected": "रद्द कर दिया",
   "assistant.partialFailure": "कुछ बदलाव लागू नहीं हो सके",
+  "assistant.outcomeUnknown": "नतीजा पक्का नहीं है। दोबारा कोशिश करने से पहले संबंधित रिकॉर्ड जाँचें।",
   "assistant.openBill": "बिल खोलें ({count} चीज़ें जोड़ी गईं)",
   "assistant.till.title": "सहायक",
   "assistant.till.thinking": "देख रहे हैं…",

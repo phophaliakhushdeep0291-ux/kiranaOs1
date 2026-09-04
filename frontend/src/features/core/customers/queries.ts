@@ -8,9 +8,11 @@ import * as ledgerApi from "@/features/core/ledger/api";
 import { cacheAuthoritativeSummary } from "@/features/core/ledger/authoritative-balances";
 import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/core/customers/local-actions";
 import { getLocalUdharLedger, getLocalUdharSummary, getLocalUdharSummaryAsync, recordPaymentLocalFirst } from "@/features/core/payments/local-actions";
+import { getLedgerCustomerId, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 import type { Customer, CustomerInput, CustomerKhataResult, LedgerResult, QueryParams, UdharSummary } from "@/types/api";
 
 const CUSTOMERS_CACHE_KEY = "customers";
+const UNSYNCED_LEDGER_STATUSES = new Set(["pending_sync", "syncing", "failed", "local_only"]);
 
 export type ListCustomersParams = QueryParams;
 export type ListCustomersResponse = Customer[];
@@ -66,13 +68,41 @@ function filterCachedCustomers(customers: Customer[], params?: ListCustomersPara
 /** Cache raw server rows, never a caller's pre-request snapshot of local rows. */
 export async function cacheCustomers(serverRows: Customer[]): Promise<Customer[]> {
   try {
-    const merged = await offlineDB.transaction(["customers"], async (tx) => {
+    const merged = await offlineDB.transaction(["customers", "customer_ledger"], async (tx) => {
       // Sync can remap/delete a local id while a customer request is in flight.
       // Reading the device rows inside this write transaction prevents an old
       // pending local echo from being reinserted after its server id is known.
-      const current = await offlineDB.getAll<Customer>("customers");
-      const byId = new Map(current.map((row) => [row.id, row]));
-      const fresh = serverRows.map((row) => ({ ...byId.get(row.id), ...row }));
+      const [current, ledger] = await Promise.all([
+        offlineDB.getAll<Customer>("customers"),
+        offlineDB.getAll<CustomerLedgerEntry>("customer_ledger"),
+      ]);
+      const byIdentity = new Map<string, Customer>();
+      for (const customer of current) {
+        for (const identity of customerKeys(customer)) byIdentity.set(identity, customer);
+      }
+      const fresh = serverRows.map((row) => {
+        const stored = customerKeys(row).map((identity) => byIdentity.get(identity)).find(Boolean);
+        const identities = new Set(stored ? customerKeys(stored) : customerKeys(row));
+        const hasPendingFinancialWork = ledger.some((entry) => {
+          const customerId = getLedgerCustomerId(entry);
+          return customerId !== null && identities.has(customerId)
+            && UNSYNCED_LEDGER_STATUSES.has(String(entry.sync_status ?? "").toLowerCase());
+        });
+        if (!stored || !hasPendingFinancialWork || stored.balance_derived_from_local_ledger !== true) {
+          return { ...stored, ...row };
+        }
+        // The server response cannot include ledger rows still queued on this
+        // device. Preserve only the transaction-derived balance fields while
+        // accepting all other current server data.
+        return {
+          ...stored,
+          ...row,
+          type: Number(stored.udharAmount ?? stored.totalUdhar ?? 0) > 0 ? "udhar" : row.type,
+          udharAmount: stored.udharAmount,
+          totalUdhar: stored.totalUdhar,
+          balance_derived_from_local_ledger: true,
+        } as Customer;
+      });
       const rows = mergeCustomers(fresh, current).map(normaliseCustomerForCache);
       await tx.putMany("customers", rows);
       return rows;
