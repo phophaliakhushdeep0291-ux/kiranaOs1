@@ -13,6 +13,11 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.cart.empty": "कार्ट खाली है",
   "billing.cart.itemCountOne": "{count} चीज़",
   "billing.cart.itemCountMany": "{count} चीज़ें",
+  // Read on the counter's own screen, so they follow the counter's language.
+  "billing.cart.udharTag": "उधार",
+  "billing.suggest.combo": "अक्सर साथ में जाता है",
+  "billing.suggest.usual": "इस समय आप आमतौर पर यही बेचते हैं",
+  "billing.search.trendingBadge": "लोकप्रिय",
   "billing.cart.emptyHint": "बाईं तरफ से {items} चुनकर जोड़ें",
   "billing.cart.sellingUnitFor": "{name} की बिक्री यूनिट",
   "billing.cart.guestItemProtected": "स्वीकृत QR आइटम · मूल मात्रा और हिस्सा सुरक्षित है",

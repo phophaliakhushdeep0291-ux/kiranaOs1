@@ -2399,7 +2399,7 @@ export default function Billing() {
             className="inline-flex h-11 items-center justify-center rounded-xl border border-[#dce5f1] px-4 text-[13px] font-black text-[#42526e]"
             aria-label={t("billing.page.closeCheckout")}
           >
-            Back
+            {t("billing.bills.back")}
           </button>
         </div>
         <div className="flex min-h-0 flex-1 overflow-y-auto p-2 pb-[var(--app-mobile-checkout-panel-clearance)] overscroll-contain lg:overflow-visible lg:p-0">
@@ -2535,8 +2535,10 @@ export default function Billing() {
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-bold text-[#7C7566]">
-                {cart.length} item{cart.length === 1 ? "" : "s"}
-                {creditAmount > 0 ? " · udhar" : ""}
+                {cart.length === 1
+                  ? t("billing.cart.itemCountOne", { count: cart.length })
+                  : t("billing.cart.itemCountMany", { count: cart.length })}
+                {creditAmount > 0 ? ` · ${t("billing.cart.udharTag")}` : ""}
               </div>
               <div className="font-display text-[20px] font-black leading-tight text-[var(--brand-ink)]">
                 ₹{grandTotal.toLocaleString("en-IN")}

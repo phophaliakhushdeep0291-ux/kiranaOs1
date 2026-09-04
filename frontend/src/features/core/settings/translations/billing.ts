@@ -16,6 +16,13 @@ export const billingEn = {
   "billing.cart.empty": "Cart is empty",
   "billing.cart.itemCountOne": "{count} item",
   "billing.cart.itemCountMany": "{count} items",
+  // The tag beside the count on the phone checkout bar, and the two headings
+  // over the suggested products. All three sat in English on a Hindi counter,
+  // beside a total and a button that were already translated.
+  "billing.cart.udharTag": "udhar",
+  "billing.suggest.combo": "Often added together",
+  "billing.suggest.usual": "You usually bill now",
+  "billing.search.trendingBadge": "Trending",
   "billing.cart.emptyHint": "Click {items} on the left to add",
   "billing.cart.sellingUnitFor": "Selling unit for {name}",
   "billing.cart.guestItemProtected": "Accepted QR item · original quantity and portion protected",
