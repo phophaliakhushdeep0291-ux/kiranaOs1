@@ -127,8 +127,52 @@ test("a valid slip lets the sale through and closes the register entry", async (
   // The number is copied alongside the id so the register keeps saying what went
   // out even if the bill is later cancelled or purged.
   assert.equal(write.data.billNumber, "INV-7");
-  // Increment, never a set — a repeat slip walks toward exhaustion.
-  assert.deepEqual(write.data.refillsUsed, { increment: 1 });
+  // The first hand-over is not a refill, so the count does not move. That is the
+  // scale dispensePrescription, canDispense and the refillable summary all use;
+  // incrementing here too put the till one dispense ahead of the register, and a
+  // slip handed over at the register could then buy Schedule H at the counter.
+  assert.equal(write.data.refillsUsed, undefined);
+  resetSaleGuards();
+});
+
+test("a repeat does move the count, so a slip walks toward exhaustion", async () => {
+  resetSaleGuards();
+  const { registerPrescriptionSaleGuard } = await import("../src/verticals/pharmacy/prescriptions/prescriptions.guard.js");
+  registerPrescriptionSaleGuard();
+
+  // Already dispensed once, with two repeats the doctor allowed.
+  const tx = fakeTx({ id: "rx2", status: "dispensed", prescribedOn: new Date().toISOString(), refillsAllowed: 2, refillsUsed: 0 });
+  const { refusal, onConfirmed } = await evaluateSaleGuards(context({
+    tx,
+    body: { prescriptionId: "rx2" },
+    items: [{ productId: "p1" }],
+    productMap: { p1: { name: "Alprax", drugSchedule: "h1" } },
+  }));
+
+  assert.equal(refusal, null);
+  await onConfirmed[0]({ tx, bill: { id: "bill2" }, billNo: "INV-8" });
+  assert.deepEqual(tx.updates[0].data.refillsUsed, { increment: 1 });
+  resetSaleGuards();
+});
+
+test("an unrestricted basket closes no register entry", async () => {
+  resetSaleGuards();
+  const { registerPrescriptionSaleGuard } = await import("../src/verticals/pharmacy/prescriptions/prescriptions.guard.js");
+  registerPrescriptionSaleGuard();
+
+  // An OTC line carries a schedule, so it reaches the guard and only
+  // evaluateSale decides it is unrestricted. There is no slip behind it, so
+  // there must be no confirm hook either — one was handed back regardless, and
+  // it dereferenced a null prescription the moment the bill was confirmed.
+  const tx = { prescription: { findFirst: async () => null }, updates: [] };
+  const { refusal, onConfirmed } = await evaluateSaleGuards(context({
+    tx,
+    items: [{ productId: "p1" }],
+    productMap: { p1: { name: "Crocin", drugSchedule: "otc" } },
+  }));
+
+  assert.equal(refusal, null);
+  assert.equal(onConfirmed.length, 0, "an OTC sale must not carry a prescription write");
   resetSaleGuards();
 });
 

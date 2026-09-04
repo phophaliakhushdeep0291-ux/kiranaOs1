@@ -153,7 +153,6 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/core/subscription/pages/SubscriptionPage.tsx": 23,
   "features/core/support/ReportIssueButton.tsx": 20,
   "features/core/support/pages/AskArthaPage.tsx": 13,
-  "features/core/sync/SyncAlertBanner.tsx": 3,
   "features/core/sync/pages/SyncStatusPage.tsx": 1,
   "features/core/voice/VoiceAssistant.tsx": 13,
   "features/verticals/auto-parts/fitment/pages/FitmentPage.tsx": 49,

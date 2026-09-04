@@ -28,6 +28,22 @@ export const syncEn = {
   // ── Status badge ──
   "sync.badge.failed": "{count} failed cloud backup",
   "sync.badge.pending": "{count} pending cloud backup",
+
+  // The top-of-app banner. Three states, because a queue that is emptying is not
+  // a fault: loading the starter catalogue queues hundreds of rows at once, and
+  // wearing the warning colour through all of it made a healthy first run look
+  // broken.
+  "sync.banner.reviewTitle": "{count} changes need review",
+  "sync.banner.reviewBody": "Your data is safe on this device. Retry, or open Sync Status to review.",
+  "sync.banner.backingUpTitle": "Backing up {count} changes...",
+  "sync.banner.backingUpBody": "Saving to the cloud. You can keep working.",
+  "sync.banner.waitingTitle": "{count} changes waiting to back up",
+  "sync.banner.waitingBody": "Will retry automatically when the connection is healthy.",
+  "sync.banner.retry": "Retry now",
+  "sync.banner.retrying": "Retrying...",
+  "sync.banner.view": "View",
+  "sync.banner.retryFailedTitle": "Retry failed",
+  "sync.banner.retryFailedBody": "Please check your connection and try again.",
   "sync.badge.offline": "Offline",
 
   // ── Top alerts ──

@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Car, Check, CircleAlert, Layers, Loader2, Package, Plus, Search, Trash2, Wrench,
+  Car, Check, CircleAlert, Layers, Loader2, Package, Plus, Receipt, Search, Trash2, Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { useOfflineStatus } from "@/features/core/sync";
+import { useAppLanguage } from "@/features/core/settings/i18n";
+import { queueProductsForBilling } from "@/features/core/billing/pending-cart-additions";
 import { useListProducts } from "@/features/core/products/queries";
 import {
   createFitment, deleteFitment, findPartsForVehicle, getFitmentSummary,
@@ -23,6 +26,8 @@ function inr(n: number) {
 }
 
 export default function FitmentPage() {
+  const { t } = useAppLanguage();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isOnline } = useOfflineStatus();
@@ -36,6 +41,18 @@ export default function FitmentPage() {
   const [results, setResults] = useState<FittingPart[] | null>(null);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<PartFitment | null>(null);
+
+  /**
+   * Hand a found part to the till.
+   *
+   * The whole point of the book: "Mahindra 575 DI, 2018 — clutch plate" ends on
+   * a bill, not on a screen the counter then has to remember and retype. Billing
+   * prices it, because billing owns pricing.
+   */
+  const sellPart = useCallback(async (part: FittingPart) => {
+    await queueProductsForBilling([{ productId: part.productId, name: part.productName }]);
+    navigate("/billing");
+  }, [navigate]);
 
   const summaryQ = useQuery({ queryKey: ["fitment", "summary"], queryFn: getFitmentSummary });
   const makesQ = useQuery({ queryKey: ["fitment", "vehicles"], queryFn: () => getVehicleOptions() });
@@ -161,7 +178,7 @@ export default function FitmentPage() {
           </div>
         </form>
 
-        {results && <VehicleResults results={results} searched={searched} />}
+        {results && <VehicleResults results={results} searched={searched} onSell={sellPart} sellLabel={t("shopType.fitment.sell")} />}
 
         <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
           <Kpi icon={<Layers size={16} />} label="Fitments recorded" value={String(summary?.fitments ?? 0)} tone="blue" />
@@ -262,7 +279,12 @@ export default function FitmentPage() {
   );
 }
 
-function VehicleResults({ results, searched }: { results: FittingPart[]; searched: { make: string; model: string; year: string } | null }) {
+function VehicleResults({ results, searched, onSell, sellLabel }: {
+  results: FittingPart[];
+  searched: { make: string; model: string; year: string } | null;
+  onSell: (part: FittingPart) => void;
+  sellLabel: string;
+}) {
   const label = [searched?.make, searched?.model, searched?.year].filter(Boolean).join(" ");
   const inStock = results.filter((part) => part.stockQty > 0);
 
@@ -314,6 +336,18 @@ function VehicleResults({ results, searched }: { results: FittingPart[]; searche
                     {part.stockQty > 0 ? `${part.stockQty} in stock` : "Out of stock"}
                   </p>
                   {part.price > 0 && <p className="mt-0.5 text-[11.5px] text-[#52627e]">{inr(part.price)}</p>}
+                  {/* Offered out of stock too: a parts shop takes the order and
+                      fetches the box from the back, and some shops bill negative
+                      stock on purpose rather than stop the counter. */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-1.5 h-11 gap-1.5 rounded-[9px] text-[12px] font-black"
+                    data-testid={`fitment-sell-${part.productId}`}
+                    onClick={() => onSell(part)}
+                  >
+                    <Receipt size={13} /> {sellLabel}
+                  </Button>
                 </>
               ) : (
                 <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", CHIP_TONES.gray)}>Recorded as fitting</span>

@@ -101,9 +101,12 @@ let syncTimer: number | null = null;
 let backendIntervalId: number | null = null;
 let running = false;
 let idleStep = 0;
+// Set by a tick that pushed rows and left more behind: the next batch goes
+// straight away instead of waiting out the ladder's fast rung.
+let draining = false;
 
 function scheduledSyncDelay() {
-  return syncDelayForStep(idleStep);
+  return syncDelayForStep(idleStep, draining);
 }
 
 // Called whenever work appears or the connection changes, so the next attempt is
@@ -128,13 +131,19 @@ async function runScheduledTick() {
     const counts = await refreshCount();
     const hadWork = Boolean(counts && counts.totalBlocking > 0);
     const canRun = navigator.onLine && document.visibilityState === "visible";
-    if (canRun && shouldRunScheduledNetworkWork()) await syncNow();
+    const pushed = canRun && shouldRunScheduledNetworkWork() ? await syncNow() : 0;
     if (canRun) await recoverLocalQueueIfNeeded();
+    // syncNow refreshed the counts before returning, so this reads the queue as
+    // it stands after the batch rather than costing another IndexedDB pass.
+    draining = pushed > 0 && state.pendingCount > 0;
     // Step down only on a genuinely quiet tick. A tick that found work stays at
     // the top of the ladder so a queue that needs several passes gets them.
     idleStep = nextIdleStep(idleStep, hadWork);
   } catch {
     // A failed tick must not stop the loop — that is how a queue goes quiet.
+    // It does drop back to the ladder: a tick that threw proved nothing about
+    // progress, and retrying it in 150ms would hammer whatever just broke.
+    draining = false;
   } finally {
     armScheduledSync();
   }
@@ -151,19 +160,21 @@ async function refreshCount(): Promise<SyncQueueCounts | null> {
   }
 }
 
-export async function syncNow(options: { manual?: boolean; hydrate?: boolean } = {}) {
-  if (isSyncing) return;
-  if (!options.manual && !shouldRunScheduledNetworkWork()) return;
+/** Returns how many outbox rows this cycle actually sent, which is what tells
+ * the scheduler whether the queue is draining or merely backed up. */
+export async function syncNow(options: { manual?: boolean; hydrate?: boolean } = {}): Promise<number> {
+  if (isSyncing) return 0;
+  if (!options.manual && !shouldRunScheduledNetworkWork()) return 0;
   const connection = await probeBackendConnection({ force: options.manual });
   setBackendStatus(connection);
-  if (!connection.browserOnline || !connection.backendReachable) return;
+  if (!connection.browserOnline || !connection.backendReachable) return 0;
   isSyncing = true;
   setSyncing(true);
   try {
     const hydrate = options.hydrate ?? options.manual === true;
-    if (hydrate) await runManualSyncCycle();
-    else await runSyncCycle();
+    const result = hydrate ? await runManualSyncCycle() : await runSyncCycle();
     await refreshCount();
+    return result.pushed;
   } finally {
     isSyncing = false;
     setSyncing(false);

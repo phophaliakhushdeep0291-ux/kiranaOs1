@@ -93,7 +93,11 @@ describe("sync scheduling runs one engine, not one per caller", () => {
     // The ladder itself is real logic with its own behavioural test — see
     // sync-cadence-ladder.test.ts. What this file pins is that the engine
     // actually uses it rather than reintroducing a fixed clock.
-    expect(offline).toContain("syncDelayForStep(idleStep)");
+    //
+    // The second argument is the drain rung: a cycle that SENT rows and left
+    // more queued skips the wait, so a bulk import is not paced by a timer.
+    // sync-bulk-queue-drain.test.ts holds the rule that gates it on progress.
+    expect(offline).toContain("syncDelayForStep(idleStep, draining)");
     expect(offline).toContain("idleStep = nextIdleStep(idleStep, hadWork);");
     expect(offline).toContain("function resetSyncCadence()");
     expect(offline).not.toContain("window.setInterval(() => {\n    void refreshCount();");
