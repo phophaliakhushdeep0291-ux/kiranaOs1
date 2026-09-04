@@ -336,6 +336,78 @@ export function convertPackagingMode(
   };
 }
 
+/**
+ * Move the form between "Packed" and "Loose" without changing what is on the shelf.
+ *
+ * The toggle used to write `isLooseItem` and nothing else, and that flag on its own
+ * does not describe a product anybody can save. A packed row carries its size in
+ * `packSizeValue`/`packSizeUnit`, and `formToInput` drops both for a loose item — so
+ * a 1 kg packet turned into a selling unit still TYPED "packet" with no size at all.
+ * The server requires every packet, pack and pouch to state its size
+ * (normalizeSellingUnits, backend/src/modules/products/products.service.js), so the
+ * save came back 400 and the shop watched the switch do nothing. The message even
+ * named the pack-size box, which loose mode hides.
+ *
+ * A pack that goes loose is sold in the unit it was MEASURED in: a 1 kg packet
+ * becomes loose kg, a box of 10 pieces becomes loose pieces. That is also what holds
+ * the shelf still, because `baseUnitFor(packSizeUnit)` is the base unit the packed
+ * form already had — so `stockBaseQty` and every alternate pack's conversion still
+ * mean the same thing on the other side of the switch.
+ *
+ * Stock is restated for the reason convertPackagingMode restates it: 10 packets of
+ * 1 kg is 10 kg, not 10. Writing the flag alone left the number where it was, so
+ * 10 kg of atta silently became 10 grams-worth of it. `lowStockAlert` is quoted in
+ * the same units and moves with it, or the reorder level shifts by a factor of the
+ * pack size. The pack's own size is kept rather than cleared, so a shop that flips
+ * to loose and back gets its 5 kg bag returned instead of a 1 kg one.
+ */
+export function convertLooseMode(
+  values: ProductFormData,
+  nextLoose: boolean,
+  packUnit = "packet",
+): Pick<ProductFormData, "isLooseItem" | "unit" | "packSizeValue" | "packSizeUnit" | "stockQuantity" | "lowStockAlert"> {
+  const current = values.isLooseItem ?? false;
+  const unchanged = {
+    isLooseItem: current,
+    unit: values.unit,
+    packSizeValue: values.packSizeValue,
+    packSizeUnit: values.packSizeUnit,
+    stockQuantity: values.stockQuantity,
+    lowStockAlert: values.lowStockAlert,
+  };
+  if (nextLoose === current) return unchanged;
+
+  // A size of zero is not a pack anybody can divide by. It cannot come from the
+  // form (the schema demands a positive number) but it can come from a draft or a
+  // spreadsheet, and one bad row must not take the stock figure with it.
+  const packSize = Number(values.packSizeValue) > 0 ? Number(values.packSizeValue) : 1;
+  const measure = (nextLoose ? values.packSizeUnit : values.unit) || values.unit;
+  const next = nextLoose
+    // The measure becomes the selling unit; the pack it came out of is remembered.
+    ? { unit: measure, packSizeValue: packSize, packSizeUnit: measure }
+    // The loose unit becomes what one pack is measured in.
+    : { unit: packUnit, packSizeValue: packSize, packSizeUnit: measure };
+
+  const conversionNow = current
+    ? toBaseQty(1, values.unit)
+    : sellingUnitConversion(packSize, values.packSizeUnit);
+  const conversionNext = nextLoose
+    ? toBaseQty(1, next.unit)
+    : sellingUnitConversion(next.packSizeValue, next.packSizeUnit);
+  const restate = (quantity: number) => (
+    conversionNext > 0
+      ? roundMoney(((Number(quantity) || 0) * conversionNow) / conversionNext)
+      : Number(quantity) || 0
+  );
+
+  return {
+    isLooseItem: nextLoose,
+    ...next,
+    stockQuantity: restate(values.stockQuantity),
+    lowStockAlert: restate(values.lowStockAlert),
+  };
+}
+
 export function formToInput(values: ProductFormData, ownerPin?: string, reason?: string): ProductInput {
   const baseUnit = values.isLooseItem ? baseUnitFor(values.unit) : baseUnitFor(values.packSizeUnit);
   const conversionToBase = values.isLooseItem
