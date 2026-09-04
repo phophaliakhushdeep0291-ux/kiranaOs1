@@ -54,17 +54,52 @@ function readCachedProducts(params?: ListProductsParams): Product[] {
   return filterCachedProducts(readInstantCache<Product[]>(productsCacheKey(), []), params);
 }
 
-async function readProductsFromIndexedDB(params?: ListProductsParams): Promise<Product[]> {
+function isProductTombstone(row: Product): boolean {
+  return row.deletedAt != null || (row as Product & { deleted_at?: unknown }).deleted_at != null;
+}
+
+function productsForActiveLocation(rows: Product[]): Product[] {
+  const locationId = getActiveLocationId();
+  return locationId && rows.some((row) => Boolean((row as Product & { inventoryLocationId?: string }).inventoryLocationId))
+    ? rows.filter((row) => (row as Product & { inventoryLocationId?: string }).inventoryLocationId === locationId)
+    : rows;
+}
+
+/**
+ * The local catalogue, split into what the screen shows and what it must suppress.
+ *
+ * Both halves come out of one `getAll`. The list query needs both on every fetch,
+ * and reading the table twice to get them doubles the deserialisation cost of a
+ * few thousand rows on the cheap Android phones this runs on.
+ *
+ * The tombstones are the reason this returns a pair at all. Deletion is
+ * local-first: the row is marked deleted in IndexedDB and the delete goes to the
+ * outbox, so the server keeps listing the product until that queue drains. Every
+ * other reader here strips deleted rows, which is right for a list about to be
+ * rendered and wrong for one about to be merged with the server's answer — the
+ * tombstone is the only thing in that merge that knows the product is gone.
+ * Without it the live server row won, the deleted product came back to the
+ * catalogue, and cacheProducts then wrote it over the local deletion so the
+ * resurrection outlived a reload.
+ *
+ * Tombstones are deliberately not filtered by `params`: one is not a row anybody
+ * displays, it is a row that suppresses one, and a search or limit that hid it
+ * would let the product back onto the very screen doing the searching.
+ */
+async function readLocalProductState(params?: ListProductsParams): Promise<{ active: Product[]; tombstones: Product[] }> {
   try {
     const rows = await offlineDB.getAll<Product>("products");
-    const locationId = getActiveLocationId();
-    const locationAwareRows = locationId && rows.some((row) => Boolean((row as Product & { inventoryLocationId?: string }).inventoryLocationId))
-      ? rows.filter((row) => (row as Product & { inventoryLocationId?: string }).inventoryLocationId === locationId)
-      : rows;
-    return filterCachedProducts(locationAwareRows, params);
+    return {
+      active: filterCachedProducts(productsForActiveLocation(rows), params),
+      tombstones: rows.filter(isProductTombstone),
+    };
   } catch {
-    return [];
+    return { active: [], tombstones: [] };
   }
+}
+
+async function readProductsFromIndexedDB(params?: ListProductsParams): Promise<Product[]> {
+  return (await readLocalProductState(params)).active;
 }
 
 /**
@@ -145,7 +180,15 @@ export function mergeProducts(serverRows: Product[], localRows: Product[], retai
     const deleted = local.deletedAt != null || (local as Product & { deleted_at?: unknown }).deleted_at != null;
     if (deleted) {
       const indexes = productKeys(local).map((key) => keyToIndex.get(key)).filter((value): value is number => value !== undefined);
-      indexes.forEach((index) => { rows[index] = { ...rows[index], ...local }; });
+      // A tombstone that matches nothing yet is still the only record that this
+      // product is gone, so it is carried rather than dropped. It used to be
+      // discarded here, and the merge that matters runs in two stages: the local
+      // stage has no server rows to overlay, so the tombstone died there and the
+      // server's live row won the second stage. The product came back to the
+      // catalogue seconds after it was deleted. Callers strip deleted rows before
+      // rendering (filterCachedProducts), so carrying it costs nothing.
+      if (indexes.length === 0) add(local);
+      else indexes.forEach((index) => { rows[index] = { ...rows[index], ...local }; });
     } else add(local);
   }
   return rows;
@@ -168,8 +211,10 @@ export function useListProducts(
     initialDataUpdatedAt: extra.initialDataUpdatedAt ?? instantCacheUpdatedAt(productsCacheKey()),
     queryFn: async () => {
       const liveCached = readCachedProducts(params);
-      const fromDB = await readProductsFromIndexedDB(params);
-      const localRows = mergeProducts([], [...liveCached, ...fromDB], true);
+      const { active: fromDB, tombstones } = await readLocalProductState(params);
+      // Tombstones last: they have to land on top of any live copy of the same
+      // product still sitting in the cache or the database.
+      const localRows = mergeProducts([], [...liveCached, ...fromDB, ...tombstones], true);
       if (!isBrowserOnline()) return filterCachedProducts(localRows, params);
       try {
         const fresh = await productsApi.listProducts(params);
