@@ -8,6 +8,8 @@ import * as ledgerApi from "@/features/core/ledger/api";
 import { cacheAuthoritativeSummary } from "@/features/core/ledger/authoritative-balances";
 import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/core/customers/local-actions";
 import { getLocalUdharLedger, getLocalUdharSummary, getLocalUdharSummaryAsync, recordPaymentLocalFirst } from "@/features/core/payments/local-actions";
+import { loadIdMap } from "@/features/core/sync/sync-id-mapping";
+import { isSupersededLocalEcho } from "@/features/core/sync/cloud-hydration";
 import type { Customer, CustomerInput, CustomerKhataResult, LedgerResult, QueryParams, UdharSummary } from "@/types/api";
 
 const CUSTOMERS_CACHE_KEY = "customers";
@@ -70,7 +72,14 @@ export async function cacheCustomers(serverRows: Customer[]): Promise<Customer[]
       // Sync can remap/delete a local id while a customer request is in flight.
       // Reading the device rows inside this write transaction prevents an old
       // pending local echo from being reinserted after its server id is known.
-      const current = await offlineDB.getAll<Customer>("customers");
+      const stored = await offlineDB.getAll<Customer>("customers");
+      // Reading inside the transaction is not enough on its own: until the server
+      // row has been written with the local id on it, the echo matches nothing in
+      // `fresh` and is written straight back as a row of its own. An id_mapping for
+      // the echo's own id is the proof the server has taken it, so drop it here —
+      // the acknowledged row is the one that belongs in the shop's list.
+      const idMap = await loadIdMap().catch(() => ({}) as Record<string, string>);
+      const current = stored.filter((row) => !isSupersededLocalEcho(row as unknown as Record<string, unknown>, idMap));
       const byId = new Map(current.map((row) => [row.id, row]));
       const fresh = serverRows.map((row) => ({ ...byId.get(row.id), ...row }));
       const rows = mergeCustomers(fresh, current).map(normaliseCustomerForCache);
@@ -111,6 +120,13 @@ function isDeviceOwnedCustomer(customer: Customer): boolean {
     ["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(String(row.sync_status ?? "").toLowerCase());
 }
 
+/** Has the server acknowledged this row, and given it an id of its own? */
+function isServerBackedCustomer(customer: Customer): boolean {
+  const row = customer as Customer & { server_id?: unknown; serverId?: unknown };
+  return (typeof row.server_id === "string" && row.server_id.length > 0)
+    || (typeof row.serverId === "string" && row.serverId.length > 0);
+}
+
 export function mergeCustomers(serverRows: Customer[], localRows: Customer[], retainSyncedLocal = false): Customer[] {
   const rows: Customer[] = [];
   const keyToIndex = new Map<string, number>();
@@ -122,7 +138,29 @@ export function mergeCustomers(serverRows: Customer[], localRows: Customer[], re
       keys.forEach((key) => keyToIndex.set(key, nextIndex));
       return;
     }
-    rows[index] = { ...rows[index], ...customer };
+    const existing = rows[index];
+    const merged = { ...existing, ...customer } as Customer & { server_id?: unknown; sync_status?: unknown };
+    /**
+     * A local echo must not take the server identity back off the row.
+     *
+     * A customer created on this device is keyed by the id the device minted and
+     * carries no server id; sync then writes the server's row (which remembers
+     * that local id) and drops the echo. The two therefore MATCH here, and
+     * spreading the echo last put `id` back to the local one, `server_id` back to
+     * null and the status back to pending — whereupon cacheCustomers wrote the
+     * result straight into IndexedDB under the local key, recreating the very row
+     * sync had just removed. The shop saw the same customer twice, one copy stuck
+     * "pending" forever, and it survived a reload.
+     *
+     * Only an echo with no server id of its own is overruled, so a pending EDIT to
+     * an already-synced customer still wins, which is what keeps offline changes.
+     */
+    if (isServerBackedCustomer(existing) && !isServerBackedCustomer(customer)) {
+      merged.id = existing.id;
+      merged.server_id = (existing as Customer & { server_id?: unknown }).server_id;
+      merged.sync_status = (existing as Customer & { sync_status?: unknown }).sync_status;
+    }
+    rows[index] = merged;
     customerKeys(rows[index]).forEach((key) => keyToIndex.set(key, index));
   };
   serverRows.forEach(add);

@@ -139,6 +139,44 @@ async function readInventoryFromIndexedDB(): Promise<InventoryItem[]> {
   }
 }
 
+/**
+ * Every identity of a product this device has deleted and not yet synced.
+ *
+ * Deleting is local-first, so the server keeps returning the product until the
+ * outbox drains — and the two queries below take the server's answer wholesale.
+ * A product deleted from the catalogue therefore went on sitting in stock, and
+ * each refresh wrote it back into the cache, so it outlived the screen. The
+ * products list suppresses the same rows for the same reason; this is that rule
+ * on the stock side of the app.
+ *
+ * Keyed by every id the row is known by, because a product created on this
+ * device carries the local id it was minted with while the server answers with
+ * its own.
+ */
+async function deletedProductIdentities(): Promise<Set<string>> {
+  try {
+    const rows = await offlineDB.getAll<Product>("products");
+    const ids = rows
+      .filter((row) => row.deletedAt != null || (row as { deleted_at?: unknown }).deleted_at != null)
+      .flatMap((row) => {
+        const record = row as Product & { productId?: unknown; server_id?: unknown; local_id?: unknown };
+        return [row.id, record.productId, record.server_id, record.local_id];
+      })
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+    return new Set(ids);
+  } catch {
+    return new Set();
+  }
+}
+
+export function withoutDeletedProducts(items: InventoryItem[], deleted: Set<string>): InventoryItem[] {
+  if (deleted.size === 0) return items;
+  return items.filter((item) => {
+    const productId = (item as InventoryItem & { productId?: unknown }).productId;
+    return !(typeof productId === "string" && deleted.has(productId)) && !deleted.has(String(item.id ?? ""));
+  });
+}
+
 export function useGetInventory(options?: QueryHookOptions<InventoryResponse, InventoryQueryKey>) {
   const extra = getQueryOptions<InventoryResponse, InventoryQueryKey>(options);
   const cached = readCachedInventory();
@@ -166,7 +204,10 @@ export function useGetInventory(options?: QueryHookOptions<InventoryResponse, In
         return fromDB;
       }
       try {
-        const fresh = (await inventoryApi.getInventory()).map((item) => normalizeInventoryItem(item));
+        const fresh = withoutDeletedProducts(
+          (await inventoryApi.getInventory()).map((item) => normalizeInventoryItem(item)),
+          await deletedProductIdentities(),
+        );
         writeInstantCache(INVENTORY_CACHE_KEY, fresh);
         return fresh;
       } catch (error) {
@@ -217,7 +258,10 @@ export function useGetLowStock(options?: QueryHookOptions<InventoryResponse, Low
         return readLowStockFromIndexedDB();
       }
       try {
-        return (await inventoryApi.getLowStock()).map((item) => normalizeInventoryItem(item));
+        return withoutDeletedProducts(
+          (await inventoryApi.getLowStock()).map((item) => normalizeInventoryItem(item)),
+          await deletedProductIdentities(),
+        );
       } catch (error) {
         if (liveCached.length > 0) return liveCached;
         if (isRecoverableNetworkError(error)) return readLowStockFromIndexedDB();
