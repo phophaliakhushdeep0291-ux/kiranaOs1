@@ -83,6 +83,7 @@ export const productsEn = {
   "products.toast.changesWillSync": "Changes will sync when you're back online.",
   "products.toast.saveFailed": "Could not save product",
   "products.toast.updateFailed": "Could not update product",
+  "products.toast.deleteFailed": "Could not move product to recycle bin",
   "products.toast.checkRequired": "Check required fields.",
   "products.toast.recycledLocally": "Product moved to recycle bin locally",
   "products.toast.draftPrepared": "Product draft prepared",

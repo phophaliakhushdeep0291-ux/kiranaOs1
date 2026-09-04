@@ -54,6 +54,12 @@ export function syncPull(paramsOrCursor?: SyncPullRequestParams | string | numbe
   })}`, {
     method: "GET",
     background: params.background,
+    // A catch-up page can hydrate hundreds of product rows (including selling
+    // units) from a small production database that has just resumed from idle.
+    // The generic 8s background timeout is appropriate for lightweight probes,
+    // but aborting a valid pull at that boundary leaves the terminal's server
+    // sequence permanently behind while pushes continue to succeed.
+    timeoutMs: 30_000,
   });
 }
 

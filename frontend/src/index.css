@@ -91,7 +91,14 @@
      shop's tube light is glare, and the shopkeeper is reading it through a
      scratched protector at arm's length for nine hours. Cards stay pure white,
      so a card still lifts off the page the way paper on a counter does. */
-  --background: 40 24% 97%;
+  /* #fcfaf7. Warm paper, but two steps lighter than the #faf8f4 it started at.
+     That first value read well and quietly cost contrast: #64748b — the most
+     used text colour in this app, 307 occurrences — measures 4.759:1 on white
+     and 4.486:1 on #faf8f4, so warming the ground pushed the body grey under
+     the 4.5 floor everywhere at once. #fcfaf7 puts it back at 4.568:1 and still
+     reads as paper rather than screen. `paper-ground-contrast.test.ts` holds
+     the relationship so a future warm-up cannot repeat it silently. */
+  --background: 36 44% 98%;
   --foreground: 228 14% 28%;
   --border: 38 20% 87%;
 
@@ -1497,7 +1504,7 @@ html[data-density="compact"] {
        protector, for nine hours, and full-brightness white is glare. Cards stay
        pure white below, so a card still lifts off the page the way a docket
        lifts off a counter. */
-    --kirana-mobile-bg: #faf8f4;
+    --kirana-mobile-bg: #fcfaf7;
     --kirana-mobile-ink: #3d4354;
     --kirana-mobile-muted: #7a7362;
     --kirana-mobile-subtle: #8a8371;

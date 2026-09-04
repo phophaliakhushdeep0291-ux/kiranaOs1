@@ -575,13 +575,50 @@ export async function updateProductLocalFirst(id: string, data: ProductInput): P
  * row, audit entry, and sync operation is stored, or none is. Re-selecting the same file is
  * safe because the dry-run reconciler will match the products created by the first import.
  */
+/**
+ * Rebuild the product list caches from what is now in the database.
+ *
+ * Split out of the import so a batched load can do it once at the end instead of
+ * once per batch. It reads the whole table and re-serialises the entire cached
+ * array twice, so running it per batch is quadratic — see `deferCacheRefresh`.
+ */
+export async function refreshProductCaches(): Promise<void> {
+  const refreshedProducts = (await offlineDB.getAll<Product>("products")).slice(0, 1000);
+  writeInstantCache(CACHE_KEY, refreshedProducts, 3650);
+  writeInstantCache(INVENTORY_CACHE_KEY, refreshedProducts, 3650);
+}
+
+export interface ImportProductsOptions {
+  /**
+   * Skip the cache rebuild and leave it to the caller.
+   *
+   * A batched load calls this function once per batch, and the rebuild reads
+   * every product and rewrites both caches whole — so across fourteen batches of
+   * the starter catalog it read roughly 3,900 rows and re-serialised about 7,800
+   * product objects to produce one final cache. The caller that owns the loop is
+   * the only one that knows when the last batch has landed, so it owns the
+   * refresh; `refreshProductCaches` is exported for it.
+   */
+  deferCacheRefresh?: boolean;
+}
+
 export async function importProductsLocalFirst(
   operations: ProductImportOperation[],
   metadata: ProductImportMetadata,
   approval?: { ownerPin: string; reason?: string },
+  options: ImportProductsOptions = {},
 ): Promise<ProductImportSession> {
   const startedAt = new Date().toISOString();
-  const existingProducts = await offlineDB.getAll<Product>("products");
+  /*
+   * Read the products table only when a row in this batch actually targets an
+   * existing product. It is consulted for nothing else, and reading it
+   * unconditionally made a bulk import quadratic: the starter catalog arrives as
+   * fourteen create-only batches, so this was fourteen full scans of a table that
+   * each preceding batch had just made bigger — roughly 3,600 rows read to
+   * resolve nothing.
+   */
+  const hasUpdates = operations.some((operation) => operation.action === "update");
+  const existingProducts = hasUpdates ? await offlineDB.getAll<Product>("products") : [];
   const existingById = new Map(existingProducts.map((product) => [product.id, product]));
   const seenUpdateIds = new Set<string>();
   const products: Product[] = [];
@@ -612,18 +649,34 @@ export async function importProductsLocalFirst(
       : touchLocalEntity(toProduct(validated, existing!.id, existing), "pending_sync");
     products.push(product);
 
-    const auditLog = buildAuditLogRow({
-      action: operation.action === "create" ? "product_import_created" : "product_import_updated",
-      entityType: "product",
-      entityId: product.id,
-      entityLabel: product.name,
-      oldValue: existing ?? null,
-      newValue: product,
-      reason: `Product migration from ${metadata.fileName}, row ${operation.rowNumber}`,
-      ownerPinProvided: Boolean(validated.ownerPin),
-      summary: `${operation.action === "create" ? "Created" : "Updated"} ${product.name} from product migration`,
-    });
-    auditLogs.push(auditLog);
+    /*
+     * Updates get a per-row audit; creates do not.
+     *
+     * On an update the row is the whole point — an import that moves a selling
+     * price has to record the before and the after, and a summary count cannot
+     * reconstruct that. On a create it records nothing the product does not
+     * already carry: `oldValue` is null by definition, `newValue` is the product,
+     * and the product row itself holds who created it and when.
+     *
+     * One product at a time that redundancy is free. At 560 it was half of
+     * everything written and half of everything synced — 574 audit rows plus 574
+     * audit outbox operations, for a catalog of 560 items. The completion summary
+     * below carries what is actually load-bearing: who approved it, which file,
+     * how many rows, and when.
+     */
+    if (operation.action === "update") {
+      auditLogs.push(buildAuditLogRow({
+        action: "product_import_updated",
+        entityType: "product",
+        entityId: product.id,
+        entityLabel: product.name,
+        oldValue: existing ?? null,
+        newValue: product,
+        reason: `Product migration from ${metadata.fileName}, row ${operation.rowNumber}`,
+        ownerPinProvided: Boolean(validated.ownerPin),
+        summary: `Updated ${product.name} from product migration`,
+      }));
+    }
 
     const priceAudit = buildPriceBelowMinimumAudit(product, existing, validated.ownerPin, validated.ownerPinReason);
     if (priceAudit) auditLogs.push(priceAudit);
@@ -684,6 +737,9 @@ export async function importProductsLocalFirst(
     entityLabel: metadata.fileName,
     newValue: session,
     reason: `Imported ${session.createdRows} new and ${session.updatedRows} existing products`,
+    // Now load-bearing. With no per-row audit behind a create-only import, this
+    // is the only row that records the import was approved rather than silent.
+    ownerPinProvided: Boolean(approval?.ownerPin),
     summary: `Product migration completed from ${metadata.fileName}`,
   });
   auditLogs.push(summaryAudit);
@@ -701,9 +757,7 @@ export async function importProductsLocalFirst(
     await tx.setSetting(LAST_PRODUCT_IMPORT_SETTING_KEY, session);
   });
 
-  const refreshedProducts = (await offlineDB.getAll<Product>("products")).slice(0, 1000);
-  writeInstantCache(CACHE_KEY, refreshedProducts, 3650);
-  writeInstantCache(INVENTORY_CACHE_KEY, refreshedProducts, 3650);
+  if (!options.deferCacheRefresh) await refreshProductCaches();
   emitLocalDataChanged({
     entityType: "product",
     action: "bulk_imported",

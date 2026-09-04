@@ -79,7 +79,7 @@ export function OwnerPinModal({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) cancel(); }}>
-      <DialogContent className="max-w-sm" aria-describedby={description ? undefined : "owner-pin-default-description"}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-sm overflow-y-auto" aria-describedby={description ? undefined : "owner-pin-default-description"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck size={18} aria-hidden="true" />

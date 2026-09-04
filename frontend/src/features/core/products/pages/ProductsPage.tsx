@@ -149,6 +149,7 @@ export default function ProductsPage() {
   const [pendingValues, setPendingValues] = useState<ProductFormData | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [stayOpen, setStayOpen] = useState(true);
   const stayOpenRef = useRef(true);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:product-panel-width");
@@ -265,10 +266,17 @@ export default function ProductsPage() {
 
   const deleteProduct = useDeleteProduct({
     mutation: {
+      onMutate: () => setDeleteError(null),
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
         setDeleteTarget(null);
+        setDeleteError(null);
         toast({ title: t("products.toast.recycledLocally") });
+      },
+      onError: (err: unknown) => {
+        const message = err instanceof Error ? err.message : t("products.toast.checkRequired");
+        setDeleteError(message);
+        toast({ title: t("products.toast.deleteFailed"), description: message, variant: "destructive" });
       },
     },
   });
@@ -696,7 +704,17 @@ export default function ProductsPage() {
                       <DropdownMenuItem onClick={() => duplicateProduct(product)}><Copy size={14} className="mr-2" /> {t("products.action.duplicate")}</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setLocation(`/products/${product.id}/pricing`)}><Layers size={14} className="mr-2" /> {t("products.action.customerPricing")}</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => printLabel(product)}><Tag size={14} className="mr-2" /> {t("products.action.printLabel")}</DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(product)}><Trash2 size={14} className="mr-2" /> {t("products.action.recycle")}</DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => {
+                          if (!manageProducts.allowed) {
+                            toast({ title: t("products.toast.permissionDenied"), description: manageProducts.reason, variant: "destructive" });
+                            return;
+                          }
+                          setDeleteError(null);
+                          setDeleteTarget(product);
+                        }}
+                      ><Trash2 size={14} className="mr-2" /> {t("products.action.recycle")}</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -1000,10 +1018,20 @@ export default function ProductsPage() {
         confirmLabel={t("products.action.moveToRecycleBinShort")}
         reasonRequired
         loading={deleteProduct.isPending}
-        onCancel={() => { if (!deleteProduct.isPending) setDeleteTarget(null); }}
-        onConfirm={({ ownerPin, reason }) => {
+        error={deleteError}
+        onCancel={() => {
+          if (!deleteProduct.isPending) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+        onConfirm={async ({ ownerPin, reason }) => {
           if (!deleteTarget) return;
-          deleteProduct.mutate({ id: deleteTarget.id, ownerPin, reason });
+          try {
+            await deleteProduct.mutateAsync({ id: deleteTarget.id, ownerPin, reason });
+          } catch {
+            // React Query's onError keeps the dialog open and renders the cause.
+          }
         }}
       />
       <OwnerPinModal
