@@ -260,6 +260,22 @@ export interface Customer {
   badCustomer?: boolean;
   trustScore?: number;
   customerSpecificPricing?: Record<string, number> | null;
+  /**
+   * Set on the device, never by the server.
+   *
+   * Marks a row whose balance was worked out from ledger entries still queued
+   * in this device's outbox. A server response cannot contain those entries, so
+   * a refresh that overwrote such a row would drop a payment the shop has
+   * already taken — which is why the merge in customers/queries.ts reads it
+   * before deciding what to keep.
+   *
+   * snake_case because it belongs to the locally stored row rather than the
+   * wire shape, matching udhar_amount and total_udhar in types/domain.ts. It is
+   * declared here because these rows are read back as Customer, and four call
+   * sites reached for it — one through a Record<string, unknown> cast to get
+   * past its absence.
+   */
+  balance_derived_from_local_ledger?: boolean;
   notes?: string | null;
   deletedAt?: string | null;
   createdAt?: string;
