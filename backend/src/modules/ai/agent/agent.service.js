@@ -155,10 +155,15 @@ function validateArgs(tool, args) {
 }
 
 function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise((_resolve, reject) => setTimeout(() => reject(new AppError(`${label} timed out`, 504, "AI_TOOL_TIMEOUT")), ms)),
-  ]);
+  let timer;
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = new AppError(`${label} timed out; its outcome is unknown and it will not be retried automatically`, 504, "AI_TOOL_TIMEOUT");
+      error.outcomeUnknown = true;
+      reject(error);
+    }, ms);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -595,37 +600,89 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
 
   const features = await resolveFeatures(ctx.shopId);
   const execCtx = { ...ctx, features: { has: features.has }, labelFor: () => null };
+  const currentlyAvailable = new Set(toolsFor(execCtx));
+  const prepared = plan.map((item) => ({ item, tool: getTool(item?.tool) }));
 
-  const needsPin = plan.some((item) => item.risk === TOOL_RISK.OWNER_PIN);
+  // Use the stricter of the risk the shopkeeper originally saw and the tool's
+  // current risk. A deployment between propose and confirm may raise a tool's
+  // risk; trusting only the stored plan would silently bypass the new PIN gate.
+  // Retaining the stored risk also prevents a deployment from weakening an
+  // approval the person already made under stricter terms.
+  const needsPin = prepared.some(({ item, tool }) => (
+    item?.risk === TOOL_RISK.OWNER_PIN || tool?.risk === TOOL_RISK.OWNER_PIN
+  ));
   if (needsPin && !ownerPinVerified) {
     throw new AppError("Owner PIN is required for this change", 403, "OWNER_PIN_REQUIRED");
   }
 
+  // This compare-and-set is the single-use boundary. Reading `parsed` and then
+  // updating after the handlers left a window where two confirm requests could
+  // both debit money or change stock. Exactly one request may move the row to
+  // `executing`; every concurrent confirmer or rejecter loses before any tool
+  // handler is entered. A crash deliberately leaves `executing` rather than
+  // making an unknown write replayable.
+  const claimed = await db.aiActionLog.updateMany({
+    where: { id: record.id, shopId: ctx.shopId, status: "parsed" },
+    data: { status: "executing", error: null },
+  });
+  if (claimed.count !== 1) {
+    throw new AppError("That plan has already been dealt with", 409, "AI_PLAN_ALREADY_RESOLVED");
+  }
+
   const results = [];
-  for (const item of plan) {
-    const tool = getTool(item.tool);
+  for (const { item, tool } of prepared) {
     if (!tool || tool.kind !== "write") {
       results.push({ ref: item.ref, ok: false, error: "That action is no longer available" });
       continue;
     }
-    // Re-checked at execution: a role or plan can change between proposing and
-    // confirming, and the earlier check was against the earlier state.
+    // Re-check the full current capability set, not only role/feature. A shop's
+    // business type can also change between proposing and confirming, and a
+    // restaurant-only action must not remain executable in a kirana shop.
+    if (!currentlyAvailable.has(tool)) {
+      results.push({ ref: item.ref, ok: false, summary: item.summary, error: "That action is no longer available on this account" });
+      continue;
+    }
+    const argErrors = validateArgs(tool, item.args ?? {});
+    if (argErrors.length) {
+      results.push({ ref: item.ref, ok: false, summary: item.summary, error: `Stored action is invalid: ${argErrors.join("; ")}` });
+      continue;
+    }
     try {
       assertToolAllowed(tool, execCtx);
-      const output = await withTimeout(tool.handler(item.args, execCtx), TOOL_TIMEOUT_MS, tool.name);
-      results.push({ ref: item.ref, ok: true, summary: item.summary, target: tool.target, output });
+      const rawOutput = await withTimeout(tool.handler(item.args, execCtx), TOOL_TIMEOUT_MS, tool.name);
+      // The HTTP response and the audit row must survive Prisma BigInt/Decimal
+      // values. Serialise only after the handler has resolved: if exotic output
+      // still cannot be encoded, the write itself succeeded and is never
+      // misreported as safe to retry.
+      let output = null;
+      let warning;
+      try {
+        output = JSON.parse(JSON.stringify(rawOutput, jsonSafe));
+      } catch {
+        warning = "The action completed, but its result could not be displayed";
+      }
+      results.push({ ref: item.ref, ok: true, summary: item.summary, target: tool.target, output, ...(warning ? { warning } : {}) });
     } catch (error) {
-      results.push({ ref: item.ref, ok: false, summary: item.summary, error: error?.message ?? "Failed" });
+      const outcomeUnknown = error?.outcomeUnknown === true || error?.code === "AI_TOOL_TIMEOUT";
+      results.push({
+        ref: item.ref,
+        ok: false,
+        summary: item.summary,
+        error: error?.message ?? "Failed",
+        ...(outcomeUnknown ? { outcomeUnknown: true } : {}),
+      });
     }
   }
 
   const failed = results.filter((result) => !result.ok);
+  const requiresReview = failed.some((result) => result.outcomeUnknown === true);
+  const executionStatus = requiresReview ? "uncertain" : failed.length === 0 ? "executed" : "failed";
   await db.aiActionLog.update({
     where: { id: record.id },
     data: {
-      status: failed.length === 0 ? "executed" : "failed",
+      status: executionStatus,
       error: failed.length ? failed.map((result) => `${result.ref}: ${result.error}`).join("; ").slice(0, 900) : null,
-      parsedActionJson: JSON.stringify({ ...parsed, results }),
+      parsedActionJson: JSON.stringify({ ...parsed, results }, jsonSafe),
     },
   });
 
@@ -636,7 +693,14 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
     .filter((result) => result.ok && result.target === "client" && result.output?.clientAction)
     .map((result) => ({ ref: result.ref, action: result.output.clientAction, payload: result.output }));
 
-  return { planId: record.id, results, clientActions, allSucceeded: failed.length === 0 };
+  return {
+    planId: record.id,
+    results,
+    clientActions,
+    allSucceeded: failed.length === 0,
+    executionStatus,
+    requiresReview,
+  };
 }
 
 /** Test surface. Not used on a request path. */
@@ -646,7 +710,12 @@ export const __agentInternals = { jsonSafe, toolResultMessage, validateArgs, san
 export async function rejectPlan(ctx, { planId }) {
   const record = await db.aiActionLog.findFirst({ where: { id: planId, shopId: ctx.shopId } });
   if (!record) throw new AppError("That plan was not found", 404, "AI_PLAN_NOT_FOUND");
-  if (record.status !== "parsed") return { planId, status: record.status };
-  await db.aiActionLog.update({ where: { id: record.id }, data: { status: "rejected" } });
+  const rejected = await db.aiActionLog.updateMany({
+    where: { id: record.id, shopId: ctx.shopId, status: "parsed" },
+    data: { status: "rejected" },
+  });
+  if (rejected.count !== 1) {
+    throw new AppError("That plan has already been dealt with", 409, "AI_PLAN_ALREADY_RESOLVED");
+  }
   return { planId, status: "rejected" };
 }

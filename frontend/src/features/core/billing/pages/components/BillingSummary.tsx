@@ -805,7 +805,7 @@ export function BillingSummary({
               {t("billing.summary.saving")}
             </>
           ) : cart.length === 0 && lastBillNo ? (
-            <>Start new bill</>
+            <>{t("billing.summary.startNewBill")}</>
           ) : (
             <>
               {isEstimateBill

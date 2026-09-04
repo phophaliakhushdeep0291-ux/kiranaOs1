@@ -13,6 +13,11 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.cart.empty": "कार्ट खाली है",
   "billing.cart.itemCountOne": "{count} चीज़",
   "billing.cart.itemCountMany": "{count} चीज़ें",
+  // Read on the counter's own screen, so they follow the counter's language.
+  "billing.cart.udharTag": "उधार",
+  "billing.suggest.combo": "अक्सर साथ में जाता है",
+  "billing.suggest.usual": "इस समय आप आमतौर पर यही बेचते हैं",
+  "billing.search.trendingBadge": "लोकप्रिय",
   "billing.cart.emptyHint": "बाईं तरफ से {items} चुनकर जोड़ें",
   "billing.cart.sellingUnitFor": "{name} की बिक्री यूनिट",
   "billing.cart.guestItemProtected": "स्वीकृत QR आइटम · मूल मात्रा और हिस्सा सुरक्षित है",
@@ -462,6 +467,8 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.closeCheckout": "पेमेंट बंद करें",
   "billing.page.reviewCollectPayment": "जांचें और पेमेंट लें",
   "billing.summary.roundOff": "राउंड ऑफ",
+  // Seen after every completed sale.
+  "billing.summary.startNewBill": "नया बिल शुरू करें",
   "billing.page.markDone": "पूरा हुआ",
   "billing.page.originalCustomerCopy": "ग्राहक की असली कॉपी",
   "billing.page.estimateCopy": "कच्चे बिल की कॉपी",

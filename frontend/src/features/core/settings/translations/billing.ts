@@ -16,6 +16,13 @@ export const billingEn = {
   "billing.cart.empty": "Cart is empty",
   "billing.cart.itemCountOne": "{count} item",
   "billing.cart.itemCountMany": "{count} items",
+  // The tag beside the count on the phone checkout bar, and the two headings
+  // over the suggested products. All three sat in English on a Hindi counter,
+  // beside a total and a button that were already translated.
+  "billing.cart.udharTag": "udhar",
+  "billing.suggest.combo": "Often added together",
+  "billing.suggest.usual": "You usually bill now",
+  "billing.search.trendingBadge": "Trending",
   "billing.cart.emptyHint": "Click {items} on the left to add",
   "billing.cart.sellingUnitFor": "Selling unit for {name}",
   "billing.cart.guestItemProtected": "Accepted QR item · original quantity and portion protected",
@@ -479,6 +486,10 @@ export const billingEn = {
   "billing.page.closeCheckout": "Close checkout",
   "billing.page.reviewCollectPayment": "Review and collect payment",
   "billing.summary.roundOff": "Round off",
+  // The confirm button after a sale has been saved: the cart is empty and the
+  // last bill number is still on screen. Shown on every completed sale, and it
+  // was the one word on that screen still in English.
+  "billing.summary.startNewBill": "Start new bill",
   "billing.page.markDone": "Mark done",
   "billing.page.originalCustomerCopy": "Original customer copy",
   "billing.page.estimateCopy": "Estimate copy",

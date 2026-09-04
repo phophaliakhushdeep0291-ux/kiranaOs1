@@ -923,7 +923,7 @@ function OrderSummaryPanel({
         onClick={onPlace}
         className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand)] py-4 text-sm font-black text-white shadow-[0_18px_38px_rgba(7,95,255,0.24)] disabled:cursor-not-allowed disabled:bg-[#b8c6dc] disabled:shadow-none"
       >
-        {placing ? <><Loader2 size={17} className="animate-spin" /> {t("storefront.placingOrder")}</> : <>Place Order <ChevronRight size={17} /></>}
+        {placing ? <><Loader2 size={17} className="animate-spin" /> {t("storefront.placingOrder")}</> : <>{t("storefront.placeOrderAction")} <ChevronRight size={17} /></>}
       </button>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button type="button" onClick={onQr} disabled={cartItems.length === 0} className="rounded-xl border border-[#d8f5e2] bg-[#f1fbf5] py-2.5 text-xs font-black text-[var(--success-ink)] disabled:opacity-40">{t("storefront.qrFallback")}</button>

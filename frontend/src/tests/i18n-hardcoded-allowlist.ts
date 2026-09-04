@@ -19,6 +19,15 @@
  * — it is debt that was always there and invisible, because a run had to fit on one
  * line to be reported and JSX is not written that way:
  *
+ * Two entries went UP when the scanner learnt to read inside a bare fragment
+ * (`<>…</>`). Its text sweep refuses a `>` that follows `<` so arrow functions
+ * are not mistaken for tags, and `<>` was caught by the same refusal — so
+ * anything written directly inside a fragment was invisible to this check.
+ * PurchaseBillsPage 211 -> 212 and FurnitureOrdersPage 41 -> 46 are that debt
+ * becoming visible, not new debt. The one file the gap was hiding entirely,
+ * CustomerOrderPage, was translated instead of listed: it is the page a
+ * customer taps.
+ *
  *     <Button>
  *       Add table        <- never counted before
  *     </Button>
@@ -91,8 +100,6 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/core/auth/pages/RegisterPage.tsx": 1,
   "features/core/auth/pages/ResetPasswordPage.tsx": 9,
   "features/core/auth/pages/VerifyEmailPage.tsx": 1,
-  "features/core/billing/pages/BillingPage.tsx": 1,
-  "features/core/billing/pages/components/BillingSearch.tsx": 1,
   "features/core/bills/components/EditBillDialog.tsx": 1,
   "features/core/bills/pages/BillsPage.tsx": 4,
   "features/core/customer-order/BillingOrderQrButton.tsx": 16,
@@ -125,7 +132,7 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/core/products/pages/components/VariantGridEditor.tsx": 18,
   "features/core/purchases/components/PurchaseOrdersPanel.tsx": 172,
   "features/core/purchases/components/PurchaseWorkflow.tsx": 1,
-  "features/core/purchases/pages/PurchaseBillsPage.tsx": 211,
+  "features/core/purchases/pages/PurchaseBillsPage.tsx": 212,
   "features/core/recovery/pages/RecoveryModePage.tsx": 40,
   "features/core/recycle-bin/pages/RecycleBinPage.tsx": 34,
   "features/core/remote-support/RemoteHelpCard.tsx": 15,
@@ -163,7 +170,7 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/verticals/electronics/units/pages/ProductUnitsPage.tsx": 58,
   "features/verticals/footwear/sizes/pages/SizeRunsPage.tsx": 51,
   "features/verticals/furniture-home/orders/components/OrderPanel.tsx": 36,
-  "features/verticals/furniture-home/orders/pages/FurnitureOrdersPage.tsx": 41,
+  "features/verticals/furniture-home/orders/pages/FurnitureOrdersPage.tsx": 46,
   "features/verticals/pharmacy/prescriptions/components/PrescriptionAttach.tsx": 8,
   "features/verticals/pharmacy/prescriptions/components/PrescriptionPanel.tsx": 58,
   "features/verticals/pharmacy/prescriptions/pages/PrescriptionsPage.tsx": 33,

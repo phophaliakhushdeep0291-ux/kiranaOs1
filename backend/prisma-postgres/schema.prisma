@@ -2124,7 +2124,7 @@ model AiActionLog {
   transcript       String
   parsedActionJson String // JSON string of the parsed command
   permissionLevel  String // safe | confirm | owner_pin | blocked
-  status           String // parsed | executed | rejected | failed
+  status           String // parsed | executing | executed | rejected | failed | uncertain
   error            String?
   createdAt        DateTime @default(now())
 
