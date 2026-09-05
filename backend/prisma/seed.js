@@ -10,7 +10,8 @@
  *   1 supplier
  */
 
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { PrismaClient } from "../src/db.js";
 import bcrypt from "bcryptjs";
 import { PLAN_CODES, PLAN_CONFIGS } from "../src/modules/subscription/planConfig.js";
 
@@ -59,9 +60,15 @@ async function main() {
       ownerName: "Ramesh Sharma",
       city: "Jodhpur",
       address: "Near Ghanta Ghar, Sardarpura, Jodhpur, Rajasthan 342001",
-      gstNumber: "08ABCDE1234F1Z5",
+      // Demo data has no legal GST registration. An invented GSTIN fails
+      // location validation and prevents the seeded catalog from loading.
+      gstNumber: null,
       phone: "0291-2512345",
     },
+  });
+  await db.shop.updateMany({
+    where: { id: shop.id, gstNumber: "08ABCDE1234F1Z5" },
+    data: { gstNumber: null },
   });
   console.log(`  ✅ Shop: ${shop.name}`);
 

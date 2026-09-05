@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { maskDatabaseUrl } from "./test-db-utils.js";
@@ -32,8 +33,19 @@ function runPrisma(args) {
 }
 
 console.log(`Updating local SQLite schema at ${maskDatabaseUrl(databaseUrl)} without destructive acceptance flags.`);
+// Prisma's SQLite engine on Windows can fail without a useful message when
+// the target file does not exist. Create it without truncating existing data.
+fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+fs.closeSync(fs.openSync(databasePath, "a"));
 runPrisma(["db", "push", "--skip-generate", "--schema", "prisma/schema.prisma"]);
 if (process.env.SKIP_LOCAL_PRISMA_GENERATE !== "true") {
   runPrisma(["generate", "--generator", "client", "--schema", "prisma/schema.prisma"]);
 }
+// Schema push does not execute SQL migrations. Local shops need the same
+// mutation log as test/production databases for incremental device sync.
+const triggers = spawnSync(process.execPath, ["scripts/install-sqlite-sync-triggers.js"], {
+  cwd: process.cwd(), env: process.env, stdio: "inherit",
+});
+if (triggers.error) throw triggers.error;
+if (triggers.status !== 0) process.exit(triggers.status ?? 1);
 console.log("Local SQLite schema is aligned with prisma/schema.prisma.");

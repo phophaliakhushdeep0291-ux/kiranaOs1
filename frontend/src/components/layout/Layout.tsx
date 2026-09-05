@@ -847,7 +847,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
             {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
           </div>}
 
-          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
+          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} plan={snapshot.plan} />}
 
           <Link href="/sync-status" aria-label="Open sync alerts" className="app-topbar-icon-button app-topbar-alerts">
             <Bell size={18} aria-hidden="true" />

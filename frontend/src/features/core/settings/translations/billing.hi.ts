@@ -267,6 +267,8 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.search.cameraBlocked": "कैमरे की इजाज़त बंद है।",
   "billing.search.scannerFailed": "स्कैनर चालू नहीं हो सका",
   "billing.search.loadingProducts": "माल आ रहा है…",
+  "billing.search.loadFailed": "आपके उत्पाद लोड नहीं हो सके",
+  "billing.search.retryProducts": "उत्पाद फिर से लोड करें",
   "billing.search.noProductsYet": "अभी कोई माल नहीं है",
   "billing.search.addFromProductsPage": "माल वाले पेज से सामान जोड़ें।",
   "billing.search.noMatch": "कुछ और लिखकर देखें या सर्च हटाएं।",
