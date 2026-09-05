@@ -67,11 +67,16 @@ export function SyncAlertBanner() {
   const mode = syncBannerMode({ pendingCount, failedCount, conflictCount, isSyncing: isSyncing || retrying });
   if (!mode) return null;
 
-  const headline = mode === "review"
-    ? t("sync.banner.reviewTitle", { count: needsReview })
+  // "1 changes need review" is what a shop reads most of the time now that a
+  // single refusal is counted once, and Hindi distinguishes the two forms too
+  // ("देखना है" against "देखने हैं"). Both dictionaries carry a .one variant.
+  const headlineCount = mode === "review" ? needsReview : pendingCount;
+  const headlineKey = mode === "review"
+    ? "sync.banner.reviewTitle"
     : mode === "backingUp"
-      ? t("sync.banner.backingUpTitle", { count: pendingCount })
-      : t("sync.banner.waitingTitle", { count: pendingCount });
+      ? "sync.banner.backingUpTitle"
+      : "sync.banner.waitingTitle";
+  const headline = t(headlineCount === 1 ? `${headlineKey}.one` : headlineKey, { count: headlineCount });
 
   const sub = mode === "review"
     ? t("sync.banner.reviewBody")

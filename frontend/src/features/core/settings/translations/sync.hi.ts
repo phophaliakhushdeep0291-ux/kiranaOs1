@@ -30,10 +30,13 @@ export const syncHi: Record<keyof typeof syncEn, string> = {
   // a fault: loading the starter catalogue queues hundreds of rows at once, and
   // wearing the warning colour through all of it made a healthy first run look
   // broken.
+  "sync.banner.reviewTitle.one": "1 बदलाव देखना है",
   "sync.banner.reviewTitle": "{count} बदलाव देखने हैं",
   "sync.banner.reviewBody": "आपका डेटा इसी डिवाइस पर सुरक्षित है। फिर से कोशिश करें, या सिंक स्टेटस खोलकर देखें।",
+  "sync.banner.backingUpTitle.one": "1 बदलाव बैकअप हो रहा है...",
   "sync.banner.backingUpTitle": "{count} बदलाव बैकअप हो रहे हैं...",
   "sync.banner.backingUpBody": "क्लाउड पर सेव हो रहा है। आप काम करते रहें।",
+  "sync.banner.waitingTitle.one": "1 बदलाव बैकअप बाकी",
   "sync.banner.waitingTitle": "{count} बदलाव बैकअप बाकी",
   "sync.banner.waitingBody": "कनेक्शन ठीक होते ही अपने आप फिर कोशिश होगी।",
   "sync.banner.retry": "फिर से कोशिश करें",

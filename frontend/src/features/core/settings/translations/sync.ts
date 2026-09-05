@@ -33,10 +33,16 @@ export const syncEn = {
   // a fault: loading the starter catalogue queues hundreds of rows at once, and
   // wearing the warning colour through all of it made a healthy first run look
   // broken.
+  // One rejected bill leaves one review item, and that is the number the
+  // banner most often carries — the queue counts stopped double-reporting a
+  // single refusal, so the singular is now reachable rather than theoretical.
+  "sync.banner.reviewTitle.one": "1 change needs review",
   "sync.banner.reviewTitle": "{count} changes need review",
   "sync.banner.reviewBody": "Your data is safe on this device. Retry, or open Sync Status to review.",
+  "sync.banner.backingUpTitle.one": "Backing up 1 change...",
   "sync.banner.backingUpTitle": "Backing up {count} changes...",
   "sync.banner.backingUpBody": "Saving to the cloud. You can keep working.",
+  "sync.banner.waitingTitle.one": "1 change waiting to back up",
   "sync.banner.waitingTitle": "{count} changes waiting to back up",
   "sync.banner.waitingBody": "Will retry automatically when the connection is healthy.",
   "sync.banner.retry": "Retry now",

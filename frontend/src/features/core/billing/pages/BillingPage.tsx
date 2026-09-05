@@ -346,10 +346,18 @@ export default function Billing() {
   const resolvedBuyerStateCode = resolvedCustomerRecord?.stateCode ?? undefined;
   const resolvedBuyerAddress = resolvedCustomerRecord?.address ?? undefined;
   const hasCreditCustomerIdentity = Boolean(resolvedCustomerId || (typedCustomerName && typedCustomerMobile));
+  // Half the trades never get loyalty on any plan — a pharmacy's growth tier is
+  // advanced_inventory, full stop — and /loyalty/program is gated server-side by
+  // the same entitlement. Asking regardless meant every billing screen in those
+  // shops answered a question it already knew the answer to with a permanent 403,
+  // several per load, burying the console errors that matter. `decideFeature`
+  // reads the same plan feature list the server's requireFeatureAccess does, so
+  // the two agree; the /loyalty route is already gated this way.
+  const loyaltyFeature = useFeature("loyalty_program");
   const loyaltyProgram = useQuery({
     queryKey: ["loyalty-program"],
     queryFn: getLoyaltyProgram,
-    enabled: isOnline,
+    enabled: isOnline && loyaltyFeature.allowed,
     staleTime: 5 * 60_000,
     retry: false,
   });
@@ -1902,7 +1910,7 @@ export default function Billing() {
     const acknowledged = settleAckRef.current?.billId === activeBillId
       && settleAckRef.current.lines === cart.length;
     if (!acknowledged) {
-      void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart }).then((warning) => {
+      void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart, slotValues: billingSlotValues }).then((warning) => {
         if (warning) {
           setSettleWarning({ warning, billType: overrideBillType, printDecision, approval: approvalOverride });
           return;
