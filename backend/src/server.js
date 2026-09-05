@@ -1,10 +1,11 @@
 import { env } from "./config/env.js";
 import app from "./app.js";
-import db from "./db.js";
+import db, { databaseEngine } from "./db.js";
 import { initErrorTracking, captureException, closeErrorTracking } from "./lib/errorTracking.js";
 import { closeRedis } from "./lib/redis.js";
 import { seedPlans } from "./modules/subscription/subscription.service.js";
 import { recoverWebhookDeliveries } from "./modules/integrations/integrations.service.js";
+import { describeSyncFeedFailure, inspectSyncFeedTriggers, shouldRefuseStartup, SYNC_FEED_TABLES } from "./modules/sync/sync-feed-integrity.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 let httpServer = null;
@@ -15,6 +16,29 @@ async function main() {
   // Test database connection before accepting traffic
   await db.$connect();
   console.log(JSON.stringify({ type: "startup", message: "Database connected", time: new Date().toISOString() }));
+
+  // Can this database still tell other devices what changed?
+  //
+  // ChangeLog is written only by triggers, and /sync/pull is a read of it, so
+  // losing them turns two-way sync into push-only WITHOUT any symptom: every
+  // device keeps reporting "Synced" and a second terminal silently never
+  // receives the first one's bills. The window is unrecoverable too — changes
+  // made while the triggers were gone were never recorded, so reinstalling them
+  // later only starts capturing from that point.
+  //
+  // Serving anyway in production would mean knowingly selling
+  // automatic_two_way_sync while it cannot work, so that refuses to start and a
+  // rollback fixes it. Elsewhere it is loud but not fatal: `prisma db push` is
+  // the documented local schema workflow and it drops triggers, so a developer
+  // who has just run it needs to be told, not blocked.
+  const feed = await inspectSyncFeedTriggers(db, databaseEngine);
+  if (feed.ok) {
+    console.log(JSON.stringify({ type: "startup", message: "Sync change feed verified", engine: feed.engine, tables: SYNC_FEED_TABLES.length, time: new Date().toISOString() }));
+  } else {
+    const detail = describeSyncFeedFailure(feed);
+    if (shouldRefuseStartup(feed, env.NODE_ENV)) throw new Error(detail);
+    console.error(JSON.stringify({ type: "startup_warn", message: detail, missing: feed.missing, time: new Date().toISOString() }));
+  }
 
   // Sync plan configs (device limits, features) to DB on every start so deployments
   // pick up plan changes without a separate migration step.
