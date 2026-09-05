@@ -34,3 +34,8 @@ release-artifacts
 *.bak
 
 /scripts/year-sim/runs/
+
+# Throwaway QA session dumps. These hold real access and refresh tokens for
+# whatever shop was being exercised, so they must never be committed — three
+# of them reached origin/main before this rule existed.
+tmp-*.json
