@@ -1902,7 +1902,7 @@ export default function Billing() {
     const acknowledged = settleAckRef.current?.billId === activeBillId
       && settleAckRef.current.lines === cart.length;
     if (!acknowledged) {
-      void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart }).then((warning) => {
+      void firstSettleWarning({ billId: activeBillId, tableId: activeTableId, cart, slotValues: billingSlotValues }).then((warning) => {
         if (warning) {
           setSettleWarning({ warning, billType: overrideBillType, printDecision, approval: approvalOverride });
           return;
