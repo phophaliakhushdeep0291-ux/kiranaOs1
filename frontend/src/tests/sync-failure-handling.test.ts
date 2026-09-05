@@ -333,6 +333,7 @@ import {
   retryFailedSyncOperations,
 } from "@/features/core/sync/engine";
 import { readSyncSnapshot } from "@/features/core/sync/pages/SyncStatusPage";
+import { readSyncQueueCounts } from "@/features/core/sync/sync-status-repair";
 
 const mockedSyncPush = vi.mocked(syncPushMock);
 
@@ -649,5 +650,111 @@ describe("sync failure handling", () => {
       local_snapshot: { customer: { name: "Device B name" } },
       server_snapshot: { id: "customer_shared", name: "Device A name", updatedAt: "2026-08-01T09:50:34.538Z" },
     }));
+  });
+});
+
+describe("what the queue counts call one rejected operation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("navigator", { onLine: true });
+    dbState.reset();
+    syncPullMock.mockResolvedValue({ changes: [], cursor: "cursor-empty" });
+    listSyncConflictsMock.mockResolvedValue({ conflicts: [], summary: { open: 0, resolved: 0, dismissed: 0 }, pagination: { hasMore: false, nextCursor: null, limit: 100 } });
+  });
+
+  /**
+   * A pharmacy refuses one Schedule H1 line. The server says no, and that single
+   * refusal writes two rows: the outbox event flips to CONFLICT and a
+   * `sync_conflicts` record lands naming the same event. Counting both told the
+   * shop "2 changes need review" over one bill, and the Sync Status screen the
+   * banner sends them to listed one — a number that could not be worked down to
+   * zero by fixing the thing that was wrong.
+   */
+  function seedRejectedBill() {
+    seedEntity("bills", "bill_h1_refused", { total: 45, billNo: "B-H1" });
+    const event = seedOutbox("CREATE_BILL", "bill", "bill_h1_refused", {
+      status: "CONFLICT",
+      sync_status: "conflict",
+      error_message: "Alprax 0.5 mg is Schedule H1 and cannot be sold without a valid prescription",
+      last_error: "Alprax 0.5 mg is Schedule H1 and cannot be sold without a valid prescription",
+    });
+    dbState.putInto("sync_conflicts", {
+      id: `conflict_bill_bill_h1_refused_${event.op_id}`,
+      entity_type: "bill",
+      entity_id: "bill_h1_refused",
+      source_event_id: event.op_id,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "conflict",
+      resolution: "unresolved",
+      error_message: "Alprax 0.5 mg is Schedule H1 and cannot be sold without a valid prescription",
+    });
+    return event;
+  }
+
+  it("counts one bill once, not once per row it left behind", async () => {
+    seedRejectedBill();
+
+    const counts = await readSyncQueueCounts();
+
+    expect(counts.conflict).toBe(1);
+    expect(counts.totalBlocking).toBe(1);
+  });
+
+  it("leaves an orphaned conflict to the repair that resolves it", async () => {
+    // The two mechanisms partition the cases and must not overlap. A stored
+    // conflict whose outbox event is gone is not this count's problem:
+    // `repairResolvedStoredConflicts` runs first and marks it auto_resolved,
+    // because nothing is left that a person could act on. What the count owns is
+    // the opposite case — a conflict the repair deliberately leaves alone
+    // because its outbox row is still live, and therefore already on screen.
+    dbState.putInto("sync_conflicts", {
+      id: "conflict_bill_bill_orphaned_op_create_bill_gone",
+      entity_type: "bill",
+      entity_id: "bill_orphaned",
+      source_event_id: "op_create_bill_gone",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "conflict",
+      resolution: "unresolved",
+    });
+
+    const counts = await readSyncQueueCounts();
+
+    expect(counts.conflict).toBe(0);
+    expect(scopedRows("sync_conflicts")[0]).toEqual(expect.objectContaining({
+      resolution: "auto_resolved",
+    }));
+  });
+
+  it("keeps two rejected bills as two review items", async () => {
+    // Collapsing by identity must stay per-operation. Two refusals are two
+    // things to look at, and a rule that folded them into one would hide work
+    // just as surely as the double count invented it.
+    seedRejectedBill();
+    seedEntity("bills", "bill_h1_refused_second", { total: 88, billNo: "B-H1-2" });
+    const second = seedOutbox("CREATE_BILL", "bill", "bill_h1_refused_second", {
+      status: "CONFLICT",
+      sync_status: "conflict",
+      error_message: "Amoxicillin 500 is Schedule H and cannot be sold without a valid prescription",
+    });
+    dbState.putInto("sync_conflicts", {
+      id: `conflict_bill_bill_h1_refused_second_${second.op_id}`,
+      entity_type: "bill",
+      entity_id: "bill_h1_refused_second",
+      source_event_id: second.op_id,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "conflict",
+      resolution: "unresolved",
+    });
+
+    const counts = await readSyncQueueCounts();
+
+    expect(counts.conflict).toBe(2);
+    expect(counts.totalBlocking).toBe(2);
   });
 });

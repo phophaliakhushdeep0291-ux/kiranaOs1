@@ -758,6 +758,43 @@ export async function repairStaleSyncedBillOutboxFailures(): Promise<number> {
   return repaired;
 }
 
+/**
+ * How many stored conflicts are news, rather than a second voice for a row the
+ * outbox is already reporting.
+ *
+ * A server refusal leaves two rows behind, not one: the outbox event flips to
+ * CONFLICT, and the server's conflict record lands in `sync_conflicts` naming
+ * that same event in `source_event_id`. Adding the two totals told a pharmacy
+ * that had refused a single Schedule H1 line "2 changes need review", while the
+ * Sync Status screen that headline sends them to listed one. The count could
+ * not be worked down to zero by dealing with the thing that was actually wrong,
+ * which is the one property a "needs review" number has to have.
+ *
+ * So a stored conflict counts only when no live outbox row already speaks for
+ * it. This is the same identity relation `repairResolvedStoredConflicts` uses to
+ * decide a conflict has outlived its event; here it decides that the event has
+ * already been counted. Every active outbox row lands in exactly one of
+ * pending/failed/conflict, so matching any of them means the work is on screen.
+ *
+ * The identity sets are built only when there is a stored conflict to test: the
+ * common case is an empty conflict table behind a few hundred queued catalogue
+ * rows, and that case must stay free.
+ */
+function countUnrepresentedStoredConflicts(
+  syncConflicts: OfflineRow[],
+  activeOutbox: PendingSyncEvent[],
+): number {
+  const unresolved = filterRowsForCurrentScope(syncConflicts).filter(
+    (row) => row.sync_status === "conflict" || row.resolution === "unresolved",
+  );
+  if (unresolved.length === 0) return 0;
+  const activeIds = activeOutbox.map(eventIdentitySet);
+  return unresolved.filter((row) => {
+    const ids = conflictIdentitySet(row);
+    return !activeIds.some((outboxIds) => intersects(ids, outboxIds));
+  }).length;
+}
+
 export async function readSyncQueueCounts(): Promise<SyncQueueCounts> {
   await repairResolvedSyncStatusNoise().catch(() => 0);
   const outbox = filterRowsForCurrentScope(
@@ -767,9 +804,7 @@ export async function readSyncQueueCounts(): Promise<SyncQueueCounts> {
   const pending = outbox.filter(isPendingOutbox).length;
   const failed = outbox.filter(isFailedOutbox).length;
   const outboxConflicts = outbox.filter(isConflictOutbox).length;
-  const storedConflicts = filterRowsForCurrentScope(syncConflicts).filter(
-    (row) => row.sync_status === "conflict" || row.resolution === "unresolved",
-  ).length;
+  const storedConflicts = countUnrepresentedStoredConflicts(syncConflicts, outbox);
   const conflict = outboxConflicts + storedConflicts;
   const retryable = failed + outboxConflicts;
   return {
