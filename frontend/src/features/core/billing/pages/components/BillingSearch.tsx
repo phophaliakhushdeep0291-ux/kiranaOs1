@@ -6,6 +6,7 @@ import {
   Clock,
   Mic,
   PauseCircle,
+  PackagePlus,
   ReceiptText,
   ScanLine,
   Search,
@@ -881,15 +882,20 @@ export function BillingSearch({
             </div>
           ) : filteredProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-              <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[#FAF7F0] text-2xl text-[#6B6455]">?</span>
+              <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[var(--brand-softer)] text-primary"><PackagePlus size={28} aria-hidden="true" /></span>
               <div>
                 <p className="text-sm font-bold text-[#3D4354]">
-                  {search ? t("billing.search.noResultsFor", { term: search }) : t("billing.search.noProductsYet")}
+                  {search ? t("billing.search.noResultsFor", { term: search }) : selectedCategory !== "all" ? t("billing.search.emptyCategory") : t("billing.search.noProductsYet")}
                 </p>
                 <p className="mt-1 text-xs text-[#6B6455]">
-                  {search ? t("billing.search.noMatch") : t("billing.search.addFromProductsPage")}
+                  {search || selectedCategory !== "all" ? t("billing.search.noMatch") : t("billing.search.addFromProductsPage")}
                 </p>
               </div>
+              {search || selectedCategory !== "all" ? (
+                <button type="button" onClick={() => { onSearchChange(""); onSelectedCategoryChange("all"); searchInputRef.current?.focus(); }} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[var(--brand-border)] bg-white px-5 text-sm font-bold text-primary"><X size={17} aria-hidden="true" />{t("billing.search.resetFilters")}</button>
+              ) : (
+                <Link href="/products" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-bold text-primary-foreground"><PackagePlus size={18} aria-hidden="true" />{t("billing.search.openProducts")}</Link>
+              )}
             </div>
           ) : (
             <>

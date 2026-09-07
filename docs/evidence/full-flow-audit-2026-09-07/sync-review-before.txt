@@ -1,0 +1,170 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Cloud Backup" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Cloud Backup page loaded
+  - heading "Sync Status" [level=2]:
+    - text: Sync Status
+  - generic: Backup needs retry or review
+  - generic: 0 pending cloud backup
+  - button "Retry failed":
+    - text: Retry failed
+  - button "Force sync":
+    - text: Force sync
+  - generic: Needs attention
+  - generic: Local changes are safe on this device. Retry backup when ready.
+  - generic: review needed x 1
+  - generic: Backup review
+  - generic: Retry / review
+  - generic: QA Soap
+  - generic: This record changed on another device before backup finished. Review it when you are free.
+  - link "Open record":
+    - /url: /products
+    - text: Open record
+  - button "Keep local"
+  - button "Keep cloud"
+  - button "Ignore"
+  - generic: Internet
+  - paragraph: Online
+  - paragraph: Internet available.
+  - generic: Backend
+  - paragraph: Online
+  - paragraph: Cloud backup can run.
+  - generic: Last backup
+  - paragraph: less than a minute ago
+  - paragraph: Last successful cloud backup.
+  - generic: Pending
+  - paragraph: "0"
+  - paragraph: 0 changes pending cloud backup.
+  - generic: Retry / review
+  - paragraph: 0 / 1
+  - paragraph: Retry failed backup items. Review only if it remains blocked.
+  - text: Device sync health
+  - generic: Server-confirmed progress for every active terminal in this shop.
+  - generic: 1 current
+  - generic: Fleet healthy
+  - paragraph: Chrome on Windows
+  - paragraph: bill004-qa-browser-20260820
+  - generic: Current
+  - paragraph: Sequence lag
+  - paragraph: "0"
+  - paragraph: Presence
+  - paragraph: Online
+  - generic: Applied less than a minute ago
+  - generic: This device
+  - paragraph: A terminal becomes current only after it applies data locally and acknowledges sequence 29.
+  - generic: Sync diagnostics
+  - generic: Plain-language explanations for anything that could not back up.
+  - button "Refresh sync diagnostics":
+  - generic: "Pending: 0"
+  - generic: "Failed: 0"
+  - generic: "Conflicts: 1"
+  - generic: "Retries: 0"
+  - generic: Last successful sync 1 minute ago
+  - list:
+    - paragraph: "Updating a product failed because of an error: Server changed an entity that has unsynced local changes (Product cmtr5xi7…)."
+    - generic: Needs attention
+    - paragraph: This needs attention — fix the cause, then make the change again.
+  - generic: Device and cloud settings
+  - generic: Useful for checking which shop device is backing up data.
+  - text: Device ID
+  - generic: bill004-qa-browser-20260820
+  - text: Server URL
+  - button "Edit"
+  - generic: http://localhost:3000/api
+  - text: Subscription sync
+  - generic: Sync allowed
+  - generic "Show server status details"
+  - generic: Pending operations
+  - generic: No pending changes. Cloud backup queue is clear.
+  - generic: No pending changes. Cloud backup queue is clear.
+  - generic: Failed operations
+  - generic: No failed changes right now.
+  - generic: No failed changes right now.
+  - generic: Backup review
+  - generic: These items are safe locally and need a retry or quick review.
+  - generic: Backup needs attention
+  - generic: QA Soap
+  - generic: product - cmtr5xi7t008yq5ikugh1j4wf
+  - generic: Retry / review
+  - link "Open":
+    - /url: /products
+    - text: Open
+  - button "Keep local"
+  - button "Keep cloud"
+  - button "Decide later"
+  - paragraph: This record changed on another device before backup finished. Review it when you are free. You can keep billing; local data has not been deleted.
+  - generic: Field
+  - generic: This device
+  - generic: Cloud
+  - generic: updatedAt
+  - generic: "\"2026-09-07T11:57:43.609Z\""
+  - generic: "\"2026-09-07T11:57:44.060Z\""
+  - generic: retailPrice
+  - generic: "50"
+  - generic: wholesalePrice
+  - generic: "50"
+  - generic: aliases
+  - generic: "[]"
+  - generic: variantAxes
+  - generic: "[]"
+  - generic: attributes
+  - generic: "{}"
+  - generic: inventoryLocationId
+  - generic: "\"cmtr5v2vi006tq5ik6tcm36rt\""
+  - generic: inventoryLocationName
+  - generic: "\"Full Flow Audit Shop - Main\""
+  - generic: inventoryLocationCode
+  - generic: "\"MAIN\""
+  - generic: tenant_id
+  - generic: "\"cmtr5v1i1006eq5ikm1j64ag8\""
+  - generic: store_id
+  - generic: "\"cmtr5v1i1006eq5ikm1j64ag8\""
+  - generic: created_at
+  - generic: "\"2026-09-07T11:34:05.942Z\""
+  - generic: updated_at
+  - generic: "\"2026-09-07T11:57:43.609Z\""
+  - generic: deleted_at
+  - generic: "null"
+  - generic: version
+  - generic: "1"
+  - generic: sync_status
+  - generic: "\"pending_sync\""
+  - generic: last_modified_by
+  - generic: "null"
+  - generic: device_id
+  - generic: "\"bill004-qa-browser-20260820\""
+  - generic: locationId
+  - generic: "\"cmtr5v2vi006tq5ik6tcm36rt\""
+  - generic: locationName
+  - generic: "\"Full Flow Audit Shop - Main\""
+  - generic "Show technical details"
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

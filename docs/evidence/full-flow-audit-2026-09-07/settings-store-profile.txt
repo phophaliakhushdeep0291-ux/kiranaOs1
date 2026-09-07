@@ -1,0 +1,189 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Store Profile" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Store Profile page loaded
+  - generic: 🏪
+  - heading "My Store" [level=2]
+  - generic: No GSTIN
+  - generic: Pro Plan
+  - paragraph: Kirana / General Store · Store ID —
+  - paragraph: Add your store address
+  - button "Upload Logo":
+    - text: Upload Logo
+  - button "Save Profile":
+    - text: Save Profile
+  - heading "Business Details" [level=3]
+  - paragraph: Legal & contact information
+  - group "Business Name":
+    - generic: Business Name
+    - textbox "Business Name"
+  - group "Owner Name":
+    - generic: Owner Name
+    - textbox "Owner Name"
+  - group "Phone Number":
+    - generic: Phone Number
+    - textbox "Phone Number"
+  - group "Alternate Phone":
+    - generic: Alternate Phone
+    - textbox "Alternate Phone"
+  - group "Email":
+    - generic: Email
+    - textbox "Email"
+  - group "GSTIN":
+    - generic: GSTIN
+    - textbox "GSTIN"
+  - group "PAN Number":
+    - generic: PAN Number
+    - textbox "PAN Number"
+  - group "Business Type":
+    - generic: Business Type
+    - combobox "Business Type" [disabled]:
+      - generic: 🛒 Kirana / General Store
+    - button "Request Business Type Change"
+    - paragraph: Locked because products or bills exist
+  - heading "Address & Location" [level=3]
+  - paragraph: Shop address & delivery area
+  - button "Open in Maps"
+  - group "Shop Address":
+    - generic: Shop Address
+    - textbox "Shop Address"
+  - group "City":
+    - generic: City
+    - textbox "City"
+  - group "State":
+    - generic: State
+    - textbox "State"
+  - group "Pincode":
+    - generic: Pincode
+    - textbox "Pincode"
+  - group "Country":
+    - generic: Country
+    - textbox "Country": India
+  - paragraph: Pin your exact shop location for delivery & maps.
+  - button "Use current":
+    - text: Use current
+  - group "Delivery Radius (km)":
+    - generic: Delivery Radius (km)
+    - textbox "Delivery Radius (km)":
+      - /placeholder: e.g. 3
+    - paragraph: Used for local delivery suggestions
+  - heading "Bill Branding" [level=3]
+  - paragraph: How your receipt looks
+  - paragraph:
+    - text: Receipt branding — footer message, GSTIN/HSN visibility, GST breakup, paper size and number of copies — lives on the
+    - strong: Printer & Receipt
+    - text: tab, so there's one place that controls how every bill prints and is shared.
+  - link "Open Printer & Receipt settings":
+    - /url: /settings/printer
+    - button "Open Printer & Receipt settings":
+      - text: Open Printer & Receipt settings
+  - heading "Operating Hours" [level=3]
+  - paragraph: Set open & close times
+  - generic: Monday
+  - switch "Monday — open for business" [checked]
+  - textbox "Monday opening time": 09:00
+  - generic: to
+  - textbox "Monday closing time": 21:00
+  - generic: Tuesday
+  - switch "Tuesday — open for business" [checked]
+  - textbox "Tuesday opening time": 09:00
+  - generic: to
+  - textbox "Tuesday closing time": 21:00
+  - generic: Wednesday
+  - switch "Wednesday — open for business" [checked]
+  - textbox "Wednesday opening time": 09:00
+  - generic: to
+  - textbox "Wednesday closing time": 21:00
+  - generic: Thursday
+  - switch "Thursday — open for business" [checked]
+  - textbox "Thursday opening time": 09:00
+  - generic: to
+  - textbox "Thursday closing time": 21:00
+  - generic: Friday
+  - switch "Friday — open for business" [checked]
+  - textbox "Friday opening time": 09:00
+  - generic: to
+  - textbox "Friday closing time": 21:00
+  - generic: Saturday
+  - switch "Saturday — open for business" [checked]
+  - textbox "Saturday opening time": 09:00
+  - generic: to
+  - textbox "Saturday closing time": 21:00
+  - generic: Sunday
+  - switch "Sunday — open for business" [checked]
+  - textbox "Sunday opening time": 09:00
+  - generic: to
+  - textbox "Sunday closing time": 21:00
+  - heading "Bank / UPI Details" [level=3]
+  - paragraph: For bill QR & payment reminders
+  - group "UPI ID":
+    - generic: UPI ID
+    - textbox "UPI ID":
+      - /placeholder: store@upi
+  - group "Bank Name":
+    - generic: Bank Name
+    - textbox "Bank Name"
+  - group "Account Holder":
+    - generic: Account Holder
+    - textbox "Account Holder"
+  - group "Account Number":
+    - generic: Account Number
+    - textbox "Account Number"
+  - group "IFSC":
+    - generic: IFSC
+    - textbox "IFSC"
+  - heading "Verification Documents" [level=3]
+  - paragraph: Keep copies on this device. Verification is not available yet.
+  - generic: GST Certificate
+  - generic: Missing
+  - button "Choose file"
+  - generic: Shop License
+  - generic: Missing
+  - button "Choose file"
+  - generic: PAN Card
+  - generic: Missing
+  - button "Choose file"
+  - generic: Owner ID Proof
+  - generic: Missing
+  - button "Choose file"
+  - generic: Address Proof
+  - generic: Missing
+  - button "Choose file"
+  - paragraph: Documents stay on this device — Artha has no verification upload service yet, so nothing is sent anywhere and no badge is granted automatically.
+  - heading "Customer QR Ordering" [level=3]
+  - paragraph: Let customers build an order on their own phone
+  - paragraph: Enable customer QR ordering
+  - paragraph: Publishes a public order page with your catalog — item names and selling prices only (never cost, margin, or stock). Off by default.
+  - switch "Enable customer QR ordering"
+  - button "Save All Changes":
+    - text: Save All Changes
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

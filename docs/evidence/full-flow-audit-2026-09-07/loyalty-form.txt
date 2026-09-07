@@ -1,0 +1,4 @@
+- status:
+  - generic: Artha
+  - paragraph: Opening your counter…
+  - paragraph: Your saved shop data stays available while the app starts.

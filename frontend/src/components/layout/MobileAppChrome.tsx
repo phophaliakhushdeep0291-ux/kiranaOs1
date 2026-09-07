@@ -14,6 +14,7 @@ import {
   Home,
   Landmark,
   LogOut,
+  LayoutGrid,
   Package,
   ReceiptIndianRupee,
   Search,
@@ -272,13 +273,13 @@ function activeChildHref(location: string, children: Array<{ href: string }>) {
   );
 }
 
-function MoreSection({ item, location }: { item: NavigationItem & { children: NonNullable<NavigationItem["children"]> }; location: string }) {
+function MoreSection({ item, location, searching = false }: { item: NavigationItem & { children: NonNullable<NavigationItem["children"]> }; location: string; searching?: boolean }) {
   const { label, helper, Icon, children } = item;
   const openChild = activeChildHref(location, children);
   // Null until the row is touched, so the section follows the route on open and
   // obeys the owner from then on — no effect needed to keep the two in step.
   const [override, setOverride] = useState<boolean | null>(null);
-  const expanded = override ?? openChild !== null;
+  const expanded = searching || (override ?? openChild !== null);
 
   return (
     <div className="mobile-more-section">
@@ -318,6 +319,7 @@ function MoreSection({ item, location }: { item: NavigationItem & { children: No
 const CASHIER_MORE_PATHS = new Set(["/bills", "/products", "/inventory", "/sync-status"]);
 
 function MoreNavigation({ location, userRole }: { location: string; userRole?: string }) {
+  const [query, setQuery] = useState("");
   const { isHrefEnabled } = useModuleVisibility();
   const verticalPack = useActiveVerticalPack();
   const businessProfile = useShopBusinessProfile();
@@ -359,14 +361,31 @@ function MoreNavigation({ location, userRole }: { location: string; userRole?: s
       .filter((group) => group.items.length > 0);
   }, [businessProfile.data?.navigation, isHrefEnabled, t, userRole, verticalPack]);
 
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const filteredGroups = groups.map((group) => ({
+    ...group,
+    items: group.items.flatMap((item) => {
+      const matches = (value: string) => value.toLocaleLowerCase().includes(normalizedQuery);
+      if (matches(`${group.label} ${item.label} ${item.helper}`)) return [item];
+      const children = item.children?.filter((child) => matches(child.label));
+      return children?.length ? [{ ...item, children }] : [];
+    }),
+  })).filter((group) => group.items.length > 0);
+
   return (
     <div className="mobile-more-groups">
-      {groups.map((group) => (
+      <div className="mobile-menu-filter">
+        <Search size={18} aria-hidden="true" />
+        <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("chrome.menu.findTool")} aria-label={t("chrome.menu.findTool")} className="min-h-12 min-w-0 flex-1 bg-transparent text-sm outline-none" />
+        {query && <button type="button" onClick={() => setQuery("")} aria-label={t("chrome.menu.clearSearch")} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl"><X size={18} aria-hidden="true" /></button>}
+      </div>
+      {filteredGroups.length === 0 && <div className="mobile-menu-empty" role="status"><p>{t("chrome.menu.noResults", { query })}</p><button type="button" onClick={() => setQuery("")} className="mt-2 min-h-11 font-bold text-primary">{t("chrome.menu.showAll")}</button></div>}
+      {filteredGroups.map((group) => (
         <section key={group.label} aria-labelledby={`mobile-more-${group.label.replace(/\W+/g, "-").toLowerCase()}`}>
           <h3 id={`mobile-more-${group.label.replace(/\W+/g, "-").toLowerCase()}`} className="mobile-more-group-title">{group.label}</h3>
           <div className="mobile-more-grid">
             {group.items.map((item) => {
-              if (item.children) return <MoreSection key={item.href} item={{ ...item, children: item.children }} location={location} />;
+              if (item.children) return <MoreSection key={item.href} item={{ ...item, children: item.children }} location={location} searching={Boolean(normalizedQuery)} />;
               const { href, label, helper, Icon } = item;
               const active = pathMatches(location, [href]);
               return (
@@ -412,6 +431,7 @@ export function MobileBottomNav({
       .filter((tab) => isPathInBusinessProfile(tab.href, businessProfile.data?.navigation)),
     [businessProfile.data?.navigation, isHrefEnabled],
   );
+  const moreActive = !tabs.some((tab) => pathMatches(location, tab.matches));
 
   return (
     <nav data-app-mobile-bottom-nav="true" aria-label="Primary navigation" className="mobile-tabbar mx-3 mb-3 mt-2 shrink-0 lg:hidden">
@@ -424,7 +444,7 @@ export function MobileBottomNav({
             <Link
               key={href}
               href={href}
-              className={cn("mobile-tab", active && "mobile-tab-active")}
+              className={cn("mobile-tab", href === "/billing" && "mobile-tab-sell", active && "mobile-tab-active")}
               aria-current={active ? "page" : undefined}
               onMouseEnter={() => void preloadCoreRoute(href)?.catch(() => undefined)}
               onFocus={() => void preloadCoreRoute(href)?.catch(() => undefined)}
@@ -438,8 +458,8 @@ export function MobileBottomNav({
 
         <Drawer open={moreOpen} onOpenChange={setMoreOpen} shouldScaleBackground={false}>
           <DrawerTrigger asChild>
-            <button type="button" className={cn("mobile-tab", moreOpen && "mobile-tab-active")} aria-label="Open all app areas" aria-expanded={moreOpen}>
-              <span className="mobile-tab-icon"><Settings size={21} strokeWidth={moreOpen ? 2.35 : 2} aria-hidden="true" /></span>
+            <button type="button" className={cn("mobile-tab", (moreOpen || moreActive) && "mobile-tab-active")} aria-label={t("chrome.menu.open")} aria-expanded={moreOpen}>
+              <span className="mobile-tab-icon"><LayoutGrid size={21} strokeWidth={moreOpen || moreActive ? 2.35 : 2} aria-hidden="true" /></span>
               <span>{t("chrome.tab.more")}</span>
             </button>
           </DrawerTrigger>

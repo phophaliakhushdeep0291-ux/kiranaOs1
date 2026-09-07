@@ -1141,13 +1141,13 @@ function MobileGeneralDashboard({
   const productsById = new Map(recentProducts.map((product) => [product.id, product]));
 
   return (
-    <div className="mx-auto w-full max-w-[560px] space-y-4 bg-transparent px-3.5 pb-5 pt-3 lg:hidden">
-      <section className="relative overflow-hidden rounded-[24px] bg-[#0b1f46] p-5 text-white shadow-[0_20px_44px_rgba(8,27,66,0.20)]">
+    <div className="mobile-home mx-auto w-full max-w-[680px] space-y-5 bg-transparent px-4 pb-5 pt-4 lg:hidden">
+      <section className="mobile-sales-hero relative overflow-hidden rounded-[24px] bg-[#0b1f46] p-5 text-white shadow-[0_20px_44px_rgba(8,27,66,0.20)]">
         <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full bg-[var(--brand)]/35 blur-2xl" aria-hidden="true" />
         <div className="relative flex items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75">{t("dashboard.netSalesToday")}</p>
-            <p className="mt-2 font-display text-[34px] font-black leading-none tracking-[-0.04em]">{fmtCompactRs(dashboard.revenue)}</p>
+            <p className="mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums">{fmtCompactRs(dashboard.revenue)}</p>
             <div className="mt-2 flex items-center gap-2 text-[12px] font-semibold text-blue-100/75">
               <MobileDelta delta={salesDelta} inverse />
               <span>·</span>
@@ -1156,7 +1156,7 @@ function MobileGeneralDashboard({
           </div>
           <Link href="/sync-status" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur">
             <span className={cn("h-2 w-2 rounded-full", syncHealthy && isOnline ? "bg-emerald-400" : failedCount > 0 ? "bg-rose-400" : "bg-amber-400")} />
-            {isSyncing ? "Syncing" : !isOnline ? "Offline safe" : syncHealthy ? "Synced" : failedCount > 0 ? "Review" : `${pendingCount} pending`}
+            {isSyncing ? t("dashboard.mobile.syncing") : !isOnline ? t("dashboard.mobile.offline") : syncHealthy ? t("dashboard.mobile.synced") : failedCount > 0 ? t("dashboard.mobile.review") : t("dashboard.mobile.pending", { count: pendingCount })}
           </Link>
         </div>
 
@@ -1168,10 +1168,10 @@ function MobileGeneralDashboard({
 
         <div className="relative mt-4 grid grid-cols-[1.35fr_1fr] gap-2.5">
           <Link href="/billing" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] bg-white px-4 text-[13px] font-black text-[#0b1f46] shadow-[0_10px_24px_rgba(0,0,0,0.12)] active:scale-[0.98]">
-            <ShoppingCart size={18} /> New sale
+            <ShoppingCart size={18} aria-hidden="true" /> {t("dashboard.mobile.newSale")}
           </Link>
-          <Link href="/customers" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]">
-            <HandCoins size={17} /> Collect due
+          <Link href="/customers?filter=udhar" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]">
+            <HandCoins size={17} aria-hidden="true" /> {t("dashboard.mobile.collectDue")}
           </Link>
         </div>
       </section>
@@ -1189,8 +1189,6 @@ function MobileGeneralDashboard({
         </section>
       )}
 
-      <ShopWorkflowPanel businessType={businessType} compact />
-
       <section>
         <div className="mb-3 flex items-center justify-between gap-3 px-0.5">
           <div>
@@ -1201,11 +1199,37 @@ function MobileGeneralDashboard({
         </div>
         <div className="grid grid-cols-2 gap-2.5">
           <MobileHealthCard href="/reports" label={t("dashboard.kpi.grossProfit")} value={fmtCompactRs(dashboard.grossProfit)} detail={t("dashboard.kpi.estimatedToday")} delta={profitDelta} icon={<TrendingUp size={18} />} tone="green" />
-          <MobileHealthCard href="/customers" label={t("dashboard.kpi.udharDue")} value={fmtCompactRs(dashboard.totalOutstanding)} detail={`${dashboard.outstandingCustomers.length} customers`} delta={outstandingDelta} positiveIsBad icon={<AlertTriangle size={18} />} tone="red" />
+          <MobileHealthCard href="/customers?filter=udhar" label={t("dashboard.kpi.udharDue")} value={fmtCompactRs(dashboard.totalOutstanding)} detail={t("dashboard.mobile.customerCount", { count: dashboard.outstandingCustomers.length })} delta={outstandingDelta} positiveIsBad icon={<AlertTriangle size={18} />} tone="red" />
           <MobileHealthCard href="/expenses" label={t("dashboard.kpi.expenses")} value={fmtCompactRs(dashboard.expensesToday)} detail={t("dashboard.kpi.recordedToday")} delta={expenseDelta} positiveIsBad icon={<Wallet size={18} />} tone="amber" />
           <MobileHealthCard href="/inventory" label={t("dashboard.lowStock")} value={lowStockCount.toLocaleString("en-IN")} detail={lowStockCount > 0 ? t("dashboard.signal.itemsToReorder") : t("dashboard.signal.stockHealthy")} icon={<Package size={18} />} tone={lowStockCount > 0 ? "violet" : "green"} />
         </div>
       </section>
+
+      <div className="overflow-hidden rounded-[20px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
+          <div className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
+            <h2 className="text-[14px] font-black text-[var(--brand-ink)]">{t("dashboard.recentBills")}</h2>
+            <Link href="/bills" className="inline-flex min-h-11 items-center px-2 text-[11px] font-black text-[var(--brand)]">{t("dashboard.viewAll")}</Link>
+          </div>
+          <div className="divide-y divide-[#edf2f8] px-3.5">
+            {recentBills.length === 0 && <div className="py-6 text-center"><ReceiptText size={24} className="mx-auto mb-2 text-primary" aria-hidden="true" /><p className="text-sm text-muted-foreground">{t("dashboard.noRecentBills")}</p><Link href="/billing" className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary">{t("dashboard.mobile.newSale")} <ChevronRight size={16} aria-hidden="true" /></Link></div>}
+            {recentBills.slice(0, 5).map((bill) => (
+              <Link key={bill.id ?? bill.billNo} href={`/bills/${bill.id ?? ""}`} className="flex min-h-[64px] items-center gap-3 py-2.5">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[#eef4ff] text-[var(--brand)]"><ReceiptText size={18} /></span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[13px] font-black text-[var(--brand-ink)]">{t("dashboard.tile.billNo", { number: compactBillNumber(bill.billNo ?? bill.billNumber) })}</span>
+                    <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
+                  </div>
+                  <span className="mt-1 block truncate text-[11px] font-semibold text-[#718096]">{bill.customerName ?? t("dashboard.tile.walkIn")}</span>
+                </div>
+                <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
+                <ChevronRight size={16} className="text-[#a2adbd]" />
+              </Link>
+            ))}
+          </div>
+        </div>
+
+      <ShopWorkflowPanel businessType={businessType} compact mobile />
 
       <section className="rounded-[18px] border border-[#e4ebf4] bg-white p-4 shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
         <div className="flex items-start justify-between gap-3">
@@ -1214,7 +1238,7 @@ function MobileGeneralDashboard({
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <span className="text-[13px] font-medium text-[#33456b]">{t("dashboard.totalSales")}</span>
               <span className="text-[15px] font-black text-[#071333]">{fmtCompactRs(periodSales)}</span>
-              <MobileDelta delta={periodSalesDelta} />
+              <MobileDelta delta={periodSalesDelta} label={t("dashboard.vsPreviousPeriod")} />
             </div>
           </div>
           <DashboardPeriodSelect value={period} onChange={onPeriodChange} compact />
@@ -1246,8 +1270,8 @@ function MobileGeneralDashboard({
         <h2 className="mb-3 font-display text-[20px] font-black text-[#071333]">{t("dashboard.quickInsights")}</h2>
         <div className="overflow-hidden rounded-[18px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
           <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={salesDelta == null ? t("dashboard.empty.noYesterday") : `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle={t("dashboard.insight.salesTrend")} />
-          <MobileInsight tone="orange" icon={<Package size={15} />} title={`${ownerReport?.topProducts[0]?.name ?? t("dashboard.topProduct")} is leading sales.`} subtitle={t("dashboard.insight.bestSellers")} />
-          <MobileInsight tone="rose" icon={<Users size={15} />} title={`${dashboard.outstandingCustomers.length} customers have outstanding dues.`} subtitle={t("dashboard.insight.followUp")} />
+          <MobileInsight tone="orange" icon={<Package size={15} />} title={topRows.length ? t("dashboard.mobile.leadingProduct", { name: topRows[0].name }) : t("dashboard.mobile.noTopProduct")} subtitle={t("dashboard.insight.bestSellers")} />
+          <MobileInsight tone="rose" icon={<Users size={15} />} title={dashboard.outstandingCustomers.length ? t("dashboard.mobile.customersOwe", { count: dashboard.outstandingCustomers.length }) : t("dashboard.mobile.noDues")} subtitle={t("dashboard.insight.followUp")} />
           <Link href="/reports" className="flex min-h-12 items-center justify-center gap-2 border-t border-[#e7edf5] text-[12px] font-black text-[var(--brand)]">{t("dashboard.viewDetailedInsights")} <ArrowUpRight size={14} /></Link>
         </div>
       </section>
@@ -1259,7 +1283,8 @@ function MobileGeneralDashboard({
             <Link href="/products" className="inline-flex min-h-11 items-center px-2 text-[11px] font-black text-[var(--brand)]">{t("dashboard.viewAll")}</Link>
           </div>
           <div className="divide-y divide-[#edf2f8] px-3.5">
-            {(topRows.length > 0 ? topRows : recentProducts.slice(0, 5).map((product) => ({ productId: product.id, name: product.name, quantitySold: Number(product.stockQuantity ?? 0), revenue: productPrice(product), profitEstimate: 0 }))).map((row) => (
+            {topRows.length === 0 && <p className="px-1 py-6 text-sm leading-6 text-muted-foreground">{t("dashboard.mobile.noTopProduct")}</p>}
+            {topRows.map((row) => (
               <Link key={row.productId} href="/products" className="flex min-h-[60px] items-center gap-3 py-2.5">
                 <ProductAvatar product={productsById.get(row.productId) ?? ({ id: row.productId, name: row.name } as Product)} compact />
                 <div className="min-w-0 flex-1">
@@ -1273,28 +1298,6 @@ function MobileGeneralDashboard({
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[20px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
-          <div className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
-            <h2 className="text-[14px] font-black text-[var(--brand-ink)]">{t("dashboard.recentBills")}</h2>
-            <Link href="/bills" className="inline-flex min-h-11 items-center px-2 text-[11px] font-black text-[var(--brand)]">{t("dashboard.viewAll")}</Link>
-          </div>
-          <div className="divide-y divide-[#edf2f8] px-3.5">
-            {recentBills.slice(0, 5).map((bill) => (
-              <Link key={bill.id ?? bill.billNo} href={`/bills/${bill.id ?? ""}`} className="flex min-h-[64px] items-center gap-3 py-2.5">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[#eef4ff] text-[var(--brand)]"><ReceiptText size={18} /></span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-[13px] font-black text-[var(--brand-ink)]">{t("dashboard.tile.billNo", { number: compactBillNumber(bill.billNo ?? bill.billNumber) })}</span>
-                    <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
-                  </div>
-                  <span className="mt-1 block truncate text-[11px] font-semibold text-[#718096]">{bill.customerName ?? t("dashboard.tile.walkIn")}</span>
-                </div>
-                <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
-                <ChevronRight size={16} className="text-[#a2adbd]" />
-              </Link>
-            ))}
-          </div>
-        </div>
       </section>
 
     </div>
@@ -1326,24 +1329,23 @@ function MobileHealthCard({ href, label, value, detail, delta, positiveIsBad = f
   // matches `>text<`, so a comparison followed by a comparison reads to it as a
   // user-visible string and pins the file to the untranslated allowlist.
   const bad = delta != null && Math.sign(delta) === (positiveIsBad ? 1 : -1);
-  const deltaTone = delta == null ? "text-[#7b8799]" : bad ? "text-[#df3347]" : "text-[var(--success-ink)]";
+  const deltaTone = delta == null ? "text-[#62708a]" : bad ? "text-[#be123c]" : "text-[var(--success-ink)]";
   return (
-    <Link href={href} className="flex min-h-[142px] min-w-0 flex-col rounded-[19px] border border-[#e1e9f3] bg-white p-3.5 shadow-[0_10px_26px_rgba(26,57,112,0.055)] transition-transform active:scale-[0.98]">
-      <div className="flex items-start justify-between gap-2">
-        <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-[13px]", iconTone)}>{icon}</span>
-        <ChevronRight size={16} className="mt-1 text-[#a2adbd]" />
+    <Link href={href} className="mobile-health-card flex min-h-[142px] min-w-0 flex-col rounded-[19px] border border-[#e1e9f3] bg-white p-3.5 shadow-[0_10px_26px_rgba(26,57,112,0.055)] transition-transform active:scale-[0.98]">
+      <div className="flex items-center gap-2">
+        <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[10px]", iconTone)}>{icon}</span>
+        <p className="text-xs font-semibold leading-4 text-[#62708a]">{label}</p>
       </div>
-      <p className="mt-3 text-[11px] font-bold text-[#62708a]">{label}</p>
-      <p className="mt-1 truncate font-display text-[22px] font-black tracking-tight text-[#071333]">{value}</p>
-      <div className="mt-auto flex min-w-0 items-center gap-1 pt-2 text-[10.5px] font-bold">
+      <p className="mt-3 break-words font-display text-[24px] font-black tracking-tight text-[#071333] tabular-nums">{value}</p>
+      <div className="mt-auto flex min-w-0 flex-wrap items-center gap-1 pt-2 text-[11px] font-medium">
         {delta != null ? <span className={deltaTone}>{delta === 0 ? t("dashboard.noChange") : `${delta > 0 ? "+" : ""}${delta}%`}</span> : null}
-        <span className="truncate text-[#7b8799]">{delta != null ? "· " : ""}{detail}</span>
+        <span className="text-[#62708a]">{delta != null ? "· " : ""}{detail}</span>
       </div>
     </Link>
   );
 }
 
-function MobileDelta({ delta, inverse = false }: { delta: number | null; inverse?: boolean }) {
+function MobileDelta({ delta, inverse = false, label }: { delta: number | null; inverse?: boolean; label?: string }) {
   const { t } = useAppLanguage();
   const color = inverse
     ? delta == null || delta === 0 ? "text-blue-100/70" : delta > 0 ? "text-emerald-300" : "text-rose-300"
@@ -1355,7 +1357,7 @@ function MobileDelta({ delta, inverse = false }: { delta: number | null; inverse
           elements read to the hardcoded-string scanner as literal text, which
           reports a phantom string this file can never translate away. */}
       <span className={cn("inline-flex items-center gap-0.5 font-bold", color)}>{delta == null ? <span>—</span> : <>{deltaIcon}{Math.abs(delta)}%</>}</span>
-      <span className={inverse ? "text-blue-100/70" : "text-[#7b8799]"}>{t("dashboard.vsYesterday")}</span>
+      <span className={inverse ? "text-blue-100/70" : "text-[#7b8799]"}>{label ?? t("dashboard.vsYesterday")}</span>
     </span>
   );
 }
@@ -1480,7 +1482,7 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
   );
 }
 
-function ShopWorkflowPanel({ businessType, compact = false }: { businessType: BusinessType; compact?: boolean }) {
+function ShopWorkflowPanel({ businessType, compact = false, mobile = false }: { businessType: BusinessType; compact?: boolean; mobile?: boolean }) {
   const { t } = useAppLanguage();
   const workflow = getShopWorkflow(businessType);
   const { isHrefEnabled } = useModuleVisibility();
@@ -1490,7 +1492,7 @@ function ShopWorkflowPanel({ businessType, compact = false }: { businessType: Bu
   const tones = ["primary", "amber", "teal", "violet"] as const;
   if (actions.length === 0) return null;
   return (
-    <section className={cn("overflow-hidden rounded-[18px] border border-[#dfe8f5] bg-[linear-gradient(135deg,#f8fbff_0%,#ffffff_64%)] shadow-[0_10px_28px_rgba(26,57,112,0.055)]", !compact && "mb-6")} data-testid="shop-workflow-panel">
+    <section className={cn("overflow-hidden rounded-[18px] border border-[#dfe8f5] bg-[linear-gradient(135deg,#f8fbff_0%,#ffffff_64%)] shadow-[0_10px_28px_rgba(26,57,112,0.055)]", !compact && "mb-6", mobile && "mobile-workflow")} data-testid="shop-workflow-panel">
       <div className="flex flex-col gap-3 border-b border-[#e8eef6] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--brand)]">{t("dashboard.shopTools")}</p>
@@ -1498,7 +1500,7 @@ function ShopWorkflowPanel({ businessType, compact = false }: { businessType: Bu
           <p className="mt-1 max-w-3xl text-[11.5px] font-semibold leading-5 text-[#65748f]">{t(workflow.subtitle)}</p>
         </div>
         <Link href="/settings/store-profile" className="inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start rounded-[10px] border border-[var(--brand-border)] bg-white px-3 text-[11px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]">
-          Change shop type <ChevronRight size={14} />
+          {t("dashboard.mobile.shopType")} <ChevronRight size={14} />
         </Link>
       </div>
       <div className="grid gap-2.5 p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-4">

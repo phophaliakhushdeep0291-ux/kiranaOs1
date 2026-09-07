@@ -1,0 +1,1994 @@
+{
+  "generatedAt": "2026-09-07T10:47:32.386Z",
+  "results": [
+    {
+      "qaId": "dashboard",
+      "route": "/dashboard",
+      "width": 375,
+      "height": 667,
+      "path": "/dashboard",
+      "viewport": [
+        375,
+        667
+      ],
+      "documentWidth": 375,
+      "bodyWidth": 375,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 15,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 2
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 23,
+        "passNodeCount": 194,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 16,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75\">Today's net sales</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[38px\\]"
+                ],
+                "html": "<p class=\"mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/70:nth-child(2)"
+                ],
+                "html": "<span class=\"text-blue-100/70\">vs yesterday</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(2)"
+                ],
+                "html": "<span>·</span>",
+                "failureSummary": "Fix any of the following:\n  Element content is too short to determine if it is actual text content"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(3)"
+                ],
+                "html": "<span>0 bills</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".items-start.justify-between.relative > .border-white\\/15.bg-white\\/10.backdrop-blur"
+                ],
+                "html": "<a href=\"/sync-status\" class=\"inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span>Syncing",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Cash</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">UPI</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Bank</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".rounded-\\[15px\\].border-white\\/15.bg-white\\/10"
+                ],
+                "html": "<a href=\"/customers?filter=udhar\" class=\"inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]\">",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".tracking-\\[0\\.16em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]\">Quick start</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".bg-\\[linear-gradient\\(145deg\\,\\#f1f6ff\\,\\#ffffff\\)\\] > .text-\\[19px\\]"
+                ],
+                "html": "<h2 class=\"mt-1 font-display text-[19px] font-black text-[#071333]\">Get ready for your first customer</h2>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[\\#52627e\\]"
+                ],
+                "html": "<p class=\"mt-1 text-[12px] font-medium leading-5 text-[#52627e]\">Complete these once, then billing stays fast every day.</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "dashboard-375x667.png"
+    },
+    {
+      "qaId": "billing",
+      "route": "/billing",
+      "width": 375,
+      "height": 667,
+      "path": "/billing",
+      "viewport": [
+        375,
+        667
+      ],
+      "documentWidth": 375,
+      "bodyWidth": 375,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 15,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 25,
+        "passNodeCount": 170,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "billing-375x667.png"
+    },
+    {
+      "qaId": "inventory",
+      "route": "/inventory",
+      "width": 375,
+      "height": 667,
+      "path": "/inventory",
+      "viewport": [
+        375,
+        667
+      ],
+      "documentWidth": 375,
+      "bodyWidth": 375,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 13,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 27,
+        "passNodeCount": 277,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "inventory-375x667.png"
+    },
+    {
+      "qaId": "billing",
+      "route": "/billing",
+      "width": 390,
+      "height": 844,
+      "path": "/billing",
+      "viewport": [
+        390,
+        844
+      ],
+      "documentWidth": 390,
+      "bodyWidth": 390,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 15,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 25,
+        "passNodeCount": 170,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "billing-390x844.png"
+    },
+    {
+      "qaId": "inventory",
+      "route": "/inventory",
+      "width": 390,
+      "height": 844,
+      "path": "/inventory",
+      "viewport": [
+        390,
+        844
+      ],
+      "documentWidth": 390,
+      "bodyWidth": 390,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 16,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 27,
+        "passNodeCount": 283,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "inventory-390x844.png"
+    },
+    {
+      "qaId": "dashboard",
+      "route": "/dashboard",
+      "width": 430,
+      "height": 932,
+      "path": "/dashboard",
+      "viewport": [
+        430,
+        932
+      ],
+      "documentWidth": 430,
+      "bodyWidth": 430,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 19,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 3
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 23,
+        "passNodeCount": 205,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 16,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75\">Today's net sales</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[38px\\]"
+                ],
+                "html": "<p class=\"mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/70:nth-child(2)"
+                ],
+                "html": "<span class=\"text-blue-100/70\">vs yesterday</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(2)"
+                ],
+                "html": "<span>·</span>",
+                "failureSummary": "Fix any of the following:\n  Element content is too short to determine if it is actual text content"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(3)"
+                ],
+                "html": "<span>0 bills</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".items-start.justify-between.relative > .border-white\\/15.bg-white\\/10.backdrop-blur"
+                ],
+                "html": "<a href=\"/sync-status\" class=\"inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span>Synced<",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Cash</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">UPI</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Bank</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".rounded-\\[15px\\].border-white\\/15.bg-white\\/10"
+                ],
+                "html": "<a href=\"/customers?filter=udhar\" class=\"inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]\">",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".tracking-\\[0\\.16em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]\">Quick start</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".bg-\\[linear-gradient\\(145deg\\,\\#f1f6ff\\,\\#ffffff\\)\\] > .text-\\[19px\\]"
+                ],
+                "html": "<h2 class=\"mt-1 font-display text-[19px] font-black text-[#071333]\">Get ready for your first customer</h2>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[\\#52627e\\]"
+                ],
+                "html": "<p class=\"mt-1 text-[12px] font-medium leading-5 text-[#52627e]\">Complete these once, then billing stays fast every day.</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "dashboard-430x932.png"
+    },
+    {
+      "qaId": "billing",
+      "route": "/billing",
+      "width": 430,
+      "height": 932,
+      "path": "/billing",
+      "viewport": [
+        430,
+        932
+      ],
+      "documentWidth": 430,
+      "bodyWidth": 430,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 15,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 25,
+        "passNodeCount": 170,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "billing-430x932.png"
+    },
+    {
+      "qaId": "inventory",
+      "route": "/inventory",
+      "width": 430,
+      "height": 932,
+      "path": "/inventory",
+      "viewport": [
+        430,
+        932
+      ],
+      "documentWidth": 430,
+      "bodyWidth": 430,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 16,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 27,
+        "passNodeCount": 285,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "inventory-430x932.png"
+    },
+    {
+      "qaId": "dashboard",
+      "route": "/dashboard",
+      "width": 768,
+      "height": 1024,
+      "path": "/dashboard",
+      "viewport": [
+        768,
+        1024
+      ],
+      "documentWidth": 768,
+      "bodyWidth": 768,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 21,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 3
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 23,
+        "passNodeCount": 207,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 16,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75\">Today's net sales</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[38px\\]"
+                ],
+                "html": "<p class=\"mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/70:nth-child(2)"
+                ],
+                "html": "<span class=\"text-blue-100/70\">vs yesterday</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(2)"
+                ],
+                "html": "<span>·</span>",
+                "failureSummary": "Fix any of the following:\n  Element content is too short to determine if it is actual text content"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(3)"
+                ],
+                "html": "<span>0 bills</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".items-start.justify-between.relative > .border-white\\/15.bg-white\\/10.backdrop-blur"
+                ],
+                "html": "<a href=\"/sync-status\" class=\"inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span>Syncing",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Cash</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">UPI</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Bank</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".rounded-\\[15px\\].border-white\\/15.bg-white\\/10"
+                ],
+                "html": "<a href=\"/customers?filter=udhar\" class=\"inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]\">",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".tracking-\\[0\\.16em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]\">Quick start</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".bg-\\[linear-gradient\\(145deg\\,\\#f1f6ff\\,\\#ffffff\\)\\] > .text-\\[19px\\]"
+                ],
+                "html": "<h2 class=\"mt-1 font-display text-[19px] font-black text-[#071333]\">Get ready for your first customer</h2>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[\\#52627e\\]"
+                ],
+                "html": "<p class=\"mt-1 text-[12px] font-medium leading-5 text-[#52627e]\">Complete these once, then billing stays fast every day.</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "dashboard-768x1024.png"
+    },
+    {
+      "qaId": "billing",
+      "route": "/billing",
+      "width": 768,
+      "height": 1024,
+      "path": "/billing",
+      "viewport": [
+        768,
+        1024
+      ],
+      "documentWidth": 768,
+      "bodyWidth": 768,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 15,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 25,
+        "passNodeCount": 171,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "billing-768x1024.png"
+    },
+    {
+      "qaId": "inventory",
+      "route": "/inventory",
+      "width": 768,
+      "height": 1024,
+      "path": "/inventory",
+      "viewport": [
+        768,
+        1024
+      ],
+      "documentWidth": 768,
+      "bodyWidth": 768,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 19,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 2
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 29,
+        "passNodeCount": 299,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 1,
+            "nodes": [
+              {
+                "target": [
+                  ".\\[border-color\\:hsl\\(var\\(--primary\\)\\)\\]"
+                ],
+                "html": "<button class=\"inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 [&amp;_s",
+                "failureSummary": "Fix any of the following:\n  Element has a 1:1 contrast ratio with the background"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "inventory-768x1024.png"
+    },
+    {
+      "qaId": "customers",
+      "route": "/customers",
+      "width": 375,
+      "height": 667,
+      "path": "/customers",
+      "viewport": [
+        375,
+        667
+      ],
+      "documentWidth": 375,
+      "bodyWidth": 375,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 16,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 1
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 26,
+        "passNodeCount": 244,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "customers-375x667.png"
+    },
+    {
+      "qaId": "customers",
+      "route": "/customers",
+      "width": 390,
+      "height": 844,
+      "path": "/customers",
+      "viewport": [
+        390,
+        844
+      ],
+      "documentWidth": 390,
+      "bodyWidth": 390,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 20,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 2
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 26,
+        "passNodeCount": 254,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "customers-390x844.png"
+    },
+    {
+      "qaId": "customers",
+      "route": "/customers",
+      "width": 430,
+      "height": 932,
+      "path": "/customers",
+      "viewport": [
+        430,
+        932
+      ],
+      "documentWidth": 430,
+      "bodyWidth": 430,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 20,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 2
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 26,
+        "passNodeCount": 255,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "customers-430x932.png"
+    },
+    {
+      "qaId": "customers",
+      "route": "/customers",
+      "width": 768,
+      "height": 1024,
+      "path": "/customers",
+      "viewport": [
+        768,
+        1024
+      ],
+      "documentWidth": 768,
+      "bodyWidth": 768,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 20,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 2
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 28,
+        "passNodeCount": 268,
+        "incompleteCount": 0,
+        "incomplete": []
+      },
+      "screenshot": "customers-768x1024.png"
+    },
+    {
+      "qaId": "populated-dashboard",
+      "route": "/dashboard",
+      "width": 375,
+      "height": 667,
+      "path": "/dashboard",
+      "viewport": [
+        375,
+        667
+      ],
+      "documentWidth": 375,
+      "bodyWidth": 375,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 15,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 2
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 23,
+        "passNodeCount": 194,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 16,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75\">Today's net sales</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[38px\\]"
+                ],
+                "html": "<p class=\"mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/70:nth-child(2)"
+                ],
+                "html": "<span class=\"text-blue-100/70\">vs yesterday</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(2)"
+                ],
+                "html": "<span>·</span>",
+                "failureSummary": "Fix any of the following:\n  Element content is too short to determine if it is actual text content"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(3)"
+                ],
+                "html": "<span>0 bills</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".items-start.justify-between.relative > .border-white\\/15.bg-white\\/10.backdrop-blur"
+                ],
+                "html": "<a href=\"/sync-status\" class=\"inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span>Synced<",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Cash</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">UPI</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Bank</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".rounded-\\[15px\\].border-white\\/15.bg-white\\/10"
+                ],
+                "html": "<a href=\"/customers?filter=udhar\" class=\"inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]\">",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".tracking-\\[0\\.16em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]\">Quick start</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".bg-\\[linear-gradient\\(145deg\\,\\#f1f6ff\\,\\#ffffff\\)\\] > .text-\\[19px\\]"
+                ],
+                "html": "<h2 class=\"mt-1 font-display text-[19px] font-black text-[#071333]\">Get ready for your first customer</h2>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[\\#52627e\\]"
+                ],
+                "html": "<p class=\"mt-1 text-[12px] font-medium leading-5 text-[#52627e]\">Complete these once, then billing stays fast every day.</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "populated-dashboard-375x667.png"
+    },
+    {
+      "qaId": "populated-dashboard",
+      "route": "/dashboard",
+      "width": 390,
+      "height": 844,
+      "path": "/dashboard",
+      "viewport": [
+        390,
+        844
+      ],
+      "documentWidth": 390,
+      "bodyWidth": 390,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 17,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 3
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 23,
+        "passNodeCount": 201,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 16,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75\">Today's net sales</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[38px\\]"
+                ],
+                "html": "<p class=\"mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/70:nth-child(2)"
+                ],
+                "html": "<span class=\"text-blue-100/70\">vs yesterday</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(2)"
+                ],
+                "html": "<span>·</span>",
+                "failureSummary": "Fix any of the following:\n  Element content is too short to determine if it is actual text content"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(3)"
+                ],
+                "html": "<span>0 bills</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".items-start.justify-between.relative > .border-white\\/15.bg-white\\/10.backdrop-blur"
+                ],
+                "html": "<a href=\"/sync-status\" class=\"inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span>Synced<",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Cash</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">UPI</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Bank</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".rounded-\\[15px\\].border-white\\/15.bg-white\\/10"
+                ],
+                "html": "<a href=\"/customers?filter=udhar\" class=\"inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]\">",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".tracking-\\[0\\.16em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]\">Quick start</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".bg-\\[linear-gradient\\(145deg\\,\\#f1f6ff\\,\\#ffffff\\)\\] > .text-\\[19px\\]"
+                ],
+                "html": "<h2 class=\"mt-1 font-display text-[19px] font-black text-[#071333]\">Get ready for your first customer</h2>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[\\#52627e\\]"
+                ],
+                "html": "<p class=\"mt-1 text-[12px] font-medium leading-5 text-[#52627e]\">Complete these once, then billing stays fast every day.</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "populated-dashboard-390x844.png"
+    },
+    {
+      "qaId": "populated-dashboard",
+      "route": "/dashboard",
+      "width": 430,
+      "height": 932,
+      "path": "/dashboard",
+      "viewport": [
+        430,
+        932
+      ],
+      "documentWidth": 430,
+      "bodyWidth": 430,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 19,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 3
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 23,
+        "passNodeCount": 205,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 16,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75\">Today's net sales</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[38px\\]"
+                ],
+                "html": "<p class=\"mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/70:nth-child(2)"
+                ],
+                "html": "<span class=\"text-blue-100/70\">vs yesterday</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(2)"
+                ],
+                "html": "<span>·</span>",
+                "failureSummary": "Fix any of the following:\n  Element content is too short to determine if it is actual text content"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(3)"
+                ],
+                "html": "<span>0 bills</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".items-start.justify-between.relative > .border-white\\/15.bg-white\\/10.backdrop-blur"
+                ],
+                "html": "<a href=\"/sync-status\" class=\"inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span>Synced<",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Cash</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">UPI</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Bank</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".rounded-\\[15px\\].border-white\\/15.bg-white\\/10"
+                ],
+                "html": "<a href=\"/customers?filter=udhar\" class=\"inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]\">",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".tracking-\\[0\\.16em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]\">Quick start</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".bg-\\[linear-gradient\\(145deg\\,\\#f1f6ff\\,\\#ffffff\\)\\] > .text-\\[19px\\]"
+                ],
+                "html": "<h2 class=\"mt-1 font-display text-[19px] font-black text-[#071333]\">Get ready for your first customer</h2>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[\\#52627e\\]"
+                ],
+                "html": "<p class=\"mt-1 text-[12px] font-medium leading-5 text-[#52627e]\">Complete these once, then billing stays fast every day.</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "populated-dashboard-430x932.png"
+    },
+    {
+      "qaId": "populated-dashboard",
+      "route": "/dashboard",
+      "width": 768,
+      "height": 1024,
+      "path": "/dashboard",
+      "viewport": [
+        768,
+        1024
+      ],
+      "documentWidth": 768,
+      "bodyWidth": 768,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 21,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 3
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 23,
+        "passNodeCount": 207,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 16,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75\">Today's net sales</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[38px\\]"
+                ],
+                "html": "<p class=\"mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/70:nth-child(2)"
+                ],
+                "html": "<span class=\"text-blue-100/70\">vs yesterday</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(2)"
+                ],
+                "html": "<span>·</span>",
+                "failureSummary": "Fix any of the following:\n  Element content is too short to determine if it is actual text content"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(3)"
+                ],
+                "html": "<span>0 bills</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".items-start.justify-between.relative > .border-white\\/15.bg-white\\/10.backdrop-blur"
+                ],
+                "html": "<a href=\"/sync-status\" class=\"inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span>Syncing",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Cash</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">UPI</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Bank</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".rounded-\\[15px\\].border-white\\/15.bg-white\\/10"
+                ],
+                "html": "<a href=\"/customers?filter=udhar\" class=\"inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]\">",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".tracking-\\[0\\.16em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]\">Quick start</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".bg-\\[linear-gradient\\(145deg\\,\\#f1f6ff\\,\\#ffffff\\)\\] > .text-\\[19px\\]"
+                ],
+                "html": "<h2 class=\"mt-1 font-display text-[19px] font-black text-[#071333]\">Get ready for your first customer</h2>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[\\#52627e\\]"
+                ],
+                "html": "<p class=\"mt-1 text-[12px] font-medium leading-5 text-[#52627e]\">Complete these once, then billing stays fast every day.</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "populated-dashboard-768x1024.png"
+    },
+    {
+      "qaId": "hindi-dashboard",
+      "route": "/dashboard",
+      "width": 390,
+      "height": 844,
+      "path": "/dashboard",
+      "viewport": [
+        390,
+        844
+      ],
+      "documentWidth": 390,
+      "bodyWidth": 390,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 17,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 3
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 23,
+        "passNodeCount": 198,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 15,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75\">आज की शुद्ध बिक्री</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[38px\\]"
+                ],
+                "html": "<p class=\"mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/70:nth-child(2)"
+                ],
+                "html": "<span class=\"text-blue-100/70\">कल की तुलना में</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(2)"
+                ],
+                "html": "<span>·</span>",
+                "failureSummary": "Fix any of the following:\n  Element content is too short to determine if it is actual text content"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(3)"
+                ],
+                "html": "<span>0 बिल</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">कैश</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">UPI</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">बैंक</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".rounded-\\[15px\\].border-white\\/15.bg-white\\/10"
+                ],
+                "html": "<a href=\"/customers?filter=udhar\" class=\"inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]\">",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".tracking-\\[0\\.16em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]\">शुरुआत करें</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".bg-\\[linear-gradient\\(145deg\\,\\#f1f6ff\\,\\#ffffff\\)\\] > .text-\\[19px\\]"
+                ],
+                "html": "<h2 class=\"mt-1 font-display text-[19px] font-black text-[#071333]\">पहले ग्राहक के लिए तैयार हो जाएं</h2>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[\\#52627e\\]"
+                ],
+                "html": "<p class=\"mt-1 text-[12px] font-medium leading-5 text-[#52627e]\">ये एक बार पूरा कर लें, फिर रोज़ बिलिंग तेज़ चलेगी।</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "hindi-dashboard-390x844.png"
+    },
+    {
+      "qaId": "small-phone-dashboard",
+      "route": "/dashboard",
+      "width": 360,
+      "height": 740,
+      "path": "/dashboard",
+      "viewport": [
+        360,
+        740
+      ],
+      "documentWidth": 360,
+      "bodyWidth": 360,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 16,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 2
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 23,
+        "passNodeCount": 195,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 16,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75\">Today's net sales</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[38px\\]"
+                ],
+                "html": "<p class=\"mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/70:nth-child(2)"
+                ],
+                "html": "<span class=\"text-blue-100/70\">vs yesterday</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(2)"
+                ],
+                "html": "<span>·</span>",
+                "failureSummary": "Fix any of the following:\n  Element content is too short to determine if it is actual text content"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(3)"
+                ],
+                "html": "<span>0 bills</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".items-start.justify-between.relative > .border-white\\/15.bg-white\\/10.backdrop-blur"
+                ],
+                "html": "<a href=\"/sync-status\" class=\"inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span>Synced<",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Cash</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">UPI</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Bank</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".rounded-\\[15px\\].border-white\\/15.bg-white\\/10"
+                ],
+                "html": "<a href=\"/customers?filter=udhar\" class=\"inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]\">",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".tracking-\\[0\\.16em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]\">Quick start</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".bg-\\[linear-gradient\\(145deg\\,\\#f1f6ff\\,\\#ffffff\\)\\] > .text-\\[19px\\]"
+                ],
+                "html": "<h2 class=\"mt-1 font-display text-[19px] font-black text-[#071333]\">Get ready for your first customer</h2>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[\\#52627e\\]"
+                ],
+                "html": "<p class=\"mt-1 text-[12px] font-medium leading-5 text-[#52627e]\">Complete these once, then billing stays fast every day.</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "small-phone-dashboard-360x740.png"
+    },
+    {
+      "qaId": "dashboard",
+      "route": "/dashboard",
+      "width": 390,
+      "height": 844,
+      "path": "/dashboard",
+      "viewport": [
+        390,
+        844
+      ],
+      "documentWidth": 390,
+      "bodyWidth": 390,
+      "undersized": [],
+      "undersizedCount": 0,
+      "visibleControlCount": 17,
+      "desktopSidebarVisible": false,
+      "genericFailure": false,
+      "stuckLoading": false,
+      "runtimeErrors": [],
+      "accessibility": {
+        "issueCount": 0,
+        "issues": [],
+        "h1Count": 1,
+        "headingCount": 3
+      },
+      "axe": {
+        "violationCount": 0,
+        "violations": [],
+        "passRuleCount": 23,
+        "passNodeCount": 201,
+        "incompleteCount": 1,
+        "incomplete": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "help": "Elements must meet minimum color contrast ratio thresholds",
+            "nodeCount": 16,
+            "nodes": [
+              {
+                "target": [
+                  ".tracking-\\[0\\.14em\\]"
+                ],
+                "html": "<p class=\"text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75\">Today's net sales</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[38px\\]"
+                ],
+                "html": "<p class=\"mt-2 break-words font-display text-[38px] font-black leading-tight tracking-[-0.04em] tabular-nums\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/70:nth-child(2)"
+                ],
+                "html": "<span class=\"text-blue-100/70\">vs yesterday</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(2)"
+                ],
+                "html": "<span>·</span>",
+                "failureSummary": "Fix any of the following:\n  Element content is too short to determine if it is actual text content"
+              },
+              {
+                "target": [
+                  ".text-blue-100\\/75.mt-2.text-\\[12px\\] > span:nth-child(3)"
+                ],
+                "html": "<span>0 bills</span>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".items-start.justify-between.relative > .border-white\\/15.bg-white\\/10.backdrop-blur"
+                ],
+                "html": "<a href=\"/sync-status\" class=\"inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span>Synced<",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it is overlapped by another element"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Cash</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(1) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">UPI</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(2) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .tracking-\\[0\\.08em\\].text-blue-100\\/60.uppercase"
+                ],
+                "html": "<p class=\"truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60\">Bank</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".min-w-0:nth-child(3) > .text-\\[15px\\].font-display.text-white"
+                ],
+                "html": "<p class=\"mt-1 truncate font-display text-[15px] font-black text-white\">₹0</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".rounded-\\[15px\\].border-white\\/15.bg-white\\/10"
+                ],
+                "html": "<a href=\"/customers?filter=udhar\" class=\"inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]\">",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".tracking-\\[0\\.16em\\]"
+                ],
+                "html": "<p class=\"text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]\">Quick start</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".bg-\\[linear-gradient\\(145deg\\,\\#f1f6ff\\,\\#ffffff\\)\\] > .text-\\[19px\\]"
+                ],
+                "html": "<h2 class=\"mt-1 font-display text-[19px] font-black text-[#071333]\">Get ready for your first customer</h2>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              },
+              {
+                "target": [
+                  ".text-\\[\\#52627e\\]"
+                ],
+                "html": "<p class=\"mt-1 text-[12px] font-medium leading-5 text-[#52627e]\">Complete these once, then billing stays fast every day.</p>",
+                "failureSummary": "Fix any of the following:\n  Element's background color could not be determined due to a background gradient"
+              }
+            ]
+          }
+        ]
+      },
+      "screenshot": "dashboard-390x844.png"
+    }
+  ]
+}

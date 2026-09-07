@@ -2053,6 +2053,50 @@ html[data-density="compact"] {
     transform: translateY(-1px);
   }
 
+  .mobile-tab-sell .mobile-tab-icon {
+    width: 42px;
+    background: var(--mobile-brand);
+    color: white;
+    box-shadow: 0 3px 8px var(--brand-shadow-soft);
+  }
+
+  .mobile-menu-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding-left: 14px;
+    border: 1px solid var(--brand-border);
+    border-radius: 14px;
+    background: white;
+    color: var(--brand-ink);
+  }
+
+  .mobile-menu-filter:focus-within {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+
+  .mobile-menu-filter input { font-size: 16px; }
+  .mobile-menu-filter input::-webkit-search-cancel-button { display: none; }
+  .mobile-menu-empty { padding: 24px 16px; text-align: center; overflow-wrap: anywhere; color: var(--brand-ink); }
+
+  .mobile-sales-hero {
+    background: linear-gradient(125deg, #263354, #414c83);
+    box-shadow: 0 8px 24px rgba(38, 51, 84, 0.14);
+  }
+
+  .mobile-home .mobile-health-card { box-shadow: 0 3px 12px rgba(38, 51, 84, 0.035); }
+
+  .mobile-workflow { background: white; box-shadow: none; }
+  .mobile-workflow > div:first-child { flex-direction: row; align-items: center; gap: 8px; padding: 12px 14px; }
+  .mobile-workflow > div:first-child p { display: none; }
+  .mobile-workflow > div:first-child h2 { margin: 0; font-size: 14px; }
+  .mobile-workflow > div:last-child { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px; }
+  .mobile-workflow > div:last-child > a { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; box-shadow: none; }
+  .mobile-workflow > div:last-child > a > svg { display: none; }
+  .mobile-workflow > div:last-child > a > span:nth-child(2) > span:last-child { font-weight: 400; line-height: 1.5; }
+
   .mobile-more-drawer {
     z-index: 100 !important;
     max-height: min(92dvh, 880px);
@@ -2521,15 +2565,15 @@ html[data-density="compact"] {
   }
 
   .mobile-brand-mark {
-    width: 40px;
-    height: 40px;
-    flex-basis: 40px;
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
   }
 
   .mobile-topbar-action {
-    width: 40px;
-    height: 40px;
-    flex-basis: 40px;
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
   }
 
   .mobile-tabbar[data-app-mobile-bottom-nav="true"] {

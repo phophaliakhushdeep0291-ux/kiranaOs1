@@ -39,7 +39,7 @@
 export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "app/providers.tsx": 4,
   "components/layout/Layout.tsx": 28,
-  "components/layout/MobileAppChrome.tsx": 50,
+  "components/layout/MobileAppChrome.tsx": 49,
   "components/security/OwnerPinModal.tsx": 7,
   "components/shared/ErrorBoundary.tsx": 11,
   "components/shared/MetricCard.tsx": 1,
@@ -106,7 +106,7 @@ export const I18N_HARDCODED_ALLOWLIST: Record<string, number> = {
   "features/core/customer-order/ImportOrderPage.tsx": 16,
   "features/core/customer-order/OwnerOrderingCard.tsx": 13,
   "features/core/customers/pages/CustomersPage.tsx": 3,
-  "features/core/dashboard/pages/DashboardPage.tsx": 21,
+  "features/core/dashboard/pages/DashboardPage.tsx": 18,
   "features/core/demo/DemoModeBanner.tsx": 6,
   "features/core/devices/pages/DeviceRemovedPage.tsx": 5,
   "features/core/expenses/pages/ExpensesPage.tsx": 80,

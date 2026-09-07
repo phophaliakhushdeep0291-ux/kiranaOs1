@@ -43,16 +43,16 @@ export function DemoModeBanner() {
   };
 
   return (
-    <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+    <div className="flex flex-wrap items-center gap-3 border-b border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
       <Sparkles size={15} className="shrink-0" aria-hidden="true" />
-      <p className="min-w-0 flex-1 text-[12.5px] font-medium leading-tight">
+      <p className="min-w-[160px] flex-1 text-[12.5px] font-medium leading-tight">
         You're exploring with <strong>sample data</strong>. It stays only on this device.
       </p>
       <button
         type="button"
         onClick={() => void startFresh()}
         disabled={busy}
-        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-amber-600 px-3 text-[12px] font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg bg-amber-800 px-3 text-[12px] font-bold text-white hover:bg-amber-900 disabled:opacity-50"
       >
         <X size={13} aria-hidden="true" /> {busy ? "Clearing…" : "Clear & start fresh"}
       </button>

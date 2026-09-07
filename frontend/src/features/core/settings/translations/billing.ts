@@ -718,4 +718,7 @@ export const billingEn = {
   "billing.pay.upi.utrPlaceholder": "e.g. 412345678901",
   "billing.pay.upi.utrHelp": "Optional, from your own payment alert. It is what matches this bill to your bank statement at day close.",
   "billing.pay.upi.utrInvalid": "Enter at least 6 letters or numbers, or leave the reference empty.",
+  "billing.search.emptyCategory": "No products in this category",
+  "billing.search.resetFilters": "Clear search & filters",
+  "billing.search.openProducts": "Open product catalog",
 } as const;

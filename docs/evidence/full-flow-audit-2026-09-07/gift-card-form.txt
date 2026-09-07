@@ -1,0 +1,68 @@
+- link:
+  - /url: "#main-content"
+  - text: Skip to main content
+- banner:
+  - link:
+    - /url: /dashboard
+  - heading [level=1]: Gift Cards
+  - generic: Full Flow Audit Shop · Synced
+  - button:
+  - link:
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link:
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Gift Cards page loaded
+  - text: Omnichannel stored value
+  - heading [level=1]: Gift cards customers can trust
+  - paragraph: Issue owner-approved store value, redeem it with cash at any branch, and keep every rupee linked to an immutable balance history.
+  - button:
+    - text: Issue gift card
+  - paragraph: Active cards
+  - paragraph: "0"
+  - paragraph: Spendable across all locations
+  - paragraph: Outstanding value
+  - paragraph: ₹0.00
+  - paragraph: Live balance, not a sales estimate
+  - paragraph: Value redeemed
+  - paragraph: ₹0.00
+  - paragraph: Includes restored cancellation history
+  - heading [level=2]: Stored-value ledger
+  - paragraph: Only the final four characters remain visible after issuance
+  - paragraph: No gift cards issued
+  - paragraph: Issue controlled store value for refunds, rewards, or prepaid gifts.
+- navigation:
+  - link:
+    - /url: /dashboard
+    - generic: Home
+  - link:
+    - /url: /billing
+    - generic: Sell
+  - link:
+    - /url: /inventory
+    - generic: Stock
+  - link:
+    - /url: /customers
+    - generic: Customers
+  - button:
+    - generic: More
+- button:
+- list
+- dialog "Issue gift card":
+  - heading "Issue gift card" [level=2]
+  - paragraph: The code is generated securely and shown once. Issuance requires owner approval and creates the opening ledger entry.
+  - text: Opening value
+  - spinbutton [active]
+  - text: Assign customer (optional)
+  - combobox:
+    - generic: Unassigned bearer card
+  - text: Expiry (optional)
+  - textbox
+  - text: Issue note (optional)
+  - textbox "Festival reward, return credit, prepaid gift…"
+  - button "Cancel"
+  - button "Continue securely" [disabled]
+  - button "Close":
+    - generic: Close

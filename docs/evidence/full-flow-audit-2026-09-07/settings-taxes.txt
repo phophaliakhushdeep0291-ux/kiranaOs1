@@ -1,0 +1,139 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Taxes" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Taxes page loaded
+  - heading "GST Configuration" [level=3]
+  - paragraph: How tax applies to your bills
+  - group "GST Mode":
+    - generic: GST Mode
+    - combobox "GST Mode":
+      - generic: Inclusive (tax in price)
+    - paragraph: Changing mode after bills exist needs owner approval.
+  - group "Default GST Rate":
+    - generic: Default GST Rate
+    - combobox "Default GST Rate":
+      - generic: 18%
+  - group "Invoice Prefix":
+    - generic: Invoice Prefix
+    - textbox "Invoice Prefix": INV
+  - group "Legal Business GSTIN":
+    - generic: Legal Business GSTIN
+    - textbox "Legal Business GSTIN":
+      - /placeholder: Add GSTIN in Business Profile
+    - paragraph: Legal identity is managed in Business Profile and validated by the server.
+  - paragraph: Enable tax invoice
+  - paragraph: Print GST invoices with breakup
+  - switch "Enable tax invoice" [checked]
+  - paragraph: Composition scheme
+  - paragraph: Flat-rate dealers (no input credit)
+  - switch "Composition scheme"
+  - heading "GST Rates" [level=3]
+  - paragraph: Enable the slabs you sell at
+  - generic: 0%
+  - paragraph: Exempt / unbranded
+  - paragraph: Tap to use on products
+  - switch "Enable 0% GST rate" [checked]
+  - generic: 5%
+  - paragraph: Essentials
+  - paragraph: Tap to use on products
+  - switch "Enable 5% GST rate" [checked]
+  - generic: 12%
+  - paragraph: Processed foods
+  - paragraph: Tap to use on products
+  - switch "Enable 12% GST rate" [checked]
+  - generic: 18%
+  - paragraph: Standard
+  - paragraph: Default rate
+  - generic: Default
+  - switch "Enable 18% GST rate" [checked]
+  - generic: 28%
+  - paragraph: Luxury / sin
+  - paragraph: Tap to use on products
+  - switch "Enable 28% GST rate" [checked]
+  - heading "HSN / Product Mapping" [level=3]
+  - paragraph: Live classifications from the product catalogue
+  - button "Refresh"
+  - table:
+    - rowgroup:
+      - row "Category GST Rate HSN Code Products Action":
+        - columnheader "Category"
+        - columnheader "GST Rate"
+        - columnheader "HSN Code"
+        - columnheader "Products"
+        - columnheader "Action"
+    - rowgroup:
+      - row "Loading product classifications…":
+        - cell "Loading product classifications…"
+  - heading "GST Reports" [level=3]
+  - paragraph: This month
+  - button "Register":
+    - text: Register
+  - button "GSTR-1 working":
+    - text: GSTR-1 working
+  - text: Seller registration for export
+  - combobox "Seller registration for export":
+    - generic: Choose one seller GSTIN
+  - paragraph: Registers and GSTR working papers use immutable bill seller snapshots across every branch assigned to this GSTIN. Format/checksum is validated locally; portal status is not verified.
+  - paragraph: Filing coverage
+  - paragraph: GST returns are filed per registration. This is every registration billed in this period.
+  - button "All registrations":
+    - text: All registrations
+  - paragraph: Checking every registration…
+  - paragraph: GST Collected
+  - paragraph: …
+  - paragraph: Taxable Sales
+  - paragraph: …
+  - paragraph: GST split
+  - paragraph: …
+  - paragraph: Bills with GST
+  - paragraph: …
+  - heading "Compliance Settings" [level=3]
+  - paragraph: Accuracy & legal safeguards
+  - paragraph: Compliance readiness
+  - paragraph: Server-validated—not a local preference
+  - generic: Checking…
+  - paragraph: E-Invoice / IRN
+  - paragraph: Blocked until a certified GSTN/GSP provider is connected
+  - generic: Not connected
+  - paragraph: E-Way Bill
+  - paragraph: Capture transporter, vehicle, document, distance and delivery details; legal generation requires a certified GSP
+  - button "E-Way Bill":
+    - text: Prepare
+  - paragraph: Show GST breakup on bill
+  - switch "Show GST breakup on bill" [checked]
+  - paragraph: Round off tax amount
+  - switch "Round off tax amount" [checked]
+  - paragraph: Lock tax after bill creation
+  - switch "Lock tax after bill creation" [checked]
+  - paragraph: Warn if GSTIN invalid
+  - switch "Warn if GSTIN invalid" [checked]
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list
