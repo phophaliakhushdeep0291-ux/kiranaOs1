@@ -1,0 +1,108 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "recovery mode" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: recovery mode page loaded
+  - heading "Recovery mode" [level=1]
+  - paragraph: Safe tools for unsaved bills, local database health, pending sync recovery, and encrypted portable backups. A restore only replaces local rows after a decrypted preview and explicit confirmation.
+  - alert:
+    - generic: Data viewing is always allowed
+    - generic: Recovery tools guide safe restoration. Billing drafts and sync operations stay local-first and retryable.
+  - text: Offline confidence meter
+  - generic: Offline setup needed
+  - paragraph: All local data is safe on this device.
+  - paragraph: The app shell or this shop type's screens are not yet cached for an offline restart.
+  - text: Pending backup
+  - generic: "0"
+  - text: Failed/conflict
+  - generic: "0"
+  - text: Last cloud backup
+  - generic: less than a minute ago
+  - text: Offline grace
+  - generic: about 1 month left
+  - text: App restart
+  - generic: Cache not verified
+  - text: Device storage
+  - generic: May be cleaned
+  - generic: 0% used
+  - link "Open sync status":
+    - /url: /sync-status
+    - button "Open sync status"
+  - link "Open recovery mode":
+    - /url: /recovery-mode
+    - button "Open recovery mode"
+  - generic: Restore last unsaved bill
+  - generic: Billing draft auto-save is checked locally.
+  - generic: No draft
+  - paragraph: No unsaved bill draft is currently stored on this device.
+  - link "Open billing draft":
+    - /url: /billing
+    - button "Open billing draft" [disabled]
+  - generic: Recover pending sync operations
+  - generic: Retry failed cloud sync without duplicating bills or payments.
+  - generic: 0 operations
+  - paragraph: Uses the existing outbox and idempotency keys. Failed operations are retried; unsynced local records are preserved.
+  - button "Retry pending sync" [disabled]
+  - generic: Encrypted local emergency backup
+  - generic: Export or restore this shop's IndexedDB and pending sync queue without internet.
+  - generic: Works offline
+  - text: New backup passphrase
+  - textbox "New backup passphrase":
+    - /placeholder: At least 10 characters
+  - paragraph: The passphrase is never stored or sent anywhere. Without it, the file cannot be opened.
+  - button "Export local backup":
+    - text: Export local backup
+  - text: Restore a .kalb file
+  - button "Restore a .kalb file"
+  - text: Backup passphrase
+  - textbox "Backup passphrase"
+  - button "Decrypt and preview" [disabled]
+  - link "Cloud backup history (internet required)":
+    - /url: /settings/sync
+    - button "Cloud backup history (internet required)"
+  - generic: Local DB health check
+  - generic: Dexie open/read checks for corruption detection.
+  - generic: warning
+  - paragraph: Checks browser IndexedDB support, core table reads, billing draft availability and pending sync count. It does not delete or mutate financial data.
+  - generic "✅ Database open"
+  - 'generic "✅ Table: products"'
+  - 'generic "✅ Table: customers"'
+  - 'generic "✅ Table: bills"'
+  - 'generic "✅ Table: bill_items"'
+  - 'generic "✅ Table: payments"'
+  - 'generic "✅ Table: customer_ledger"'
+  - 'generic "✅ Table: inventory_movements"'
+  - 'generic "✅ Table: sync_outbox"'
+  - generic "⚠️ Pending cloud backup"
+  - generic "⚠️ Billing draft"
+  - generic "✅ Financial data integrity"
+  - button "Run check again"
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

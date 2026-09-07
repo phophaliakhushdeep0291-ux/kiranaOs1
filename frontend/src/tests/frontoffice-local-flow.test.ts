@@ -509,7 +509,11 @@ describe("front office local-first cashier flow", () => {
       purchase_paid_amount: 500,
       purchase_due_amount: 0,
       purchase_payment_status: "paid",
-      purchase_payment_mode: "upi",
+      // How the purchase was first settled, not how it was last topped up.
+      // Each payment carries its own mode, and the money statement splits the
+      // opening amount by this field — letting a later UPI settlement rewrite
+      // it moved the original cash into the UPI column.
+      purchase_payment_mode: "cash",
     }));
     // Every payment has an immutable local row and its own exactly-once server operation.
     expect(rows("payments").filter((row) => row.kind === "supplier_payment")).toHaveLength(2);

@@ -675,4 +675,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.pay.upi.utrPlaceholder": "जैसे 412345678901",
   "billing.pay.upi.utrHelp": "वैकल्पिक, अपने भुगतान अलर्ट से। दिन के अंत में यही इस बिल को आपके बैंक स्टेटमेंट से मिलाता है।",
   "billing.pay.upi.utrInvalid": "कम से कम 6 अक्षर या अंक डालें, या रेफ़रेंस खाली छोड़ें।",
+  "billing.search.emptyCategory": "इस कैटेगरी में कोई सामान नहीं है",
+  "billing.search.resetFilters": "खोज और फ़िल्टर हटाएँ",
+  "billing.search.openProducts": "सामान की सूची खोलें",
 };

@@ -3,6 +3,11 @@
 import type { settingsPagesEn } from "./settings-pages";
 
 export const settingsPagesHi: Record<keyof typeof settingsPagesEn, string> = {
+  "settings.export.approve": "डेटा एक्सपोर्ट की अनुमति",
+  "settings.export.help": "इस फ़ाइल में दुकान के निजी रिकॉर्ड हैं। डाउनलोड करने के लिए मालिक का PIN और कारण दर्ज करें। अनुमति जाँचने के लिए इंटरनेट से जुड़ें।",
+  "settings.export.download": "एक्सपोर्ट डाउनलोड करें",
+  "settings.export.reason": "एक्सपोर्ट का कारण",
+  "settings.export.failed": "एक्सपोर्ट विफल हुआ। फिर कोशिश करें।",
   "settings.lock.locked": "काउंटर लॉक है",
   "settings.lock.checking": "जांच हो रही है…",
   "settings.lock.unlock": "काउंटर खोलें",
@@ -94,7 +99,7 @@ export const settingsPagesHi: Record<keyof typeof settingsPagesEn, string> = {
   "settings.advanced.exportFailed": "एक्सपोर्ट असफल",
   "settings.advanced.exportFailedHelp": "इस एक्सपोर्ट के लिए लोकल डेटा नहीं पढ़ा जा सका।",
   "settings.advanced.backupDownloaded": "बैकअप डाउनलोड हो गया",
-  "settings.advanced.backupPrivate": "यह फाइल निजी रखें। इसमें दुकान का डेटा है।",
+  "settings.advanced.backupPrivate": "यह फाइल निजी रखें। इसमें चुने हुए स्थानीय रिकॉर्ड हैं, पूरा बैकअप नहीं। पूरे बैकअप और बहाली के लिए सिंक और बैकअप खोलें।",
   "settings.advanced.backupFailed": "बैकअप असफल",
   "settings.advanced.backupFailedHelp": "लोकल डेटाबेस नहीं पढ़ा जा सका।",
   "settings.advanced.settingsReset": "सेटिंग वापस डिफ़ॉल्ट पर",
@@ -709,7 +714,7 @@ export const settingsPagesHi: Record<keyof typeof settingsPagesEn, string> = {
   "settings.store.accountNumber": "खाता नंबर",
   "settings.store.ifsc": "IFSC",
   "settings.store.docsTitle": "पहचान के दस्तावेज़",
-  "settings.store.docsSub": "सत्यापित बैज के लिए अपलोड करें",
+  "settings.store.docsSub": "प्रतियां इस डिवाइस पर रखें। सत्यापन अभी उपलब्ध नहीं है।",
   "settings.store.approveTitle": "दुकान की जानकारी बदलने की मंज़ूरी दें",
   "settings.store.approveHelp": "दुकान का नाम, मालिक, GST, पता और फ़ोन सुरक्षित जानकारी है। यह बदलाव सेव करने के लिए मालिक का PIN डालें।",
   "settings.store.save": "जानकारी सेव करें",
@@ -914,7 +919,7 @@ export const settingsPagesHi: Record<keyof typeof settingsPagesEn, string> = {
   "settings.advanced.export.products": "सामान एक्सपोर्ट करें",
   "settings.advanced.export.customers": "ग्राहक एक्सपोर्ट करें",
   "settings.advanced.export.bills": "बिल एक्सपोर्ट करें",
-  "settings.advanced.export.full": "पूरा बैकअप एक्सपोर्ट करें",
+  "settings.advanced.export.full": "स्थानीय रिकॉर्ड एक्सपोर्ट करें",
   "settings.advanced.export.template": "ग्राहक CSV टेम्पलेट",
   "settings.advanced.export.import": "सामान इम्पोर्ट खोलें",
   "settings.advanced.danger.resetSettings": "सेटिंग रीसेट करें",

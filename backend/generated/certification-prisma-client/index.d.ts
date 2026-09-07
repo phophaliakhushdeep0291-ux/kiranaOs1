@@ -33773,11 +33773,13 @@ export namespace Prisma {
   export type CustomerAvgAggregateOutputType = {
     udharAmount: number | null
     udharAmountPaise: number | null
+    udharLimit: number | null
   }
 
   export type CustomerSumAggregateOutputType = {
     udharAmount: number | null
     udharAmountPaise: bigint | null
+    udharLimit: number | null
   }
 
   export type CustomerMinAggregateOutputType = {
@@ -33792,6 +33794,10 @@ export namespace Prisma {
     customerGroup: string | null
     udharAmount: number | null
     udharAmountPaise: bigint | null
+    udharLimit: number | null
+    dueDate: string | null
+    promiseToPayDate: string | null
+    notes: string | null
     reminderOverrideUntil: Date | null
     deletedAt: Date | null
     createdAt: Date | null
@@ -33810,6 +33816,10 @@ export namespace Prisma {
     customerGroup: string | null
     udharAmount: number | null
     udharAmountPaise: bigint | null
+    udharLimit: number | null
+    dueDate: string | null
+    promiseToPayDate: string | null
+    notes: string | null
     reminderOverrideUntil: Date | null
     deletedAt: Date | null
     createdAt: Date | null
@@ -33828,6 +33838,10 @@ export namespace Prisma {
     customerGroup: number
     udharAmount: number
     udharAmountPaise: number
+    udharLimit: number
+    dueDate: number
+    promiseToPayDate: number
+    notes: number
     reminderOverrideUntil: number
     deletedAt: number
     createdAt: number
@@ -33839,11 +33853,13 @@ export namespace Prisma {
   export type CustomerAvgAggregateInputType = {
     udharAmount?: true
     udharAmountPaise?: true
+    udharLimit?: true
   }
 
   export type CustomerSumAggregateInputType = {
     udharAmount?: true
     udharAmountPaise?: true
+    udharLimit?: true
   }
 
   export type CustomerMinAggregateInputType = {
@@ -33858,6 +33874,10 @@ export namespace Prisma {
     customerGroup?: true
     udharAmount?: true
     udharAmountPaise?: true
+    udharLimit?: true
+    dueDate?: true
+    promiseToPayDate?: true
+    notes?: true
     reminderOverrideUntil?: true
     deletedAt?: true
     createdAt?: true
@@ -33876,6 +33896,10 @@ export namespace Prisma {
     customerGroup?: true
     udharAmount?: true
     udharAmountPaise?: true
+    udharLimit?: true
+    dueDate?: true
+    promiseToPayDate?: true
+    notes?: true
     reminderOverrideUntil?: true
     deletedAt?: true
     createdAt?: true
@@ -33894,6 +33918,10 @@ export namespace Prisma {
     customerGroup?: true
     udharAmount?: true
     udharAmountPaise?: true
+    udharLimit?: true
+    dueDate?: true
+    promiseToPayDate?: true
+    notes?: true
     reminderOverrideUntil?: true
     deletedAt?: true
     createdAt?: true
@@ -33999,6 +34027,10 @@ export namespace Prisma {
     customerGroup: string | null
     udharAmount: number
     udharAmountPaise: bigint | null
+    udharLimit: number | null
+    dueDate: string | null
+    promiseToPayDate: string | null
+    notes: string | null
     reminderOverrideUntil: Date | null
     deletedAt: Date | null
     createdAt: Date
@@ -34036,6 +34068,10 @@ export namespace Prisma {
     customerGroup?: boolean
     udharAmount?: boolean
     udharAmountPaise?: boolean
+    udharLimit?: boolean
+    dueDate?: boolean
+    promiseToPayDate?: boolean
+    notes?: boolean
     reminderOverrideUntil?: boolean
     deletedAt?: boolean
     createdAt?: boolean
@@ -34061,6 +34097,10 @@ export namespace Prisma {
     customerGroup?: boolean
     udharAmount?: boolean
     udharAmountPaise?: boolean
+    udharLimit?: boolean
+    dueDate?: boolean
+    promiseToPayDate?: boolean
+    notes?: boolean
     reminderOverrideUntil?: boolean
     deletedAt?: boolean
     createdAt?: boolean
@@ -34101,6 +34141,10 @@ export namespace Prisma {
       customerGroup: string | null
       udharAmount: number
       udharAmountPaise: bigint | null
+      udharLimit: number | null
+      dueDate: string | null
+      promiseToPayDate: string | null
+      notes: string | null
       reminderOverrideUntil: Date | null
       deletedAt: Date | null
       createdAt: Date
@@ -34547,6 +34591,10 @@ export namespace Prisma {
     readonly customerGroup: FieldRef<"Customer", 'String'>
     readonly udharAmount: FieldRef<"Customer", 'Float'>
     readonly udharAmountPaise: FieldRef<"Customer", 'BigInt'>
+    readonly udharLimit: FieldRef<"Customer", 'Float'>
+    readonly dueDate: FieldRef<"Customer", 'String'>
+    readonly promiseToPayDate: FieldRef<"Customer", 'String'>
+    readonly notes: FieldRef<"Customer", 'String'>
     readonly reminderOverrideUntil: FieldRef<"Customer", 'DateTime'>
     readonly deletedAt: FieldRef<"Customer", 'DateTime'>
     readonly createdAt: FieldRef<"Customer", 'DateTime'>
@@ -180692,6 +180740,10 @@ export namespace Prisma {
     customerGroup: 'customerGroup',
     udharAmount: 'udharAmount',
     udharAmountPaise: 'udharAmountPaise',
+    udharLimit: 'udharLimit',
+    dueDate: 'dueDate',
+    promiseToPayDate: 'promiseToPayDate',
+    notes: 'notes',
     reminderOverrideUntil: 'reminderOverrideUntil',
     deletedAt: 'deletedAt',
     createdAt: 'createdAt',
@@ -185611,6 +185663,10 @@ export namespace Prisma {
     customerGroup?: StringNullableFilter<"Customer"> | string | null
     udharAmount?: FloatFilter<"Customer"> | number
     udharAmountPaise?: BigIntNullableFilter<"Customer"> | bigint | number | null
+    udharLimit?: FloatNullableFilter<"Customer"> | number | null
+    dueDate?: StringNullableFilter<"Customer"> | string | null
+    promiseToPayDate?: StringNullableFilter<"Customer"> | string | null
+    notes?: StringNullableFilter<"Customer"> | string | null
     reminderOverrideUntil?: DateTimeNullableFilter<"Customer"> | Date | string | null
     deletedAt?: DateTimeNullableFilter<"Customer"> | Date | string | null
     createdAt?: DateTimeFilter<"Customer"> | Date | string
@@ -185635,6 +185691,10 @@ export namespace Prisma {
     customerGroup?: SortOrderInput | SortOrder
     udharAmount?: SortOrder
     udharAmountPaise?: SortOrderInput | SortOrder
+    udharLimit?: SortOrderInput | SortOrder
+    dueDate?: SortOrderInput | SortOrder
+    promiseToPayDate?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
     reminderOverrideUntil?: SortOrderInput | SortOrder
     deletedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -185663,6 +185723,10 @@ export namespace Prisma {
     customerGroup?: StringNullableFilter<"Customer"> | string | null
     udharAmount?: FloatFilter<"Customer"> | number
     udharAmountPaise?: BigIntNullableFilter<"Customer"> | bigint | number | null
+    udharLimit?: FloatNullableFilter<"Customer"> | number | null
+    dueDate?: StringNullableFilter<"Customer"> | string | null
+    promiseToPayDate?: StringNullableFilter<"Customer"> | string | null
+    notes?: StringNullableFilter<"Customer"> | string | null
     reminderOverrideUntil?: DateTimeNullableFilter<"Customer"> | Date | string | null
     deletedAt?: DateTimeNullableFilter<"Customer"> | Date | string | null
     createdAt?: DateTimeFilter<"Customer"> | Date | string
@@ -185687,6 +185751,10 @@ export namespace Prisma {
     customerGroup?: SortOrderInput | SortOrder
     udharAmount?: SortOrder
     udharAmountPaise?: SortOrderInput | SortOrder
+    udharLimit?: SortOrderInput | SortOrder
+    dueDate?: SortOrderInput | SortOrder
+    promiseToPayDate?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
     reminderOverrideUntil?: SortOrderInput | SortOrder
     deletedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -185713,6 +185781,10 @@ export namespace Prisma {
     customerGroup?: StringNullableWithAggregatesFilter<"Customer"> | string | null
     udharAmount?: FloatWithAggregatesFilter<"Customer"> | number
     udharAmountPaise?: BigIntNullableWithAggregatesFilter<"Customer"> | bigint | number | null
+    udharLimit?: FloatNullableWithAggregatesFilter<"Customer"> | number | null
+    dueDate?: StringNullableWithAggregatesFilter<"Customer"> | string | null
+    promiseToPayDate?: StringNullableWithAggregatesFilter<"Customer"> | string | null
+    notes?: StringNullableWithAggregatesFilter<"Customer"> | string | null
     reminderOverrideUntil?: DateTimeNullableWithAggregatesFilter<"Customer"> | Date | string | null
     deletedAt?: DateTimeNullableWithAggregatesFilter<"Customer"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Customer"> | Date | string
@@ -203062,6 +203134,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -203086,6 +203162,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -203108,6 +203188,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -203132,6 +203216,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -203155,6 +203243,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -203172,6 +203264,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -203190,6 +203286,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -222748,6 +222848,10 @@ export namespace Prisma {
     customerGroup?: SortOrder
     udharAmount?: SortOrder
     udharAmountPaise?: SortOrder
+    udharLimit?: SortOrder
+    dueDate?: SortOrder
+    promiseToPayDate?: SortOrder
+    notes?: SortOrder
     reminderOverrideUntil?: SortOrder
     deletedAt?: SortOrder
     createdAt?: SortOrder
@@ -222757,6 +222861,7 @@ export namespace Prisma {
   export type CustomerAvgOrderByAggregateInput = {
     udharAmount?: SortOrder
     udharAmountPaise?: SortOrder
+    udharLimit?: SortOrder
   }
 
   export type CustomerMaxOrderByAggregateInput = {
@@ -222771,6 +222876,10 @@ export namespace Prisma {
     customerGroup?: SortOrder
     udharAmount?: SortOrder
     udharAmountPaise?: SortOrder
+    udharLimit?: SortOrder
+    dueDate?: SortOrder
+    promiseToPayDate?: SortOrder
+    notes?: SortOrder
     reminderOverrideUntil?: SortOrder
     deletedAt?: SortOrder
     createdAt?: SortOrder
@@ -222789,6 +222898,10 @@ export namespace Prisma {
     customerGroup?: SortOrder
     udharAmount?: SortOrder
     udharAmountPaise?: SortOrder
+    udharLimit?: SortOrder
+    dueDate?: SortOrder
+    promiseToPayDate?: SortOrder
+    notes?: SortOrder
     reminderOverrideUntil?: SortOrder
     deletedAt?: SortOrder
     createdAt?: SortOrder
@@ -222798,6 +222911,7 @@ export namespace Prisma {
   export type CustomerSumOrderByAggregateInput = {
     udharAmount?: SortOrder
     udharAmountPaise?: SortOrder
+    udharLimit?: SortOrder
   }
 
   export type CustomerNullableRelationFilter = {
@@ -246731,6 +246845,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -246753,6 +246871,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -252213,6 +252335,10 @@ export namespace Prisma {
     customerGroup?: StringNullableFilter<"Customer"> | string | null
     udharAmount?: FloatFilter<"Customer"> | number
     udharAmountPaise?: BigIntNullableFilter<"Customer"> | bigint | number | null
+    udharLimit?: FloatNullableFilter<"Customer"> | number | null
+    dueDate?: StringNullableFilter<"Customer"> | string | null
+    promiseToPayDate?: StringNullableFilter<"Customer"> | string | null
+    notes?: StringNullableFilter<"Customer"> | string | null
     reminderOverrideUntil?: DateTimeNullableFilter<"Customer"> | Date | string | null
     deletedAt?: DateTimeNullableFilter<"Customer"> | Date | string | null
     createdAt?: DateTimeFilter<"Customer"> | Date | string
@@ -266769,6 +266895,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -266792,6 +266922,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -267596,6 +267730,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -267619,6 +267757,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -277944,6 +278086,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -277967,6 +278113,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -278306,6 +278456,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -278329,6 +278483,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -282595,6 +282753,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -282618,6 +282780,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -282957,6 +283123,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -282980,6 +283150,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -286633,6 +286807,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -286656,6 +286834,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -287216,6 +287398,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -287239,6 +287425,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -303909,6 +304099,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -303932,6 +304126,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -304236,6 +304434,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -304259,6 +304461,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -347247,6 +347453,10 @@ export namespace Prisma {
     customerGroup?: string | null
     udharAmount?: number
     udharAmountPaise?: bigint | number | null
+    udharLimit?: number | null
+    dueDate?: string | null
+    promiseToPayDate?: string | null
+    notes?: string | null
     reminderOverrideUntil?: Date | string | null
     deletedAt?: Date | string | null
     createdAt?: Date | string
@@ -349550,6 +349760,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -349572,6 +349786,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -349594,6 +349812,10 @@ export namespace Prisma {
     customerGroup?: NullableStringFieldUpdateOperationsInput | string | null
     udharAmount?: FloatFieldUpdateOperationsInput | number
     udharAmountPaise?: NullableBigIntFieldUpdateOperationsInput | bigint | number | null
+    udharLimit?: NullableFloatFieldUpdateOperationsInput | number | null
+    dueDate?: NullableStringFieldUpdateOperationsInput | string | null
+    promiseToPayDate?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     reminderOverrideUntil?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     deletedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string

@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
-import { getPlan } from "@/features/core/subscription/plans";
+import { getPlan, getPlanForBusinessType } from "@/features/core/subscription/plans";
+import { useBusinessTypeKey } from "@/features/core/settings/business-types";
 
 function compactStatus(status?: string | null) {
   if (!status || status === "active") return "";
@@ -14,7 +15,8 @@ export function PlanBadge({
   planCode?: string | null;
   status?: string | null;
 }) {
-  const plan = getPlan(planCode);
+  const businessType = useBusinessTypeKey();
+  const plan = getPlanForBusinessType(getPlan(planCode).code, businessType);
   const statusLabel = compactStatus(status);
   const label = `Rs ${plan.price} ${plan.name}`;
   const title = statusLabel ? `${label} - ${statusLabel}` : label;

@@ -163,7 +163,7 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <CardHead icon={<CreditCard size={15} />} title={t("settings.hub.billingSubscription")} action={<Manage href="/settings/billing" label={t("settings.hub.managePlanAction")} />} />
+          <CardHead icon={<CreditCard size={15} />} title={t("settings.hub.billingSubscription")} action={<Manage href="/subscription" label={t("settings.hub.managePlanAction")} />} />
           <div className="px-5 pb-4">
             <div className="mb-4 flex items-center gap-2">
               <Badge tone="amber">{t("settings.store.planBadge", { plan: planName })}</Badge>
@@ -181,7 +181,7 @@ export default function SettingsPage() {
                 <p className="text-[11px] text-[#64748b]">{t("settings.hub.usageThisMonth")}</p>
                 <p className="font-display text-[18px] font-black text-[var(--brand-ink)]">{snapshot?.status === "active" ? t("settings.hub.subscriptionActive") : "—"}</p>
                 <p className="mt-1 text-[11px] text-[#64748b]">{t("settings.hub.managePlanAction")}</p>
-                <Link href="/settings/billing" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.hub.viewPlan")} <ChevronRight size={13} /></Link>
+                <Link href="/subscription" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.hub.viewPlan")} <ChevronRight size={13} /></Link>
               </div>
             </div>
           </div>

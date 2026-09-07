@@ -1,0 +1,99 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Plans" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Plans page loaded
+  - heading "Plans" [level=1]
+  - generic: "Kirana / General Store pricing: self-serve software with no setup fee."
+  - generic "Rs 999 Business - trial": Rs 999 Business
+  - paragraph: Self-serve setup · no launch fee
+  - paragraph: Create your shop, import your catalog and start billing without an installation visit.
+  - generic "Billing cycle":
+    - button "Monthly"
+    - button "Annual · save up to 17%"
+  - generic: Starter
+  - generic: Essential billing for an owner-run kirana.
+  - paragraph: Self-serve software
+  - generic: Rs 999
+  - generic: /year
+  - paragraph: Rs 83/month, billed annually
+  - paragraph: "1"
+  - paragraph: store
+  - paragraph: "1"
+  - paragraph: device
+  - paragraph: Owner account only
+  - list:
+    - generic: 1 store, 1 registered device and 1 billing counter
+    - generic: Fast cash, UPI, split and udhar billing—even offline
+    - generic: Product catalogue and customer ledger
+    - generic: 7-day sales view, cloud backup and bill sharing
+  - button "Upgrade to Starter"
+  - generic: Growth
+  - generic: Popular
+  - generic: Daily stock control, staff access and clearer reports.
+  - paragraph: Self-serve software
+  - generic: Rs 2999
+  - generic: /year
+  - paragraph: Rs 250/month, billed annually
+  - paragraph: "1"
+  - paragraph: store
+  - paragraph: "3"
+  - paragraph: devices
+  - paragraph: Includes 3 staff accounts
+  - list:
+    - generic: Everything in Starter
+    - generic: 1 store, 3 devices and up to 3 staff
+    - generic: Purchases, suppliers, stock adjustments and low-stock alerts
+    - generic: Batch/expiry tracking, automatic sync and recovery tools
+  - paragraph: +2 more included
+  - button "Upgrade to Growth"
+  - text: Business
+  - generic: Current
+  - generic: Advanced pricing, compliance and multi-store control.
+  - paragraph: Self-serve software
+  - generic: Rs 5999
+  - generic: /year
+  - paragraph: Rs 500/month, billed annually
+  - paragraph: "3"
+  - paragraph: stores
+  - paragraph: "10"
+  - paragraph: devices
+  - paragraph: Includes 10 staff accounts
+  - list:
+    - generic: Everything in Growth
+    - generic: Up to 3 stores, 10 devices and 10 staff
+    - generic: Customer-specific prices, quantity discounts and loyalty
+    - generic: Advanced inventory, GST reports and Tally export
+  - paragraph: +2 more included
+  - button "Manage current plan"
+  - paragraph: Data stays yours
+  - paragraph: "Expiry never bricks the counter: sales, billing renewal and data export remain available. Existing bills, customers, products and ledgers remain viewable."
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

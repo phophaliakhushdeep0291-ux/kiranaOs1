@@ -691,6 +691,10 @@ model Customer {
   customerGroup         String? // owner-defined pricing group (Wholesale/VIP/…)
   udharAmount           Float     @default(0) // current outstanding
   udharAmountPaise      BigInt? // Phase 27 shadow integer paise column
+  udharLimit            Float?
+  dueDate               String? // Calendar date, YYYY-MM-DD (no timezone conversion)
+  promiseToPayDate      String?
+  notes                 String?
   reminderOverrideUntil DateTime?
   deletedAt             DateTime?
   createdAt             DateTime  @default(now())

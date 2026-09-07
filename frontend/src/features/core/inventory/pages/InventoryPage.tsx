@@ -1,3 +1,4 @@
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useAppLanguage, type Translate } from "@/features/core/settings/i18n";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -299,6 +300,7 @@ function useTrackedInventoryView() {
 }
 
 export default function InventoryPage() {
+  const requestExport = useDataExport();
   const { t } = useAppLanguage();
   useTrackedInventoryView();
   const { toast } = useToast();
@@ -368,7 +370,11 @@ export default function InventoryPage() {
   const allInventoryRows = useMemo(() => {
     const inventoryRows = inventory.data ?? [];
     const productRows = (products.data ?? []) as unknown as InventoryItem[];
-    return mergeInventoryRows(productRows, inventoryRows, localProductRows);
+    const pendingRows = localProductRows.filter((row) =>
+      ["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(
+        String((row as InventoryItem & { sync_status?: string }).sync_status ?? ""),
+      ));
+    return mergeInventoryRows(productRows, localProductRows, inventoryRows, pendingRows);
   }, [inventory.data, localProductRows, products.data]);
 
   const filterOptions = useMemo(() => ({
@@ -869,7 +875,7 @@ export default function InventoryPage() {
                       <Input aria-label={t("inventory.page.search")} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("inventory.page.search")} className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
                     </div>
                     <Button variant="outline" className="h-10 rounded-[8px] px-3 text-[12px]" onClick={() => setStockFilter(stockFilter === "all" ? "low" : "all")}><SlidersHorizontal size={14} className="mr-1.5" />{t("inventory.page.filters")}</Button>
-                    <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_var(--brand-shadow)] hover:bg-[var(--brand-strong)]" onClick={exportInventory}><Download size={14} className="mr-1.5" />{t("inventory.page.export")}</Button>
+                    <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_var(--brand-shadow)] hover:bg-[var(--brand-strong)]" onClick={() => requestExport({ reportType: "inventory", format: "csv" }, exportInventory)}><Download size={14} className="mr-1.5" />{t("inventory.page.export")}</Button>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

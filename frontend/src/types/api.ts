@@ -256,7 +256,7 @@ export interface Customer {
   stateCode?: string | null;
   dueDate?: string | null;
   promiseToPayDate?: string | null;
-  udharLimit?: number;
+  udharLimit?: number | null;
   badCustomer?: boolean;
   trustScore?: number;
   customerSpecificPricing?: Record<string, number> | null;
@@ -290,11 +290,11 @@ export interface CustomerInput {
   address?: string;
   gstNumber?: string;
   stateCode?: string;
-  dueDate?: string;
-  promiseToPayDate?: string;
-  udharLimit?: number;
+  dueDate?: string | null;
+  promiseToPayDate?: string | null;
+  udharLimit?: number | null;
   customerSpecificPricing?: Record<string, number>;
-  notes?: string;
+  notes?: string | null;
 }
 
 export interface Supplier {

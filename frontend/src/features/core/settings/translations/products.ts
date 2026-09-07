@@ -132,7 +132,7 @@ export const productsEn = {
   "products.form.amountPlaceholder": "0.00",
   "products.form.gstRate": "GST Rate",
   "products.form.avgCost": "Avg. cost",
-  "products.form.margin": "Margin",
+  "products.form.margin": "Markup on cost",
   "products.form.otherPackSizes": "Other pack sizes",
   "products.form.otherPackSizesHint": "Optional: sell the same stock as 500 g, 1 kg, carton, etc.",
   "products.form.stockCounting": "Stock counting",

@@ -1,0 +1,74 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Notifications" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Notifications page loaded
+  - heading "WhatsApp Automation" [level=3]
+  - paragraph: Live provider, queue, and worker readiness
+  - button "Refresh":
+    - text: Refresh
+  - paragraph: Delivery pipeline
+  - generic: Checking
+  - paragraph: Reading live backend readiness.
+  - link "Integration setup":
+    - /url: /settings/integrations
+    - button "Integration setup":
+      - text: Integration setup
+  - generic: Provider API
+  - paragraph: unknown
+  - generic: Signed callbacks
+  - paragraph: not ready
+  - generic: Redis queue
+  - paragraph: not ready
+  - generic: Reminder worker
+  - paragraph: no heartbeat
+  - paragraph: Delivery truth, not optimistic UI
+  - paragraph: Provider acceptance is shown as Accepted. Sent, Delivered, and Read appear only after a verified provider callback; skipped and failed attempts remain visible below.
+  - heading "Daily Closing Share" [level=3]
+  - paragraph: Choose what appears in the real closing summary
+  - paragraph: These preferences control the Daily Closing screen and its share text. They do not claim to schedule SMS, email, or push delivery.
+  - paragraph: Include sales total
+  - switch "Include sales total" [checked]
+  - paragraph: Include profit
+  - switch "Include profit" [checked]
+  - paragraph: Include udhar collection
+  - switch "Include udhar collection" [checked]
+  - paragraph: Include cash / UPI breakup
+  - switch "Include cash / UPI breakup" [checked]
+  - heading "Server Reminder Templates" [level=3]
+  - paragraph: Audited templates used by automated WhatsApp sends
+  - paragraph:
+    - text: Loading server templates
+  - heading "Actual Delivery History" [level=3]
+  - paragraph: Latest server records; sample messages never appear here
+  - paragraph:
+    - text: Loading deliveries
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

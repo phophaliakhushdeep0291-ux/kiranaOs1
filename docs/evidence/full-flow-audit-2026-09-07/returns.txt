@@ -1,0 +1,98 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Returns" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Returns page loaded
+  - generic: Synced · Just now
+  - button "01 Sep 2026 - 07 Sep 2026":
+    - text: 01 Sep 2026 - 07 Sep 2026
+  - button "Filters":
+    - text: Filters
+  - button "New Return":
+    - text: New Return
+  - article:
+    - paragraph: Total Returns
+    - paragraph: ₹50
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - paragraph: Return Orders
+    - paragraph: "1"
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - paragraph: Items Returned
+    - paragraph: "1"
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - paragraph: Refund Amount
+    - paragraph: ₹50
+    - text: 100%
+    - generic: vs last period
+  - article:
+    - paragraph: Credit Issued (Udhar)
+    - paragraph: ₹0
+    - text: 0%
+    - generic: vs last period
+  - button "Sales Returns" [pressed]:
+    - text: Sales Returns
+  - button "Purchase Returns":
+    - text: Purchase Returns
+  - textbox "Search invoice, customer or mobile..."
+  - heading "Return Orders" [level=2]
+  - link "RET-000001 Walk-in • 07 Sep, 05:08 PM Cash ₹50 Completed":
+    - /url: /bills/cmtr63iti00cuq5ikyf1w7ar0
+    - generic: RET-000001
+    - generic: Walk-in • 07 Sep, 05:08 PM
+    - generic: Cash
+    - generic: ₹50
+    - generic: Completed
+  - link "View all returns":
+    - /url: /bills
+  - article:
+    - heading "Top Returned Items" [level=2]
+    - link "View all":
+      - /url: /products
+    - paragraph: QA Soap
+    - paragraph: General • 1 returned
+    - paragraph: ₹50
+  - article:
+    - heading "Return Summary" [level=2]
+    - generic: Selected period
+    - paragraph: ₹50
+    - paragraph: Total Returns
+    - generic: Cash
+    - text: ₹50
+    - emphasis: (100.0%)
+  - paragraph:
+    - text: Sales returns affect stock. Resellable items are added back to inventory automatically.
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

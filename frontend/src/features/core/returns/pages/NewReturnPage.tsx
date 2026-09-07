@@ -248,9 +248,11 @@ export default function NewReturnPage() {
     allBills.forEach((bill) => billIdentityKeys(bill).forEach((key) => originalById.set(key, bill)));
     const salesRows = allBills.filter(isReturnBill).filter((bill) => returnType(bill) === "sales").map((bill) => {
       const keys = new Set(billIdentityKeys(bill));
-      const billItems = items.filter((item) => keys.has(itemBillId(item)));
+      const billItems = items.filter((item) => item.deletedAt == null && item.deleted_at == null && keys.has(itemBillId(item)));
       const embedded = Array.isArray(bill.items) ? bill.items.filter((item): item is RecordLike => Boolean(item && typeof item === "object")) : [];
-      const returnItems = billItems.length > 0 ? billItems : embedded;
+      // The bill snapshot is one complete version. The separate child table can
+      // temporarily contain both device and server copies during reconciliation.
+      const returnItems = embedded.length > 0 ? embedded : billItems;
       const record = bill as Bill & RecordLike;
       const originalId = String(record.returnOfBillId ?? record.return_of_bill_id ?? record.originalBillId ?? "");
       const original = originalById.get(originalId);

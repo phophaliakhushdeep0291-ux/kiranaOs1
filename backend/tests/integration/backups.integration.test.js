@@ -220,6 +220,8 @@ if (ctx.skip) {
     test("transactionally restores business data, preserves credentials, creates recovery backup, and releases maintenance lock", async () => {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Before Restore", stockBaseQty: 7 });
+      const followup = { udharLimit: 1200.25, dueDate: "2026-09-15", promiseToPayDate: "2026-09-12", notes: "Collect after delivery" };
+      const customer = await ctx.db.customer.create({ data: { shopId: tenant.shop.id, name: "Follow-up backup", ...followup } });
       const tallyPost = await ctx.db.tallyPost.create({ data: {
         shopId: tenant.shop.id,
         documentType: "sale",
@@ -235,6 +237,7 @@ if (ctx.skip) {
       await processShopBackupArtifact(artifact.id, tenant.shop.id);
       const ownerBefore = await ctx.db.user.findUnique({ where: { id: tenant.owner.id }, select: { passwordHash: true, pinHash: true } });
       await ctx.db.product.update({ where: { id: product.id }, data: { name: "Changed Later", stockBaseQty: 99 } });
+      await ctx.db.customer.update({ where: { id: customer.id }, data: { udharLimit: null, dueDate: null, promiseToPayDate: null, notes: null } });
       await createProduct(ctx.db, tenant.shop.id, { name: "Created Later" });
       await ctx.db.tallyPost.delete({ where: { id: tallyPost.id } });
       await ctx.db.tallyPost.create({ data: {
@@ -252,6 +255,8 @@ if (ctx.skip) {
       const products = await ctx.db.product.findMany({ where: { shopId: tenant.shop.id }, orderBy: { name: "asc" } });
       assert.deepEqual(products.map((row) => row.name), ["Before Restore"]);
       assert.equal(products[0].stockBaseQty, 7);
+      const restoredCustomer = await ctx.db.customer.findUniqueOrThrow({ where: { id: customer.id } });
+      for (const [key, value] of Object.entries(followup)) assert.equal(restoredCustomer[key], value, `${key} survives backup recovery`);
       const restoredTallyPosts = await ctx.db.tallyPost.findMany({ where: { shopId: tenant.shop.id } });
       assert.deepEqual(restoredTallyPosts.map((row) => row.id), [tallyPost.id], "Tally idempotency history is restored so vouchers cannot be posted twice");
       const ownerAfter = await ctx.db.user.findUnique({ where: { id: tenant.owner.id }, select: { passwordHash: true, pinHash: true } });

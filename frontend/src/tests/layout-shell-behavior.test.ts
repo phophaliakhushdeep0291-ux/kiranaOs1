@@ -190,7 +190,8 @@ describe("desktop app shell behavior", () => {
       expect(mobileChrome).toContain(`labelKey: "chrome.tab.${key}"`);
       expect(shellEn).toContain(`"chrome.tab.${key}": "${label}"`);
     }
-    expect(mobileChrome).toContain("Open all app areas");
+    expect(mobileChrome).toContain('t("chrome.menu.open")');
+    expect(shellEn).toContain('"chrome.menu.open": "Open all app areas"');
     expect(mobileChrome).toContain("Search products, bills, customers");
     expect(mobileChrome).toContain("Backup & sync");
   });

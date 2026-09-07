@@ -6,6 +6,11 @@
 // so the two sets cannot collide — every English key must live in exactly one
 // registered module.
 export const settingsPagesEn = {
+  "settings.export.approve": "Approve data export",
+  "settings.export.help": "This file contains private shop records. Enter the owner PIN and a reason to download it. Connect to the internet to verify approval.",
+  "settings.export.download": "Download export",
+  "settings.export.reason": "Reason for export",
+  "settings.export.failed": "Export failed. Please try again.",
   "settings.lock.locked": "Counter locked",
   "settings.lock.checking": "Checking…",
   "settings.lock.unlock": "Unlock counter",
@@ -97,7 +102,7 @@ export const settingsPagesEn = {
   "settings.advanced.exportFailed": "Export failed",
   "settings.advanced.exportFailedHelp": "Could not read local data for this export.",
   "settings.advanced.backupDownloaded": "Backup downloaded",
-  "settings.advanced.backupPrivate": "Keep this file private. It contains local shop data.",
+  "settings.advanced.backupPrivate": "Keep this file private. It contains selected local records. Use Sync & Backup for a complete backup and restore.",
   "settings.advanced.backupFailed": "Backup failed",
   "settings.advanced.backupFailedHelp": "Could not read the local database.",
   "settings.advanced.settingsReset": "Settings reset to defaults",
@@ -734,7 +739,7 @@ export const settingsPagesEn = {
   "settings.store.accountNumber": "Account Number",
   "settings.store.ifsc": "IFSC",
   "settings.store.docsTitle": "Verification Documents",
-  "settings.store.docsSub": "Upload for a verified badge",
+  "settings.store.docsSub": "Keep copies on this device. Verification is not available yet.",
   "settings.store.approveTitle": "Approve store profile update",
   "settings.store.approveHelp": "Store name, owner, GST, address and phone are protected fields. Enter the owner PIN to save this change.",
   "settings.store.save": "Save profile",
@@ -945,7 +950,7 @@ export const settingsPagesEn = {
   "settings.advanced.export.products": "Export products",
   "settings.advanced.export.customers": "Export customers",
   "settings.advanced.export.bills": "Export bills",
-  "settings.advanced.export.full": "Export full backup",
+  "settings.advanced.export.full": "Export local records",
   "settings.advanced.export.template": "Customer CSV template",
   "settings.advanced.export.import": "Open product import",
   "settings.advanced.danger.resetSettings": "Reset settings",

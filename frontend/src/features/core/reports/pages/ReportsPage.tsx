@@ -46,7 +46,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { PageShell, SyncBadge, TradeFocusStrip } from "@/components/shared";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { useBusinessTypeKey } from "@/features/core/settings/business-types";
@@ -57,7 +56,7 @@ import {
   toDateInputValue,
   type LocalReportSnapshot,
 } from "@/features/core/reports/local-reporting";
-import { recordDataExportLocalFirst } from "@/features/core/reports/local-actions";
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { AccountingControlPanel } from "@/features/core/reports/components/AccountingControlPanel";
 import { BankReconciliationPanel } from "@/features/core/reports/components/BankReconciliationPanel";
 import { useToast } from "@/hooks/use-toast";
@@ -209,9 +208,7 @@ export default function ReportsPage() {
   const snapshotRef = useRef<LocalReportSnapshot | null>(null);
   const loadRequestId = useRef(0);
   const refreshTimer = useRef<number | null>(null);
-  const [exportPinOpen, setExportPinOpen] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
+  const requestExport = useDataExport();
   const [controlsOpen, setControlsOpen] = useState(false);
 
   const range = useMemo(() => safeDateRange(from, to), [from, to]);
@@ -351,20 +348,12 @@ export default function ReportsPage() {
     ].filter(Boolean) as Array<{ tone: "green" | "amber" | "red"; title: string; detail: string }>;
   }, [snapshot, selected, previous?.sales, paymentModes]);
 
-  async function confirmExport(ownerPin: string, reason: string) {
+  function exportReport() {
     if (!snapshot) return;
-    setExporting(true);
-    setExportError(null);
-    try {
-      await recordDataExportLocalFirst({
-        ownerPin,
-        reason,
-        reportType: "local_reports_snapshot",
-        from: range.from,
-        to: range.to,
-        format: "json",
-        rowCount: snapshot.topProducts.length + snapshot.topCustomers.length + snapshot.lowStock.length + snapshot.staffSales.length,
-      });
+    requestExport({
+      reportType: "local_reports_snapshot", from: range.from, to: range.to, format: "json",
+      rowCount: snapshot.topProducts.length + snapshot.topCustomers.length + snapshot.lowStock.length + snapshot.staffSales.length,
+    }, () => {
       const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), range, snapshot }, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -372,14 +361,8 @@ export default function ReportsPage() {
       anchor.download = `kirana-report-${range.from}-to-${range.to}.json`;
       anchor.click();
       URL.revokeObjectURL(url);
-      setExportPinOpen(false);
       trackEvent(ACTIVITY_EVENTS.REPORT_EXPORT, { report: "overview", reportLabel: "Business overview", format: "json" });
-      toast({ title: "Report exported", description: "Owner approval was recorded in the audit log." });
-    } catch (error) {
-      setExportError(error instanceof Error ? error.message : "Owner approval is required.");
-    } finally {
-      setExporting(false);
-    }
+    });
   }
 
   const trend = snapshot?.dailyTrend ?? [];
@@ -526,7 +509,7 @@ export default function ReportsPage() {
               <Link href="/daily-closing" className="mt-1 flex min-h-11 items-center border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[var(--brand)] sm:min-h-0">Open daily closing</Link>
             </PopoverContent>
           </Popover>
-          <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-11 w-full rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold shadow-[0_8px_20px_rgba(7,95,255,0.22)] hover:bg-[var(--brand-strong)] sm:mouse:h-9 sm:w-auto sm:rounded-[7px]"><Download size={14} className="mr-2" />Export</Button>
+          <Button onClick={exportReport} disabled={!snapshot || loading} className="h-11 w-full rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold shadow-[0_8px_20px_rgba(7,95,255,0.22)] hover:bg-[var(--brand-strong)] sm:mouse:h-9 sm:w-auto sm:rounded-[7px]"><Download size={14} className="mr-2" />Export</Button>
           {/* Icon-only, so it keeps the 44px square `button.tsx` sets as the
               standard for this variant rather than shrinking with the row. */}
           <Button variant="outline" size="icon" title="Refresh reports" aria-label="Refresh reports" onClick={() => void loadReports({ showLoader: !snapshotRef.current })} disabled={loading && !snapshot} className="h-11 w-11 rounded-xl border-[#dfe7f2] sm:rounded-[7px]"><RefreshCw size={16} className={loading ? "animate-spin" : ""} /></Button>
@@ -769,7 +752,6 @@ export default function ReportsPage() {
         {controlsOpen ? <div className="space-y-4 border-t border-[#e7edf5] bg-[#f7f9fc] p-3 sm:p-4 lg:p-5"><Link href="/channel-settlements" className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-indigo-950 transition hover:bg-indigo-100"><span className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-indigo-700 shadow-sm"><ReceiptIndianRupee size={18} /></span><span><span className="block text-sm font-black">Channel payout reconciliation</span><span className="block text-[11px] text-indigo-700">Match marketplace order IDs, deductions and paid net without automatic posting</span></span></span><span className="text-xs font-black text-indigo-700">Open →</span></Link><AccountingControlPanel from={range.from} to={range.to} /><BankReconciliationPanel from={range.from} to={range.to} /></div> : null}
       </section>
 
-      <OwnerPinModal open={exportPinOpen} onCancel={() => { if (!exporting) setExportPinOpen(false); }} title="Approve data export" description="Reports contain sensitive shop data. Owner PIN and reason are required before export." confirmLabel="Export data" reasonRequired loading={exporting} error={exportError} onConfirm={({ ownerPin, reason }) => confirmExport(ownerPin, reason)} />
     </PageShell>
   );
 }

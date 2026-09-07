@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { checkOwnerPin, verifyOwnerPin } from "@/features/core/settings/api";
 import { isBiometricEnrolled, verifyBiometric } from "@/features/core/settings/biometric-unlock";
+import { isSessionLocked, persistSessionLock } from "@/features/core/settings/session-lock-state";
 import {
   SECURITY_POLICY_CHANGED_EVENT,
   getSecurityPolicySync,
@@ -66,6 +67,7 @@ function isColdStart(): boolean {
 }
 
 export function clearSessionLockState() {
+  persistSessionLock();
   try {
     localStorage.removeItem(LAST_ACTIVITY_KEY);
     sessionStorage.removeItem(SESSION_STARTED_KEY);
@@ -80,6 +82,7 @@ export function clearSessionLockState() {
  * applies on the next real browser start, not immediately after authentication.
  */
 export function markAuthenticatedSessionActive(at = Date.now()) {
+  persistSessionLock();
   try {
     localStorage.setItem(LAST_ACTIVITY_KEY, String(at));
     sessionStorage.setItem(SESSION_STARTED_KEY, String(at));
@@ -91,7 +94,7 @@ export function markAuthenticatedSessionActive(at = Date.now()) {
 export function SessionLockGate({ children }: { children: ReactNode }) {
   const { logout, user } = useAuth();
   const [policy, setPolicy] = useState<SecurityPolicy>(() => getSecurityPolicySync());
-  const [locked, setLocked] = useState(false);
+  const [locked, setLocked] = useState(() => isSessionLocked(user?.id));
   const [hasPin, setHasPin] = useState<boolean | null>(null);
   const lastWriteRef = useRef(0);
   const coldStartHandled = useRef(false);
@@ -150,7 +153,7 @@ export function SessionLockGate({ children }: { children: ReactNode }) {
     const cold = isColdStart();
     if (!cold || !policy.requireLoginOnStart) return;
     if (!canLock) return;
-    if (policy.rememberDevice) setLocked(true);
+    if (policy.rememberDevice) { persistSessionLock(user?.id); setLocked(true); }
     else void logout();
     // policy is read once on the first mount; later changes apply to the next start.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,11 +166,11 @@ export function SessionLockGate({ children }: { children: ReactNode }) {
       if (Date.now() - readLastActivity() < timeout) return;
       // Re-check reachability at the moment it fires, not when the timer was set.
       if (!navigator.onLine || hasPin !== true) return;
-      if (policy.autoLock && policy.rememberDevice) setLocked(true);
+      if (policy.autoLock && policy.rememberDevice) { persistSessionLock(user?.id); setLocked(true); }
       else void logout();
     }, CHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [hasPin, locked, logout, policy]);
+  }, [hasPin, locked, logout, policy, user?.id]);
 
   if (!locked) return <>{children}</>;
 
@@ -176,6 +179,7 @@ export function SessionLockGate({ children }: { children: ReactNode }) {
       userName={user?.name ?? null}
       biometric={policy.biometric && isBiometricEnrolled()}
       onUnlock={() => {
+        persistSessionLock();
         writeLastActivity(Date.now());
         setLocked(false);
       }}

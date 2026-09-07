@@ -377,7 +377,7 @@ async function recordPurchasePaymentLocalUnlocked(
     amount: currentAmount,
     paid,
     due: remaining,
-    paymentMode: payment.mode,
+    paymentMode: currentDisplay.paymentMode,
     status: remaining <= 0 ? "paid" : "partial",
   };
   const paymentId = createOutboxId("supplier_payment");
