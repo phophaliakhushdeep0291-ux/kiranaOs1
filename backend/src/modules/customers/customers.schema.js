@@ -2,6 +2,11 @@ import { z } from "zod";
 import { moneyAmount } from "../../utils/validationSchemas.js";
 import { validateGstin } from "../../utils/gst.js";
 
+const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}, "Valid calendar date required").nullable().optional();
+
 const customerFields = {
   name: z.string().min(1),
   mobile: z.string().regex(/^[6-9]\d{9}$/, "Valid Indian mobile required").optional().nullable(),
@@ -10,6 +15,10 @@ const customerFields = {
   stateCode: z.string().regex(/^\d{2}$/, "Two-digit GST state code required").optional().nullable(),
   type: z.enum(["regular", "udhar"]).default("regular"),
   udharAmount: moneyAmount().default(0).optional(),
+  udharLimit: moneyAmount().nullable().optional(),
+  dueDate: calendarDate,
+  promiseToPayDate: calendarDate,
+  notes: z.string().trim().max(2000).nullable().optional(),
 };
 
 function withGstIdentityValidation(schema) {

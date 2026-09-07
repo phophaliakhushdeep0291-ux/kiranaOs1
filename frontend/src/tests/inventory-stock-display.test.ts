@@ -55,6 +55,28 @@ function packagedProduct(overrides: Partial<InventoryItem> = {}): InventoryItem 
 }
 
 describe("inventory stock display", () => {
+  it("counts a device product and its server echo once, using current stock", () => {
+    const local = { ...packagedProduct({ id: "device_soap", productId: undefined, stockBaseQty: 20 }), sync_status: "synced" };
+    const server = { ...packagedProduct({ id: "server_soap", productId: undefined, stockBaseQty: 18 }), clientProductId: "device_soap" };
+    const rows = mergeInventoryRows([server], [local], [server]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].stockBaseQty).toBe(18);
+  });
+
+  it("joins records when the identity bridge arrives last without joining equal names", () => {
+    const local = packagedProduct({ id: "device_soap", productId: undefined });
+    const server = packagedProduct({ id: "server_soap", productId: undefined });
+    const separate = packagedProduct({ id: "another_soap", productId: undefined });
+    const rows = mergeInventoryRows([local, server, separate], [{ ...server, clientProductId: local.id } as InventoryItem]);
+    expect(rows).toHaveLength(2);
+    expect(enrichInventoryRows([local], [{ ...server, clientProductId: local.id } as InventoryItem])).toHaveLength(1);
+  });
+
+  it("keeps a pending device stock edit over an older server snapshot", () => {
+    const server = packagedProduct({ id: "server_soap", productId: undefined, stockBaseQty: 18 });
+    const pending = { ...server, id: "device_soap", server_id: server.id, stockBaseQty: 17, sync_status: "pending_sync" };
+    expect(mergeInventoryRows([server], [pending])).toEqual([expect.objectContaining({ stockBaseQty: 17 })]);
+  });
   it("shows packaged stock in packets while preserving base quantity", () => {
     const item = packagedProduct();
 

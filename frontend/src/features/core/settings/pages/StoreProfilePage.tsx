@@ -307,7 +307,7 @@ export default function StoreProfilePage() {
   }
 
   const storeId = shop?.id ? `KRN-${String(shop.id).slice(-6).toUpperCase()}` : "—";
-  const planName = snapshot?.planCode ? snapshot.planCode.charAt(0).toUpperCase() + snapshot.planCode.slice(1) : "Free";
+  const planName = snapshot?.plan.name ?? "Free";
 
   return (
     <SettingsShell>

@@ -397,6 +397,8 @@ export function BillingSummary({
             </div>
             <button
               data-testid="button-change-customer"
+              type="button"
+              aria-expanded={showCustomerOptions || needsOptionsVisible}
               onClick={() => setShowCustomerOptions((v) => !v)}
               className="ml-auto inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center px-2 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
             >
@@ -463,8 +465,6 @@ export function BillingSummary({
                 </Select>
               </div>
 
-              {selectedCustomerId === "walk_in" && (
-                <>
                   <Select
                     value={selectedCustomerId}
                     onValueChange={(value) => {
@@ -495,6 +495,8 @@ export function BillingSummary({
                       ))}
                     </SelectContent>
                   </Select>
+              {selectedCustomerId === "walk_in" && (
+                <>
                   <div className="grid grid-cols-2 gap-2">
                     <Input
                       ref={customerNameInputRef}

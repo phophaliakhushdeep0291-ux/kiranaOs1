@@ -1,3 +1,4 @@
+import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
@@ -116,6 +117,7 @@ function categoryBadge(name: string) {
 }
 
 export default function ProductsPage() {
+  const requestExport = useDataExport();
   const { t } = useAppLanguage();
   // The sidebar already reached this screen under this trade's own word for it
   // ("Menu", "Medicines", "Parts"). What the page counts and what it says the
@@ -606,7 +608,7 @@ export default function ProductsPage() {
         </Button>
         <Button
           variant="outline"
-          onClick={exportCatalogue}
+          onClick={() => requestExport({ reportType: "products", format: "csv" }, exportCatalogue)}
           data-testid="button-export-products"
           className="hidden h-11 shrink-0 gap-1.5 rounded-[10px] px-4 text-[13px] font-bold lg:inline-flex"
         >

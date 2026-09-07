@@ -3,6 +3,7 @@ import { Router as WouterRouter } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/features/core/auth/AuthContext";
+import { DataExportProvider } from "@/features/core/reports/DataExportProvider";
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { ApiClientError } from "@/lib/api/http";
 import { initializeOfflineStorage } from "@/lib/offline/migrations";
@@ -157,7 +158,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
               <Suspense fallback={null}>
                 <BackgroundRuntime />
               </Suspense>
-              {children}
+              <DataExportProvider>{children}</DataExportProvider>
             </AuthProvider>
             {/* Inside the language provider, not beside it. The toast close
                 button is translated, and `useAppLanguage` throws when it cannot

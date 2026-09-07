@@ -109,6 +109,35 @@ export function reconcileInventoryLedgerEntries(
     const entry = normalizeInventoryLedgerEntry(raw);
     if (entry.id) merged.set(entry.id, entry);
   }
+  // Bill-generated optimistic movements have device ids, while the server
+  // generates its own clientMovementId. Match their exact source document and
+  // product, only when the complete quantity agrees. A second sale or a manual
+  // adjustment with the same quantity must remain a separate movement.
+  const billMovementKey = (row: Record<string, unknown>) => {
+    const sourceType = String(row.sourceType ?? row.source_type ?? row.reference_type ?? "");
+    const billId = row.billId ?? row.bill_id ?? (sourceType === "bill" ? row.sourceId ?? row.source_id ?? row.reference_id : undefined);
+    const productId = ledgerProductId(row);
+    const action = String(row.action ?? row.type ?? "");
+    return billId && productId && ["sale", "return", "damage"].includes(action)
+      ? JSON.stringify([billId, productId, action]) : undefined;
+  };
+  const serverQuantities = new Map<string, number>();
+  const localGroups = new Map<string, InventoryLedgerDisplayEntry[]>();
+  for (const raw of serverEntries) {
+    const key = billMovementKey(raw);
+    if (key) serverQuantities.set(key, (serverQuantities.get(key) ?? 0) + Number(normalizeInventoryLedgerEntry(raw).quantityDelta));
+  }
+  for (const entry of merged.values()) {
+    const key = billMovementKey(entry);
+    if (key) localGroups.set(key, [...(localGroups.get(key) ?? []), entry]);
+  }
+  for (const [key, entries] of localGroups) {
+    const serverQuantity = serverQuantities.get(key);
+    const localQuantity = entries.reduce((sum, entry) => sum + Number(entry.quantityDelta), 0);
+    if (serverQuantity !== undefined && Math.abs(serverQuantity - localQuantity) < 0.000001) {
+      entries.forEach((entry) => merged.delete(entry.id));
+    }
+  }
   for (const raw of serverEntries) {
     const entry = normalizeInventoryLedgerEntry(raw);
     const clientMovementId = String(raw.clientMovementId ?? raw.client_movement_id ?? "");

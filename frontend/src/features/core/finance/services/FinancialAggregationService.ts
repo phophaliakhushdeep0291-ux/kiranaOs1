@@ -1,4 +1,5 @@
 import { roundMoney } from "@/lib/money";
+import { mergeSupplierPaymentHistory, supplierPurchaseKeys } from "./supplier-payment-history";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import type { Bill, Customer, Product, Supplier } from "@/types/api";
 import {
@@ -87,6 +88,7 @@ export interface CollectionBreakdown {
 
 export interface SupplierDueRow {
   id: string;
+  purchaseKeys?: string[];
   supplierId: string | null;
   supplierName: string;
   invoiceNumber: string;
@@ -307,6 +309,9 @@ function paymentIdentityKeys(payment: RecordLike): string[] {
 
 function ledgerPaymentReferenceKeys(entry: RecordLike): string[] {
   return [
+    readString(entry, ["id"]),
+    readString(entry, ["server_id", "serverId"]),
+    readString(entry, ["idempotencyKey", "idempotency_key"]),
     readString(entry, ["paymentId", "payment_id"]),
     readString(entry, ["source_id", "sourceId"]),
     readString(entry, ["localPaymentId", "local_payment_id"]),
@@ -410,7 +415,7 @@ function paymentAmount(payment: RecordLike): number {
 
 function paymentMode(payment: RecordLike): string {
   const mode = String(payment.mode ?? payment.paymentMode ?? payment.payment_mode ?? "cash").toLowerCase();
-  if (mode === "card") return "bank";
+  if (mode === "card" || mode === "bank_transfer") return "bank";
   return mode;
 }
 
@@ -689,17 +694,25 @@ function calculateProfitByProduct(
       }
     }
     const expectedItemTotal = readNumber(bill.subtotal ?? bill.subtotalAmount ?? bill.subtotal_amount, billTotal(bill) + billDiscount(bill));
-    const uniqueItems = dedupeBillItemsForDisplay(rawItems, expectedItemTotal) as LocalBillItem[];
+    // A synced bill includes a complete item snapshot. Mixing its server children
+    // with optimistic child rows can count the same sale or return twice.
+    const embeddedItems = Array.isArray(bill.items) ? bill.items.filter(isRecord).filter((item) => !isDeleted(item)) : [];
+    const uniqueItems = embeddedItems.length > 0
+      ? embeddedItems
+      : dedupeBillItemsForDisplay(rawItems, expectedItemTotal) as LocalBillItem[];
 
     for (const item of uniqueItems) {
     const productId = getProductId(item) ?? `custom:${readString(item, ["name", "productName", "product_name"], "item")}`;
     const product = productById.get(productId);
-    const quantity = Math.abs(readNumber(item.quantity ?? item.qty, 0));
+    const rawQuantity = readNumber(item.quantity ?? item.qty, 0);
+    const isReturn = billTotal(bill) < 0;
+    const quantity = isReturn ? -Math.abs(rawQuantity) : rawQuantity;
     const rate = readNumber(
       item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate ?? item.price,
       productPrice(product),
     );
-    const revenue = roundMoney(readNumber(item.line_total ?? item.lineTotal ?? item.total, 0) || quantity * rate);
+    const rawRevenue = readNumber(item.line_total ?? item.lineTotal ?? item.total, quantity * rate);
+    const revenue = roundMoney(isReturn ? -Math.abs(rawRevenue) : rawRevenue);
     const cost = roundMoney(quantity * itemUnitCost(item, product));
     const profit = roundMoney(revenue - cost);
     const existing = rows.get(productId) ?? {
@@ -787,7 +800,7 @@ function purchaseDue(row: RecordLike): number {
 
 function purchasePaymentMode(row: RecordLike): string {
   const mode = String(row.purchasePaymentMode ?? row.purchase_payment_mode ?? row.paymentMode ?? row.payment_mode ?? "cash").toLowerCase();
-  if (mode === "card") return "bank";
+  if (mode === "card" || mode === "bank_transfer") return "bank";
   return mode;
 }
 
@@ -898,6 +911,7 @@ function buildSupplierDueCandidate(
     : ["purchasePaymentStatus", "purchase_payment_status", "status"];
   return {
     id: readString(row, ["id", "local_id", "server_id"], source === "purchase_bill" ? `purchase_${index}` : `movement_${index}`),
+    purchaseKeys: [...supplierPurchaseKeys(row), ...(source === "purchase_bill" ? ["id", "local_id", "server_id", "localId", "serverId"].map((key) => String(row[key] ?? "")).filter(Boolean) : [])],
     supplierId,
     supplierName: supplier?.name ?? readString(row, ["supplierName", "supplier_name"], "Supplier"),
     invoiceNumber: purchaseInvoiceNumber(row),
@@ -908,7 +922,7 @@ function buildSupplierDueCandidate(
     paymentMode: purchasePaymentMode(row),
     status: readString(row, statusKeys, due > 0 ? "due" : "paid"),
     source,
-    dedupeKeys: [...purchaseIdentityKeys(row), purchaseStableKey(row), purchaseBusinessKey(row)],
+    dedupeKeys: [...purchaseIdentityKeys(row), ...(source === "purchase_bill" ? ["id", "local_id", "server_id", "localId", "serverId"].map((key) => row[key] ? `purchase-id:${row[key]}` : "").filter(Boolean) : []), purchaseStableKey(row), purchaseBusinessKey(row)],
     priority: purchaseRowPriority(row, source),
   };
 }
@@ -918,7 +932,15 @@ function dedupeSupplierDueCandidates(candidates: SupplierDueCandidate[]): Suppli
   const picked: SupplierDueCandidate[] = [];
   const sorted = [...candidates].sort((a, b) => b.priority - a.priority || b.date.localeCompare(a.date));
   for (const candidate of sorted) {
-    if (candidate.dedupeKeys.some((key) => seen.has(key))) continue;
+    if (candidate.dedupeKeys.some((key) => seen.has(key))) {
+      const existing = picked.find((row) => row.dedupeKeys.some((key) => candidate.dedupeKeys.includes(key)));
+      if (existing) {
+        existing.purchaseKeys = [...new Set([...(existing.purchaseKeys ?? []), ...(candidate.purchaseKeys ?? [])])];
+        existing.dedupeKeys = [...new Set([...existing.dedupeKeys, ...candidate.dedupeKeys])];
+        candidate.dedupeKeys.forEach((key) => seen.add(key));
+      }
+      continue;
+    }
     candidate.dedupeKeys.forEach((key) => seen.add(key));
     picked.push(candidate);
   }
@@ -949,7 +971,7 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const range = input.range ?? { from: date, to: date };
   const bills = dedupeBillsForDisplay(input.bills ?? [], { includeUserDeleted: true });
   const billItems = (input.billItems ?? []).filter((row) => !isDeleted(row));
-  const payments = dedupePaymentsForDisplay((input.payments ?? []).filter((row) => !isDeleted(row)));
+  const payments = mergeSupplierPaymentHistory(input.payments ?? [], input.purchaseBills ?? []).filter((row) => !isDeleted(row));
   const ledger = dedupeLedgerEntries((input.ledger ?? []).filter((row) => !isDeleted(row)));
   const products = (input.products ?? []).filter((row) => !isDeleted(row as unknown as RecordLike));
   const customers = (input.customers ?? []).filter((row) => !isDeleted(row as unknown as RecordLike));
@@ -974,9 +996,26 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const outstandingCustomers = calculateOutstandingCustomers(ledger, customers);
   const supplierDueRows = buildSupplierDueRows(purchaseBills, inventoryMovements, suppliers);
   const todaySupplierRows = supplierDueRows.filter((row) => row.date && isWithinDateRange({ created_at: row.date }, range));
-  const supplierCashPaidToday = roundMoney(todaySupplierRows.filter((row) => row.paymentMode === "cash").reduce((sum, row) => sum + row.paid, 0));
-  const supplierUpiPaidToday = roundMoney(todaySupplierRows.filter((row) => row.paymentMode === "upi").reduce((sum, row) => sum + row.paid, 0));
-  const supplierBankPaidToday = roundMoney(todaySupplierRows.filter((row) => row.paymentMode === "bank").reduce((sum, row) => sum + row.paid, 0));
+  const supplierPayments = payments.filter((row) => row.kind === "supplier_payment"
+    && !["reversed", "cancelled", "voided"].includes(String(row.status ?? "").toLowerCase()));
+  const supplierPaidToday = { cash: 0, upi: 0, bank: 0 };
+  for (const row of supplierPayments) {
+    const occurredAt = readString(row, ["paid_at", "paidAt", "created_at", "createdAt"]);
+    const mode = paymentMode(row);
+    if (mode in supplierPaidToday && occurredAt && isWithinDateRange({ created_at: occurredAt }, range)) {
+      supplierPaidToday[mode as keyof typeof supplierPaidToday] += readNumber(row.amount, 0);
+    }
+  }
+  for (const purchase of todaySupplierRows) {
+    const keys = new Set([purchase.id, ...(purchase.purchaseKeys ?? [])]);
+    const separatePaid = supplierPayments.filter((payment) => supplierPurchaseKeys(payment).some((key) => keys.has(key)))
+      .reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
+    const initialPaid = Math.max(0, roundMoney(purchase.paid - separatePaid));
+    if (purchase.paymentMode in supplierPaidToday) supplierPaidToday[purchase.paymentMode as keyof typeof supplierPaidToday] += initialPaid;
+  }
+  const supplierCashPaidToday = roundMoney(supplierPaidToday.cash);
+  const supplierUpiPaidToday = roundMoney(supplierPaidToday.upi);
+  const supplierBankPaidToday = roundMoney(supplierPaidToday.bank);
   const purchaseDueToday = roundMoney(todaySupplierRows.reduce((sum, row) => sum + row.due, 0));
   const supplierDue = roundMoney(supplierDueRows.reduce((sum, row) => sum + row.due, 0));
   // These were hardcoded to 0, so the expected drawer ignored the morning float and any
