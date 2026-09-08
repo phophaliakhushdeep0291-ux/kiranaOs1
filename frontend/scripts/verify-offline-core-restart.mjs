@@ -15,6 +15,7 @@ const BUILD_DIR = path.resolve(process.env.QA_OFFLINE_BUILD_DIR || path.join(OUT
 // offline restart. A fixed profile could quietly test a previous release's SW.
 const PROFILE_DIR = path.resolve(process.env.QA_OFFLINE_PROFILE_DIR || await mkdtemp(path.join(tmpdir(), "artha-offline-core-restart-")));
 const BUILD_ID = process.env.QA_OFFLINE_BUILD_ID || "offline-core-restart-qa";
+const VERIFY_SYNC_REVIEW = process.env.QA_OFFLINE_VERIFY_SYNC_REVIEW === "true";
 const VIEWPORT = { width: 390, height: 844 };
 const ALL_ROUTES = [
   ["OQA-DASH-01", "/dashboard", false],
@@ -223,6 +224,18 @@ async function closeChrome(client, chrome, debugPort) {
 async function prepareAppOrigin(client) {
   await client.send("Page.navigate", { url: `${FRONTEND_URL}/manifest.webmanifest` });
   await waitForPage(client, `document.readyState === "complete" && location.origin === ${JSON.stringify(FRONTEND_ORIGIN)}`);
+  // This is a fresh QA profile; keep text assertions independent of the
+  // product's default language. Never reuse the merchant's browser profile.
+  await client.evaluate(`localStorage.setItem("kirana-os:ui-language:v1", "en")`);
+}
+
+async function unlockQaCounterIfNeeded(client) {
+  const locked = await client.evaluate(`Boolean(document.querySelector('.session-lock-screen'))`);
+  if (!locked) return;
+  await client.evaluate(`document.querySelector('.session-lock-input').focus()`);
+  await client.send("Input.insertText", { text: "2468" });
+  await client.evaluate(`document.querySelector('.session-lock-form button[type="submit"]').click()`);
+  await waitForPage(client, `!document.querySelector('.session-lock-screen')`, 15_000);
 }
 
 async function ensureSession(client) {
@@ -249,10 +262,12 @@ async function seedCoreData(client) {
     const apiUrl=${JSON.stringify(API_URL)},session=JSON.parse(localStorage.getItem("kiranaos.auth.session.v1")||"{}"),deviceId=localStorage.getItem("kiranaos_device_id"),headers={"content-type":"application/json",authorization:"Bearer "+session.accessToken,"x-device-id":deviceId,"x-owner-pin":"2468"};
     const request=async(path,options={})=>{const response=await fetch(apiUrl+path,{...options,headers:{...headers,...(options.headers||{})}}),json=await response.json();if(!response.ok)throw new Error(path+": "+JSON.stringify(json));return json.data??json};
     const products=await request("/products");
-    if(!products.some(product=>product.name==="Offline Matrix Rice"))await request("/products",{method:"POST",body:JSON.stringify({name:"Offline Matrix Rice",category:"Grocery",displayUnit:"kg",baseUnit:"kg",rateUnit:"kg",stockBaseQty:25,costPerRateUnit:42,minPricePerRateUnit:45,defaultPricePerRateUnit:50,mrp:55,gstRate:5})});
+    const product=products.find(product=>product.name==="Offline Matrix Rice")||await request("/products",{method:"POST",body:JSON.stringify({name:"Offline Matrix Rice",category:"Grocery",displayUnit:"kg",baseUnit:"kg",rateUnit:"kg",stockBaseQty:25,costPerRateUnit:42,minPricePerRateUnit:45,defaultPricePerRateUnit:50,mrp:55,gstRate:5})});
     const customers=await request("/customers");
     const customer=customers.find(customer=>customer.name==="Offline Matrix Customer")||await request("/customers",{method:"POST",body:JSON.stringify({name:"Offline Matrix Customer",mobile:"9876504321",type:"regular"})});
-    return {customerId:customer.id}
+    let conflictId=null;
+    if(${JSON.stringify(VERIFY_SYNC_REVIEW)}){const reported=await request("/sync/conflicts/report",{method:"POST",body:JSON.stringify({client_conflict_id:"offline-qa-"+crypto.randomUUID(),entity_type:"product",entity_id:product.id,reason_code:"OFFLINE_QA_REVIEW",message:"Offline sync review QA",local_snapshot:{id:product.id,name:product.name,defaultPricePerRateUnit:49},server_snapshot:{id:product.id,name:product.name,defaultPricePerRateUnit:50}})});conflictId=reported.conflict.id}
+    return {customerId:customer.id,conflictId}
   })()`);
 }
 
@@ -261,6 +276,7 @@ async function navigateOnline(client, route) {
   await waitForPage(client, `document.readyState === "complete" && location.pathname === ${JSON.stringify(route)}`);
   await waitForPage(client, `document.body && document.body.innerText.trim().length > 30`);
   await sleep(800);
+  await unlockQaCounterIfNeeded(client);
 }
 
 async function primeOfflineInstall(client) {
@@ -279,6 +295,12 @@ async function primeOfflineInstall(client) {
   await waitForPage(client, `document.body.innerText.includes("Offline Matrix Rice")`, 60_000);
   await navigateOnline(client, "/customers");
   await waitForPage(client, `document.body.innerText.includes("Offline Matrix Customer")`, 60_000);
+  if (VERIFY_SYNC_REVIEW) {
+    // Never open Sync Status online: its background cache must populate the
+    // header on an ordinary route, then survive the browser restart.
+    await waitForPage(client, `document.querySelector('a[aria-label="Open sync alerts"]')?.innerText.trim() === "1"`, 90_000);
+    console.log("Cloud-only review reached the header without opening Sync Status.");
+  }
   const cacheState = await client.evaluate(`(async()=>{const keys=(await caches.keys()).filter(key=>key.startsWith("kiranaos-shell"));const entries=[];for(const key of keys){const cache=await caches.open(key);entries.push(...(await cache.keys()).map(request=>new URL(request.url).pathname))}return{keys,entryCount:new Set(entries).size,hasIndex:entries.includes("/index.html"),hasManifest:entries.includes("/manifest.webmanifest"),hasOffline:entries.includes("/offline.html"),hasScript:entries.some(path=>path.endsWith(".js")),hasStyles:entries.some(path=>path.endsWith(".css")),hasCoreMarker:entries.some(path=>path.startsWith("/__offline/core/"))}})()`);
   assert(cacheState.keys.length > 0 && cacheState.hasIndex && cacheState.hasManifest && cacheState.hasOffline && cacheState.hasScript && cacheState.hasStyles && cacheState.hasCoreMarker, `Offline shell did not finish caching: ${JSON.stringify(cacheState)}`);
   return { cacheState, seeded };
@@ -300,6 +322,7 @@ async function auditOfflineRoute(client, qaId, route, expectsInternetRequired = 
   await client.send("Page.navigate", { url: `${FRONTEND_URL}${route}` });
   await waitForPage(client, `document.readyState === "complete" && location.pathname === ${JSON.stringify(route)}`, 60_000);
   await waitForPage(client, `document.body && document.body.innerText.trim().length > 30`, 60_000);
+  await unlockQaCounterIfNeeded(client);
   // A sidebar already exceeds 30 characters while a lazy page is still loading.
   // Time the actual route, not just the shared shell.
   await waitForPage(client, `Boolean(document.querySelector('.app-route-ready, [data-testid="internet-required-route"]')) && !document.querySelector('.app-loading-surface[aria-busy="true"]')`, 15_000);
@@ -307,6 +330,12 @@ async function auditOfflineRoute(client, qaId, route, expectsInternetRequired = 
   if (route === "/customers") await waitForPage(client, `document.body.innerText.includes("Offline Matrix Customer")`, 15_000);
   if (qaId === "OQA-CUST-ACCOUNT-01") await waitForPage(client, `document.body.innerText.includes("Offline Matrix Customer") && Boolean(document.querySelector('[data-testid="customer-timeline"]'))`, 15_000);
   if (route === "/recovery-mode") await waitForPage(client, `/Database open|Local database problem detected/.test(document.body.innerText)`, 15_000);
+  if (VERIFY_SYNC_REVIEW && route === "/sync-status") {
+    await waitForPage(client, `document.body.innerText.includes("review needed x 1") && document.body.innerText.includes("Offline Matrix Rice")`, 15_000);
+  }
+  if (VERIFY_SYNC_REVIEW && route === "/daily-closing") {
+    await waitForPage(client, `[...document.querySelectorAll('p')].some(p=>p.textContent==="Conflicts" && p.previousElementSibling?.textContent==="1")`, 15_000);
+  }
   const readyMs = Date.now() - startedAt;
   await sleep(500);
   // navigator.onLine is only a network-interface hint and can remain true while
@@ -330,6 +359,9 @@ async function auditOfflineRoute(client, qaId, route, expectsInternetRequired = 
   assert(!metrics.stuckLoading, `${qaId} remained stuck loading offline: ${JSON.stringify({ ...metrics, cacheDiagnostics })}`);
   assert(metrics.runtimeErrors.length === 0, `${qaId} runtime errors offline: ${metrics.runtimeErrors.join(" | ")}`);
   assert(metrics.internetRequired === expectsInternetRequired, `${qaId} offline capability label mismatch: ${JSON.stringify(metrics)}`);
+  if (VERIFY_SYNC_REVIEW && ["/sync-status", "/daily-closing"].includes(route)) {
+    assert(await client.evaluate(`document.querySelector('a[aria-label="Open sync alerts"]')?.innerText.trim() === "1"`), `${qaId} header disagreed with the preserved review`);
+  }
   if (route === "/products") assert(metrics.hasSeedProduct, `${qaId} did not restore cached product data`);
   if (route === "/customers") assert(metrics.hasSeedCustomer, `${qaId} did not restore cached customer data`);
   if (route === "/recovery-mode") {
@@ -363,7 +395,7 @@ async function main() {
     // a complete browser restart without waiting for the cloud summary.
     results.push(await auditOfflineRoute(offlineBrowser.client, "OQA-CUST-ACCOUNT-01", `/customers/${seeded.customerId}`));
     await mkdir(OUTPUT_DIR, { recursive: true });
-    await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), buildId: BUILD_ID, frontendUrl: FRONTEND_URL, cacheState, coldRestart: true, networkDisabled: true, results }, null, 2));
+    await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), buildId: BUILD_ID, frontendUrl: FRONTEND_URL, cacheState, coldRestart: true, networkDisabled: true, syncReviewVerified: VERIFY_SYNC_REVIEW, results }, null, 2));
     console.log(`Offline cold-restart matrix passed ${results.length}/${results.length} routes. Artifacts: ${OUTPUT_DIR}`);
   } finally {
     if (onlineBrowser) await closeChrome(onlineBrowser.client, onlineBrowser.chrome, onlineBrowser.debugPort);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SyncDiagnosticsSection } from "./SyncDiagnosticsSection";
 import { formatDistanceToNow } from "date-fns";
 import { hi as hiDateLocale } from "date-fns/locale";
@@ -34,6 +34,7 @@ import { probeBackendConnection, readBackendConnectionSnapshot } from "@/feature
 import {
   dexieDB,
   offlineDB,
+  filterRowsForCurrentScope,
   type OfflineRow,
   type PendingSyncEvent,
   type SyncCursorRow,
@@ -42,7 +43,6 @@ import { getOfflineScope } from "@/lib/offline/context";
 import {
   getSyncStatus,
   getSyncFleet,
-  listSyncConflicts,
   reportSyncConflict,
   resolveSyncConflict,
   retryFailedSyncOperations,
@@ -51,6 +51,8 @@ import {
 import { getCurrentSubscriptionSnapshot } from "@/features/core/subscription/access";
 import type { SyncConflictRecord, SyncFleetResponse, SyncStatusResponse } from "@/types/api";
 import { repairResolvedSyncStatusNoise, retryableStoredGuestBillConflict } from "@/features/core/sync/sync-status-repair";
+import { isUnresolvedSyncConflict, syncOperationIds, syncOperationState, syncReviewRows, syncReviewSourceIds } from "@/features/core/sync/sync-health";
+import { refreshServerConflictCache } from "@/features/core/sync/sync-conflict-cache";
 import { tableNameForEntity } from "@/features/core/sync/sync-types";
 import { isSensitiveSyncKey, sanitizeSyncDiagnostic } from "@/features/core/sync/sensitive-data";
 import { PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
@@ -230,83 +232,6 @@ function moneyLabel(value: number | null): string | null {
   return `Rs ${Math.abs(value).toLocaleString("en-IN")}`;
 }
 
-function mergeServerConflictRows(
-  localRows: ConflictRow[],
-  serverRows: SyncConflictRecord[],
-): ConflictRow[] {
-  const scope = getOfflineScope();
-  const sourceEventIds = new Set(
-    serverRows
-      .map((row) => row.source_event_id)
-      .filter((value): value is string => typeof value === "string" && value.length > 0),
-  );
-  const serverIdentity = (row: SyncConflictRecord) => {
-    const explicitSource = typeof row.source_event_id === "string" && row.source_event_id.length > 0
-      ? row.source_event_id
-      : null;
-    const linkedSource = explicitSource
-      ?? (typeof row.server_version === "string" && sourceEventIds.has(row.server_version)
-        ? row.server_version
-        : null);
-    if (linkedSource) return `source:${linkedSource}`;
-    if (row.client_conflict_id) return `client:${row.client_conflict_id}`;
-    return `server:${row.id}`;
-  };
-  const canonicalServerRows = new Map<string, SyncConflictRecord>();
-  for (const row of serverRows) {
-    const identity = serverIdentity(row);
-    const current = canonicalServerRows.get(identity);
-    const rowIsAuthoritative = typeof row.source_event_id === "string" && row.source_event_id.length > 0;
-    const currentIsAuthoritative = typeof current?.source_event_id === "string" && current.source_event_id.length > 0;
-    if (!current || (rowIsAuthoritative && !currentIsAuthoritative)) {
-      canonicalServerRows.set(identity, row);
-    }
-  }
-
-  const byIdentity = new Map<string, ConflictRow>();
-  for (const row of localRows) {
-    const explicitSource = readStringFromRecord(row, ["source_event_id"]);
-    const linkedSource = explicitSource
-      ?? (typeof row.server_version === "string" && sourceEventIds.has(row.server_version)
-        ? row.server_version
-        : null);
-    const identity = linkedSource ? `source:${linkedSource}` : `client:${String(row.id)}`;
-    byIdentity.set(identity, row);
-  }
-
-  for (const [identity, server] of canonicalServerRows) {
-    const clientId = server.client_conflict_id ?? undefined;
-    const local = byIdentity.get(identity) ?? (clientId ? byIdentity.get(`client:${clientId}`) : undefined);
-    const id = local?.id ?? clientId ?? server.id;
-    const merged: ConflictRow = {
-      ...(local ?? {}),
-      id,
-      entity_type: server.entity_type,
-      entity_id: server.entity_id,
-      tenant_id: local?.tenant_id ?? scope.tenant_id,
-      store_id: local?.store_id ?? scope.store_id,
-      device_id: local?.device_id ?? server.device_id ?? scope.device_id,
-      created_at: local?.created_at ?? server.created_at,
-      updated_at: server.updated_at,
-      deleted_at: null,
-      version: local?.version ?? 1,
-      sync_status: "conflict",
-      last_modified_by: local?.last_modified_by ?? null,
-      resolution: "unresolved",
-      local_snapshot: local?.local_snapshot ?? server.local_snapshot ?? null,
-      server_snapshot: server.server_snapshot ?? local?.server_snapshot ?? null,
-      error_message: server.message,
-      source_event_id: server.source_event_id ?? readStringFromRecord(local, ["source_event_id"]),
-      server_conflict_id: server.id,
-      server_record_version: server.version,
-      server_version: server.server_version,
-    };
-    byIdentity.set(identity, merged);
-  }
-  return [...byIdentity.values()].sort((a, b) =>
-    String(b.updated_at ?? b.created_at ?? "").localeCompare(String(a.updated_at ?? a.created_at ?? "")),
-  );
-}
 
 function userSafeSyncReason(t: Translate, rawReason: unknown, fallback?: string): string {
   const fallbackText = fallback ?? t("sync.reason.fallback");
@@ -502,12 +427,12 @@ async function getLastSuccessfulSyncAt() {
   )[0];
 }
 
-export async function readSyncSnapshot(): Promise<
+export async function readSyncSnapshot(options: { localOnly?: boolean } = {}): Promise<
   Omit<SyncStatusSnapshot, "isLoading" | "isSyncing">
 > {
   await offlineDB.init();
-  await repairResolvedSyncStatusNoise().catch(() => 0);
-  const connection = await probeBackendConnection();
+  if (!options.localOnly) await repairResolvedSyncStatusNoise().catch(() => 0);
+  const connection = options.localOnly ? readBackendConnectionSnapshot() : await probeBackendConnection();
   const isOnline = connection.browserOnline && connection.backendReachable;
   const [
     allOperationsRaw,
@@ -522,7 +447,7 @@ export async function readSyncSnapshot(): Promise<
       .then((rows) =>
         rows.filter(
           (row) =>
-            row.sync_status === "conflict" || row.resolution === "unresolved",
+            isUnresolvedSyncConflict(row),
         ),
       )
       .catch(() => []),
@@ -531,45 +456,46 @@ export async function readSyncSnapshot(): Promise<
     canSubscriptionSyncLocally(),
   ]);
 
-  const allOperations = [...allOperationsRaw].sort(
-    (a, b) => Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0),
-  );
-
   let serverStatus: SyncStatusResponse | null = null;
-  let serverConflictRows: SyncConflictRecord[] = [];
+  let cachedConflictRows = conflictRows;
+  let currentOperations = allOperationsRaw;
   let fleet: SyncFleetResponse | null = null;
   let subscriptionSyncAllowed = localSubscriptionAllowed;
-  if (isOnline) {
-    try {
-      serverStatus = await getSyncStatus();
-      if (serverStatus.allowed !== undefined)
-        subscriptionSyncAllowed = serverStatus.allowed;
-    } catch {
-      // The page must still work offline or when the sync-status endpoint is unavailable.
-    }
-    try {
-      const ledger = await listSyncConflicts({ status: "open", limit: 100, background: true });
-      serverConflictRows = ledger.conflicts;
-    } catch {
-      // Cashiers cannot list cross-device snapshots; owners still retain local rows offline.
-    }
-    try {
-      fleet = await getSyncFleet({ background: true });
-    } catch {
-      // Fleet visibility is intentionally owner/admin only.
-    }
+  if (isOnline && !options.localOnly) {
+    // Independent diagnostics should cost one network wait, not three serial
+    // waits. A failed owner-only endpoint never blocks the local queue view.
+    [serverStatus, fleet] = await Promise.all([
+      getSyncStatus({ background: true }).catch(() => null),
+      getSyncFleet({ background: true }).catch(() => null),
+      refreshServerConflictCache({ force: true }).catch(() => undefined),
+    ]);
+    if (serverStatus?.allowed !== undefined) subscriptionSyncAllowed = serverStatus.allowed;
+    // Uploads can finish while diagnostics are loading. Read the durable queue
+    // again so an old response cannot bring an already-cleared error back.
+    [currentOperations, cachedConflictRows] = await Promise.all([
+      offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => currentOperations),
+      offlineDB.getAll<ConflictRow>("sync_conflicts").catch(() => cachedConflictRows),
+    ]);
   }
 
-  const pendingOperations = allOperations.filter(
-    (operation) =>
-      operation.status === "PENDING" ||
-      operation.status === "SYNCING" ||
-      operation.sync_status === "pending_sync" ||
-      operation.sync_status === "syncing",
+  const allOperations = filterRowsForCurrentScope([...currentOperations]).sort(
+    (a, b) => Number(b.createdAt ?? 0) - Number(a.createdAt ?? 0),
   );
-  const failedOperations = allOperations.filter(
+  const conflicts = syncReviewRows(
+    allOperations,
+    filterRowsForCurrentScope(cachedConflictRows),
+  ) as ConflictRow[];
+  const reviewSources = syncReviewSourceIds(conflicts);
+  const operationsWithoutReview = allOperations.filter(
+    (operation) => !syncOperationIds(operation).some((id) => reviewSources.has(id)),
+  );
+  const pendingOperations = operationsWithoutReview.filter(
     (operation) =>
-      operation.status === "FAILED" || operation.sync_status === "failed",
+      syncOperationState(operation) === "pending",
+  );
+  const failedOperations = operationsWithoutReview.filter(
+    (operation) =>
+      syncOperationState(operation) === "failed",
   );
 
   return {
@@ -579,7 +505,7 @@ export async function readSyncSnapshot(): Promise<
     backendError: connection.error ?? null,
     pendingOperations,
     failedOperations,
-    conflicts: mergeServerConflictRows(conflictRows as ConflictRow[], serverConflictRows),
+    conflicts,
     lastSuccessfulSyncAt,
     deviceId: getOfflineScope().device_id,
     apiBaseUrl: getApiBaseUrl(),
@@ -1011,18 +937,28 @@ export default function SyncStatusPage() {
   const loc = useAppLanguage();
   const { t } = loc;
   const [snapshot, setSnapshot] = useState<SyncStatusSnapshot>(initialSnapshot);
+  const refreshGeneration = useRef(0);
+  const remoteRead = useRef<ReturnType<typeof readSyncSnapshot> | null>(null);
 
   const refresh = useCallback(async () => {
-    setSnapshot((current) => ({
-      ...current,
-      isLoading: true,
-      isOnline: readBackendConnectionSnapshot().browserOnline && readBackendConnectionSnapshot().backendReachable,
-      isBrowserOnline: readBackendConnectionSnapshot().browserOnline,
-      isBackendReachable: readBackendConnectionSnapshot().backendReachable,
-      backendError: readBackendConnectionSnapshot().error ?? null,
-    }));
-    const next = await readSyncSnapshot();
-    setSnapshot((current) => ({ ...current, ...next, isLoading: false }));
+    const generation = ++refreshGeneration.current;
+    try {
+      const local = await readSyncSnapshot({ localOnly: true });
+      if (generation !== refreshGeneration.current) return;
+      setSnapshot((current) => ({ ...current, ...local, serverStatus: current.serverStatus, fleet: current.fleet, isLoading: false }));
+      if (!remoteRead.current) remoteRead.current = readSyncSnapshot();
+      const request = remoteRead.current;
+      void request.then(
+        () => { if (remoteRead.current === request) remoteRead.current = null; },
+        () => { if (remoteRead.current === request) remoteRead.current = null; },
+      );
+      const next = await request;
+      if (generation === refreshGeneration.current) {
+        setSnapshot((current) => ({ ...current, ...next, isLoading: false }));
+      }
+    } catch {
+      if (generation === refreshGeneration.current) setSnapshot((current) => ({ ...current, isLoading: false }));
+    }
   }, []);
 
   useEffect(() => {
@@ -1035,6 +971,7 @@ export default function SyncStatusPage() {
     window.addEventListener("kirana:local-data-changed", onDataChange);
     const interval = window.setInterval(() => void refresh(), 30_000);
     return () => {
+      refreshGeneration.current += 1;
       window.removeEventListener("online", onOnlineChange);
       window.removeEventListener("offline", onOnlineChange);
       window.removeEventListener("kirana:sync-queue-updated", onDataChange);
@@ -1227,7 +1164,10 @@ export default function SyncStatusPage() {
     setSnapshot((current) => ({ ...current, isSyncing: true }));
     try {
       await offlineDB.init();
-      const row = await dexieDB.sync_conflicts.get(conflictId);
+      // A crash can leave the rejection in the outbox before its review row
+      // was stored. The displayed fallback still contains its exact snapshot.
+      const row = await dexieDB.sync_conflicts.get(conflictId)
+        ?? snapshot.conflicts.find((conflict) => conflict.id === conflictId);
       const scope = getOfflineScope();
       if (row && (row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id)) throw new Error("Conflict not found");
       let serverConflictId = typeof row?.server_conflict_id === "string" ? row.server_conflict_id : conflictId;

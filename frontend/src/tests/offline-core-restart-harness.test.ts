@@ -55,4 +55,14 @@ describe("offline cold-restart QA harness", () => {
     expect(source).toContain("did not restore cached customer data");
     expect(source).toContain("did not expose the encrypted local backup tool offline");
   });
+
+  it("unlocks the QA session through its PIN form and can verify a cloud-only review offline", () => {
+    expect(source).toContain('Input.insertText');
+    expect(source).toContain('await unlockQaCounterIfNeeded(client)');
+    expect(source).toContain('QA_OFFLINE_VERIFY_SYNC_REVIEW');
+    expect(source).toContain('/sync/conflicts/report');
+    expect(source).toContain('review needed x 1');
+    expect(source).toContain('header disagreed with the preserved review');
+    expect(source).not.toContain('localStorage.removeItem("kiranaos.security');
+  });
 });

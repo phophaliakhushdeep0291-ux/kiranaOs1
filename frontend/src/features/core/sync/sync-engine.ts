@@ -9,6 +9,8 @@ import { probeBackendConnection } from "@/features/core/sync/backend-health";
 import { ApiClientError, getStoredAccessToken, getStoredRefreshToken } from "@/lib/api/http";
 import { ACTIVITY_EVENTS, trackEvent, type ActivityEventType } from "@/lib/activity";
 import { drainDeviceCommands } from "@/features/core/remote-support/command-runner";
+import { refreshServerConflictCache } from "@/features/core/sync/sync-conflict-cache";
+import { loadAuthSession } from "@/lib/storage/auth-storage";
 
 async function canSubscriptionSync(): Promise<boolean> {
   const snapshot = await getCurrentSubscriptionSnapshot();
@@ -114,6 +116,13 @@ async function runSyncCycleBody(ownsCrossTabLock = false): Promise<SyncRunResult
   // all. Fire-and-forget so a slow repair never stalls the till's own sync; the
   // runner guards its own re-entrancy, since RUN_SYNC_NOW lands back here.
   void drainDeviceCommands();
+
+  // Reviews from another counter must reach the header even if Sync Status is
+  // never opened. Owner/admin only; run in the background so billing sync never
+  // waits for the review listing. The cache throttles repeated cycles.
+  if (["owner", "admin"].includes(String(loadAuthSession().user?.role ?? ""))) {
+    void refreshServerConflictCache().catch(() => undefined);
+  }
 
   const localSubscriptionAllowsSync = await canSubscriptionSync();
   let serverAllowsSync: boolean | null = null;

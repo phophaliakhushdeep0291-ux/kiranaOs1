@@ -10,6 +10,7 @@ import {
   type FinancialAggregationSnapshot,
 } from "@/features/core/finance/services/FinancialAggregationService";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
+import { calculateSyncQueueCounts } from "@/features/core/sync/sync-health";
 import { fromBaseQty, productDisplayUnit } from "@/features/core/products/pages/product-pricing";
 import {
   findInventorySellingUnit,
@@ -255,6 +256,7 @@ interface LocalFinanceRows {
   inventoryMovements: LocalInventoryMovement[];
   purchaseBills: LocalPurchaseBill[];
   outbox: PendingSyncEvent[];
+  conflicts: RecordLike[];
 }
 
 function readNumber(value: unknown, fallback = 0): number {
@@ -705,13 +707,6 @@ function calculateStaffSales(bills: LocalBill[], range: DateRange): StaffSalesRo
   return [...rows.values()].sort((a, b) => b.sales - a.sales).slice(0, 10);
 }
 
-function syncCounters(outbox: PendingSyncEvent[]) {
-  const pending = outbox.filter((op) => op.status === "PENDING" || op.sync_status === "pending_sync").length;
-  const failed = outbox.filter((op) => op.status === "FAILED" || op.sync_status === "failed").length;
-  const conflicts = outbox.filter((op) => op.status === "CONFLICT" || op.sync_status === "conflict").length;
-  return { pending, failed, conflicts };
-}
-
 async function loadScopedRows<T>(tableName: string): Promise<T[]> {
   return offlineDB.getAll<T>(tableName).then((rows) => filterRowsForCurrentScope(rows)).catch(() => []);
 }
@@ -729,6 +724,7 @@ async function loadLocalFinanceRows(): Promise<LocalFinanceRows> {
     inventoryMovements,
     purchaseBills,
     outbox,
+    conflicts,
   ] = await Promise.all([
     loadScopedRows<LocalBill>("bills"),
     loadScopedRows<LocalBillItem>("bill_items"),
@@ -740,10 +736,11 @@ async function loadLocalFinanceRows(): Promise<LocalFinanceRows> {
     loadScopedRows<LocalInventoryMovement>("inventory_movements"),
     loadScopedRows<LocalPurchaseBill>("purchase_bills"),
     loadScopedRows<PendingSyncEvent>("sync_outbox"),
+    loadScopedRows<RecordLike>("sync_conflicts"),
   ]);
 
   // Historical safety check: const payments = dedupePaymentsForDisplay(filterRowsForCurrentScope(paymentsRaw))
-  return { bills, billItems, payments, ledger, products, customers, suppliers, inventoryMovements, purchaseBills, outbox };
+  return { bills, billItems, payments, ledger, products, customers, suppliers, inventoryMovements, purchaseBills, outbox, conflicts };
 }
 
 function aggregate(rows: LocalFinanceRows, range: DateRange, drawer?: DrawerAdjustments): FinancialAggregationSnapshot {
@@ -779,7 +776,7 @@ export async function buildLocalReportSnapshot(range: DateRange, drawer?: Drawer
   const todaySnapshot = aggregate(rows, todayRange);
   const sevenDaySnapshot = aggregate(rows, sevenDayRange);
   const thirtyDaySnapshot = aggregate(rows, thirtyDayRange);
-  const counters = syncCounters(rows.outbox);
+  const counters = calculateSyncQueueCounts(rows.outbox, rows.conflicts);
   const lowStock = calculateLowStock(rows.products);
   const lowStockPacks = calculateLowStockPacks(rows.products);
   const dailyTrend = buildDailyTrend(rows, range);
@@ -819,10 +816,10 @@ export async function buildLocalReportSnapshot(range: DateRange, drawer?: Drawer
     hourlySales: calculateHourlySales(rows.bills, range),
     pendingSyncCount: counters.pending,
     failedSyncCount: counters.failed,
-    conflictCount: counters.conflicts,
-    hasUnsyncedOperations: counters.pending + counters.failed + counters.conflicts > 0,
+    conflictCount: counters.conflict,
+    hasUnsyncedOperations: counters.totalBlocking > 0,
     hasLocalData,
-    dataSourceLabel: counters.pending + counters.failed + counters.conflicts > 0 ? "Local estimate" : "Local confirmed data",
+    dataSourceLabel: counters.totalBlocking > 0 ? "Local estimate" : "Local confirmed data",
   };
 }
 
