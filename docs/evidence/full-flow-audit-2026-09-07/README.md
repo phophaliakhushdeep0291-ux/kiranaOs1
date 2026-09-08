@@ -2,6 +2,10 @@
 
 Local working-tree audit of Artha/KiranaOS, with emphasis on a 390×844 phone. This is not production certification or a claim that every feature has been used. The existing [release gate](../../../RELEASE_GATE.md) remains NO-GO pending candidate, external, and manual evidence.
 
+## Readiness follow-up — 8 September 2026
+
+The customer persistence, supplier settlement, and standard file-export fixes have now been implemented and tested. See [readiness verification](readiness/README.md) for current results and remaining external checks. The original findings below are retained as the audit history.
+
 ## Transaction flows exercised
 
 All new business records belong to the dedicated **Full Flow Audit Shop** QA tenant. No real customer messages, external payments, public catalog publishing, or physical printing were performed.
@@ -45,9 +49,9 @@ All new business records belong to the dedicated **Full Flow Audit Shop** QA ten
 
 | Priority | Finding | Evidence / next step |
 | --- | --- | --- |
-| High | Customer credit limits and follow-up dates are not persisted end to end | The form accepts these fields; backend Customer schema and customer API validation omit them. Local validation also omits the date fields. Add migration, API/sync support, and save/reload/reconnect tests. Notes also need server persistence. |
-| High | Daily closing attributes cumulative supplier payments to purchase date and one mode | `FinancialAggregationService` still sums `paid` on purchase rows dated in the closing range. Payments on later dates or in mixed tenders need the individual supplier payment ledger. The same-day flow above passes; historical-date settlement is not certified. |
-| High | Export approval preference is not consistently enforced | Security says Export Data is protected, but Advanced local export downloaded without a PIN. Apply a shared approval gate across export entry points and verify role/PIN/audit behavior. |
+| Fixed (8 Sep) | Customer credit limits and follow-up dates were not persisted end to end | The form accepts these fields; backend Customer schema and customer API validation omit them. Local validation also omits the date fields. Add migration, API/sync support, and save/reload/reconnect tests. Notes also need server persistence. |
+| Fixed (8 Sep) | Daily closing attributed cumulative supplier payments to purchase date and one mode | `FinancialAggregationService` still sums `paid` on purchase rows dated in the closing range. Payments on later dates or in mixed tenders need the individual supplier payment ledger. The same-day flow above passes; historical-date settlement is not certified. |
+| Fixed for standard file exports (8 Sep) | Export approval preference was not consistently enforced | Security says Export Data is protected, but Advanced local export downloaded without a PIN. Apply a shared approval gate across export entry points and verify role/PIN/audit behavior. |
 | High | Production recovery and device proof remain incomplete | Verify the exact candidate with PostgreSQL concurrency, a complete backup/restore, production offline restart, clean Windows install, and real receipt hardware. See RELEASE_GATE.md. |
 | Medium | Verification and two-factor enrollment are unavailable | Store Profile and Security now describe these limits. There is no verification upload/badge service; two-factor enrollment is not offered. |
 | Medium | Recurring expense wording promises scheduling | Source inspection found recurrence fields stored, but no expense generation worker was found. Validate or implement generation, duplicate prevention, and failure recovery before promising automatic repetition. |
@@ -71,4 +75,4 @@ The temporary five-minute session timeout was restored to its original fifteen m
 - `daily-closing-counted.txt`, `stock-count-applied.txt`, `customer-balance.txt`, `purchase-balance.txt`, and `money-statement-final.txt` record the actual QA outcomes. Before-fix snapshots are retained with explicit filenames.
 - Previous frontend polish evidence remains in [mobile-ux-polish](../mobile-ux-polish/README.md).
 
-Changes are local and uncommitted. The running backend was not restarted for the response-identity change; isolated integration verifies that change, while the browser verifies the frontend compatibility fix against the existing runtime.
+At the original audit cutoff the backend had not been restarted. The readiness follow-up applied the additive local database update after a consistent backup and restarted the API for browser verification. Repository commits changed during the session; this agent did not create those commits or deploy the app.

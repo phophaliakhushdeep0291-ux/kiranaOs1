@@ -3,6 +3,8 @@
 import type { billingEn } from "./billing";
 
 export const billingHi: Record<keyof typeof billingEn, string> = {
+  "billing.assistant.queueFailed": "सहायक के आइटम लोड नहीं हो सके",
+  "billing.assistant.queueRetry": "फिर कोशिश करने के लिए बिल दोबारा खोलें। भुगतान लेने से पहले कार्ट जांच लें।",
   "billing.openBills": "खुले बिल",
   "billing.openBills.current": "यही बिल चालू है",
   "billing.openBills.switchTo": "{name} पर जाएं",

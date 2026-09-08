@@ -1,6 +1,7 @@
 node_modules
 generated/integration-prisma-client
 generated/postgres-prisma-client
+generated/certification-prisma-client
 .env
 .env.*
 !.env.example

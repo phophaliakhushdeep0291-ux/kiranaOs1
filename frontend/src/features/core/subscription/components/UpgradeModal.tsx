@@ -28,6 +28,7 @@ import {
 import { ApiClientError } from "@/lib/api/http";
 import { useToast } from "@/hooks/use-toast";
 import { safeRandomUUID } from "@/lib/safe-uuid";
+import { loadRazorpayCheckout } from "@/lib/razorpay-checkout-loader";
 
 interface RazorpaySuccessResponse {
   razorpay_order_id: string;
@@ -61,41 +62,6 @@ declare global {
   interface Window {
     Razorpay?: new (options: RazorpayCheckoutOptions) => RazorpayInstance;
   }
-}
-
-let razorpayLoader: Promise<void> | null = null;
-
-function loadRazorpayCheckout() {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("Checkout is available only in the browser."));
-  }
-  if (window.Razorpay) return Promise.resolve();
-  if (razorpayLoader) return razorpayLoader;
-
-  razorpayLoader = new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(
-      "script[data-razorpay-checkout]",
-    );
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener(
-        "error",
-        () => reject(new Error("Unable to load payment checkout.")),
-        { once: true },
-      );
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.dataset.razorpayCheckout = "true";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Unable to load payment checkout."));
-    document.head.appendChild(script);
-  });
-
-  return razorpayLoader;
 }
 
 async function openRazorpayCheckout(

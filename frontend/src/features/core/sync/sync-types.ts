@@ -322,7 +322,11 @@ export function extractIdPair(
   const collectionLedgerId = collection
     ? getStringFrom(resultRecord, ["ledgerEntryId", "ledger_entry_id"]) ?? getStringFrom(entity, ["ledgerEntryId", "ledger_entry_id"])
     : undefined;
-  const serverId = collectionLedgerId ??
+  // Reversal updates the original local payment's status. Its id must remain
+  // the original ledger id; the separate refund arrives in purchase history.
+  const originalSupplierLedgerId = (event?.operation_type ?? event?.type) === "REVERSE_SUPPLIER_PAYMENT"
+    ? getStringFrom(resultRecord, ["originalLedgerEntryId"]) : undefined;
+  const serverId = originalSupplierLedgerId ?? collectionLedgerId ??
     getStringFrom(result, entityIdKeys(entityType)) ??
     getStringFrom(resultRecord, entityIdKeys(entityType)) ??
     getStringFrom(entity, entityIdKeys(entityType));

@@ -230,12 +230,67 @@ async function prepareAppOrigin(client) {
 }
 
 async function unlockQaCounterIfNeeded(client) {
-  const locked = await client.evaluate(`Boolean(document.querySelector('.session-lock-screen'))`);
+  await waitForPage(client, `!document.querySelector('.session-lock-screen') || Boolean(document.querySelector('.session-lock-input'))`);
+  const locked = await client.evaluate(`Boolean(document.querySelector('.session-lock-input'))`);
   if (!locked) return;
-  await client.evaluate(`document.querySelector('.session-lock-input').focus()`);
-  await client.send("Input.insertText", { text: "2468" });
-  await client.evaluate(`document.querySelector('.session-lock-form button[type="submit"]').click()`);
+  if (await client.evaluate(`Boolean(document.querySelector('[data-testid="device-unlock"]'))`)) {
+    await client.evaluate(`document.querySelector('[data-testid="device-unlock"]').click()`);
+  } else {
+    await submitQaPin(client, "2468");
+  }
   await waitForPage(client, `!document.querySelector('.session-lock-screen')`, 15_000);
+}
+
+async function submitQaPin(client, pin) {
+  await client.evaluate(`document.querySelector('.session-lock-input').focus()`);
+  await client.evaluate(`document.querySelector('.session-lock-input').select()`);
+  await client.send("Input.insertText", { text: pin });
+  await client.evaluate(`document.querySelector('.session-lock-form button[type="submit"]').click()`);
+}
+
+async function addQaAuthenticator(client, credentials = []) {
+  // Virtual hardware is only in this isolated Chrome profile. Never save its
+  // private test keys to screenshots, logs or the machine-readable report.
+  await client.send("WebAuthn.enable", { enableUI: false });
+  const { authenticatorId } = await client.send("WebAuthn.addVirtualAuthenticator", { options: {
+    protocol: "ctap2", transport: "internal", hasResidentKey: true,
+    hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true,
+  } });
+  for (const credential of credentials) await client.send("WebAuthn.addCredential", { authenticatorId, credential });
+  return authenticatorId;
+}
+
+async function verifyLockedCounter(client) {
+  await client.send("Page.navigate", { url: `${FRONTEND_URL}/dashboard` });
+  await waitForPage(client, `Boolean(document.querySelector('.session-lock-input'))`);
+  await submitQaPin(client, "1111");
+  await waitForPage(client, `Boolean(document.querySelector('.session-lock-error'))`, 15_000);
+  assert(await client.evaluate(`!document.querySelector('main') && Boolean(document.querySelector('.session-lock-input'))`), "Wrong PIN exposed the counter");
+  await setOffline(client);
+  await submitQaPin(client, "2468");
+  await waitForPage(client, `Boolean(document.querySelector('.session-lock-error')) && !document.querySelector('.session-lock-input').disabled`, 15_000);
+  assert(await client.evaluate(`!document.querySelector('main') && Boolean(document.querySelector('.session-lock-input')) && !document.querySelector('[data-testid="device-unlock"]')`), "Network loss unlocked a counter without enrollment");
+  await client.send("Page.reload");
+  await waitForPage(client, `Boolean(document.querySelector('.session-lock-input'))`);
+  assert(await client.evaluate(`!document.querySelector('main')`), "Reload exposed the locked counter");
+  const shot = await client.send("Page.captureScreenshot", { format: "png" });
+  await writeFile(path.join(OUTPUT_DIR, "counter-offline-no-enrollment.png"), Buffer.from(shot.data, "base64"));
+  await client.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+  await unlockQaCounterIfNeeded(client);
+  console.log("Wrong PIN, network loss and offline reload retained the lock; verified online PIN resumed the counter.");
+}
+
+async function enrollQaDevice(client) {
+  await navigateOnline(client, "/settings/security");
+  await waitForPage(client, `Boolean(document.querySelector('button[role="switch"][aria-label="Biometric unlock"]'))`);
+  await client.evaluate(`document.querySelector('button[role="switch"][aria-label="Biometric unlock"]').click()`);
+  await waitForPage(client, `Boolean(document.querySelector('[role="dialog"] input[inputmode="numeric"]'))`);
+  await client.evaluate(`document.querySelector('[role="dialog"] input[inputmode="numeric"]').focus()`);
+  await client.send("Input.insertText", { text: "2468" });
+  await client.evaluate(`document.querySelector('[role="dialog"] button[type="submit"]').click()`);
+  await waitForPage(client, `!document.querySelector('[role="dialog"]') && document.querySelector('button[role="switch"][aria-label="Biometric unlock"]')?.getAttribute('aria-checked') === 'true'`, 15_000);
+  await sleep(1_000); // Let the normal settings persistence debounce complete.
+  console.log("Device unlock enrolled through Security settings and the owner-PIN approval form.");
 }
 
 async function ensureSession(client) {
@@ -284,6 +339,12 @@ async function primeOfflineInstall(client) {
   await ensureSession(client);
   const seeded = await seedCoreData(client);
   assert(typeof seeded.customerId === "string", "QA customer was not created");
+  // The first protected navigation must lock before any business UI mounts.
+  await client.send("Page.navigate", { url: `${FRONTEND_URL}/dashboard` });
+  await waitForPage(client, `Boolean(document.querySelector('.session-lock-input'))`);
+  await waitForPage(client, `navigator.serviceWorker && navigator.serviceWorker.ready.then(()=>true)`);
+  await waitForPage(client, `navigator.serviceWorker.controller !== null`);
+  await verifyLockedCounter(client);
   await navigateOnline(client, "/dashboard");
   await waitForPage(client, `navigator.serviceWorker && navigator.serviceWorker.ready.then(()=>true)`);
   await waitForPage(client, `navigator.serviceWorker.controller !== null`);
@@ -301,6 +362,9 @@ async function primeOfflineInstall(client) {
     await waitForPage(client, `document.querySelector('a[aria-label="Open sync alerts"]')?.innerText.trim() === "1"`, 90_000);
     console.log("Cloud-only review reached the header without opening Sync Status.");
   }
+  // One extra online screen is necessary to enroll the offline screen unlock.
+  // Remaining routes still depend solely on the precache installation.
+  await enrollQaDevice(client);
   const cacheState = await client.evaluate(`(async()=>{const keys=(await caches.keys()).filter(key=>key.startsWith("kiranaos-shell"));const entries=[];for(const key of keys){const cache=await caches.open(key);entries.push(...(await cache.keys()).map(request=>new URL(request.url).pathname))}return{keys,entryCount:new Set(entries).size,hasIndex:entries.includes("/index.html"),hasManifest:entries.includes("/manifest.webmanifest"),hasOffline:entries.includes("/offline.html"),hasScript:entries.some(path=>path.endsWith(".js")),hasStyles:entries.some(path=>path.endsWith(".css")),hasCoreMarker:entries.some(path=>path.startsWith("/__offline/core/"))}})()`);
   assert(cacheState.keys.length > 0 && cacheState.hasIndex && cacheState.hasManifest && cacheState.hasOffline && cacheState.hasScript && cacheState.hasStyles && cacheState.hasCoreMarker, `Offline shell did not finish caching: ${JSON.stringify(cacheState)}`);
   return { cacheState, seeded };
@@ -381,13 +445,28 @@ async function main() {
   let offlineBrowser;
   try {
     onlineBrowser = await launchChrome("about:blank", DEBUG_PORT);
+    const onlineAuthenticator = await addQaAuthenticator(onlineBrowser.client);
     const { cacheState, seeded } = await primeOfflineInstall(onlineBrowser.client);
+    const { credentials } = await onlineBrowser.client.send("WebAuthn.getCredentials", { authenticatorId: onlineAuthenticator });
+    assert(credentials.length === 1, "QA device enrollment was not created");
     await closeChrome(onlineBrowser.client, onlineBrowser.chrome, onlineBrowser.debugPort);
     onlineBrowser = null;
 
     offlineBrowser = await launchChrome("about:blank", DEBUG_PORT + 1);
+    const offlineAuthenticator = await addQaAuthenticator(offlineBrowser.client, credentials);
     await offlineBrowser.client.send("Emulation.setDeviceMetricsOverride", { ...VIEWPORT, deviceScaleFactor: 1, mobile: true });
     await setOffline(offlineBrowser.client);
+    await offlineBrowser.client.send("Page.navigate", { url: `${FRONTEND_URL}/dashboard` });
+    await waitForPage(offlineBrowser.client, `Boolean(document.querySelector('[data-testid="device-unlock"]'))`);
+    // Exercise a real browser WebAuthn response with a deliberately invalid
+    // signature, then recover with a signed, user-verified response offline.
+    await offlineBrowser.client.send("WebAuthn.setResponseOverrideBits", { authenticatorId: offlineAuthenticator, isBogusSignature: true });
+    await offlineBrowser.client.evaluate(`document.querySelector('[data-testid="device-unlock"]').click()`);
+    await waitForPage(offlineBrowser.client, `Boolean(document.querySelector('.session-lock-error')) && !document.querySelector('.session-lock-input').disabled`, 15_000);
+    assert(await offlineBrowser.client.evaluate(`!document.querySelector('main') && Boolean(document.querySelector('.session-lock-input'))`), "Forged device signature exposed the counter");
+    await offlineBrowser.client.send("WebAuthn.setResponseOverrideBits", { authenticatorId: offlineAuthenticator });
+    await unlockQaCounterIfNeeded(offlineBrowser.client);
+    console.log("Cold offline restart rejected a forged signature and resumed with verified device unlock.");
     const results = [];
     for (const [qaId, route, expectsInternetRequired] of ROUTES) results.push(await auditOfflineRoute(offlineBrowser.client, qaId, route, expectsInternetRequired));
     // Exercise a populated account, not only the existing missing-customer case.
@@ -395,7 +474,7 @@ async function main() {
     // a complete browser restart without waiting for the cloud summary.
     results.push(await auditOfflineRoute(offlineBrowser.client, "OQA-CUST-ACCOUNT-01", `/customers/${seeded.customerId}`));
     await mkdir(OUTPUT_DIR, { recursive: true });
-    await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), buildId: BUILD_ID, frontendUrl: FRONTEND_URL, cacheState, coldRestart: true, networkDisabled: true, syncReviewVerified: VERIFY_SYNC_REVIEW, results }, null, 2));
+    await writeFile(path.join(OUTPUT_DIR, "report.json"), JSON.stringify({ generatedAt: new Date().toISOString(), buildId: BUILD_ID, frontendUrl: FRONTEND_URL, cacheState, coldRestart: true, networkDisabled: true, counterLockVerified: true, deviceUnlock: "Chrome virtual authenticator; not physical biometric certification", syncReviewVerified: VERIFY_SYNC_REVIEW, results }, null, 2));
     console.log(`Offline cold-restart matrix passed ${results.length}/${results.length} routes. Artifacts: ${OUTPUT_DIR}`);
   } finally {
     if (onlineBrowser) await closeChrome(onlineBrowser.client, onlineBrowser.chrome, onlineBrowser.debugPort);

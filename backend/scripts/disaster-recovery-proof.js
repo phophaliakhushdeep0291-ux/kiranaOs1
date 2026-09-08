@@ -274,7 +274,7 @@ try {
     exitCode: 0,
     durationMs: 0,
   });
-  run("npm", ["run", "money:paise:reconcile", "--", "--native"], {
+  run("node", ["scripts/money-paise-reconciliation.js", "--native"], {
     id: "money-paise-reconciliation",
     label: "Run money paise reconciliation against restored DB",
     env: { DATABASE_URL: restoreUrl, TEST_DATABASE_URL: restoreUrl, DIRECT_DATABASE_URL: restoreUrl, ALLOW_MONEY_PAISE_BACKFILL: "false" },

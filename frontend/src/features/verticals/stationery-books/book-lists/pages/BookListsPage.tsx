@@ -97,7 +97,7 @@ export default function BookListsPage() {
       });
       setLocation("/billing");
     },
-    onError: () => toast({ title: "Could not open the bill", description: "Try again", variant: "destructive" }),
+    onError: (error) => toast({ title: "Could not open the bill", description: error instanceof Error ? error.message : "Try again", variant: "destructive" }),
   });
 
   const lists = useMemo(() => {
@@ -121,7 +121,7 @@ export default function BookListsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Kpi icon={<ClipboardList size={16} />} label="Lists" value={String(summary?.lists ?? 0)} tone="blue" />
           <Kpi icon={<School size={16} />} label="Schools" value={String(summary?.schools ?? 0)} tone="violet" />
           <Kpi icon={<Check size={16} />} label="Ready to hand over" value={String(summary?.completeLists ?? 0)} tone="green" />

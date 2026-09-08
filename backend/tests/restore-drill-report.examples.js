@@ -61,7 +61,11 @@ assert.equal(rpo.withinObjective, false, "an unreadable timestamp is a failure, 
 
 // A clock that has gone backwards must not report a negative age as "very fresh".
 rpo = recoveryPoint({ backupTakenAt: now + 60_000, now });
-assert.equal(rpo.ageHours, 0);
+assert.equal(rpo.known, false);
+assert.equal(rpo.withinObjective, false, "future timestamps cannot claim freshness");
+for (const objectiveHours of [0, -1, NaN, Infinity]) {
+  assert.equal(recoveryPoint({ backupTakenAt: hourAgo, now, objectiveHours }).withinObjective, false);
+}
 
 /* ------------------------------------------------------- reconciliation */
 
@@ -88,6 +92,15 @@ assert.equal(result.variances[0].note, "present only after restore");
 // because the float mirror rounds, which is the bug the drill exists to catch.
 result = reconcile({ billTotalPaise: 9007199254740993n }, { billTotalPaise: 9007199254740992n });
 assert.equal(result.matched, false, "large paise totals are compared exactly, not through a float");
+assert.equal(reconcile({ billTotalPaise: "9007199254740993" }, { billTotalPaise: "9007199254740992" }).matched, false, "psql returns strings; those must be exact too");
+assert.equal(reconcile({}, {}).matched, false, "no successful measurements cannot pass a restore");
+for (const value of [null, "", true, "1.1", NaN, 9007199254740992]) {
+  assert.equal(reconcile({ total: value }, { total: value }).matched, false, `invalid measurement must fail: ${String(value)}`);
+}
+assert.equal(reconcile({ total: "0001" }, { total: 1n }).matched, true);
+assert.doesNotThrow(() => JSON.stringify(reconcile({ total: 1n }, {})));
+assert.ok(missingRequirements({ DATABASE_URL: "postgresql://u:p@localhost/restore_test", RESTORE_TEST_DATABASE_URL: "postgresql://u:p@127.0.0.1/restore_test", ALLOW_RESTORE_TEST_DB: "true" }).length > 0);
+assert.ok(missingRequirements({ DATABASE_URL: "file:dev.db", RESTORE_TEST_DATABASE_URL: "postgresql://u:p@host/restore_test", ALLOW_RESTORE_TEST_DB: "true" }).length > 0);
 
 /* ------------------------------------------------------------- verdict */
 

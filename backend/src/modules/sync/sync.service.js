@@ -332,6 +332,10 @@ function conflictCustomerUpdate(selected) {
     gstNumber: conflictText(selected.gstNumber),
     stateCode: conflictText(selected.stateCode),
     type: conflictEnum(selected.type, ["regular", "udhar"]),
+    udharLimit: selected.udharLimit,
+    dueDate: selected.dueDate,
+    promiseToPayDate: selected.promiseToPayDate,
+    notes: selected.notes,
   });
 }
 
@@ -3452,7 +3456,7 @@ async function applyReverseSupplierPayment(shopId, event, user) {
 
   return db.$transaction(async (tx) => {
     const existing = await tx.financialLedger.findFirst({ where: { shopId, idempotencyKey } });
-    if (existing) return { type: event.type, paymentId: original.sourceId, reversalLedgerEntryId: existing.id, purchaseHistoryId: existing.purchaseBillId, idempotentReplay: true };
+    if (existing) return { type: event.type, paymentId: original.sourceId, originalLedgerEntryId: original.id, reversalLedgerEntryId: existing.id, purchaseHistoryId: existing.purchaseBillId, idempotentReplay: true };
     const priorReversal = await tx.financialLedger.findFirst({
       where: { shopId, sourceType: "supplier_payment_reversal", sourceId: original.id },
     });
@@ -3514,7 +3518,7 @@ async function applyReverseSupplierPayment(shopId, event, user) {
         "SUPPLIER_PAYMENT_REVERSAL_AUDIT_WRITE_FAILED",
       );
     }
-    return { type: event.type, paymentId: original.sourceId, reversalLedgerEntryId: reversal.id, purchaseHistoryId: purchase.id, amountPaid: -amount, purchaseHistory: toSyncJsonSafe(updated) };
+    return { type: event.type, paymentId: original.sourceId, originalLedgerEntryId: original.id, reversalLedgerEntryId: reversal.id, purchaseHistoryId: purchase.id, amountPaid: -amount, purchaseHistory: toSyncJsonSafe(updated) };
   });
 }
 

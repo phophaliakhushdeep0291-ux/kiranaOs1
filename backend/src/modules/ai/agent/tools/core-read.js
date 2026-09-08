@@ -16,6 +16,8 @@
  * get.
  */
 import { defineTool, TOOL_RISK } from "../tool-contract.js";
+import { env } from "../../../../config/env.js";
+import { agentReportRange, customerEvidenceRow, productDetailEvidence, productEvidenceRow } from "./read-data.js";
 import { listProducts, getProduct } from "../../../products/products.service.js";
 import { listCustomers, getKhata } from "../../../customers/customers.service.js";
 import { getUdharSummary } from "../../../udhar/udhar.service.js";
@@ -36,27 +38,12 @@ const MAX_ROWS = 25;
  * to buy. Answering "what should I reorder" off the wrong one gives a confident
  * answer about the wrong products, so both are named for what they are.
  */
-function productRow(product) {
-  const stock = product.stockBaseQty ?? null;
-  const lowStockAt = product.lowStockThreshold ?? null;
-  return {
-    id: product.id,
-    name: product.name,
-    unit: product.rateUnit ?? product.baseUnit ?? null,
-    stock,
-    tracksStock: product.stockTrackingEnabled !== false,
-    price: product.defaultPricePerRateUnit ?? null,
-    mrp: product.mrp ?? null,
-    lowStockAt,
-    reorderQty: product.reorderLevel ?? null,
-    isLow: Number(lowStockAt) > 0 && Number(stock) <= Number(lowStockAt),
-  };
-}
+const productRow = productEvidenceRow;
 
 const RANGE = {
   type: "string",
   enum: ["today", "yesterday", "week", "month", "quarter", "year"],
-  description: "Named period to report on. Use this unless the shopkeeper gave explicit dates.",
+  description: "Named period: week means last 7 days; month, quarter and year mean the current calendar period to date. Use explicit from/to for previous periods.",
 };
 
 export const CORE_READ_TOOLS = [
@@ -73,7 +60,7 @@ export const CORE_READ_TOOLS = [
       additionalProperties: false,
       properties: {
         search: { type: "string", description: "Name, partial name or spoken alias, e.g. 'chini' or 'sugar'." },
-        lowStockOnly: { type: "boolean", description: "Only products at or below their reorder level." },
+        lowStockOnly: { type: "boolean", description: "Only products at or below their stock alert threshold." },
       },
       required: ["search"],
     },
@@ -106,7 +93,7 @@ export const CORE_READ_TOOLS = [
     handler: async ({ productId }, ctx) => {
       const product = await getProduct(ctx.shopId, productId);
       if (!product) return { found: false };
-      return { found: true, product };
+      return { found: true, product: productDetailEvidence(product, ctx.role) };
     },
   }),
 
@@ -128,12 +115,7 @@ export const CORE_READ_TOOLS = [
       const customers = await listCustomers(ctx.shopId, { search });
       return {
         matchCount: customers.length,
-        customers: customers.slice(0, MAX_ROWS).map((customer) => ({
-          id: customer.id,
-          name: customer.name,
-          mobile: customer.mobile,
-          udharBalance: customer.udharBalance ?? customer.balance ?? null,
-        })),
+        customers: customers.slice(0, MAX_ROWS).map(customerEvidenceRow),
         truncated: customers.length > MAX_ROWS,
       };
     },
@@ -159,7 +141,11 @@ export const CORE_READ_TOOLS = [
       try {
         const khata = await getKhata(ctx.shopId, customerId);
         const entries = Array.isArray(khata?.entries) ? khata.entries : khata?.ledger ?? [];
-        return { found: true, ...khata, entries: entries.slice(0, MAX_ROWS) };
+        return { found: true, customer: customerEvidenceRow(khata.customer),
+          entries: entries.slice(-MAX_ROWS).map(({ type, amount, amountPaise, mode, businessDate, reversedAt }) => ({ type, amount, amountPaise, mode, businessDate, reversedAt })),
+          entryCount: entries.length,
+          truncated: entries.length > MAX_ROWS,
+        };
       } catch (error) {
         // AppError carries `statusCode`, not `status`. Matching only on the
         // message worked by luck; a reworded string would have silently turned
@@ -200,9 +186,7 @@ export const CORE_READ_TOOLS = [
       },
     },
     handler: async ({ range, from, to, includeProfit }, ctx) => getSalesSummary(ctx.shopId, {
-      range: range ?? (from || to ? undefined : "today"),
-      from,
-      to,
+      ...agentReportRange({ range, from, to }, new Date(), env.DAILY_CLOSING_TIMEZONE),
       // Profit is owner-shaped information. A staff member asking is answered
       // with revenue, not refused, because the question is reasonable and the
       // number simply is not theirs.
@@ -226,12 +210,14 @@ export const CORE_READ_TOOLS = [
         limit: { type: "integer", minimum: 1, maximum: 25 },
       },
     },
-    handler: async ({ from, to, limit }, ctx) => getTopProducts(ctx.shopId, {
-      from,
-      to,
-      limit: Math.min(limit ?? 10, MAX_ROWS),
-      includeProfit: ctx.role === "owner" || ctx.role === "admin",
-    }),
+    handler: async ({ from, to, limit }, ctx) => {
+      const period = agentReportRange({ from, to }, new Date(), env.DAILY_CLOSING_TIMEZONE);
+      return { ...period, products: await getTopProducts(ctx.shopId, {
+        ...period,
+        limit: Math.min(limit ?? 10, MAX_ROWS),
+        includeProfit: ctx.role === "owner" || ctx.role === "admin",
+      }) };
+    },
   }),
 
   defineTool({

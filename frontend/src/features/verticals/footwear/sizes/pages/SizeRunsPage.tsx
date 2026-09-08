@@ -144,7 +144,7 @@ export default function SizeRunsPage() {
           {lookup && <LookupResult lookup={lookup} />}
         </form>
 
-        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Kpi icon={<Footprints size={16} />} label="Pairs on hand" value={String(summary?.totalPairs ?? 0)} tone="green" />
           <Kpi icon={<Layers size={16} />} label="Styles" value={String(summary?.styles ?? 0)} tone="blue" />
           <Kpi icon={<CircleAlert size={16} />} label="Runs with gaps" value={String(summary?.brokenRuns ?? 0)} tone={summary?.brokenRuns ? "amber" : "green"} />

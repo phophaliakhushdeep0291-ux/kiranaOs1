@@ -96,7 +96,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
       { label: "workflow.clothing.action.1", detail: "workflow.clothing.action.1.detail", href: "/products?add=1", icon: "products" },
       { label: "workflow.clothing.action.2", detail: "workflow.clothing.action.2.detail", href: "/inventory/stock-counts", icon: "inventory" },
       { label: "workflow.clothing.action.3", detail: "workflow.clothing.action.3.detail", href: "/returns/new", icon: "billing" },
-      { label: "workflow.clothing.action.4", detail: "workflow.clothing.action.4.detail", href: "/offers", icon: "reports" },
+      { label: "workflow.clothing.action.4", detail: "workflow.clothing.action.4.detail", href: "/rentals", icon: "reports" },
     ],
     productEntry: {
       helper: "workflow.clothing.entry.helper",
@@ -118,7 +118,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
     subtitle: "workflow.footwear.subtitle",
     actions: [
       { label: "workflow.footwear.action.1", detail: "workflow.footwear.action.1.detail", href: "/products?add=1", icon: "products" },
-      { label: "workflow.footwear.action.2", detail: "workflow.footwear.action.2.detail", href: "/inventory/stock-counts", icon: "inventory" },
+      { label: "workflow.footwear.action.2", detail: "workflow.footwear.action.2.detail", href: "/size-runs", icon: "inventory" },
       { label: "workflow.footwear.action.3", detail: "workflow.footwear.action.3.detail", href: "/returns/new", icon: "billing" },
       { label: "workflow.footwear.action.4", detail: "workflow.footwear.action.4.detail", href: "/inventory", icon: "purchase" },
     ],
@@ -141,7 +141,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
     title: "workflow.auto_parts.title",
     subtitle: "workflow.auto_parts.subtitle",
     actions: [
-      { label: "workflow.auto_parts.action.1", detail: "workflow.auto_parts.action.1.detail", href: "/products?add=1", icon: "products" },
+      { label: "workflow.auto_parts.action.1", detail: "workflow.auto_parts.action.1.detail", href: "/fitment", icon: "products" },
       { label: "workflow.auto_parts.action.2", detail: "workflow.auto_parts.action.2.detail", href: "/purchase-bills", icon: "purchase" },
       { label: "workflow.auto_parts.action.3", detail: "workflow.auto_parts.action.3.detail", href: "/inventory/stock-counts", icon: "inventory" },
       { label: "workflow.auto_parts.action.4", detail: "workflow.auto_parts.action.4.detail", href: "/udhar", icon: "payment" },
@@ -166,7 +166,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
     subtitle: "workflow.electronics.subtitle",
     actions: [
       { label: "workflow.electronics.action.1", detail: "workflow.electronics.action.1.detail", href: "/products?add=1", icon: "products" },
-      { label: "workflow.electronics.action.2", detail: "workflow.electronics.action.2.detail", href: "/inventory/stock-counts", icon: "inventory" },
+      { label: "workflow.electronics.action.2", detail: "workflow.electronics.action.2.detail", href: "/serial-units", icon: "inventory" },
       { label: "workflow.electronics.action.3", detail: "workflow.electronics.action.3.detail", href: "/returns/new", icon: "billing" },
       { label: "workflow.electronics.action.4", detail: "workflow.electronics.action.4.detail", href: "/customers", icon: "payment" },
     ],
@@ -191,7 +191,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
     actions: [
       { label: "workflow.pharmacy.action.1", detail: "workflow.pharmacy.action.1.detail", href: "/inventory/batches", icon: "inventory" },
       { label: "workflow.pharmacy.action.2", detail: "workflow.pharmacy.action.2.detail", href: "/purchase-bills", icon: "purchase" },
-      { label: "workflow.pharmacy.action.3", detail: "workflow.pharmacy.action.3.detail", href: "/inventory", icon: "products" },
+      { label: "workflow.pharmacy.action.3", detail: "workflow.pharmacy.action.3.detail", href: "/prescriptions", icon: "products" },
       { label: "workflow.pharmacy.action.4", detail: "workflow.pharmacy.action.4.detail", href: "/udhar", icon: "payment" },
     ],
     productEntry: {
@@ -214,7 +214,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
     subtitle: "workflow.stationery.subtitle",
     actions: [
       { label: "workflow.stationery.action.1", detail: "workflow.stationery.action.1.detail", href: "/products?add=1", icon: "products" },
-      { label: "workflow.stationery.action.2", detail: "workflow.stationery.action.2.detail", href: "/inventory/stock-counts", icon: "inventory" },
+      { label: "workflow.stationery.action.2", detail: "workflow.stationery.action.2.detail", href: "/book-lists", icon: "inventory" },
       { label: "workflow.stationery.action.3", detail: "workflow.stationery.action.3.detail", href: "/purchase-bills", icon: "purchase" },
       { label: "workflow.stationery.action.4", detail: "workflow.stationery.action.4.detail", href: "/reports", icon: "reports" },
     ],
@@ -238,9 +238,9 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
     subtitle: "workflow.furniture.subtitle",
     actions: [
       { label: "workflow.furniture.action.1", detail: "workflow.furniture.action.1.detail", href: "/products?add=1", icon: "products" },
-      { label: "workflow.furniture.action.2", detail: "workflow.furniture.action.2.detail", href: "/billing?billType=estimate", icon: "billing" },
-      { label: "workflow.furniture.action.3", detail: "workflow.furniture.action.3.detail", href: "/orders-received", icon: "reports" },
-      { label: "workflow.furniture.action.4", detail: "workflow.furniture.action.4.detail", href: "/udhar", icon: "payment" },
+      { label: "workflow.furniture.action.2", detail: "workflow.furniture.action.2.detail", href: "/orders", icon: "billing" },
+      { label: "workflow.furniture.action.3", detail: "workflow.furniture.action.3.detail", href: "/orders", icon: "reports" },
+      { label: "workflow.furniture.action.4", detail: "workflow.furniture.action.4.detail", href: "/orders", icon: "payment" },
     ],
     productEntry: {
       helper: "workflow.furniture.entry.helper",
@@ -263,7 +263,7 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
     actions: [
       { label: "workflow.cosmetics.action.1", detail: "workflow.cosmetics.action.1.detail", href: "/products?add=1", icon: "products" },
       { label: "workflow.cosmetics.action.2", detail: "workflow.cosmetics.action.2.detail", href: "/inventory/batches", icon: "inventory" },
-      { label: "workflow.cosmetics.action.3", detail: "workflow.cosmetics.action.3.detail", href: "/offers", icon: "reports" },
+      { label: "workflow.cosmetics.action.3", detail: "workflow.cosmetics.action.3.detail", href: "/testers", icon: "reports" },
       { label: "workflow.cosmetics.action.4", detail: "workflow.cosmetics.action.4.detail", href: "/loyalty", icon: "payment" },
     ],
     productEntry: {
@@ -286,8 +286,8 @@ export const SHOP_WORKFLOWS: Record<BusinessType, ShopWorkflowDefinition> = {
     subtitle: "workflow.restaurant.subtitle",
     actions: [
       { label: "workflow.restaurant.action.1", detail: "workflow.restaurant.action.1.detail", href: "/billing", icon: "billing" },
-      { label: "workflow.restaurant.action.2", detail: "workflow.restaurant.action.2.detail", href: "/products?add=1", icon: "products" },
-      { label: "workflow.restaurant.action.3", detail: "workflow.restaurant.action.3.detail", href: "/orders-received", icon: "reports" },
+      { label: "workflow.restaurant.action.2", detail: "workflow.restaurant.action.2.detail", href: "/menu", icon: "products" },
+      { label: "workflow.restaurant.action.3", detail: "workflow.restaurant.action.3.detail", href: "/tables", icon: "reports" },
       { label: "workflow.restaurant.action.4", detail: "workflow.restaurant.action.4.detail", href: "/daily-closing", icon: "closing" },
     ],
     productEntry: {

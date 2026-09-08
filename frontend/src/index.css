@@ -771,6 +771,11 @@
     will-change: transform;
   }
 
+  .app-slide-panel[aria-hidden="true"] {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   .responsive-action-row {
     display: grid;
     width: 100%;
@@ -2876,4 +2881,18 @@ html[data-density="compact"] {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Trade registers keep every action visible on a phone. */
+@media (max-width: 639px) {
+  .trade-mobile-table,
+  .app-table-scroll .trade-mobile-table { display: block; width: 100%; min-width: 0; }
+  .trade-mobile-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .trade-mobile-table tbody { display: grid; gap: 12px; padding: 12px; }
+  .trade-mobile-table tr { display: block; min-width: 0; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+  .trade-mobile-table td { display: block; min-width: 0; padding: 10px 12px; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+  .trade-mobile-table td + td { border-top: 1px solid #f1f5f9; }
+  .trade-mobile-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 5px; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .trade-mobile-table td:last-child > .flex { flex-wrap: wrap; justify-content: flex-start; }
+  .trade-mobile-table td button { min-height: 44px; }
 }

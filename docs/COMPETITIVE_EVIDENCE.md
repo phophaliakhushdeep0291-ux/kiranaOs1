@@ -13,6 +13,25 @@ Every non-absent claim must include an official competitor URL, KiranaOS source 
 
 Run `npm run competitive:evidence` from `backend` for the current scored report. The same verifier runs inside the AI-safety test suite, so invalid or inflated evidence fails the normal backend test gate.
 
+The verifier validates real calendar dates, fixed scoring weights, repository-scoped
+paths and actual npm script names. Verified runtime artifacts must have a matching
+canonical-JSON content checksum, a completed proof date matching the claim, and
+workflow-specific evidence (not just a `passed` label). The canonical checksum is
+SHA-256 over `JSON.stringify(JSON.parse(fileContents))`, avoiding line-ending
+differences. It detects drift; it is not a digital signature or independent audit.
+New runtime proof formats need explicit validators before being marked verified.
+
+These checks do not execute the referenced test commands, refresh competitor
+webpages, or prove that historical artifacts cover today's changed source. A
+passing matrix check means its evidence records passed these consistency checks.
+Current release readiness still requires running the complete release suite on a
+stable source snapshot. Do not replace a newer failure with an older success.
+
+On 2026-09-08, the local-release claim was corrected to partial: the latest full
+run failed source-snapshot stability on September 2. The August 24 pass remains
+historical. The resulting 7.68/10 internal evidence score is not an independent
+product rating or proof of parity with any competitor.
+
 ## Improvement loop
 
 1. Start with the lowest capped domain or the highest-weight absent claim.

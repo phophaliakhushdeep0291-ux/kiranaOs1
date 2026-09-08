@@ -112,12 +112,16 @@ if (ctx.skip) {
 
     test("sync push CREATE_CUSTOMER works", async () => {
       const { ownerAuth, deviceHeaders } = await ownerCtx();
+      const followup = { udharLimit: 1500.25, dueDate: "2026-09-15", promiseToPayDate: "2026-09-12", notes: "Offline follow-up" };
       const response = await ctx.post("/api/sync/push", {
-        events: [{ eventId: "create-customer-1", type: "CREATE_CUSTOMER", payload: { customer: { name: "Sync Customer", mobile: "6999999991", type: "regular" } } }],
+        events: [{ eventId: "create-customer-1", type: "CREATE_CUSTOMER", payload: { customer: { name: "Sync Customer", mobile: "6999999991", type: "regular", ...followup } } }],
       }, { token: ownerAuth.accessToken, headers: deviceHeaders });
       const data = assertSuccess(response);
       assert.equal(data.summary.synced, 1);
       assert.ok(data.results[0].serverId);
+      const pulled = assertSuccess(await ctx.get("/api/sync/pull?since=1970-01-01T00:00:00.000Z", { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const customer = pulled.customers.find((row) => row.id === data.results[0].serverId);
+      for (const [key, value] of Object.entries(followup)) assert.equal(customer[key], value);
     });
 
     test("CREATE_CUSTOMER converges on existing mobile instead of duplicating or failing", async () => {
@@ -2116,6 +2120,7 @@ if (ctx.skip) {
       const reversed = assertSuccess(await ctx.post("/api/sync/push", { events: [reverseEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       const reversalLedger = await ctx.db.financialLedger.findFirst({ where: { shopId: tenant.shop.id, sourceType: "supplier_payment_reversal", sourceId: paymentLedger.id } });
       assert.equal(reversed.results[0].serverId, reversalLedger.id, "reversal reconciliation must expose the reversal-ledger id");
+      assert.equal(reversed.results[0].result.originalLedgerEntryId, paymentLedger.id, "the original payment retains its identity on devices");
       assertSuccess(await ctx.post("/api/sync/push", { events: [reverseEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       updated = await ctx.db.purchaseHistory.findUnique({ where: { id: purchase.id } });
       assert.equal(updated.purchasePaidAmount, 100);

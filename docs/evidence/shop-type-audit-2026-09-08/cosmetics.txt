@@ -1,0 +1,76 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Testers" [level=1]
+  - generic: QA cosmetics Workflow · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Testers page loaded
+  - paragraph: Testers on the counter
+  - paragraph: "0"
+  - paragraph: Need replacing
+  - paragraph: "0"
+  - paragraph: Value on the counter
+  - paragraph: ₹0
+  - paragraph: Testers cost this month
+  - paragraph: ₹10
+  - button "What are testers costing you? A counter full of shades is real money in stock that will never be sold. Tap to see which shades are eating it.":
+    - generic: What are testers costing you?
+    - generic: A counter full of shades is real money in stock that will never be sold. Tap to see which shades are eating it.
+  - heading "Tester register" [level=3]
+  - paragraph: Opening a tester takes the unit out of sellable stock, so the shelf count stays honest.
+  - button "Open a Tester":
+    - text: Open a Tester
+  - button "On the counter"
+  - button "Replaced"
+  - button "Discarded" [active]
+  - button "Everything"
+  - button "Due only"
+  - textbox "Product or shade"
+  - table:
+    - rowgroup:
+      - row "Tester Opened Replace by Cost Actions":
+        - columnheader "Tester"
+        - columnheader "Opened"
+        - columnheader "Replace by"
+        - columnheader "Cost"
+        - columnheader "Actions"
+    - rowgroup:
+      - row "Tester QA cosmetics item QA Red Opened 08 Sept 26 0 days ago Replace by Discarded 08 Sept 26 Cost ₹10 Actions Delete the QA cosmetics item tester record":
+        - cell "Tester QA cosmetics item QA Red":
+          - text: Tester
+          - paragraph: QA cosmetics item
+          - paragraph: QA Red
+        - cell "Opened 08 Sept 26 0 days ago":
+          - text: Opened
+          - paragraph: 08 Sept 26
+          - paragraph: 0 days ago
+        - cell "Replace by Discarded 08 Sept 26":
+          - text: Replace by
+          - generic: Discarded 08 Sept 26
+        - cell "Cost ₹10"
+        - cell "Actions Delete the QA cosmetics item tester record":
+          - text: Actions
+          - button "Delete the QA cosmetics item tester record":
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

@@ -232,11 +232,13 @@ describe("settings pages no longer ship placeholder content", () => {
     expect(advanced).toContain("removeDevice");
   });
 
-  it("never locks the counter when the PIN could not be checked", () => {
+  it("enforces configured locks offline and offers verified device unlock", () => {
     const gate = readFileSync("src/features/core/settings/SessionLockGate.tsx", "utf8");
-    // Offline-first is the product promise: the lock must not strand a shop.
-    expect(gate).toContain("const canLock = hasPin === true && navigator.onLine");
-    expect(gate).toContain("if (!navigator.onLine || hasPin !== true) return;");
-    expect(gate).toContain("checkOwnerPin");
+    expect(gate).toContain("counterStartupDecision");
+    expect(gate).toContain("counterIdleDecision");
+    expect(gate).toContain("verifyCounterPin(value)");
+    expect(gate).toContain("verifyBiometric()");
+    expect(gate).not.toContain("if (!navigator.onLine");
+    expect(gate).not.toContain("err instanceof TypeError");
   });
 });

@@ -1,0 +1,38 @@
+{
+  "advanced-export-result.txt": {
+    "bytes": 4319,
+    "sha256": "8c34a6bdfc0fe14c9511a7b8402cf2ad73a15255997ec1bae1145d98b017dad0"
+  },
+  "customer-reloaded-360.png": {
+    "bytes": 35173,
+    "sha256": "ecc33338e6bcd508ca88cdf069f54aff66aaddb10b06460e14ca41a83ac82a2d"
+  },
+  "customer-reloaded-360.txt": {
+    "bytes": 6649,
+    "sha256": "3f99f2b635d1468c84c0af1ce91087e473df2a2aedf8fce4cc692def894e73a6"
+  },
+  "customer-server-clear.json": {
+    "bytes": 209,
+    "sha256": "1d7f7cc788a0b3ee9c2acc3d48e8d1df8ac8bc6a89570b046b4c15aeb9e8e913"
+  },
+  "export-audit.txt": {
+    "bytes": 1533,
+    "sha256": "11baa6ce37b3cc0397534d91e37b4b7b4b8f403f2a9425af5a3b1b9246ae2b4a"
+  },
+  "export-wrong-pin-360.png": {
+    "bytes": 26747,
+    "sha256": "6e8ad5c263dfa785a3a38d645dc0ee13ca3207123e71ca38a3811576dab602b7"
+  },
+  "export-wrong-pin-360.txt": {
+    "bytes": 3384,
+    "sha256": "215408b262fce850f5b6a79a101c3d2967420d80736dd682cd5c047e254b9189"
+  },
+  "final-sync-status.txt": {
+    "bytes": 3256,
+    "sha256": "969a5e22f574700e9a6ccc998ce4f2a4f9f5296c6c23c93c768ee2d152283329"
+  },
+  "README.md": {
+    "bytes": 6317,
+    "sha256": "99a631372ed74cdae4e191a03b168a502cbcf6f42eab31fcd679e6eef5d7fa25"
+  }
+}

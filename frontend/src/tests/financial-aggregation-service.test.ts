@@ -29,6 +29,11 @@ describe("supplier settlement dates", () => {
     expect(restored.supplierCashPaidToday).toBe(200);
     expect(existing.supplierCashPaidToday).toBe(200);
   });
+  it("keeps equal supplier installments separate even when paid in the same minute", () => {
+    const payments = [settlements[0], { ...settlements[0], id: "second-installment" }];
+    const snapshot = aggregateFinancialRows({ date, payments });
+    expect(snapshot.supplierCashPaidToday).toBe(400);
+  });
   it("returns reversed money to the drawer on the reversal date", () => {
     const payments = [{ ...settlements[0], status: "reversed", reversed_at: "2026-06-08T10:00:00.000" }];
     const purchaseBills = [{ ...purchase, purchasePaidAmount: 100, purchaseDueAmount: 900 }];

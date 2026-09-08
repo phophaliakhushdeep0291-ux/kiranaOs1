@@ -9,8 +9,7 @@
 import db from "../../../db.js";
 import { AppError } from "../../../shared/errors/index.js";
 import { businessTypeFromSettings, parseShopSettings } from "../../shops/businessProfiles.js";
-import { runAgentTurn, executeApprovedPlan, rejectPlan } from "./agent.service.js";
-import { registrySnapshot } from "./tool-registry.js";
+import { runAgentTurn, executeApprovedPlan, rejectPlan, availableAgentTools } from "./agent.service.js";
 import "./register-core.js";
 
 async function contextFor(req) {
@@ -29,7 +28,7 @@ async function contextFor(req) {
 function sendProviderError(error, res) {
   const message = String(error?.message ?? "").toLowerCase();
   const status = error?.status ?? error?.statusCode ?? 0;
-  if (error?.code === "AI_KEY_MISSING" || message.includes("no ai api key configured")) {
+  if (error?.code === "AI_KEY_MISSING" || status === 401 || message.includes("no ai api key configured")) {
     res.status(503).json({ success: false, error: "AI is not configured on this server.", code: "AI_KEY_MISSING" });
     return true;
   }
@@ -88,7 +87,7 @@ export async function reject(req, res, next) {
 export async function capabilities(req, res, next) {
   try {
     const ctx = await contextFor(req);
-    res.json({ success: true, data: { businessType: ctx.businessType, role: ctx.role, tools: registrySnapshot() } });
+    res.json({ success: true, data: { businessType: ctx.businessType, role: ctx.role, tools: (await availableAgentTools(ctx)).map(({ name, kind, risk, feature, roles }) => ({ name, kind, risk, feature, roles })) } });
   } catch (error) {
     next(error);
   }

@@ -1,10 +1,23 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 
 const read = (file) => fs.readFileSync(file, "utf8");
 const pkg = JSON.parse(read("package.json"));
 const runner = read("scripts/release-certification.js");
 const workflowPath = "../.github/workflows/release-certification.yml";
+await import("./release-source-snapshot.examples.js");
+assert.ok(runner.indexOf('id: "prisma-postgres-generate"') < runner.indexOf('id: "backend-tests"'),
+  "clean certification must generate the PostgreSQL client before datasource-selection tests");
+const postgresGeneration = runner.match(/id: "prisma-postgres-generate"[\s\S]*?\n\}\);/)?.[0] ?? "";
+assert.match(postgresGeneration, /"generate", "--schema", "prisma-postgres\/schema.prisma"/);
+assert.doesNotMatch(postgresGeneration, /"migrate"|"db", "push"/, "preparing the client must not mutate PostgreSQL");
+
+assert.ok(read(".gitignore").split(/\r?\n/).includes("generated/certification-prisma-client"),
+  "the regenerated certification client must not become source evidence");
+const generatedTracked = spawnSync("git", ["ls-files", "--", "generated/certification-prisma-client"], { encoding: "utf8", shell: false });
+assert.equal(generatedTracked.status, 0, "must inspect tracked certification artifacts");
+assert.equal(generatedTracked.stdout.trim(), "", "generated certification client files must remain untracked so regeneration cannot change the certified source");
 
 assert.ok(fs.existsSync(workflowPath), "release CI must live at repository-root .github/workflows");
 for (const script of ["release:certify", "release:certify:ci", "release:certify:local"]) {

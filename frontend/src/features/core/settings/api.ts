@@ -126,6 +126,8 @@ export function checkOwnerPin() {
 export function verifyOwnerPin(pin: string) {
   return apiRequest<{ valid: boolean }>("/auth/pin/verify", {
     method: "POST",
+    cache: "no-store",
+    timeoutMs: 10_000,
     body: JSON.stringify({ pin }),
   });
 }

@@ -515,11 +515,10 @@ export async function recordPurchase(shopId, data, identity = {}, client = db) {
   }
 }
 
-export async function recordDamage(shopId, data, identity = {}) {
+export async function recordDamage(shopId, data, identity = {}, client = db) {
   const { productId, quantity, enteredUnit, note, locationId } = data;
   const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
-  try {
-    return await db.$transaction(async (tx) => {
+  const execute = async (tx) => {
       const location = await resolveOperationalLocation(shopId, locationId ?? identity.locationId ?? null, tx);
       if (idempotencyKey) {
         const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
@@ -637,9 +636,12 @@ export async function recordDamage(shopId, data, identity = {}) {
         damageLossValue,
         note: note ?? "Damage/loss",
       };
-    });
+  };
+  try {
+    return client === db ? await db.$transaction(execute) : await execute(client);
   } catch (error) {
-    if (isUniqueConstraintError(error) && idempotencyKey) {
+    // A caller-owned transaction must roll back before retrying a failed write.
+    if (client === db && isUniqueConstraintError(error) && idempotencyKey) {
       const existing = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
       if (existing) {
         await assertCompatibleDamageReplay(

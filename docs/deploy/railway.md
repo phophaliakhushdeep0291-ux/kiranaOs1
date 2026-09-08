@@ -212,7 +212,7 @@ cd backend
 export DATABASE_URL="<postgres public URL>"
 export RESTORE_TEST_DATABASE_URL="<postgres-drill public URL>"
 export ALLOW_RESTORE_TEST_DB=true
-npm run drill:restore:check   # confirms the wiring, touches nothing
+npm run drill:restore:check   # validates configuration only; no connection test
 npm run drill:restore
 ```
 
@@ -222,6 +222,11 @@ refused** — rename the drill database to something containing `drill` or
 `restore`, which is also what stops a tired hand pointing it at the live one.
 
 Run it before the café goes live, and again after any release that migrates.
+Use representative data in an isolated test source for a pre-launch rehearsal;
+an empty business schema cannot pass. This command verifies a fresh snapshot,
+not the freshness or retention of scheduled Railway backups. See the
+[recovery runbook](../../backend/docs/DISASTER_RECOVERY.md) for verifying a
+particular retained dump.
 
 ---
 

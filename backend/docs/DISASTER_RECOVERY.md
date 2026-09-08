@@ -86,6 +86,24 @@ Set `PG_BIN_DIR` when native PostgreSQL tools are not on PATH. Prisma-only URL
 parameters such as `schema` are removed for native tools; SSL settings are kept.
 Native recovery verification currently supports the public application schema.
 
+`npm run drill:restore` is the cafe entry point to this same recovery engine.
+It always creates a fresh snapshot-backed dump and reads only its own unique
+proof report. It requires successful content verification, read-only money
+reconciliation, a non-empty business workload, and unchanged backend source.
+It does not select the newest file from a shared backup directory.
+
+`npm run drill:restore:check` validates configuration and target identity only;
+it makes no database connection and does not verify credentials or recovery.
+Add `-- --require` to make missing configuration fail this check. The actual
+`drill:restore` command always exits unsuccessfully when configuration is missing.
+
+`RECOVERY_POINT_OBJECTIVE_HOURS` defaults to 24 and must be positive and finite.
+The cafe report measures the fresh drill's age conservatively from its start
+time, not the dump's filesystem modification time. This is not evidence of
+scheduled production backup frequency or retention. Monitor and rehearse the
+retained production backups separately; use `proof:dr` with a trusted manifest
+to validate a particular existing dump.
+
 The drill removes only its own freshly generated dump unless `DR_KEEP_BACKUP=true`.
 It never deletes a supplied `BACKUP_FILE`. To rehearse an existing dump, set
 `DR_CREATE_BACKUP=false`, `BACKUP_FILE`, and `BACKUP_MANIFEST_FILE` to its trusted
@@ -98,7 +116,27 @@ target. It verifies populated multi-tenant records, concurrent source writes,
 same-count one-paise tampering, checksum rejection before reset, and a fresh
 restore. CI runs this test against its disposable PostgreSQL databases.
 
+`npm run test:restore-drill` covers configuration guards, exact integer
+comparison, missing evidence, freshness, and cafe orchestration without a live
+database. A passing unit suite is not a completed database recovery drill.
+
 ## Strict production proof mode
+
+For local whole-release validation while the main worktree is being edited, run
+`npm run release:snapshot` first. It captures tracked and non-ignored untracked
+source into a unique directory under `backend/release-artifacts/source-snapshots`,
+checks every copied file against the source digest, rechecks source stability,
+and creates an independent local Git repository. It does not modify the source
+repository's commits, copy ignored secrets/databases/dependencies, or execute
+tests. A concurrent edit invalidates capture; existing destinations are never
+overwritten. Failed captures remain diagnostic artifacts, not valid snapshots.
+
+Install dependencies in the captured `backend` (`npm ci`) and `frontend`
+(`pnpm install --frozen-lockfile`) directories, then run
+`npm run release:certify:local` inside its backend. Keep both the snapshot
+manifest and certification report. A pass applies to that captured content,
+not to later edits in the original worktree. The generated certification Prisma
+client must stay ignored and untracked so rebuilding it does not mutate source.
 
 When you are doing final pre-sell validation, include disaster recovery in the full proof suite:
 
