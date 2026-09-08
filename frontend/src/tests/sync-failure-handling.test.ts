@@ -313,6 +313,7 @@ vi.mock("@/features/core/sync/api", () => ({
   syncPull: syncPullMock,
   acknowledgeSyncSequence: vi.fn(async () => ({ acknowledgement: { accepted: true } })),
   getSyncStatus: vi.fn(async () => ({ allowed: true })),
+  getSyncFleet: vi.fn(async () => null),
   requestSyncRetry: requestSyncRetryMock,
   listSyncConflicts: listSyncConflictsMock,
 }));
@@ -702,13 +703,58 @@ describe("what the queue counts call one rejected operation", () => {
     expect(counts.totalBlocking).toBe(1);
   });
 
-  it("leaves an orphaned conflict to the repair that resolves it", async () => {
-    // The two mechanisms partition the cases and must not overlap. A stored
-    // conflict whose outbox event is gone is not this count's problem:
-    // `repairResolvedStoredConflicts` runs first and marks it auto_resolved,
-    // because nothing is left that a person could act on. What the count owns is
-    // the opposite case — a conflict the repair deliberately leaves alone
-    // because its outbox row is still live, and therefore already on screen.
+  it("shows an outbox-only rejection in both the header counts and review page", async () => {
+    const event = seedRejectedBill();
+    dbState.tables.sync_conflicts = [];
+
+    const counts = await readSyncQueueCounts();
+    const snapshot = await readSyncSnapshot();
+
+    expect(counts.conflict).toBe(1);
+    expect(snapshot.conflicts).toHaveLength(1);
+    expect(snapshot.conflicts[0]).toEqual(expect.objectContaining({
+      source_event_id: event.op_id,
+      entity_id: event.entity_id,
+      local_snapshot: event.payload,
+    }));
+  });
+
+  it("can paint locally stored reviews without waiting for cloud diagnostics", async () => {
+    seedRejectedBill();
+    listSyncConflictsMock.mockImplementation(() => new Promise(() => undefined));
+
+    const snapshot = await readSyncSnapshot({ localOnly: true });
+
+    expect(snapshot.conflicts).toHaveLength(1);
+    expect(listSyncConflictsMock).not.toHaveBeenCalled();
+  });
+
+  it("re-reads the queue after diagnostics so old failures cannot return", async () => {
+    const event = seedOutbox("UPDATE_PRODUCT", "product", "edited-product", { status: "FAILED", sync_status: "failed" });
+    listSyncConflictsMock.mockImplementationOnce(async () => {
+      dbState.putInto("sync_outbox", { ...event, status: "SYNCED", sync_status: "synced" });
+      return { conflicts: [], pagination: { hasMore: false, nextCursor: null, limit: 100 } };
+    });
+
+    const snapshot = await readSyncSnapshot();
+
+    expect(snapshot.failedOperations).toHaveLength(0);
+    expect(snapshot.pendingOperations).toHaveLength(0);
+  });
+
+  it("shows one review, not a review plus pending upload, when retrying its operation", async () => {
+    const event = seedRejectedBill();
+    dbState.putInto("sync_outbox", { ...event, status: "PENDING", sync_status: "pending_sync" });
+
+    expect(await readSyncQueueCounts()).toEqual(expect.objectContaining({ pending: 0, conflict: 1, totalBlocking: 1 }));
+    const snapshot = await readSyncSnapshot();
+    expect(snapshot.conflicts).toHaveLength(1);
+    expect(snapshot.pendingOperations).toHaveLength(0);
+  });
+
+  it("keeps an orphaned conflict open until there is positive resolution evidence", async () => {
+    // A pull conflict or another device's review need not have a local outbox
+    // event. Queue absence must never substitute for an owner's decision.
     dbState.putInto("sync_conflicts", {
       id: "conflict_bill_bill_orphaned_op_create_bill_gone",
       entity_type: "bill",
@@ -723,9 +769,52 @@ describe("what the queue counts call one rejected operation", () => {
 
     const counts = await readSyncQueueCounts();
 
-    expect(counts.conflict).toBe(0);
+    expect(counts.conflict).toBe(1);
     expect(scopedRows("sync_conflicts")[0]).toEqual(expect.objectContaining({
-      resolution: "auto_resolved",
+      resolution: "unresolved",
+    }));
+  });
+
+  it("does not clear a cloud review just because its local event was acknowledged", async () => {
+    const event = seedRejectedBill();
+    dbState.putInto("sync_outbox", { ...event, status: "SYNCED", sync_status: "synced" });
+    const conflict = scopedRows("sync_conflicts")[0];
+    dbState.putInto("sync_conflicts", { ...conflict, server_conflict_id: "cloud-review-1" });
+
+    expect((await readSyncQueueCounts()).conflict).toBe(1);
+    expect(scopedRows("sync_conflicts")[0].resolution).toBe("unresolved");
+  });
+
+  it("clears a local-only rejection after that exact event is acknowledged", async () => {
+    const event = seedRejectedBill();
+    dbState.putInto("sync_outbox", { ...event, status: "SYNCED", sync_status: "synced" });
+
+    expect((await readSyncQueueCounts()).totalBlocking).toBe(0);
+    expect(scopedRows("sync_conflicts")[0].resolution).toBe("auto_resolved");
+  });
+
+  it("does not use an acknowledgement for a different operation on the same bill", async () => {
+    const event = seedRejectedBill();
+    dbState.tables.sync_outbox = [];
+    dbState.putInto("sync_outbox", {
+      ...event, op_id: "other-event", clientEventId: "other-event",
+      status: "SYNCED", sync_status: "synced",
+    });
+
+    expect((await readSyncQueueCounts()).conflict).toBe(1);
+    expect(scopedRows("sync_conflicts")[0].resolution).toBe("unresolved");
+  });
+
+  it("counts a separate review even when another action on the same bill is pending", async () => {
+    const event = seedRejectedBill();
+    dbState.tables.sync_outbox = [];
+    dbState.putInto("sync_outbox", {
+      ...event, op_id: "other-event", clientEventId: "other-event",
+      status: "PENDING", sync_status: "pending_sync",
+    });
+
+    expect(await readSyncQueueCounts()).toEqual(expect.objectContaining({
+      pending: 1, conflict: 1, totalBlocking: 2,
     }));
   });
 

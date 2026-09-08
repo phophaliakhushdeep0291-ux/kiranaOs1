@@ -1,4 +1,5 @@
 import type { Shop, User } from "@/types/api";
+import { clearDeviceUnlock } from "./device-unlock-storage";
 
 export const AUTH_SESSION_STORAGE_KEY = "kiranaos.auth.session.v1";
 
@@ -30,6 +31,17 @@ export function authSessionIdentity(session: AuthSession = loadAuthSession()): s
       : null;
   if (!userId || !shopId) return null;
   return JSON.stringify([userId, shopId]);
+}
+
+/** The backend's refresh token is sessionId.secret; only the secret rotates.
+ * Use the stable session ID to revoke outstanding screen-unlock prompts on a
+ * new login without rejecting a legitimate background token refresh.
+ */
+export function authSessionInstance(session: AuthSession = loadAuthSession()): string | null {
+  const identity = authSessionIdentity(session);
+  const refresh = session.refreshToken;
+  if (!identity || !refresh) return null;
+  return JSON.stringify([identity, refresh.split(".")[0]]);
 }
 
 function safeGet(storage: Storage | undefined, key: string): string | null {
@@ -89,6 +101,7 @@ export function loadAuthSession(): AuthSession {
 
 export function clearAuthSession(): void {
   if (typeof window === "undefined") return;
+  clearDeviceUnlock();
   safeRemove(window.localStorage, AUTH_SESSION_STORAGE_KEY);
 }
 

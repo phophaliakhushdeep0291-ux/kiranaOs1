@@ -154,6 +154,14 @@ const PAGE_TITLE_KEYS: Record<string, TranslationKey> = {
   "/staff": "page.title.staff",
   "/plans": "page.title.plans",
   "/help": "page.title.help",
+  "/rentals": "shopType.nav.rentals",
+  "/serial-units": "shopType.nav.serialUnits",
+  "/size-runs": "shopType.nav.sizeRuns",
+  "/fitment": "shopType.nav.fitment",
+  "/prescriptions": "shopType.nav.prescriptions",
+  "/book-lists": "shopType.nav.bookLists",
+  "/orders": "shopType.nav.orderBook",
+  "/testers": "shopType.nav.testers",
 };
 
 function getPageTitle(loc: string, t: Translate): string {
@@ -165,7 +173,7 @@ function getPageTitle(loc: string, t: Translate): string {
   // name; title-casing its last segment is the honest fallback.
   const segment = path.split("/").filter(Boolean).at(-1);
   return segment
-    ? segment.replace(/-/g, " ").replace(/\w/g, (letter) => letter.toUpperCase())
+    ? segment.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
     : "Artha";
 }
 

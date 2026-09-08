@@ -17,7 +17,7 @@ import { SettingsShell } from "@/features/core/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge, RowToggle } from "@/features/core/settings/ui";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { checkOwnerPin } from "@/features/core/settings/api";
-import { enrolBiometric, forgetBiometric, isBiometricAvailable } from "@/features/core/settings/biometric-unlock";
+import { enrolBiometric, forgetBiometric, isBiometricAvailable, isBiometricEnrolled } from "@/features/core/settings/biometric-unlock";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { listDevices, logoutDevice, type DeviceDto } from "@/features/core/devices/api";
@@ -112,6 +112,8 @@ export default function SecuritySettingsPage() {
   const [signingOut, setSigningOut] = useState(false);
   const [biometricSupported, setBiometricSupported] = useState<boolean | null>(null);
   const [enrolling, setEnrolling] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [enrollError, setEnrollError] = useState<string | null>(null);
   const seeded = useRef(false);
   const currentDeviceId = getOfflineScope().device_id;
   const { user } = useAuth();
@@ -149,13 +151,20 @@ export default function SecuritySettingsPage() {
       toast({ title: t("settings.security.biometricOff") });
       return;
     }
+    setEnrollError(null);
+    setEnrollOpen(true);
+  }
+
+  async function confirmBiometric(ownerPin: string) {
     setEnrolling(true);
+    setEnrollError(null);
     try {
-      await enrolBiometric(user?.id ?? "artha-owner", user?.name ?? "Artha owner");
+      await enrolBiometric(user?.id ?? "", user?.name ?? "Artha owner", ownerPin);
       update({ biometric: true });
+      setEnrollOpen(false);
       toast({ title: t("settings.security.biometricReady"), description: t("settings.security.biometricReadyHelp") });
     } catch (error) {
-      update({ biometric: false });
+      setEnrollError((error as { message?: string })?.message || "Device setup did not complete.");
       toast({
         title: t("settings.security.biometricFailed"),
         description: (error as { message?: string })?.message || "The device prompt was cancelled.",
@@ -256,12 +265,13 @@ export default function SecuritySettingsPage() {
                   ? t("settings.security.biometricHelp")
                   : t("settings.security.biometricUnavailable")}
               pill={biometricSupported
-                ? <Switch disabled={enrolling} checked={sec.biometric} onCheckedChange={(v) => void toggleBiometric(v)} />
+                ? <Switch disabled={enrolling} checked={sec.biometric && isBiometricEnrolled()} onCheckedChange={(v) => void toggleBiometric(v)} />
                 : <Badge tone="gray"><Fingerprint size={11} /> {t("settings.security.unavailable")}</Badge>}
             />
             <RowToggle label={t("settings.security.unlockOnStart")} desc={t("settings.security.unlockOnStartHelp")} pill={<Switch checked={sec.requireLoginOnStart} onCheckedChange={(v) => update({ requireLoginOnStart: v })} />} />
             <RowToggle label={t("settings.security.rememberDevice")} desc={t("settings.security.rememberDeviceHelp")} pill={<Switch checked={sec.rememberDevice} onCheckedChange={(v) => update({ rememberDevice: v })} />} last />
             <p className="mt-2 text-[11px] text-[#9aa6bb]">{t("settings.security.twoFactorHelp")}</p>
+            <p className="mt-2 text-[12px] text-[#64748b]">{t("settings.lock.connectionHelp")}</p>
           </div>
         </Card>
       </div>
@@ -433,6 +443,16 @@ export default function SecuritySettingsPage() {
       </div>
 
       <ChangePinDialog open={pwOpen} onOpenChange={setPwOpen} onChanged={() => void pinQ.refetch()} />
+
+      <OwnerPinModal
+        open={enrollOpen}
+        title={t("settings.security.biometric")}
+        description={t("settings.security.deviceEnrollHelp")}
+        loading={enrolling}
+        error={enrollError}
+        onCancel={() => { if (!enrolling) setEnrollOpen(false); }}
+        onConfirm={({ ownerPin }) => confirmBiometric(ownerPin)}
+      />
 
       <OwnerPinModal
         open={signOutTarget !== null}

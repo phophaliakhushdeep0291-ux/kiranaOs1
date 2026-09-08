@@ -456,22 +456,22 @@ export async function restoreRental(shopId, id) {
 export async function getRentalSummary(shopId) {
   const key = todayKey();
   const { start, end } = resolveWindow(key, key);
-  const open = await db.rentalBooking.findMany({
-    where: { shopId, deletedAt: null, status: { in: ACTIVE_STATUSES } },
+  const collectible = await db.rentalBooking.findMany({
+    where: { shopId, deletedAt: null, status: { not: "cancelled" } },
     include: { items: true },
   });
+  const open = collectible.filter((booking) => ACTIVE_STATUSES.includes(booking.status));
 
   let outNow = 0;
   let dueToday = 0;
   let overdue = 0;
   let upcoming = 0;
   let depositHeld = 0;
-  let pendingCollection = 0;
+  const pendingCollection = collectible.reduce((sum, booking) => sum + Math.max(0, serialize(booking).balanceDue), 0);
 
   for (const booking of open) {
     const row = serialize(booking);
     depositHeld += Number(booking.depositAmount) || 0;
-    pendingCollection += Math.max(0, row.balanceDue);
     if (row.isOverdue) overdue += 1;
     else if (row.toDateKey === key) dueToday += 1;
     if (booking.status === "picked_up") outNow += 1;

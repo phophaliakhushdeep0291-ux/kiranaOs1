@@ -1,4 +1,5 @@
 import { roundMoney } from "@/lib/money";
+import { mergeSupplierPaymentHistory, supplierPurchaseKeys } from "@/features/core/finance/services/supplier-payment-history";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import { emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import type { SupplierDueRow } from "@/features/core/finance/services/FinancialAggregationService";
@@ -426,12 +427,18 @@ export function recordPurchasePaymentLocal(
 }
 
 export async function listSupplierPaymentsLocal(displayRow: SupplierDueRow) {
-  const rows = filterRowsForCurrentScope(await offlineDB.getAll<MutableRow>("payments").catch(() => []));
+  const [storedPayments, storedPurchases] = await Promise.all([
+    offlineDB.getAll<MutableRow>("payments"), offlineDB.getAll<MutableRow>("purchase_bills"),
+  ]);
+  const rows = mergeSupplierPaymentHistory(filterRowsForCurrentScope(storedPayments), filterRowsForCurrentScope(storedPurchases));
+  const reversedIds = new Set(rows.map((row) => String(row.reverses_payment_id ?? "")).filter(Boolean));
+  const purchaseKeys = new Set([displayRow.id, ...(displayRow.purchaseKeys ?? [])]);
   const invoice = normalizeKey(displayRow.invoiceNumber === "-" ? "" : displayRow.invoiceNumber);
   const supplier = normalizeKey(displayRow.supplierId || displayRow.supplierName);
   const matches = rows.filter((row) => {
     if (String(row.kind ?? "") !== "supplier_payment") return false;
-    if ([row.local_purchase_history_id, row.purchase_history_id, row.purchase_bill_id].map(String).includes(displayRow.id)) return true;
+    if (Number(row.amount) <= 0) return false;
+    if (supplierPurchaseKeys(row).some((key) => purchaseKeys.has(key))) return true;
     const rowInvoice = normalizeKey(row.invoice_number ?? row.invoiceNumber);
     const rowSupplier = normalizeKey(row.supplier_id ?? row.supplierId ?? row.supplier_name ?? row.supplierName);
     return Boolean(invoice && rowInvoice === invoice && supplier && rowSupplier === supplier);
@@ -442,7 +449,9 @@ export async function listSupplierPaymentsLocal(displayRow: SupplierDueRow) {
     const current = unique.get(key);
     if (!current || (String(row.sync_status) === "synced" && String(current.sync_status) !== "synced")) unique.set(key, row);
   }
-  return [...unique.values()].sort((a, b) => String(b.paid_at ?? b.created_at).localeCompare(String(a.paid_at ?? a.created_at)));
+  return [...unique.values()].map((row) => [row.id, row.local_id, row.server_id].some((id) => reversedIds.has(String(id)))
+    ? { ...row, status: "reversed" } : row)
+    .sort((a, b) => String(b.paid_at ?? b.created_at).localeCompare(String(a.paid_at ?? a.created_at)));
 }
 
 async function reverseSupplierPaymentLocalUnlocked(

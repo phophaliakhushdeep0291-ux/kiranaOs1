@@ -1,0 +1,99 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Cloud Backup" [level=1]
+  - generic: Full Flow Audit Shop · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- generic: Trial active — your data is safe on this device
+- link "Details":
+  - /url: /subscription
+  - generic: Details
+- main:
+  - status: Cloud Backup page loaded
+  - heading "Sync Status" [level=2]:
+    - text: Sync Status
+  - generic: Data safe locally and backed up
+  - generic: 0 pending cloud backup
+  - button "Retry failed" [disabled]:
+    - text: Retry failed
+  - button "Force sync":
+    - text: Force sync
+  - generic: Internet
+  - paragraph: Online
+  - paragraph: Internet available.
+  - generic: Backend
+  - paragraph: Online
+  - paragraph: Cloud backup can run.
+  - generic: Last backup
+  - paragraph: less than a minute ago
+  - paragraph: Last successful cloud backup.
+  - generic: Pending
+  - paragraph: "0"
+  - paragraph: 0 changes pending cloud backup.
+  - generic: Retry / review
+  - paragraph: 0 / 0
+  - paragraph: Retry failed backup items. Review only if it remains blocked.
+  - text: Device sync health
+  - generic: Server-confirmed progress for every active terminal in this shop.
+  - generic: 1 current
+  - generic: Fleet healthy
+  - paragraph: Chrome on Windows
+  - paragraph: bill004-qa-browser-20260820
+  - generic: Current
+  - paragraph: Sequence lag
+  - paragraph: "0"
+  - paragraph: Presence
+  - paragraph: Online
+  - generic: Applied less than a minute ago
+  - generic: This device
+  - paragraph: A terminal becomes current only after it applies data locally and acknowledges sequence 36.
+  - generic: Sync diagnostics
+  - generic: Plain-language explanations for anything that could not back up.
+  - button "Refresh sync diagnostics":
+  - generic: "Pending: 0"
+  - generic: "Failed: 0"
+  - generic: "Conflicts: 0"
+  - generic: "Retries: 0"
+  - generic: Last successful sync 1 minute ago
+  - text: Everything is syncing cleanly — no failures or conflicts.
+  - generic: Device and cloud settings
+  - generic: Useful for checking which shop device is backing up data.
+  - text: Device ID
+  - generic: bill004-qa-browser-20260820
+  - text: Server URL
+  - button "Edit"
+  - generic: http://localhost:3000/api
+  - text: Subscription sync
+  - generic: Sync allowed
+  - generic "Show server status details"
+  - generic: Pending operations
+  - generic: No pending changes. Cloud backup queue is clear.
+  - generic: No pending changes. Cloud backup queue is clear.
+  - generic: Failed operations
+  - generic: No failed changes right now.
+  - generic: No failed changes right now.
+  - generic: Backup review
+  - generic: No cloud backup item needs review.
+  - generic: No review items. Data is clean for backup.
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

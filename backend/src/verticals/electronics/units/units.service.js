@@ -465,7 +465,7 @@ export async function getUnitSummary(shopId) {
   const soonEnd = new Date(dayEnd.getTime() + WARRANTY_SOON_DAYS * 86_400_000);
 
   const [inStock, openBox, soldToday, soldThisMonth, atService, warrantyExpiringSoon] = await Promise.all([
-    db.productUnit.count({ where: { shopId, deletedAt: null, status: "in_stock" } }),
+    db.productUnit.count({ where: { shopId, deletedAt: null, status: { in: ["in_stock", "returned"] } } }),
     db.productUnit.count({ where: { shopId, deletedAt: null, status: { in: ["in_stock", "returned"] }, condition: { in: ["open_box", "refurbished"] } } }),
     db.productUnit.count({ where: { shopId, deletedAt: null, status: "sold", soldAt: { gte: dayStart, lte: dayEnd } } }),
     db.productUnit.count({ where: { shopId, deletedAt: null, status: "sold", soldAt: { gte: monthStart } } }),

@@ -60,14 +60,9 @@ async function resolveBillItem(shopId, { query, quantity, unit }) {
   const shortlist = exact.length ? exact : prefix.length ? prefix : matches;
   const ranked = [...shortlist].sort((a, b) => String(a.name).length - String(b.name).length);
 
-  if (exact.length === 0 && ranked.length > 1) {
-    const [first, second] = ranked;
-    // Two candidates of the same length are genuinely indistinguishable from the
-    // word alone. A different length means one is the plain item and the other a
-    // variant, and the plain one is what was asked for.
-    if (String(first.name).length === String(second.name).length) {
-      return { query, resolved: false, reason: "ambiguous", candidates: ranked.slice(0, 5).map((p) => p.name) };
-    }
+  if (ranked.length > 1) {
+    // Name length says nothing about size, shade, strength or compatibility.
+    return { query, resolved: false, reason: "ambiguous", candidates: ranked.slice(0, 5).map((p) => p.name) };
   }
 
   const product = ranked[0];
@@ -252,7 +247,7 @@ export const CORE_WRITE_TOOLS = [
             type: "object",
             additionalProperties: false,
             properties: {
-              query: { type: "string", description: "Product as spoken, e.g. \"chini\" or \"Sugar\"." },
+              query: { type: "string", minLength: 1, maxLength: 200, description: "Product as spoken, e.g. \"chini\" or \"Sugar\"." },
               quantity: { type: "number", exclusiveMinimum: 0, description: "How many or how much." },
               unit: { type: "string", description: "Unit if the shopkeeper said one, e.g. kg, packet. Omit otherwise." },
             },

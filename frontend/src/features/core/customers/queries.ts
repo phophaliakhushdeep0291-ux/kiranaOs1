@@ -80,14 +80,19 @@ export async function cacheCustomers(serverRows: Customer[]): Promise<Customer[]
       for (const customer of current) {
         for (const identity of customerKeys(customer)) byIdentity.set(identity, customer);
       }
+      // Index live pending movement once. Re-scanning the full ledger for each
+      // customer makes a refresh grow with customers × ledger history.
+      const pendingCustomerIds = new Set<string>();
+      for (const entry of ledger) {
+        if (entry.deleted_at != null || entry.deletedAt != null || entry.merged_into_id != null || entry.mergedIntoId != null) continue;
+        if (!UNSYNCED_LEDGER_STATUSES.has(String(entry.sync_status ?? "").toLowerCase())) continue;
+        const customerId = getLedgerCustomerId(entry);
+        if (customerId !== null) pendingCustomerIds.add(customerId);
+      }
       const fresh = serverRows.map((row) => {
         const stored = customerKeys(row).map((identity) => byIdentity.get(identity)).find(Boolean);
-        const identities = new Set(stored ? customerKeys(stored) : customerKeys(row));
-        const hasPendingFinancialWork = ledger.some((entry) => {
-          const customerId = getLedgerCustomerId(entry);
-          return customerId !== null && identities.has(customerId)
-            && UNSYNCED_LEDGER_STATUSES.has(String(entry.sync_status ?? "").toLowerCase());
-        });
+        const identities = stored ? customerKeys(stored) : customerKeys(row);
+        const hasPendingFinancialWork = identities.some((identity) => pendingCustomerIds.has(identity));
         if (!stored || !hasPendingFinancialWork || stored.balance_derived_from_local_ledger !== true) {
           return { ...stored, ...row };
         }

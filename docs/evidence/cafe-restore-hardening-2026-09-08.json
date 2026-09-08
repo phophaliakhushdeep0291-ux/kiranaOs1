@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "type": "kiranaos_cafe_restore_hardening_evidence",
+  "status": "passed",
+  "verifiedAt": "2026-09-08T17:43:19.661Z",
+  "scope": "Targeted local recovery regression proof, not full-release certification or production backup certification",
+  "repository": {
+    "commit": "6171b2b6a308902eebd26f66919a082646c99deb",
+    "dirty": true,
+    "backendSourceStableDuringProof": true,
+    "backendSourceFingerprintSha256": "1a81e8f510ca855c814db8a4ac37ace3f6c00c0ff1d4d605659beea146e491c9"
+  },
+  "verification": {
+    "unitCommand": "cd backend && npm run test:restore-drill",
+    "unitStatus": "passed",
+    "runtimeCommand": "cd backend && npm run test:restore-runtime",
+    "runtimeStatus": "passed",
+    "runtimeCases": 6,
+    "syntheticTenants": 2,
+    "postgresVersion": "18.3",
+    "tests": [
+      "Populated multi-tenant restore",
+      "Concurrent source writes use the exported snapshot",
+      "Same-count one-paise corruption rejected",
+      "Wrong dump checksum rejected before resetting target",
+      "Fresh restore content and read-only money verification",
+      "Cafe wrapper completes a fresh snapshot proof without npm-specific environment"
+    ],
+    "cafeProofReport": "backend/release-artifacts/cafe-restore-drill-b14d66c8-8302-4465-a91c-d971942f2c1e/proof.json",
+    "freshProofReport": "backend/release-artifacts/restore-runtime-dr-fixture-df943888-5a2f-4076-89e7-44902489e79e/fresh-restore-passed.json",
+    "fidelity": {
+      "tableCount": 143,
+      "totalRows": "168",
+      "migrationRows": "131",
+      "exactMatch": true,
+      "contentHashesMatched": true,
+      "businessWorkloadVerified": true
+    },
+    "dumpBytes": 549294,
+    "dumpSha256": "9e567bfcb4e0f96f5ff66755e8218b269ded3e44af42aee18b5ea603e2d97f9f",
+    "generatedDumpRemoved": true,
+    "temporaryPostgresStopped": true
+  },
+  "sourceSha256": {
+    "backend/scripts/cafe-restore-drill.js": "a7bedfee2efb197dc1e08e380c8eb03a1f3a8f5ac26878ae5db0dc60209f9d7b",
+    "backend/scripts/restore-drill-report.js": "a195ca3f3139056a7bb674adad51a6ce9be757e961041583b258d3d2490130c2",
+    "backend/scripts/disaster-recovery-proof.js": "c486ddf47c87fe8c6dec65760819375262c5d8bc4a2c3e63fbae62623e33529e",
+    "backend/tests/cafe-restore-drill.examples.js": "f80280d755f9f43af802b1261975ecece42bbe1166fcd19a47bdf09ff2d73a8a",
+    "backend/tests/restore-drill-report.examples.js": "83336a2885dcd38e465188e6a670da7276ab5b9be33343ed7e64de790090b39a",
+    "backend/tests/postgres-restore-runtime.examples.js": "050b3eccf02d1442d55216c4c0f2cd8ccfc74bebb716fc1e5a26f4b4f95b45c3"
+  },
+  "limitations": [
+    "The retained test source had 131 migration records; this run does not certify deployment of every current worktree migration.",
+    "Fresh snapshot age does not prove scheduled production backup cadence, retention, cloud durability, or cross-region recovery.",
+    "Public table content is verified; sequences, permissions, roles, indexes and non-public schemas are not independently compared.",
+    "Six local synthetic scenarios do not establish production-scale RTO or competitive parity."
+  ]
+}

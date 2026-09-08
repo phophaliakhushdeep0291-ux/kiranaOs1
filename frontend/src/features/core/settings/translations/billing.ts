@@ -4,6 +4,8 @@
 // counter already says out loud ("बिल", "कैश", "स्टॉक", "पेमेंट") are kept in
 // Devanagari rather than translated into words nobody uses at a kirana.
 export const billingEn = {
+  "billing.assistant.queueFailed": "Could not load the assistant's items",
+  "billing.assistant.queueRetry": "Reload the bill to try again. Check the cart before collecting payment.",
   // Open bills strip
   "billing.openBills": "Open bills",
   "billing.openBills.current": "Current bill",

@@ -11,6 +11,7 @@ const shopB = `ai-claim-b-${suffix}`;
 let mutationCount = 0;
 let foreignMutationCount = 0;
 let gate = null;
+let completedWrite = null;
 
 function deferred() {
   let resolve;
@@ -41,7 +42,8 @@ const confirmTool = defineTool({
     gate?.started.resolve();
     if (gate) await gate.release.promise;
     await db.shop.update({ where: { id: ctx.shopId }, data: { city: marker } });
-    return { marker, mutationCount };
+    completedWrite?.resolve();
+    return { marker, mutationCount, amountPaise: 9007199254740993n };
   },
 });
 
@@ -79,7 +81,13 @@ const restaurantOnlyTool = defineTool({
   },
 });
 
-registerTools("core", [confirmTool, ownerPinTool]);
+const invalidClientOutput = defineTool({
+  name: "client_bad_output_probe", kind: "write", target: "client", risk: TOOL_RISK.CONFIRM, always: true,
+  description: "Test-only bill preparation whose unencodable output must never be reported as applied.",
+  summarize: () => "Prepare test bill lines",
+  handler: async () => { const output = {}; output.self = output; return output; },
+});
+registerTools("core", [confirmTool, ownerPinTool, invalidClientOutput]);
 registerTools("restaurant", [restaurantOnlyTool]);
 
 const ctxA = { shopId: shopA, userId: null, role: "owner", businessType: "kirana", deviceId: "test-device" };
@@ -130,6 +138,8 @@ try {
   const firstResult = await firstConfirm;
   assert.equal(firstResult.allSucceeded, true);
   assert.equal(firstResult.executionStatus, "executed");
+  assert.equal(firstResult.results[0].output.amountPaise, "9007199254740993");
+  assert.doesNotThrow(() => JSON.stringify(firstResult));
   assert.equal(mutationCount, 1, "parallel confirm requests must enter the write handler once");
   await assertStatus(doubleConfirmPlan, "executed");
 
@@ -198,6 +208,71 @@ try {
   assert.equal(declines.filter((item) => item.status === "fulfilled").length, 1);
   assert.equal(declines.filter((item) => item.status === "rejected" && item.reason?.code === "AI_PLAN_ALREADY_RESOLVED").length, 1);
   await assertStatus(rejectPlanId, "rejected");
+
+  // Force both requests to observe `parsed` before either tries to claim it.
+  // The reads remain real SQL reads; only their delivery is synchronised.
+  const staleReadPlan = await createPlan();
+  const originalFindFirst = db.aiActionLog.findFirst.bind(db.aiActionLog);
+  const bothRead = deferred();
+  let readers = 0;
+  db.aiActionLog.findFirst = async (query) => {
+    const result = await originalFindFirst(query);
+    if (query.where.id === staleReadPlan) {
+      assert.equal(result.status, "parsed");
+      readers += 1;
+      if (readers === 2) bothRead.resolve();
+      await bothRead.promise;
+    }
+    return result;
+  };
+  try {
+    const before = mutationCount;
+    const requests = await Promise.allSettled([
+      executeApprovedPlan(ctxA, { planId: staleReadPlan }),
+      executeApprovedPlan(ctxA, { planId: staleReadPlan }),
+    ]);
+    assert.equal(readers, 2);
+    assert.equal(requests.filter((result) => result.status === "fulfilled").length, 1);
+    assert.equal(requests.filter((result) => result.status === "rejected" && result.reason?.code === "AI_PLAN_ALREADY_RESOLVED").length, 1);
+    assert.equal(mutationCount, before + 1);
+  } finally {
+    db.aiActionLog.findFirst = originalFindFirst;
+  }
+
+  // A timed-out handler can still commit. Leave the plan uncertain and skip
+  // later steps, then prove the late commit never makes the plan replayable.
+  const timeoutPlan = await createPlan({ args: { marker: "late-write" } });
+  const timeoutRow = await db.aiActionLog.findUnique({ where: { id: timeoutPlan } });
+  const timeoutParsed = JSON.parse(timeoutRow.parsedActionJson);
+  timeoutParsed.plan.push({ ...timeoutParsed.plan[0], ref: "2", args: { marker: "must-not-run" } });
+  await db.aiActionLog.update({ where: { id: timeoutPlan }, data: { parsedActionJson: JSON.stringify(timeoutParsed) } });
+  const timeoutGate = newGate();
+  completedWrite = deferred();
+  const beforeTimeout = mutationCount;
+  const timedOut = await executeApprovedPlan(ctxA, { planId: timeoutPlan });
+  assert.equal(timedOut.executionStatus, "uncertain");
+  assert.equal(timedOut.requiresReview, true);
+  assert.equal(timedOut.results[0].outcomeUnknown, true);
+  assert.equal(timedOut.results[1].skipped, true);
+  assert.equal(mutationCount, beforeTimeout + 1);
+  timeoutGate.release.resolve();
+  await completedWrite.promise;
+  assert.equal((await db.shop.findUnique({ where: { id: shopA } })).city, "late-write");
+  await assertStatus(timeoutPlan, "uncertain");
+  await assert.rejects(executeApprovedPlan(ctxA, { planId: timeoutPlan }), { code: "AI_PLAN_ALREADY_RESOLVED" });
+  assert.equal(mutationCount, beforeTimeout + 1);
+  completedWrite = null;
+
+  const corruptPlan = await createPlan();
+  await db.aiActionLog.update({ where: { id: corruptPlan }, data: { parsedActionJson: JSON.stringify({ kind: "agent_turn", plan: [null] }) } });
+  await assert.rejects(executeApprovedPlan(ctxA, { planId: corruptPlan }), { code: "AI_PLAN_CORRUPT" });
+  await assertStatus(corruptPlan, "parsed");
+
+  const badClientPlan = await createPlan({ tool: invalidClientOutput.name, args: {} });
+  const badClientResult = await executeApprovedPlan(ctxA, { planId: badClientPlan });
+  assert.equal(badClientResult.allSucceeded, false);
+  assert.deepEqual(badClientResult.clientActions, []);
+  assert.match(badClientResult.results[0].error, /could not be delivered/);
 
   console.log("AI agent atomic plan execution examples passed");
 } finally {

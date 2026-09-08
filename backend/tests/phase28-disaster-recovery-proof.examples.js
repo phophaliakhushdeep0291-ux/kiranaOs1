@@ -72,7 +72,7 @@ for (const snippet of [
   "backendSourceFingerprintSha256",
   '"diff", "--binary", "HEAD", "--", "backend"',
   "DISASTER_RECOVERY_SOURCE_CHANGED",
-  "money:paise:reconcile",
+  'run("node", ["scripts/money-paise-reconciliation.js", "--native"]',
   "PROOF_REQUIRE_DR",
 ]) {
   assert.ok(restoreProof.includes(snippet), `restore proof must include ${snippet}`);

@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "type": "kiranaos_ai_agent_reliability_evidence",
+  "verifiedDate": "2026-09-08",
+  "status": "passed_local_checks",
+  "policyVersion": "2026-09-08.1",
+  "repository": {
+    "baseCommit": "6171b2b6a308902eebd26f66919a082646c99deb",
+    "dirty": true,
+    "scope": "Working-tree implementation and targeted checks; this is not whole-release certification."
+  },
+  "checks": [
+    { "command": "npm run test:ai-safety", "directory": "backend", "status": "passed", "usesExternalProvider": false },
+    { "command": "npm run prod:check", "directory": "backend", "status": "passed" },
+    { "command": "npm run typecheck", "directory": "frontend", "status": "passed" },
+    { "command": "npm run i18n:check", "directory": "frontend", "status": "passed", "translationKeys": 5776, "modules": 17 },
+    { "command": "npm run build", "directory": "frontend", "status": "passed", "buildWarning": "sync-engine has both static and dynamic imports; it is not moved to a separate chunk" },
+    {
+      "command": "npm run test -- src/tests/assistant-error-codes.test.ts src/tests/ai-feedback-client.test.ts src/tests/assistant-mobile-reach.test.ts src/tests/sync-failure-handling.test.ts src/tests/local-reports-daily-closing.test.ts src/tests/financial-aggregation-service.test.ts",
+      "directory": "frontend", "status": "passed", "files": 6, "tests": 76
+    }
+  ],
+  "verifiedBehaviors": [
+    "Provider-authored sales amounts and completion claims cannot replace server-composed evidence replies.",
+    "A successful unrelated lookup or a status-only trace does not validate provider prose.",
+    "Large integer paise remain exact; null amounts are unavailable and negative stock keeps its sign.",
+    "Real catalogue lookups distinguish stock base units from price rate units.",
+    "Real customer lookups use the ledger-derived balance instead of a stale cached customer amount.",
+    "Staff product detail results omit costs before they reach the provider.",
+    "Recent ledger entries omit free-form notes and retain dates, amounts and reversal information.",
+    "Named report ranges resolve to explicit dates in the configured shop timezone.",
+    "A provider failure after a successful read preserves the available verified answer.",
+    "Oversized results use valid JSON with a bounded server summary; unencodable results produce error traces.",
+    "Two confirmations forced to read the same pending plan still execute one write handler only.",
+    "Confirmation and rejection use competing atomic claims; another tenant cannot consume the plan.",
+    "Current owner-PIN risk and business-type availability are enforced again at execution.",
+    "A timed-out write can finish later without making the plan replayable; later steps are skipped.",
+    "Unencodable client-target output is reported as undelivered rather than applied."
+  ],
+  "sourceSha256": {
+    "backend/src/modules/ai/agent/agent.service.js": "78a03f04f952f580a5cea4f3edde366661edf0c5907c1a290573be277ee44ba7",
+    "backend/src/modules/ai/agent/evidence-reply.js": "d387ce4bd74e4dcaf72efc7f01fe9636abe268d7ea6705fc71492e008697863d",
+    "backend/src/modules/ai/agent/tools/read-data.js": "c7d0d7cf1db2d7c2e86059afc5e2df38b8b6f28b7b5f7066ea5f635bc96d29df",
+    "backend/src/modules/ai/agent/tools/core-read.js": "43dec53a3de008ca854d1b54b31af7f12de144556f3cedca2823d560e2688ceb",
+    "backend/tests/ai-agent-response-grounding.examples.js": "3b078d73fc1bc1a605fc809265dbf43c71e87d95117c7fb5fb72ae5ca63d65d4",
+    "backend/tests/ai-agent-plan-concurrency.examples.js": "856998ef216c63ec5643226b9d5752e7d4c96d95e0865ceca200b58fbe1993e2"
+  },
+  "competitiveAssessment": {
+    "internalChecklistScore": 7.81,
+    "changed": false,
+    "independentMarketRating": false,
+    "parityProven": false
+  },
+  "limitations": [
+    "The provider in the new runtime tests is scripted. These checks do not estimate accuracy on real merchant traffic or accents.",
+    "The agent can still select an irrelevant tool, misunderstand intent, or omit part of a request. Write proposals still require human review.",
+    "The new concurrency scenarios ran on an isolated SQLite database; this report does not claim that those new scenarios were rerun on PostgreSQL.",
+    "Feedback proportions need independently labelled samples to establish population false-accept and false-reject rates.",
+    "No physical-device certification, credentialed GSP submission, native channel production traffic, or deployed release certification was established by this pass.",
+    "The last whole-release certification remains failed because repository content changed during its run."
+  ]
+}

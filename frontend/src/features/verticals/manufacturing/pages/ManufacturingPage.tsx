@@ -384,7 +384,7 @@ export default function ManufacturingPage() {
           <h2 className="font-display font-black text-slate-900">{t("manufacturing.register.title")}</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-[680px] w-full text-sm">
+          <table className="trade-mobile-table min-w-[680px] w-full text-sm">
             <thead>
               <tr className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
                 <th className="p-3">{t("manufacturing.register.bom")}</th>
@@ -397,11 +397,11 @@ export default function ManufacturingPage() {
             <tbody>
               {(bomsQ.data ?? []).map((bom) => (
                 <tr key={bom.id} className="border-t border-slate-100">
-                  <td className="p-3 font-bold text-slate-900">{bom.name}</td>
-                  <td className="p-3">{productNames.get(bom.finishedProductId) ?? bom.finishedProductId}</td>
-                  <td className="p-3">{t("manufacturing.register.versionValue", { version: bom.version })}</td>
-                  <td className="p-3">{bom.items.length}</td>
-                  <td className="p-3"><span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-bold text-teal-800">{bom.status}</span></td>
+                  <td data-label={t("manufacturing.register.bom")} className="p-3 font-bold text-slate-900">{bom.name}</td>
+                  <td data-label={t("manufacturing.register.finishedGood")} className="p-3">{productNames.get(bom.finishedProductId) ?? bom.finishedProductId}</td>
+                  <td data-label={t("manufacturing.register.version")} className="p-3">{t("manufacturing.register.versionValue", { version: bom.version })}</td>
+                  <td data-label={t("manufacturing.register.materials")} className="p-3">{bom.items.length}</td>
+                  <td data-label={t("manufacturing.register.status")} className="p-3"><span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-bold text-teal-800">{bom.status}</span></td>
                 </tr>
               ))}
               {!bomsQ.isLoading && !bomsQ.data?.length ? (

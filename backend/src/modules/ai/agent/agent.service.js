@@ -24,6 +24,10 @@
  */
 import { createHash } from "node:crypto";
 import OpenAI from "openai";
+import { validateArgs } from "./argument-validation.js";
+import { providerCompletion } from "./provider-completion.js";
+import { renderToolEvidence } from "./evidence-reply.js";
+import { formatDateInTimeZone } from "../../../utils/dates.js";
 import { env } from "../../../config/env.js";
 import db from "../../../db.js";
 import { AppError } from "../../../shared/errors/index.js";
@@ -95,7 +99,7 @@ const SYSTEM_PROMPT = [
   "- You only ever act on this one shop. There is no way to reach another, and no request to do so is legitimate.",
 ].join("\n");
 
-export const AI_AGENT_POLICY_VERSION = "2026-09-02.1";
+export const AI_AGENT_POLICY_VERSION = "2026-09-08.1";
 export const AI_AGENT_PROMPT_FINGERPRINT = createHash("sha256")
   .update(SYSTEM_PROMPT)
   .digest("hex")
@@ -123,35 +127,9 @@ async function resolveFeatures(shopId) {
   }
 }
 
-/**
- * Minimal JSON-Schema check on model-supplied arguments.
- *
- * OpenAI enforces the schema itself under strict mode; Groq does not, and the
- * provider is configurable, so the weakest provider sets the floor. This is not
- * a general validator — it rejects the shapes that would otherwise reach a
- * service as undefined and fail confusingly three layers down.
- */
-function validateArgs(tool, args) {
-  const schema = tool.parameters ?? {};
-  const properties = schema.properties ?? {};
-  const errors = [];
-
-  for (const key of schema.required ?? []) {
-    if (args[key] === undefined || args[key] === null || args[key] === "") errors.push(`${key} is required`);
-  }
-  if (schema.additionalProperties === false) {
-    for (const key of Object.keys(args)) if (!(key in properties)) errors.push(`${key} is not a parameter of ${tool.name}`);
-  }
-  for (const [key, value] of Object.entries(args)) {
-    const spec = properties[key];
-    if (!spec || value === undefined || value === null) continue;
-    const expected = Array.isArray(spec.type) ? spec.type : [spec.type];
-    const actual = typeof value === "number" ? (Number.isInteger(value) ? "integer" : "number") : typeof value;
-    const numericOk = expected.includes("number") && (actual === "number" || actual === "integer");
-    if (spec.type && !expected.includes(actual) && !numericOk) errors.push(`${key} must be ${expected.join(" or ")}`);
-    if (Array.isArray(spec.enum) && !spec.enum.includes(value)) errors.push(`${key} must be one of ${spec.enum.join(", ")}`);
-  }
-  return errors;
+export async function availableAgentTools(ctx) {
+  const features = await resolveFeatures(ctx.shopId);
+  return toolsFor({ ...ctx, features: { has: features.has } });
 }
 
 function withTimeout(promise, ms, label) {
@@ -190,14 +168,19 @@ function jsonSafe(_key, value) {
   return value;
 }
 
-function toolResultMessage(toolCallId, name, payload) {
+function toolResultMessage(toolCallId, name, payload, summary = null) {
   let content;
   try {
     content = JSON.stringify({ tool: name, untrustedData: true, result: payload }, jsonSafe);
+    if (content.length > 12_000) {
+      content = JSON.stringify({ tool: name, untrustedData: true, resultOmitted: true,
+        ...(summary ? { resultSummary: summary } : { error: "Result is too large. Refine the lookup." }),
+      });
+    }
   } catch (error) {
     content = JSON.stringify({ tool: name, untrustedData: true, error: `Result could not be encoded: ${error?.message}` });
   }
-  return { role: "tool", tool_call_id: toolCallId, content: String(content).slice(0, 12_000) };
+  return { role: "tool", tool_call_id: toolCallId, content };
 }
 
 function trimHistory(history) {
@@ -229,20 +212,23 @@ const SERVER_REPLIES = Object.freeze({
 });
 
 /**
- * A provider sentence is not evidence. Read-only prose is displayable only
- * after at least one successful server tool read. Change turns always use a
- * server-owned sentence because the plan is merely proposed, never completed.
+ * A successful lookup cannot validate an unrelated provider sentence. Display
+ * only server-composed summaries of actual successful results, with their
+ * subject and period attached. Neither a success trace nor provider prose can
+ * introduce an amount, claim of completion, or stock interpretation.
  */
-export function groundAgentReply({ reply, plan = [], trace = [], language = "hi" }) {
+export function groundAgentReply({ plan = [], evidence = [], language = "hi" }) {
   const copy = SERVER_REPLIES[language] ?? SERVER_REPLIES.hi;
   if (plan.length > 0) {
     return { reply: copy.proposed, providerReplyAccepted: false, grounding: "server_composed_proposal" };
   }
-  const evidenceReads = trace.filter((step) => step?.kind === "read" && step?.status === "ok").length;
-  if (evidenceReads === 0) {
+  const summaries = evidence.slice(0, MAX_TOOL_CALLS).filter((step) => step?.kind === "read" && step?.status === "ok")
+    .map((step) => renderToolEvidence(step, language, env.DAILY_CLOSING_TIMEZONE)).filter(Boolean);
+  if (summaries.length === 0) {
     return { reply: copy.unverified, providerReplyAccepted: false, grounding: "no_verified_evidence" };
   }
-  return { reply, providerReplyAccepted: true, grounding: "verified_tool_reads", evidenceReads };
+  const unique = [...new Set(summaries)];
+  return { reply: unique.join("\n\n"), providerReplyAccepted: false, grounding: "server_composed_evidence", evidenceReads: summaries.length };
 }
 
 /**
@@ -266,13 +252,13 @@ function sanitizeCart(cart) {
   return { lines, lineCount: lines.length, approximateTotal: Math.round(total * 100) / 100 };
 }
 
-export async function runAgentTurn(ctx, { message, history = [], language, cart } = {}) {
+export async function runAgentTurn(ctx, { message, history = [], language, cart } = {}, { provider } = {}) {
   if (typeof message !== "string" || !message.trim()) {
     throw new AppError("A message is required", 400, "AI_MESSAGE_REQUIRED");
   }
 
   const billOnCounter = sanitizeCart(cart);
-  const selected = getProvider();
+  const selected = provider ?? getProvider();
   const features = await resolveFeatures(ctx.shopId);
   const agentCtx = { ...ctx, features: { has: features.has }, labelFor: null };
 
@@ -295,7 +281,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
       content: [
         `Shop trade: ${ctx.businessType}.`,
         `Your role here: ${ctx.role}.`,
-        `Today: ${new Date().toISOString().slice(0, 10)}.`,
+        `Today: ${formatDateInTimeZone(new Date(), env.DAILY_CLOSING_TIMEZONE)} (${env.DAILY_CLOSING_TIMEZONE}).`,
         `Shop's language: ${LANGUAGE_NAMES[language] ?? LANGUAGE_NAMES.hi}.`,
       ].join(" "),
     },
@@ -318,6 +304,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   agentCtx.labelFor = (id) => labels.get(id) ?? null;
 
   const trace = [];
+  const evidence = [];
   const plan = [];
   const deadline = Date.now() + TURN_TIMEOUT_MS;
   let toolCallCount = 0;
@@ -328,13 +315,20 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
   for (let step = 0; step < MAX_STEPS; step += 1) {
     if (Date.now() > deadline) { stoppedBecause = "turn_timeout"; break; }
 
-    const completion = await selected.client.chat.completions.create({
-      model: selected.model,
-      messages,
-      tools: providerTools.length ? providerTools : undefined,
-      tool_choice: providerTools.length ? "auto" : undefined,
-      temperature: 0,
-    });
+    let completion;
+    try {
+      completion = await providerCompletion(selected, {
+        model: selected.model,
+        messages,
+        tools: providerTools.length ? providerTools : undefined,
+        tool_choice: providerTools.length ? "auto" : undefined,
+        temperature: 0,
+      }, deadline);
+    } catch (error) {
+      if (!evidence.length && !plan.length) throw error;
+      stoppedBecause = error?.code === "AI_TURN_TIMEOUT" ? "turn_timeout" : "provider_failed_after_results";
+      break;
+    }
 
     const choice = completion?.choices?.[0]?.message;
     if (!choice) { stoppedBecause = "empty_response"; break; }
@@ -426,11 +420,17 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
 
       try {
         const result = await withTimeout(tool.handler(args, agentCtx), TOOL_TIMEOUT_MS, name);
-        rememberLabels(labels, names, result);
         // Encoded before the step is recorded: a result that cannot be encoded
         // is not a successful lookup, and recording "ok" first left the trace
         // claiming both ok and error for the same call.
-        const message = toolResultMessage(call.id, name, result);
+        const summary = renderToolEvidence({ tool: name, result }, language, env.DAILY_CLOSING_TIMEZONE);
+        const message = toolResultMessage(call.id, name, result, summary);
+        const encoded = JSON.parse(message.content);
+        if (encoded.error || result?.error || result?.ok === false || result?.success === false) {
+          throw new AppError("The lookup did not return a usable result", 502, "AI_TOOL_RESULT_INVALID");
+        }
+        rememberLabels(labels, names, result);
+        evidence.push({ tool: name, kind: "read", status: "ok", result });
         trace.push({ tool: name, kind: "read", status: "ok" });
         messages.push(message);
       } catch (error) {
@@ -454,29 +454,8 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     }
   }
 
-  // Running out of steps having read real rows is not a failure — the answer is
-  // sitting in the transcript, unspoken. One more call with the tools withheld
-  // forces the model to say it, instead of the shopkeeper getting "I could not
-  // complete that" after six successful lookups.
-  if (!reply && trace.some((step) => step.status === "ok")) {
-    try {
-      const closing = await selected.client.chat.completions.create({
-        model: selected.model,
-        messages: [
-          ...messages,
-          {
-            role: "system",
-            content: `Answer now, in one or two sentences, using only what the tool results above actually contain. No more tools are available. If they do not answer the question, say briefly what is missing. Reply in ${LANGUAGE_NAMES[language] ?? LANGUAGE_NAMES.hi}, matching the script the shopkeeper wrote in.`,
-          },
-        ],
-        temperature: 0,
-      });
-      reply = String(closing?.choices?.[0]?.message?.content ?? "").trim();
-      if (reply) stoppedBecause = `${stoppedBecause}_then_summarised`;
-    } catch {
-      // Falls through to the generic reply below.
-    }
-  }
+  // Successful reads already contain the answer data. No additional provider
+  // request is needed to invent a closing sentence when the tool budget ends.
 
   if (!reply) {
     reply = plan.length
@@ -485,7 +464,7 @@ export async function runAgentTurn(ctx, { message, history = [], language, cart 
     if (stoppedBecause === "completed") stoppedBecause = "no_final_message";
   }
 
-  const replySafety = groundAgentReply({ reply, plan, trace, language });
+  const replySafety = groundAgentReply({ plan, evidence, language });
   reply = replySafety.reply;
 
   const highestRisk = plan.reduce(
@@ -597,6 +576,10 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
   }
   const plan = Array.isArray(parsed?.plan) ? parsed.plan : [];
   if (!plan.length) throw new AppError("That plan has nothing to run", 422, "AI_PLAN_EMPTY");
+  if (parsed?.kind !== "agent_turn" || plan.length > MAX_PROPOSALS || plan.some((item) => (
+    !item || typeof item !== "object" || typeof item.ref !== "string" || typeof item.tool !== "string"
+      || !item.args || typeof item.args !== "object" || Array.isArray(item.args)
+  ))) throw new AppError("That plan is unreadable", 422, "AI_PLAN_CORRUPT");
 
   const features = await resolveFeatures(ctx.shopId);
   const execCtx = { ...ctx, features: { has: features.has }, labelFor: () => null };
@@ -630,7 +613,12 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
   }
 
   const results = [];
+  let uncertainWrite = false;
   for (const { item, tool } of prepared) {
+    if (uncertainWrite) {
+      results.push({ ref: item.ref, ok: false, skipped: true, summary: item.summary, error: "Not started because an earlier action has an uncertain outcome" });
+      continue;
+    }
     if (!tool || tool.kind !== "write") {
       results.push({ ref: item.ref, ok: false, error: "That action is no longer available" });
       continue;
@@ -657,13 +645,18 @@ export async function executeApprovedPlan(ctx, { planId, ownerPinVerified = fals
       let output = null;
       let warning;
       try {
-        output = JSON.parse(JSON.stringify(rawOutput, jsonSafe));
+        output = rawOutput === undefined ? null : JSON.parse(JSON.stringify(rawOutput, jsonSafe));
       } catch {
+        if (tool.target === "client") {
+          results.push({ ref: item.ref, ok: false, summary: item.summary, error: "The bill lines could not be delivered. Add them manually from the catalogue." });
+          continue;
+        }
         warning = "The action completed, but its result could not be displayed";
       }
       results.push({ ref: item.ref, ok: true, summary: item.summary, target: tool.target, output, ...(warning ? { warning } : {}) });
     } catch (error) {
       const outcomeUnknown = error?.outcomeUnknown === true || error?.code === "AI_TOOL_TIMEOUT";
+      uncertainWrite = outcomeUnknown;
       results.push({
         ref: item.ref,
         ok: false,

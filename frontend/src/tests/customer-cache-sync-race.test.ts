@@ -96,4 +96,31 @@ describe("customer list refresh racing sync acknowledgement", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: "local-customer", server_id: server.id, udharAmount: 125 });
   });
+
+  it.each([
+    { deleted_at: "2026-09-08T04:00:00.000Z" },
+    { deletedAt: "2026-09-08T04:00:00.000Z" },
+    { merged_into_id: "confirmed-ledger" },
+    { mergedIntoId: "confirmed-ledger" },
+  ])("does not let a retired pending echo pin a stale balance: %j", async (retired) => {
+    state.rows[0] = { ...state.rows[0], udharAmount: 125, totalUdhar: 125, balance_derived_from_local_ledger: true };
+    state.ledger = [{ id: "old-payment", customer_id: server.id, type: "PAYMENT", amount: 75, sync_status: "pending_sync", ...retired }];
+
+    const rows = await cacheCustomers([{ ...server, udharAmount: 100, totalUdhar: 100 }]);
+
+    expect(rows[0].udharAmount).toBe(100);
+    expect(state.rows[0].udharAmount).toBe(100);
+  });
+
+  it("preserves a live payment even when another payment has been retired", async () => {
+    state.rows[0] = { ...state.rows[0], udharAmount: 50, totalUdhar: 50, balance_derived_from_local_ledger: true };
+    state.ledger = [
+      { id: "old-payment", customer_id: server.id, type: "PAYMENT", amount: 75, sync_status: "pending_sync", merged_into_id: "confirmed-ledger" },
+      { id: "new-payment", customer_id: "local-customer", type: "PAYMENT", amount: 75, sync_status: "pending_sync", deleted_at: null },
+    ];
+
+    const rows = await cacheCustomers([{ ...server, udharAmount: 125, totalUdhar: 125 }]);
+
+    expect(rows[0].udharAmount).toBe(50);
+  });
 });

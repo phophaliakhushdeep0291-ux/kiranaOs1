@@ -67,7 +67,10 @@ export default function ProductUnitsPage() {
   const listQ = useQuery({ queryKey: ["product-units"], queryFn: () => listProductUnits() });
   const summaryQ = useQuery({ queryKey: ["product-units", "summary"], queryFn: getProductUnitSummary });
 
-  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["product-units"] });
+  const invalidate = (unit?: ProductUnit) => {
+    void queryClient.invalidateQueries({ queryKey: ["product-units"] });
+    setLookedUp((current) => current && unit && current.unit?.id === unit.id ? { ...current, unit } : current);
+  };
 
   function failure(title: string) {
     return (err: unknown) => {
@@ -92,6 +95,7 @@ export default function ProductUnitsPage() {
     mutationFn: (data: ReceiveProductUnitsInput) => receiveProductUnits(data),
     onSuccess: (units) => {
       invalidate();
+      setLookedUp(null);
       setPanelOpen(false);
       toast({ title: `${units.length} unit${units.length === 1 ? "" : "s"} added to stock` });
     },
@@ -102,7 +106,7 @@ export default function ProductUnitsPage() {
     mutationFn: (vars: { id: string; billNumber: string; customerName: string; customerPhone: string; sellingPrice: number }) =>
       sellProductUnit(vars.id, vars),
     onSuccess: (unit) => {
-      invalidate();
+      invalidate(unit);
       setSelling(null);
       toast({
         title: `${unit.productName} recorded as sold`,
@@ -114,31 +118,31 @@ export default function ProductUnitsPage() {
 
   const returnMut = useMutation({
     mutationFn: (id: string) => returnProductUnit(id),
-    onSuccess: () => { invalidate(); toast({ title: "Taken back into stock as open box" }); },
+    onSuccess: (unit) => { invalidate(unit); toast({ title: "Taken back into stock as open box" }); },
     onError: failure("Could not take it back"),
   });
 
   const serviceMut = useMutation({
     mutationFn: (id: string) => sendProductUnitToService(id),
-    onSuccess: () => { invalidate(); toast({ title: "Marked as away with the service centre" }); },
+    onSuccess: (unit) => { invalidate(unit); toast({ title: "Marked as away with the service centre" }); },
     onError: failure("Could not update"),
   });
 
   const serviceBackMut = useMutation({
     mutationFn: (id: string) => returnProductUnitFromService(id),
-    onSuccess: () => { invalidate(); toast({ title: "Back from service" }); },
+    onSuccess: (unit) => { invalidate(unit); toast({ title: "Back from service" }); },
     onError: failure("Could not update"),
   });
 
   const writeOffMut = useMutation({
     mutationFn: (id: string) => writeOffProductUnit(id, "lost"),
-    onSuccess: () => { invalidate(); toast({ title: "Marked as lost" }); },
+    onSuccess: (unit) => { invalidate(unit); toast({ title: "Marked as lost" }); },
     onError: failure("Could not write it off"),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteProductUnit(id),
-    onSuccess: () => { invalidate(); setDeleting(null); toast({ title: "Unit moved to recycle bin" }); },
+    onSuccess: () => { invalidate(); setLookedUp(null); setDeleting(null); toast({ title: "Unit moved to recycle bin" }); },
     onError: failure("Could not delete"),
   });
 
@@ -149,6 +153,7 @@ export default function ProductUnitsPage() {
       .filter((unit) => {
         if (filter === "all") return true;
         if (filter === "held") return unit.isHeld;
+        if (filter === "in_stock") return unit.status === "in_stock" || unit.status === "returned";
         return unit.status === filter;
       })
       .filter((unit) => {
@@ -186,7 +191,10 @@ export default function ProductUnitsPage() {
                 placeholder="Scan or type an IMEI or serial"
                 value={lookupCode}
                 onChange={(e) => setLookupCode(e.target.value)}
-                inputMode="numeric"
+                inputMode="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </div>
             <Button
@@ -215,7 +223,7 @@ export default function ProductUnitsPage() {
           ))}
         </form>
 
-        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Kpi icon={<Boxes size={16} />} label="On the shelf" value={String(summary?.inStock ?? 0)} tone="green" />
           <Kpi icon={<PackageCheck size={16} />} label="Sold this month" value={String(summary?.soldThisMonth ?? 0)} tone="blue" />
           <Kpi icon={<Wrench size={16} />} label="At service" value={String(summary?.atService ?? 0)} tone={summary?.atService ? "amber" : "green"} />
@@ -275,7 +283,7 @@ export default function ProductUnitsPage() {
             </div>
           ) : (
             <div className="app-table-scroll overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="trade-mobile-table w-full text-[13px]">
                 <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-bold">Unit</th>
@@ -290,12 +298,12 @@ export default function ProductUnitsPage() {
                     const chip = STATUS_CHIP[unit.status] ?? STATUS_CHIP.in_stock;
                     return (
                       <tr key={unit.id} className={i < rows.length - 1 ? "border-b border-[#eef2f8]" : ""}>
-                        <td className="px-5 py-3 align-top">
+                        <td data-label="Unit" className="px-5 py-3 align-top">
                           <p className="font-bold text-[var(--brand-ink)]">{unit.productName}</p>
                           {unit.imei && <p className="mt-0.5 font-mono text-[11.5px] text-[#52627e]">IMEI {unit.imei}</p>}
                           {unit.serialNumber && <p className="mt-0.5 font-mono text-[11px] text-[#8492ac]">S/N {unit.serialNumber}</p>}
                         </td>
-                        <td className="px-5 py-3 align-top">
+                        <td data-label="Status" className="px-5 py-3 align-top">
                           <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", CHIP_TONES[chip.tone])}>{chip.label}</span>
                           {unit.condition !== "new" && (
                             <span className="mt-1 block w-fit rounded-[7px] bg-[#f1f5fa] px-2 py-[3px] text-[11px] font-bold text-[#52627e]">
@@ -303,7 +311,7 @@ export default function ProductUnitsPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-5 py-3 align-top">
+                        <td data-label="Sold to" className="px-5 py-3 align-top">
                           {unit.soldAt ? (
                             <>
                               <p className="font-semibold text-[var(--brand-ink)]">{unit.customerName || "—"}</p>
@@ -314,8 +322,8 @@ export default function ProductUnitsPage() {
                             </>
                           ) : <span className="text-[12px] text-[#8492ac]">—</span>}
                         </td>
-                        <td className="px-5 py-3 align-top"><WarrantyCell unit={unit} /></td>
-                        <td className="px-5 py-3 align-top">
+                        <td data-label="Warranty" className="px-5 py-3 align-top"><WarrantyCell unit={unit} /></td>
+                        <td data-label="Actions" className="px-5 py-3 align-top">
                           <div className="flex flex-wrap items-center justify-end gap-2 lg:mouse:gap-1.5">
                             {unit.canSell && (
                               <Button variant="outline" className="h-11 lg:mouse:h-8 gap-1.5 rounded-[8px] px-2.5 text-[11.5px] font-bold" onClick={() => setSelling(unit)}>

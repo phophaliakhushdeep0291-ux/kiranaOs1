@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "type": "kiranaos_release_certification_status",
+  "status": "failed",
+  "observedAt": "2026-09-08",
+  "sourceArtifact": "backend/release-artifacts/release-certification-latest.json",
+  "sourceArtifactSha256": "fd6c30c8b1d1d8904ac3e361f405da671f6959ec49ac01f2fa31692127ba2883",
+  "sourceCompletedAt": "2026-09-02T17:07:37.929Z",
+  "sourceCommit": "edce6a450311ef2e27bd84d7b358af86ac4edc84",
+  "sourceDirty": true,
+  "summary": { "passed": 15, "failed": 1, "blocked": 0, "skipped": 9 },
+  "failedRequiredStages": [
+    {
+      "id": "source-snapshot-stability",
+      "reason": "repository content changed during certification; rerun against one stable source snapshot"
+    }
+  ],
+  "supersedesAsCurrentClaim": "docs/evidence/local-release-certification-latest.json",
+  "nextProofRequired": "Run the complete current local certification against one stable source snapshot and retain the successful report.",
+  "limitation": "The August 24 pass remains historical evidence. It does not establish certification of the current worktree. Targeted September 8 checks do not replace whole-release certification."
+}

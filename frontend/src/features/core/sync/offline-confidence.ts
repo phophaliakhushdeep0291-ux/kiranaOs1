@@ -1,12 +1,14 @@
 import {
   dexieDB,
   offlineDB,
+  filterRowsForCurrentScope,
   type OfflineRow,
   type PendingSyncEvent,
   type SyncCursorRow,
 } from "@/lib/offline/db";
 import { getCurrentSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { readOfflineReadiness, type OfflineReadinessState } from "@/features/core/sync/offline-readiness";
+import { calculateSyncQueueCounts } from "@/features/core/sync/sync-health";
 
 export interface OfflineConfidenceSnapshot {
   dbHealthy: boolean;
@@ -100,20 +102,9 @@ export async function readOfflineConfidenceSnapshot(): Promise<OfflineConfidence
       readOfflineReadiness(),
     ]);
 
-    const pendingSyncCount = allOperations.filter(
-      (row) =>
-        row.status === "PENDING" ||
-        row.status === "SYNCING" ||
-        row.sync_status === "pending_sync" ||
-        row.sync_status === "syncing",
-    ).length;
-    const failedSyncCount = allOperations.filter(
-      (row) => row.status === "FAILED" || row.sync_status === "failed",
-    ).length;
-    const conflictCount = conflicts.filter(
-      (row) =>
-        row.sync_status === "conflict" || row.resolution === "unresolved",
-    ).length;
+    const { pending: pendingSyncCount, failed: failedSyncCount, conflict: conflictCount } = calculateSyncQueueCounts(
+      filterRowsForCurrentScope(allOperations), filterRowsForCurrentScope(conflicts),
+    );
     const cloudSyncAllowed = subscription?.cloudSyncAllowed ?? true;
 
     const warning =

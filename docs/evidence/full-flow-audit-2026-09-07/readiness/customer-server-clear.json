@@ -1,0 +1,10 @@
+{
+  "customerId": "cmtr64ts900e2q5iknhnfa4w3",
+  "optionalFieldsClearedOnServer": true,
+  "fields": {
+    "udharLimit": null,
+    "dueDate": null,
+    "promiseToPayDate": null,
+    "notes": null
+  }
+}

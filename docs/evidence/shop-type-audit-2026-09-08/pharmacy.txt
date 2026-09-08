@@ -1,0 +1,89 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Prescriptions" [level=1]
+  - generic: QA pharmacy Workflow · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Prescriptions page loaded
+  - paragraph: Waiting to dispense
+  - paragraph: "0"
+  - paragraph: Dispensed today
+  - paragraph: "1"
+  - paragraph: Repeats available
+  - paragraph: "1"
+  - paragraph: Older than 90 days
+  - paragraph: "0"
+  - heading "Prescription register" [level=3]
+  - paragraph: 0 Schedule H/H1/X entries this month, out of 1 recorded.
+  - button "Record Prescription":
+    - text: Record Prescription
+  - button "To dispense"
+  - button "Dispensed" [active]
+  - button "Cancelled"
+  - button "Whole register"
+  - combobox "Filter by schedule":
+    - option "Every schedule" [selected]
+    - option "Schedule H"
+    - option "Schedule H1"
+    - option "Schedule X"
+    - option "Over the counter"
+    - option "Other"
+  - textbox "Patient, doctor, entry no."
+  - table:
+    - rowgroup:
+      - row "Patient Prescribed by Medicines Status Actions":
+        - columnheader "Patient"
+        - columnheader "Prescribed by"
+        - columnheader "Medicines"
+        - columnheader "Status"
+        - columnheader "Actions"
+    - rowgroup:
+      - row "Patient QA Patient — RX-000001 Prescribed by QA Doctor 08 Sept 26 Medicines 1 × QA pharmacy item Status Dispensed 1 repeat left Actions Repeat Correct RX-000001 Cancel RX-000001 Delete RX-000001":
+        - cell "Patient QA Patient — RX-000001":
+          - text: Patient
+          - paragraph: QA Patient
+          - paragraph:
+            - text: —
+          - generic: RX-000001
+        - cell "Prescribed by QA Doctor 08 Sept 26":
+          - text: Prescribed by
+          - paragraph: QA Doctor
+          - paragraph:
+            - text: 08 Sept 26
+        - cell "Medicines 1 × QA pharmacy item":
+          - text: Medicines
+          - list:
+            - listitem: 1 × QA pharmacy item
+        - cell "Status Dispensed 1 repeat left":
+          - text: Status Dispensed
+          - generic: 1 repeat left
+        - cell "Actions Repeat Correct RX-000001 Cancel RX-000001 Delete RX-000001":
+          - text: Actions
+          - button "Repeat":
+            - text: Repeat
+          - button "Correct RX-000001":
+          - button "Cancel RX-000001":
+          - button "Delete RX-000001":
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

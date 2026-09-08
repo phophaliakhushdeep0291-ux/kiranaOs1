@@ -212,11 +212,18 @@ export ALLOW_RESTORE_TEST_DB=true
 npm run drill:restore
 ```
 
-It backs up the live database, restores into the scratch one, and compares them
-— shops, bills, **integer-paise bill totals**, customer orders, restaurant
-tables, audit rows. Any variance fails. It also reports how old the backup was,
-because a restore that works from a three-week-old dump has still lost three
-weeks.
+It creates a fresh snapshot-backed dump, restores into the scratch database,
+and compares every public table by exact row count and content hash. It also
+runs read-only money reconciliation. Missing evidence or any variance fails.
+The source must contain a representative business workload, including bills,
+payments and customer ledger entries; an empty schema cannot pass. For a
+pre-launch rehearsal, use populated test data in an isolated test database.
+
+The `--check` command validates configuration only, not connections or recovery.
+The age in the actual drill report applies to its newly captured snapshot. It
+does not prove that scheduled production backups are recent or retained.
+Rehearse those separately with the trusted-manifest procedure in
+[`DISASTER_RECOVERY.md`](../../backend/docs/DISASTER_RECOVERY.md).
 
 The drill refuses to run if the restore target's name looks like production, and
 never writes to the source.
@@ -230,7 +237,8 @@ Run it **before the café goes live**, and again whenever the schema changes.
 1. Put the till and DineIn back on the previous build.
 2. Leave the database alone unless the release included a migration.
 3. If it did, restore the pre-migration backup into a scratch database first and
-   check it with the drill above before touching the live one.
+   verify that specific backup with `proof:dr` and its trusted snapshot manifest
+   before touching the live one. The cafe drill always creates a new backup.
 
 Roll back the apps freely. Roll back the database only with a verified restore
 in hand.

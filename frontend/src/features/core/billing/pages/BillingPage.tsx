@@ -1334,21 +1334,23 @@ export default function Billing() {
   // Items the assistant resolved while the shopkeeper was on another screen.
   //
   // Waits for the catalogue, since a staged line is an id until there is a
-  // Product to hang it on, and takeStagedBillLines clears as it reads so a
-  // remount cannot bill the same items twice.
+  // Product to hang it on. Restore the existing draft before merging, and
+  // leave the queue untouched if this effect is cancelled while reading it.
   useEffect(() => {
-    if (allProducts.length === 0) return;
+    if (!draftHydrated || allProducts.length === 0) return;
     let cancelled = false;
     void (async () => {
-      const staged = await takeStagedBillLines();
+      const staged = await takeStagedBillLines(() => !cancelled);
       if (cancelled || staged.length === 0) return;
       if (mergeAssistantLines(staged) > 0) {
         toast({ title: t("billing.page.addedToCart"), description: t("billing.page.addedToCartDetail") });
       }
-    })();
+    })().catch(() => {
+      if (!cancelled) toast({ title: t("billing.assistant.queueFailed"), description: t("billing.assistant.queueRetry"), variant: "destructive" });
+    });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allProducts.length, productById, t]);
+  }, [draftHydrated, allProducts.length, productById, t]);
 
   function addVoiceDraftToCart() {
     if (!voiceDraft) return;

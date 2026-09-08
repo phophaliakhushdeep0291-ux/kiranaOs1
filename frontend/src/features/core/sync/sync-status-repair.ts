@@ -3,14 +3,9 @@ import { dexieDB, filterRowsForCurrentScope, MAX_AUTOMATIC_RETRY_ATTEMPTS, offli
 import { nowIso } from "@/lib/offline/context";
 import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
 import { buildBackendSyncOperation } from "@/features/core/sync/sync-operation-normalizer";
+import { calculateSyncQueueCounts, type SyncQueueCounts } from "@/features/core/sync/sync-health";
 
-export interface SyncQueueCounts {
-  pending: number;
-  failed: number;
-  conflict: number;
-  retryable: number;
-  totalBlocking: number;
-}
+export type { SyncQueueCounts } from "@/features/core/sync/sync-health";
 
 type MutableRow = Record<string, unknown>;
 const STALE_SYNCING_TIMEOUT_MS = 2 * 60 * 1000;
@@ -612,50 +607,6 @@ export async function repairRetryableBillValidationConflicts(): Promise<number> 
   return repaired;
 }
 
-function conflictIdentitySet(conflict: OfflineRow): Set<string> {
-  const ids = new Set<string>();
-  addString(ids, conflict.id);
-  addString(ids, conflict.entity_id);
-  addString(ids, conflict.sourceId);
-  addString(ids, conflict.source_id);
-  addString(ids, conflict.sourceEventId);
-  addString(ids, conflict.source_event_id);
-  const local = isRecord(conflict.local_snapshot) ? conflict.local_snapshot : {};
-  const server = isRecord(conflict.server_snapshot) ? conflict.server_snapshot : {};
-  [local, server].forEach((row) => {
-    ["id", "local_id", "localId", "server_id", "serverId", "entity_id", "entityId", "billId", "bill_id", "customerId", "customer_id", "productId", "product_id"].forEach((key) => addString(ids, row[key]));
-  });
-  return ids;
-}
-
-async function repairResolvedStoredConflicts(): Promise<number> {
-  await dexieDB.open();
-  const conflicts = filterRowsForCurrentScope(
-    await offlineDB.getAll<OfflineRow>("sync_conflicts").catch(() => []),
-  ).filter((row) => row.sync_status === "conflict" || row.resolution === "unresolved");
-  if (conflicts.length === 0) return 0;
-  const activeOutbox = filterRowsForCurrentScope(
-    await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
-  ).filter((event) => !isSyncedOutbox(event));
-  const activeIds = activeOutbox.map(eventIdentitySet);
-  const now = nowIso();
-  let repaired = 0;
-  for (const conflict of conflicts) {
-    const ids = conflictIdentitySet(conflict);
-    const stillBlocked = activeIds.some((outboxIds) => intersects(ids, outboxIds));
-    if (stillBlocked) continue;
-    await dexieDB.sync_conflicts.put({
-      ...conflict,
-      resolution: "auto_resolved",
-      sync_status: "synced",
-      resolved_at: now,
-      updated_at: now,
-    });
-    repaired += 1;
-  }
-  return repaired;
-}
-
 /**
  * Drops the retry backoff on failed operations when the connection comes back.
  *
@@ -713,8 +664,7 @@ export async function repairResolvedSyncStatusNoise(options: {
   const financialRepaired = await hardenLocalFinancialData().then((result) => result.total).catch(() => 0);
   const billRepaired = await repairStaleSyncedBillOutboxFailures().catch(() => 0);
   const duplicateKeyRepaired = await repairResolvedDuplicateKeyOutboxFailures().catch(() => 0);
-  const conflictsRepaired = await repairResolvedStoredConflicts().catch(() => 0);
-  const repaired = staleSyncingRepaired + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + cancellationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired + conflictsRepaired;
+  const repaired = staleSyncingRepaired + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + cancellationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired;
   if (repaired > 0 && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
   }
@@ -758,60 +708,11 @@ export async function repairStaleSyncedBillOutboxFailures(): Promise<number> {
   return repaired;
 }
 
-/**
- * How many stored conflicts are news, rather than a second voice for a row the
- * outbox is already reporting.
- *
- * A server refusal leaves two rows behind, not one: the outbox event flips to
- * CONFLICT, and the server's conflict record lands in `sync_conflicts` naming
- * that same event in `source_event_id`. Adding the two totals told a pharmacy
- * that had refused a single Schedule H1 line "2 changes need review", while the
- * Sync Status screen that headline sends them to listed one. The count could
- * not be worked down to zero by dealing with the thing that was actually wrong,
- * which is the one property a "needs review" number has to have.
- *
- * So a stored conflict counts only when no live outbox row already speaks for
- * it. This is the same identity relation `repairResolvedStoredConflicts` uses to
- * decide a conflict has outlived its event; here it decides that the event has
- * already been counted. Every active outbox row lands in exactly one of
- * pending/failed/conflict, so matching any of them means the work is on screen.
- *
- * The identity sets are built only when there is a stored conflict to test: the
- * common case is an empty conflict table behind a few hundred queued catalogue
- * rows, and that case must stay free.
- */
-function countUnrepresentedStoredConflicts(
-  syncConflicts: OfflineRow[],
-  activeOutbox: PendingSyncEvent[],
-): number {
-  const unresolved = filterRowsForCurrentScope(syncConflicts).filter(
-    (row) => row.sync_status === "conflict" || row.resolution === "unresolved",
-  );
-  if (unresolved.length === 0) return 0;
-  const activeIds = activeOutbox.map(eventIdentitySet);
-  return unresolved.filter((row) => {
-    const ids = conflictIdentitySet(row);
-    return !activeIds.some((outboxIds) => intersects(ids, outboxIds));
-  }).length;
-}
-
 export async function readSyncQueueCounts(): Promise<SyncQueueCounts> {
   await repairResolvedSyncStatusNoise().catch(() => 0);
   const outbox = filterRowsForCurrentScope(
     await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
-  ).filter((row) => !isSyncedOutbox(row));
+  );
   const syncConflicts = await offlineDB.getAll<OfflineRow>("sync_conflicts").catch(() => []);
-  const pending = outbox.filter(isPendingOutbox).length;
-  const failed = outbox.filter(isFailedOutbox).length;
-  const outboxConflicts = outbox.filter(isConflictOutbox).length;
-  const storedConflicts = countUnrepresentedStoredConflicts(syncConflicts, outbox);
-  const conflict = outboxConflicts + storedConflicts;
-  const retryable = failed + outboxConflicts;
-  return {
-    pending,
-    failed,
-    conflict,
-    retryable,
-    totalBlocking: pending + failed + conflict,
-  };
+  return calculateSyncQueueCounts(outbox, filterRowsForCurrentScope(syncConflicts));
 }

@@ -1,0 +1,64 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Billing" [level=1]
+  - generic: QA stationery Workflow · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Billing page loaded
+  - generic: Open bills
+  - button "Walk-in 1":
+    - generic: Walk-in
+    - generic: "1"
+  - button "Walk-in 1":
+    - generic: Walk-in
+    - generic: "1"
+  - button "New bill":
+    - text: New bill
+  - generic: Draft restored (1 item)
+  - button "Dismiss"
+  - textbox "Search products"
+  - button "Scan barcode":
+  - button "Open voice billing":
+  - button "All"
+  - button "general"
+  - button "Order QR":
+    - text: Order QR
+  - button "QA stationery item piece ₹20.00 +":
+    - generic: 📦
+    - paragraph: QA stationery item
+    - paragraph: piece
+    - generic: ₹20.00
+    - generic: +
+  - paragraph: Order Summary
+  - paragraph: 1 Item
+  - paragraph: Products
+  - generic: ₹
+  - paragraph: ₹40
+  - paragraph: Subtotal
+  - paragraph: ₹40
+  - paragraph: Grand Total
+  - generic: 1 item
+  - generic: ₹40
+  - button "Review & collect ₹40"
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- region "Notifications (F8)":
+  - list
