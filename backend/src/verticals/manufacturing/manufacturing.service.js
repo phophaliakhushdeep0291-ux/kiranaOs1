@@ -38,14 +38,15 @@ export async function runDetails(shopId, runId, actor = {}) {
 }
 
 export async function overview(shopId) {
-  const [activeBoms, plannedRuns, inProgressRuns, quarantinedLots, recentRuns] = await Promise.all([
+  const [activeBoms, plannedRuns, inProgressRuns, quarantinedLots, openRuns, closedRuns] = await Promise.all([
     db.manufacturingBom.count({ where: { shopId, status: "active" } }),
     db.productionRun.count({ where: { shopId, status: "planned" } }),
     db.productionRun.count({ where: { shopId, status: "in_progress" } }),
     db.inventoryLot.count({ where: { shopId, status: { in: ["quarantined", "recalled"] }, producedByRunId: { not: null } } }),
-    db.productionRun.findMany({ where: { shopId }, orderBy: { createdAt: "desc" }, take: 20, include: { bom: true, consumptions: true, outputs: true } }),
+    db.productionRun.findMany({ where: { shopId, status: { in: ["planned", "in_progress", "quarantined"] } }, orderBy: { createdAt: "asc" }, include: { bom: true } }),
+    db.productionRun.findMany({ where: { shopId, status: { notIn: ["planned", "in_progress", "quarantined"] } }, orderBy: { createdAt: "desc" }, take: 20, include: { bom: true } }),
   ]);
-  return { summary: { activeBoms, plannedRuns, inProgressRuns, quarantinedLots }, recentRuns };
+  return { summary: { activeBoms, plannedRuns, inProgressRuns, quarantinedLots }, recentRuns: [...openRuns, ...closedRuns] };
 }
 
 export function listBoms(shopId) {
@@ -90,6 +91,7 @@ export async function completeRun(shopId, runId, input, actor = {}) {
     const location = await resolveOperationalLocation(shopId, run.locationId, tx);
     const finished = await tx.product.findFirst({ where: { id: run.bom.finishedProductId, shopId, deletedAt: null }, include: { sellingUnits: true } });
     if (!finished) throw new AppError("Finished product is unavailable", 422, "FINISHED_PRODUCT_UNAVAILABLE");
+    if (!finished.batchTrackingEnabled) throw new AppError("Enable batch tracking on the finished product before recording production", 422, "FINISHED_PRODUCT_BATCH_TRACKING_REQUIRED");
     const scale = Number(run.plannedOutputBaseQty) / Number(run.bom.outputQuantityBaseQty);
     const bomByProduct = new Map(run.bom.items.map((row) => [row.materialProductId, row]));
     if (new Set(input.consumptions.map((row) => row.productId)).size !== input.consumptions.length) throw new AppError("Combine duplicate material consumption rows", 422, "DUPLICATE_CONSUMPTION");
@@ -118,7 +120,7 @@ export async function completeRun(shopId, runId, input, actor = {}) {
     }
 
     const outputTotal = round2(input.outputs.reduce((sum, row) => sum + Number(row.quantityBaseQty), 0));
-    if (Math.abs(outputTotal - Number(input.actualOutputBaseQty)) > 0.01) throw new AppError("Packaging outputs must equal actual finished output", 422, "PRODUCTION_OUTPUT_MISMATCH");
+    if (Math.abs(outputTotal - Number(input.actualOutputBaseQty)) > 0.001) throw new AppError("Packaging outputs must equal actual finished output", 422, "PRODUCTION_OUTPUT_MISMATCH");
     const lot = await tx.inventoryLot.create({ data: { shopId, locationId: location.id, productId: finished.id, producedByRunId: run.id, batchNumber: input.finishedBatchNumber, manufacturedOn: cleanDate(input.manufacturedOn), expiresOn: cleanDate(input.expiresOn), receivedBaseQty: input.actualOutputBaseQty, availableBaseQty: input.actualOutputBaseQty, costPerRateUnit: finished.costPerRateUnit, status: input.qcStatus === "conditional" ? "quarantined" : "active", note: `Produced by ${run.runNumber}` } });
     const packMap = new Map();
     for (const row of input.outputs) {
@@ -151,7 +153,11 @@ export async function releaseRun(shopId, runId, actor = {}) {
     runLocation(run, actor);
     const claimed = await tx.productionRun.updateMany({ where: { id: run.id, shopId, status: "quarantined" }, data: { status: "completed", qcStatus: "passed" } });
     if (claimed.count !== 1) throw new AppError("This run's QC status changed. Refresh and review it again", 409, "PRODUCTION_RUN_NOT_ON_HOLD");
-    await tx.inventoryLot.updateMany({ where: { shopId, producedByRunId: run.id, status: "quarantined" }, data: { status: "active", note: `QC released from ${run.runNumber}` } });
+    const lots = await tx.inventoryLot.findMany({ where: { shopId, producedByRunId: run.id } });
+    const today = cleanDate(formatDateInTimeZone(new Date()));
+    if (!lots.length || lots.some((lot) => lot.status !== "quarantined" || lot.expiresOn < today)) throw new AppError("This batch is expired, recalled or no longer on QC hold. Review it in inventory before continuing", 409, "PRODUCTION_BATCH_NOT_RELEASABLE");
+    const released = await tx.inventoryLot.updateMany({ where: { shopId, producedByRunId: run.id, status: "quarantined", expiresOn: { gte: today } }, data: { status: "active", note: `QC released from ${run.runNumber}` } });
+    if (released.count !== lots.length) throw new AppError("Batch status changed. Refresh and review it again", 409, "PRODUCTION_BATCH_NOT_RELEASABLE");
     return tx.productionRun.update({ where: { id: run.id }, data: { status: "completed", qcStatus: "passed" }, include: { bom: true, consumptions: true, outputs: true } });
   });
 }

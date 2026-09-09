@@ -8,6 +8,11 @@
 import type { syncEn } from "./sync";
 
 export const syncHi: Record<keyof typeof syncEn, string> = {
+  "sync.local.checking": "लोकल डेटा जाँचा जा रहा है",
+  "sync.local.unavailable": "लोकल डेटा की पुष्टि नहीं हो सकी",
+  "sync.local.unavailableBody": "लोकल डेटाबेस पढ़ा नहीं जा सका। सिंक स्थिति और कुल रकम की पुष्टि नहीं हुई है। आगे बढ़ने से पहले दोबारा जाँचें या रिकवरी मोड खोलें।",
+  "sync.local.retry": "लोकल जाँच दोबारा करें",
+  "sync.local.recovery": "रिकवरी मोड खोलें",
   // ── Page header ──
   "sync.title": "क्लाउड बैकअप",
   "sync.action.retryFailed": "फिर कोशिश करें",

@@ -11,6 +11,11 @@
 // Singular/plural is two keys, never one string with a suffix: Hindi does not
 // pluralise by adding "s", so `${n} change${n === 1 ? "" : "s"}` is untranslatable.
 export const syncEn = {
+  "sync.local.checking": "Checking local data",
+  "sync.local.unavailable": "Cannot verify local data",
+  "sync.local.unavailableBody": "The local database could not be read. Sync status and totals are unverified. Retry or open Recovery Mode before continuing.",
+  "sync.local.retry": "Retry local check",
+  "sync.local.recovery": "Open Recovery Mode",
   // ── Page header ──
   "sync.title": "Sync Status",
   "sync.action.retryFailed": "Retry failed",

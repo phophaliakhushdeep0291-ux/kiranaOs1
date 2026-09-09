@@ -1,3 +1,4 @@
+import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SyncDiagnosticsSection } from "./SyncDiagnosticsSection";
 import { formatDistanceToNow } from "date-fns";
@@ -83,6 +84,7 @@ interface SyncStatusSnapshot {
   isBackendReachable: boolean;
   backendError: string | null;
   isLoading: boolean;
+  localReadError: boolean;
   isSyncing: boolean;
   pendingOperations: PendingSyncEvent[];
   failedOperations: PendingSyncEvent[];
@@ -102,6 +104,7 @@ const initialSnapshot: SyncStatusSnapshot = {
   isBackendReachable: readBackendConnectionSnapshot().backendReachable,
   backendError: readBackendConnectionSnapshot().error ?? null,
   isLoading: true,
+  localReadError: false,
   isSyncing: false,
   pendingOperations: [],
   failedOperations: [],
@@ -387,8 +390,7 @@ async function countBusinessRows() {
     tables.map((table) =>
       offlineDB
         .getAll<OfflineRow>(table)
-        .then((rows) => rows.length)
-        .catch(() => 0),
+        .then((rows) => filterRowsForCurrentScope(rows).length),
     ),
   );
   return counts.reduce((total, count) => total + count, 0);
@@ -396,8 +398,7 @@ async function countBusinessRows() {
 
 async function getLastSuccessfulSyncAt() {
   const cursors = await offlineDB
-    .getAll<SyncCursorRow>("sync_cursor")
-    .catch(() => []);
+    .getAll<SyncCursorRow>("sync_cursor");
   const cursor = cursors.find((row) => row.id === "global");
   const lastPull = cursor?.last_pulled_at ?? cursor?.updated_at ?? null;
   const syncedOutbox = await offlineDB
@@ -407,8 +408,7 @@ async function getLastSuccessfulSyncAt() {
         (operation) =>
           operation.status === "SYNCED" || operation.sync_status === "synced",
       ),
-    )
-    .catch(() => []);
+    );
 
   const outboxTimes = syncedOutbox
     .map(
@@ -441,7 +441,7 @@ export async function readSyncSnapshot(options: { localOnly?: boolean } = {}): P
     localBusinessRowsCount,
     localSubscriptionAllowed,
   ] = await Promise.all([
-    offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
+    offlineDB.getAll<PendingSyncEvent>("sync_outbox"),
     offlineDB
       .getAll<ConflictRow>("sync_conflicts")
       .then((rows) =>
@@ -449,8 +449,7 @@ export async function readSyncSnapshot(options: { localOnly?: boolean } = {}): P
           (row) =>
             isUnresolvedSyncConflict(row),
         ),
-      )
-      .catch(() => []),
+      ),
     getLastSuccessfulSyncAt(),
     countBusinessRows(),
     canSubscriptionSyncLocally(),
@@ -473,8 +472,8 @@ export async function readSyncSnapshot(options: { localOnly?: boolean } = {}): P
     // Uploads can finish while diagnostics are loading. Read the durable queue
     // again so an old response cannot bring an already-cleared error back.
     [currentOperations, cachedConflictRows] = await Promise.all([
-      offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => currentOperations),
-      offlineDB.getAll<ConflictRow>("sync_conflicts").catch(() => cachedConflictRows),
+      offlineDB.getAll<PendingSyncEvent>("sync_outbox"),
+      offlineDB.getAll<ConflictRow>("sync_conflicts"),
     ]);
   }
 
@@ -499,6 +498,7 @@ export async function readSyncSnapshot(options: { localOnly?: boolean } = {}): P
   );
 
   return {
+    localReadError: false,
     isOnline,
     isBrowserOnline: connection.browserOnline,
     isBackendReachable: connection.backendReachable,
@@ -957,7 +957,7 @@ export default function SyncStatusPage() {
         setSnapshot((current) => ({ ...current, ...next, isLoading: false }));
       }
     } catch {
-      if (generation === refreshGeneration.current) setSnapshot((current) => ({ ...current, isLoading: false }));
+      if (generation === refreshGeneration.current) setSnapshot((current) => ({ ...current, localReadError: true, isLoading: false }));
     }
   }, []);
 
@@ -1327,6 +1327,8 @@ export default function SyncStatusPage() {
       await refresh();
     }
   };
+
+  if (snapshot.localReadError || snapshot.isLoading) return <LocalDataUnavailable checking={snapshot.isLoading} onRetry={() => void refresh()} />;
 
   return (
     <PageShell className="space-y-4 sm:space-y-6">

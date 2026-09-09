@@ -1,0 +1,10 @@
+import db from '../backend/src/db.js';
+const shop = await db.shop.findFirst({ where: { name: 'QA manufacturing Workflow', phone: '8778090810' }, select: { id: true } });
+if (!shop) throw new Error('QA manufacturing shop missing');
+const run = await db.productionRun.findFirst({ where: { shopId: shop.id, runNumber: 'QA-MOBILE-RUN-02' }, include: { consumptions: true, outputs: true } });
+if (!run) throw new Error('QA run missing');
+const products = await db.product.findMany({ where: { shopId: shop.id, name: { in: ['QA manufacturing item', 'QA raw material'] } }, select: { name: true, stockBaseQty: true } });
+const lots = await db.inventoryLot.findMany({ where: { shopId: shop.id, producedByRunId: run.id }, select: { batchNumber: true, status: true, availableBaseQty: true } });
+const ledger = await db.stockLedger.findMany({ where: { shopId: shop.id, sourceId: run.id }, select: { action: true, changeBaseQty: true } });
+console.log(JSON.stringify({ run: { number: run.runNumber, status: run.status, qc: run.qcStatus, planned: run.plannedOutputBaseQty, actual: run.actualOutputBaseQty, consumed: run.consumptions.map(c => c.actualBaseQty) }, products, lots, ledger }, null, 2));
+await db.$disconnect();

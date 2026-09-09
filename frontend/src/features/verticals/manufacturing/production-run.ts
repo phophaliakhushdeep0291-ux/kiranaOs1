@@ -55,7 +55,11 @@ export function completionPayload(details: RunDetails, draft: CompletionDraft) {
     return { qty, ...(value.sellingUnitId ? { sellingUnitId: value.sellingUnitId, packageCount: Number(value.amount) } : {}) };
   };
   if (!draft.batch.trim() || draft.batch.trim().length > 80) throw new Error("batch");
-  const validDay = (day: string) => /^\d{4}-\d{2}-\d{2}$/.test(day) && new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day;
+  const validDay = (day: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+    const date = new Date(`${day}T00:00:00Z`);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === day;
+  };
   if (!validDay(draft.manufacturedOn) || !validDay(draft.expiresOn) || draft.expiresOn <= draft.manufacturedOn) throw new Error("dates");
   const output = row(details.run.bom.finishedProductId, draft.actual);
   const consumptions = details.run.bom.items.map((item) => {

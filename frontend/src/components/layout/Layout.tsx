@@ -411,7 +411,7 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   // hides there rather than each deciding for itself.
   const floatingHelpersAllowed = cleanPath(loc) !== "/billing";
   const resolvedPageTitle = pageTitle ?? getPageTitle(loc, t);
-  const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
+  const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing, queueStatus } = useOfflineStatus();
   const { snapshot } = useSubscriptionSnapshot();
   const { def: btDef } = useBusinessType();
   useBusinessTypeServerSync();
@@ -476,15 +476,15 @@ export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle
   };
 
   const attentionCount = pendingCount + failedCount + conflictCount;
-  const hasSyncProblems = failedCount > 0 || conflictCount > 0;
+  const hasSyncProblems = queueStatus !== "ready" || failedCount > 0 || conflictCount > 0;
   const hasPendingSync = pendingCount > 0;
   const backendChecked = Boolean(backendStatus.checkedAt);
-  const connectionLabel = isOnline
+  const connectionLabel = queueStatus !== "ready" ? (queueStatus === "error" ? t("sync.local.unavailable") : t("sync.local.checking")) : isOnline
     ? (hasSyncProblems ? "Review sync" : isSyncing ? "Syncing..." : hasPendingSync ? `${pendingCount} pending` : "Synced")
     : backendStatus.browserOnline
       ? (backendChecked ? "Cloud paused" : "Checking backup")
       : "Offline safe";
-  const connectionDetail = isOnline
+  const connectionDetail = queueStatus !== "ready" ? t("sync.local.unavailableBody") : isOnline
     ? (hasSyncProblems ? "Some records need owner review" : hasPendingSync ? "Backup will finish shortly" : "Last synced just now")
     : backendStatus.browserOnline
       ? "Local billing works; backup will retry"

@@ -43,7 +43,7 @@ function backupTone(status: BackupArtifact["status"]): "green" | "amber" | "red"
 export default function SyncSettingsPage() {
   const { t } = useAppLanguage();
   const { toast } = useToast();
-  const { isOnline, isBrowserOnline, backendStatus, isSyncing, pendingCount, failedCount, conflictCount, syncNow } = useOfflineStatus();
+  const { isOnline, isBrowserOnline, backendStatus, isSyncing, pendingCount, failedCount, conflictCount, syncNow, queueStatus } = useOfflineStatus();
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [backups, setBackups] = useState<BackupArtifact[]>([]);
   const [backupHistoryLoading, setBackupHistoryLoading] = useState(true);
@@ -114,8 +114,8 @@ export default function SyncSettingsPage() {
   const hasPending = pendingCount > 0;
   const hasFailed = failedCount > 0;
   const hasConflict = conflictCount > 0;
-  const allSynced = isOnline && !hasPending && !hasFailed && !hasConflict;
-  const backupStatusLabel = isOnline
+  const allSynced = queueStatus === "ready" && !isSyncing && isOnline && !hasPending && !hasFailed && !hasConflict;
+  const backupStatusLabel = queueStatus !== "ready" ? t(queueStatus === "error" ? "sync.local.unavailable" : "sync.local.checking") : isOnline
     ? (isSyncing ? "Syncing" : hasFailed || hasConflict ? "Review sync" : hasPending ? "Pending backup" : "Synced")
     : isBrowserOnline
       ? (backendStatus.checkedAt ? "Cloud paused" : "Checking")
@@ -123,7 +123,7 @@ export default function SyncSettingsPage() {
   const backupStatusTone = allSynced ? "green" : hasFailed || hasConflict ? "red" : isBrowserOnline ? "amber" : "gray";
 
   function handleSync() {
-    void syncNow({ manual: true });
+    void syncNow({ manual: true }).catch(() => toast({ title: t("sync.local.unavailable"), variant: "destructive" }));
     toast({ title: isOnline ? "Syncing now..." : isBrowserOnline ? "Cloud paused" : "You're offline" });
   }
 
@@ -171,7 +171,7 @@ export default function SyncSettingsPage() {
         <Card>
           <CardHead icon={<Upload size={15} />} title={t("settings.sync.queueTitle")} sub={t("settings.sync.queueSub")} action={(pendingCount + failedCount) > 0 ? <button onClick={handleSync} className="text-[12px] font-bold text-[var(--brand)] hover:underline">{t("settings.sync.retryAll")}</button> : undefined} />
           <div className="px-5 pb-5">
-            {(pendingCount + failedCount + conflictCount) === 0 ? (
+            {queueStatus !== "ready" ? <p role="status" className="py-6 text-sm text-amber-800">{t(queueStatus === "error" ? "sync.local.unavailableBody" : "sync.local.checking")}</p> : (pendingCount + failedCount + conflictCount) === 0 ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
                 <span className="grid h-12 w-12 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 size={22} /></span>
                 <p className="text-[13px] font-bold text-[var(--brand-ink)]">{t("settings.sync.allSynced")}</p>

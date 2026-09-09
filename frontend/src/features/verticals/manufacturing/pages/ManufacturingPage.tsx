@@ -21,6 +21,8 @@ import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
 import { useToast } from "@/hooks/use-toast";
+import ProductionRuns from "./ProductionRuns";
+import type { ProductionRun } from "../production-run";
 
 type BomItem = {
   id: string;
@@ -39,17 +41,6 @@ type Bom = {
   items: BomItem[];
 };
 
-type Run = {
-  id: string;
-  runNumber: string;
-  status: string;
-  qcStatus: string;
-  plannedOutputBaseQty: number;
-  actualOutputBaseQty?: number | null;
-  finishedBatchNumber?: string | null;
-  bom: { name: string };
-};
-
 type Overview = {
   summary: {
     activeBoms: number;
@@ -57,7 +48,7 @@ type Overview = {
     inProgressRuns: number;
     quarantinedLots: number;
   };
-  recentRuns: Run[];
+  recentRuns: ProductionRun[];
 };
 
 type Trace = {
@@ -300,6 +291,8 @@ export default function ManufacturingPage() {
         <Kpi icon={<ShieldCheck size={18} />} label={t("manufacturing.kpi.qcHold")} value={summary?.quarantinedLots} />
       </section>
 
+      <ProductionRuns runs={overviewQ.data?.recentRuns ?? []} boms={bomsQ.data ?? []} loading={overviewQ.isLoading} />
+
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <div className={panel} id="new-bom">
           <div className="border-b border-slate-100 p-4 sm:p-5">
@@ -450,24 +443,6 @@ export default function ManufacturingPage() {
         <div className="flex flex-col gap-2 p-4 sm:flex-row"><Input value={flipkartShipmentId} onChange={(event) => setFlipkartShipmentId(event.target.value)} placeholder={t("manufacturing.flipkart.shipmentId")} /><Button disabled={!flipkartQ.data?.configured || !flipkartShipmentId.trim()} onClick={() => void openFlipkartPdf("invoice")}>{t("manufacturing.flipkart.invoice")}</Button><Button disabled={!flipkartQ.data?.configured || !flipkartShipmentId.trim()} onClick={() => void openFlipkartPdf("label")}>{t("manufacturing.flipkart.label")}</Button></div>
       </section>
 
-      <section className={panel}>
-        <div className="border-b border-slate-100 p-4 sm:p-5">
-          <h2 className="font-display font-black text-slate-900">{t("manufacturing.runs.title")}</h2>
-        </div>
-        <div className="divide-y divide-slate-100">
-          {(overviewQ.data?.recentRuns ?? []).map((run) => (
-            <div key={run.id} className="grid gap-1.5 p-4 text-sm sm:grid-cols-[1fr_1fr_120px_140px] sm:gap-2">
-              <strong className="text-slate-900">{run.runNumber}</strong>
-              <span>{run.bom.name}</span>
-              <span>{run.finishedBatchNumber ?? t("manufacturing.runs.notProduced")}</span>
-              <span className="font-bold text-slate-600">{run.status} · {run.qcStatus}</span>
-            </div>
-          ))}
-          {!overviewQ.isLoading && !overviewQ.data?.recentRuns.length ? (
-            <div className="p-8 text-center text-slate-500">{t("manufacturing.runs.empty")}</div>
-          ) : null}
-        </div>
-      </section>
     </PageShell>
   );
 }
