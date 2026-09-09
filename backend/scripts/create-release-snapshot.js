@@ -39,6 +39,12 @@ export function releaseSourceInventory(sourceRoot) {
   return { commit, files, contentSha256: digest(JSON.stringify(files)) };
 }
 
+export function releaseSnapshotDestination(sourceRoot) {
+  // pnpm's nested package names can exceed Windows dependency-resolution path
+  // limits under release-artifacts/source-snapshots/<full UUID>.
+  return path.join(path.resolve(sourceRoot), ".release-qa", crypto.randomUUID().replaceAll("-", "").slice(0, 12));
+}
+
 export function createReleaseSnapshot({ sourceRoot, destination, afterCopy = () => {} }) {
   const source = fs.realpathSync(sourceRoot);
   const target = path.resolve(destination);
@@ -77,7 +83,7 @@ export function createReleaseSnapshot({ sourceRoot, destination, afterCopy = () 
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-  const destination = path.join(sourceRoot, "backend", "release-artifacts", "source-snapshots", crypto.randomUUID());
+  const destination = releaseSnapshotDestination(sourceRoot);
   try { console.log(JSON.stringify(createReleaseSnapshot({ sourceRoot, destination }), null, 2)); }
   catch (error) { console.error(JSON.stringify({ type: "kiranaos_release_source_snapshot", status: "failed", destination, message: error.message })); process.exitCode = 1; }
 }

@@ -1,6 +1,6 @@
-import test, { after } from "node:test";
+import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
-import { createIntegrationContext, assertSuccess } from "./setup.js";
+import { createIntegrationContext, assertSuccess, resetDatabase } from "./setup.js";
 import { createTenant, createProduct, login, billPayload } from "./factories.js";
 import { BUSINESS_TYPES, settingsForBusinessType } from "../../src/verticals/registry.js";
 import { availableAgentTools } from "../../src/modules/ai/agent/agent.service.js";
@@ -10,6 +10,9 @@ const day = (offset = 0) => new Date(Date.now() + offset * 86400000).toISOString
 if (ctx.skip) test("shop-type flows unavailable", { skip: ctx.reason }, () => {});
 else {
   after(() => ctx.close());
+  // Files run in separate processes but share this invocation's test database.
+  // Factory phone sequences restart per process, so remove prior-file tenants.
+  before(() => resetDatabase(ctx.db));
   for (const trade of BUSINESS_TYPES) {
     test(`${trade}: bootstrap, counter sale and dedicated workflow persist`, async () => {
       const tenant = await createTenant(ctx.db, { shopName: `Shop audit ${trade}`, planCode: "pro" });

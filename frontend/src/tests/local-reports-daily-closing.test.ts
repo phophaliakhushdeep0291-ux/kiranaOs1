@@ -35,6 +35,23 @@ import {
   buildDailyClosingReport,
   buildLocalReportSnapshot,
 } from "@/features/core/reports/local-reporting";
+import { offlineDB } from "@/lib/offline/db";
+
+describe("financial read failures cannot become confirmed zero totals", () => {
+  it.each(["bills", "bill_items", "payments", "customer_ledger", "products", "customers", "suppliers", "inventory_movements", "purchase_bills", "sync_outbox", "sync_conflicts"])("rejects reports and closing if %s cannot be read, then recovers", async (table) => {
+    const getAll = vi.mocked(offlineDB.getAll);
+    const original = getAll.getMockImplementation()!;
+    getAll.mockImplementation(async (name) => {
+      if (name === table) throw new Error(`unreadable:${table}`);
+      return original(name);
+    });
+    try {
+      await expect(buildLocalReportSnapshot({ from: "2026-06-06", to: "2026-06-06" })).rejects.toThrow(`unreadable:${table}`);
+      await expect(buildDailyClosingReport("2026-06-06")).rejects.toThrow(`unreadable:${table}`);
+    } finally { getAll.mockImplementation(original); }
+    await expect(buildDailyClosingReport("2026-06-06")).resolves.toHaveProperty("date", "2026-06-06");
+  });
+});
 
 const scope = {
   tenant_id: "tenant_reports",

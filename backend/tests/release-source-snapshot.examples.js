@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { createReleaseSnapshot, releaseSourceInventory } from "../scripts/create-release-snapshot.js";
+import { createReleaseSnapshot, releaseSourceInventory, releaseSnapshotDestination } from "../scripts/create-release-snapshot.js";
 
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "kiranaos-source-snapshot-test-"));
 const source = path.join(fixture, "source");
@@ -13,7 +13,7 @@ const run = (args) => {
 };
 try {
   fs.mkdirSync(source);
-  fs.writeFileSync(path.join(source, ".gitignore"), ".env\nnode_modules/\ngenerated/\n");
+  fs.writeFileSync(path.join(source, ".gitignore"), ".env\nnode_modules/\ngenerated/\n/.release-qa/\n");
   fs.writeFileSync(path.join(source, "app.js"), "export const amount = 1;\n");
   fs.writeFileSync(path.join(source, "retired.js"), "old\n");
   run(["init"]); run(["add", "."]);
@@ -23,10 +23,14 @@ try {
   fs.writeFileSync(path.join(source, ".env"), "PRIVATE_VALUE=do-not-copy\n");
   fs.unlinkSync(path.join(source, "retired.js"));
   const before = releaseSourceInventory(source);
-  const destination = path.join(fixture, "snapshot");
+  const destination = releaseSnapshotDestination(source);
+  assert.equal(path.dirname(destination), path.join(source, ".release-qa"));
+  assert.match(path.basename(destination), /^[a-f0-9]{12}$/);
+  assert.notEqual(releaseSnapshotDestination(source), destination);
   const report = createReleaseSnapshot({ sourceRoot: source, destination });
   assert.equal(report.status, "captured");
   assert.equal(report.sourceContentSha256, before.contentSha256);
+  assert.equal(releaseSourceInventory(source).contentSha256, before.contentSha256, "nested snapshots must remain ignored and never enter later captures");
   assert.equal(fs.readFileSync(path.join(destination, "app.js"), "utf8"), "export const amount = 2;\n");
   assert.equal(fs.existsSync(path.join(destination, "new-test.js")), true);
   assert.equal(fs.existsSync(path.join(destination, ".env")), false);

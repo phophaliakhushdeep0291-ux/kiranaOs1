@@ -515,7 +515,7 @@ type PaymentSlice = { label: string; value: number; color: string; dot: string }
 function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
   const { t } = useAppLanguage();
   const billingWords = useShopBillingWords();
-  const { isOnline, isSyncing, pendingCount, failedCount } = useOfflineStatus();
+  const { isOnline, isSyncing, pendingCount, failedCount, conflictCount, queueStatus } = useOfflineStatus();
   const [, navigate] = useLocation();
   const insightsPersonalization = usePersonalization();
   const [period, setPeriod] = useState<DashboardPeriod>("week");
@@ -730,8 +730,8 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
     ];
     return orderByUsage(rows, (row) => row.href, usageScores(insightsPersonalization.data?.dashboardOrder));
   }, [ownerReport, avgBillValue, insightsPersonalization.data]);
-  const syncStatusValue = failedCount > 0 ? "Review needed" : pendingCount > 0 ? `${pendingCount} pending` : "Up to date";
-  const syncHealthGood = failedCount === 0 && pendingCount === 0;
+  const syncStatusValue = queueStatus !== "ready" ? t(queueStatus === "error" ? "sync.local.unavailable" : "sync.local.checking") : failedCount + conflictCount > 0 ? t("sync.local.reviewNeeded") : pendingCount > 0 ? `${pendingCount} pending` : "Up to date";
+  const syncHealthGood = queueStatus === "ready" && failedCount + conflictCount === 0 && pendingCount === 0;
 
   return (
     <>
@@ -745,7 +745,8 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         isOnline={isOnline}
         isSyncing={isSyncing}
         pendingCount={pendingCount}
-        failedCount={failedCount}
+        failedCount={failedCount + conflictCount}
+        queueStatus={queueStatus}
         salesDelta={salesDelta}
         outstandingDelta={outstandingDelta}
         profitDelta={profitDelta}
@@ -1053,13 +1054,13 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                 {syncHealthGood ? "All systems operational" : "Backup needs attention"}
               </div>
               <p className={cn("ml-7 mt-0.5 text-[10px] font-medium", DASH_MUTED)}>
-                {isSyncing ? "Sync running now" : syncHealthGood ? "Last synced just now" : "Local data is safe"}
+                {queueStatus !== "ready" ? t("sync.local.unavailableBody") : isSyncing ? "Sync running now" : syncHealthGood ? "Local queue checked" : "Backup needs attention"}
               </p>
             </div>
             <div className="mt-2.5 flex min-h-0 flex-1 flex-col justify-evenly gap-2">
               <HealthRow icon={<Wifi size={13} />} label={t("dashboard.health.internet")} status={isOnline ? "ok" : "warn"} value={isOnline ? t("dashboard.health.online") : t("dashboard.health.offline")} />
-              <HealthRow icon={<RefreshCw size={13} />} label={t("dashboard.health.dataSync")} status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={syncStatusValue} />
-              <HealthRow icon={<Cloud size={13} />} label={t("dashboard.health.backupStatus")} status={pendingCount > 0 || failedCount > 0 ? "warn" : "ok"} value={isSyncing ? t("dashboard.health.syncing") : pendingCount > 0 ? t("settings.notify.queued") : t("dashboard.health.secure")} />
+              <HealthRow icon={<RefreshCw size={13} />} label={t("dashboard.health.dataSync")} status={queueStatus !== "ready" ? "warn" : failedCount + conflictCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={syncStatusValue} />
+              <HealthRow icon={<Cloud size={13} />} label={t("dashboard.health.backupStatus")} status={!syncHealthGood ? "warn" : "ok"} value={queueStatus !== "ready" ? syncStatusValue : failedCount + conflictCount > 0 ? t("sync.local.reviewNeeded") : isSyncing ? t("dashboard.health.syncing") : pendingCount > 0 ? t("settings.notify.queued") : t("dashboard.health.secure")} />
               <HealthRow icon={<MonitorSmartphone size={13} />} label={t("dashboard.health.deviceStatus")} status="ok" value={t("inventory.status.active")} />
             </div>
             <Link href="/sync-status">
@@ -1103,6 +1104,7 @@ interface MobileGeneralDashboardProps {
   isSyncing: boolean;
   pendingCount: number;
   failedCount: number;
+  queueStatus: "checking" | "ready" | "error";
   salesDelta: number | null;
   outstandingDelta: number | null;
   profitDelta: number | null;
@@ -1125,6 +1127,7 @@ function MobileGeneralDashboard({
   isSyncing,
   pendingCount,
   failedCount,
+  queueStatus,
   salesDelta,
   outstandingDelta,
   profitDelta,
@@ -1136,7 +1139,7 @@ function MobileGeneralDashboard({
   periodSalesDelta,
 }: MobileGeneralDashboardProps) {
   const { t } = useAppLanguage();
-  const syncHealthy = failedCount === 0 && pendingCount === 0;
+  const syncHealthy = queueStatus === "ready" && failedCount === 0 && pendingCount === 0;
   const topRows = ownerReport?.topProducts.slice(0, 5) ?? [];
   const productsById = new Map(recentProducts.map((product) => [product.id, product]));
 
@@ -1156,7 +1159,7 @@ function MobileGeneralDashboard({
           </div>
           <Link href="/sync-status" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur">
             <span className={cn("h-2 w-2 rounded-full", syncHealthy && isOnline ? "bg-emerald-400" : failedCount > 0 ? "bg-rose-400" : "bg-amber-400")} />
-            {isSyncing ? t("dashboard.mobile.syncing") : !isOnline ? t("dashboard.mobile.offline") : syncHealthy ? t("dashboard.mobile.synced") : failedCount > 0 ? t("dashboard.mobile.review") : t("dashboard.mobile.pending", { count: pendingCount })}
+            {queueStatus !== "ready" ? t(queueStatus === "error" ? "sync.local.unavailable" : "sync.local.checking") : isSyncing ? t("dashboard.mobile.syncing") : !isOnline ? t("dashboard.mobile.offline") : syncHealthy ? t("dashboard.mobile.synced") : failedCount > 0 ? t("dashboard.mobile.review") : t("dashboard.mobile.pending", { count: pendingCount })}
           </Link>
         </div>
 

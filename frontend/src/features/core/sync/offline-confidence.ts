@@ -93,6 +93,7 @@ export async function readOfflineConfidenceSnapshot(): Promise<OfflineConfidence
       getCurrentSubscriptionSnapshot().catch(() => null),
       readOfflineReadiness(),
     ]);
+    if (!readiness.databaseAvailable) throw new Error("Local readiness database check failed");
 
     const { pending: pendingSyncCount, failed: failedSyncCount, conflict: conflictCount } = calculateSyncQueueCounts(
       filterRowsForCurrentScope(allOperations), filterRowsForCurrentScope(conflicts),

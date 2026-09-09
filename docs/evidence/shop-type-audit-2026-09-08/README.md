@@ -31,7 +31,7 @@ Every row passed isolated SQLite tenant setup, a confirmed cash sale, durable bi
 | Furniture | Quote → confirmation → advance → ready → delivery → installation passed. Overbooking, invalid product/bill links, edit/restore conflicts and retained dues were tested. | Order holds are not shared with all sales channels. Delivery does not itself create the financial sale/stock movement. Advance/refund reconciliation with central money reporting needs completion. |
 | Cosmetics | Shade/variant stock, expiry and tester register exist. Tester opening removes stock, then close/discard persists. Failure rollback is tested. | Tester requests lack a persistent request ID across retries; a repeated request can open a second tester. Replacement requires explicitly opening the new tester. |
 | Restaurant | Tables, menu, KOT, recipes and QR ordering exist. Table → KOT → preparing → ready → served passed. | This pass does not certify every guest-order/payment/table-settlement path. Physical kitchen/receipt output and payment settlement remain unverified. |
-| Manufacturing | BOM, production run, raw-material consumption, finished batch, QC and traceability exist in the API. A run consumed 12 raw units and produced 10 finished units; QC/trace records persisted. | **The current frontend shows recent runs but does not expose run creation/completion/release. This blocks a complete factory workflow through the UI.** Dispatch, wholesale invoicing, returns and export-document workflows also need a combined end-to-end pass. |
+| Manufacturing | Multi-material recipe editing, production planning, actual material/output entry and QC release are available in the mobile UI. A two-material recipe produced 20 units with exact stock deductions, including wastage. An earlier run verified QC hold/release without duplicate stock. Source-lot selection was exercised; transactional API tests cover tracked materials, packs and traceability. | The completion UI uses one output packaging type, and each material can consume only one source batch per run. Dispatch, wholesale invoicing, returns and export documents still need a combined end-to-end pass. |
 | Other/custom | Configurable core products, units, inventory, billing, customers and purchasing. Tenant setup and sale passed. | This is a configurable retail baseline, not complete support for every possible industry. |
 
 Specialist registers still contain English-only copy and some form labels need accessibility work. Core translation checks passing does not certify complete specialist Hindi coverage.
@@ -93,8 +93,50 @@ The final shared table selector was included in a fresh production build on 9 Se
 
 ### Priorities before selling specialist editions
 
-1. Complete the factory run UI and verify raw lots, actual consumption, QC hold/release and finished output through it.
+1. Support split source batches/output packaging and verify the complete production-to-dispatch/invoice/return workflow. Multi-material recipe editing, basic run planning, completion and QC release are implemented and verified below.
 2. Connect rental and furniture collections/advances/refunds to the central financial ledger, and enforce furniture holds across all sale channels.
 3. Integrate serial-unit selection with electronics billing and add repair tickets if repair shops are a target market.
 4. Add durable request IDs to retryable specialist stock actions, and make AI queue consumption and draft persistence one recoverable handoff.
 5. Finish the external and exact-release checks above, followed by merchant trials for the selected shop types. Specialist requirements should be agreed with those merchants; this matrix is not an exhaustive industry specification.
+
+### Manufacturing implementation follow-up — 9 September
+
+The earlier missing-run-controls finding is resolved for basic production. Owners/admins can plan a run, record every recipe material's actual use, choose source lots and packaging, record finished batch dates, hold output for QC and release a reviewed batch. The form has English/Hindi copy, touch-sized controls, a persistent visible save footer and inline errors. Open runs remain ahead of the most recent 20 closed runs, so unfinished work does not disappear from the queue.
+
+Backend changes enforce the same shop/location, complete material coverage, active unexpired source lots, required packaging and matching pack totals. Stock quantities use the ledger's two-decimal precision. Completion claims the run within the transaction; failures roll back the claim, material lots, pack counts, genealogy and ledger. Repeated completion/release cannot add stock twice. Recalled or expired output cannot be released, and finished products must retain batch tracking.
+
+Live phone verification at a requested 390×844 viewport (375px content width after the scrollbar):
+
+- Planned `QA-MOBILE-RUN-02` for 10 units through the UI.
+- Attempted to consume 101 raw units with only 100 available. The server rejected it, preserving the batch number, dates and output quantity.
+- Corrected consumption to 12.5 and output to 9. Saved on QC hold, then confirmed release. Raw stock changed 100 → 87.5; finished stock 20 → 29. Release changed the lot to active while leaving these quantities and the two ledger entries unchanged.
+- Opened the remaining QA run with tracked material and selected `QA-SOURCE-01`; the dropdown showed 87.5 available and its expiry. That second run was not submitted: development refreshes interrupted entry, and the shared QA fixtures were subsequently removed by separate workspace activity. The tracked-material completion path is covered by the isolated API tests.
+
+Visually inspected evidence: [production entry](manufacturing-production-entry-390.png), [material review and preserved error](manufacturing-production-review-390.png). The form's content width and scroll width both measured 375px, with the save footer visible while scrolling. [Completed run text](manufacturing-production-completed.txt), [QC hold stock](manufacturing-stock-hold.json) and [released stock](manufacturing-stock-released.json) preserve the live results. These are browser viewport checks, not tests on physical phones.
+
+Verification after the changes:
+
+| Check | Result | Log |
+| --- | --- | --- |
+| Manufacturing transactions and all 12 shop workflows | 15 passed, zero skipped | `output/manufacturing-integration.log` |
+| Manufacturing schema and existing contracts | 7 passed | `output/manufacturing-examples.log` |
+| Production form validation | 9 passed | `output/manufacturing-frontend-tests.log` |
+| Latest complete frontend suite | 2,488 passed, 1 skipped | `output/manufacturing-final-suite.log` |
+| Typecheck and translations | Passed; 5,847 translation keys | `output/manufacturing-final-typecheck.log`, `output/manufacturing-final-i18n.log` |
+| Configured production build and bundle/app checks | Passed | `output/manufacturing-final-build.log`, `output/manufacturing-final-appcheck.log` |
+
+A local production preview exposed a configuration gap: a build without `VITE_API_BASE_URL` succeeded but the app could not start. Vite now rejects that missing value before emitting a release build. The negative build check is in `output/manufacturing-build-missing-api.log`; the successful local build used `http://127.0.0.1:3000/api`. A deployment must supply its own API address. Two new untranslated sync-state messages caught by the suite were moved into the English/Hindi dictionaries; the translation regression passed afterwards.
+
+Restarting the local SQLite server later exposed missing change-feed triggers. The repository installer restored all 33 triggers (`output/manufacturing-sync-trigger-repair.log`). This restores forward change tracking; it is not evidence of PostgreSQL behavior or a complete multi-device recovery test. Unrelated cleanup, sync and reporting work continued in the shared checkout, so the results here describe the checked files and observed runs, not a signed production candidate.
+
+Remaining factory scope: split source lots, multiple output pack types in the form, recoverable drafts after page/device restart, and combined dispatch/invoice/return flows. The external integration and other specialist limitations above still apply.
+
+### Multi-material recipe follow-up — 9 September
+
+The recipe editor now supports up to 100 ingredient/packaging rows, with independent quantities and wastage. Numbered, labelled cards have touch-sized controls and English/Hindi copy. Duplicate materials and using the finished product as an ingredient are prevented; invalid quantities, unavailable products and untracked finished goods are rejected. Removing a row preserves the remaining row's selection and quantities. Owners/admins can save while online; errors retain the form values.
+
+Browser verification used the isolated `factory-ui-isolated.db` database and a built preview at port 5174. The saved `QA Spice and carton` recipe contains 12 spice units with 2% wastage and 5 cartons for a standard output of 10. Planning `QA-RECIPE-RUN-03` for 20 units populated 24.48 spice units and 10 cartons. Completing it with QC passed created active batch `QA-RECIPE-BATCH-03`, expiring 9 September 2027. Database assertions confirmed spice stock 100 → 75.52, carton stock 50 → 40 and finished stock 0 → 20, with exactly three ledger movements, two consumption records and one active output lot. Materials in this browser fixture were untracked; source-lot completion remains covered by the API tests above. Native keyboard entry was used to commit the expiry after automated date filling failed to retain it.
+
+Visually inspected evidence: [recipe form](manufacturing-recipe-mobile.png), [material cards](manufacturing-recipe-materials-mobile.png), [production material review](manufacturing-recipe-run-mobile.png), [completed run](manufacturing-recipe-completed.txt) and [stock assertions](manufacturing-recipe-stock.json). The production dialog measured 375px for both content and scroll width; the second recipe card measured 303px for both. The recipe screenshots show an unsaved layout-check draft; the saved recipe and completed run are recorded in the text/JSON evidence.
+
+The final frontend production gate passed typecheck, 5,861 translation keys, **2,518 tests passed / 1 skipped**, configured production build, bundle budgets and app checks (`output/manufacturing-recipe-final-production.log`). This includes 12 recipe validation tests. A newly added local-data recovery rendering test needed a router context for server rendering; that test setup was fixed without changing its assertions. The preview tested the recipe build from earlier in this follow-up; unrelated shared-checkout edits continued, so these results are not certification of an immutable release artifact.

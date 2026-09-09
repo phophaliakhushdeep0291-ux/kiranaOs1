@@ -1,6 +1,19 @@
 import type { manufacturingEn } from "./manufacturing";
 
 export const manufacturingHi: Record<keyof typeof manufacturingEn, string> = {
+  "manufacturing.recipe.help": "मानक उत्पादन के लिए सभी सामग्री और पैकिंग जोड़ें। सहेजने पर रेसिपी का नया संस्करण बनेगा और पुराना उत्पादन इतिहास सुरक्षित रहेगा।",
+  "manufacturing.recipe.errorFinished": "बैच ट्रैकिंग वाला तैयार उत्पाद चुनें।",
+  "manufacturing.recipe.errorName": "रेसिपी का नाम 2–160 अक्षरों में भरें।",
+  "manufacturing.recipe.errorQuantity": "शून्य से अधिक मात्रा भरें, अधिकतम दो दशमलव अंकों के साथ।",
+  "manufacturing.recipe.errorMaterials": "हर पंक्ति में अलग उपलब्ध सामग्री चुनें। तैयार उत्पाद खुद सामग्री नहीं हो सकता।",
+  "manufacturing.recipe.errorWastage": "हर सामग्री की बर्बादी 0 से 100 प्रतिशत तक भरें।",
+  "manufacturing.recipe.ownerOnly": "मालिक या एडमिन रेसिपी के संस्करण बना सकते हैं।",
+  "manufacturing.recipe.setup": "रेसिपी बनाने के लिए तैयार उत्पाद की बैच ट्रैकिंग चालू करें।",
+  "manufacturing.recipe.openProducts": "उत्पाद खोलें",
+  "manufacturing.recipe.materialNumber": "सामग्री {number}",
+  "manufacturing.recipe.removeNumber": "सामग्री {number} हटाएँ",
+  "manufacturing.recipe.remove": "सामग्री हटाएँ",
+  "manufacturing.recipe.add": "एक और सामग्री जोड़ें",
   "manufacturing.production.title": "उत्पादन रन",
   "manufacturing.production.help": "रन की योजना बनाएँ, इस्तेमाल हुआ माल और तैयार मात्रा दर्ज करें, फिर QC के बाद बैच जारी करें। खुले रन पहले दिखते हैं।",
   "manufacturing.production.planned": "नियोजित",

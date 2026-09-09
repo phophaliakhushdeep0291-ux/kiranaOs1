@@ -122,14 +122,20 @@ export default function DailyClosingPage() {
     try {
       // The float and till movements live on this device; cash expenses are server-backed,
       // so they are fetched and handed to the same drawer calculation.
-      const [drawer, expenseCash] = await Promise.all([
+      const [drawer, expenseCash, counts, floats, movements] = await Promise.all([
         loadDrawerAdjustments(date),
         loadCashExpenseTotal(date),
+        loadDrawerCounts(),
+        loadOpeningFloats(),
+        loadCashMovements(),
       ]);
       const next = await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash });
       if (generation !== loadGeneration.current) return;
       setCashExpenses(expenseCash);
       setReport(next);
+      setDrawerCounts(counts);
+      setOpeningFloats(floats);
+      setCashMovements(movements);
       setReadError(false);
     } catch {
       if (generation === loadGeneration.current) setReadError(true);
@@ -150,6 +156,7 @@ export default function DailyClosingPage() {
     window.addEventListener("kirana:local-data-changed", refresh);
     window.addEventListener("kirana:sync-queue-updated", refresh);
     return () => {
+      loadGeneration.current += 1;
       if (refreshTimer.current) {
         window.clearTimeout(refreshTimer.current);
         refreshTimer.current = null;
@@ -160,10 +167,7 @@ export default function DailyClosingPage() {
   }, [load]);
 
   useEffect(() => {
-    void loadDrawerCounts().then(setDrawerCounts);
     if (navigator.onLine) void refreshDrawerCountsFromCloud().then(setDrawerCounts).catch(() => undefined);
-    void loadOpeningFloats().then(setOpeningFloats);
-    void loadCashMovements().then(setCashMovements);
   }, []);
 
   // Re-prime the float box when the date changes; typing must not be overwritten.
@@ -179,22 +183,28 @@ export default function DailyClosingPage() {
   async function saveFloatForDate() {
     const amount = Number(floatDraft);
     if (floatDraft.trim() === "" || !Number.isFinite(amount) || amount < 0) return;
-    setOpeningFloats(await saveOpeningFloat(buildOpeningFloat(date, amount)));
-    await load({ showLoader: false });
+    try {
+      setOpeningFloats(await saveOpeningFloat(buildOpeningFloat(date, amount)));
+      await load({ showLoader: false });
+    } catch { setReadError(true); }
   }
 
   async function addCashMovement(kind: CashMovementKind) {
     const amount = Number(movementAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
-    setCashMovements(await saveCashMovement(buildCashMovement(date, kind, amount, movementNote)));
-    setMovementAmount("");
-    setMovementNote("");
-    await load({ showLoader: false });
+    try {
+      setCashMovements(await saveCashMovement(buildCashMovement(date, kind, amount, movementNote)));
+      setMovementAmount("");
+      setMovementNote("");
+      await load({ showLoader: false });
+    } catch { setReadError(true); }
   }
 
   async function deleteCashMovement(id: string) {
-    setCashMovements(await removeCashMovement(id));
-    await load({ showLoader: false });
+    try {
+      setCashMovements(await removeCashMovement(id));
+      await load({ showLoader: false });
+    } catch { setReadError(true); }
   }
 
   // Prefill the count input when switching to a date that was already counted.
@@ -228,6 +238,8 @@ export default function DailyClosingPage() {
         adjustments,
       ));
       countedDraftDirty.current = false;
+    } catch {
+      setReadError(true);
     } finally {
       setSavingCount(false);
     }

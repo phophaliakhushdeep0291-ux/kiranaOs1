@@ -1,3 +1,4 @@
+import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
 import { useDataExport } from "@/features/core/reports/DataExportProvider";
 import { roundMoney } from "@/lib/money";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -254,6 +255,8 @@ export default function SalesOverviewPage() {
   const [to, setTo] = useState(toDateInputValue(new Date()));
   const [data, setData] = useState<SalesData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState(false);
+  const [retryGeneration, setRetryGeneration] = useState(0);
   const [dateOpen, setDateOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -267,15 +270,19 @@ export default function SalesOverviewPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let generation = 0;
     const run = async (options?: { showLoader?: boolean }) => {
       if (cancelled) return;
+      const request = ++generation;
       const showLoader = options?.showLoader ?? !dataRef.current;
       if (showLoader) setLoading(true);
       try {
         const next = await loadSalesData(range);
-        if (!cancelled) setData(next);
+        if (!cancelled && request === generation) { setData(next); setReadError(false); }
+      } catch {
+        if (!cancelled && request === generation) setReadError(true);
       } finally {
-        if (!cancelled && showLoader) setLoading(false);
+        if (!cancelled && request === generation) setLoading(false);
       }
     };
     void run({ showLoader: !dataRef.current });
@@ -297,7 +304,7 @@ export default function SalesOverviewPage() {
       window.removeEventListener("kirana:local-data-changed", refresh);
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
-  }, [range]);
+  }, [range, retryGeneration]);
 
   const applyPeriod = (nextPeriod: Exclude<SalesPeriod, "custom">) => {
     const nextRange = periodRange(nextPeriod);
@@ -420,6 +427,8 @@ export default function SalesOverviewPage() {
     URL.revokeObjectURL(url);
     toast({ title: "Sales overview exported", description: "The selected period summary was downloaded." });
   };
+
+  if (readError || !data) return <LocalDataUnavailable checking={!readError && loading} onRetry={() => setRetryGeneration((value) => value + 1)} />;
 
   return (
     <PageShell className="mx-auto min-h-full w-full max-w-[1800px] space-y-3 !bg-white pb-8 text-[var(--brand-ink)]">

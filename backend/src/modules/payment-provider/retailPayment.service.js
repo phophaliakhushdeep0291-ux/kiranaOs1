@@ -324,15 +324,31 @@ export async function confirmRetailQrIntentFromWebhook({ qrCode, payment }) {
 
 export async function resolveRetailPaymentIntents(client, { shopId, locationId, payments }) {
   const resolved = new Map();
-  for (const payment of payments.filter((row) => row.mode !== "cash" && row.mode !== "credit")) {
+  for (const payment of payments) {
+    if (payment.retailPaymentIntentId && payment.retail_payment_intent_id
+      && payment.retailPaymentIntentId !== payment.retail_payment_intent_id) {
+      throw new AppError("Payment references disagree; select one captured payment", 409, "RETAIL_PAYMENT_INTENT_AMBIGUOUS");
+    }
     const intentId = payment.retailPaymentIntentId ?? payment.retail_payment_intent_id ?? null;
     if (!intentId) {
       if (env.RETAIL_PAYMENT_CONFIRMATION_REQUIRED && payment.mode === "upi") throw new AppError("Verified UPI confirmation is required before billing", 409, "RETAIL_PAYMENT_CONFIRMATION_REQUIRED");
       continue;
     }
+    if (resolved.has(intentId)) {
+      throw new AppError("A captured payment can appear only once in a bill", 409, "RETAIL_PAYMENT_INTENT_DUPLICATE");
+    }
     const intent = await client.retailPaymentIntent.findFirst({ where: { id: intentId, shopId } });
-    if (!intent || intent.locationId !== locationId || intent.status !== "confirmed" || intent.consumedAt) {
+    if (!intent || intent.locationId !== locationId || intent.status !== "confirmed" || intent.consumedAt
+      || !intent.providerPaymentId || !intent.confirmedAt || intent.currency !== "INR") {
       throw new AppError("Retail payment intent is not valid for this bill and branch", 409, "RETAIL_PAYMENT_INTENT_INVALID");
+    }
+    // Terminal collections belong to bank/card reports; QR/checkout captures
+    // are verified UPI. A supplied reference must never become cash or credit,
+    // nor silently disappear from the payment's reconciliation trail.
+    const expectedMode = intent.checkoutMode === "terminal" ? "bank"
+      : ["checkout", "dynamic_qr"].includes(intent.checkoutMode) ? "upi" : null;
+    if (!expectedMode || payment.mode !== expectedMode) {
+      throw new AppError("Captured payment type does not match the selected bill tender", 409, "RETAIL_PAYMENT_TENDER_MISMATCH");
     }
     const expectedPaise = Math.round(Number(payment.amount) * 100);
     if (intent.amountPaise !== expectedPaise) throw new AppError("Retail payment amount does not match the bill tender", 409, "RETAIL_PAYMENT_AMOUNT_MISMATCH");

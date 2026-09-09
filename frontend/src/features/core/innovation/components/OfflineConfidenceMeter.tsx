@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { readOfflineConfidenceSnapshot, type OfflineConfidenceSnapshot } from "@/features/core/sync/offline-confidence";
+import { useAppLanguage } from "@/features/core/settings/i18n";
 
 function formatAgo(value: string | null) {
   if (!value) return "No cloud backup yet";
@@ -26,6 +27,7 @@ function formatStorage(snapshot: OfflineConfidenceSnapshot | null) {
   return `${Math.round(snapshot.storageUsageRatio * 100)}% used`;
 }
 export function OfflineConfidenceMeter({ compact = false }: { compact?: boolean }) {
+  const { t } = useAppLanguage();
   const [snapshot, setSnapshot] = useState<OfflineConfidenceSnapshot | null>(null);
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export function OfflineConfidenceMeter({ compact = false }: { compact?: boolean 
             {dbHealthy ? <ShieldCheck className="h-5 w-5 text-emerald-600" /> : <AlertTriangle className="h-5 w-5 text-destructive" />}
             Offline confidence meter
           </CardTitle>
-          <Badge variant={offlineReady ? "secondary" : dbHealthy ? "outline" : "destructive"}>{!snapshot ? "Checking local data" : offlineReady ? "Ready for offline billing" : dbHealthy ? "Offline setup needed" : "Check recovery"}</Badge>
+          <Badge variant={offlineReady ? "secondary" : dbHealthy ? "outline" : "destructive"}>{!snapshot ? t("sync.local.checking") : offlineReady ? "Ready for offline billing" : dbHealthy ? t("sync.local.setupNeeded") : "Check recovery"}</Badge>
         </div>
       </CardHeader>
       <CardContent className={compact ? "p-4 pt-0" : "space-y-4"}>
