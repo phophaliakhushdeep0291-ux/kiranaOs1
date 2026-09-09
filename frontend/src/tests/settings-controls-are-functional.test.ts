@@ -41,9 +41,9 @@ describe("security policy drives real behaviour", () => {
     expect(sessionTimeoutMs()).toBe(60 * 60_000);
   });
 
-  it("treats an unknown timeout label as no timeout instead of locking instantly", () => {
+  it("retains the default idle limit for an unknown timeout label", () => {
     setSecurityPolicyCache({ ...DEFAULT_SECURITY_POLICY, sessionTimeout: "banana" });
-    expect(sessionTimeoutMs()).toBe(0);
+    expect(sessionTimeoutMs()).toBe(15 * 60_000);
   });
 
   it("cannot turn off server-derived billing or destructive approval prompts", () => {

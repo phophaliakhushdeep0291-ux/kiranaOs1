@@ -24,6 +24,8 @@ The browser run used port 3001 and the new SQLite database `backend/prisma/sync-
 
 ## Remaining work
 
+9 September update: the fail-open counter lock finding below has been corrected and verified locally; see [counter-lock evidence](counter-lock-2026-09-09.md). Physical biometric hardware certification and the newly identified PIN/password settings mismatch remain outstanding.
+
 - **High-priority security finding:** `SessionLockGate.tsx` currently releases an already locked counter after a failed PIN request when the browser is offline, the request reports status 0, or it throws `TypeError`. Network loss is not authentication. Replace this with a verified, scoped offline-unlock design and wrong-PIN/network-loss regression coverage; the cold-start test above entered the correct QA PIN and does not certify this policy.
 - Confirm cross-device resolution propagation for every mutable and financial conflict type, including cloud resolution while a rejected local outbox event remains.
 - Test database-read failures explicitly: several existing status readers still convert read errors into empty arrays; an unreadable queue must not appear healthy.

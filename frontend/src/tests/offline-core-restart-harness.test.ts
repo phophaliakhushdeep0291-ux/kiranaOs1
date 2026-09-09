@@ -65,4 +65,13 @@ describe("offline cold-restart QA harness", () => {
     expect(source).toContain('header disagreed with the preserved review');
     expect(source).not.toContain('localStorage.removeItem("kiranaos.security');
   });
+  it("proves fail-closed PIN/reload behavior and authenticated offline screen unlock", () => {
+    expect(source).toContain('Wrong PIN exposed the counter');
+    expect(source).toContain('Network loss unlocked a counter without enrollment');
+    expect(source).toContain('Reload exposed the locked counter');
+    expect(source).toContain('await enrollQaDevice(client)');
+    expect(source).toContain('WebAuthn.setResponseOverrideBits');
+    expect(source).toContain('Forged device signature exposed the counter');
+    expect(source).toContain('counterLockVerified: true');
+  });
 });
