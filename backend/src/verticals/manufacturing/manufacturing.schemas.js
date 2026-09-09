@@ -44,7 +44,7 @@ export const completeRunSchema = z.object({
     sellingUnitId: id.nullable().optional(),
     packageCount: stockQty.nullable().optional(),
     actualBaseQty: stockQty,
-  })).min(1).max(100),
+  })).min(1).max(1000),
   outputs: z.array(z.object({
     sellingUnitId: id.nullable().optional(),
     packageCount: stockQty.nullable().optional(),

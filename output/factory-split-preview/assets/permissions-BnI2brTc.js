@@ -1,0 +1,11 @@
+import{a as e}from"./vendor-data-BaHBZjtO.js"
+import{d as r,$ as a}from"./index-CYG8yywH.js"
+import"./vendor-react-CdF70ZyV.js"
+const n=["create_bill","cancel_bill","record_payment","reverse_payment","view_reports","manage_products","manage_customers","manage_inventory","manage_staff","export_data","change_settings","view_profit","apply_discount","sell_below_minimum_price"],t={create_bill:"Create bill",cancel_bill:"Cancel bill",record_payment:"Record payment",reverse_payment:"Reverse payment",view_reports:"View reports",manage_products:"Manage products",manage_customers:"Manage customers",manage_inventory:"Manage inventory",manage_staff:"Manage staff",export_data:"Export data",change_settings:"Change settings",view_profit:"View profit",apply_discount:"Apply discount",sell_below_minimum_price:"Sell below minimum price"},o={owner:"Owner",manager:"Manager",cashier:"Cashier",viewer:"Viewer"},i={owner:[...n],manager:["create_bill","cancel_bill","record_payment","reverse_payment","view_reports","manage_products","manage_customers","manage_inventory","export_data","change_settings","view_profit","apply_discount"],cashier:["create_bill","record_payment","manage_customers","apply_discount"],viewer:["view_reports"]},s=["cancel_bill","reverse_payment","manage_inventory","export_data","manage_staff","sell_below_minimum_price"]
+function l(e){const r=String(e??"owner").trim().toLowerCase()
+return"owner"===r?"owner":"manager"===r||"admin"===r?"manager":"cashier"===r||"staff"===r?"cashier":"viewer"===r||"read_only"===r||"readonly"===r?"viewer":"cashier"}function c(e){if("owner"===e)return[...n]
+const r=i[e]??[]
+return Array.from(new Set([...r]))}function _(c){const{user:_}=r(),m=a("staff_login")
+return e.useMemo(()=>{const e=l(_?.role),r=(e=>{return"object"!=typeof e||null===e||Array.isArray(e)?[]:(r=e.permissions,Array.isArray(r)?r.filter(e=>"string"==typeof e):[]).filter(e=>n.includes(e))
+var r})(_),a="owner"===e||m.allowed,p=((e,r,a)=>"owner"===e||(a&&a.length>0?a:i[e]).includes(r))(e,c,r),d=a&&p,g=d?"Allowed":a?`${o[e]} cannot ${t[c].toLowerCase()}.`:"Staff login and role-based access need the Growth plan or above."
+return{permission:c,label:t[c],role:e,allowed:d,loading:m.loading,reason:g,requiresOwnerPin:s.includes(c),subscriptionAllowed:a}},[c,m.allowed,m.loading,_])}export{n as P,o as R,t as a,i as b,l as n,c as p,_ as u}
