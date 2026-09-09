@@ -22,6 +22,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
 import { useToast } from "@/hooks/use-toast";
 import ProductionRuns from "./ProductionRuns";
+import RecipeEditor from "./RecipeEditor";
 import type { ProductionRun } from "../production-run";
 
 type BomItem = {
@@ -78,12 +79,6 @@ export default function ManufacturingPage() {
   const client = useQueryClient();
   const { toast } = useToast();
   const { t } = useAppLanguage();
-  const [finishedProductId, setFinishedProductId] = useState("");
-  const [materialProductId, setMaterialProductId] = useState("");
-  const [bomName, setBomName] = useState("");
-  const [outputQty, setOutputQty] = useState("1");
-  const [materialQty, setMaterialQty] = useState("1");
-  const [wastage, setWastage] = useState("0");
   const [traceBatch, setTraceBatch] = useState("");
   const [traceResult, setTraceResult] = useState<Trace | null>(null);
   const [orderNumber, setOrderNumber] = useState("");
@@ -133,41 +128,6 @@ export default function ManufacturingPage() {
     () => new Map((productsQ.data ?? []).map((row) => [row.id, row.name])),
     [productsQ.data],
   );
-
-  const createBom = useMutation({
-    mutationFn: () => apiRequest<Bom>("/manufacturing/boms", {
-      method: "POST",
-      body: JSON.stringify({
-        finishedProductId,
-        name: bomName,
-        outputQuantityBaseQty: Number(outputQty),
-        items: [{
-          materialProductId,
-          quantityBaseQty: Number(materialQty),
-          wastagePercent: Number(wastage),
-        }],
-      }),
-    }),
-    onSuccess: async () => {
-      toast({
-        title: t("manufacturing.bom.createdTitle"),
-        description: t("manufacturing.bom.createdDetail"),
-      });
-      setBomName("");
-      setMaterialProductId("");
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ["manufacturing", "boms"] }),
-        client.invalidateQueries({ queryKey: ["manufacturing", "overview"] }),
-      ]);
-    },
-    onError: (error) => toast({
-      title: t("manufacturing.bom.failedTitle"),
-      description: error instanceof Error
-        ? error.message
-        : t("manufacturing.bom.failedDetail"),
-      variant: "destructive",
-    }),
-  });
 
   const trace = useMutation({
     mutationFn: () => apiRequest<Trace>(
@@ -294,54 +254,7 @@ export default function ManufacturingPage() {
       <ProductionRuns runs={overviewQ.data?.recentRuns ?? []} boms={bomsQ.data ?? []} loading={overviewQ.isLoading} />
 
       <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className={panel} id="new-bom">
-          <div className="border-b border-slate-100 p-4 sm:p-5">
-            <h2 className="font-display font-black text-slate-900">{t("manufacturing.bom.createTitle")}</h2>
-            <p className="mt-1 text-xs leading-5 text-slate-500">{t("manufacturing.bom.createDescription")}</p>
-          </div>
-          <div className="grid gap-3.5 p-4 sm:grid-cols-2 sm:p-5">
-            <Field label={t("manufacturing.bom.name")}>
-              <Input className="h-11" value={bomName} onChange={(event) => setBomName(event.target.value)} placeholder={t("manufacturing.bom.namePlaceholder")} />
-            </Field>
-            <Field label={t("manufacturing.bom.finishedGood")}>
-              <ProductSelect
-                value={finishedProductId}
-                onChange={setFinishedProductId}
-                products={productsQ.data ?? []}
-                emptyLabel={t("manufacturing.product.select")}
-                unitFallback={t("manufacturing.product.unitFallback")}
-              />
-            </Field>
-            <Field label={t("manufacturing.bom.standardOutput")}>
-              <Input className="h-11" type="number" min="0.001" value={outputQty} onChange={(event) => setOutputQty(event.target.value)} />
-            </Field>
-            <Field label={t("manufacturing.bom.material")}>
-              <ProductSelect
-                value={materialProductId}
-                onChange={setMaterialProductId}
-                products={(productsQ.data ?? []).filter((row) => row.id !== finishedProductId)}
-                emptyLabel={t("manufacturing.product.select")}
-                unitFallback={t("manufacturing.product.unitFallback")}
-              />
-            </Field>
-            <Field label={t("manufacturing.bom.materialQty")}>
-              <Input className="h-11" type="number" min="0.001" value={materialQty} onChange={(event) => setMaterialQty(event.target.value)} />
-            </Field>
-            <Field label={t("manufacturing.bom.wastage")}>
-              <Input className="h-11" type="number" min="0" max="100" value={wastage} onChange={(event) => setWastage(event.target.value)} />
-            </Field>
-            <Button
-              className="min-h-12 rounded-xl font-black sm:col-span-2"
-              disabled={!bomName.trim() || !finishedProductId || !materialProductId || createBom.isPending}
-              onClick={() => createBom.mutate()}
-            >
-              {createBom.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : null}
-              {createBom.isPending
-                ? t("manufacturing.bom.saving")
-                : t("manufacturing.bom.createAction")}
-            </Button>
-          </div>
-        </div>
+        <RecipeEditor products={productsQ.data ?? []} />
 
         <div className={panel}>
           <div className="border-b border-slate-100 p-4 sm:p-5">

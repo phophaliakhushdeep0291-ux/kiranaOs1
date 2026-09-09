@@ -1,5 +1,18 @@
 // Manufacturing, wholesale and export operations.
 export const manufacturingEn = {
+  "manufacturing.recipe.help": "Add every ingredient and packaging material for the standard output. Saving creates a new recipe version and keeps older production history.",
+  "manufacturing.recipe.errorFinished": "Choose a finished product with batch tracking enabled.",
+  "manufacturing.recipe.errorName": "Enter a recipe name of 2–160 characters.",
+  "manufacturing.recipe.errorQuantity": "Use positive quantities with up to two decimal places.",
+  "manufacturing.recipe.errorMaterials": "Choose a different available material in every row. The finished product cannot be an ingredient.",
+  "manufacturing.recipe.errorWastage": "Enter wastage from 0 to 100 percent for each material.",
+  "manufacturing.recipe.ownerOnly": "An owner or admin can create recipe versions.",
+  "manufacturing.recipe.setup": "Enable batch tracking on a finished product to create its recipe.",
+  "manufacturing.recipe.openProducts": "Open products",
+  "manufacturing.recipe.materialNumber": "Material {number}",
+  "manufacturing.recipe.removeNumber": "Remove material {number}",
+  "manufacturing.recipe.remove": "Remove material",
+  "manufacturing.recipe.add": "Add another material",
   "manufacturing.production.title": "Production runs",
   "manufacturing.production.help": "Plan a run, record actual material use and output, then release batches after QC. Open runs appear first.",
   "manufacturing.production.planned": "Planned",

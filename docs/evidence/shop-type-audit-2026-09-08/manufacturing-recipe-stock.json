@@ -1,0 +1,140 @@
+{
+  "run": {
+    "id": "cmtu16n17000g4v1lwaxn2s7e",
+    "shopId": "cmtu0u1ct000011hs64ydzygz",
+    "locationId": "cmtu0xtky000ebcqvghbb59sb",
+    "bomId": "cmtu0yx7q001vbcqv5z5nlu7r",
+    "runNumber": "QA-RECIPE-RUN-03",
+    "status": "completed",
+    "plannedOutputBaseQty": 20,
+    "actualOutputBaseQty": 20,
+    "finishedBatchNumber": "QA-RECIPE-BATCH-03",
+    "manufacturedOn": "2026-09-09T00:00:00.000Z",
+    "expiresOn": "2027-09-09T00:00:00.000Z",
+    "qcStatus": "passed",
+    "notes": null,
+    "startedAt": "2026-09-09T11:48:35.014Z",
+    "completedAt": "2026-09-09T11:48:35.014Z",
+    "createdAt": "2026-09-09T11:44:32.540Z",
+    "updatedAt": "2026-09-09T11:48:34.970Z",
+    "bom": {
+      "id": "cmtu0yx7q001vbcqv5z5nlu7r",
+      "shopId": "cmtu0u1ct000011hs64ydzygz",
+      "finishedProductId": "cmtu0u1gz000611hsx7sznigr",
+      "name": "QA Spice and carton",
+      "version": 1,
+      "status": "active",
+      "outputQuantityBaseQty": 10,
+      "notes": null,
+      "createdAt": "2026-09-09T11:38:32.484Z",
+      "updatedAt": "2026-09-09T11:38:32.484Z",
+      "items": [
+        {
+          "id": "cmtu0yx7q001xbcqv6bpdb1ej",
+          "shopId": "cmtu0u1ct000011hs64ydzygz",
+          "bomId": "cmtu0yx7q001vbcqv5z5nlu7r",
+          "materialProductId": "cmtu0u1hb000811hs0czhouv3",
+          "quantityBaseQty": 12,
+          "wastagePercent": 2,
+          "createdAt": "2026-09-09T11:38:32.484Z"
+        },
+        {
+          "id": "cmtu0yx7q001wbcqv59g4648i",
+          "shopId": "cmtu0u1ct000011hs64ydzygz",
+          "bomId": "cmtu0yx7q001vbcqv5z5nlu7r",
+          "materialProductId": "cmtu0u1hg000a11hsz36ljhr9",
+          "quantityBaseQty": 5,
+          "wastagePercent": 0,
+          "createdAt": "2026-09-09T11:38:32.484Z"
+        }
+      ]
+    },
+    "consumptions": [
+      {
+        "id": "cmtu1bu43000l4v1lcmv7qnd2",
+        "shopId": "cmtu0u1ct000011hs64ydzygz",
+        "runId": "cmtu16n17000g4v1lwaxn2s7e",
+        "productId": "cmtu0u1hb000811hs0czhouv3",
+        "inventoryLotId": null,
+        "plannedBaseQty": 24.48,
+        "actualBaseQty": 24.48,
+        "sourceBatchNumber": null,
+        "createdAt": "2026-09-09T11:48:34.970Z"
+      },
+      {
+        "id": "cmtu1bu4c000p4v1lxxo63bu2",
+        "shopId": "cmtu0u1ct000011hs64ydzygz",
+        "runId": "cmtu16n17000g4v1lwaxn2s7e",
+        "productId": "cmtu0u1hg000a11hsz36ljhr9",
+        "inventoryLotId": null,
+        "plannedBaseQty": 10,
+        "actualBaseQty": 10,
+        "sourceBatchNumber": null,
+        "createdAt": "2026-09-09T11:48:34.970Z"
+      }
+    ],
+    "outputs": [
+      {
+        "id": "cmtu1bu4g000t4v1l8kd6solf",
+        "shopId": "cmtu0u1ct000011hs64ydzygz",
+        "runId": "cmtu16n17000g4v1lwaxn2s7e",
+        "productId": "cmtu0u1gz000611hsx7sznigr",
+        "sellingUnitId": null,
+        "inventoryLotId": "cmtu1bu4d000r4v1l6c9r3k60",
+        "packagingSku": null,
+        "quantityBaseQty": 20,
+        "packageCount": null,
+        "batchNumber": "QA-RECIPE-BATCH-03",
+        "createdAt": "2026-09-09T11:48:34.970Z"
+      }
+    ]
+  },
+  "products": [
+    {
+      "id": "cmtu0u1gz000611hsx7sznigr",
+      "name": "QA Finished spice",
+      "stockBaseQty": 20
+    },
+    {
+      "id": "cmtu0u1hb000811hs0czhouv3",
+      "name": "QA Raw spice",
+      "stockBaseQty": 75.52
+    },
+    {
+      "id": "cmtu0u1hg000a11hsz36ljhr9",
+      "name": "QA Carton",
+      "stockBaseQty": 40
+    }
+  ],
+  "ledger": [
+    {
+      "productName": "QA Raw spice",
+      "action": "production_use",
+      "changeBaseQty": -24.48,
+      "oldStockBaseQty": 100,
+      "newStockBaseQty": 75.52
+    },
+    {
+      "productName": "QA Carton",
+      "action": "production_use",
+      "changeBaseQty": -10,
+      "oldStockBaseQty": 50,
+      "newStockBaseQty": 40
+    },
+    {
+      "productName": "QA Finished spice",
+      "action": "production_output",
+      "changeBaseQty": 20,
+      "oldStockBaseQty": 0,
+      "newStockBaseQty": 20
+    }
+  ],
+  "lots": [
+    {
+      "batchNumber": "QA-RECIPE-BATCH-03",
+      "availableBaseQty": 20,
+      "status": "active",
+      "expiresOn": "2027-09-09T00:00:00.000Z"
+    }
+  ]
+}

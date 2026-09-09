@@ -1,0 +1,11 @@
+import db from '../backend/src/db.js';
+import { createTenant, createProduct } from '../backend/tests/integration/factories.js';
+import { settingsForBusinessType } from '../backend/src/verticals/registry.js';
+if (!String(process.env.DATABASE_URL).includes('factory-ui-isolated.db')) throw new Error('Isolated QA database required');
+const tenant = await createTenant(db, { shopName: 'Factory UI test', ownerMobile: '8779090999', password: 'QaFlow@2026', ownerPin: '2468' });
+await db.shop.update({ where: { id: tenant.shop.id }, data: { settingsJson: JSON.stringify(settingsForBusinessType('manufacturing')) } });
+const finished = await createProduct(db, tenant.shop.id, { name: 'QA Finished spice', stockBaseQty: 0 });
+await db.product.update({ where: { id: finished.id }, data: { batchTrackingEnabled: true } });
+await createProduct(db, tenant.shop.id, { name: 'QA Raw spice', stockBaseQty: 100 });
+await createProduct(db, tenant.shop.id, { name: 'QA Carton', stockBaseQty: 50 });
+console.log('Isolated factory UI fixture ready'); await db.$disconnect();
