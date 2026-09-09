@@ -1,4 +1,5 @@
 import { offlineDB } from "@/lib/offline/db";
+import { authSessionInstance } from "@/lib/storage/auth-storage";
 
 /**
  * Security policy (Settings -> Security & PIN) lives in the synced settings blob
@@ -92,40 +93,59 @@ const TIMEOUT_MINUTES: Record<string, number> = {
 export const SESSION_TIMEOUT_OPTIONS = Object.keys(TIMEOUT_MINUTES);
 
 let cache: SecurityPolicy = { ...DEFAULT_SECURITY_POLICY };
+let cacheSession: string | null = null;
+let cacheRevision = 0;
 
 function normalise(saved: Partial<SecurityPolicy> | null | undefined): SecurityPolicy {
+  const boolean = (key: "autoLock" | "biometric" | "requireLoginOnStart" | "rememberDevice") =>
+    typeof saved?.[key] === "boolean" ? saved[key] : DEFAULT_SECURITY_POLICY[key];
+  const actions = Object.fromEntries(Object.entries(saved?.actions ?? {}).map(([key, rule]) => [key, {
+    on: typeof rule?.on === "boolean" ? rule.on : DEFAULT_ACTION_RULE.on,
+    approver: rule?.approver === "ownerManager" ? "ownerManager" : "owner",
+  }]));
   return {
     ...DEFAULT_SECURITY_POLICY,
-    ...(saved ?? {}),
-    actions: { ...DEFAULT_SECURITY_POLICY.actions, ...(saved?.actions ?? {}) },
+    sessionTimeout: saved?.sessionTimeout && Object.hasOwn(TIMEOUT_MINUTES, saved.sessionTimeout)
+      ? saved.sessionTimeout : DEFAULT_SECURITY_POLICY.sessionTimeout,
+    autoLock: boolean("autoLock"), biometric: boolean("biometric"),
+    requireLoginOnStart: boolean("requireLoginOnStart"), rememberDevice: boolean("rememberDevice"),
+    actions: { ...DEFAULT_SECURITY_POLICY.actions, ...actions } as SecurityPolicy["actions"],
   };
 }
 
 export function getSecurityPolicySync(): SecurityPolicy {
-  return cache;
+  return cacheSession === authSessionInstance() ? cache : { ...DEFAULT_SECURITY_POLICY };
 }
 
 export function setSecurityPolicyCache(saved: Partial<SecurityPolicy> | null | undefined) {
   cache = normalise(saved);
+  cacheSession = authSessionInstance();
+  cacheRevision++;
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(SECURITY_POLICY_CHANGED_EVENT));
   }
 }
 
 export async function loadSecurityPolicy(): Promise<SecurityPolicy> {
+  const session = authSessionInstance();
+  const revision = cacheRevision;
   try {
     const prefs = await offlineDB.getSetting<{ security?: Partial<SecurityPolicy> }>(PREFS_KEY);
+    if (session !== authSessionInstance()) return { ...DEFAULT_SECURITY_POLICY };
+    if (revision !== cacheRevision) return getSecurityPolicySync();
     setSecurityPolicyCache(prefs?.security);
   } catch {
-    /* keep whatever is cached */
+    // An unreadable policy is not permission to reuse an older, weaker policy.
+    if (session === authSessionInstance()) setSecurityPolicyCache(null);
   }
-  return cache;
+  return getSecurityPolicySync();
 }
 
-/** Idle window in milliseconds; 0 means "never time out". */
-export function sessionTimeoutMs(policy: SecurityPolicy = cache): number {
-  const minutes = TIMEOUT_MINUTES[policy.sessionTimeout];
-  return minutes ? minutes * 60_000 : 0;
+/** Invalid or obsolete labels retain the default idle limit, never disable it. */
+export function sessionTimeoutMs(policy: SecurityPolicy = getSecurityPolicySync()): number {
+  const minutes = Object.hasOwn(TIMEOUT_MINUTES, policy.sessionTimeout)
+    ? TIMEOUT_MINUTES[policy.sessionTimeout] : TIMEOUT_MINUTES[DEFAULT_SECURITY_POLICY.sessionTimeout];
+  return minutes * 60_000;
 }
 
 /**
@@ -133,12 +153,12 @@ export function sessionTimeoutMs(policy: SecurityPolicy = cache): number {
  * Security removes the prompt; the backend keeps its own checks either way, so
  * this only controls the counter-side prompt.
  */
-export function isActionProtected(key: ProtectedActionKey, policy: SecurityPolicy = cache): boolean {
+export function isActionProtected(key: ProtectedActionKey, policy: SecurityPolicy = getSecurityPolicySync()): boolean {
   if (isServerEnforced(key)) return true; // the API rejects it without a PIN anyway
   return (policy.actions[key] ?? DEFAULT_ACTION_RULE).on;
 }
 
-export function actionApprover(key: ProtectedActionKey, policy: SecurityPolicy = cache): ActionApprover {
+export function actionApprover(key: ProtectedActionKey, policy: SecurityPolicy = getSecurityPolicySync()): ActionApprover {
   return (policy.actions[key] ?? DEFAULT_ACTION_RULE).approver;
 }
 
@@ -146,6 +166,6 @@ export function actionApprover(key: ProtectedActionKey, policy: SecurityPolicy =
  * Roles allowed to approve the action, for the prompt copy and for the local
  * pre-check before the request is sent.
  */
-export function approverRoles(key: ProtectedActionKey, policy: SecurityPolicy = cache): string[] {
+export function approverRoles(key: ProtectedActionKey, policy: SecurityPolicy = getSecurityPolicySync()): string[] {
   return actionApprover(key, policy) === "ownerManager" ? ["owner", "admin"] : ["owner"];
 }

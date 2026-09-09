@@ -1,0 +1,74 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/cloud-hydration-oOoaiupV.js","assets/index-Ci-XYli4.js","assets/vendor-data-BaHBZjtO.js","assets/vendor-react-CdF70ZyV.js","assets/vendor-ui-CIi-vqR6.js","assets/vendor-validation-C84QDzN5.js","assets/index-B-026ryc.css","assets/sync-reconcile-CXUAdiJ7.js","assets/sync-types-B187FdZc.js"])))=>i.map(i=>d[i]);
+import{du as e,dk as t,aO as n,dv as s,dw as a,dx as r,ar as i,a_ as o,J as c,b2 as l,dm as d,bH as u,dy as _,dz as p,p as f,c9 as y,aJ as w,A as v,ds as h,t as g}from"./index-Ci-XYli4.js"
+import{w as m,u as S,x as b,q as C}from"./sync-reconcile-CXUAdiJ7.js"
+import{c as O,d as E,p as A,b as k}from"./sync-push-Dx95mRLP.js"
+import{d as F,e as D,r as L}from"./sync-status-repair-D20_rW1P.js"
+import{e as N,t as R}from"./sync-types-B187FdZc.js"
+import"./vendor-data-BaHBZjtO.js"
+import{p as x,a as I}from"./api-OSMhuKuf.js"
+const P={async COLLECT_DIAGNOSTICS(){const e=await s()
+return await a(e),{reported:!0,appVersion:r().appVersion??null,online:e.online??null}},async RUN_SYNC_NOW(){const{runSyncCycle:e}=await n(async()=>{const{runSyncCycle:e}=await Promise.resolve().then(()=>W)
+return{runSyncCycle:e}},void 0),t=await e()
+return{pushed:t.pushed,pulled:t.pulled,failed:t.failed,conflicts:t.conflicts}},async RETRY_FAILED_SYNC(){const{retryFailedSyncOperations:e}=await n(async()=>{const{retryFailedSyncOperations:e}=await Promise.resolve().then(()=>W)
+return{retryFailedSyncOperations:e}},void 0)
+return{...await e()}},async PULL_FROM_CLOUD(){const{hydrateFromBackendSnapshot:e}=await n(async()=>{const{hydrateFromBackendSnapshot:e}=await import("./cloud-hydration-oOoaiupV.js")
+return{hydrateFromBackendSnapshot:e}},__vite__mapDeps([0,1,2,3,4,5,6,7,8]))
+return{...await e()}},CLEAR_LOCAL_CACHE:async()=>(t(),{cleared:"memory-cache"}),REFRESH_APP:async()=>(e(),{reloading:!0})}
+function j(e){return e instanceof Error?e.message:"string"==typeof e?e:"Command failed"}async function M(e){if(t=e.type,!Object.prototype.hasOwnProperty.call(P,t))return{status:"failed",error:`Unsupported command: ${e.type}`}
+var t
+if(e.reloadsApp)return await I(e.id,{status:"applied",result:{reloading:!0}}).catch(()=>null),await P[e.type](e).catch(()=>({})),{status:"applied",result:{reloading:!0}}
+try{return{status:"applied",result:await P[e.type](e)}}catch(n){return{status:"failed",error:j(n)}}}let T=!1
+function $(e,t){if(!e||"object"!=typeof e)return
+const n=e
+for(const s of t)if("string"==typeof n[s]&&n[s])return n[s]}const Y=new Map
+function q(e={}){const t=i(),n=`${t.tenant_id}:${t.store_id}`,s=Y.get(n)
+if(s&&(s.inFlight||!e.force&&Date.now()-s.startedAt<6e4))return s.promise
+const a=Date.now(),r=(async()=>{const e=o(await c.getAll("sync_conflicts")),n=new Map(e.map(e=>[e.id,JSON.stringify(e)])),s=[],r=new Set
+let u=null
+for(;;){const e=await m({status:"open",limit:100,cursor:u,background:!0})
+if(s.push(...e.conflicts),!e.pagination.hasMore)break
+if(u=e.pagination.nextCursor,!u||r.has(u))throw new Error("Conflict pagination did not advance")
+r.add(u)}const _=()=>{const e=i()
+return e.tenant_id===t.tenant_id&&e.store_id===t.store_id}
+if(!_())return
+let p=!1
+await l.transaction("rw",[l.sync_conflicts],async()=>{if(!_())return
+const e=o(await c.getAll("sync_conflicts")),t=new Set(e.filter(e=>Date.parse(e.updated_at)>a||n.get(e.id)!==JSON.stringify(e)).map(e=>e.id)),r=s.filter(n=>!e.some(e=>(e.server_conflict_id===n.id||e.id===n.client_conflict_id)&&(t.has(e.id)||Number(e.server_record_version??0)>n.version))),u=new Set(s.map(e=>e.id)),f=((e,t)=>{const n=i(),s=new Set(t.map(e=>e.source_event_id).filter(e=>"string"==typeof e&&e.length>0)),a=e=>{const t=("string"==typeof e.source_event_id&&e.source_event_id.length>0?e.source_event_id:null)??("string"==typeof e.server_version&&s.has(e.server_version)?e.server_version:null)
+return t?`source:${t}`:e.client_conflict_id?`client:${e.client_conflict_id}`:`server:${e.id}`},r=new Map
+for(const i of t){const e=a(i),t=r.get(e),n="string"==typeof i.source_event_id&&i.source_event_id.length>0,s="string"==typeof t?.source_event_id&&t.source_event_id.length>0;(!t||n&&!s)&&r.set(e,i)}const o=new Map
+for(const i of e){const e=$(i,["source_event_id"])??("string"==typeof i.server_version&&s.has(i.server_version)?i.server_version:null),t=e?`source:${e}`:`client:${String(i.id)}`
+o.set(t,i)}for(const[i,c]of r){const e=c.client_conflict_id??void 0,t=o.get(i)??(e?o.get(`client:${e}`):void 0)??[...o.values()].find(e=>e.server_conflict_id===c.id),s={...t??{},id:t?.id??e??c.id,entity_type:c.entity_type,entity_id:c.entity_id,tenant_id:t?.tenant_id??n.tenant_id,store_id:t?.store_id??n.store_id,device_id:t?.device_id??c.device_id??n.device_id,created_at:t?.created_at??c.created_at,updated_at:c.updated_at,deleted_at:null,version:t?.version??1,sync_status:"conflict",last_modified_by:t?.last_modified_by??null,resolution:"unresolved",local_snapshot:S(t?.local_snapshot??c.local_snapshot??null),server_snapshot:S(c.server_snapshot??t?.server_snapshot??null),error_message:c.message,source_event_id:c.source_event_id??$(t,["source_event_id"]),server_conflict_id:c.id,server_record_version:c.version,server_version:c.server_version}
+if(t)for(const[n,a]of o)n!==i&&a.id===t.id&&o.delete(n)
+o.set(i,s)}return[...o.values()].sort((e,t)=>String(t.updated_at??t.created_at??"").localeCompare(String(e.updated_at??e.created_at??"")))})(e,r),y=new Map(e.map(e=>[e.id,e]))
+for(const n of f){let e=n
+"string"!=typeof n.server_conflict_id||u.has(n.server_conflict_id)||!d(n)||t.has(n.id)||(e={...n,resolution:"server_closed",sync_status:"synced",updated_at:(new Date).toISOString()}),JSON.stringify(y.get(e.id))!==JSON.stringify(e)&&(await l.sync_conflicts.put(e),p=!0)}}),p&&"undefined"!=typeof window&&window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"))})(),u={startedAt:a,promise:r,inFlight:!0}
+return Y.set(n,u),r.then(()=>{u.inFlight=!1},()=>{u.inFlight=!1}),r}async function B(e){return{pushed:0,pulled:0,conflicts:0,failed:0,pending:(await L()).totalBlocking,skipped:0,cursor:e}}let J=null,V=null
+function U(){return J?(V||(V=J.catch(()=>{}).then(()=>(V=null,U()))),V):(J=(async()=>{try{return await(async e=>"undefined"==typeof navigator||"function"!=typeof navigator.locks?.request?e(!1):navigator.locks.request("kirana-os:sync-cycle:v1",{mode:"exclusive"},()=>e(!0)))(z)}finally{J=null}})(),J)}async function z(e=!1){if(await c.init(),"undefined"!=typeof window&&!_()&&!p())return B()
+const t=await f()
+if(!t.browserOnline||!t.backendReachable)return B();(async()=>{if(T)return{ran:0,failed:0}
+T=!0
+try{return await(async()=>{let e=0,t=0
+try{const{commands:n}=await x()
+if(!Array.isArray(n)||0===n.length)return{ran:0,failed:0}
+for(const s of n){const n=await M(s)
+if("applied"===n.status?e+=1:t+=1,s.reloadsApp||await I(s.id,{status:n.status,result:n.result,error:n.error}).catch(()=>null),s.reloadsApp)break}}catch{return{ran:e,failed:t}}return{ran:e,failed:t}})()}finally{T=!1}})(),["owner","admin"].includes(String(y().user?.role??""))&&q().catch(()=>{})
+const n=await(async()=>(await h()).cloudSyncAllowed)()
+let s,a=null
+try{const e=await C({background:!0})
+a=!1!==e.allowed,s=e.cursor??e.server_version}catch(l){if((e=>e instanceof w&&(401===e.status||403===e.status))(l))return B(s)}if(!(a??n))return B(s)
+await F({recoverAbandonedSyncing:e}).catch(()=>0),await D().catch(()=>0)
+const r=Date.now()
+let i,o
+try{i=await E(),o=await A()}catch(l){throw H(v.SYNC_FAILED,Date.now()-r,{reason:l instanceof w?l.data?.code??String(l.status):"unknown"}),l}return await F().catch(()=>0),(i.pushed+o.pulled+i.failed+i.conflicts+o.conflicts>0||o.failed)&&H(i.failed>0||o.failed?v.SYNC_FAILED:v.SYNC_COMPLETED,Date.now()-r,{pushed:i.pushed,pulled:o.pulled,failed:i.failed,conflicts:i.conflicts+o.conflicts,...o.failed?{pullFailed:!0,reason:o.failureReason??"unknown"}:{}}),{pushed:i.pushed,pulled:o.pulled,conflicts:i.conflicts+o.conflicts,failed:i.failed,pending:(await L()).totalBlocking,skipped:i.skipped,cursor:o.cursor,pullFailed:o.failed,pullFailureReason:o.failureReason}}function H(e,t,n){g(e,n,{durationMs:t,module:"sync"})}async function G(e,t=[]){await l.open()
+const n=e?.length?await Promise.all(e.map(e=>l.sync_outbox.get(e))).then(e=>e.filter(e=>Boolean(e)&&u(e))):await c.getAll("sync_outbox").then(e=>e.filter(e=>"FAILED"===e.status||"CONFLICT"===e.status||"failed"===e.sync_status||"conflict"===e.sync_status)),s=new Set(t),a=e=>e.op_id||e.clientEventId,r=n.filter(e=>!s.has(a(e))),i=n.filter(e=>s.has(a(e)))
+let o=null
+const d=[...new Set([...r.map(a),...t].filter(e=>"string"==typeof e&&e.length>0))]
+try{o=await b({op_ids:d.length>0?d:e})}catch(y){if(t.length>0)throw y}const _=o?.recovery?.results??[],p=new Set(_.filter(e=>"replayed"===e.status||"already_recovered"===e.status).map(e=>e.sourceEventId))
+for(const c of i){const e=a(c),t=_.find(t=>t.sourceEventId===e)
+"replayed"===t?.status&&t.replay?await O(c,t.replay):"already_recovered"===t?.status&&await l.sync_outbox.put({...c,status:"SYNCED",sync_status:"synced",error_message:null,last_error:null,next_retry_at:null})}r.length>0&&await l.transaction("rw",l.sync_outbox,async()=>{for(const e of r){await l.sync_outbox.put({...e,status:"PENDING",sync_status:"pending_sync",error_message:null,last_error:null,next_retry_at:null,repair_requeues:0})
+const t=N(e.operation_type,e.entity_type),n=R(t)
+if(n&&"settings"!==n){const t=l.table(n),s=await t.get(e.entity_id).catch(()=>{})
+s&&u(s)&&await t.put({...s,sync_status:"pending_sync",isSynced:"bills"!==n&&s.isSynced,is_synced:"bills"!==n&&s.is_synced})}}})
+const f=await U()
+return 0===t.length?f:{...f,storedConflictRecovery:{requested:t.length,recovered:p.size,failed:_.filter(e=>"failed"===e.status).length,skipped:_.filter(e=>"skipped"===e.status).length,codes:_.filter(e=>"failed"===e.status||"skipped"===e.status).map(e=>e.code)}}}const W=Object.freeze(Object.defineProperty({__proto__:null,pullServerChanges:A,pushPendingOutboxOperations:k,retryFailedSyncOperations:G,runSyncCycle:U},Symbol.toStringTag,{value:"Module"}))
+export{G as a,q as b,U as r,W as s}

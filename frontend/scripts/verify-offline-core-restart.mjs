@@ -445,6 +445,7 @@ async function main() {
   let offlineBrowser;
   try {
     onlineBrowser = await launchChrome("about:blank", DEBUG_PORT);
+    await onlineBrowser.client.send("Emulation.setDeviceMetricsOverride", { ...VIEWPORT, deviceScaleFactor: 1, mobile: true });
     const onlineAuthenticator = await addQaAuthenticator(onlineBrowser.client);
     const { cacheState, seeded } = await primeOfflineInstall(onlineBrowser.client);
     const { credentials } = await onlineBrowser.client.send("WebAuthn.getCredentials", { authenticatorId: onlineAuthenticator });
@@ -460,13 +461,25 @@ async function main() {
     await waitForPage(offlineBrowser.client, `Boolean(document.querySelector('[data-testid="device-unlock"]'))`);
     // Exercise a real browser WebAuthn response with a deliberately invalid
     // signature, then recover with a signed, user-verified response offline.
-    await offlineBrowser.client.send("WebAuthn.setResponseOverrideBits", { authenticatorId: offlineAuthenticator, isBogusSignature: true });
-    await offlineBrowser.client.evaluate(`document.querySelector('[data-testid="device-unlock"]').click()`);
-    await waitForPage(offlineBrowser.client, `Boolean(document.querySelector('.session-lock-error')) && !document.querySelector('.session-lock-input').disabled`, 15_000);
-    assert(await offlineBrowser.client.evaluate(`!document.querySelector('main') && Boolean(document.querySelector('.session-lock-input'))`), "Forged device signature exposed the counter");
+    for (const override of ["isBogusSignature", "isBadUP", "isBadUV"]) {
+      await offlineBrowser.client.send("WebAuthn.setResponseOverrideBits", { authenticatorId: offlineAuthenticator, [override]: true });
+      await offlineBrowser.client.evaluate(`document.querySelector('[data-testid="device-unlock"]').click()`);
+      await waitForPage(offlineBrowser.client, `Boolean(document.querySelector('.session-lock-error')) && !document.querySelector('.session-lock-input').disabled`, 15_000);
+      assert(await offlineBrowser.client.evaluate(`!document.querySelector('main') && Boolean(document.querySelector('.session-lock-input'))`), `Forged device signature exposed the counter (${override})`);
+    }
     await offlineBrowser.client.send("WebAuthn.setResponseOverrideBits", { authenticatorId: offlineAuthenticator });
     await unlockQaCounterIfNeeded(offlineBrowser.client);
     console.log("Cold offline restart rejected a forged signature and resumed with verified device unlock.");
+    await waitForPage(offlineBrowser.client, `Boolean(document.querySelector('main a[href="/billing"]'))`);
+    // Age only the isolated QA session's idle stamp, then use an actual UI
+    // control. A resumed/suspended tab must lock BEFORE that click navigates.
+    await offlineBrowser.client.evaluate(`(()=>{const session=JSON.parse(localStorage.getItem("kiranaos.auth.session.v1"));const identity=JSON.stringify([session.user.id,session.shop?.id??session.user.shopId]);localStorage.setItem("kiranaos.security.lastActivity.v1:"+identity,String(Date.now()-20*60_000));document.querySelector('main a[href="/billing"]').click()})()`);
+    await waitForPage(offlineBrowser.client, `Boolean(document.querySelector('[data-testid="device-unlock"]'))`);
+    assert(await offlineBrowser.client.evaluate(`location.pathname === '/dashboard' && !document.querySelector('main')`), "Expired counter processed the click before locking");
+    const lockedShot = await offlineBrowser.client.send("Page.captureScreenshot", { format: "png" });
+    await writeFile(path.join(OUTPUT_DIR, "counter-offline-enrolled-390x844.png"), Buffer.from(lockedShot.data, "base64"));
+    await unlockQaCounterIfNeeded(offlineBrowser.client);
+    console.log("Expired offline counter intercepted the first click, then resumed through verified device unlock.");
     const results = [];
     for (const [qaId, route, expectsInternetRequired] of ROUTES) results.push(await auditOfflineRoute(offlineBrowser.client, qaId, route, expectsInternetRequired));
     // Exercise a populated account, not only the existing missing-customer case.

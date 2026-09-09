@@ -1,3 +1,4 @@
+import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -205,6 +206,7 @@ export default function ReportsPage() {
   const [period, setPeriod] = useState<ReportPeriod>("week");
   const [snapshot, setSnapshot] = useState<LocalReportSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState(false);
   const snapshotRef = useRef<LocalReportSnapshot | null>(null);
   const loadRequestId = useRef(0);
   const refreshTimer = useRef<number | null>(null);
@@ -253,9 +255,12 @@ export default function ReportsPage() {
       const nextSnapshot = await buildLocalReportSnapshot({ from: range.from, to: range.to });
       if (requestId === loadRequestId.current) {
         setSnapshot(nextSnapshot);
+        setReadError(false);
       }
+    } catch {
+      if (requestId === loadRequestId.current) setReadError(true);
     } finally {
-      if (requestId === loadRequestId.current && showLoader) {
+      if (requestId === loadRequestId.current) {
         setLoading(false);
       }
     }
@@ -468,6 +473,8 @@ export default function ReportsPage() {
       spark: trend.map((point) => point.profit - (expenseByDay.get(point.date) ?? 0)),
     },
   ];
+
+  if (readError || !snapshot) return <LocalDataUnavailable checking={!readError && loading} onRetry={() => void loadReports()} />;
 
   return (
     <PageShell className="reports-page mx-auto min-h-full w-full max-w-[1800px] space-y-4 pb-10 text-[var(--brand-ink)] lg:space-y-5">

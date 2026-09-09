@@ -708,7 +708,9 @@ function calculateStaffSales(bills: LocalBill[], range: DateRange): StaffSalesRo
 }
 
 async function loadScopedRows<T>(tableName: string): Promise<T[]> {
-  return offlineDB.getAll<T>(tableName).then((rows) => filterRowsForCurrentScope(rows)).catch(() => []);
+  // Missing rows and an unreadable table are different. Never publish a partial
+  // financial report as zero sales or "Local confirmed data".
+  return offlineDB.getAll<T>(tableName).then((rows) => filterRowsForCurrentScope(rows));
 }
 
 async function loadLocalFinanceRows(): Promise<LocalFinanceRows> {

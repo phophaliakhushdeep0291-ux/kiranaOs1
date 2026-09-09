@@ -14,6 +14,7 @@ router.get("/overview", ctrl.overview);
 router.get("/boms", ctrl.boms);
 router.post("/boms", requireRole("owner", "admin"), validate(createBomSchema), ctrl.createBom);
 router.post("/runs", requireRole("owner", "admin"), requireLocationAccess("inventory"), validate(createRunSchema), ctrl.createRun);
+router.get("/runs/:id", requireRole("owner", "admin"), requireLocationAccess("inventory"), ctrl.runDetails);
 router.post("/runs/:id/complete", requireRole("owner", "admin"), requireLocationAccess("inventory"), validate(completeRunSchema), ctrl.completeRun);
 router.post("/runs/:id/release", requireRole("owner", "admin"), requireLocationAccess("inventory"), ctrl.releaseRun);
 router.get("/trace", validateQuery(traceQuerySchema), ctrl.trace);

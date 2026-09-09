@@ -711,8 +711,8 @@ export async function repairStaleSyncedBillOutboxFailures(): Promise<number> {
 export async function readSyncQueueCounts(): Promise<SyncQueueCounts> {
   await repairResolvedSyncStatusNoise().catch(() => 0);
   const outbox = filterRowsForCurrentScope(
-    await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
+    await offlineDB.getAll<PendingSyncEvent>("sync_outbox"),
   );
-  const syncConflicts = await offlineDB.getAll<OfflineRow>("sync_conflicts").catch(() => []);
+  const syncConflicts = await offlineDB.getAll<OfflineRow>("sync_conflicts");
   return calculateSyncQueueCounts(outbox, filterRowsForCurrentScope(syncConflicts));
 }

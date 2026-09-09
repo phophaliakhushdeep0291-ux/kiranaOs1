@@ -17,7 +17,7 @@ import {
   markCounterSessionStarted,
 } from "./counter-lock-policy";
 
-const ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart", "focus"] as const;
+const ACTIVITY_EVENTS = ["pointerdown", "keydown", "click", "submit", "wheel", "touchstart", "focus"] as const;
 const ACTIVITY_WRITE_INTERVAL_MS = 15_000;
 const CHECK_INTERVAL_MS = 10_000;
 
@@ -59,7 +59,7 @@ function ScopedSessionLockGate({ children, identity }: { children: ReactNode; id
     void loadSecurityPolicy().then((loaded) => {
       if (!active) return;
       setPolicy(loaded);
-      const decision = isSessionLocked(identity ?? undefined)
+      const decision = isSessionLocked(identity ?? undefined) || isSessionLocked(user?.id)
         ? "lock" : counterStartupDecision(loaded, identity);
       markCounterSessionStarted(identity);
       setLocked(decision !== "allow");
@@ -74,11 +74,15 @@ function ScopedSessionLockGate({ children, identity }: { children: ReactNode; id
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity]);
 
-  const markActive = useCallback(() => {
+  const markActive = useCallback((event: Event) => {
     // Returning to a long-idle tab is not proof of presence. Check expiry before
     // focus/keypress can overwrite the durable idle stamp.
     const decision = counterIdleDecision(policy, identity);
     if (decision !== "allow") {
+      // Capture before React's handlers: the first click after a suspended tab
+      // expires must not submit a bill and only then show the lock screen.
+      if (event.cancelable) event.preventDefault();
+      event.stopImmediatePropagation();
       lock();
       if (decision === "logout") void logout();
       return;
@@ -92,7 +96,7 @@ function ScopedSessionLockGate({ children, identity }: { children: ReactNode; id
   useEffect(() => {
     if (!ready || locked) return;
     // Do not reset last activity on mount: refresh must not defeat the timeout.
-    for (const event of ACTIVITY_EVENTS) window.addEventListener(event, markActive, { passive: true });
+    for (const event of ACTIVITY_EVENTS) window.addEventListener(event, markActive, { capture: true, passive: false });
     const timer = window.setInterval(() => {
       const decision = counterIdleDecision(policy, identity);
       if (decision === "allow") return;
@@ -101,7 +105,7 @@ function ScopedSessionLockGate({ children, identity }: { children: ReactNode; id
     }, CHECK_INTERVAL_MS);
     return () => {
       window.clearInterval(timer);
-      for (const event of ACTIVITY_EVENTS) window.removeEventListener(event, markActive);
+      for (const event of ACTIVITY_EVENTS) window.removeEventListener(event, markActive, { capture: true });
     };
   }, [identity, ready, locked, lock, logout, markActive, policy]);
 
@@ -218,7 +222,7 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
               <Fingerprint size={16} /> Use fingerprint / face
             </Button>
           ) : null}
-          <Button type="button" variant="ghost" className="session-lock-signout" onClick={onSignOut}>
+          <Button type="button" variant="ghost" disabled={checking} className="session-lock-signout" onClick={() => { setChecking(true); onSignOut(); }}>
             <LogOut size={14} /> Sign out instead
           </Button>
         </form>

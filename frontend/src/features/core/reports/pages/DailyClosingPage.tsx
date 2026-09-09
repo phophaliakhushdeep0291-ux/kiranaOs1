@@ -1,3 +1,4 @@
+import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, CreditCard, MessageCircle, Printer, RefreshCw, ShieldAlert, TrendingUp, Wallet, XCircle } from "lucide-react";
@@ -95,6 +96,8 @@ export default function DailyClosingPage() {
   const [date, setDate] = useState(toDateInputValue(new Date()));
   const [report, setReport] = useState<DailyClosingReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState(false);
+  const loadGeneration = useRef(0);
   const [drawerCounts, setDrawerCounts] = useState<DrawerCount[]>([]);
   const [countedDraft, setCountedDraft] = useState("");
   const [savingCount, setSavingCount] = useState(false);
@@ -113,6 +116,7 @@ export default function DailyClosingPage() {
   }, [report]);
 
   const load = useCallback(async (options?: { showLoader?: boolean }) => {
+    const generation = ++loadGeneration.current;
     const showLoader = options?.showLoader ?? !reportRef.current;
     if (showLoader) setLoading(true);
     try {
@@ -122,10 +126,15 @@ export default function DailyClosingPage() {
         loadDrawerAdjustments(date),
         loadCashExpenseTotal(date),
       ]);
+      const next = await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash });
+      if (generation !== loadGeneration.current) return;
       setCashExpenses(expenseCash);
-      setReport(await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash }));
+      setReport(next);
+      setReadError(false);
+    } catch {
+      if (generation === loadGeneration.current) setReadError(true);
     }
-    finally { if (showLoader) setLoading(false); }
+    finally { if (generation === loadGeneration.current) setLoading(false); }
   }, [date]);
 
   useEffect(() => {
@@ -227,6 +236,8 @@ export default function DailyClosingPage() {
   const totalIncomingTender = (report?.cashReceived ?? 0) + (report?.upiReceived ?? 0) + (report?.bankReceived ?? 0);
   const cashPct = totalIncomingTender > 0 ? Math.round(((report?.cashReceived ?? 0) / totalIncomingTender) * 100) : 0;
   const upiPct = totalIncomingTender > 0 ? Math.round(((report?.upiReceived ?? 0) / totalIncomingTender) * 100) : 0;
+
+  if (readError || !report) return <LocalDataUnavailable checking={!readError && loading} onRetry={() => void load()} />;
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-5 p-4 sm:p-5 lg:p-6">

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const id = z.string().trim().min(1).max(64);
 const qty = z.coerce.number().positive().max(1_000_000_000);
+const stockQty = qty.refine((value) => Math.abs(value - Math.round(value * 100) / 100) < 0.0000001, "Use at most two decimal places for stock quantities");
 
 export const createBomSchema = z.object({
   finishedProductId: id,
@@ -31,7 +32,7 @@ export const createRunSchema = z.object({
 });
 
 export const completeRunSchema = z.object({
-  actualOutputBaseQty: qty,
+  actualOutputBaseQty: stockQty,
   finishedBatchNumber: z.string().trim().min(1).max(80),
   manufacturedOn: z.string().date(),
   expiresOn: z.string().date(),
@@ -41,13 +42,13 @@ export const completeRunSchema = z.object({
     productId: id,
     inventoryLotId: id.nullable().optional(),
     sellingUnitId: id.nullable().optional(),
-    packageCount: qty.nullable().optional(),
-    actualBaseQty: qty,
+    packageCount: stockQty.nullable().optional(),
+    actualBaseQty: stockQty,
   })).min(1).max(100),
   outputs: z.array(z.object({
     sellingUnitId: id.nullable().optional(),
-    packageCount: qty.nullable().optional(),
-    quantityBaseQty: qty,
+    packageCount: stockQty.nullable().optional(),
+    quantityBaseQty: stockQty,
   })).min(1).max(50),
 }).refine((value) => value.expiresOn > value.manufacturedOn, { path: ["expiresOn"], message: "Expiry must be after manufacturing date" });
 
