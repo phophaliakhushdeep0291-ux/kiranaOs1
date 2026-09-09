@@ -136,26 +136,40 @@ function retailIntentResponse(intent, location = null) {
   };
 }
 
+async function updateUnpaidIntent(intent, data, statuses = ["creating", "pending"]) {
+  await db.retailPaymentIntent.updateMany({
+    where: { id: intent.id, shopId: intent.shopId, status: { in: statuses }, providerPaymentId: null, consumedAt: null },
+    data,
+  });
+  return db.retailPaymentIntent.findUnique({ where: { id: intent.id } });
+}
+
+async function confirmCapturedIntent(intent, paymentId, confirmationSource) {
+  // Closing a QR or expiring the local checkout does not reverse captured money.
+  // Signed/API-verified late captures may reconcile an unpaid intent, but can
+  // never replace a different payment or reopen a refunded/consumed settlement.
+  const current = await updateUnpaidIntent(intent, {
+    status: "confirmed", providerPaymentId: paymentId, confirmedAt: new Date(), confirmationSource, failureReason: null,
+  }, ["creating", "pending", "cancelled", "expired", "failed"]);
+  if (current?.status === "confirmed" && current.providerPaymentId === paymentId) return current;
+  throw new AppError("This retail intent is already bound to another payment or no longer accepts settlement; reconcile before billing", 409, "RETAIL_PAYMENT_SETTLEMENT_CONFLICT");
+}
+
 async function confirmQrIntent(intent, qrCode, payments, confirmationSource) {
   const captured = (Array.isArray(payments?.items) ? payments.items : [])
     .filter((payment) => String(payment?.status || "").toLowerCase() === "captured" || payment?.captured === true);
   if (captured.length > 1) {
-    await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "failed", failureReason: "Provider returned multiple captured payments for a single-use QR" } });
+    await updateUnpaidIntent(intent, { status: "failed", failureReason: "Provider returned multiple captured payments for a single-use QR" });
     throw new AppError("Multiple payments were reported for this single-use QR; reconcile before billing", 409, "RETAIL_QR_MULTIPLE_PAYMENTS");
   }
   if (captured.length === 0) return null;
   const payment = captured[0];
   const validation = validateRetailQrPayment(intent, qrCode, payment);
   if (!validation.valid) {
-    await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "failed", failureReason: validation.reason } });
+    await updateUnpaidIntent(intent, { status: "failed", failureReason: validation.reason });
     throw new AppError(validation.reason, 409, "RETAIL_QR_PAYMENT_MISMATCH");
   }
-  const claimed = await db.retailPaymentIntent.updateMany({
-    where: { id: intent.id, status: { in: ["creating", "pending"] }, providerPaymentId: null },
-    data: { status: "confirmed", providerPaymentId: payment.id, confirmedAt: new Date(), confirmationSource, failureReason: null },
-  });
-  if (claimed.count === 1) return db.retailPaymentIntent.findUnique({ where: { id: intent.id } });
-  return db.retailPaymentIntent.findUnique({ where: { id: intent.id } });
+  return confirmCapturedIntent(intent, payment.id, confirmationSource);
 }
 
 export async function getRetailPaymentIntentStatus({ shopId, intentId }) {
@@ -175,7 +189,7 @@ export async function getRetailPaymentIntentStatus({ shopId, intentId }) {
   if (confirmed) return retailIntentResponse(confirmed);
 
   if (intent.expiresAt <= new Date() || qrCode.status === "closed") {
-    intent = await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "expired", failureReason: qrCode.close_reason ? `QR closed: ${qrCode.close_reason}` : null } });
+    intent = await updateUnpaidIntent(intent, { status: "expired", failureReason: qrCode.close_reason ? `QR closed: ${qrCode.close_reason}` : null });
   }
   return retailIntentResponse(intent);
 }
@@ -241,10 +255,19 @@ export async function cancelRetailPaymentIntent({ shopId, intentId, userId, user
   if (!['owner', 'admin'].includes(userRole) && intent.createdByUserId && intent.createdByUserId !== userId) {
     throw new AppError("Only the cashier who started this QR can cancel it", 403, "RETAIL_PAYMENT_INTENT_FORBIDDEN");
   }
-  if (intent.status === "confirmed") throw new AppError("A confirmed payment cannot be cancelled from checkout", 409, "RETAIL_PAYMENT_ALREADY_CONFIRMED");
+  if (intent.status === "confirmed" || intent.providerPaymentId || intent.consumedAt) throw new AppError("A confirmed payment cannot be cancelled from checkout", 409, "RETAIL_PAYMENT_ALREADY_CONFIRMED");
+  if (intent.checkoutMode !== "dynamic_qr") throw new AppError("Only a dynamic QR can be cancelled from this endpoint", 409, "RETAIL_QR_REQUIRED");
+  if (!["creating", "pending"].includes(intent.status)) return retailIntentResponse(intent);
   const credentials = (await getSelectedPaymentConnection(shopId, "razorpay"))?.credentials ?? null;
-  if (intent.providerQrCodeId && ["creating", "pending"].includes(intent.status)) await closeRazorpayQrCode(intent.providerQrCodeId, credentials);
-  const updated = await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "cancelled", failureReason: "Cancelled by cashier before confirmation" } });
+  if (intent.providerQrCodeId) {
+    await closeRazorpayQrCode(intent.providerQrCodeId, credentials);
+    // A single-use QR can close because it was paid. Closing alone is not
+    // evidence that no payment happened while the cashier pressed Cancel.
+    const checked = await getRetailPaymentIntentStatus({ shopId, intentId });
+    if (checked.status === "confirmed") throw new AppError("A confirmed payment cannot be cancelled from checkout", 409, "RETAIL_PAYMENT_ALREADY_CONFIRMED");
+  }
+  const updated = await updateUnpaidIntent(intent, { status: "cancelled", failureReason: "QR closed by cashier; late captured payments remain reconcilable" }, ["creating", "pending", "expired"]);
+  if (updated?.providerPaymentId || updated?.consumedAt) throw new AppError("A confirmed payment cannot be cancelled from checkout", 409, "RETAIL_PAYMENT_ALREADY_CONFIRMED");
   return retailIntentResponse(updated);
 }
 
@@ -258,7 +281,7 @@ export async function verifyRetailPaymentIntent({ shopId, intentId, input }) {
   if (!intent) throw new AppError("Retail payment intent not found", 404, "RETAIL_PAYMENT_INTENT_NOT_FOUND");
   if (intent.status === "confirmed" && intent.providerPaymentId === input.razorpay_payment_id) return intent;
   if (intent.expiresAt <= new Date()) {
-    await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "expired" } });
+    await updateUnpaidIntent(intent, { status: "expired" });
     throw new AppError("Retail payment intent has expired", 409, "RETAIL_PAYMENT_INTENT_EXPIRED");
   }
   if (intent.providerOrderId !== input.razorpay_order_id) throw new AppError("Payment order does not match this retail intent", 409, "RETAIL_PAYMENT_ORDER_MISMATCH");
@@ -266,10 +289,7 @@ export async function verifyRetailPaymentIntent({ shopId, intentId, input }) {
   if (!verifyPaymentSignature(input, credentials).verified) throw new AppError("Invalid Razorpay payment signature", 400, "INVALID_PAYMENT_SIGNATURE");
   const [payment, order] = await Promise.all([fetchRazorpayPayment(input.razorpay_payment_id, credentials), fetchRazorpayOrder(input.razorpay_order_id, credentials)]);
   assertRemotePayment(intent, input.razorpay_order_id, input.razorpay_payment_id, payment, order);
-  return db.retailPaymentIntent.update({
-    where: { id: intent.id },
-    data: { status: "confirmed", providerPaymentId: input.razorpay_payment_id, confirmedAt: new Date(), confirmationSource: "provider_api", failureReason: null },
-  });
+  return confirmCapturedIntent(intent, input.razorpay_payment_id, "provider_api");
 }
 
 export async function confirmRetailIntentFromWebhook({ notes, payment, order }) {
@@ -278,10 +298,10 @@ export async function confirmRetailIntentFromWebhook({ notes, payment, order }) 
   if (!intent) return { retailPayment: true, confirmed: false, reason: "Retail intent not found" };
   try {
     assertRemotePayment(intent, intent.providerOrderId, payment?.id, payment, order);
-    const updated = await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "confirmed", providerPaymentId: payment.id, confirmedAt: new Date(), confirmationSource: "signed_webhook", failureReason: null } });
+    const updated = await confirmCapturedIntent(intent, payment.id, "signed_webhook");
     return { retailPayment: true, confirmed: true, intentId: updated.id, shopId: updated.shopId };
   } catch (error) {
-    await db.retailPaymentIntent.update({ where: { id: intent.id }, data: { status: "failed", failureReason: String(error.message).slice(0, 500) } });
+    await updateUnpaidIntent(intent, { status: "failed", failureReason: String(error.message).slice(0, 500) });
     return { retailPayment: true, confirmed: false, intentId: intent.id, reason: error.message };
   }
 }

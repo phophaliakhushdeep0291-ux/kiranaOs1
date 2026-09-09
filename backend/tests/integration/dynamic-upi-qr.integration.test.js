@@ -19,6 +19,8 @@ test("dynamic QR stays branch-bound, exact-amount, provider-confirmed and idempo
   const payments = new Map();
   const providerCalls = [];
   let sequence = 1;
+  let onClose = null;
+  let onPayments = null;
 
   global.fetch = async (input, options = {}) => {
     const target = typeof input === "string" ? input : input?.toString?.() || "";
@@ -38,9 +40,14 @@ test("dynamic QR stays branch-bound, exact-amount, provider-confirmed and idempo
     if (options.method === "POST" && parts.at(-1) === "close") {
       const qr = qrs.get(qrId);
       qrs.set(qrId, { ...qr, status: "closed", close_reason: "on_demand" });
+      await onClose?.(qrId);
       return jsonResponse(qrs.get(qrId));
     }
-    if (parts.at(-1) === "payments") return jsonResponse({ entity: "collection", count: payments.get(qrId)?.length || 0, items: payments.get(qrId) || [] });
+    if (parts.at(-1) === "payments") {
+      const items = payments.get(qrId) || [];
+      await onPayments?.(qrId);
+      return jsonResponse({ entity: "collection", count: items.length, items });
+    }
     if (qrs.has(qrId)) return jsonResponse(qrs.get(qrId));
     return jsonResponse({ error: { description: "QR not found" } }, 404);
   };
@@ -57,6 +64,11 @@ test("dynamic QR stays branch-bound, exact-amount, provider-confirmed and idempo
     const tenant = await createTenant(ctx.db);
     const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
     const token = auth.accessToken;
+    const { confirmRetailQrIntentFromWebhook } = await import("../../src/modules/payment-provider/retailPayment.service.js");
+    const makeIntent = async (amountPaise) => {
+      const response = assertSuccess(await ctx.post("/api/payment-provider/retail/intents", { amountPaise, mode: "dynamic_qr" }, { token }), 201);
+      return ctx.db.retailPaymentIntent.findUnique({ where: { id: response.intentId } });
+    };
 
     const readiness = assertSuccess(await ctx.get("/api/payment-provider/retail/readiness", { token }));
     assert.equal(readiness.configured, true);
@@ -122,6 +134,45 @@ test("dynamic QR stays branch-bound, exact-amount, provider-confirmed and idempo
     const duplicate = assertSuccess(await postRawWebhook(ctx.baseUrl, webhookBody, signWebhook(webhookBody)));
     assert.equal(duplicate.duplicate, true);
     assert.equal((await ctx.db.retailPaymentIntent.count({ where: { providerPaymentId: "pay_webhook_qr_1" } })), 1);
+
+    // A bad or conflicting later event must never erase a captured settlement.
+    const badLate = await confirmRetailQrIntentFromWebhook({ qrCode: webhookQr, payment: capturedPayment("pay_bad_late", 9901) });
+    assert.equal(badLate.confirmed, false);
+    const conflictingLate = await confirmRetailQrIntentFromWebhook({ qrCode: webhookQr, payment: capturedPayment("pay_other_capture", 9900) });
+    assert.equal(conflictingLate.confirmed, false);
+    assert.equal((await ctx.db.retailPaymentIntent.findUnique({ where: { id: webhookIntent.id } })).providerPaymentId, "pay_webhook_qr_1");
+    assert.equal((await ctx.db.retailPaymentIntent.findUnique({ where: { id: webhookIntent.id } })).status, "confirmed");
+
+    // Payment notifications can arrive after the local QR cancellation.
+    const lateCaptured = await confirmRetailQrIntentFromWebhook({ qrCode: qrs.get(cancelledIntent.providerQrCodeId), payment: capturedPayment("pay_after_close", 7600) });
+    assert.equal(lateCaptured.confirmed, true);
+    assert.equal((await ctx.db.retailPaymentIntent.findUnique({ where: { id: cancelledIntent.id } })).status, "confirmed");
+
+    const cancelRace = await makeIntent(4400);
+    onClose = async (qrId) => {
+      if (qrId !== cancelRace.providerQrCodeId) return;
+      onClose = null;
+      const captured = await confirmRetailQrIntentFromWebhook({ qrCode: qrs.get(qrId), payment: capturedPayment("pay_cancel_race", 4400) });
+      assert.equal(captured.confirmed, true);
+    };
+    const cancelledRace = assertFailure(await ctx.post(`/api/payment-provider/retail/intents/${cancelRace.id}/cancel`, {}, { token }), 409);
+    assert.equal(cancelledRace.code, "RETAIL_PAYMENT_ALREADY_CONFIRMED");
+    assert.equal((await ctx.db.retailPaymentIntent.findUnique({ where: { id: cancelRace.id } })).status, "confirmed");
+
+    const expiryRace = await makeIntent(5500);
+    qrs.set(expiryRace.providerQrCodeId, { ...qrs.get(expiryRace.providerQrCodeId), status: "closed" });
+    onPayments = async (qrId) => {
+      if (qrId !== expiryRace.providerQrCodeId) return;
+      onPayments = null;
+      assert.equal((await confirmRetailQrIntentFromWebhook({ qrCode: qrs.get(qrId), payment: capturedPayment("pay_expiry_race", 5500) })).confirmed, true);
+    };
+    const expiryResponse = assertSuccess(await ctx.get(`/api/payment-provider/retail/intents/${expiryRace.id}/status`, { token }));
+    assert.equal(expiryResponse.status, "confirmed", "a stale empty provider response cannot overwrite concurrent confirmation with expiry");
+
+    const capturedBeforeCancel = await makeIntent(6600);
+    payments.set(capturedBeforeCancel.providerQrCodeId, [capturedPayment("pay_before_cancel", 6600)]);
+    assertFailure(await ctx.post(`/api/payment-provider/retail/intents/${capturedBeforeCancel.id}/cancel`, {}, { token }), 409);
+    assert.equal((await ctx.db.retailPaymentIntent.findUnique({ where: { id: capturedBeforeCancel.id } })).status, "confirmed");
 
     assert.ok(providerCalls.some((call) => call.target.includes("/payments?count=10")), "polling must verify captured payments through the provider API");
   } finally {

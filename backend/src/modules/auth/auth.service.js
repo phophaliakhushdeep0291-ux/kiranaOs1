@@ -547,14 +547,23 @@ export async function getMe(userId, shopId) {
 
 // ── PIN management ──────────────────────────────────────────
 
-export async function setPin(userId, shopId, pin, reqMeta = {}) {
+export async function setPin(userId, shopId, pin, reqMeta = {}, currentPassword) {
   const user = await db.user.findFirst({ where: { id: userId, shopId, disabledAt: null } });
   if (!user) throw new AppError("User not found", 404);
   if (user.role !== "owner") throw new AppError("Only owner can set a PIN", 403);
+  if (typeof currentPassword !== "string" || !currentPassword || !await bcrypt.compare(currentPassword, user.passwordHash)) {
+    throw new AppError("Current login password is incorrect", 403, "OWNER_REAUTH_FAILED");
+  }
 
   const pinHash = await bcrypt.hash(pin, 10);
   await db.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: userId }, data: { pinHash } });
+    // Password resets, disabled owners and simultaneous PIN changes revoke
+    // an older check. Check the credential versions inside the write transaction.
+    const changed = await tx.user.updateMany({
+      where: { id: userId, shopId, role: "owner", disabledAt: null, passwordHash: user.passwordHash, pinHash: user.pinHash },
+      data: { pinHash },
+    });
+    if (changed.count !== 1) throw new AppError("Owner credentials changed. Try again.", 409, "OWNER_CREDENTIALS_CHANGED");
     await writeRequiredAuthAudit(tx, {
       shopId,
       userId,

@@ -114,6 +114,7 @@ export const resetPasswordSchema = z.object({
 
 export const setPinSchema = z.object({
   pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits"),
+  currentPassword: z.string().min(1, "Current login password is required"),
 });
 
 export const verifyPinSchema = z.object({

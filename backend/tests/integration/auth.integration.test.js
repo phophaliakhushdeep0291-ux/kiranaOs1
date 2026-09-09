@@ -180,7 +180,7 @@ if (ctx.skip) {
       const initialPinHash = (await ctx.db.user.findUniqueOrThrow({ where: { id: tenant.owner.id } })).pinHash;
       const failedPin = assertFailure(await failAudit("PIN_CHANGED", () => ctx.post(
         "/api/auth/pin/set",
-        { pin: "5678" },
+        { pin: "5678", currentPassword: tenant.ownerPassword },
         { token: auth.accessToken },
       )), 503);
       assert.equal(failedPin.code, "AUTH_AUDIT_WRITE_FAILED");
