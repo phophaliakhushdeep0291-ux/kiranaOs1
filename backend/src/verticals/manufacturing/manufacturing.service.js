@@ -94,8 +94,20 @@ export async function completeRun(shopId, runId, input, actor = {}) {
     if (!finished.batchTrackingEnabled) throw new AppError("Enable batch tracking on the finished product before recording production", 422, "FINISHED_PRODUCT_BATCH_TRACKING_REQUIRED");
     const scale = Number(run.plannedOutputBaseQty) / Number(run.bom.outputQuantityBaseQty);
     const bomByProduct = new Map(run.bom.items.map((row) => [row.materialProductId, row]));
-    if (new Set(input.consumptions.map((row) => row.productId)).size !== input.consumptions.length) throw new AppError("Combine duplicate material consumption rows", 422, "DUPLICATE_CONSUMPTION");
-    if (input.consumptions.length !== bomByProduct.size || input.consumptions.some((row) => !bomByProduct.has(row.productId))) throw new AppError("Record actual consumption for every BOM material", 422, "PRODUCTION_MATERIALS_INCOMPLETE");
+    const materialIds = new Set(input.consumptions.map((row) => row.productId));
+    if (materialIds.size !== bomByProduct.size || [...materialIds].some((id) => !bomByProduct.has(id))) throw new AppError("Record actual consumption for every BOM material", 422, "PRODUCTION_MATERIALS_INCOMPLETE");
+    const sourceKeys = new Set();
+    const materialTotals = new Map();
+    for (const row of input.consumptions) {
+      const key = JSON.stringify([row.productId, row.inventoryLotId || null, row.sellingUnitId || null]);
+      if (sourceKeys.has(key)) throw new AppError("Combine rows using the same material, source batch and packaging", 422, "DUPLICATE_CONSUMPTION");
+      sourceKeys.add(key);
+      const total = round2((materialTotals.get(row.productId) || 0) + Number(row.actualBaseQty));
+      if (!Number.isFinite(total) || total > 1e9) throw new AppError("Material consumption is too large", 422, "PRODUCTION_QUANTITY_LIMIT");
+      materialTotals.set(row.productId, total);
+    }
+    const allocatedPlan = new Map();
+    const consumedTotal = new Map();
 
     for (const row of input.consumptions) {
       const bomItem = bomByProduct.get(row.productId);
@@ -107,6 +119,7 @@ export async function completeRun(shopId, runId, input, actor = {}) {
       if (row.inventoryLotId) {
         const lot = await tx.inventoryLot.findFirst({ where: { id: row.inventoryLotId, shopId, locationId: location.id, productId: row.productId, status: "active", expiresOn: { gte: cleanDate(formatDateInTimeZone(new Date())) } } });
         if (!lot || Number(lot.availableBaseQty) < Number(row.actualBaseQty)) throw new AppError(`Insufficient selected batch stock for ${product.name}`, 409, "INSUFFICIENT_BATCH_STOCK");
+        if (lot.sellingUnitId && lot.sellingUnitId !== row.sellingUnitId) throw new AppError(`Choose the packaging belonging to the selected batch of ${product.name}`, 422, "PRODUCTION_SOURCE_PACK_MISMATCH");
         const movedLot = await tx.inventoryLot.updateMany({ where: { id: lot.id, status: "active", availableBaseQty: { gte: row.actualBaseQty } }, data: { availableBaseQty: { decrement: row.actualBaseQty } } });
         if (movedLot.count !== 1) throw new AppError(`Selected batch stock changed for ${product.name}`, 409, "INSUFFICIENT_BATCH_STOCK");
         await tx.inventoryLot.updateMany({ where: { id: lot.id, availableBaseQty: 0 }, data: { status: "depleted" } });
@@ -116,13 +129,20 @@ export async function completeRun(shopId, runId, input, actor = {}) {
       const packs = pack ? new Map([[row.sellingUnitId, pack]]) : null;
       const moved = await decrementLocationInventory(tx, { shopId, location, product, quantityBase: row.actualBaseQty, packs });
       await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: product.id, productName: product.name, ...stockLedgerProvenance(actor), sellingUnitId: row.sellingUnitId ?? null, sellingUnitQty: row.packageCount ?? null, action: "production_use", changeBaseQty: -row.actualBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "production_run", sourceId: run.id, note: `Consumed by ${run.runNumber}` } });
-      await tx.productionConsumption.create({ data: { shopId, runId: run.id, productId: product.id, inventoryLotId: row.inventoryLotId ?? null, plannedBaseQty: effectiveBomQty(bomItem, scale), actualBaseQty: row.actualBaseQty, sourceBatchNumber } });
+      // Allocate the recipe expectation across source rows. Recording the full
+      // expectation on every split would multiply planned use in trace reports.
+      const consumed = round2((consumedTotal.get(product.id) || 0) + Number(row.actualBaseQty));
+      const cumulativePlan = round2(effectiveBomQty(bomItem, scale) * consumed / materialTotals.get(product.id));
+      const plannedBaseQty = round2(cumulativePlan - (allocatedPlan.get(product.id) || 0));
+      consumedTotal.set(product.id, consumed); allocatedPlan.set(product.id, cumulativePlan);
+      await tx.productionConsumption.create({ data: { shopId, runId: run.id, productId: product.id, inventoryLotId: row.inventoryLotId ?? null, plannedBaseQty, actualBaseQty: row.actualBaseQty, sourceBatchNumber } });
     }
 
     const outputTotal = round2(input.outputs.reduce((sum, row) => sum + Number(row.quantityBaseQty), 0));
     if (Math.abs(outputTotal - Number(input.actualOutputBaseQty)) > 0.001) throw new AppError("Packaging outputs must equal actual finished output", 422, "PRODUCTION_OUTPUT_MISMATCH");
     const lot = await tx.inventoryLot.create({ data: { shopId, locationId: location.id, productId: finished.id, producedByRunId: run.id, batchNumber: input.finishedBatchNumber, manufacturedOn: cleanDate(input.manufacturedOn), expiresOn: cleanDate(input.expiresOn), receivedBaseQty: input.actualOutputBaseQty, availableBaseQty: input.actualOutputBaseQty, costPerRateUnit: finished.costPerRateUnit, status: input.qcStatus === "conditional" ? "quarantined" : "active", note: `Produced by ${run.runNumber}` } });
     const packMap = new Map();
+    const outputMovements = new Map();
     for (const row of input.outputs) {
       const pack = packaging(finished, row, row.quantityBaseQty);
       const unit = pack?.sellingUnit;
@@ -130,10 +150,22 @@ export async function completeRun(shopId, runId, input, actor = {}) {
         const previous = packMap.get(unit.id);
         packMap.set(unit.id, { ...pack, qty: round2((previous?.qty ?? 0) + pack.qty) });
       }
+      const movementKey = unit?.id ?? null;
+      const previousMovement = outputMovements.get(movementKey);
+      outputMovements.set(movementKey, {
+        sellingUnitId: movementKey,
+        sellingUnitQty: pack ? round2((previousMovement?.sellingUnitQty || 0) + pack.qty) : null,
+        quantityBaseQty: round2((previousMovement?.quantityBaseQty || 0) + Number(row.quantityBaseQty)),
+      });
       await tx.productionOutput.create({ data: { shopId, runId: run.id, productId: finished.id, sellingUnitId: unit?.id ?? null, inventoryLotId: lot.id, packagingSku: unit?.sku ?? unit?.unitCode ?? null, quantityBaseQty: row.quantityBaseQty, packageCount: row.packageCount ?? null, batchNumber: input.finishedBatchNumber } });
     }
     const moved = await incrementLocationInventory(tx, { shopId, location, product: finished, quantityBase: input.actualOutputBaseQty, packs: packMap.size ? packMap : null });
-    await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: finished.id, productName: finished.name, ...stockLedgerProvenance(actor), action: "production_output", changeBaseQty: input.actualOutputBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "production_run", sourceId: run.id, note: `Finished batch ${input.finishedBatchNumber}` } });
+    let previousStock = moved.oldStock;
+    for (const movement of outputMovements.values()) {
+      const nextStock = round2(previousStock + movement.quantityBaseQty);
+      await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: finished.id, productName: finished.name, ...stockLedgerProvenance(actor), sellingUnitId: movement.sellingUnitId, sellingUnitQty: movement.sellingUnitQty, action: "production_output", changeBaseQty: movement.quantityBaseQty, oldStockBaseQty: previousStock, newStockBaseQty: nextStock, sourceType: "production_run", sourceId: run.id, note: `Finished batch ${input.finishedBatchNumber}` } });
+      previousStock = nextStock;
+    }
     return tx.productionRun.update({ where: { id: run.id }, data: { status: input.qcStatus === "conditional" ? "quarantined" : "completed", actualOutputBaseQty: input.actualOutputBaseQty, finishedBatchNumber: input.finishedBatchNumber, manufacturedOn: cleanDate(input.manufacturedOn), expiresOn: cleanDate(input.expiresOn), qcStatus: input.qcStatus, notes: input.notes ?? run.notes, startedAt: run.startedAt ?? new Date(), completedAt: new Date() }, include: { bom: true, consumptions: true, outputs: true } });
   });
 }

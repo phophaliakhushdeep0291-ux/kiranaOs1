@@ -98,4 +98,57 @@ else {
     assert.equal(overview.recentRuns[0].id, f.run.id, "old open work cannot disappear behind newer completed runs");
     assert.equal(overview.recentRuns.length, 21);
   });
+
+  test("split source batches and mixed output packs reconcile genealogy, stock and pack ledger through the HTTP API", async () => {
+    const f = await fixture();
+    await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { receivedBaseQty: 6, availableBaseQty: 6, sellingUnitId: f.rawPack.id } });
+    const secondLot = await ctx.db.inventoryLot.create({ data: { shopId: f.shopId, locationId: f.run.locationId, productId: f.raw.id, batchNumber: "RAW-2", expiresOn: new Date(day(365)), receivedBaseQty: 94, availableBaseQty: 94, costPerRateUnit: 10, sellingUnitId: f.rawPack.id } });
+    const carton = await ctx.db.productSellingUnit.create({ data: { shopId: f.shopId, productId: f.finished.id, name: "Carton", unitType: "pack", unitCode: "carton", conversionToBase: 3, onHandQty: 0, defaultPrice: 30 } });
+    const input = { ...f.input, consumptions: [
+      { ...f.input.consumptions[0], actualBaseQty: 6, packageCount: 0.6 },
+      { ...f.input.consumptions[0], inventoryLotId: secondLot.id, actualBaseQty: 4, packageCount: 0.4 },
+      f.input.consumptions[1],
+    ], outputs: [f.input.outputs[0], { sellingUnitId: carton.id, packageCount: 2, quantityBaseQty: 6 }] };
+    const auth = await login(ctx, f.ownerMobile, f.ownerPassword);
+    const result = assertSuccess(await ctx.post(`/api/manufacturing/runs/${f.run.id}/complete`, input, { token: auth.accessToken, headers: { "x-location-id": f.run.locationId } }));
+    assert.equal(result.consumptions.length, 3);
+    const rawConsumption = result.consumptions.filter((row) => row.productId === f.raw.id);
+    assert.deepEqual(rawConsumption.map((row) => row.plannedBaseQty).sort(), [4, 6]);
+    assert.equal((await ctx.db.inventoryLot.findUnique({ where: { id: f.lot.id } })).status, "depleted");
+    assert.equal((await ctx.db.inventoryLot.findUnique({ where: { id: secondLot.id } })).availableBaseQty, 90);
+    assert.equal((await ctx.db.product.findUnique({ where: { id: f.raw.id } })).stockBaseQty, 90);
+    assert.equal((await ctx.db.productSellingUnit.findUnique({ where: { id: f.rawPack.id } })).onHandQty, 9);
+    for (const packId of [f.outputPack.id, carton.id]) assert.equal((await ctx.db.productSellingUnit.findUnique({ where: { id: packId } })).onHandQty, 2);
+    const ledger = await ctx.db.stockLedger.findMany({ where: { sourceId: f.run.id, action: "production_output" } });
+    assert.equal(ledger.length, 2);
+    assert.equal(ledger.reduce((sum, row) => sum + row.changeBaseQty, 0), 10);
+    assert.equal(ledger.find((row) => row.sellingUnitId === f.outputPack.id).sellingUnitQty, 2);
+    assert.equal(ledger.find((row) => row.sellingUnitId === carton.id).sellingUnitQty, 2);
+    assert.deepEqual(ledger.map((row) => [row.oldStockBaseQty, row.newStockBaseQty]).sort((a, b) => a[0] - b[0]), [[0, 4], [4, 10]]);
+    for (const batch of ["RAW-1", "RAW-2"]) assert.equal((await production.traceBatch(f.shopId, batch)).consumedBy[0].runId, f.run.id);
+    await production.releaseRun(f.shopId, f.run.id);
+    assert.equal(await ctx.db.stockLedger.count({ where: { sourceId: f.run.id } }), 5);
+    await assert.rejects(() => production.completeRun(f.shopId, f.run.id, input), { code: "PRODUCTION_RUN_ALREADY_CLOSED" });
+    assert.equal((await ctx.db.product.findUnique({ where: { id: f.finished.id } })).stockBaseQty, 10);
+  });
+
+  test("a later split failure or wrong source packaging rolls back earlier sources and the run claim", async () => {
+    const f = await fixture();
+    const secondLot = await ctx.db.inventoryLot.create({ data: { shopId: f.shopId, locationId: f.run.locationId, productId: f.raw.id, batchNumber: "RAW-SMALL", expiresOn: new Date(day(365)), receivedBaseQty: 3, availableBaseQty: 3, costPerRateUnit: 10 } });
+    const split = { ...f.input, consumptions: [
+      { ...f.input.consumptions[0], actualBaseQty: 6, packageCount: 0.6 },
+      { ...f.input.consumptions[0], inventoryLotId: secondLot.id, actualBaseQty: 4, packageCount: 0.4 },
+      f.input.consumptions[1],
+    ] };
+    await assert.rejects(() => production.completeRun(f.shopId, f.run.id, split), { code: "INSUFFICIENT_BATCH_STOCK" });
+    await assert.rejects(() => production.completeRun(f.shopId, f.run.id, { ...f.input, consumptions: [...f.input.consumptions, f.input.consumptions[0]] }), { code: "DUPLICATE_CONSUMPTION" });
+    await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { sellingUnitId: "different-pack" } });
+    await assert.rejects(() => production.completeRun(f.shopId, f.run.id, f.input), { code: "PRODUCTION_SOURCE_PACK_MISMATCH" });
+    assert.equal((await ctx.db.inventoryLot.findUnique({ where: { id: f.lot.id } })).availableBaseQty, 100);
+    assert.equal((await ctx.db.product.findUnique({ where: { id: f.raw.id } })).stockBaseQty, 100);
+    assert.equal((await ctx.db.productSellingUnit.findUnique({ where: { id: f.rawPack.id } })).onHandQty, 10);
+    assert.equal((await ctx.db.productionRun.findUnique({ where: { id: f.run.id } })).status, "planned");
+    assert.equal(await ctx.db.productionConsumption.count({ where: { runId: f.run.id } }), 0);
+    assert.equal(await ctx.db.stockLedger.count({ where: { sourceId: f.run.id } }), 0);
+  });
 }

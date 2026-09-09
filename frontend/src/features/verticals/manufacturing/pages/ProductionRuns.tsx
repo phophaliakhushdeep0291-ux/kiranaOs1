@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ClipboardList, Loader2, Plus, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ClipboardList, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,11 +10,12 @@ import { useOfflineStatus } from "@/features/core/sync";
 import { apiRequest } from "@/lib/api/http";
 import { useToast } from "@/hooks/use-toast";
 import type { Product } from "@/types/api";
-import { baseQuantity, completionPayload, initialCompletion, plannedMaterial, type CompletionDraft, type ProductionBom, type ProductionRun, type QuantityDraft, type RunDetails } from "../production-run";
+import { baseQuantity, completionPayload, newQuantityRow, plannedMaterial, totalQuantity, type CompletionDraft, type ProductionBom, type ProductionRun, type QuantityDraft, type RunDetails } from "../production-run";
+import { useProductionDraft } from "../use-production-draft";
 
 const selectClass = "h-11 w-full min-w-0 rounded-lg border border-input bg-background px-3 text-sm font-normal";
 const statusKeys = { planned: "manufacturing.production.planned", in_progress: "manufacturing.production.inProgress", quarantined: "manufacturing.production.held", completed: "manufacturing.production.completed" } as const;
-const validationKeys = { quantity: "manufacturing.production.errorQuantity", batch: "manufacturing.production.errorBatch", dates: "manufacturing.production.errorDates", sourceBatch: "manufacturing.production.errorSource", stock: "manufacturing.production.errorStock" } as const;
+const validationKeys = { quantity: "manufacturing.production.errorQuantity", batch: "manufacturing.production.errorBatch", dates: "manufacturing.production.errorDates", sourceBatch: "manufacturing.production.errorSource", stock: "manufacturing.production.errorStock", duplicateSource: "manufacturing.production.errorDuplicateSource", duplicateOutput: "manufacturing.production.errorDuplicateOutput", sourcePack: "manufacturing.production.errorSourcePack" } as const;
 type T = ReturnType<typeof useAppLanguage>["t"];
 
 export default function ProductionRuns({ runs, boms, loading }: { runs: ProductionRun[]; boms: ProductionBom[]; loading: boolean }) {
@@ -84,45 +85,76 @@ function PlanRun({ open, close, boms, saved }: { open: boolean; close: () => voi
 
 function LoadCompletion({ run, close, saved }: { run: ProductionRun; close: () => void; saved: () => Promise<void> }) {
   const { t } = useAppLanguage();
+  const { user, shop } = useAuth();
   const detail = useQuery({ queryKey: ["manufacturing", "run", run.id], queryFn: () => apiRequest<RunDetails>(`/manufacturing/runs/${run.id}`, { headers: { "x-location-id": run.locationId } }), staleTime: 0 });
   if (detail.isPending) return <p role="status" className="p-6">{t("manufacturing.production.loading")}</p>;
   if (detail.isError) return <div><ErrorText error={detail.error} /><Button variant="outline" onClick={() => void detail.refetch()}>{t("manufacturing.retry")}</Button></div>;
-  return <CompletionForm details={detail.data} close={close} saved={saved} />;
+  if (!["planned", "in_progress"].includes(detail.data.run.status)) return <div className="space-y-3"><p role="status">{t("manufacturing.production.alreadyClosed")}</p><Button onClick={() => { close(); void saved(); }}>{t("manufacturing.production.closeRefresh")}</Button></div>;
+  return <CompletionForm key={JSON.stringify([shop?.id, user?.id, run.id, run.bomId])} details={detail.data} close={close} saved={saved} />;
 }
 
 function CompletionForm({ details, close, saved }: { details: RunDetails; close: () => void; saved: () => Promise<void> }) {
   const { t } = useAppLanguage();
   const { isOnline } = useOfflineStatus();
-  const [draft, setDraft] = useState<CompletionDraft>(() => initialCompletion(details));
+  const { user, shop } = useAuth();
+  const shopId = shop?.id || user?.shopId;
+  const entry = useProductionDraft(details, shopId && user?.id ? { shopId, userId: user.id, locationId: details.run.locationId, runId: details.run.id, bomId: details.run.bomId } : null);
+  const { draft, setDraft } = entry;
   const [validation, setValidation] = useState<string | null>(null);
   const mutation = useMutation({
     mutationFn: (payload: ReturnType<typeof completionPayload>) => apiRequest(`/manufacturing/runs/${details.run.id}/complete`, { method: "POST", headers: { "x-location-id": details.run.locationId }, body: JSON.stringify(payload) }),
-    onSuccess: async () => { close(); await saved(); },
+    onSuccess: async () => { entry.clear(); close(); await saved(); },
   });
   const product = (id: string) => details.products.find((entry) => entry.id === id);
   const finished = product(details.run.bom.finishedProductId);
+  const outputUnits = (finished?.sellingUnits ?? []).filter((unit) => unit.id && unit.isActive && unit.conversionToBase > 0).map((unit) => unit.id!);
+  if (finished?.packagingMode !== "per_pack") outputUnits.unshift("");
+  const availableOutput = outputUnits.find((id) => !draft.outputs.some((row) => row.sellingUnitId === id));
+  const sourceRowCount = Object.values(draft.materials).reduce((sum, rows) => sum + rows.length, 0);
   return <form className="space-y-5" onSubmit={(event) => {
     event.preventDefault(); setValidation(null);
     try { mutation.mutate(completionPayload(details, draft)); }
     catch (error) { setValidation(t(validationKeys[(error as Error).message as keyof typeof validationKeys] ?? "manufacturing.production.errorQuantity")); }
   }}>
+    <p role="status" className={`rounded-lg p-3 text-xs leading-5 ${entry.saved ? "bg-slate-50 text-slate-600" : "bg-amber-50 text-amber-900"}`}>{t(entry.saved ? "manufacturing.production.draftSaved" : "manufacturing.production.draftUnavailable")}{entry.restored && <> {t("manufacturing.production.draftRestored")}</>}</p>
+    {entry.restoreProblem && <p role="alert" className="text-xs text-amber-900">{t("manufacturing.production.draftReadFailed")}</p>}
     <fieldset disabled={mutation.isPending} className="space-y-5">
       <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
         <h3 className="font-bold">{t("manufacturing.production.output")}</h3><p className="text-sm text-slate-600">{finished?.name}</p>
-        <QuantityFields product={finished} value={draft.actual} change={(actual) => setDraft((previous) => ({ ...previous, actual }))} t={t} />
+        <p className="text-xs leading-5 text-slate-500">{t("manufacturing.production.outputHelp")}</p>
+        {draft.outputs.map((value, index) => <fieldset key={value.key} className="min-w-0 space-y-3 rounded-lg border bg-white p-3"><legend className="px-1 text-xs font-bold">{t("manufacturing.production.outputNumber", { number: index + 1 })}</legend>
+          <QuantityFields product={finished} value={value} excludedUnits={draft.outputs.filter((row) => row.key !== value.key).map((row) => row.sellingUnitId)} change={(next) => setDraft((previous) => ({ ...previous, outputs: previous.outputs.map((row) => row.key === value.key ? { ...next, key: value.key } : row) }))} t={t} />
+          {draft.outputs.length > 1 && <Button type="button" variant="ghost" className="min-h-11 gap-2 text-rose-700" aria-label={t("manufacturing.production.removeOutputNumber", { number: index + 1 })} onClick={() => setDraft((previous) => ({ ...previous, outputs: previous.outputs.filter((row) => row.key !== value.key) }))}><Trash2 size={15} />{t("manufacturing.production.removeRow")}</Button>}
+        </fieldset>)}
+        <Button type="button" variant="outline" className="min-h-11 w-full gap-2" disabled={availableOutput === undefined || draft.outputs.length >= 50} onClick={() => setDraft((previous) => ({ ...previous, outputs: [...previous.outputs, { ...newQuantityRow(finished), sellingUnitId: availableOutput ?? "" }] }))}><Plus size={15} />{t("manufacturing.production.addOutput")}</Button>
+        <p className="text-sm font-bold">{t("manufacturing.production.outputTotal", { qty: totalQuantity(finished, draft.outputs), unit: finished?.baseUnit || "" })}</p>
         <Field label={t("manufacturing.production.finishedBatch")}><Input value={draft.batch} onChange={(event) => setDraft({ ...draft, batch: event.target.value })} required maxLength={80} className="h-11" /></Field>
         <div className="grid gap-3 sm:grid-cols-2"><Field label={t("manufacturing.production.manufacturedOn")}><Input type="date" required value={draft.manufacturedOn} onChange={(event) => setDraft({ ...draft, manufacturedOn: event.target.value })} className="h-11" /></Field><Field label={t("manufacturing.production.expiresOn")}><Input type="date" required value={draft.expiresOn} min={draft.manufacturedOn} onChange={(event) => setDraft({ ...draft, expiresOn: event.target.value })} className="h-11" /></Field></div>
       </section>
       <section className="space-y-3"><h3 className="font-bold">{t("manufacturing.production.materials")}</h3><p className="text-xs leading-5 text-slate-500">{t("manufacturing.production.materialHelp")}</p>
         {details.run.bom.items.map((item) => {
           const material = product(item.materialProductId);
-          const value = draft.materials[item.materialProductId];
-          const change = (next: QuantityDraft) => setDraft((previous) => ({ ...previous, materials: { ...previous.materials, [item.materialProductId]: next } }));
+          const values = draft.materials[item.materialProductId];
+          const changeRows = (update: (rows: typeof values) => typeof values) => setDraft((previous) => ({ ...previous, materials: { ...previous.materials, [item.materialProductId]: update(previous.materials[item.materialProductId]) } }));
           const lots = details.lots.filter((lot) => lot.productId === item.materialProductId);
+          const units = (material?.sellingUnits ?? []).filter((unit) => unit.id && unit.isActive && unit.conversionToBase > 0).map((unit) => unit.id!);
+          if (material?.packagingMode !== "per_pack") units.unshift("");
+          const sourceOptions = units.reduce((sum, id) => sum + lots.filter((lot) => !lot.sellingUnitId || lot.sellingUnitId === id).length + (material?.batchTrackingEnabled ? 0 : 1), 0);
           return <fieldset key={item.materialProductId} className="min-w-0 space-y-3 rounded-xl border border-slate-200 p-3 sm:p-4"><legend className="px-1 text-sm font-bold">{material?.name || item.materialProductId}</legend>
             <p className="text-xs text-slate-500">{t("manufacturing.production.expected", { qty: plannedMaterial(details.run, item), unit: material?.baseUnit || "" })}</p>
-            <QuantityFields product={material} value={value} change={change} t={t} />
-            {(material?.batchTrackingEnabled || lots.length > 0) && <Field label={t("manufacturing.production.sourceBatch")}><select className={selectClass} required={!!material?.batchTrackingEnabled} value={value.inventoryLotId || ""} onChange={(event) => change({ ...value, inventoryLotId: event.target.value })}><option value="">{t(material?.batchTrackingEnabled ? "manufacturing.production.chooseBatch" : "manufacturing.production.noBatch")}</option>{lots.map((lot) => <option key={lot.id} value={lot.id}>{t("manufacturing.production.batchOption", { batch: lot.batchNumber, qty: lot.availableBaseQty, date: lot.expiresOn.slice(0, 10) })}</option>)}</select></Field>}
+            {values.map((value, index) => {
+              const change = (next: QuantityDraft) => changeRows((rows) => rows.map((row) => row.key === value.key ? { ...next, key: value.key } : row));
+              return <fieldset key={value.key} className="min-w-0 space-y-3 rounded-lg border border-slate-100 bg-slate-50 p-3"><legend className="px-1 text-xs font-bold">{t("manufacturing.production.sourceNumber", { number: index + 1 })}</legend>
+                <QuantityFields product={material} value={value} change={(next) => {
+                  const selectedLot = lots.find((lot) => lot.id === next.inventoryLotId);
+                  change(selectedLot?.sellingUnitId && selectedLot.sellingUnitId !== next.sellingUnitId ? { ...next, inventoryLotId: "" } : next);
+                }} t={t} />
+                {(material?.batchTrackingEnabled || lots.length > 0) && <Field label={t("manufacturing.production.sourceBatch")}><select className={selectClass} required={!!material?.batchTrackingEnabled} value={value.inventoryLotId || ""} onChange={(event) => change({ ...value, inventoryLotId: event.target.value })}><option value="">{t(material?.batchTrackingEnabled ? "manufacturing.production.chooseBatch" : "manufacturing.production.noBatch")}</option>{lots.filter((lot) => (!lot.sellingUnitId || lot.sellingUnitId === value.sellingUnitId) && !values.some((other) => other.key !== value.key && other.inventoryLotId === lot.id && other.sellingUnitId === value.sellingUnitId)).map((lot) => <option key={lot.id} value={lot.id}>{t("manufacturing.production.batchOption", { batch: lot.batchNumber, qty: lot.availableBaseQty, date: lot.expiresOn.slice(0, 10) })}</option>)}</select></Field>}
+                {values.length > 1 && <Button type="button" variant="ghost" className="min-h-11 gap-2 text-rose-700" aria-label={t("manufacturing.production.removeSourceNumber", { material: material?.name || "", number: index + 1 })} onClick={() => changeRows((rows) => rows.filter((row) => row.key !== value.key))}><Trash2 size={15} />{t("manufacturing.production.removeRow")}</Button>}
+              </fieldset>;
+            })}
+            <p className="text-xs font-bold">{t("manufacturing.production.materialTotal", { qty: totalQuantity(material, values), unit: material?.baseUnit || "" })}</p>
+            {sourceOptions > 1 && <Button type="button" variant="outline" className="min-h-11 w-full gap-2" disabled={values.length >= Math.min(sourceOptions, 50) || sourceRowCount >= 1000} onClick={() => changeRows((rows) => [...rows, newQuantityRow(material)])}><Plus size={15} />{t("manufacturing.production.addSource")}</Button>}
             {material?.batchTrackingEnabled && !lots.length && <p className="text-xs text-amber-800">{t("manufacturing.production.noSourceStock")}</p>}
           </fieldset>;
         })}
@@ -136,11 +168,11 @@ function CompletionForm({ details, close, saved }: { details: RunDetails; close:
   </form>;
 }
 
-function QuantityFields({ product, value, change, t }: { product: Product | undefined; value: QuantityDraft; change: (value: QuantityDraft) => void; t: T }) {
-  const units = product?.sellingUnits?.filter((unit) => unit.id && unit.isActive && unit.conversionToBase > 0) ?? [];
+function QuantityFields({ product, value, change, t, excludedUnits = [] }: { product: Product | undefined; value: QuantityDraft; change: (value: QuantityDraft) => void; t: T; excludedUnits?: string[] }) {
+  const units = product?.sellingUnits?.filter((unit) => unit.id && unit.isActive && unit.conversionToBase > 0 && !excludedUnits.includes(unit.id)) ?? [];
   const base = baseQuantity(product, value);
   return <div className="grid gap-3 sm:grid-cols-2"><Field label={t("manufacturing.production.amount")}><Input value={value.amount} onChange={(event) => change({ ...value, amount: event.target.value })} required type="number" min="0.01" max="1000000000" step="0.01" className="h-11" /></Field>
-    <Field label={t("manufacturing.production.unit")}><select className={selectClass} value={value.sellingUnitId} required={product?.packagingMode === "per_pack"} onChange={(event) => change({ ...value, sellingUnitId: event.target.value })}><option value="" disabled={product?.packagingMode === "per_pack"}>{product?.packagingMode === "per_pack" ? t("manufacturing.production.choosePack") : t("manufacturing.production.baseUnits", { unit: product?.baseUnit || "" })}</option>{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></Field>
+    <Field label={t("manufacturing.production.unit")}><select className={selectClass} value={value.sellingUnitId} required={product?.packagingMode === "per_pack"} onChange={(event) => change({ ...value, sellingUnitId: event.target.value })}><option value="" disabled={product?.packagingMode === "per_pack" || excludedUnits.includes("")}>{product?.packagingMode === "per_pack" ? t("manufacturing.production.choosePack") : t("manufacturing.production.baseUnits", { unit: product?.baseUnit || "" })}</option>{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></Field>
     <p className="text-xs text-slate-500 sm:col-span-2">{t("manufacturing.production.baseTotal", { qty: Number.isFinite(base) ? base : 0, unit: product?.baseUnit || "" })}</p>
   </div>;
 }
