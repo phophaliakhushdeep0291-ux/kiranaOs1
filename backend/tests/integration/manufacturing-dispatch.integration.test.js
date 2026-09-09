@@ -191,6 +191,7 @@ else {
     assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
     await ctx.db.tradeOrder.update({ where: { id: f.order.id }, data: { orderType: "export", currencyCode: "USD", exchangeRate: 90 } });
     await assert.rejects(() => createTradeInvoice(f.shopId, f.order.id, { paymentMode: "bank" }, actor), { code: "TRADE_EXPORT_INVOICE_UNAVAILABLE" });
+    await assert.rejects(() => buildTradePdf(f.shopId, f.order.id, "commercial-invoice"), { code: "TRADE_EXPORT_INVOICE_UNAVAILABLE" });
     assert.equal(await ctx.db.bill.count({ where: { shopId: f.shopId } }), 0);
   });
 }

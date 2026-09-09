@@ -1,2 +1,0 @@
-import{ak as t}from"./index-DbQMpL2c.js"
-function n(){return t("/auth/staff")}function o(n,o){return t("/auth/staff",{method:"POST",body:JSON.stringify(n),ownerPin:o})}function a(n,o,a){return t(`/auth/staff/${n}`,{method:"PATCH",body:JSON.stringify(o),ownerPin:a})}function r(n,o){return t(`/auth/staff/${n}`,{method:"DELETE",ownerPin:o})}function f(n){return t(`/auth/staff/${n}/locations`)}function i(n,o,a){return t(`/auth/staff/${n}/locations`,{method:"PUT",body:JSON.stringify({locations:o,ownerPin:a})})}export{i as a,f as g,o as i,n as l,r,a as u}

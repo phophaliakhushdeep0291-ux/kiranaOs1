@@ -1,4 +1,0 @@
-import{j as e}from"./vendor-data-BaHBZjtO.js"
-import{l as s}from"./index-DbQMpL2c.js"
-function t({title:t,description:a,eyebrow:l,actions:r,headingLevel:i=1,className:n,...d}){const m=2===i?"h2":"h1"
-return e.jsxs("header",{className:s("premium-page-header mb-4 flex w-full min-w-0 flex-col gap-3 overflow-hidden sm:mb-5 md:flex-row md:items-start md:justify-between",n),...d,children:[e.jsxs("div",{className:"min-w-0 flex-1 space-y-1.5",children:[e.jsx(m,{className:"text-balance break-words font-display text-[clamp(1.35rem,1.1rem+0.9vw,1.9rem)] font-black leading-tight tracking-tight text-foreground",children:t}),a?e.jsx("div",{className:"max-w-3xl break-words text-sm leading-6 text-muted-foreground",children:a}):null,l?e.jsx("div",{className:"text-xs text-muted-foreground",children:l}):null]}),r?e.jsx("div",{className:"responsive-action-row min-w-0 max-w-full shrink-0 md:justify-end",children:r}):null]})}export{t as P}
