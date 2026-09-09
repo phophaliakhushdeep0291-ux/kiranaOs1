@@ -1,0 +1,122 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 1888 >>
+stream
+BT
+/F2 16 Tf
+1 0 0 1 40 785.89 Tm
+(SALES INVOICE) Tj
+/F1 9.5 Tf
+1 0 0 1 40 766.89 Tm
+(KOS-2026-000001 | 2026-09-10) Tj
+/F1 9 Tf
+1 0 0 1 40 753.89 Tm
+(Seller: Factory split QA) Tj
+1 0 0 1 40 740.89 Tm
+(Seller GSTIN: Not registered) Tj
+1 0 0 1 40 727.89 Tm
+(Seller address: Integration Test Address) Tj
+1 0 0 1 40 714.89 Tm
+(Buyer: QA Wholesale Buyer) Tj
+1 0 0 1 40 701.89 Tm
+(Buyer GSTIN: Unregistered) Tj
+1 0 0 1 40 688.89 Tm
+(Buyer PO: -) Tj
+1 0 0 1 40 675.89 Tm
+(Order number: QA-SPLIT-ORDER-01) Tj
+1 0 0 1 40 662.89 Tm
+(Currency: INR) Tj
+/F2 10 Tf
+1 0 0 1 40 639.89 Tm
+(Bill to / ship to) Tj
+/F1 9 Tf
+1 0 0 1 40 624.89 Tm
+(QA Wholesale Buyer) Tj
+1 0 0 1 40 611.89 Tm
+(Address not recorded) Tj
+/F2 10 Tf
+1 0 0 1 40 594.89 Tm
+(Invoice items) Tj
+/F2 9 Tf
+1 0 0 1 40 579.89 Tm
+(Item / packaging) Tj
+1 0 0 1 260 579.89 Tm
+(HSN) Tj
+1 0 0 1 320 579.89 Tm
+(        Qty) Tj
+1 0 0 1 380 579.89 Tm
+(         Rate) Tj
+1 0 0 1 450 579.89 Tm
+(         Amount) Tj
+/F1 9 Tf
+1 0 0 1 40 566.89 Tm
+(QA Finished spice \(Finished bag 2 units\)) Tj
+1 0 0 1 260 566.89 Tm
+(-) Tj
+1 0 0 1 320 566.89 Tm
+(           5) Tj
+1 0 0 1 380 566.89 Tm
+(         20.00) Tj
+1 0 0 1 450 566.89 Tm
+(          100.00) Tj
+1 0 0 1 40 553.89 Tm
+(QA Finished spice \(Finished carton 5 units\)) Tj
+1 0 0 1 260 553.89 Tm
+(-) Tj
+1 0 0 1 320 553.89 Tm
+(           2) Tj
+1 0 0 1 380 553.89 Tm
+(         40.00) Tj
+1 0 0 1 450 553.89 Tm
+(           80.00) Tj
+/F2 10 Tf
+1 0 0 1 40 532.89 Tm
+(Totals) Tj
+/F1 9 Tf
+1 0 0 1 40 517.89 Tm
+(Subtotal: INR 180.00) Tj
+1 0 0 1 40 504.89 Tm
+(GST: INR 0.00) Tj
+1 0 0 1 40 491.89 Tm
+(Invoice total: INR 180.00) Tj
+1 0 0 1 40 478.89 Tm
+(Paid: INR 180.00) Tj
+1 0 0 1 40 465.89 Tm
+(Credit recorded: INR 0.00) Tj
+1 0 0 1 40 452.89 Tm
+(Dispatch: QA-SPLIT-DISPATCH-01) Tj
+/F1 8 Tf
+1 0 0 1 40 30 Tm
+(System generated document. Verify statutory and marketplace data before dispatch.   |   Page 1 of 1) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000212 00000 n 
+0000000314 00000 n 
+0000002254 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+2396
+%%EOF

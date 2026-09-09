@@ -1,0 +1,23 @@
+import{j as e}from"./vendor-data-BaHBZjtO.js"
+import{L as r}from"./vendor-react-CdF70ZyV.js"
+import{k as s}from"./index-DbQMpL2c.js"
+import{b as a,R as n,C as t,c as u}from"./ui-B37zSg3D.js"
+const d=e=>{const r=Number(e??0)
+return Number.isFinite(r)?r:0}
+function l(e,r){const s=Math.abs(d(e)),a=String(r??"").toLowerCase()
+return"g"===a&&s>=1e3?`${c(s/1e3)} kg`:"ml"===a&&s>=1e3?`${c(s/1e3)} L`:a&&"piece"!==a&&"pc"!==a?`${c(s)} ${a}`:c(s)}function c(e){return String(Number(e.toFixed(3)))}function o({finding:c,compact:o=!1}){const{t:E}=s(),i=(e=>{const r=(e.triggeredRules??[]).filter(e=>e.active)
+if(r.length)return r.reduce((e,r)=>r.scoreContribution>e.scoreContribution?r:e,r[0])})(c),_=((e,r,s)=>{const n={head:{key:"assurance.rule.generic.body",vars:{}},body:null,doKey:null,rewritten:!1}
+if(!r)return n
+const t=r.details??{},u=t.differencePaise??e.discrepancyPaise??null,c=null===u?null:a(Math.abs(d(u))),o=(e=>{const r=e.title.indexOf(": ")
+if(r<=0)return null
+const s=e.title.slice(0,r).replace(/^(Product|Bill|Expense|Purchase|Customer|Daily closing|Sync event)\s*/i,"").trim()
+return s.length?s:null})(e),E=d(t.offenderCount),i=e=>1===E?`${e}1`:e
+switch(r.ruleCode){case"CLOSING_CASH_FIGURE_STALE":return null===c?n:{head:{key:d(t.differencePaise)<0?"assurance.rule.CLOSING_CASH_FIGURE_STALE.head":"assurance.rule.CLOSING_CASH_FIGURE_STALE.over",vars:{amount:c}},body:{key:"assurance.rule.CLOSING_CASH_FIGURE_STALE.body",vars:{expected:a(d(t.recomputedCashPaise)),recorded:a(d(t.snapshotCashPaise))}},doKey:"assurance.rule.CLOSING_CASH_FIGURE_STALE.do",rewritten:!0}
+case"CLOSING_CASH_EXPENSES_NOT_DEDUCTED":return null===c?n:{head:{key:"assurance.rule.CLOSING_CASH_EXPENSES_NOT_DEDUCTED.head",vars:{amount:c}},body:{key:"assurance.rule.CLOSING_CASH_EXPENSES_NOT_DEDUCTED.body",vars:{expected:a(d(t.recomputedExpectedCashPaise)),recorded:a(d(t.snapshotExpectedCashPaise))}},doKey:"assurance.rule.CLOSING_CASH_EXPENSES_NOT_DEDUCTED.do",rewritten:!0}
+case"CLOSING_UPI_FIGURE_STALE":return null===c?n:{head:{key:"assurance.rule.CLOSING_UPI_FIGURE_STALE.head",vars:{amount:c}},body:{key:"assurance.rule.CLOSING_UPI_FIGURE_STALE.body",vars:{expected:a(d(t.recomputedUpiPaise)),recorded:a(d(t.snapshotUpiPaise))}},doKey:"assurance.rule.CLOSING_UPI_FIGURE_STALE.do",rewritten:!0}
+case"STOCK_NEGATIVE_BALANCE":return{head:{key:"assurance.rule.STOCK_NEGATIVE_BALANCE.head",vars:{name:o??s}},body:{key:"assurance.rule.STOCK_NEGATIVE_BALANCE.body",vars:{qty:l(t.shortfallBaseQty,t.baseUnit)}},doKey:"assurance.rule.STOCK_NEGATIVE_BALANCE.do",rewritten:!0}
+case"STOCK_DECREASE_WITHOUT_SOURCE":return{head:{key:"assurance.rule.STOCK_DECREASE_WITHOUT_SOURCE.head",vars:{qty:l(t.totalUnexplainedBaseQty,t.baseUnit),name:o??s}},body:{key:i("assurance.rule.STOCK_DECREASE_WITHOUT_SOURCE.body"),vars:{count:E}},doKey:"assurance.rule.STOCK_DECREASE_WITHOUT_SOURCE.do",rewritten:!0}
+case"STOCK_INCREASE_WITHOUT_SOURCE":return{head:{key:"assurance.rule.STOCK_INCREASE_WITHOUT_SOURCE.head",vars:{name:o??s}},body:{key:i("assurance.rule.STOCK_INCREASE_WITHOUT_SOURCE.body"),vars:{count:E}},doKey:"assurance.rule.STOCK_INCREASE_WITHOUT_SOURCE.do",rewritten:!0}
+case"STOCK_SALE_EXCEEDED_AVAILABLE":return{head:{key:"assurance.rule.STOCK_SALE_EXCEEDED_AVAILABLE.head",vars:{name:o??s}},body:{key:i("assurance.rule.STOCK_SALE_EXCEEDED_AVAILABLE.body"),vars:{count:E}},doKey:"assurance.rule.STOCK_SALE_EXCEEDED_AVAILABLE.do",rewritten:!0}
+default:return n}})(c,i,E("assurance.item")),S=(c.triggeredRules??[]).filter(e=>e.active).length-1,C=_.rewritten?E(_.head.key,_.head.vars):i?.name??c.title
+return e.jsxs("div",{className:"min-w-0 flex-1",children:[e.jsx(r,{href:`/assurance/findings/${c.findingId}`,className:"block",children:e.jsx("p",{className:"text-[15px] font-semibold leading-snug hover:underline",children:C})}),_.body?e.jsx("p",{className:"mt-1 text-sm leading-snug text-muted-foreground",children:E(_.body.key,_.body.vars)}):null,!o&&_.doKey?e.jsxs("p",{className:"mt-1.5 text-sm leading-snug",children:[e.jsxs("span",{className:"font-medium",children:[E("assurance.whatToDo"),": "]}),e.jsx("span",{className:"text-muted-foreground",children:E(_.doKey)})]}):null,e.jsxs("div",{className:"mt-2 flex flex-wrap items-center gap-1.5",children:[e.jsx(n,{level:c.riskLevel}),c.occurredAt?e.jsx(t,{children:u(c.occurredAt)}):null,S>0?e.jsxs(t,{children:["+",S]}):null,null!==c.discrepancyPaise?e.jsx(t,{className:"font-semibold",children:a(c.discrepancyPaise)}):null]}),o?null:e.jsxs("p",{className:"mt-2 text-[11px] text-muted-foreground/70",children:[E("assurance.reference"),": ",c.title]})]})}export{o as P}

@@ -1578,7 +1578,12 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
       else await restoreLotsForSaleReturn(tx, { originalBillId: original?.id ?? null, returnBill, damagedBaseQtyByProduct });
 
       // Restock resellable items; write off damaged ones (no restock, records the cost loss).
+      const returnMovementCounts = new Map();
       for (const { product, qtyInBase, lineCost, damaged, sellingUnitId, sellingUnitQty } of restockPlan) {
+        const movementGroup = `${damaged ? "damage" : "return"}:${product.id}`;
+        const occurrence = returnMovementCounts.get(movementGroup) || 0;
+        returnMovementCounts.set(movementGroup, occurrence + 1);
+        const movementKey = occurrence ? `${movementGroup}:line:${occurrence}` : movementGroup;
         if (damaged) {
           await tx.stockLedger.create({
             data: {
@@ -1598,8 +1603,8 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
               // damage silently undercounts once those consumers become primary.
               ...moneyShadows({ damageLossValue: lineCost }),
               billId: returnBill.id,
-              clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `damage:${product.id}`),
-              idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `damage:${product.id}`),
+              clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, movementKey),
+              idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, movementKey),
               sourceDeviceId: billIdentity.sourceDeviceId,
               sourceType: "bill",
               sourceId: returnBill.id,
@@ -1633,8 +1638,8 @@ export async function createSaleReturn(shopId, body, actor = {}, fulfilment = nu
             sellingUnitId: sellingUnitId ?? null,
             sellingUnitQty: sellingUnitId && sellingUnitQty > 0 ? round2(sellingUnitQty) : null,
             billId: returnBill.id,
-            clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `return:${product.id}`),
-            idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `return:${product.id}`),
+            clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, movementKey),
+            idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, movementKey),
             sourceDeviceId: billIdentity.sourceDeviceId,
             sourceType: "bill",
             sourceId: returnBill.id,

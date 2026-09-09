@@ -1,0 +1,5 @@
+import{ak as r,aV as a,aJ as s}from"./index-DbQMpL2c.js"
+function t(r,a=0){const s=Number(r??a)
+return Number.isFinite(s)?s:a}async function e(e){try{return(r=>{const a=t(r.revenue??r.grossSales),s=t(r.grossProfit),e=t(r.cost,Math.max(0,a-s))
+return{...r,revenue:a,cost:e,grossProfit:s,grossMarginPct:t(r.grossMarginPct,a?s/a*100:0),totalBills:t(r.totalBills),cashSales:t(r.cashSales??r.cashCollected),upiSales:t(r.upiSales??r.upiCollected),udharSales:t(r.udharSales??r.udharGivenThisPeriod)}})(await r(`/reports/pnl${a(e)}`))}catch(o){if(o instanceof s&&403===o.status)return((r="profit_report_unavailable")=>({revenue:0,cost:0,grossProfit:0,grossMarginPct:0,totalBills:0,cashSales:0,upiSales:0,udharSales:0,unavailableReason:r}))(o.data.code??"profit_report_not_included")
+throw o}}function o(s){return r(`/reports/payment-summary${a(s)}`)}function n(s){return r(`/reports/daily-closing/drawer-counts${a(s)}`,{background:!0})}function i(s){return r(`/accounting/control${a(s)}`)}export{o as a,n as b,i as c,e as g}
