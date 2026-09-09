@@ -353,7 +353,7 @@ export const settingsPagesEn = {
   "settings.security.biometricReadyHelp": "The lock screen will offer fingerprint / face on this device.",
   "settings.security.biometricFailed": "Could not set up biometric unlock",
   "settings.security.deviceSignedOut": "Device signed out",
-  "settings.security.pinUpdated": "Owner PIN / password updated",
+  "settings.security.pinUpdated": "Owner PIN updated",
   "settings.security.error": "Error",
   "settings.printer.ready": "Ready",
   "settings.printer.configured": "Configured",

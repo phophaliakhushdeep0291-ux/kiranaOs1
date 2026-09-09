@@ -28,6 +28,8 @@ QA used a separate API on port 3001 and `backend/prisma/sync-health-test-2026090
 
 ## Boundaries and next defects
 
+Later 9 September update: the PIN/password form mismatch below is now corrected and covered by isolated database tests and the production checks; see [owner-PIN evidence](owner-pin-2026-09-09.md). Human credential-change UI acceptance is still pending.
+
 - This is a screen lock, not encryption of the offline business database. It does not resist arbitrary script execution, developer-tools changes, or a compromised OS/browser. Device custody still needs an OS lock and disk encryption. Server PIN checks remain authoritative for protected financial actions.
 - Real Windows Hello / Android / Apple hardware has not been certified here. The browser proof uses a virtual authenticator; it is not physical fingerprint/face evidence.
 - **Next confirmed defect:** Security's `ChangePinDialog` labels itself as owner PIN management but calls `useChangePassword`, with six-character password validation. The backend changes `passwordHash`, not `pinHash`. Correct the workflow and its authorization/rotation tests rather than relabeling the result as a PIN change.
