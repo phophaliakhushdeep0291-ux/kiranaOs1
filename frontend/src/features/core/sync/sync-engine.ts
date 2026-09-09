@@ -168,6 +168,15 @@ async function runSyncCycleBody(ownsCrossTabLock = false): Promise<SyncRunResult
   }
 
   await repairResolvedSyncStatusNoise().catch(() => 0);
+  // A successful network exchange is not proof that the durable local queue can
+  // be verified. Check before recording SYNC_COMPLETED, not afterwards.
+  let queueCounts: Awaited<ReturnType<typeof readSyncQueueCounts>>;
+  try {
+    queueCounts = await readSyncQueueCounts();
+  } catch (error) {
+    trackSyncEvent(ACTIVITY_EVENTS.SYNC_FAILED, Date.now() - startedAt, { reason: "local_queue_unavailable" });
+    throw error;
+  }
   const moved = push.pushed + pull.pulled + push.failed + push.conflicts + pull.conflicts;
   // A failed pull moves nothing, so it would never be recorded if `moved` alone
   // decided — which is exactly how a total receive outage stayed invisible.
@@ -190,7 +199,7 @@ async function runSyncCycleBody(ownsCrossTabLock = false): Promise<SyncRunResult
     pulled: pull.pulled,
     conflicts: push.conflicts + pull.conflicts,
     failed: push.failed,
-    pending: (await readSyncQueueCounts()).totalBlocking,
+    pending: queueCounts.totalBlocking,
     skipped: push.skipped,
     cursor: pull.cursor,
     pullFailed: pull.failed,

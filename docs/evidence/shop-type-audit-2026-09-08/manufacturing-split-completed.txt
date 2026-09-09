@@ -1,0 +1,140 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Artha home":
+    - /url: /dashboard
+  - heading "Manufacturing" [level=1]
+  - generic: Factory split QA · Synced
+  - button "Search products, bills, and customers":
+  - link "Open backup and sync status":
+    - /url: /sync-status
+- main:
+  - status: Manufacturing page loaded
+  - heading "Factory operations" [level=1]
+  - generic: Convert traceable raw-material batches into QC-controlled finished batches, then package and dispatch them to wholesale or export buyers.
+  - generic: Manufacturing vertical
+  - button "New BOM":
+    - text: New BOM
+  - paragraph: Active BOMs
+  - paragraph: "1"
+  - paragraph: Planned runs
+  - paragraph: "0"
+  - paragraph: In production
+  - paragraph: "0"
+  - paragraph: QC hold / recall
+  - paragraph: "0"
+  - heading "Production runs" [level=2]
+  - paragraph: Plan a run, record actual material use and output, then release batches after QC. Open runs appear first.
+  - button "Plan production":
+    - text: Plan production
+  - article:
+    - heading "QA-SPLIT-RUN-01" [level=3]
+    - generic: Completed
+    - paragraph: QA Split recipe
+    - paragraph: "Planned: 20 base units"
+    - paragraph: "Produced: 20 base units"
+    - paragraph: "Batch: QA-SPLIT-FINISHED-01"
+  - heading "Create BOM version" [level=2]
+  - paragraph: Add every ingredient and packaging material for the standard output. Saving creates a new recipe version and keeps older production history.
+  - text: BOM name
+  - textbox "BOM name"
+  - text: Finished good
+  - combobox "Finished good":
+    - option "Select product" [selected]
+    - option "QA Finished spice (piece)"
+    - option "QA Raw spice (piece)"
+  - text: Standard output (base units)
+  - spinbutton "Standard output (base units)": "1"
+  - group "Material 1":
+    - generic: Material 1
+    - text: Raw / packaging material
+    - combobox "Raw / packaging material":
+      - option "Select product" [selected]
+      - option "QA Finished spice (piece)"
+      - option "QA Labels (piece)"
+      - option "QA Raw spice (piece)"
+    - text: Material quantity (base units)
+    - spinbutton "Material quantity (base units)": "1"
+    - text: Expected wastage %
+    - spinbutton "Expected wastage %": "0"
+  - button "Add another material" [disabled]:
+    - text: Add another material
+  - button "Create controlled BOM version"
+  - heading "Batch genealogy" [level=2]
+  - paragraph: Search either a supplier batch or a finished batch.
+  - textbox "Batch number"
+  - button "Trace" [disabled]:
+    - text: Trace
+  - paragraph: Produce
+  - paragraph: Consume approved material lots and record actual yield and process loss.
+  - paragraph: Package
+  - paragraph: Split finished output across pouch, box and carton SKUs.
+  - paragraph: Dispatch
+  - paragraph: Use released batches for domestic wholesale or export invoices.
+  - heading "BOM register" [level=2]
+  - table:
+    - rowgroup:
+      - row "BOM Finished good Version Materials Status":
+        - columnheader "BOM"
+        - columnheader "Finished good"
+        - columnheader "Version"
+        - columnheader "Materials"
+        - columnheader "Status"
+    - rowgroup:
+      - row "BOM QA Split recipe Finished good QA Finished spice Version v1 Materials 2 Status active":
+        - cell "BOM QA Split recipe"
+        - cell "Finished good QA Finished spice"
+        - cell "Version v1"
+        - cell "Materials 2"
+        - cell "Status active"
+  - heading "New wholesale / export order" [level=2]:
+    - text: New wholesale / export order
+  - paragraph: Capture the buyer PO first. Batch allocation, packing and dispatch follow without posting revenue early.
+  - text: Internal order number
+  - textbox "Internal order number"
+  - text: Buyer PO number
+  - textbox "Buyer PO number"
+  - text: Buyer name
+  - textbox "Buyer name"
+  - text: Order type
+  - combobox "Order type":
+    - option "Domestic wholesale" [selected]
+    - option "Export"
+  - text: Finished product
+  - combobox "Finished product":
+    - option "Select product" [selected]
+    - option "QA Finished spice (piece)"
+    - option "QA Labels (piece)"
+    - option "QA Raw spice (piece)"
+  - text: Order quantity
+  - spinbutton "Order quantity": "1"
+  - text: Unit price
+  - spinbutton "Unit price": "0"
+  - button "Add product line" [disabled]
+  - button "Create trade order" [disabled]
+  - heading "Wholesale and export order register" [level=2]:
+    - text: Wholesale and export order register
+  - generic: No wholesale or export orders yet.
+  - heading "Official Flipkart documents" [level=2]
+  - paragraph: Add Flipkart Seller API credentials on the server to enable official documents.
+  - textbox "Flipkart shipment ID"
+  - button "Official invoice" [disabled]
+  - button "Official label" [disabled]
+- navigation "Primary navigation":
+  - link "Home":
+    - /url: /dashboard
+    - generic: Home
+  - link "Sell":
+    - /url: /billing
+    - generic: Sell
+  - link "Stock":
+    - /url: /inventory
+    - generic: Stock
+  - link "Customers":
+    - /url: /customers
+    - generic: Customers
+  - button "Open all app areas":
+    - generic: More
+- button "Open assistant":
+- region "Notifications (F8)":
+  - list

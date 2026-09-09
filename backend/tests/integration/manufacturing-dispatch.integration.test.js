@@ -1,0 +1,86 @@
+import test, { after } from "node:test";
+import assert from "node:assert/strict";
+import { createIntegrationContext } from "./setup.js";
+import { createTenant, createProduct } from "./factories.js";
+import * as production from "../../src/verticals/manufacturing/manufacturing.service.js";
+import * as trade from "../../src/verticals/manufacturing/trade-orders.service.js";
+import { createTradeOrderSchema } from "../../src/verticals/manufacturing/manufacturing.schemas.js";
+const ctx = await createIntegrationContext();
+const day = (offset = 0) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+let sequence = 8779091200;
+if (ctx.skip) test("manufacturing dispatch unavailable", { skip: ctx.reason }, () => {});
+else {
+  after(() => ctx.close());
+  async function fixture() {
+    const { shop } = await createTenant(ctx.db, { ownerMobile: String(sequence++) });
+    const raw = await createProduct(ctx.db, shop.id, { stockBaseQty: 100 });
+    const finished = await createProduct(ctx.db, shop.id, { stockBaseQty: 0 });
+    await ctx.db.product.update({ where: { id: finished.id }, data: { batchTrackingEnabled: true, packagingMode: "per_pack" } });
+    const unit = (name, conversionToBase) => ctx.db.productSellingUnit.create({ data: { shopId: shop.id, productId: finished.id, name, unitType: "pack", unitCode: name, conversionToBase, onHandQty: 0, defaultPrice: 20 } });
+    const bag = await unit("bag", 2); const carton = await unit("carton", 5);
+    const bom = await production.createBom(shop.id, { finishedProductId: finished.id, name: "Dispatch recipe", outputQuantityBaseQty: 20, items: [{ materialProductId: raw.id, quantityBaseQty: 20, wastagePercent: 0 }] });
+    const run = await production.createRun(shop.id, { bomId: bom.id, runNumber: "RUN", plannedOutputBaseQty: 20 });
+    await production.completeRun(shop.id, run.id, { actualOutputBaseQty: 20, finishedBatchNumber: "FINISHED", manufacturedOn: day(), expiresOn: day(365), qcStatus: "conditional", consumptions: [{ productId: raw.id, actualBaseQty: 20 }], outputs: [{ sellingUnitId: bag.id, packageCount: 5, quantityBaseQty: 10 }, { sellingUnitId: carton.id, packageCount: 2, quantityBaseQty: 10 }] });
+    const lot = await ctx.db.inventoryLot.findFirst({ where: { producedByRunId: run.id } });
+    const orderInput = createTradeOrderSchema.parse({ orderNumber: "ORDER", customerName: "QA Buyer", items: [{ productId: finished.id, sellingUnitId: bag.id, quantity: 5, unitPrice: 20 }, { productId: finished.id, sellingUnitId: carton.id, quantity: 2, unitPrice: 40 }] });
+    const order = await trade.createTradeOrder(shop.id, orderInput);
+    await trade.confirmTradeOrder(shop.id, order.id);
+    return { shopId: shop.id, raw, finished, bag, carton, run, lot, order, orderInput };
+  }
+  test("held production cannot allocate; release enables mixed-pack allocation, packing and exactly one dispatch", async () => {
+    const f = await fixture();
+    await assert.rejects(() => trade.autoAllocateTradeOrder(f.shopId, f.order.id), { code: "TRADE_ALLOCATION_STOCK_SHORT" });
+    await production.releaseRun(f.shopId, f.run.id);
+    const allocated = await trade.autoAllocateTradeOrder(f.shopId, f.order.id, { locationId: f.run.locationId });
+    assert.equal(allocated.status, "allocated");
+    assert.equal(allocated.items.flatMap(row => row.allocations).reduce((sum, row) => sum + row.quantityBaseQty, 0), 20);
+    const second = await trade.createTradeOrder(f.shopId, { ...f.orderInput, orderNumber: "COMPETING" });
+    await trade.confirmTradeOrder(f.shopId, second.id);
+    await assert.rejects(() => trade.autoAllocateTradeOrder(f.shopId, second.id), { code: "TRADE_ALLOCATION_STOCK_SHORT" });
+    await trade.packTradeOrder(f.shopId, f.order.id, { items: allocated.items.map(item => ({ orderItemId: item.id, packedQuantity: item.quantity })) });
+    const payload = { dispatchNumber: "DSP-1", dispatchDate: day() };
+    await assert.rejects(() => trade.dispatchTradeOrder(f.shopId, f.order.id, payload, { locationId: "elsewhere" }), { code: "TRADE_ORDER_LOCATION_MISMATCH" });
+    const dispatched = await trade.dispatchTradeOrder(f.shopId, f.order.id, payload, { locationId: f.run.locationId });
+    assert.equal(dispatched.status, "dispatched");
+    assert.equal((await ctx.db.product.findUnique({ where: { id: f.finished.id } })).stockBaseQty, 0);
+    for (const unitId of [f.bag.id, f.carton.id]) assert.equal((await ctx.db.productSellingUnit.findUnique({ where: { id: unitId } })).onHandQty, 0);
+    assert.equal((await ctx.db.inventoryLot.findUnique({ where: { id: f.lot.id } })).status, "depleted");
+    const ledger = await ctx.db.stockLedger.findMany({ where: { sourceId: f.order.id } });
+    assert.equal(ledger.length, 2); assert.equal(ledger.reduce((sum, row) => sum + row.changeBaseQty, 0), -20);
+    await assert.rejects(() => trade.dispatchTradeOrder(f.shopId, f.order.id, payload), { code: "TRADE_ORDER_NOT_PACKED" });
+    await assert.rejects(() => trade.cancelTradeOrder(f.shopId, f.order.id), { code: "TRADE_ORDER_CANNOT_CANCEL" });
+    assert.equal(await ctx.db.tradeDispatch.count({ where: { orderId: f.order.id } }), 1);
+    assert.equal((await trade.tradeDocuments(f.shopId, f.order.id)).packingList.items.length, 2);
+  });
+  test("allocation rejects expired stock, wrong packaging and combined overbooking across order lines", async () => {
+    const f = await fixture(); await production.releaseRun(f.shopId, f.run.id);
+    const allocations = f.order.items.map(item => ({ orderItemId: item.id, inventoryLotId: f.lot.id, quantityBaseQty: item.quantityBaseQty }));
+    await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { expiresOn: new Date(day(-1)) } });
+    await assert.rejects(() => trade.allocateTradeOrder(f.shopId, f.order.id, { allocations }), { code: "TRADE_ALLOCATION_BATCH_INVALID" });
+    await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { expiresOn: new Date(day(365)), availableBaseQty: 15 } });
+    await assert.rejects(() => trade.allocateTradeOrder(f.shopId, f.order.id, { allocations }), { code: "TRADE_ALLOCATION_STOCK_SHORT" });
+    await assert.rejects(() => trade.autoAllocateTradeOrder(f.shopId, f.order.id), { code: "TRADE_ALLOCATION_STOCK_SHORT" });
+    await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { availableBaseQty: 20, sellingUnitId: f.bag.id } });
+    await assert.rejects(() => trade.allocateTradeOrder(f.shopId, f.order.id, { allocations }), { code: "TRADE_ALLOCATION_PACKAGING_MISMATCH" });
+    assert.equal((await trade.getTradeOrder(f.shopId, f.order.id)).status, "confirmed");
+    assert.equal(await ctx.db.tradeOrderAllocation.count({ where: { shopId: f.shopId } }), 0);
+    await assert.rejects(() => trade.createTradeOrder(f.shopId, { ...f.orderInput, orderNumber: "NO-PACK", items: [{ ...f.orderInput.items[0], sellingUnitId: null }] }), { code: "TRADE_ORDER_PACKAGING_REQUIRED" });
+  });
+  test("expiry after packing and a later pack shortage roll back dispatch and every earlier stock movement", async () => {
+    const f = await fixture(); await production.releaseRun(f.shopId, f.run.id);
+    const order = await trade.autoAllocateTradeOrder(f.shopId, f.order.id);
+    await trade.packTradeOrder(f.shopId, f.order.id, { items: order.items.map(item => ({ orderItemId: item.id, packedQuantity: item.quantity })) });
+    const payload = { dispatchNumber: "DSP-1", dispatchDate: day() };
+    await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { expiresOn: new Date(day(-1)) } });
+    await assert.rejects(() => trade.dispatchTradeOrder(f.shopId, f.order.id, payload), { code: "TRADE_DISPATCH_BATCH_STOCK_CHANGED" });
+    await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { expiresOn: new Date(day(365)) } });
+    await ctx.db.productSellingUnit.update({ where: { id: f.carton.id }, data: { onHandQty: 0 } });
+    await assert.rejects(() => trade.dispatchTradeOrder(f.shopId, f.order.id, payload), { code: "TRADE_DISPATCH_PACK_STOCK_SHORT" });
+    assert.equal((await trade.getTradeOrder(f.shopId, f.order.id)).status, "packed");
+    assert.equal((await ctx.db.inventoryLot.findUnique({ where: { id: f.lot.id } })).availableBaseQty, 20);
+    assert.equal((await ctx.db.product.findUnique({ where: { id: f.finished.id } })).stockBaseQty, 20);
+    assert.equal((await ctx.db.productSellingUnit.findUnique({ where: { id: f.bag.id } })).onHandQty, 5);
+    assert.equal(await ctx.db.stockLedger.count({ where: { sourceId: f.order.id } }), 0);
+    assert.equal(await ctx.db.tradeDispatch.count({ where: { orderId: f.order.id } }), 0);
+  });
+}

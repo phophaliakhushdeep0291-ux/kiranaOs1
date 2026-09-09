@@ -1103,8 +1103,7 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
 async function loadScopedRows<T>(tableName: string): Promise<T[]> {
   return offlineDB
     .getAll<T>(tableName)
-    .then((rows) => filterRowsForCurrentScope(rows))
-    .catch(() => []);
+    .then((rows) => filterRowsForCurrentScope(rows));
 }
 
 export async function buildFinancialAggregationSnapshot(date = todayInputValue()): Promise<FinancialAggregationSnapshot> {

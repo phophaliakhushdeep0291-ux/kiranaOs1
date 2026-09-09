@@ -730,6 +730,19 @@ describe("what the queue counts call one rejected operation", () => {
     expect((await readSyncSnapshot({ localOnly: true })).localReadError).toBe(false);
   });
 
+  it("rejects a stale healthy snapshot if the conflict reread fails after cloud diagnostics", async () => {
+    const getAll = vi.mocked(offlineDB.getAll);
+    const original = getAll.getMockImplementation()!;
+    let reads = 0;
+    getAll.mockImplementation(async (name) => {
+      if (name === "sync_conflicts" && ++reads > 1) throw new Error("reread failed");
+      return original(name);
+    });
+    try {
+      await expect(readSyncSnapshot()).rejects.toThrow("reread failed");
+    } finally { getAll.mockImplementation(original); }
+  });
+
   it("shows an outbox-only rejection in both the header counts and review page", async () => {
     const event = seedRejectedBill();
     dbState.tables.sync_conflicts = [];

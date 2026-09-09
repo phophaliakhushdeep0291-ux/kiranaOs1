@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import ProductionRuns from "./ProductionRuns";
 import RecipeEditor from "./RecipeEditor";
 import type { ProductionRun } from "../production-run";
+import { tradeOrderLine } from "../trade-order-line";
 
 type BomItem = {
   id: string;
@@ -65,7 +66,7 @@ type TradeOrder = {
   billId?: string | null;
   countryOfDestination?: string | null; items: Array<{ id: string; description: string; quantity: number; lineTotal: number }>;
 };
-type DraftOrderLine = { productId: string; description: string; quantity: number; unitPrice: number };
+type DraftOrderLine = NonNullable<ReturnType<typeof tradeOrderLine>>;
 type FlipkartStatus = { enabled: boolean; configured: boolean; officialDocuments: boolean };
 
 const panel = "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.055)]";
@@ -85,6 +86,7 @@ export default function ManufacturingPage() {
   const [buyerPoNumber, setBuyerPoNumber] = useState("");
   const [buyerName, setBuyerName] = useState("");
   const [orderProductId, setOrderProductId] = useState("");
+  const [orderUnitId, setOrderUnitId] = useState("");
   const [orderQty, setOrderQty] = useState("1");
   const [orderPrice, setOrderPrice] = useState("0");
   const [orderLines, setOrderLines] = useState<DraftOrderLine[]>([]);
@@ -152,12 +154,12 @@ export default function ManufacturingPage() {
         exchangeRate: orderType === "domestic" ? 1 : Number(exchangeRate),
         countryOfDestination: orderType === "export" ? destination : null,
         incoterm: orderType === "export" ? incoterm : null,
-        items: orderLines.map((line) => ({ productId: line.productId, quantity: line.quantity, unitPrice: line.unitPrice, lineDiscount: 0 })),
+        items: orderLines.map((line) => ({ productId: line.productId, sellingUnitId: line.sellingUnitId, quantity: line.quantity, unitPrice: line.unitPrice, lineDiscount: 0 })),
       }),
     }),
     onSuccess: async () => {
       toast({ title: t("manufacturing.orders.createdTitle"), description: t("manufacturing.orders.createdDetail") });
-      setOrderNumber(""); setBuyerPoNumber(""); setBuyerName(""); setOrderProductId(""); setOrderLines([]);
+      setOrderNumber(""); setBuyerPoNumber(""); setBuyerName(""); setOrderProductId(""); setOrderUnitId(""); setOrderLines([]);
       await tradeOrdersQ.refetch();
     },
     onError: (error) => toast({ title: t("manufacturing.orders.failedTitle"), description: error instanceof Error ? error.message : t("manufacturing.orders.failedDetail"), variant: "destructive" }),
@@ -192,11 +194,12 @@ export default function ManufacturingPage() {
     onError: (error) => toast({ title: t("manufacturing.orders.failedTitle"), description: error instanceof Error ? error.message : t("manufacturing.orders.failedDetail"), variant: "destructive" }),
   });
 
+  const orderProduct = (productsQ.data ?? []).find((row) => row.id === orderProductId);
+  const nextOrderLine = tradeOrderLine(orderProduct, orderUnitId, orderQty, orderPrice);
   const addOrderLine = () => {
-    const product = (productsQ.data ?? []).find((row) => row.id === orderProductId);
-    if (!product || Number(orderQty) <= 0 || Number(orderPrice) < 0) return;
-    setOrderLines((current) => [...current, { productId: product.id, description: product.name, quantity: Number(orderQty), unitPrice: Number(orderPrice) }]);
-    setOrderProductId(""); setOrderQty("1"); setOrderPrice("0");
+    if (!nextOrderLine) return;
+    setOrderLines((current) => [...current, nextOrderLine]);
+    setOrderProductId(""); setOrderUnitId(""); setOrderQty("1"); setOrderPrice("0");
   };
 
   const openTradePdf = async (order: TradeOrder, kind: "tax-invoice" | "packing-list" | "shipping-label") => {
@@ -329,11 +332,13 @@ export default function ManufacturingPage() {
             <Field label={t("manufacturing.orders.buyerPo")}><Input className="h-11" value={buyerPoNumber} onChange={(event) => setBuyerPoNumber(event.target.value)} /></Field>
             <Field label={t("manufacturing.orders.buyerName")}><Input className="h-11" value={buyerName} onChange={(event) => setBuyerName(event.target.value)} /></Field>
             <Field label={t("manufacturing.orders.type")}><select className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm" value={orderType} onChange={(event) => { const next = event.target.value as "domestic" | "export"; setOrderType(next); if (next === "domestic") { setCurrencyCode("INR"); setExchangeRate("1"); } }}><option value="domestic">{t("manufacturing.orders.domestic")}</option><option value="export">{t("manufacturing.orders.export")}</option></select></Field>
-            <Field label={t("manufacturing.orders.product")}><ProductSelect value={orderProductId} onChange={setOrderProductId} products={productsQ.data ?? []} emptyLabel={t("manufacturing.product.select")} unitFallback={t("manufacturing.product.unitFallback")} /></Field>
-            <Field label={t("manufacturing.orders.quantity")}><Input className="h-11" type="number" min="0.001" value={orderQty} onChange={(event) => setOrderQty(event.target.value)} /></Field>
-            <Field label={t("manufacturing.orders.unitPrice")}><Input className="h-11" type="number" min="0" value={orderPrice} onChange={(event) => setOrderPrice(event.target.value)} /></Field>
-            <Button type="button" variant="outline" className="min-h-11 sm:col-span-2" disabled={!orderProductId || Number(orderQty) <= 0 || Number(orderPrice) < 0} onClick={addOrderLine}>{t("manufacturing.orders.addLine")}</Button>
-            {orderLines.length ? <div className="space-y-2 rounded-xl bg-slate-50 p-3 sm:col-span-2">{orderLines.map((line, index) => <div key={`${line.productId}-${index}`} className="flex items-center justify-between gap-3 text-sm"><span><strong>{line.description}</strong> - {line.quantity} x {line.unitPrice.toFixed(2)}</span><Button size="sm" variant="ghost" onClick={() => setOrderLines((current) => current.filter((_, rowIndex) => rowIndex !== index))}>{t("manufacturing.orders.removeLine")}</Button></div>)}</div> : null}
+            <Field label={t("manufacturing.orders.product")}><ProductSelect value={orderProductId} onChange={(id) => { setOrderProductId(id); setOrderUnitId(""); }} products={productsQ.data ?? []} emptyLabel={t("manufacturing.product.select")} unitFallback={t("manufacturing.product.unitFallback")} /></Field>
+            <Field label={t("manufacturing.production.unit")}><select className="h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm" value={orderUnitId} disabled={!orderProduct} onChange={(event) => setOrderUnitId(event.target.value)}><option value="" disabled={orderProduct?.packagingMode === "per_pack"}>{t(orderProduct?.packagingMode === "per_pack" ? "manufacturing.production.choosePack" : "manufacturing.production.baseUnits", { unit: orderProduct?.baseUnit || "" })}</option>{orderProduct?.sellingUnits?.filter((unit) => unit.id && unit.isActive && unit.conversionToBase > 0).map((unit) => <option value={unit.id} key={unit.id}>{unit.name}</option>)}</select></Field>
+            <Field label={t("manufacturing.orders.quantity")}><Input className="h-11" type="number" min="0.01" max="1000000000" step="0.01" value={orderQty} onChange={(event) => setOrderQty(event.target.value)} /></Field>
+            <Field label={t("manufacturing.orders.unitPrice")}><Input className="h-11" type="number" min="0" max="1000000000" step="0.01" value={orderPrice} onChange={(event) => setOrderPrice(event.target.value)} /></Field>
+            {nextOrderLine && <p className="text-xs text-slate-500 sm:col-span-2">{t("manufacturing.production.baseTotal", { qty: nextOrderLine.quantityBaseQty, unit: orderProduct?.baseUnit || "" })}</p>}
+            <Button type="button" variant="outline" className="min-h-11 sm:col-span-2" disabled={!nextOrderLine || orderLines.length >= 500} onClick={addOrderLine}>{t("manufacturing.orders.addLine")}</Button>
+            {orderLines.length ? <div className="space-y-2 rounded-xl bg-slate-50 p-3 sm:col-span-2">{orderLines.map((line, index) => <div key={`${line.productId}-${index}`} className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 break-words"><strong>{line.description}</strong> - {line.quantity} {line.unitName} × {line.unitPrice.toFixed(2)}</span><Button className="min-h-11 shrink-0" size="sm" variant="ghost" onClick={() => setOrderLines((current) => current.filter((_, rowIndex) => rowIndex !== index))}>{t("manufacturing.orders.removeLine")}</Button></div>)}</div> : null}
             {orderType === "export" ? <><Field label={t("manufacturing.orders.currency")}><Input className="h-11 uppercase" maxLength={3} value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value.toUpperCase())} /></Field><Field label={t("manufacturing.orders.exchangeRate")}><Input className="h-11" type="number" min="0.000001" value={exchangeRate} onChange={(event) => setExchangeRate(event.target.value)} /></Field><Field label={t("manufacturing.orders.destination")}><Input className="h-11" value={destination} onChange={(event) => setDestination(event.target.value)} /></Field><Field label={t("manufacturing.orders.incoterm")}><Input className="h-11 uppercase" placeholder={t("manufacturing.orders.incotermPlaceholder")} value={incoterm} onChange={(event) => setIncoterm(event.target.value.toUpperCase())} /></Field></> : null}
             <Button className="min-h-12 rounded-xl font-black sm:col-span-2" disabled={!orderNumber.trim() || !buyerName.trim() || orderLines.length === 0 || (orderType === "export" && (!destination.trim() || !incoterm.trim())) || createTradeOrder.isPending} onClick={() => createTradeOrder.mutate()}>{createTradeOrder.isPending ? <Loader2 size={16} className="mr-2 animate-spin" /> : null}{t("manufacturing.orders.createAction")}</Button>
           </div>
