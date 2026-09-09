@@ -335,6 +335,7 @@ import {
 } from "@/features/core/sync/engine";
 import { readSyncSnapshot } from "@/features/core/sync/pages/SyncStatusPage";
 import { readSyncQueueCounts } from "@/features/core/sync/sync-status-repair";
+import { offlineDB } from "@/lib/offline/db";
 
 const mockedSyncPush = vi.mocked(syncPushMock);
 
@@ -701,6 +702,32 @@ describe("what the queue counts call one rejected operation", () => {
 
     expect(counts.conflict).toBe(1);
     expect(counts.totalBlocking).toBe(1);
+  });
+
+  it.each(["sync_outbox", "sync_conflicts"])("does not report zero queue counts when %s cannot be read", async (table) => {
+    const getAll = vi.mocked(offlineDB.getAll);
+    const original = getAll.getMockImplementation()!;
+    getAll.mockImplementation(async (name) => {
+      if (name === table) throw new Error(`unreadable:${table}`);
+      return original(name);
+    });
+    try {
+      await expect(readSyncQueueCounts()).rejects.toThrow(`unreadable:${table}`);
+    } finally { getAll.mockImplementation(original); }
+    expect((await readSyncQueueCounts()).totalBlocking).toBe(0);
+  });
+
+  it.each(["sync_outbox", "sync_conflicts", "sync_cursor", "products", "customers", "bills", "payments", "inventory_movements", "suppliers"])("rejects an incomplete Sync Status snapshot when %s fails", async (table) => {
+    const getAll = vi.mocked(offlineDB.getAll);
+    const original = getAll.getMockImplementation()!;
+    getAll.mockImplementation(async (name) => {
+      if (name === table) throw new Error(`unreadable:${table}`);
+      return original(name);
+    });
+    try {
+      await expect(readSyncSnapshot({ localOnly: true })).rejects.toThrow(`unreadable:${table}`);
+    } finally { getAll.mockImplementation(original); }
+    expect((await readSyncSnapshot({ localOnly: true })).localReadError).toBe(false);
   });
 
   it("shows an outbox-only rejection in both the header counts and review page", async () => {

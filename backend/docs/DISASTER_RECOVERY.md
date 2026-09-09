@@ -124,12 +124,14 @@ database. A passing unit suite is not a completed database recovery drill.
 
 For local whole-release validation while the main worktree is being edited, run
 `npm run release:snapshot` first. It captures tracked and non-ignored untracked
-source into a unique directory under `backend/release-artifacts/source-snapshots`,
+source into a unique directory under the ignored root `.release-qa/` folder,
 checks every copied file against the source digest, rechecks source stability,
 and creates an independent local Git repository. It does not modify the source
 repository's commits, copy ignored secrets/databases/dependencies, or execute
 tests. A concurrent edit invalidates capture; existing destinations are never
 overwritten. Failed captures remain diagnostic artifacts, not valid snapshots.
+The short snapshot path avoids Windows dependency-resolution failures with
+pnpm's deeply nested package paths; keep the parent checkout path short too.
 
 Install dependencies in the captured `backend` (`npm ci`) and `frontend`
 (`pnpm install --frozen-lockfile`) directories, then run

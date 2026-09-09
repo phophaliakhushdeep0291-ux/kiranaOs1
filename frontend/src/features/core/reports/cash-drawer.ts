@@ -82,7 +82,7 @@ export function openingFloatFor(list: OpeningFloat[], date: string): number {
 }
 
 export async function loadOpeningFloats(): Promise<OpeningFloat[]> {
-  const stored = await offlineDB.getSetting<OpeningFloat[]>(FLOAT_KEY).catch(() => null);
+  const stored = await offlineDB.getSetting<OpeningFloat[]>(FLOAT_KEY);
   return Array.isArray(stored) ? stored : [];
 }
 
@@ -93,7 +93,7 @@ export async function saveOpeningFloat(entry: OpeningFloat): Promise<OpeningFloa
 }
 
 export async function loadCashMovements(): Promise<CashMovement[]> {
-  const stored = await offlineDB.getSetting<CashMovement[]>(MOVEMENT_KEY).catch(() => null);
+  const stored = await offlineDB.getSetting<CashMovement[]>(MOVEMENT_KEY);
   return Array.isArray(stored) ? stored : [];
 }
 

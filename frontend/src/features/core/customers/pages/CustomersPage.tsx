@@ -426,7 +426,7 @@ export default function CustomersPage() {
       variant: "destructive",
     }),
   });
-  const { pendingCount, failedCount } = useOfflineStatus();
+  const { pendingCount, failedCount, conflictCount, queueStatus } = useOfflineStatus();
   const { data: customers = [], isLoading, refetch } = useCustomersLedgerList();
   const overviewQuery = useQuery({ queryKey: ["customers-overview-activity"], queryFn: loadCustomerOverviewActivity, staleTime: 1_500 });
   const [search, setSearch] = useState("");
@@ -994,7 +994,7 @@ export default function CustomersPage() {
       <section className="rounded-[18px] border border-[#e2e8f2] bg-white p-4 shadow-[0_10px_30px_rgba(15,35,80,0.05)] lg:flex lg:items-center lg:justify-between lg:gap-6 lg:p-5">
         <div className="min-w-0">
           <div className="hidden items-center gap-3 lg:flex"><span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><Users size={19} /></span><div><h2 className="text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t(tradeProfile.headingKey)}</h2><p className="mt-0.5 text-[11px] font-medium text-[#718099]">{t(tradeProfile.subtitleKey)}</p></div></div>
-          <SyncBadge className="hidden lg:mt-3 lg:inline-flex" status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? t("customers.detail.reviewSync") : pendingCount > 0 ? `${pendingCount} pending` : t("customers.detail.syncedJustNow")} />
+          <SyncBadge className="hidden lg:mt-3 lg:inline-flex" status={queueStatus !== "ready" ? "failed" : failedCount + conflictCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={queueStatus !== "ready" ? t(queueStatus === "error" ? "sync.local.unavailable" : "sync.local.checking") : failedCount + conflictCount > 0 ? t("customers.detail.reviewSync") : pendingCount > 0 ? `${pendingCount} pending` : t("customers.detail.syncedJustNow")} />
         </div>
         <div className="grid grid-cols-2 items-center gap-2 lg:flex lg:flex-wrap">
           <div className="col-span-2 lg:contents">

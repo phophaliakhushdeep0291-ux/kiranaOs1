@@ -242,7 +242,7 @@ function handleQueueUpdated(event?: Event) {
     if (queueRecoveryTimer !== null) window.clearTimeout(queueRecoveryTimer);
     queueRecoveryTimer = window.setTimeout(() => {
       queueRecoveryTimer = null;
-      void recoverLocalQueueIfNeeded();
+      void recoverLocalQueueIfNeeded().catch(() => undefined);
     }, 900);
   }
 }
@@ -255,7 +255,7 @@ function handleBackendStatus(event: Event) {
 function handleVisibility() {
   if (document.visibilityState === "visible") {
     void refreshCount();
-    if (navigator.onLine) void recoverLocalQueueIfNeeded();
+    if (navigator.onLine) void recoverLocalQueueIfNeeded().catch(() => undefined);
   }
 }
 
@@ -280,7 +280,7 @@ function start() {
   }
   bootRecoveryTimer = window.setTimeout(() => {
     bootRecoveryTimer = null;
-    void recoverLocalQueueIfNeeded();
+    void recoverLocalQueueIfNeeded().catch(() => undefined);
   }, 1_000);
 
   idleStep = 0;

@@ -63,6 +63,8 @@ playwright-report/
 release-certification-*.json
 release-certification-*.md
 /ci[0-9]*/
+# Short, isolated release snapshots avoid deeply nested pnpm paths on Windows.
+/.release-qa/
 # Unrelated prototypes retained outside the product build/test/lint/CI surface.
 archive/
 

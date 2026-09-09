@@ -268,6 +268,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     void loadReports({ showLoader: !snapshotRef.current });
+    return () => { loadRequestId.current += 1; };
   }, [loadReports]);
 
   useEffect(() => {
