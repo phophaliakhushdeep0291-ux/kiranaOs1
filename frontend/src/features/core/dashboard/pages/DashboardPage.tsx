@@ -1,3 +1,4 @@
+import { LocalDataUnavailable } from "@/features/core/sync/LocalDataUnavailable";
 import { roundMoney } from "@/lib/money";
 import { resolveBillPaymentMode } from "@/features/core/bills/payment-mode";
 import { useShopBillingWords } from "@/features/core/settings/shop-billing";
@@ -362,6 +363,7 @@ export default function Dashboard() {
   const yesterday = format(new Date(Date.now() - 86_400_000), "yyyy-MM-dd");
   const [localSnapshot, setLocalSnapshot] = useState<LocalDashboardSnapshot>(() => getLocalDashboardSnapshot());
   const [ownerReport, setOwnerReport] = useState<LocalReportSnapshot | null>(null);
+  const [reportReadError, setReportReadError] = useState(false);
   const [financialSnapshot, setFinancialSnapshot] = useState<FinancialAggregationSnapshot | null>(null);
   const [previousFinancialSnapshot, setPreviousFinancialSnapshot] = useState<FinancialAggregationSnapshot | null>(null);
   const [drilldown, setDrilldown] = useState<DrilldownType | null>(null);
@@ -374,8 +376,12 @@ export default function Dashboard() {
     refreshLocal();
     window.addEventListener("kirana:local-data-changed", refreshLocal);
     void warmRecentLocalCache(30).then(setLocalSnapshot).catch(() => refreshLocal());
+    let reportGeneration = 0;
     const refreshReport = () => {
-      void buildLocalReportSnapshot({ from: format(new Date(Date.now() - 6 * 86_400_000), "yyyy-MM-dd"), to: today }).then(setOwnerReport).catch(() => undefined);
+      const generation = ++reportGeneration;
+      void buildLocalReportSnapshot({ from: format(new Date(Date.now() - 6 * 86_400_000), "yyyy-MM-dd"), to: today }).then((next) => {
+        if (generation === reportGeneration) { setOwnerReport(next); setReportReadError(false); }
+      }).catch(() => { if (generation === reportGeneration) setReportReadError(true); });
       void Promise.all([
         FinancialAggregationService.buildSnapshot(today),
         FinancialAggregationService.buildSnapshot(yesterday),
@@ -388,6 +394,7 @@ export default function Dashboard() {
     window.addEventListener("kirana:sync-queue-updated", refreshReport);
     window.addEventListener("kirana:local-data-changed", refreshReport);
     return () => {
+      reportGeneration += 1;
       window.removeEventListener("kirana:local-data-changed", refreshLocal);
       window.removeEventListener("kirana:local-data-changed", refreshReport);
       window.removeEventListener("kirana:sync-queue-updated", refreshReport);
@@ -491,6 +498,7 @@ export default function Dashboard() {
   };
 
   const variant = btDef.dashboardVariant;
+  if (reportReadError) return <LocalDataUnavailable onRetry={() => window.dispatchEvent(new CustomEvent("kirana:local-data-changed"))} />;
 
   return (
     <>
@@ -522,6 +530,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
   const periodRange = useMemo(() => dashboardPeriodRange(period), [period]);
   const previousPeriodRange = useMemo(() => previousDashboardRange(periodRange), [periodRange]);
   const [periodReport, setPeriodReport] = useState<LocalReportSnapshot | null>(null);
+  const [periodReadError, setPeriodReadError] = useState(false);
   const [recentProducts, setRecentProducts] = useState<Product[]>([]);
   const [productsById, setProductsById] = useState<Record<string, Product>>({});
   const [localRecentBills, setLocalRecentBills] = useState<Bill[]>([]);
@@ -546,10 +555,12 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
 
   useEffect(() => {
     let cancelled = false;
+    let generation = 0;
     const refreshPeriodReport = () => {
+      const request = ++generation;
       void buildLocalReportSnapshot(periodRange).then((next) => {
-        if (!cancelled) setPeriodReport(next);
-      }).catch(() => undefined);
+        if (!cancelled && request === generation) { setPeriodReport(next); setPeriodReadError(false); }
+      }).catch(() => { if (!cancelled && request === generation) setPeriodReadError(true); });
     };
     refreshPeriodReport();
     window.addEventListener("kirana:local-data-changed", refreshPeriodReport);
@@ -732,6 +743,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
   }, [ownerReport, avgBillValue, insightsPersonalization.data]);
   const syncStatusValue = queueStatus !== "ready" ? t(queueStatus === "error" ? "sync.local.unavailable" : "sync.local.checking") : failedCount + conflictCount > 0 ? t("sync.local.reviewNeeded") : pendingCount > 0 ? `${pendingCount} pending` : "Up to date";
   const syncHealthGood = queueStatus === "ready" && failedCount + conflictCount === 0 && pendingCount === 0;
+  if (periodReadError) return <LocalDataUnavailable onRetry={() => window.dispatchEvent(new CustomEvent("kirana:local-data-changed"))} />;
 
   return (
     <>

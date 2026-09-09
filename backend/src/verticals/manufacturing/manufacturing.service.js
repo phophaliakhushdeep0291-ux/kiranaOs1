@@ -1,7 +1,7 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
-import { decrementLocationInventory, incrementLocationInventory, resolveOperationalLocation } from "../../modules/stores/location-context.service.js";
+import { decrementLocationInventory, incrementLocationInventory, resolveOperationalLocation, getVariantLocationQuantity } from "../../modules/stores/location-context.service.js";
 import { stockLedgerProvenance } from "../../modules/inventory/stock-ledger-provenance.js";
 import { formatDateInTimeZone } from "../../utils/dates.js";
 
@@ -128,6 +128,7 @@ export async function completeRun(shopId, runId, input, actor = {}) {
       const pack = packaging(product, row, row.actualBaseQty);
       const packs = pack ? new Map([[row.sellingUnitId, pack]]) : null;
       const moved = await decrementLocationInventory(tx, { shopId, location, product, quantityBase: row.actualBaseQty, packs });
+      if (pack && product.packagingMode === "per_pack" && await getVariantLocationQuantity(tx, shopId, location, product, row.sellingUnitId) < 0) throw new AppError(`Insufficient selected packaging stock for ${product.name}`, 409, "PRODUCTION_PACK_STOCK_SHORT");
       await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: product.id, productName: product.name, ...stockLedgerProvenance(actor), sellingUnitId: row.sellingUnitId ?? null, sellingUnitQty: row.packageCount ?? null, action: "production_use", changeBaseQty: -row.actualBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "production_run", sourceId: run.id, note: `Consumed by ${run.runNumber}` } });
       // Allocate the recipe expectation across source rows. Recording the full
       // expectation on every split would multiply planned use in trace reports.

@@ -50,7 +50,7 @@
     "test:frontend-checklist": "node tests/frontend-manual-checklist.examples.js",
     "seed": "node prisma/seed.js",
     "prod:check": "node scripts/check-app-module-graph.js && node scripts/production-check.js && node tests/dependency-security.examples.js",
-    "test:dependency-security": "node tests/dependency-security.examples.js",
+    "test:dependency-security": "node tests/dependency-security.examples.js && node tests/loadtest-dependency-compat.examples.js",
     "prisma:generate:postgres": "node node_modules/prisma/build/index.js generate --schema prisma-postgres/schema.prisma",
     "prisma:migrate:postgres": "node node_modules/prisma/build/index.js migrate dev --schema prisma-postgres/schema.prisma",
     "prisma:deploy:postgres": "node scripts/deploy-postgres-migrations.js",
@@ -156,7 +156,10 @@
     "zod": "^3.23.8"
   },
   "overrides": {
-    "qs": "6.16.0"
+    "qs": "6.16.0",
+    "hyperid": {
+      "uuid": "11.1.1"
+    }
   },
   "devDependencies": {
     "autocannon": "^8.0.0",

@@ -90,7 +90,7 @@ export async function readOfflineConfidenceSnapshot(): Promise<OfflineConfidence
       offlineDB.getAll<OfflineRow>("sync_conflicts"),
       getLastCloudBackupAt(),
       countLocalBusinessRows(),
-      getCurrentSubscriptionSnapshot().catch(() => null),
+      getCurrentSubscriptionSnapshot(),
       readOfflineReadiness(),
     ]);
     if (!readiness.databaseAvailable) throw new Error("Local readiness database check failed");

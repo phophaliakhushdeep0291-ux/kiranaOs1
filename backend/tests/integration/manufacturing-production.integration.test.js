@@ -144,6 +144,10 @@ else {
     await assert.rejects(() => production.completeRun(f.shopId, f.run.id, { ...f.input, consumptions: [...f.input.consumptions, f.input.consumptions[0]] }), { code: "DUPLICATE_CONSUMPTION" });
     await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { sellingUnitId: "different-pack" } });
     await assert.rejects(() => production.completeRun(f.shopId, f.run.id, f.input), { code: "PRODUCTION_SOURCE_PACK_MISMATCH" });
+    await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { sellingUnitId: f.rawPack.id } });
+    await ctx.db.productSellingUnit.update({ where: { id: f.rawPack.id }, data: { onHandQty: 0 } });
+    await assert.rejects(() => production.completeRun(f.shopId, f.run.id, f.input), { code: "PRODUCTION_PACK_STOCK_SHORT" });
+    await ctx.db.productSellingUnit.update({ where: { id: f.rawPack.id }, data: { onHandQty: 10 } });
     assert.equal((await ctx.db.inventoryLot.findUnique({ where: { id: f.lot.id } })).availableBaseQty, 100);
     assert.equal((await ctx.db.product.findUnique({ where: { id: f.raw.id } })).stockBaseQty, 100);
     assert.equal((await ctx.db.productSellingUnit.findUnique({ where: { id: f.rawPack.id } })).onHandQty, 10);

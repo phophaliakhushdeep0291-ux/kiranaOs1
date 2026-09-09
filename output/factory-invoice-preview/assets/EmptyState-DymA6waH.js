@@ -1,0 +1,5 @@
+import{a as e,j as r}from"./vendor-data-BaHBZjtO.js"
+import{l as s}from"./index-DtTTo2f-.js"
+import{au as t}from"./vendor-ui-CIi-vqR6.js"
+function d({title:d,description:i,icon:a,action:n,className:l,...o}){const m=e.useId(),c=`empty-title-${m.replace(/:/g,"")}`,f=`empty-description-${m.replace(/:/g,"")}`
+return r.jsxs("div",{className:s("flex min-h-36 w-full flex-col items-center justify-center rounded-[14px] border border-dashed border-[#dce5f1] bg-[#f8fafd] p-6 text-center",l),"aria-labelledby":c,"aria-describedby":i?f:void 0,...o,children:[r.jsx("div",{className:"mb-3 flex h-10 w-10 items-center justify-center rounded-[12px] bg-white text-muted-foreground shadow-sm ring-1 ring-[#e4eaf3]",children:a??r.jsx(t,{className:"h-5 w-5","aria-hidden":"true"})}),r.jsx("p",{id:c,className:"font-medium text-foreground",children:d}),i?r.jsx("p",{id:f,className:"mt-1 max-w-sm text-sm leading-6 text-muted-foreground",children:i}):null,n?r.jsx("div",{className:"mt-4",children:n}):null]})}export{d as E}

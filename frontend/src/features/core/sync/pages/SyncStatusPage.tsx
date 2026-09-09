@@ -1337,7 +1337,7 @@ export default function SyncStatusPage() {
         headingLevel={2}
         title={<span className="flex items-center gap-3"><span className="rounded-full bg-primary/10 p-3 text-primary"><HeroIcon className="h-6 w-6" /></span>{t("sync.title")}</span>}
         description={hero.title}
-        eyebrow={<SyncBadge status={snapshot.isOnline ? (failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced") : "offline"} label={snapshot.isOnline ? (failedCount > 0 ? t("sync.badge.failed", { count: failedCount }) : t("sync.badge.pending", { count: pendingCount })) : t("sync.badge.offline")} />}
+        eyebrow={<SyncBadge status={snapshot.isOnline ? (failedCount > 0 ? "failed" : conflictCount > 0 ? "conflict" : pendingCount > 0 ? "pending" : "synced") : "offline"} label={snapshot.isOnline ? (failedCount > 0 ? t("sync.badge.failed", { count: failedCount }) : conflictCount > 0 ? t("sync.hero.conflict") : t("sync.badge.pending", { count: pendingCount })) : t("sync.badge.offline")} />}
         actions={(
           <>
             <Button variant="outline" onClick={() => void handleRetryFailed()} disabled={snapshot.isSyncing || retryableCount === 0}>
