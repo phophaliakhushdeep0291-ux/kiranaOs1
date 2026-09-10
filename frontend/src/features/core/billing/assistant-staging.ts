@@ -1,4 +1,7 @@
 import { offlineDB } from "@/lib/offline/db";
+import type { Product } from "@/lib/api/client";
+import type { BillingDraft } from "./pages/billing-types";
+import { mergeAssistantCart } from "./assistant-cart";
 
 /**
  * Lines the assistant has resolved, waiting for the till to pick them up.
@@ -76,4 +79,23 @@ export async function takeStagedBillLines(shouldTake: () => boolean = () => true
 
 export async function clearStagedBillLines(): Promise<void> {
   await offlineDB.setSetting(STAGED_LINES_KEY, { lines: [], stagedAt: 0 });
+}
+
+/** A route change or lost acknowledgement can recover the committed draft.
+ * The queue is never cleared independently of the cart that receives it.
+ */
+export async function recoverAssistantBillingDraft(draftKey: string, products: Map<string, Product>, shouldRecover: () => boolean = () => true) {
+  return offlineDB.transaction(["settings"], async tx => {
+    const draft = await offlineDB.getSetting<BillingDraft>(draftKey) ?? {};
+    const batch = await readStagedBatch();
+    if (!shouldRecover()) return null;
+    const merged = mergeAssistantCart(draft.cart ?? [], batch?.lines ?? [], products);
+    const next = merged.applied.length ? { ...draft, cart: merged.cart } : draft;
+    if (merged.applied.length) {
+      await tx.setSetting(draftKey, next);
+      await tx.setSetting(STAGED_LINES_KEY, { lines: merged.remaining, stagedAt: batch?.stagedAt ?? 0 });
+      if (!shouldRecover()) throw new Error("Billing recovery cancelled");
+    }
+    return { draft: next, added: merged.applied.length, remaining: merged.remaining.length };
+  });
 }
