@@ -1,4 +1,4 @@
-import { database as db } from "../../infrastructure/database/index.js";
+import { database as db, serializableTransaction } from "../../infrastructure/database/index.js";
 import { AppError } from "../../shared/errors/index.js";
 import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
 import { BUSINESS_PROFILES, assertBusinessTypeOffered, bootstrapForShop, businessTypeFromSettings, parseShopSettings, requestedBusinessTypeFromSettings, settingsForBusinessType } from "./businessProfiles.js";
@@ -27,7 +27,7 @@ export async function getBootstrap(shopId, role) {
 export async function updateShop(shopId, data, actor = {}) {
   const startedAt = Date.now();
   const requestedData = { ...(data ?? {}) };
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const previous = await tx.shop.findUnique({ where: { id: shopId } });
     if (!previous) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
 
@@ -76,7 +76,7 @@ export async function updateShop(shopId, data, actor = {}) {
       });
     }
     return shop;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 const COMPATIBLE_PROFILE_CHANGES = new Set([
@@ -128,7 +128,7 @@ export async function getBusinessTypeCompatibility(shopId, targetBusinessType, a
 }
 
 export async function updateSetupStatus(shopId, status, actor = {}) {
-  const updated = await db.$transaction(async (tx) => {
+  const updated = await serializableTransaction(async (tx) => {
     const shop = await tx.shop.findUnique({ where: { id: shopId } });
     if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
     const settings = parseShopSettings(shop.settingsJson);
@@ -148,7 +148,7 @@ export async function updateSetupStatus(shopId, status, actor = {}) {
       req: actor.req ?? null,
     });
     return saved;
-  }, { isolationLevel: "Serializable" });
+  });
   return bootstrapForShop(updated, actor.role ?? null);
 }
 

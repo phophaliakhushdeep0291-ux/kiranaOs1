@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -480,7 +481,7 @@ function auditSnapshot(order) {
 
 async function saveMarketplaceOrder(shopId, prepared, actor) {
   const idempotencyKey = `flipkart:shipment:${prepared.shipmentId}`;
-  const result = await db.$transaction(async (tx) => {
+  const result = await serializableTransaction(async (tx) => {
     const existing = await tx.customerOrder.findFirst({ where: { shopId, idempotencyKey } });
     if (existing && (existing.sourceChannel !== "marketplace" || existing.externalOrderId !== prepared.shipmentId)) {
       throw new AppError("Marketplace idempotency key belongs to a different order", 409, "FLIPKART_IDEMPOTENCY_CONFLICT");
@@ -573,7 +574,7 @@ async function saveMarketplaceOrder(shopId, prepared, actor) {
       externalOrderId: saved.externalOrderId,
     }, { client: tx });
     return { kind: action, order: saved, deliveries };
-  }, { isolationLevel: "Serializable" });
+  });
 
   await dispatchIntegrationDeliveries(result.deliveries);
   return result.kind;

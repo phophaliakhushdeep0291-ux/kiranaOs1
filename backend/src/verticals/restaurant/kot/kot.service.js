@@ -1,4 +1,5 @@
 import db from "../../../db.js";
+import { serializableTransaction } from "../../../lib/transactions.js";
 import { activeOrderLines } from "../../../shared/customer-order-lines.js";
 import { AppError } from "../../../middleware/error.js";
 import { resolveOperationalLocation } from "../../../modules/stores/location-context.service.js";
@@ -198,7 +199,7 @@ export async function fireTicket(shopId, input, context = {}) {
 
 export async function setTicketStatus(shopId, id, status) {
   if (!KOT_STATUSES.includes(status)) throw new AppError("Unknown kitchen ticket status", 400);
-  const result = await db.$transaction(async (tx) => {
+  const result = await serializableTransaction(async (tx) => {
     const existing = await tx.kitchenTicket.findFirst({ where: { id, shopId, deletedAt: null } });
     if (!existing) throw new AppError("Kitchen ticket not found", 404);
     const ticket = await tx.kitchenTicket.update({ where: { id }, data: {
@@ -236,7 +237,7 @@ export async function setTicketStatus(shopId, id, status) {
       }, { client: tx }));
     }
     return { ticket, deliveries };
-  }, { isolationLevel: "Serializable" });
+  });
   await dispatchIntegrationDeliveries(result.deliveries);
   return serializeTicket(result.ticket);
 }

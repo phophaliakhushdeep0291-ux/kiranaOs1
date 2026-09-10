@@ -176,6 +176,17 @@ rejected on measurement. Read it before optimising; several obvious ideas
 (recharts chunking, per-vertical chunks, lowering `experimentalMinChunkSize`)
 were measured and made things worse.
 
+**SQLite passes races that PostgreSQL refuses.** SQLite queues concurrent
+writers; PostgreSQL aborts the losing Serializable transaction (Prisma P2034),
+which used to reach the client as a 500 while every local test stayed green.
+Serializable transactions go through `serializableTransaction`
+(`backend/src/lib/transactions.js`), which runs the loser again, in the same
+order SQLite would have run them. Its callback may therefore run more than once:
+keep webhooks, provider calls and metrics outside it. A conflict that outlasts
+the retries answers 503, never 409, because the till's sync engine parks any 4xx
+for a human. `tests/serializable-transaction.examples.js` fails on a raw
+Serializable `$transaction`.
+
 **Tests passing is not the feature working.** The suites are large and green, and
 the bugs that reached a shop were all found by driving the real screen or probing
 a parser directly with what a shopkeeper would actually say. When you finish a
