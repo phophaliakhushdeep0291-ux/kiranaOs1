@@ -119,6 +119,15 @@ failures are therefore classified (`sync-failure-classification.ts`):
 | **Transient** — no status, 5xx, 408, 429, 401 | never got a verdict | back to `PENDING`, deferred, **no attempt spent**, reported as `skipped` |
 | **Permanent** — a 4xx verdict | the server read it and refused | `FAILED`, parked for a human immediately |
 
+The rule holds **per event** too, not only per batch. A push that returns 200 can
+still fail one operation inside it, and the backend's `classifySyncError` marks
+each result `retryable`: a write conflict that outlasted `serializableTransaction`,
+a 5xx, a 408/425/429, `SYNC_DEPENDENCY_PENDING` and `SYNC_EVENT_IN_PROGRESS` are
+`true`; `PERMISSION_DENIED` and business-rule refusals are `false`.
+`isTransientSyncEventResult` reads that flag, so a retryable event takes the
+transient row of the table above while its neighbours in the batch settle
+normally. An explicit `retryable: false` always wins.
+
 Two consequences worth holding on to: a wifi blip no longer lights the "needs
 review" banner, and a rejected operation stops wasting twelve attempts against an
 endpoint that will keep saying no. Setting a row back to `PENDING` also sets
