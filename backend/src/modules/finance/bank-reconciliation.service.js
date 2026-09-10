@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import db from "../../db.js";
+import { isWriteConflict, serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 
@@ -763,9 +764,9 @@ export async function getBankReconciliation(shopId, query = {}) {
 
 async function runReconciliationTransaction(work) {
   try {
-    return await db.$transaction(work, { isolationLevel: "Serializable", maxWait: 5_000, timeout: 15_000 });
+    return await serializableTransaction(work, { maxWait: 5_000, timeout: 15_000 });
   } catch (error) {
-    if (["P1008", "P2028", "P2034"].includes(error?.code)) {
+    if (["P1008", "P2028"].includes(error?.code) || isWriteConflict(error)) {
       fail("Reconciliation changed concurrently; reload and retry", 409, "BANK_RECONCILIATION_CONFLICT");
     }
     throw error;

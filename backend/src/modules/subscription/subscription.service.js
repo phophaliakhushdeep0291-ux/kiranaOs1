@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import {
   DEFAULT_GRACE_DAYS,
@@ -140,7 +141,7 @@ export async function activateManualSubscription(shopId, planCode, period = "mon
   const currentPeriodEnd = addPeriod(now, period);
   const provider = options.provider ?? "manual";
 
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const plan = await getBillablePlan(shopId, planCode, tx);
     const amountPaise = options.amountPaise ?? (period === "yearly" ? plan.priceYearlyPaise : plan.priceMonthlyPaise);
     const before = await tx.subscription.findUnique({ where: { shopId } });
@@ -201,7 +202,7 @@ export async function activateManualSubscription(shopId, planCode, period = "mon
     });
 
     return { subscription: normalizeSubscriptionDates(subscription), paymentTransaction };
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function activateSubscriptionAfterPayment({
@@ -337,7 +338,7 @@ export async function reconcileSubscriptionAfterRefund({
 export async function changePlan(shopId, planCode, actor = {}) {
   if (!validatePlanCode(planCode)) throw new AppError("Invalid plan code", 400);
   await ensurePlansSeeded();
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const nextPlan = await getBillablePlan(shopId, planCode, tx);
     const now = new Date();
     const current = await tx.subscription.findUnique({ where: { shopId } });
@@ -381,7 +382,7 @@ export async function changePlan(shopId, planCode, actor = {}) {
       metadata: { planCode, source: "internal_override" },
     });
     return next;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function grantFoundingCustomer(shopId, intendedPaidPlanCode = "starter", options = {}) {
@@ -390,7 +391,7 @@ export async function grantFoundingCustomer(shopId, intendedPaidPlanCode = "star
   const trialEndsAt = options.endsAt ? new Date(options.endsAt) : addDays(now, 365);
   if (!(trialEndsAt > now)) throw new AppError("Founding-customer end date must be in the future", 400);
   await ensurePlansSeeded();
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const plan = await getBillablePlan(shopId, intendedPaidPlanCode, tx);
     const before = await tx.subscription.findUnique({ where: { shopId } });
     const subscription = await tx.subscription.upsert({
@@ -422,7 +423,7 @@ export async function grantFoundingCustomer(shopId, intendedPaidPlanCode = "star
       metadata: { intendedPaidPlanCode, trialEndsAt, source: "internal_override" },
     });
     return subscription;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function recordOnboardingPurchase(shopId, userId, input = {}, actor = {}) {
@@ -433,7 +434,7 @@ export async function recordOnboardingPurchase(shopId, userId, input = {}, actor
     throw error;
   }
   const includes = input.includes ?? FIRST_YEAR_ONBOARDING_SKU.includes;
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const purchase = await tx.onboardingPurchase.create({ data: {
       shopId, recordedByUserId: userId ?? null, sku: FIRST_YEAR_ONBOARDING_SKU.code,
       amountPaise: input.amountPaise ?? FIRST_YEAR_ONBOARDING_SKU.amountPaise,
@@ -452,7 +453,7 @@ export async function recordOnboardingPurchase(shopId, userId, input = {}, actor
       metadata: { sku: purchase.sku, amountPaise: purchase.amountPaise, status: purchase.status },
     });
     return purchase;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function listOnboardingPurchases(shopId) {
@@ -468,7 +469,7 @@ export async function getBillablePlan(shopId, planCode, client = db) {
 }
 
 export async function cancelSubscription(shopId, actor = {}) {
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const subscription = await tx.subscription.findUnique({ where: { shopId } });
     if (!subscription) return getCurrentSubscription(shopId, tx);
     const cancelled = await tx.subscription.update({
@@ -486,11 +487,11 @@ export async function cancelSubscription(shopId, actor = {}) {
       after: cancelled,
     });
     return cancelled;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export async function extendGrace(shopId, days, actor = {}) {
-  return db.$transaction(async (tx) => {
+  return serializableTransaction(async (tx) => {
     const subscription = await tx.subscription.findUnique({ where: { shopId } });
     if (!subscription) throw new AppError("Subscription not found", 404);
     const graceBase = subscription.graceEndsAt && subscription.graceEndsAt > new Date()
@@ -512,7 +513,7 @@ export async function extendGrace(shopId, days, actor = {}) {
       metadata: { days, source: "internal_override" },
     });
     return extended;
-  }, { isolationLevel: "Serializable" });
+  });
 }
 
 export function isSubscriptionActive(subscription) {

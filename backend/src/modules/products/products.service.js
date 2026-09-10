@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { requireFeatureAccess } from "../feature-gates/featureGate.service.js";
@@ -317,8 +318,14 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
     rest.stockBaseQty = unitTotal;
   }
   try {
-    const product = await withProductCodeDecisionLock(shopId, () => db.$transaction(async (tx) => {
+    const product = await withProductCodeDecisionLock(shopId, () => serializableTransaction(async (tx) => {
       await lockProductCodeNamespace(tx, shopId);
+      // The replay rule above, asked again where it cannot be stale. A replay
+      // that lost the race (queued behind the winner, or retried after
+      // PostgreSQL aborted it) would otherwise reach the name check, find the
+      // winner's product and answer 409, which sync parks for a human.
+      const replayed = await findExistingProductByIdentity(tx, shopId, productIdentity);
+      if (replayed) return replayed;
       await assertNoActiveProductNameConflict(shopId, data.name, null, tx);
       await assertProductCodeNamespaceAvailable(shopId, rest, normalizedUnits, null, tx);
       const created = await tx.product.create({
@@ -437,7 +444,7 @@ export async function createProduct(shopId, data, { identity = null, actor = {},
         req: actor.req ?? null,
       }, tx);
       return hydrated;
-    }, { isolationLevel: "Serializable" }));
+    }));
     return deserializeProduct(product);
   } catch (error) {
     // Race backstop: two concurrent creates with the same client identity collide on the
@@ -598,7 +605,7 @@ export async function updateProduct(shopId, id, data, { actor = {}, locationId =
     updateData.packagingMode = packagingModeForAxes(variantAxes, rest.packagingMode ?? existing.packagingMode);
   }
 
-  const updated = await withProductCodeDecisionLock(shopId, () => db.$transaction(async (tx) => {
+  const updated = await withProductCodeDecisionLock(shopId, () => serializableTransaction(async (tx) => {
     await lockProductCodeNamespace(tx, shopId);
     const current = await tx.product.findFirst({
       where: { id, shopId, deletedAt: null },
@@ -679,7 +686,7 @@ export async function updateProduct(shopId, id, data, { actor = {}, locationId =
       req: actor.req ?? null,
     }, tx);
     return hydrated;
-  }, { isolationLevel: "Serializable" }));
+  }));
   return deserializeProduct(updated);
 }
 
@@ -1128,9 +1135,8 @@ async function assertProductCodeNamespaceAvailable(shopId, product, sellingUnits
 export async function bindProductBarcode(shopId, productId, barcode, options = {}) {
   const client = options.client ?? db;
   if (client === db) {
-    return withProductCodeDecisionLock(shopId, () => db.$transaction(
+    return withProductCodeDecisionLock(shopId, () => serializableTransaction(
       (tx) => bindProductBarcodeWithClient(shopId, productId, barcode, { ...options, client: tx }),
-      { isolationLevel: "Serializable" },
     ));
   }
   return bindProductBarcodeWithClient(shopId, productId, barcode, { ...options, client });

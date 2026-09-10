@@ -1,4 +1,5 @@
 import db from "../../db.js";
+import { serializableTransaction } from "../../lib/transactions.js";
 import { AppError } from "../../middleware/error.js";
 import { getDailyClosing } from "./reports.service.js";
 import { dateRangeForDateOnly, formatDateInTimeZone } from "../../utils/dates.js";
@@ -288,7 +289,7 @@ export async function recordDailyClosingDrawerCount(shopId, date, input, actor =
     });
   }
 
-  const snapshot = await db.$transaction(async (tx) => {
+  const snapshot = await serializableTransaction(async (tx) => {
     const current = await tx.dailyClosingSnapshot.findUnique({
       where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
     });
@@ -340,7 +341,7 @@ export async function recordDailyClosingDrawerCount(shopId, date, input, actor =
       },
     }, tx);
     return updated;
-  }, { isolationLevel: "Serializable" });
+  });
 
   return snapshotToDailyClosing(snapshot);
 }
@@ -385,7 +386,7 @@ export async function lockDailyClosingSnapshot(shopId, date, userId, requestedSt
     if (!snapshot) return generated;
   }
 
-  snapshot = await db.$transaction(async (tx) => {
+  snapshot = await serializableTransaction(async (tx) => {
     const current = await tx.dailyClosingSnapshot.findUnique({
       where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
     });
@@ -408,7 +409,7 @@ export async function lockDailyClosingSnapshot(shopId, date, userId, requestedSt
       before: current, after: locked, metadata: { date: dateKey(day), storeId: location.id },
     }, tx);
     return locked;
-  }, { isolationLevel: "Serializable" });
+  });
 
   return snapshotToDailyClosing(snapshot, { locked: true });
 }

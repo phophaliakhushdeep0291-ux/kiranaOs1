@@ -2,6 +2,7 @@ import { ZodError } from "zod";
 import { env } from "../config/env.js";
 import { logger } from "../lib/logger.js";
 import { captureRequestError } from "../lib/errorTracking.js";
+import { isWriteConflict } from "../lib/transactions.js";
 import { recordErrorEvent } from "../modules/diagnostics/diagnostics.service.js";
 
 const BACKEND_VERSION = process.env.APP_VERSION || "1.0.0";
@@ -153,6 +154,26 @@ export function errorHandler(err, req, res, _next) {
     return res.status(404).json({
       ...baseError(req, "Record not found"),
       code: "RECORD_NOT_FOUND",
+    });
+  }
+
+  // PostgreSQL kept aborting this request's transaction for a write conflict
+  // (serializableTransaction retries it first). Nothing is wrong with the
+  // request and the same bytes will go through a moment later, so answer as a
+  // transient failure: a 4xx here would park a till's queued sale for a human.
+  if (isWriteConflict(err)) {
+    logger.warn({
+      type: "write_conflict",
+      requestId: req?.requestId,
+      method: req?.method,
+      path: req?.originalUrl,
+      shopId: req?.user?.shopId ?? null,
+      errorCode: err.code,
+    });
+    res.setHeader("Retry-After", "1");
+    return res.status(503).json({
+      ...baseError(req, "Another change to the same records was being saved at that moment. Please try again."),
+      code: "WRITE_CONFLICT",
     });
   }
 
