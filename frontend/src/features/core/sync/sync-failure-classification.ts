@@ -48,10 +48,48 @@ export function isTransientSyncFailure(error: unknown): boolean {
 }
 
 /**
- * Backoff for a transient batch failure. Capped well below the ordinary failure
- * ladder because the operation is not suspect — we are only waiting for the
- * network or the server to come back, and a till should resume promptly when it
- * does. `attempt` is the count of consecutive transient failures.
+ * Per-event codes that mean "no verdict on this operation" (backend
+ * `classifySyncError`): a 5xx or status-less throw — including a write conflict
+ * that outlasted the serializable retries — a 408/425/429, a reference whose
+ * server id does not exist yet, and the same event still being processed by an
+ * earlier request.
+ */
+const TRANSIENT_EVENT_CODES = new Set(["SERVER_ERROR", "SYNC_DEPENDENCY_PENDING", "SYNC_EVENT_IN_PROGRESS"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The same question for one operation inside a push that came back 200.
+ *
+ * A batch can succeed while a single event in it fails, and the server already
+ * says which kind of failure it was: every per-event result carries `retryable`.
+ * `true` means the server never judged the operation, so it must retry without
+ * spending an attempt, exactly like a failed batch. `false` (PERMISSION_DENIED,
+ * a business rule) is a verdict and stays FAILED.
+ *
+ * The flag sits on the nested `result` envelope today; the top level is read too,
+ * so a server that promotes it is understood the same way. An explicit `false`
+ * on either wins. The codes are only a fallback for a result with no flag at all,
+ * and a failure with neither stays FAILED, as it always has.
+ */
+export function isTransientSyncEventResult(result: unknown): boolean {
+  if (!isRecord(result)) return false;
+  const envelope = isRecord(result.result) ? result.result : {};
+  const flags = [result.retryable, envelope.retryable];
+  if (flags.includes(false)) return false;
+  if (flags.includes(true)) return true;
+  const code = typeof result.code === "string" ? result.code : envelope.code;
+  return typeof code === "string" && TRANSIENT_EVENT_CODES.has(code);
+}
+
+/**
+ * Backoff for a transient failure, whole batch or one event in it. Capped well
+ * below the ordinary failure ladder because the operation is not suspect — we are
+ * only waiting for the network or the server to come back, and a till should
+ * resume promptly when it does. `attempt` is the count of consecutive transient
+ * failures.
  */
 export function transientRetryDelayMs(attempt: number): number {
   const safe = Number.isFinite(attempt) ? Math.max(0, Math.trunc(attempt)) : 0;

@@ -398,6 +398,21 @@ function successResult(event: Row, serverId = "server_product_1") {
   };
 }
 
+/** One event's failure inside a 200 push, shaped like the backend's buildSyncResult. */
+function eventFailureResult(event: Row, code: string, retryable: boolean, error: string) {
+  return {
+    clientEventId: event.clientEventId,
+    eventId: event.clientEventId,
+    type: event.operation_type,
+    status: "failed",
+    success: false,
+    serverId: null,
+    error,
+    code,
+    result: { code, retryable },
+  };
+}
+
 function billSuccessResult(event: Row, serverId = "server_bill_1") {
   return {
     clientEventId: event.clientEventId,
@@ -501,6 +516,128 @@ describe("sync engine reliability", () => {
 
     expect(result).toEqual(expect.objectContaining({ pushed: 0, failed: 1 }));
     expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({ status: "FAILED", sync_status: "failed", retry_count: 1 }),
+    );
+  });
+
+  it("keeps an event the server failed to judge queued, even though the batch returned 200", async () => {
+    // The batch-level rule, one event at a time. A PostgreSQL write conflict that
+    // outlasted serializableTransaction's retries comes back as SERVER_ERROR with
+    // `retryable: true` inside an otherwise successful push. As FAILED it spent an
+    // attempt, and a dozen of those on a busy shop retired the sale for good.
+    const event = seedOutbox();
+    mockedSyncPush.mockResolvedValueOnce({
+      results: [
+        eventFailureResult(
+          event,
+          "SERVER_ERROR",
+          true,
+          "Transaction failed due to a write conflict or a deadlock. Please retry your transaction",
+        ),
+      ],
+    });
+
+    const result = await pushPendingOutboxOperations();
+
+    // Skipped, not failed: nothing was rejected, so no "needs review" banner.
+    expect(result).toEqual({ pushed: 0, failed: 0, conflicts: 0, skipped: 1 });
+    expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({
+        status: "PENDING",
+        sync_status: "pending_sync",
+        retry_count: 0,
+        attempts: 0,
+        idempotency_key: "idem-product-1",
+        // Kept, so Sync Status can say why the row is waiting.
+        error_message: "Transaction failed due to a write conflict or a deadlock. Please retry your transaction",
+      }),
+    );
+    // Deferred rather than resent on the very next cycle.
+    expect(scopedRows("sync_outbox")[0].next_retry_at).toBeTruthy();
+  });
+
+  it("never retires an event however many times the server fails to judge it", async () => {
+    // MAX_AUTOMATIC_RETRY_ATTEMPTS is 12. Go past it: an event the server keeps
+    // answering "already being processed" must still be queued afterwards.
+    const event = seedOutbox();
+    for (let attempt = 0; attempt < 15; attempt += 1) {
+      mockedSyncPush.mockResolvedValueOnce({
+        results: [
+          eventFailureResult(event, "SYNC_EVENT_IN_PROGRESS", true, "This sync event is already being processed. Retry later."),
+        ],
+      });
+      await pushPendingOutboxOperations();
+    }
+
+    expect(syncPush).toHaveBeenCalledTimes(15);
+    expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({ status: "PENDING", sync_status: "pending_sync", retry_count: 0 }),
+    );
+
+    // And when the server does answer, the same row lands.
+    mockedSyncPush.mockResolvedValueOnce({ results: [successResult(event)] });
+    const landed = await pushPendingOutboxOperations();
+    expect(landed).toEqual(expect.objectContaining({ pushed: 1, failed: 0 }));
+    expect(scopedRows("sync_outbox")[0]).toEqual(expect.objectContaining({ status: "SYNCED" }));
+  });
+
+  it("still parks a per-event refusal the server marked not retryable", async () => {
+    // The other half, per event: a missing owner PIN is a verdict. It must stay on
+    // the FAILED path and spend its attempt, not loop forever as PENDING.
+    const event = seedOutbox();
+    mockedSyncPush.mockResolvedValueOnce({
+      results: [eventFailureResult(event, "PERMISSION_DENIED", false, "Owner PIN required")],
+    });
+
+    const result = await pushPendingOutboxOperations();
+
+    expect(result).toEqual(expect.objectContaining({ pushed: 0, failed: 1, skipped: 0 }));
+    expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({
+        status: "FAILED",
+        sync_status: "failed",
+        retry_count: 1,
+        error_message: "Owner PIN required",
+      }),
+    );
+  });
+
+  it("settles each event in a mixed batch on its own terms", async () => {
+    const landed = seedOutbox();
+    const waiting = seedOutbox({
+      op_id: "op_product_2",
+      clientEventId: "op_product_2",
+      idempotency_key: "idem-product-2",
+      entity_id: "product_2",
+      payload: { id: "product_2", name: "Salt" },
+      createdAt: 2,
+    });
+    const refused = seedOutbox({
+      op_id: "op_product_3",
+      clientEventId: "op_product_3",
+      idempotency_key: "idem-product-3",
+      entity_id: "product_3",
+      payload: { id: "product_3", name: "Tea" },
+      createdAt: 3,
+    });
+    mockedSyncPush.mockResolvedValueOnce({
+      results: [
+        successResult(landed),
+        eventFailureResult(waiting, "SYNC_DEPENDENCY_PENDING", true, "Server id not available yet for local customer id"),
+        eventFailureResult(refused, "PERMISSION_DENIED", false, "Owner PIN required"),
+      ],
+    });
+
+    const result = await pushPendingOutboxOperations();
+
+    expect(result).toEqual({ pushed: 1, failed: 1, conflicts: 0, skipped: 1 });
+    const byId = new Map(scopedRows("sync_outbox").map((row) => [row.clientEventId, row]));
+    expect(byId.get("op_product_1")).toEqual(expect.objectContaining({ status: "SYNCED" }));
+    expect(byId.get("op_product_2")).toEqual(
+      expect.objectContaining({ status: "PENDING", sync_status: "pending_sync", retry_count: 0 }),
+    );
+    expect(byId.get("op_product_2")?.next_retry_at).toBeTruthy();
+    expect(byId.get("op_product_3")).toEqual(
       expect.objectContaining({ status: "FAILED", sync_status: "failed", retry_count: 1 }),
     );
   });
