@@ -6,6 +6,7 @@ import { useListProducts } from "@/features/core/products/queries";
 import { bindProductBarcodeLocalFirst } from "@/features/core/products/local-actions";
 import type { KnownProductDetails } from "@/features/core/products/product-knowledge";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import { Button } from "@/components/ui/button";
 import { createProductLocalFirst } from "@/features/core/products/local-actions";
 import { formToInput, productToForm } from "@/features/core/products/pages/product-form-state";
 import { useAuth } from "@/features/core/auth/useAuth";
@@ -60,6 +61,7 @@ import { startBackendTranscription, type BackendTranscriptionSession } from "@/f
 import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity, showCustomerDisplayViaHardwareBridge, type HardwareCustomerDisplayState } from "@/features/core/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { speechRecognitionLocale } from "@/features/core/voice/voice-recognition";
+import { Loader2 } from "lucide-react";
 import {
   ACTIVITY_EVENTS,
   matchSearchSuggestions,

@@ -61,6 +61,8 @@ Migrations are **additive and data-preserving** (nullable columns, `CREATE ... I
 - Production branch is `main`; Vercel builds **Production** on merge to `main` and **Preview** on any other branch.
 - Set `VITE_API_BASE_URL` to your Railway backend URL (per-environment if you use a staging backend).
 - Package manager is **pnpm** (`packageManager` field in `frontend/package.json`); there is a single `pnpm-lock.yaml`.
+- The repository contains a root `vercel.json` for projects whose Root Directory is the repository, plus `frontend/vercel.json` for projects whose Root Directory is `frontend`.
+- `VITE_API_BASE_URL` is required in Vercel Preview and Production environment scopes. A local `.env.local` is ignored by Git and is never available to Vercel.
 
 ```bash
 cd frontend

@@ -5,6 +5,13 @@ import type { billingEn } from "./billing";
 export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.assistant.queueFailed": "सहायक के आइटम लोड नहीं हो सके",
   "billing.assistant.queueRetry": "फिर कोशिश करने के लिए बिल दोबारा खोलें। भुगतान लेने से पहले कार्ट जांच लें।",
+  "billing.assistant.itemsPending": "सहायक के कुछ आइटम अभी बाकी हैं",
+  "billing.assistant.itemsPendingDetail": "पेमेंट लेने से पहले कार्ट जांच लें।",
+  "billing.assistant.recoveryFailed": "बिल ड्राफ्ट वापस नहीं आ सका",
+  "billing.assistant.recovering": "बिल ड्राफ्ट वापस आ रहा है",
+  "billing.assistant.recoveryFailedDetail": "सेव किया हुआ ड्राफ्ट लोड नहीं हो सका। नया बिल शुरू करने से पहले दोबारा कोशिश करें।",
+  "billing.assistant.recoveringDetail": "सेव किए हुए आइटम वापस लाए जा रहे हैं।",
+  "billing.assistant.retryRecovery": "फिर कोशिश करें",
   "billing.openBills": "खुले बिल",
   "billing.openBills.current": "यही बिल चालू है",
   "billing.openBills.switchTo": "{name} पर जाएं",
