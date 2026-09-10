@@ -6,6 +6,13 @@
 export const billingEn = {
   "billing.assistant.queueFailed": "Could not load the assistant's items",
   "billing.assistant.queueRetry": "Reload the bill to try again. Check the cart before collecting payment.",
+  "billing.assistant.itemsPending": "Some assistant items are still pending",
+  "billing.assistant.itemsPendingDetail": "Review the cart before collecting payment.",
+  "billing.assistant.recoveryFailed": "Could not recover the billing draft",
+  "billing.assistant.recovering": "Recovering your billing draft",
+  "billing.assistant.recoveryFailedDetail": "The saved draft could not be loaded. Try again before starting a new bill.",
+  "billing.assistant.recoveringDetail": "Please wait while we restore the saved items.",
+  "billing.assistant.retryRecovery": "Try again",
   // Open bills strip
   "billing.openBills": "Open bills",
   "billing.openBills.current": "Current bill",
