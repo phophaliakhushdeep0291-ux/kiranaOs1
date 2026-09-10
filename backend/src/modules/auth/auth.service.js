@@ -556,24 +556,34 @@ export async function setPin(userId, shopId, pin, reqMeta = {}, currentPassword)
   }
 
   const pinHash = await bcrypt.hash(pin, 10);
-  await db.$transaction(async (tx) => {
-    // Password resets, disabled owners and simultaneous PIN changes revoke
-    // an older check. Check the credential versions inside the write transaction.
-    const changed = await tx.user.updateMany({
-      where: { id: userId, shopId, role: "owner", disabledAt: null, passwordHash: user.passwordHash, pinHash: user.pinHash },
-      data: { pinHash },
-    });
-    if (changed.count !== 1) throw new AppError("Owner credentials changed. Try again.", 409, "OWNER_CREDENTIALS_CHANGED");
-    await writeRequiredAuthAudit(tx, {
-      shopId,
-      userId,
-      action: user.pinHash ? "PIN_CHANGED" : "PIN_SET",
-      entityType: "user",
-      entityId: userId,
-      metadata: { previouslyConfigured: Boolean(user.pinHash) },
-      req: auditReqShim(reqMeta),
-    });
-  }, { isolationLevel: "Serializable" });
+  const credentialsChanged = () => new AppError("Owner credentials changed. Try again.", 409, "OWNER_CREDENTIALS_CHANGED");
+  try {
+    await db.$transaction(async (tx) => {
+      // Password resets, disabled owners and simultaneous PIN changes revoke
+      // an older check. Check the credential versions inside the write transaction.
+      const changed = await tx.user.updateMany({
+        where: { id: userId, shopId, role: "owner", disabledAt: null, passwordHash: user.passwordHash, pinHash: user.pinHash },
+        data: { pinHash },
+      });
+      if (changed.count !== 1) throw credentialsChanged();
+      await writeRequiredAuthAudit(tx, {
+        shopId,
+        userId,
+        action: user.pinHash ? "PIN_CHANGED" : "PIN_SET",
+        entityType: "user",
+        entityId: userId,
+        metadata: { previouslyConfigured: Boolean(user.pinHash) },
+        req: auditReqShim(reqMeta),
+      });
+    }, { isolationLevel: "Serializable" });
+  } catch (error) {
+    // SQLite serializes writers, so the losing change reaches the guarded
+    // update and matches no row. PostgreSQL instead aborts the losing
+    // Serializable transaction (P2034). Both mean the credential version this
+    // request checked is stale — the same conflict, not a server fault.
+    if (error?.code === "P2034") throw credentialsChanged();
+    throw error;
+  }
   return { success: true, message: "PIN set successfully" };
 }
 

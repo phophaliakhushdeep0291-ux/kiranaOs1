@@ -22,7 +22,15 @@ describe("atomic coupon billing client", () => {
 
   it("persists the validated coupon across reloads and held-bill switching", () => {
     expect(billingTypes).toContain("appliedOffer?: AppliedOffer | null");
-    expect(billingPage).toContain("writeBillingDraft({ activeBillId, sourceOrderId, sourceOrderFingerprint, cart, discount: safeDiscount, discountReason, appliedOffer");
+    // Field order is not the contract. The draft gained `tableId` mid-list and an
+    // exact-substring match went red while the coupon was still being saved, so
+    // assert the saved fields themselves.
+    const draftFields = (billingPage.match(/writeBillingDraft\(\{([^}]*)\}\)/)?.[1] ?? "").split(",").map((field) => field.trim());
+    for (const field of ["activeBillId", "sourceOrderId", "sourceOrderFingerprint", "cart", "discount: safeDiscount", "discountReason", "appliedOffer"]) {
+      expect(draftFields).toContain(field);
+    }
+    // …and read back on both paths: a reload restores the draft, a switch resumes a held bill.
+    expect(billingPage).toContain("setAppliedOffer(draft.appliedOffer ?? null)");
     expect(billingPage).toContain("setAppliedOffer(bill.appliedOffer ?? null)");
   });
 });

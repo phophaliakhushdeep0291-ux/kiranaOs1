@@ -161,10 +161,11 @@ export async function createIntegrationContext() {
 }
 
 /**
- * SQLite can reject one selected audit action with a compact `WHEN NEW.action`
- * trigger. PostgreSQL requires a trigger function for the same proof. Most of
- * the integration suite deliberately installs those short-lived SQLite
- * triggers to prove that a business write rolls back when its required audit
+ * SQLite can reject an insert with a compact `BEGIN SELECT RAISE(...) END`
+ * trigger, optionally narrowed by `WHEN NEW.<column> ...`. PostgreSQL requires
+ * a trigger function for the same proof. Much of the integration suite
+ * deliberately installs those short-lived SQLite triggers to prove that a
+ * business write rolls back when one of its rows (usually the required audit)
  * cannot be stored. Translate only that test-only shape on PostgreSQL so the
  * exact same atomicity proof runs against both production database engines.
  */
@@ -172,43 +173,46 @@ function portableIntegrationDatabase(rawDb) {
   if (!/^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL || "")) return rawDb;
 
   const originalExecuteRawUnsafe = rawDb.$executeRawUnsafe.bind(rawDb);
-  const auditTriggerFunctions = new Map();
+  // trigger name -> { table, triggerFunction }; PostgreSQL drops a trigger by
+  // table, while the SQLite statement being translated names only the trigger.
+  const failureTriggers = new Map();
 
   async function executePortableRaw(sql, ...values) {
     if (typeof sql !== "string") return originalExecuteRawUnsafe(sql, ...values);
     const statement = sql.trim();
     const create = statement.match(
-      /^CREATE\s+TRIGGER\s+"?([A-Za-z0-9_]+)"?\s+BEFORE\s+INSERT\s+ON\s+"?AuditLog"?\s+WHEN\s+NEW\.?"?action"?\s+(=\s*'[^']+'|IN\s*\([^)]*\))\s+BEGIN\s+SELECT\s+RAISE\s*\([\s\S]*?\)\s*;?\s*END\s*;?$/i,
+      /^CREATE\s+TRIGGER\s+"?([A-Za-z0-9_]+)"?\s+BEFORE\s+INSERT\s+ON\s+"?([A-Za-z0-9_]+)"?\s+(?:WHEN\s+NEW\."?([A-Za-z0-9_]+)"?\s+(=\s*'[^']+'|IN\s*\([^)]*\))\s+)?BEGIN\s+SELECT\s+RAISE\s*\([\s\S]*?\)\s*;?\s*END\s*;?$/i,
     );
     if (create) {
-      const [, triggerName, condition] = create;
+      const [, triggerName, table, column, condition] = create;
       const triggerFunction = `${triggerName}_fn`;
-      await originalExecuteRawUnsafe(`DROP TRIGGER IF EXISTS "${triggerName}" ON "AuditLog"`);
+      const guard = column ? `IF NEW."${column}" ${condition} THEN` : "IF TRUE THEN";
+      await originalExecuteRawUnsafe(`DROP TRIGGER IF EXISTS "${triggerName}" ON "${table}"`);
       await originalExecuteRawUnsafe(`
-        CREATE OR REPLACE FUNCTION "${triggerFunction}"() RETURNS trigger AS $audit_failure$
+        CREATE OR REPLACE FUNCTION "${triggerFunction}"() RETURNS trigger AS $forced_failure$
         BEGIN
-          IF NEW."action" ${condition} THEN
-            RAISE EXCEPTION 'forced audit failure';
+          ${guard}
+            RAISE EXCEPTION 'forced ${table} failure';
           END IF;
           RETURN NEW;
         END;
-        $audit_failure$ LANGUAGE plpgsql
+        $forced_failure$ LANGUAGE plpgsql
       `);
       await originalExecuteRawUnsafe(`
         CREATE TRIGGER "${triggerName}"
-        BEFORE INSERT ON "AuditLog"
+        BEFORE INSERT ON "${table}"
         FOR EACH ROW EXECUTE FUNCTION "${triggerFunction}"()
       `);
-      auditTriggerFunctions.set(triggerName, triggerFunction);
+      failureTriggers.set(triggerName, { table, triggerFunction });
       return 0;
     }
 
-    const drop = statement.match(/^DROP\s+TRIGGER\s+IF\s+EXISTS\s+"?([A-Za-z0-9_]+)"?\s*;?$/i);
-    const triggerFunction = drop ? auditTriggerFunctions.get(drop[1]) : null;
-    if (drop && triggerFunction) {
-      await originalExecuteRawUnsafe(`DROP TRIGGER IF EXISTS "${drop[1]}" ON "AuditLog"`);
-      await originalExecuteRawUnsafe(`DROP FUNCTION IF EXISTS "${triggerFunction}"()`);
-      auditTriggerFunctions.delete(drop[1]);
+    const drop = statement.match(/^DROP\s+TRIGGER\s+(?:IF\s+EXISTS\s+)?"?([A-Za-z0-9_]+)"?\s*;?$/i);
+    const installed = drop ? failureTriggers.get(drop[1]) : null;
+    if (drop && installed) {
+      await originalExecuteRawUnsafe(`DROP TRIGGER IF EXISTS "${drop[1]}" ON "${installed.table}"`);
+      await originalExecuteRawUnsafe(`DROP FUNCTION IF EXISTS "${installed.triggerFunction}"()`);
+      failureTriggers.delete(drop[1]);
       return 0;
     }
 
