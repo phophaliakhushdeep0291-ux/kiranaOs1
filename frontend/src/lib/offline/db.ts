@@ -2,6 +2,7 @@ import Dexie, { type Table } from "dexie";
 import type { SyncStatus } from "@/types/domain";
 import { getOfflineScope, nowIso, type OfflineScope } from "@/lib/offline/context";
 import { StorageFullError, isQuotaExceededError } from "@/lib/offline/storage-errors";
+import { nextTransientFailureCount } from "@/features/core/sync/sync-failure-classification";
 
 export interface OfflineRow {
   id: string;
@@ -75,6 +76,10 @@ export interface PendingSyncEvent {
   // How many times a repair sweep has re-queued this event after it failed
   // validation. Bounds the sweep↔push loop; see MAX_REPAIR_REQUEUES.
   repair_requeues?: number;
+  // Consecutive transient failures (no verdict: network, 5xx, a retryable event
+  // result). Paces the PENDING deferral and never retires anything — retry_count
+  // is the budget, and a transient failure spends none of it. Unindexed.
+  transient_failures?: number;
 }
 
 function isCriticalBillSyncEvent(event: PendingSyncEvent): boolean {
@@ -1049,6 +1054,9 @@ class OfflineDBFacade {
                       : row.sync_status,
           retry_count: retryCount,
           attempts: retryCount,
+          // What spaces a deferred row's retries out. The caller sized this
+          // deferral from the count as it stood; the row now carries one more.
+          transient_failures: nextTransientFailureCount(row, status, options?.deferMs ?? 0),
           error_message: status === "SYNCED" ? null : (errorMessage ?? null),
           last_error: status === "SYNCED" ? null : (errorMessage ?? null),
           last_attempt_at: now,

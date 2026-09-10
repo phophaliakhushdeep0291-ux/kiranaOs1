@@ -88,10 +88,42 @@ export function isTransientSyncEventResult(result: unknown): boolean {
  * Backoff for a transient failure, whole batch or one event in it. Capped well
  * below the ordinary failure ladder because the operation is not suspect — we are
  * only waiting for the network or the server to come back, and a till should
- * resume promptly when it does. `attempt` is the count of consecutive transient
- * failures.
+ * resume promptly when it does. `attempt` is how many transient failures the row
+ * had already had in a row before this one — `transientFailureCount`, never
+ * `retry_count`.
  */
 export function transientRetryDelayMs(attempt: number): number {
   const safe = Number.isFinite(attempt) ? Math.max(0, Math.trunc(attempt)) : 0;
   return Math.min(30_000, 1_000 * 2 ** Math.min(safe, 5));
+}
+
+/**
+ * Consecutive transient failures recorded on an outbox row (`transient_failures`).
+ *
+ * It has to be its own counter. `retry_count` rises only on FAILED — a transient
+ * failure goes back to PENDING precisely so that it spends none of it — so a row
+ * that had never been refused always read 0 there, the deferral was always 1s,
+ * and a till facing a 500ing server re-sent every scheduler tick for as long as
+ * the outage lasted. Absent on every row written before the counter existed,
+ * which reads as none.
+ */
+export function transientFailureCount(row: { transient_failures?: unknown }): number {
+  const count = row.transient_failures;
+  return typeof count === "number" && Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+}
+
+/**
+ * The counter a row carries after a status change. A deferred PENDING is one more
+ * transient failure. SYNCED, FAILED and CONFLICT are verdicts and end the streak.
+ * Anything else — SYNCING, a PENDING requeue with no deferral — leaves it alone,
+ * or a push that is merely in flight would erase the backoff it is waiting out.
+ */
+export function nextTransientFailureCount(
+  row: { transient_failures?: unknown },
+  status: "PENDING" | "SYNCING" | "SYNCED" | "FAILED" | "CONFLICT",
+  deferMs: number,
+): number {
+  if (status === "SYNCED" || status === "FAILED" || status === "CONFLICT") return 0;
+  if (status === "PENDING" && deferMs > 0) return transientFailureCount(row) + 1;
+  return transientFailureCount(row);
 }

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   isTransientSyncEventResult,
   isTransientSyncFailure,
+  nextTransientFailureCount,
+  transientFailureCount,
   transientRetryDelayMs,
 } from "@/features/core/sync/sync-failure-classification";
 
@@ -133,5 +135,78 @@ describe("sync failure classification", () => {
     // deferred by a transient failure and must wait its turn.
     expect(pendingBranch.slice(0, 600)).toContain("if (!event.next_retry_at) return true;");
     expect(db).toContain('status === "FAILED" || retryDelayMs > 0');
+  });
+});
+
+/**
+ * How long a deferred row waits. It used to be sized from `retry_count`, which a
+ * transient failure never moves — that is the whole point of sending it back to
+ * PENDING — so a row the server had never refused waited 1s every time, and a
+ * till facing a 500ing server re-sent on every scheduler tick until it recovered.
+ */
+describe("transient failure streak", () => {
+  it("backs a row off further with every transient failure in a row", () => {
+    // What the outbox does on each failure: size the deferral from the count as
+    // it stands, then record one more. retry_count takes no part in it.
+    let row: { retry_count: number; transient_failures?: number } = { retry_count: 0 };
+    const waits: number[] = [];
+    for (let failure = 0; failure < 8; failure += 1) {
+      const deferMs = transientRetryDelayMs(transientFailureCount(row));
+      waits.push(deferMs);
+      row = { ...row, transient_failures: nextTransientFailureCount(row, "PENDING", deferMs) };
+    }
+
+    expect(waits).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000]);
+    expect(row.transient_failures).toBe(8);
+    expect(row.retry_count).toBe(0);
+  });
+
+  it("ignores retry_count, so a row with refusals behind it is not made to wait longer", () => {
+    // Eleven refusals, then the network drops: still the first transient failure.
+    const refusedOften: { retry_count: number; attempts: number; transient_failures?: number } = {
+      retry_count: 11,
+      attempts: 11,
+    };
+    expect(transientFailureCount(refusedOften)).toBe(0);
+    expect(transientRetryDelayMs(transientFailureCount(refusedOften))).toBe(1_000);
+  });
+
+  it("ends the streak on any verdict", () => {
+    const streak = { transient_failures: 4 };
+    expect(nextTransientFailureCount(streak, "SYNCED", 0)).toBe(0);
+    expect(nextTransientFailureCount(streak, "CONFLICT", 0)).toBe(0);
+    // FAILED carries its own ladder's delay; that is not a transient deferral.
+    expect(nextTransientFailureCount(streak, "FAILED", 0)).toBe(0);
+    expect(nextTransientFailureCount(streak, "FAILED", 5_000)).toBe(0);
+  });
+
+  it("keeps the streak through a push in flight and a plain requeue", () => {
+    const streak = { transient_failures: 4 };
+    // Every retry passes through SYNCING. Resetting there would erase the backoff
+    // on the very attempt it was spacing out.
+    expect(nextTransientFailureCount(streak, "SYNCING", 0)).toBe(4);
+    // PENDING with no deferral is not a failure.
+    expect(nextTransientFailureCount(streak, "PENDING", 0)).toBe(4);
+    expect(nextTransientFailureCount(streak, "PENDING", 16_000)).toBe(5);
+  });
+
+  it("reads a missing or unreadable counter as no failures", () => {
+    // Every row queued before the counter existed has no such field.
+    expect(transientFailureCount({})).toBe(0);
+    expect(transientFailureCount({ transient_failures: undefined })).toBe(0);
+    expect(transientFailureCount({ transient_failures: null })).toBe(0);
+    expect(transientFailureCount({ transient_failures: Number.NaN })).toBe(0);
+    expect(transientFailureCount({ transient_failures: "3" })).toBe(0);
+    expect(transientFailureCount({ transient_failures: -2 })).toBe(0);
+    expect(transientFailureCount({ transient_failures: 2.7 })).toBe(2);
+    expect(nextTransientFailureCount({ transient_failures: "garbage" }, "PENDING", 1_000)).toBe(1);
+  });
+
+  it("persists the streak where the outbox row is written", () => {
+    // Structural: the Dexie path cannot run here (no fake-indexeddb). The rule is
+    // the one tested above; what this pins is that updatePendingEventStatus
+    // stores it, fed the same deferral the caller sized.
+    const db = readFileSync("src/lib/offline/db.ts", "utf8");
+    expect(db).toContain("transient_failures: nextTransientFailureCount(row, status, options?.deferMs ?? 0)");
   });
 });
