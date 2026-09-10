@@ -97,4 +97,10 @@ jobs:
 
       - name: Build
         working-directory: frontend
+        env:
+          # The build validates the bundle only; Vercel supplies the real
+          # backend URL separately through its Preview/Production env vars.
+          # `/api` keeps this CI proof same-origin without embedding a fake
+          # deployment URL in the shipped frontend.
+          VITE_API_BASE_URL: /api
         run: pnpm run build
