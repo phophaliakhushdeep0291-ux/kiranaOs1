@@ -22,6 +22,7 @@
 // Nothing here may be imported statically from shell code — that would defeat
 // the split and put the tables back into the startup download. The test in
 // i18n-english-split.test.ts fails the build if i18n.tsx imports it as a value.
+import { accountingEn } from "./accounting";
 import { assistantEn } from "./assistant";
 import { devicesEn } from "./devices";
 import { assuranceEn } from "./assurance";
@@ -40,6 +41,7 @@ import { workflowsEn } from "./workflows";
 
 export const englishDeferredTranslations = {
   ...productsEn,
+  ...accountingEn,
   ...assistantEn,
   ...devicesEn,
   ...assuranceEn,
@@ -59,6 +61,7 @@ export const englishDeferredTranslations = {
 /** Registered deferred modules. `english.ts` re-exports these into EN_MODULES. */
 export const EN_DEFERRED_MODULES = {
   products: productsEn,
+  accounting: accountingEn,
   assistant: assistantEn,
   devices: devicesEn,
   assurance: assuranceEn,

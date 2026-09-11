@@ -17,6 +17,7 @@ import {
   BarChart3,
   Bell,
   ChevronDown,
+  BookOpenCheck,
   ChevronRight,
   LayoutDashboard,
   Landmark,
@@ -146,6 +147,7 @@ const PAGE_TITLE_KEYS: Record<string, TranslationKey> = {
   "/settings": "page.title.settings",
   "/billing": "page.title.billing",
   "/reports": "page.title.reports",
+  "/accounting": "accounting.title",
   "/returns": "page.title.returns",
   "/loyalty": "page.title.loyalty",
   "/devices": "page.title.devices",
@@ -273,6 +275,7 @@ export const NAV: NavSpecItem[] = [
   { kind: "link", href: "/returns", label: "page.title.returns", Icon: Undo2 },
   { kind: "link", href: "/reports", label: "nav.reports", Icon: BarChart3 },
   { kind: "link", href: "/money-statement", label: "page.title.moneystatement", Icon: Landmark },
+  { kind: "link", href: "/accounting", label: "accounting.title", Icon: BookOpenCheck },
   {
     kind: "group", id: "business-tools", label: "nav.businessTools", Icon: ShieldCheck,
     triggerPaths: ["/assurance", "/activity-insights", "/offers", "/loyalty", "/gift-cards"],
