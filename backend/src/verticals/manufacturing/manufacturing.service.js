@@ -176,7 +176,12 @@ export async function traceBatch(shopId, batchNumber) {
   const source = await db.productionConsumption.findMany({ where: { shopId, sourceBatchNumber: batchNumber }, include: { run: { include: { bom: true, outputs: true } } } });
   const lots = await db.inventoryLot.findMany({ where: { shopId, batchNumber }, include: { allocations: { include: { billItem: { include: { bill: { select: { id: true, billNo: true, customerName: true, businessDate: true, status: true } } } } } } } });
   const dispatchedBills = [...new Map(lots.flatMap((lot) => lot.allocations.map((allocation) => allocation.billItem.bill)).map((bill) => [bill.id, bill])).values()];
-  return { batchNumber, producedAs: outputs, consumedBy: source, dispatchedBills };
+  // Bill allocations appear only once an order is invoiced. A dispatched order
+  // awaiting its invoice — and every export order, which cannot be invoiced yet —
+  // had left the factory without appearing in the trace at all.
+  const orderAllocations = await db.tradeOrderAllocation.findMany({ where: { shopId, batchNumber }, include: { orderItem: { include: { order: { select: { id: true, orderNumber: true, customerName: true, status: true, orderType: true } } } } } });
+  const tradeOrders = [...new Map(orderAllocations.map((row) => row.orderItem.order).filter((order) => order.status !== "cancelled").map((order) => [order.id, order])).values()];
+  return { batchNumber, producedAs: outputs, consumedBy: source, dispatchedBills, tradeOrders };
 }
 
 export async function releaseRun(shopId, runId, actor = {}) {

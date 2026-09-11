@@ -18,8 +18,11 @@ const statusKeys = { planned: "manufacturing.production.planned", in_progress: "
 const validationKeys = { quantity: "manufacturing.production.errorQuantity", batch: "manufacturing.production.errorBatch", dates: "manufacturing.production.errorDates", sourceBatch: "manufacturing.production.errorSource", stock: "manufacturing.production.errorStock", duplicateSource: "manufacturing.production.errorDuplicateSource", duplicateOutput: "manufacturing.production.errorDuplicateOutput", sourcePack: "manufacturing.production.errorSourcePack" } as const;
 type T = ReturnType<typeof useAppLanguage>["t"];
 
-export default function ProductionRuns({ runs, boms, loading }: { runs: ProductionRun[]; boms: ProductionBom[]; loading: boolean }) {
+export default function ProductionRuns({ runs, boms, products, loading }: { runs: ProductionRun[]; boms: ProductionBom[]; products: Product[]; loading: boolean }) {
   const { t } = useAppLanguage();
+  // "Planned: 50000 base units" left the owner to remember that powder is
+  // counted in grams. Name the finished good's own unit.
+  const outputUnit = (bomId: string) => products.find((product) => product.id === boms.find((bom) => bom.id === bomId)?.finishedProductId)?.baseUnit || t("manufacturing.production.baseUnitFallback");
   const { user } = useAuth();
   const { isOnline } = useOfflineStatus();
   const client = useQueryClient();
@@ -45,15 +48,15 @@ export default function ProductionRuns({ runs, boms, loading }: { runs: Producti
       {runs.map((run) => <article key={run.id} className="min-w-0 rounded-xl border border-slate-200 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="break-all font-bold text-slate-900">{run.runNumber}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${run.status === "quarantined" ? "bg-amber-50 text-amber-900" : "bg-slate-100 text-slate-700"}`}>{t(statusKeys[run.status as keyof typeof statusKeys] ?? "manufacturing.production.inProgress")}</span></div>
         <p className="mt-2 break-words text-sm text-slate-600">{run.bom.name}</p>
-        <p className="mt-2 text-sm">{t("manufacturing.production.plannedAmount", { qty: run.plannedOutputBaseQty })}</p>
-        {run.actualOutputBaseQty != null && <p className="mt-1 text-sm">{t("manufacturing.production.actualAmount", { qty: run.actualOutputBaseQty })}</p>}
+        <p className="mt-2 text-sm">{t("manufacturing.production.plannedAmount", { qty: run.plannedOutputBaseQty, unit: outputUnit(run.bomId) })}</p>
+        {run.actualOutputBaseQty != null && <p className="mt-1 text-sm">{t("manufacturing.production.actualAmount", { qty: run.actualOutputBaseQty, unit: outputUnit(run.bomId) })}</p>}
         {run.finishedBatchNumber && <p className="mt-1 break-all text-xs text-slate-500">{t("manufacturing.production.batchValue", { batch: run.finishedBatchNumber })}</p>}
         {canManage && ["planned", "in_progress"].includes(run.status) && <Button variant="outline" className="mt-4 min-h-11 w-full gap-2" disabled={!isOnline} onClick={() => setSelected(run)}><ClipboardList size={16} />{t("manufacturing.production.record")}</Button>}
         {canManage && run.status === "quarantined" && <Button variant="outline" className="mt-4 min-h-11 w-full gap-2" disabled={!isOnline} onClick={() => { release.reset(); setReleasing(run); }}><ShieldCheck size={16} />{t("manufacturing.production.reviewRelease")}</Button>}
       </article>)}
       {!runs.length && <p className="py-6 text-sm text-slate-500">{t(loading ? "manufacturing.production.loading" : "manufacturing.runs.empty")}</p>}
     </div>
-    <PlanRun open={planning} close={() => setPlanning(false)} boms={boms} saved={refreshed} />
+    <PlanRun open={planning} close={() => setPlanning(false)} boms={boms} outputUnit={outputUnit} saved={refreshed} />
     <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}><DialogContent className="max-h-[92vh] sm:max-w-2xl"><DialogHeader className="pr-10"><DialogTitle>{t("manufacturing.production.record")}</DialogTitle><DialogDescription>{selected?.runNumber} · {t("manufacturing.production.reviewActual")}</DialogDescription></DialogHeader>{selected && <LoadCompletion key={selected.id} run={selected} close={() => setSelected(null)} saved={refreshed} />}</DialogContent></Dialog>
     <Dialog open={!!releasing} onOpenChange={(open) => !open && !release.isPending && setReleasing(null)}><DialogContent><DialogHeader className="pr-8"><DialogTitle>{t("manufacturing.production.releaseTitle")}</DialogTitle><DialogDescription>{t("manufacturing.production.releaseHelp", { batch: releasing?.finishedBatchNumber || "" })}</DialogDescription></DialogHeader>
       <ErrorText error={release.error} />
@@ -62,7 +65,7 @@ export default function ProductionRuns({ runs, boms, loading }: { runs: Producti
   </section>;
 }
 
-function PlanRun({ open, close, boms, saved }: { open: boolean; close: () => void; boms: ProductionBom[]; saved: () => Promise<void> }) {
+function PlanRun({ open, close, boms, outputUnit, saved }: { open: boolean; close: () => void; boms: ProductionBom[]; outputUnit: (bomId: string) => string; saved: () => Promise<void> }) {
   const { t } = useAppLanguage();
   const { isOnline } = useOfflineStatus();
   const [bomId, setBomId] = useState("");
@@ -76,7 +79,7 @@ function PlanRun({ open, close, boms, saved }: { open: boolean; close: () => voi
     <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}>
       <Field label={t("manufacturing.production.runNumber")}><Input value={number} onChange={(event) => setNumber(event.target.value)} required maxLength={64} className="h-11" /></Field>
       <Field label={t("manufacturing.production.recipe")}><select required className={selectClass} value={bomId} onChange={(event) => { setBomId(event.target.value); setAmount(String(boms.find((bom) => bom.id === event.target.value)?.outputQuantityBaseQty || "")); }}><option value="">{t("manufacturing.production.chooseRecipe")}</option>{boms.filter((bom) => bom.status === "active").map((bom) => <option key={bom.id} value={bom.id}>{bom.name}</option>)}</select></Field>
-      <Field label={t("manufacturing.production.plannedOutput")}><Input value={amount} onChange={(event) => setAmount(event.target.value)} type="number" step="0.01" min="0.01" max="1000000000" required className="h-11" /></Field>
+      <Field label={t("manufacturing.production.plannedOutput", { unit: outputUnit(bomId) })}><Input value={amount} onChange={(event) => setAmount(event.target.value)} type="number" step="0.01" min="0.01" max="1000000000" required className="h-11" /></Field>
       <ErrorText error={mutation.error} />
       <Button type="submit" className="min-h-12 w-full gap-2" disabled={!isOnline || mutation.isPending || !number.trim() || !bomId || !(Number(amount) > 0)}>{mutation.isPending && <Loader2 size={16} className="animate-spin" />}{t("manufacturing.production.savePlan")}</Button>
     </form>

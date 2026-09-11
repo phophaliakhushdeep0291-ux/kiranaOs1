@@ -30,6 +30,11 @@ export async function createTradeOrder(shopId, input) {
   const products = await db.product.findMany({ where: { shopId, id: { in: ids }, deletedAt: null }, include: { sellingUnits: true } });
   const byId = new Map(products.map((row) => [row.id, row]));
   if (products.length !== ids.length) throw new AppError("One or more order products are unavailable", 422, "TRADE_ORDER_PRODUCT_UNAVAILABLE");
+  // Allocation, dispatch, invoicing and returns all move stock by batch. An
+  // untracked product was accepted here and confirmed, then allocation reported
+  // "insufficient batches" with the shelf full, and the order sat stuck.
+  const untracked = products.find((row) => !row.batchTrackingEnabled);
+  if (untracked) throw new AppError(`Turn on batch tracking for ${untracked.name} before adding it to a wholesale order. Orders reserve and dispatch stock by batch.`, 422, "TRADE_ORDER_BATCH_TRACKING_REQUIRED");
   const items = input.items.map((row) => {
     const product = byId.get(row.productId);
     const unit = row.sellingUnitId ? product.sellingUnits.find((candidate) => candidate.id === row.sellingUnitId && candidate.isActive) : null;
