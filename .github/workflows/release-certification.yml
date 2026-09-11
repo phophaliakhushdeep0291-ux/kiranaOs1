@@ -1,12 +1,21 @@
 name: KiranaOS Release Certification
 
 on:
-  # Certify on push only. A pull_request trigger ran this same job a second time
-  # against refs/pull/N/merge, so every change was billed twice — and it was not
-  # buying a pre-merge gate: pull requests here are merged within minutes of the
-  # branch push, while this job takes tens of minutes, so the PR run was still
-  # in progress when the merge landed. Certifying main is also the result that
-  # matters, since it is main's evidence artifact that records the release.
+  # Certify every pull request into main, and main itself after each merge.
+  #
+  # The pull_request run is a REQUIRED check on main. It was once dropped because
+  # it bought no gate: pull requests merged within minutes of the branch push,
+  # while this job takes tens of minutes, so the PR run was still going when the
+  # merge landed. Then PRs #318 and #320 merged before their certification
+  # finished, and the only test gate this repo has was running after the fact.
+  # Required, the PR cannot merge until the run passes, so the second billing
+  # now buys what it did not before.
+  #
+  # No paths filter here, deliberately: a required check that never reports
+  # leaves the pull request waiting forever, so a docs-only PR must still run it.
+  pull_request:
+    branches: [main, master]
+  # Main's own run records the evidence artifact for the exact commit released.
   push:
     branches: [main, master]
     # Actions minutes are billed on this private repo, and a documentation-only
@@ -25,13 +34,18 @@ permissions:
   contents: read
 
 concurrency:
-  # One run per commit, never cancelled. This job produces the certification
-  # evidence for one exact commit, so a merge landing behind it must not kill
-  # it — that is what turned main red with nothing actually broken. Keying by
-  # SHA rather than ref also stops a third merge from displacing the second
-  # while it is still queued, since a group holds only one pending run.
-  group: kiranaos-release-${{ github.workflow }}-${{ github.sha }}
-  cancel-in-progress: false
+  # Main: one run per commit, never cancelled. This job produces the
+  # certification evidence for one exact commit, so a merge landing behind it
+  # must not kill it — that is what turned main red with nothing actually
+  # broken. Keying by SHA rather than ref also stops a third merge from
+  # displacing the second while it is still queued, since a group holds only
+  # one pending run.
+  #
+  # Pull requests: one run per PR, and a new push cancels the old one. Each push
+  # to a PR is a new merge SHA, so keyed by SHA every superseded run would burn
+  # its full twenty minutes for a result nobody can use.
+  group: kiranaos-release-${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   certify:
@@ -81,10 +95,11 @@ jobs:
       STORAGE_PROVIDER: local
       LOG_LEVEL: silent
       # The image build is the most expensive step in the run, and on a private
-      # repo every merge to main pays for it again. Merges defer it; the weekly
-      # and manual runs carry it. Deferral is recorded as a skip in the evidence
-      # report, never as a silent pass, and strict certification still demands it.
-      RELEASE_CERT_SKIP_IMAGE: ${{ github.event_name == 'push' }}
+      # repo every pull request and every merge to main would pay for it again.
+      # Both defer it; the weekly and manual runs carry it. Deferral is recorded
+      # as a skip in the evidence report, never as a silent pass, and strict
+      # certification still demands it.
+      RELEASE_CERT_SKIP_IMAGE: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -122,11 +137,11 @@ jobs:
       # that whenever the Dockerfile, the lockfile and the Prisma schemas are
       # unchanged, which is every commit that only touches source.
       - name: Set up Docker Buildx
-        if: github.event_name != 'push'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers
-        if: github.event_name != 'push'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
