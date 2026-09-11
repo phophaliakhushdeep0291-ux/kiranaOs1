@@ -1,6 +1,7 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
-import { round2 } from "../../utils/money.js";
+import { round2, addMoney, multiplyMoney, moneyShadows } from "../../utils/money.js";
+import { baseQtyToRateQty } from "../../utils/units.js";
 import { decrementLocationInventory, incrementLocationInventory, resolveOperationalLocation, getVariantLocationQuantity } from "../../modules/stores/location-context.service.js";
 import { stockLedgerProvenance } from "../../modules/inventory/stock-ledger-provenance.js";
 import { formatDateInTimeZone } from "../../utils/dates.js";
@@ -78,7 +79,9 @@ export async function createRun(shopId, input) {
 }
 
 export async function completeRun(shopId, runId, input, actor = {}) {
-  if (input.qcStatus === "failed") throw new AppError("A failed QC batch cannot be released into finished stock", 422, "PRODUCTION_QC_FAILED");
+  // A failed batch still consumed its materials. Refusing to record it left the
+  // shop no way to book the loss, so the material stock stayed wrong on paper.
+  const scrapped = input.qcStatus === "failed";
   return db.$transaction(async (tx) => {
     const run = await tx.productionRun.findFirst({ where: { id: runId, shopId }, include: { bom: { include: { items: true } } } });
     if (!run) throw new AppError("Production run not found", 404, "PRODUCTION_RUN_NOT_FOUND");
@@ -108,6 +111,7 @@ export async function completeRun(shopId, runId, input, actor = {}) {
     }
     const allocatedPlan = new Map();
     const consumedTotal = new Map();
+    let materialCost = 0;
 
     for (const row of input.consumptions) {
       const bomItem = bomByProduct.get(row.productId);
@@ -115,6 +119,9 @@ export async function completeRun(shopId, runId, input, actor = {}) {
       const product = await tx.product.findFirst({ where: { id: row.productId, shopId, deletedAt: null }, include: { sellingUnits: true } });
       if (!product) throw new AppError("Consumed material is unavailable", 422, "MATERIAL_UNAVAILABLE");
       let sourceBatchNumber = null;
+      // Cost the batch at what its materials actually cost: the source lot's own
+      // rate when it is batch tracked, the product's weighted average otherwise.
+      let sourceCostPerRateUnit = Number(product.costPerRateUnit || 0);
       if (product.batchTrackingEnabled && !row.inventoryLotId) throw new AppError(`Select a source batch for ${product.name}`, 422, "PRODUCTION_SOURCE_BATCH_REQUIRED");
       if (row.inventoryLotId) {
         const lot = await tx.inventoryLot.findFirst({ where: { id: row.inventoryLotId, shopId, locationId: location.id, productId: row.productId, status: "active", expiresOn: { gte: cleanDate(formatDateInTimeZone(new Date())) } } });
@@ -124,12 +131,14 @@ export async function completeRun(shopId, runId, input, actor = {}) {
         if (movedLot.count !== 1) throw new AppError(`Selected batch stock changed for ${product.name}`, 409, "INSUFFICIENT_BATCH_STOCK");
         await tx.inventoryLot.updateMany({ where: { id: lot.id, availableBaseQty: 0 }, data: { status: "depleted" } });
         sourceBatchNumber = lot.batchNumber;
+        sourceCostPerRateUnit = Number(lot.costPerRateUnit || 0);
       }
       const pack = packaging(product, row, row.actualBaseQty);
       const packs = pack ? new Map([[row.sellingUnitId, pack]]) : null;
       const moved = await decrementLocationInventory(tx, { shopId, location, product, quantityBase: row.actualBaseQty, packs });
       if (pack && product.packagingMode === "per_pack" && await getVariantLocationQuantity(tx, shopId, location, product, row.sellingUnitId) < 0) throw new AppError(`Insufficient selected packaging stock for ${product.name}`, 409, "PRODUCTION_PACK_STOCK_SHORT");
       await tx.stockLedger.create({ data: { shopId, locationId: location.id, productId: product.id, productName: product.name, ...stockLedgerProvenance(actor), sellingUnitId: row.sellingUnitId ?? null, sellingUnitQty: row.packageCount ?? null, action: "production_use", changeBaseQty: -row.actualBaseQty, oldStockBaseQty: moved.oldStock, newStockBaseQty: moved.newStock, sourceType: "production_run", sourceId: run.id, note: `Consumed by ${run.runNumber}` } });
+      materialCost = addMoney(materialCost, multiplyMoney(sourceCostPerRateUnit, baseQtyToRateQty(Number(row.actualBaseQty), product.rateUnit, product.baseUnit)));
       // Allocate the recipe expectation across source rows. Recording the full
       // expectation on every split would multiply planned use in trace reports.
       const consumed = round2((consumedTotal.get(product.id) || 0) + Number(row.actualBaseQty));
@@ -139,9 +148,24 @@ export async function completeRun(shopId, runId, input, actor = {}) {
       await tx.productionConsumption.create({ data: { shopId, runId: run.id, productId: product.id, inventoryLotId: row.inventoryLotId ?? null, plannedBaseQty, actualBaseQty: row.actualBaseQty, sourceBatchNumber } });
     }
 
+    if (scrapped) {
+      // Nothing sellable exists, so there is no lot and no stock increment. The
+      // loss is already on the ledger as the production_use lines written above.
+      return tx.productionRun.update({ where: { id: run.id }, data: {
+        status: "failed", qcStatus: "failed", actualOutputBaseQty: input.actualOutputBaseQty,
+        finishedBatchNumber: input.finishedBatchNumber, manufacturedOn: cleanDate(input.manufacturedOn),
+        expiresOn: null, notes: input.notes ?? run.notes,
+        startedAt: run.startedAt ?? new Date(), completedAt: new Date(),
+      }, include: { bom: true, consumptions: true, outputs: true } });
+    }
     const outputTotal = round2(input.outputs.reduce((sum, row) => sum + Number(row.quantityBaseQty), 0));
     if (Math.abs(outputTotal - Number(input.actualOutputBaseQty)) > 0.001) throw new AppError("Packaging outputs must equal actual finished output", 422, "PRODUCTION_OUTPUT_MISMATCH");
-    const lot = await tx.inventoryLot.create({ data: { shopId, locationId: location.id, productId: finished.id, producedByRunId: run.id, batchNumber: input.finishedBatchNumber, manufacturedOn: cleanDate(input.manufacturedOn), expiresOn: cleanDate(input.expiresOn), receivedBaseQty: input.actualOutputBaseQty, availableBaseQty: input.actualOutputBaseQty, costPerRateUnit: finished.costPerRateUnit, status: input.qcStatus === "conditional" ? "quarantined" : "active", note: `Produced by ${run.runNumber}` } });
+    // What this batch actually cost to make, rather than what the product master
+    // guesses. Margins on a produced batch were previously the buy price of a
+    // good the shop never buys.
+    const outputRateQty = baseQtyToRateQty(Number(input.actualOutputBaseQty), finished.rateUnit, finished.baseUnit);
+    const producedCostPerRateUnit = outputRateQty > 0 ? round2(materialCost / outputRateQty) : Number(finished.costPerRateUnit || 0);
+    const lot = await tx.inventoryLot.create({ data: { shopId, locationId: location.id, productId: finished.id, producedByRunId: run.id, batchNumber: input.finishedBatchNumber, manufacturedOn: cleanDate(input.manufacturedOn), expiresOn: cleanDate(input.expiresOn), receivedBaseQty: input.actualOutputBaseQty, availableBaseQty: input.actualOutputBaseQty, costPerRateUnit: producedCostPerRateUnit, ...moneyShadows({ costPerRateUnit: producedCostPerRateUnit }), status: input.qcStatus === "conditional" ? "quarantined" : "active", note: `Produced by ${run.runNumber}` } });
     const packMap = new Map();
     const outputMovements = new Map();
     for (const row of input.outputs) {
@@ -182,6 +206,25 @@ export async function traceBatch(shopId, batchNumber) {
   const orderAllocations = await db.tradeOrderAllocation.findMany({ where: { shopId, batchNumber }, include: { orderItem: { include: { order: { select: { id: true, orderNumber: true, customerName: true, status: true, orderType: true } } } } } });
   const tradeOrders = [...new Map(orderAllocations.map((row) => row.orderItem.order).filter((order) => order.status !== "cancelled").map((order) => [order.id, order])).values()];
   return { batchNumber, producedAs: outputs, consumedBy: source, dispatchedBills, tradeOrders };
+}
+
+/**
+ * Abandon a run that never started. A mistaken plan used to sit in "Planned
+ * runs" forever because nothing could close it; once materials are consumed the
+ * honest close is completeRun with a failed QC, which books the loss.
+ */
+export async function cancelRun(shopId, runId, actor = {}) {
+  return db.$transaction(async (tx) => {
+    const run = await tx.productionRun.findFirst({ where: { id: runId, shopId } });
+    if (!run) throw new AppError("Production run not found", 404, "PRODUCTION_RUN_NOT_FOUND");
+    runLocation(run, actor);
+    if (!["planned", "in_progress"].includes(run.status)) throw new AppError("This production run is already closed", 409, "PRODUCTION_RUN_ALREADY_CLOSED");
+    const consumed = await tx.productionConsumption.count({ where: { shopId, runId: run.id } });
+    if (consumed > 0) throw new AppError("This run has already used materials — record it as a failed batch instead", 409, "PRODUCTION_RUN_HAS_CONSUMPTION");
+    const claimed = await tx.productionRun.updateMany({ where: { id: run.id, shopId, status: { in: ["planned", "in_progress"] } }, data: { status: "cancelled", completedAt: new Date() } });
+    if (claimed.count !== 1) throw new AppError("This production run is already closed", 409, "PRODUCTION_RUN_ALREADY_CLOSED");
+    return tx.productionRun.findFirst({ where: { id: run.id }, include: { bom: true, consumptions: true, outputs: true } });
+  });
 }
 
 export async function releaseRun(shopId, runId, actor = {}) {

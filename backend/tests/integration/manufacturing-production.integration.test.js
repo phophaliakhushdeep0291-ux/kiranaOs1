@@ -155,4 +155,58 @@ else {
     assert.equal(await ctx.db.productionConsumption.count({ where: { runId: f.run.id } }), 0);
     assert.equal(await ctx.db.stockLedger.count({ where: { sourceId: f.run.id } }), 0);
   });
+
+  test("a failed batch books the material loss without ever creating sellable stock", async () => {
+    const f = await fixture();
+    const scrap = { ...f.input, qcStatus: "failed", outputs: [], expiresOn: null, notes: "Viscosity out of spec" };
+    const failed = await production.completeRun(f.shopId, f.run.id, scrap, { locationId: f.run.locationId, userId: f.owner.id });
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.qcStatus, "failed");
+    assert.equal(failed.actualOutputBaseQty, 10, "the scrapped quantity is still worth recording");
+    // The materials really were used up, so the shop's material stock must fall.
+    assert.equal((await ctx.db.product.findUnique({ where: { id: f.raw.id } })).stockBaseQty, 90);
+    assert.equal((await ctx.db.product.findUnique({ where: { id: f.label.id } })).stockBaseQty, 18);
+    assert.equal((await ctx.db.inventoryLot.findUnique({ where: { id: f.lot.id } })).availableBaseQty, 90);
+    assert.equal((await ctx.db.productSellingUnit.findUnique({ where: { id: f.rawPack.id } })).onHandQty, 9);
+    // Nothing sellable came out of it.
+    assert.equal((await ctx.db.product.findUnique({ where: { id: f.finished.id } })).stockBaseQty, 0);
+    assert.equal(await ctx.db.inventoryLot.count({ where: { producedByRunId: f.run.id } }), 0);
+    assert.equal((await ctx.db.productSellingUnit.findUnique({ where: { id: f.outputPack.id } })).onHandQty, 0);
+    assert.equal(await ctx.db.stockLedger.count({ where: { sourceId: f.run.id, action: "production_output" } }), 0);
+    assert.equal(await ctx.db.stockLedger.count({ where: { sourceId: f.run.id, action: "production_use" } }), 2);
+    assert.equal(await ctx.db.productionConsumption.count({ where: { runId: f.run.id } }), 2, "a write-off still traces which batches were lost");
+    await assert.rejects(() => production.completeRun(f.shopId, f.run.id, scrap), { code: "PRODUCTION_RUN_ALREADY_CLOSED" });
+    await assert.rejects(() => production.releaseRun(f.shopId, f.run.id), { code: "PRODUCTION_RUN_NOT_ON_HOLD" });
+  });
+
+  test("a produced batch is costed from the materials it actually consumed", async () => {
+    const f = await fixture();
+    // 10 base of raw at 25 plus 2 base of label at its product cost of 10, over
+    // 10 base of output: the finished batch cost 27, not the 10 on the master.
+    await ctx.db.inventoryLot.update({ where: { id: f.lot.id }, data: { costPerRateUnit: 25 } });
+    await production.completeRun(f.shopId, f.run.id, { ...f.input, qcStatus: "passed" }, { locationId: f.run.locationId });
+    const lot = await ctx.db.inventoryLot.findFirst({ where: { producedByRunId: f.run.id } });
+    assert.equal(lot.costPerRateUnit, 27);
+    assert.equal(Number(lot.costPerRateUnitPaise), 2700, "the paise shadow must follow the float");
+    assert.notEqual(lot.costPerRateUnit, (await ctx.db.product.findUnique({ where: { id: f.finished.id } })).costPerRateUnit);
+  });
+
+  test("a planned run can be cancelled, but never one that already used materials", async () => {
+    const f = await fixture();
+    await assert.rejects(() => production.cancelRun(f.shopId, f.run.id, { locationId: "wrong" }), { code: "PRODUCTION_LOCATION_MISMATCH" });
+    await assert.rejects(() => production.cancelRun(f.shopId, "missing-run"), { code: "PRODUCTION_RUN_NOT_FOUND" });
+    // Defensive: a run holding consumption rows is a loss to book, not a plan to drop.
+    const guard = await ctx.db.productionConsumption.create({ data: { shopId: f.shopId, runId: f.run.id, productId: f.raw.id, plannedBaseQty: 1, actualBaseQty: 1 } });
+    await assert.rejects(() => production.cancelRun(f.shopId, f.run.id), { code: "PRODUCTION_RUN_HAS_CONSUMPTION" });
+    await ctx.db.productionConsumption.delete({ where: { id: guard.id } });
+    const cancelled = await production.cancelRun(f.shopId, f.run.id, { locationId: f.run.locationId });
+    assert.equal(cancelled.status, "cancelled");
+    assert.equal(await ctx.db.stockLedger.count({ where: { sourceId: f.run.id } }), 0, "cancelling a plan moves no stock");
+    await assert.rejects(() => production.cancelRun(f.shopId, f.run.id), { code: "PRODUCTION_RUN_ALREADY_CLOSED" });
+    await assert.rejects(() => production.completeRun(f.shopId, f.run.id, f.input), { code: "PRODUCTION_RUN_ALREADY_CLOSED" });
+    // A cancelled plan leaves the open-work counters, which is the whole point.
+    const overview = await production.overview(f.shopId);
+    assert.equal(overview.summary.plannedRuns, 0);
+    assert.equal(overview.recentRuns.find((row) => row.id === f.run.id).status, "cancelled");
+  });
 }

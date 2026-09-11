@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { manufacturingEn } from "@/features/core/settings/translations/manufacturing";
 import { completionPayload, initialCompletion, type RunDetails } from "@/features/verticals/manufacturing/production-run";
 
 function fixture(): RunDetails {
@@ -100,5 +102,46 @@ describe("production entry", () => {
     details.products[0].packagingMode = "pooled";
     draft.outputs.push({ key: "base", amount: "1", sellingUnitId: "" });
     expect(() => completionPayload(details, draft)).toThrow("quantity");
+  });
+  it("writes a failed batch off without packing it into stock, and insists on a reason", () => {
+    const details = fixture(); const draft = ready(details);
+    draft.qcStatus = "failed"; draft.expiresOn = "";
+    expect(() => completionPayload(details, draft)).toThrow("reason");
+    draft.notes = "  Viscosity out of spec  ";
+    const payload = completionPayload(details, draft);
+    expect(payload.qcStatus).toBe("failed");
+    expect(payload.expiresOn).toBeNull();
+    expect(payload.outputs).toEqual([]);
+    expect(payload.actualOutputBaseQty).toBe(20);
+    expect(payload.consumptions).toHaveLength(2);
+    expect(payload.notes).toBe("Viscosity out of spec");
+  });
+  it("still demands an expiry for a batch that is going on a shelf", () => {
+    const details = fixture(); const draft = ready(details);
+    draft.expiresOn = "";
+    expect(() => completionPayload(details, draft)).toThrow("dates");
+    draft.qcStatus = "passed";
+    expect(() => completionPayload(details, draft)).toThrow("dates");
+  });
+});
+
+describe("production run screen", () => {
+  const source = readFileSync(new URL("../features/verticals/manufacturing/pages/ProductionRuns.tsx", import.meta.url), "utf8");
+  it("offers the failed-QC outcome the server now accepts", () => {
+    expect(source).toContain("manufacturing.production.failOption");
+    for (const key of ["failOption", "failHelp", "scrapTitle", "reasonLabel", "saveScrap", "errorReason"]) {
+      expect(manufacturingEn).toHaveProperty(`manufacturing.production.${key}`);
+    }
+  });
+  it("lets a mistaken plan be cancelled instead of sitting in the register for good", () => {
+    expect(source).toContain("/cancel`, { method: \"POST\"");
+    for (const key of ["abandon", "abandonTitle", "abandonHelp", "abandonConfirm", "keepRun", "abandoned"]) {
+      expect(manufacturingEn).toHaveProperty(`manufacturing.production.${key}`);
+    }
+  });
+  it("names the closed statuses the server can now return", () => {
+    for (const status of ["failed", "cancelled"]) expect(manufacturingEn).toHaveProperty(`manufacturing.production.${status}`);
+    expect(source).toContain("failed: \"manufacturing.production.failed\"");
+    expect(source).toContain("cancelled: \"manufacturing.production.cancelled\"");
   });
 });

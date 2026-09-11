@@ -18,7 +18,7 @@ export type QuantityDraft = { amount: string; sellingUnitId: string; inventoryLo
 export type QuantityRow = QuantityDraft & { key: string };
 export type CompletionDraft = {
   outputs: QuantityRow[]; materials: Record<string, QuantityRow[]>; batch: string;
-  manufacturedOn: string; expiresOn: string; qcStatus: "passed" | "conditional"; notes: string;
+  manufacturedOn: string; expiresOn: string; qcStatus: "passed" | "conditional" | "failed"; notes: string;
 };
 
 const rounded = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -66,7 +66,10 @@ export function completionPayload(details: RunDetails, draft: CompletionDraft) {
     const date = new Date(`${day}T00:00:00Z`);
     return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === day;
   };
-  if (!validDay(draft.manufacturedOn) || !validDay(draft.expiresOn) || draft.expiresOn <= draft.manufacturedOn) throw new Error("dates");
+  // A scrapped batch is never stored, so it carries no expiry — only a reason.
+  const scrapped = draft.qcStatus === "failed";
+  if (!validDay(draft.manufacturedOn) || (!scrapped && (!validDay(draft.expiresOn) || draft.expiresOn <= draft.manufacturedOn))) throw new Error("dates");
+  if (scrapped && !draft.notes.trim()) throw new Error("reason");
   if (!draft.outputs.length || draft.outputs.length > 50) throw new Error("quantity");
   const outputUnits = new Set<string>();
   const outputs = draft.outputs.map((value) => {
@@ -106,7 +109,7 @@ export function completionPayload(details: RunDetails, draft: CompletionDraft) {
   if (consumptions.length > 1000) throw new Error("quantity");
   return {
     actualOutputBaseQty: outputTotal, finishedBatchNumber: draft.batch.trim(), manufacturedOn: draft.manufacturedOn,
-    expiresOn: draft.expiresOn, qcStatus: draft.qcStatus, notes: draft.notes.trim() || null,
-    consumptions, outputs,
+    expiresOn: scrapped ? null : draft.expiresOn, qcStatus: draft.qcStatus, notes: draft.notes.trim() || null,
+    consumptions, outputs: scrapped ? [] : outputs,
   };
 }
